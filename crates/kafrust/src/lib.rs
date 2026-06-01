@@ -4,11 +4,13 @@
 pub mod client;
 pub mod config;
 pub mod error;
+pub mod producer;
 
 pub use client::Client;
 pub use config::ClientConfig;
 pub use error::{Error, Result};
 pub use kafrust_protocol as protocol;
+pub use producer::{Acks, Header, ProducerConfig, ProducerRecord, RecordMetadata};
 
 /// Returns the crate version compiled into this build.
 pub fn version() -> &'static str {
