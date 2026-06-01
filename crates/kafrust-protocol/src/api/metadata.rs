@@ -21,7 +21,9 @@ impl MetadataRequestV1 {
             client_id: self.client_id.clone(),
         }
         .encode_v1(&mut encoder)?;
-        encoder.write_array(self.topics.as_deref(), |encoder, topic| encoder.write_string(topic))?;
+        encoder.write_array(self.topics.as_deref(), |encoder, topic| {
+            encoder.write_string(topic)
+        })?;
         Ok(encoder.into_bytes())
     }
 }
@@ -172,7 +174,7 @@ mod tests {
             0, 0, 0, 1, // topics count
             0, 0, // topic error code
             0, 6, b'o', b'r', b'd', b'e', b'r', b's', // topic name
-            0, // is internal false
+            0,    // is internal false
             0, 0, 0, 1, // partition count
             0, 0, // partition error code
             0, 0, 0, 0, // partition index
