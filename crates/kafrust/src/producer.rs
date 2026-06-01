@@ -166,7 +166,10 @@ pub struct Producer {
 
 impl Producer {
     pub async fn send(&mut self, record: ProducerRecord) -> Result<RecordMetadata> {
-        let metadata = self.client.metadata(Some(vec![record.topic().to_owned()])).await?;
+        let metadata = self
+            .client
+            .metadata(Some(vec![record.topic().to_owned()]))
+            .await?;
         let partition = choose_partition(&record, &metadata)?;
         let leader = leader_for(&metadata, record.topic(), partition)?;
         let _acks = self.config.acks.as_i16();
@@ -236,7 +239,11 @@ fn choose_partition(record: &ProducerRecord, metadata: &MetadataResponseV1) -> R
         })
 }
 
-fn leader_for(metadata: &MetadataResponseV1, topic_name: &str, partition_index: i32) -> Result<i32> {
+fn leader_for(
+    metadata: &MetadataResponseV1,
+    topic_name: &str,
+    partition_index: i32,
+) -> Result<i32> {
     metadata
         .topics
         .iter()
@@ -264,7 +271,9 @@ fn leader_for(metadata: &MetadataResponseV1, topic_name: &str, partition_index: 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
-    use super::{choose_partition, leader_for, Acks, ProducerConfig, ProducerRecord, RecordMetadata};
+    use super::{
+        choose_partition, leader_for, Acks, ProducerConfig, ProducerRecord, RecordMetadata,
+    };
     use kafrust_protocol::api::metadata::{
         BrokerMetadata, MetadataResponseV1, PartitionMetadata, TopicMetadata,
     };
