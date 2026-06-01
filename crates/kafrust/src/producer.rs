@@ -1,6 +1,10 @@
 use std::time::SystemTime;
 
+use kafrust_protocol::api::metadata::MetadataResponseV1;
+
+use crate::client::Client;
 use crate::config::ClientConfig;
+use crate::error::{Error, Result};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Acks {
@@ -154,6 +158,26 @@ impl RecordMetadata {
     }
 }
 
+#[derive(Debug)]
+pub struct Producer {
+    client: Client,
+    config: ProducerConfig,
+}
+
+impl Producer {
+    pub async fn send(&mut self, record: ProducerRecord) -> Result<RecordMetadata> {
+        let metadata = self.client.metadata(Some(vec![record.topic().to_owned()])).await?;
+        let partition = choose_partition(&record, &metadata)?;
+        let leader = leader_for(&metadata, record.topic(), partition)?;
+        let _acks = self.config.acks.as_i16();
+        let _leader = leader;
+
+        Err(Error::Unsupported(
+            "ProduceRequest encoding is not implemented yet",
+        ))
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProducerConfig {
     client: ClientConfig,
@@ -185,12 +209,65 @@ impl ProducerConfig {
     pub fn client_config(&self) -> &ClientConfig {
         &self.client
     }
+
+    pub async fn build(self) -> Result<Producer> {
+        let client = self.client.clone().connect().await?;
+        Ok(Producer {
+            client,
+            config: self,
+        })
+    }
+}
+
+fn choose_partition(record: &ProducerRecord, metadata: &MetadataResponseV1) -> Result<i32> {
+    if let Some(partition) = record.partition_ref() {
+        return Ok(partition);
+    }
+
+    metadata
+        .topics
+        .iter()
+        .find(|topic| topic.name == record.topic())
+        .and_then(|topic| topic.partitions.first())
+        .map(|partition| partition.partition_index)
+        .ok_or_else(|| Error::UnknownTopicOrPartition {
+            topic: record.topic().to_owned(),
+            partition: -1,
+        })
+}
+
+fn leader_for(metadata: &MetadataResponseV1, topic_name: &str, partition_index: i32) -> Result<i32> {
+    metadata
+        .topics
+        .iter()
+        .find(|topic| topic.name == topic_name)
+        .and_then(|topic| {
+            topic
+                .partitions
+                .iter()
+                .find(|partition| partition.partition_index == partition_index)
+        })
+        .ok_or_else(|| Error::UnknownTopicOrPartition {
+            topic: topic_name.to_owned(),
+            partition: partition_index,
+        })
+        .and_then(|partition| {
+            (partition.leader_id >= 0)
+                .then_some(partition.leader_id)
+                .ok_or_else(|| Error::MissingLeader {
+                    topic: topic_name.to_owned(),
+                    partition: partition_index,
+                })
+        })
 }
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
-    use super::{Acks, ProducerConfig, ProducerRecord, RecordMetadata};
+    use super::{choose_partition, leader_for, Acks, ProducerConfig, ProducerRecord, RecordMetadata};
+    use kafrust_protocol::api::metadata::{
+        BrokerMetadata, MetadataResponseV1, PartitionMetadata, TopicMetadata,
+    };
 
     #[test]
     fn maps_acks_to_kafka_values() {
@@ -233,5 +310,61 @@ mod tests {
         assert_eq!(metadata.partition(), 1);
         assert_eq!(metadata.offset(), 42);
         assert_eq!(metadata.timestamp(), None);
+    }
+
+    #[test]
+    fn chooses_explicit_partition() {
+        let metadata = metadata_fixture();
+        let record = ProducerRecord::to("orders").partition(1);
+
+        assert_eq!(choose_partition(&record, &metadata).unwrap(), 1);
+    }
+
+    #[test]
+    fn chooses_first_partition_when_record_has_no_partition() {
+        let metadata = metadata_fixture();
+        let record = ProducerRecord::to("orders");
+
+        assert_eq!(choose_partition(&record, &metadata).unwrap(), 0);
+    }
+
+    #[test]
+    fn resolves_partition_leader() {
+        let metadata = metadata_fixture();
+
+        assert_eq!(leader_for(&metadata, "orders", 0).unwrap(), 1);
+    }
+
+    fn metadata_fixture() -> MetadataResponseV1 {
+        MetadataResponseV1 {
+            brokers: vec![BrokerMetadata {
+                node_id: 1,
+                host: "localhost".to_owned(),
+                port: 9092,
+                rack: None,
+            }],
+            controller_id: 1,
+            topics: vec![TopicMetadata {
+                error_code: 0,
+                name: "orders".to_owned(),
+                is_internal: false,
+                partitions: vec![
+                    PartitionMetadata {
+                        error_code: 0,
+                        partition_index: 0,
+                        leader_id: 1,
+                        replica_nodes: vec![1],
+                        isr_nodes: vec![1],
+                    },
+                    PartitionMetadata {
+                        error_code: 0,
+                        partition_index: 1,
+                        leader_id: 1,
+                        replica_nodes: vec![1],
+                        isr_nodes: vec![1],
+                    },
+                ],
+            }],
+        }
     }
 }
