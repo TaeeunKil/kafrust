@@ -66,9 +66,12 @@ impl Client {
             }));
         }
 
-        let mut response = vec![0; usize::try_from(size).map_err(|_| {
-            Error::Protocol(kafrust_protocol::Error::LengthOverflow("response frame"))
-        })?];
+        let mut response = vec![
+            0;
+            usize::try_from(size).map_err(|_| {
+                Error::Protocol(kafrust_protocol::Error::LengthOverflow("response frame"))
+            })?
+        ];
         self.stream.read_exact(&mut response).await?;
         Ok(response)
     }
