@@ -16,3 +16,4 @@ workspace = true
 
 [dependencies]
 kafrust-protocol = { version = "0.0.0", path = "../kafrust-protocol" }
+tokio = { version = "1", features = ["io-util", "net"] }
