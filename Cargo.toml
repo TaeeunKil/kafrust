@@ -1,0 +1,26 @@
+[workspace]
+members = [
+    "crates/kafrust",
+    "crates/kafrust-protocol",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+rust-version = "1.75"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/TaeeunKil/kafrust"
+homepage = "https://github.com/TaeeunKil/kafrust"
+readme = "README.md"
+keywords = ["kafka", "client", "async", "protocol"]
+categories = ["api-bindings", "network-programming"]
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "warn"
+todo = "warn"
+dbg_macro = "warn"
