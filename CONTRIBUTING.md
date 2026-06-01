@@ -1,5 +1,35 @@
 # Contributing
 
+## Branch Strategy
+
+This project uses solo trunk-based development while it is early and maintained by a single primary author.
+
+`main` should stay buildable and reviewable. Small, verified changes may land directly on `main`.
+
+Use a short-lived branch when a change is likely to be risky, experimental, or spread across multiple commits.
+
+Create a branch for changes that:
+
+- modify public APIs
+- change crate or module boundaries
+- require multiple commits
+- are experimental or likely to be reverted
+- may temporarily break tests or CI
+
+Branch names should use a short type prefix:
+
+```text
+feat/protocol-primitives
+feat/api-versions
+feat/metadata-request
+test/protocol-fixtures
+docs/architecture
+chore/ci
+fix/response-decoding
+```
+
+Avoid long-lived milestone branches unless the project has multiple concurrent maintainers or release trains.
+
 ## Commit Convention
 
 This project uses Conventional Commits.
@@ -38,4 +68,3 @@ Use `!` for breaking changes:
 ```text
 feat(api)!: replace producer config builder
 ```
-
