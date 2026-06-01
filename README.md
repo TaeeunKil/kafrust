@@ -9,3 +9,10 @@ The project is starting with a production-oriented focus:
 - protocol correctness
 - clear operational behavior
 
+## Development
+
+kafrust is developed with an agent-assisted workflow that keeps agent work reviewable and grounded in explicit project rules.
+
+- [Contributing](CONTRIBUTING.md)
+- [Agent instructions](AGENTS.md)
+- [Agentic development workflow](docs/agentic-development.md)
