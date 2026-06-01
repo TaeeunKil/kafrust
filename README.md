@@ -22,3 +22,4 @@ kafrust is developed with an agent-assisted workflow that keeps agent work revie
 - [Contributing](CONTRIBUTING.md)
 - [Agent instructions](AGENTS.md)
 - [Agentic development workflow](docs/agentic-development.md)
+- [Roadmap](docs/roadmap.md)
