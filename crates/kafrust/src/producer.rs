@@ -169,10 +169,6 @@ pub struct Producer {
 
 impl Producer {
     pub async fn send(&mut self, record: ProducerRecord) -> Result<RecordMetadata> {
-        let metadata = self
-            .client
-            .metadata(Some(vec![record.topic().to_owned()]))
-            .await?;
         if self.config.acks == Acks::None {
             return Err(Error::Unsupported("producer acks=0 send without response"));
         }
@@ -182,11 +178,38 @@ impl Producer {
             ));
         }
 
-        let partition = choose_partition(&record, &metadata)?;
-        let leader = leader_for(&metadata, record.topic(), partition)?;
-        let broker_addr = broker_addr_for(&metadata, leader)?;
         let timestamp = record.timestamp_ref().unwrap_or_else(SystemTime::now);
         let timestamp_ms = timestamp_millis(timestamp);
+        let mut attempt = 0;
+
+        loop {
+            let metadata = self
+                .client
+                .metadata(Some(vec![record.topic().to_owned()]))
+                .await?;
+            let result = self
+                .send_with_metadata(&record, &metadata, timestamp, timestamp_ms)
+                .await;
+
+            match result {
+                Err(Error::Broker { code, .. }) if attempt == 0 && can_retry_produce(code) => {
+                    attempt += 1;
+                }
+                result => return result,
+            }
+        }
+    }
+
+    async fn send_with_metadata(
+        &self,
+        record: &ProducerRecord,
+        metadata: &MetadataResponseV1,
+        timestamp: SystemTime,
+        timestamp_ms: i64,
+    ) -> Result<RecordMetadata> {
+        let partition = choose_partition(record, metadata)?;
+        let leader = leader_for(metadata, record.topic(), partition)?;
+        let broker_addr = broker_addr_for(metadata, leader)?;
 
         let mut leader_client = Client::connect(
             broker_addr,
@@ -331,6 +354,10 @@ fn timestamp_millis(timestamp: SystemTime) -> i64 {
         Ok(value) => value,
         Err(_) => i64::MAX,
     }
+}
+
+fn can_retry_produce(code: i16) -> bool {
+    matches!(code, 3 | 5 | 6 | 7 | 9)
 }
 
 fn produce_partition_response<'a>(
