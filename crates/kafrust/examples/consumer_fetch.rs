@@ -19,7 +19,8 @@ async fn main() -> kafrust::Result<()> {
         .build()
         .await?;
 
-    let records = consumer.fetch(topic, partition, offset).await?;
+    consumer.assign(topic, partition, offset);
+    let records = consumer.poll().await?;
     for record in records {
         println!(
             "fetched {}-{}@{} key={:?} value={:?}",
