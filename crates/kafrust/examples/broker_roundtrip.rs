@@ -2,8 +2,8 @@ use kafrust::ClientConfig;
 
 #[tokio::main]
 async fn main() -> kafrust::Result<()> {
-    let bootstrap = std::env::var("KAFRUST_BOOTSTRAP_SERVERS")
-        .unwrap_or_else(|_| "localhost:9092".to_owned());
+    let bootstrap =
+        std::env::var("KAFRUST_BOOTSTRAP_SERVERS").unwrap_or_else(|_| "localhost:9092".to_owned());
 
     let mut client = ClientConfig::new([bootstrap])
         .client_id("kafrust-roundtrip")
