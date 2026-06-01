@@ -3,11 +3,13 @@
 
 pub mod client;
 pub mod config;
+pub mod consumer;
 pub mod error;
 pub mod producer;
 
 pub use client::Client;
 pub use config::ClientConfig;
+pub use consumer::{Consumer, ConsumerConfig, ConsumerRecord};
 pub use error::{Error, Result};
 pub use kafrust_protocol as protocol;
 pub use producer::{Acks, Header, ProducerConfig, ProducerRecord, RecordMetadata};
