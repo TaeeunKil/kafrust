@@ -6,6 +6,14 @@
 //! encoding and decoding so the public client can stay focused on user-facing
 //! producer and consumer behavior.
 
+pub mod api;
+pub mod codec;
+pub mod error;
+pub mod frame;
+pub mod header;
+
+pub use error::{Error, Result};
+
 /// Returns the protocol crate version compiled into this build.
 pub fn version() -> &'static str {
     env!("CARGO_PKG_VERSION")
