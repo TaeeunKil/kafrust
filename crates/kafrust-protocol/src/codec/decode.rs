@@ -126,6 +126,51 @@ impl<'a> Decoder<'a> {
         Err(Error::VarintTooLong)
     }
 
+    pub fn read_varint(&mut self) -> Result<i32> {
+        let value = self.read_unsigned_varint()?;
+        Ok(((value >> 1) as i32) ^ -((value & 1) as i32))
+    }
+
+    pub fn read_varlong(&mut self) -> Result<i64> {
+        let mut value = 0u64;
+        for shift in (0..=63).step_by(7) {
+            let byte = self.read_exact(1)?[0];
+            value |= u64::from(byte & 0x7f) << shift;
+            if byte & 0x80 == 0 {
+                return Ok(((value >> 1) as i64) ^ -((value & 1) as i64));
+            }
+        }
+        Err(Error::VarintTooLong)
+    }
+
+    pub fn read_varint_bytes(&mut self) -> Result<Vec<u8>> {
+        let length = self.read_varint()?;
+        if length < 0 {
+            return Err(Error::NegativeLength {
+                kind: "varint bytes",
+                length,
+            });
+        }
+        let length = usize::try_from(length).map_err(|_| Error::LengthOverflow("varint bytes"))?;
+        Ok(self.read_exact(length)?.to_vec())
+    }
+
+    pub fn read_varint_nullable_bytes(&mut self) -> Result<Option<Vec<u8>>> {
+        let length = self.read_varint()?;
+        if length == -1 {
+            return Ok(None);
+        }
+        if length < -1 {
+            return Err(Error::NegativeLength {
+                kind: "varint nullable bytes",
+                length,
+            });
+        }
+        let length =
+            usize::try_from(length).map_err(|_| Error::LengthOverflow("varint nullable bytes"))?;
+        Ok(Some(self.read_exact(length)?.to_vec()))
+    }
+
     pub fn read_compact_string(&mut self) -> Result<String> {
         let encoded_length = self.read_unsigned_varint()?;
         let length = encoded_length.checked_sub(1).ok_or(Error::NegativeLength {

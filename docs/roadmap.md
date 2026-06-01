@@ -132,7 +132,7 @@ Known limits:
 
 ## M4 Consumer MVP
 
-Status: In progress.
+Status: Implemented; live fetch verification is opt-in/manual.
 
 Goal: provide a minimal consumer path before implementing full consumer groups.
 
@@ -153,14 +153,13 @@ Exit criteria:
 Evidence:
 
 - Fetch v2 protocol request/response types exist.
-- Legacy MessageSet records are decoded and covered by focused tests.
+- Legacy MessageSet and RecordBatch v2 records are decoded and covered by focused tests.
 - `ConsumerConfig`, `Consumer`, and `ConsumerRecord` expose direct topic/partition/offset fetch.
 - `Consumer::assign` and `Consumer::poll` provide a stream-like path with in-memory offset advancement.
 - `consumer_fetch` example and `docs/consumer-api.md` document the current path.
 
 Next work:
 
-- Add RecordBatch decoding so the consumer can read modern Kafka record batches, not only legacy MessageSet records.
 - Run producer and consumer examples against a real broker.
 
 ## M5 Consumer Group Alpha
