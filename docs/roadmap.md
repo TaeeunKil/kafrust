@@ -155,11 +155,11 @@ Evidence:
 - Fetch v2 protocol request/response types exist.
 - Legacy MessageSet records are decoded and covered by focused tests.
 - `ConsumerConfig`, `Consumer`, and `ConsumerRecord` expose direct topic/partition/offset fetch.
+- `Consumer::assign` and `Consumer::poll` provide a stream-like path with in-memory offset advancement.
 - `consumer_fetch` example and `docs/consumer-api.md` document the current path.
 
 Next work:
 
-- Add a stream-like consumption API on top of direct fetch.
 - Add RecordBatch decoding so the consumer can read modern Kafka record batches, not only legacy MessageSet records.
 - Run producer and consumer examples against a real broker.
 

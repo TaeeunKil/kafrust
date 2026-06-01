@@ -56,9 +56,43 @@ impl ConsumerRecord {
 pub struct Consumer {
     client: Client,
     config: ConsumerConfig,
+    assignments: Vec<ConsumerAssignment>,
 }
 
 impl Consumer {
+    pub fn assign(&mut self, topic: impl Into<String>, partition: i32, offset: i64) {
+        assign_partition(&mut self.assignments, topic.into(), partition, offset);
+    }
+
+    pub fn assignments(&self) -> &[ConsumerAssignment] {
+        &self.assignments
+    }
+
+    pub async fn poll(&mut self) -> Result<Vec<ConsumerRecord>> {
+        let assignments = self.assignments.clone();
+        let mut records = Vec::new();
+
+        for assignment in assignments {
+            let fetched = self
+                .fetch(
+                    &assignment.topic,
+                    assignment.partition,
+                    assignment.next_offset,
+                )
+                .await?;
+            if let Some(last) = fetched.last() {
+                self.update_assignment_offset(
+                    &assignment.topic,
+                    assignment.partition,
+                    last.offset().saturating_add(1),
+                );
+            }
+            records.extend(fetched);
+        }
+
+        Ok(records)
+    }
+
     pub async fn fetch(
         &mut self,
         topic: impl Into<String>,
@@ -100,6 +134,58 @@ impl Consumer {
             .map(|record| ConsumerRecord::from_message_set(&topic, partition, record))
             .collect())
     }
+
+    fn update_assignment_offset(&mut self, topic: &str, partition: i32, next_offset: i64) {
+        if let Some(assignment) = self
+            .assignments
+            .iter_mut()
+            .find(|assignment| assignment.topic == topic && assignment.partition == partition)
+        {
+            assignment.next_offset = next_offset;
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConsumerAssignment {
+    topic: String,
+    partition: i32,
+    next_offset: i64,
+}
+
+impl ConsumerAssignment {
+    pub fn topic(&self) -> &str {
+        &self.topic
+    }
+
+    pub fn partition(&self) -> i32 {
+        self.partition
+    }
+
+    pub fn next_offset(&self) -> i64 {
+        self.next_offset
+    }
+}
+
+fn assign_partition(
+    assignments: &mut Vec<ConsumerAssignment>,
+    topic: String,
+    partition: i32,
+    offset: i64,
+) {
+    if let Some(assignment) = assignments
+        .iter_mut()
+        .find(|assignment| assignment.topic == topic && assignment.partition == partition)
+    {
+        assignment.next_offset = offset;
+        return;
+    }
+
+    assignments.push(ConsumerAssignment {
+        topic,
+        partition,
+        next_offset: offset,
+    });
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -149,6 +235,7 @@ impl ConsumerConfig {
         Ok(Consumer {
             client,
             config: self,
+            assignments: Vec::new(),
         })
     }
 }
@@ -219,7 +306,7 @@ fn fetch_partition_response<'a>(
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
-    use super::{leader_for, ConsumerConfig, ConsumerRecord};
+    use super::{assign_partition, leader_for, ConsumerAssignment, ConsumerConfig, ConsumerRecord};
     use kafrust_protocol::api::fetch::MessageSetRecord;
     use kafrust_protocol::api::metadata::{
         BrokerMetadata, MetadataResponseV1, PartitionMetadata, TopicMetadata,
@@ -258,6 +345,19 @@ mod tests {
         assert_eq!(record.timestamp_ms(), 123);
         assert_eq!(record.key().unwrap(), b"order-1");
         assert_eq!(record.value().unwrap(), b"created");
+    }
+
+    #[test]
+    fn tracks_assignments() {
+        let mut assignments = Vec::<ConsumerAssignment>::new();
+
+        assign_partition(&mut assignments, "orders".to_owned(), 0, 10);
+        assign_partition(&mut assignments, "orders".to_owned(), 0, 20);
+
+        assert_eq!(assignments.len(), 1);
+        assert_eq!(assignments[0].topic(), "orders");
+        assert_eq!(assignments[0].partition(), 0);
+        assert_eq!(assignments[0].next_offset(), 20);
     }
 
     #[test]

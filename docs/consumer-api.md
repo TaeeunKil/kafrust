@@ -10,7 +10,8 @@ let mut consumer = ConsumerConfig::new(["localhost:9092"])
     .build()
     .await?;
 
-let records = consumer.fetch("orders", 0, 0).await?;
+consumer.assign("orders", 0, 0);
+let records = consumer.poll().await?;
 for record in records {
     println!("{}-{}@{}", record.topic(), record.partition(), record.offset());
 }
@@ -26,6 +27,7 @@ Current implementation status:
 
 - `ConsumerConfig`, `Consumer`, and `ConsumerRecord` are public API types.
 - `Consumer::fetch` accepts topic, partition, and offset directly.
+- `Consumer::assign` and `Consumer::poll` provide a stream-like path that advances assigned partition offsets after records are returned.
 - Fetch uses metadata lookup and partition leader routing.
 - The first decoder supports legacy MessageSet records used by the current producer path.
 - Consumer groups and offset commits are intentionally out of scope for the MVP.
