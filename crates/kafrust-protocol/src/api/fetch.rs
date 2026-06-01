@@ -145,10 +145,17 @@ fn decode_message_set(bytes: &[u8]) -> Result<Vec<MessageSetRecord>> {
         let message_size =
             usize::try_from(message_size).map_err(|_| Error::LengthOverflow("message"))?;
         let message = decoder.read_exact(message_size)?;
-        records.push(decode_message(offset, message)?);
+        records.extend(decode_message_or_batch(offset, message)?);
     }
 
     Ok(records)
+}
+
+fn decode_message_or_batch(offset: i64, bytes: &[u8]) -> Result<Vec<MessageSetRecord>> {
+    match bytes.get(4).copied() {
+        Some(2) => decode_record_batch(offset, bytes),
+        _ => Ok(vec![decode_message(offset, bytes)?]),
+    }
 }
 
 fn decode_message(offset: i64, bytes: &[u8]) -> Result<MessageSetRecord> {
@@ -172,6 +179,79 @@ fn decode_message(offset: i64, bytes: &[u8]) -> Result<MessageSetRecord> {
     Ok(MessageSetRecord {
         offset,
         timestamp_ms,
+        key,
+        value,
+    })
+}
+
+fn decode_record_batch(base_offset: i64, bytes: &[u8]) -> Result<Vec<MessageSetRecord>> {
+    let mut decoder = Decoder::new(bytes);
+    let _partition_leader_epoch = decoder.read_i32()?;
+    let magic = decoder.read_i8()?;
+    if magic != 2 {
+        return Err(Error::UnsupportedVersion {
+            kind: "record batch magic",
+            version: i16::from(magic),
+        });
+    }
+    let _crc = decoder.read_i32()?;
+    let _attributes = decoder.read_i16()?;
+    let _last_offset_delta = decoder.read_i32()?;
+    let base_timestamp = decoder.read_i64()?;
+    let _max_timestamp = decoder.read_i64()?;
+    let _producer_id = decoder.read_i64()?;
+    let _producer_epoch = decoder.read_i16()?;
+    let _base_sequence = decoder.read_i32()?;
+    let record_count = decoder.read_i32()?;
+    if record_count < 0 {
+        return Err(Error::NegativeLength {
+            kind: "record batch records",
+            length: record_count,
+        });
+    }
+
+    let record_count =
+        usize::try_from(record_count).map_err(|_| Error::LengthOverflow("record batch records"))?;
+    let mut records = Vec::with_capacity(record_count);
+    for _ in 0..record_count {
+        let record_length = decoder.read_varint()?;
+        if record_length < 0 {
+            return Err(Error::NegativeLength {
+                kind: "record",
+                length: record_length,
+            });
+        }
+        let record_length =
+            usize::try_from(record_length).map_err(|_| Error::LengthOverflow("record"))?;
+        let record_bytes = decoder.read_exact(record_length)?;
+        records.push(decode_record(base_offset, base_timestamp, record_bytes)?);
+    }
+
+    Ok(records)
+}
+
+fn decode_record(base_offset: i64, base_timestamp: i64, bytes: &[u8]) -> Result<MessageSetRecord> {
+    let mut decoder = Decoder::new(bytes);
+    let _attributes = decoder.read_i8()?;
+    let timestamp_delta = decoder.read_varlong()?;
+    let offset_delta = decoder.read_varint()?;
+    let key = decoder.read_varint_nullable_bytes()?;
+    let value = decoder.read_varint_nullable_bytes()?;
+    let header_count = decoder.read_varint()?;
+    if header_count < 0 {
+        return Err(Error::NegativeLength {
+            kind: "record headers",
+            length: header_count,
+        });
+    }
+    for _ in 0..header_count {
+        let _header_key = decoder.read_varint_bytes()?;
+        let _header_value = decoder.read_varint_nullable_bytes()?;
+    }
+
+    Ok(MessageSetRecord {
+        offset: base_offset.saturating_add(i64::from(offset_delta)),
+        timestamp_ms: base_timestamp.saturating_add(timestamp_delta),
         key,
         value,
     })
@@ -249,5 +329,87 @@ mod tests {
         assert_eq!(response.responses[0].partitions[0].high_watermark, 43);
         assert_eq!(response.responses[0].partitions[0].records, vec![record]);
         assert!(decoder.is_empty());
+    }
+
+    #[test]
+    fn decodes_fetch_response_v2_with_record_batch() {
+        let mut record = Vec::new();
+        record.push(0);
+        write_varlong(&mut record, 5);
+        write_varint(&mut record, 0);
+        write_varint(&mut record, 7);
+        record.extend_from_slice(b"order-1");
+        write_varint(&mut record, 7);
+        record.extend_from_slice(b"created");
+        write_varint(&mut record, 0);
+
+        let mut batch = Encoder::new();
+        batch.write_i32(0);
+        batch.write_i8(2);
+        batch.write_i32(0);
+        batch.write_i16(0);
+        batch.write_i32(0);
+        batch.write_i64(1_000);
+        batch.write_i64(1_005);
+        batch.write_i64(-1);
+        batch.write_i16(-1);
+        batch.write_i32(-1);
+        batch.write_i32(1);
+        let mut encoded_record = Vec::new();
+        write_varint(&mut encoded_record, i32::try_from(record.len()).unwrap());
+        encoded_record.extend_from_slice(&record);
+        batch.write_raw(&encoded_record);
+        let batch = batch.into_bytes();
+
+        let mut set = Encoder::new();
+        set.write_i64(42);
+        set.write_i32(i32::try_from(batch.len()).unwrap());
+        set.write_raw(&batch);
+        let set = set.into_bytes();
+
+        let mut bytes = Encoder::new();
+        bytes.write_i32(0);
+        bytes.write_i32(1);
+        bytes.write_string("orders").unwrap();
+        bytes.write_i32(1);
+        bytes.write_i32(0);
+        bytes.write_i16(0);
+        bytes.write_i64(43);
+        bytes.write_bytes(&set).unwrap();
+        let bytes = bytes.into_bytes();
+
+        let mut decoder = Decoder::new(&bytes);
+        let response = FetchResponseV2::decode_body(&mut decoder).unwrap();
+        let record = MessageSetRecord {
+            offset: 42,
+            timestamp_ms: 1_005,
+            key: Some(b"order-1".to_vec()),
+            value: Some(b"created".to_vec()),
+        };
+
+        assert_eq!(response.responses[0].partitions[0].records, vec![record]);
+        assert!(decoder.is_empty());
+    }
+
+    fn write_varint(output: &mut Vec<u8>, value: i32) {
+        write_unsigned_varint(output, u64::from(((value << 1) ^ (value >> 31)) as u32));
+    }
+
+    fn write_varlong(output: &mut Vec<u8>, value: i64) {
+        write_unsigned_varint(output, ((value << 1) ^ (value >> 63)) as u64);
+    }
+
+    fn write_unsigned_varint(output: &mut Vec<u8>, mut value: u64) {
+        loop {
+            let mut byte = (value & 0x7f) as u8;
+            value >>= 7;
+            if value != 0 {
+                byte |= 0x80;
+            }
+            output.push(byte);
+            if value == 0 {
+                break;
+            }
+        }
     }
 }

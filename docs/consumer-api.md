@@ -29,5 +29,5 @@ Current implementation status:
 - `Consumer::fetch` accepts topic, partition, and offset directly.
 - `Consumer::assign` and `Consumer::poll` provide a stream-like path that advances assigned partition offsets after records are returned.
 - Fetch uses metadata lookup and partition leader routing.
-- The first decoder supports legacy MessageSet records used by the current producer path.
+- The decoder supports legacy MessageSet records and RecordBatch v2 records.
 - Consumer groups and offset commits are intentionally out of scope for the MVP.

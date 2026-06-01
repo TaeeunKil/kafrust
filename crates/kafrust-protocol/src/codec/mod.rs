@@ -75,6 +75,17 @@ mod tests {
     }
 
     #[test]
+    fn decodes_signed_varints() {
+        let mut decoder = Decoder::new(&[0x02, 0x01, 0x04, 0x03]);
+
+        assert_eq!(decoder.read_varint().unwrap(), 1);
+        assert_eq!(decoder.read_varint().unwrap(), -1);
+        assert_eq!(decoder.read_varlong().unwrap(), 2);
+        assert_eq!(decoder.read_varlong().unwrap(), -2);
+        assert!(decoder.is_empty());
+    }
+
+    #[test]
     fn rejects_invalid_bool_and_short_input() {
         let mut decoder = Decoder::new(&[2]);
         assert_eq!(decoder.read_bool(), Err(Error::InvalidBool(2)));
