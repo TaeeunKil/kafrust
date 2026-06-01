@@ -10,6 +10,7 @@ pub enum Error {
     LengthOverflow(&'static str),
     InvalidUtf8,
     VarintTooLong,
+    UnsupportedVersion { kind: &'static str, version: i16 },
 }
 
 impl fmt::Display for Error {
@@ -26,6 +27,9 @@ impl fmt::Display for Error {
             Self::LengthOverflow(kind) => write!(f, "{kind} length does not fit Kafka encoding"),
             Self::InvalidUtf8 => f.write_str("invalid UTF-8 string"),
             Self::VarintTooLong => f.write_str("unsigned varint is too long"),
+            Self::UnsupportedVersion { kind, version } => {
+                write!(f, "unsupported {kind} version {version}")
+            }
         }
     }
 }
