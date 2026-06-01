@@ -5,6 +5,9 @@ pub type Result<T> = core::result::Result<T, Error>;
 #[derive(Debug)]
 pub enum Error {
     MissingBootstrapServer,
+    UnknownTopicOrPartition { topic: String, partition: i32 },
+    MissingLeader { topic: String, partition: i32 },
+    Unsupported(&'static str),
     Io(std::io::Error),
     Protocol(kafrust_protocol::Error),
 }
@@ -13,6 +16,13 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::MissingBootstrapServer => f.write_str("missing Kafka bootstrap server"),
+            Self::UnknownTopicOrPartition { topic, partition } => {
+                write!(f, "unknown topic or partition {topic}-{partition}")
+            }
+            Self::MissingLeader { topic, partition } => {
+                write!(f, "missing leader for topic partition {topic}-{partition}")
+            }
+            Self::Unsupported(feature) => write!(f, "unsupported feature: {feature}"),
             Self::Io(error) => write!(f, "I/O error: {error}"),
             Self::Protocol(error) => write!(f, "Kafka protocol error: {error}"),
         }
@@ -24,7 +34,10 @@ impl std::error::Error for Error {
         match self {
             Self::Io(error) => Some(error),
             Self::Protocol(error) => Some(error),
-            Self::MissingBootstrapServer => None,
+            Self::MissingBootstrapServer
+            | Self::UnknownTopicOrPartition { .. }
+            | Self::MissingLeader { .. }
+            | Self::Unsupported(_) => None,
         }
     }
 }
