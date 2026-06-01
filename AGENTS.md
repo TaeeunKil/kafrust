@@ -6,6 +6,8 @@ This repository is developed with coding agents. Treat these instructions as pro
 
 - Keep kafrust a pure Rust Kafka client.
 - Do not introduce librdkafka, C client bindings, or a required C toolchain.
+- Preserve Kafka user-facing concepts and operational behavior in public APIs.
+- Prefer Rust ergonomics that clarify Kafka concepts over abstractions that hide them.
 - Prefer small, reviewable changes over broad rewrites.
 - Keep public APIs minimal until protocol and runtime behavior are stable.
 - Ground protocol behavior in Kafka API/version details when making assumptions.
