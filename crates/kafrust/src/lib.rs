@@ -1,6 +1,13 @@
 #![doc = include_str!("../../../README.md")]
 #![forbid(unsafe_code)]
 
+pub mod client;
+pub mod config;
+pub mod error;
+
+pub use client::Client;
+pub use config::ClientConfig;
+pub use error::{Error, Result};
 pub use kafrust_protocol as protocol;
 
 /// Returns the crate version compiled into this build.
