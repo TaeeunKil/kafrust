@@ -1,3 +1,5 @@
+#![allow(clippy::expect_used)]
+
 use kafrust::ClientConfig;
 
 #[tokio::test]
