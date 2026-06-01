@@ -23,3 +23,12 @@ kafrust is developed with an agent-assisted workflow that keeps agent work revie
 - [Agent instructions](AGENTS.md)
 - [Agentic development workflow](docs/agentic-development.md)
 - [Roadmap](docs/roadmap.md)
+
+## License
+
+kafrust is licensed under either of:
+
+- [MIT License](LICENSE-MIT)
+- [Apache License, Version 2.0](LICENSE-APACHE)
+
+at your option.
