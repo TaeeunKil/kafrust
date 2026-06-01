@@ -13,8 +13,7 @@ let mut producer = ProducerConfig::new(["localhost:9092"])
 
 let record = ProducerRecord::to("orders")
     .key("order-123")
-    .value("created")
-    .header("source", "checkout");
+    .value("created");
 
 let metadata = producer.send(record).await?;
 println!("{}-{}@{}", metadata.topic(), metadata.partition(), metadata.offset());
@@ -37,5 +36,6 @@ Current implementation status:
 
 - `ProducerConfig`, `ProducerRecord`, `Acks`, and `RecordMetadata` are public API types.
 - `ProducerConfig::build` creates a producer backed by a Kafka broker connection.
-- `Producer::send` performs metadata lookup and leader routing preparation.
-- ProduceRequest wire encoding is not implemented yet.
+- `Producer::send` performs metadata lookup, connects to the partition leader, encodes ProduceRequest v2, and decodes ProduceResponse v2.
+- The first wire path uses the legacy MessageSet v1 record format, so record headers are rejected until RecordBatch encoding is added.
+- `acks=0` is rejected for now because the current client request loop expects a broker response.

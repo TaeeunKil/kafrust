@@ -7,6 +7,8 @@ pub enum Error {
     MissingBootstrapServer,
     UnknownTopicOrPartition { topic: String, partition: i32 },
     MissingLeader { topic: String, partition: i32 },
+    MissingBroker { node_id: i32 },
+    Broker { code: i16, context: String },
     Unsupported(&'static str),
     Io(std::io::Error),
     Protocol(kafrust_protocol::Error),
@@ -22,6 +24,10 @@ impl fmt::Display for Error {
             Self::MissingLeader { topic, partition } => {
                 write!(f, "missing leader for topic partition {topic}-{partition}")
             }
+            Self::MissingBroker { node_id } => {
+                write!(f, "missing broker metadata for node {node_id}")
+            }
+            Self::Broker { code, context } => write!(f, "Kafka broker error {code}: {context}"),
             Self::Unsupported(feature) => write!(f, "unsupported feature: {feature}"),
             Self::Io(error) => write!(f, "I/O error: {error}"),
             Self::Protocol(error) => write!(f, "Kafka protocol error: {error}"),
@@ -37,6 +43,8 @@ impl std::error::Error for Error {
             Self::MissingBootstrapServer
             | Self::UnknownTopicOrPartition { .. }
             | Self::MissingLeader { .. }
+            | Self::MissingBroker { .. }
+            | Self::Broker { .. }
             | Self::Unsupported(_) => None,
         }
     }

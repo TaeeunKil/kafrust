@@ -1,5 +1,8 @@
 use kafrust_protocol::api::api_versions::{ApiVersionsRequestV0, ApiVersionsResponseV0};
 use kafrust_protocol::api::metadata::{MetadataRequestV1, MetadataResponseV1};
+use kafrust_protocol::api::produce::{
+    MessageSetMessage, ProducePartitionV2, ProduceRequestV2, ProduceResponseV2, ProduceTopicV2,
+};
 use kafrust_protocol::codec::Decoder;
 use kafrust_protocol::frame::encode_frame;
 use kafrust_protocol::header::ResponseHeader;
@@ -49,6 +52,47 @@ impl Client {
         let mut decoder = Decoder::new(&response);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(MetadataResponseV1::decode_body(&mut decoder)?)
+    }
+
+    pub async fn produce_v2(
+        &mut self,
+        acks: i16,
+        timeout_ms: i32,
+        topics: Vec<ProduceTopicV2>,
+    ) -> Result<ProduceResponseV2> {
+        let request = ProduceRequestV2 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            acks,
+            timeout_ms,
+            topics,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::new(&response);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(ProduceResponseV2::decode_body(&mut decoder)?)
+    }
+
+    pub async fn produce_one_v2(
+        &mut self,
+        acks: i16,
+        timeout_ms: i32,
+        topic: String,
+        partition_index: i32,
+        records: Vec<MessageSetMessage>,
+    ) -> Result<ProduceResponseV2> {
+        self.produce_v2(
+            acks,
+            timeout_ms,
+            vec![ProduceTopicV2 {
+                name: topic,
+                partitions: vec![ProducePartitionV2 {
+                    partition_index,
+                    records,
+                }],
+            }],
+        )
+        .await
     }
 
     async fn send_request(&mut self, request: &[u8]) -> Result<Vec<u8>> {
