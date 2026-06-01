@@ -1,6 +1,9 @@
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use kafrust_protocol::api::metadata::MetadataResponseV1;
+use kafrust_protocol::api::metadata::{BrokerMetadata, MetadataResponseV1};
+use kafrust_protocol::api::produce::{
+    MessageSetMessage, ProducePartitionResponseV2, ProduceResponseV2,
+};
 
 use crate::client::Client;
 use crate::config::ClientConfig;
@@ -170,13 +173,52 @@ impl Producer {
             .client
             .metadata(Some(vec![record.topic().to_owned()]))
             .await?;
+        if self.config.acks == Acks::None {
+            return Err(Error::Unsupported("producer acks=0 send without response"));
+        }
+        if !record.headers().is_empty() {
+            return Err(Error::Unsupported(
+                "record headers require Kafka record batch encoding",
+            ));
+        }
+
         let partition = choose_partition(&record, &metadata)?;
         let leader = leader_for(&metadata, record.topic(), partition)?;
-        let _acks = self.config.acks.as_i16();
-        let _leader = leader;
+        let broker_addr = broker_addr_for(&metadata, leader)?;
+        let timestamp = record.timestamp_ref().unwrap_or_else(SystemTime::now);
+        let timestamp_ms = timestamp_millis(timestamp);
 
-        Err(Error::Unsupported(
-            "ProduceRequest encoding is not implemented yet",
+        let mut leader_client = Client::connect(
+            broker_addr,
+            self.config.client.client_id_ref().map(str::to_owned),
+        )
+        .await?;
+        let response = leader_client
+            .produce_one_v2(
+                self.config.acks.as_i16(),
+                30_000,
+                record.topic().to_owned(),
+                partition,
+                vec![MessageSetMessage::new(
+                    record.key_ref().map(|key| key.to_vec()),
+                    record.value_ref().map(|value| value.to_vec()),
+                    timestamp_ms,
+                )],
+            )
+            .await?;
+        let partition_response = produce_partition_response(&response, record.topic(), partition)?;
+        if partition_response.error_code != 0 {
+            return Err(Error::Broker {
+                code: partition_response.error_code,
+                context: format!("produce {}-{}", record.topic(), partition),
+            });
+        }
+
+        Ok(RecordMetadata::new(
+            record.topic(),
+            partition,
+            partition_response.base_offset,
+            Some(timestamp),
         ))
     }
 }
@@ -265,6 +307,50 @@ fn leader_for(
                     topic: topic_name.to_owned(),
                     partition: partition_index,
                 })
+        })
+}
+
+fn broker_addr_for(metadata: &MetadataResponseV1, node_id: i32) -> Result<String> {
+    metadata
+        .brokers
+        .iter()
+        .find(|broker| broker.node_id == node_id)
+        .map(broker_addr)
+        .ok_or(Error::MissingBroker { node_id })
+}
+
+fn broker_addr(broker: &BrokerMetadata) -> String {
+    format!("{}:{}", broker.host, broker.port)
+}
+
+fn timestamp_millis(timestamp: SystemTime) -> i64 {
+    let duration = timestamp
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or(Duration::from_millis(0));
+    match i64::try_from(duration.as_millis()) {
+        Ok(value) => value,
+        Err(_) => i64::MAX,
+    }
+}
+
+fn produce_partition_response<'a>(
+    response: &'a ProduceResponseV2,
+    topic_name: &str,
+    partition_index: i32,
+) -> Result<&'a ProducePartitionResponseV2> {
+    response
+        .responses
+        .iter()
+        .find(|topic| topic.name == topic_name)
+        .and_then(|topic| {
+            topic
+                .partitions
+                .iter()
+                .find(|partition| partition.partition_index == partition_index)
+        })
+        .ok_or_else(|| Error::UnknownTopicOrPartition {
+            topic: topic_name.to_owned(),
+            partition: partition_index,
         })
 }
 

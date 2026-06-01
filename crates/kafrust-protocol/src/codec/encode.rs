@@ -168,4 +168,8 @@ impl Encoder {
     pub fn write_empty_tagged_fields(&mut self) {
         self.write_unsigned_varint(0);
     }
+
+    pub fn write_raw(&mut self, bytes: &[u8]) {
+        self.output.extend_from_slice(bytes);
+    }
 }
