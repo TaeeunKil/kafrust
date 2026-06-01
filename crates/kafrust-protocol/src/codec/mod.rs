@@ -22,8 +22,8 @@ mod tests {
         assert_eq!(
             bytes,
             [
-                1, 0x12, 0x34, 0x12, 0x34, 0x56, 0x78, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06,
-                0x07, 0x08,
+                1, 0x12, 0x34, 0x12, 0x34, 0x56, 0x78, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+                0x08,
             ]
         );
 
@@ -45,7 +45,10 @@ mod tests {
 
         let bytes = encoder.into_bytes();
         let mut decoder = Decoder::new(&bytes);
-        assert_eq!(decoder.read_nullable_string().unwrap(), Some("topic".to_owned()));
+        assert_eq!(
+            decoder.read_nullable_string().unwrap(),
+            Some("topic".to_owned())
+        );
         assert_eq!(decoder.read_nullable_string().unwrap(), None);
         assert_eq!(decoder.read_nullable_bytes().unwrap(), Some(vec![1, 2, 3]));
         assert_eq!(decoder.read_nullable_bytes().unwrap(), None);

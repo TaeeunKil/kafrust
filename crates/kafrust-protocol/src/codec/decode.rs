@@ -153,8 +153,7 @@ impl<'a> Decoder<'a> {
             kind: "compact bytes",
             length: -1,
         })?;
-        let length =
-            usize::try_from(length).map_err(|_| Error::LengthOverflow("compact bytes"))?;
+        let length = usize::try_from(length).map_err(|_| Error::LengthOverflow("compact bytes"))?;
         Ok(self.read_exact(length)?.to_vec())
     }
 
@@ -197,7 +196,8 @@ impl<'a> Decoder<'a> {
         if encoded_length == 0 {
             return Ok(None);
         }
-        let length = usize::try_from(encoded_length - 1).map_err(|_| Error::LengthOverflow(kind))?;
+        let length =
+            usize::try_from(encoded_length - 1).map_err(|_| Error::LengthOverflow(kind))?;
         let mut values = Vec::with_capacity(length);
         for _ in 0..length {
             values.push(read_item(self)?);
@@ -212,8 +212,8 @@ impl<'a> Decoder<'a> {
         for _ in 0..count {
             let tag = self.read_unsigned_varint()?;
             let length = self.read_unsigned_varint()?;
-            let length = usize::try_from(length)
-                .map_err(|_| Error::LengthOverflow("tagged field data"))?;
+            let length =
+                usize::try_from(length).map_err(|_| Error::LengthOverflow("tagged field data"))?;
             let data = self.read_exact(length)?.to_vec();
             fields.push(TaggedField { tag, data });
         }
