@@ -164,7 +164,7 @@ Next work:
 
 ## M5 Consumer Group Alpha
 
-Status: In progress.
+Status: Implemented; live group verification is opt-in/manual.
 
 Scope:
 
@@ -178,6 +178,12 @@ Scope:
 - OffsetCommit (implemented as protocol + client roundtrip)
 - ConsumerGroup alpha API with join, sync, heartbeat, poll, and commit
 - rebalance handling (initial range assignment only; no automatic rejoin loop yet)
+
+Known limits:
+
+- Rebalance handling does not yet run an automatic rejoin loop.
+- Heartbeats are sent explicitly through `ConsumerGroup::heartbeat` or before `ConsumerGroup::poll`; there is no background heartbeat task yet.
+- Live group validation still requires running the opt-in example against Kafka.
 
 ## M6 Production Behavior
 
