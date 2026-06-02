@@ -60,6 +60,11 @@ impl ConsumerGroupConfig {
         self
     }
 
+    pub fn request_timeout_ms(mut self, request_timeout_ms: u64) -> Self {
+        self.client = self.client.request_timeout_ms(request_timeout_ms);
+        self
+    }
+
     pub fn subscribe(mut self, topic: impl Into<String>) -> Self {
         self.topics.push(topic.into());
         self
@@ -125,9 +130,10 @@ impl ConsumerGroupConfig {
         }
 
         let coordinator_addr = coordinator_addr(&coordinator);
-        let mut coordinator_client = Client::connect(
+        let mut coordinator_client = Client::connect_with_request_timeout(
             coordinator_addr,
             self.client.client_id_ref().map(str::to_owned),
+            self.client.request_timeout(),
         )
         .await?;
         let subscription = ConsumerProtocolSubscriptionV0 {
@@ -192,6 +198,8 @@ impl ConsumerGroupConfig {
         if let Some(client_id) = self.client.client_id_ref() {
             consumer_config = consumer_config.client_id(client_id);
         }
+        consumer_config =
+            consumer_config.request_timeout_ms(duration_millis(self.client.request_timeout()));
         let consumer_client = self.client.clone().connect().await?;
 
         Ok(ConsumerGroup {
@@ -451,6 +459,10 @@ fn coordinator_addr(coordinator: &FindCoordinatorResponseV1) -> String {
     format!("{}:{}", coordinator.host, coordinator.port)
 }
 
+fn duration_millis(duration: std::time::Duration) -> u64 {
+    u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
+}
+
 fn partitions_for(metadata: &MetadataResponseV1, topic_name: &str) -> Result<Vec<i32>> {
     let topic = metadata
         .topics
@@ -520,6 +532,7 @@ mod tests {
     fn builds_consumer_group_config() {
         let config = ConsumerGroupConfig::new(["localhost:9092"], "orders-group")
             .client_id("orders-reader")
+            .request_timeout_ms(5_000)
             .subscribe("orders")
             .session_timeout_ms(8_000)
             .rebalance_timeout_ms(20_000)

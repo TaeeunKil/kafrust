@@ -211,9 +211,10 @@ impl Producer {
         let leader = leader_for(metadata, record.topic(), partition)?;
         let broker_addr = broker_addr_for(metadata, leader)?;
 
-        let mut leader_client = Client::connect(
+        let mut leader_client = Client::connect_with_request_timeout(
             broker_addr,
             self.config.client.client_id_ref().map(str::to_owned),
+            self.config.client.request_timeout(),
         )
         .await?;
         let response = leader_client
@@ -262,6 +263,11 @@ impl ProducerConfig {
 
     pub fn client_id(mut self, client_id: impl Into<String>) -> Self {
         self.client = self.client.client_id(client_id);
+        self
+    }
+
+    pub fn request_timeout_ms(mut self, request_timeout_ms: u64) -> Self {
+        self.client = self.client.request_timeout_ms(request_timeout_ms);
         self
     }
 
@@ -418,6 +424,7 @@ mod tests {
     fn builds_producer_config() {
         let config = ProducerConfig::new(["localhost:9092"])
             .client_id("orders-api")
+            .request_timeout_ms(5_000)
             .acks(Acks::All);
 
         assert_eq!(config.acks_ref(), Acks::All);

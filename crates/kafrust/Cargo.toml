@@ -16,7 +16,7 @@ workspace = true
 
 [dependencies]
 kafrust-protocol = { version = "0.0.0", path = "../kafrust-protocol" }
-tokio = { version = "1", features = ["io-util", "net"] }
+tokio = { version = "1", features = ["io-util", "net", "time"] }
 
 [dev-dependencies]
-tokio = { version = "1", features = ["io-util", "macros", "net", "rt-multi-thread"] }
+tokio = { version = "1", features = ["io-util", "macros", "net", "rt-multi-thread", "time"] }

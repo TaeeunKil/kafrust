@@ -7,6 +7,7 @@ use kafrust::{Acks, ProducerConfig, ProducerRecord};
 
 let mut producer = ProducerConfig::new(["localhost:9092"])
     .client_id("orders-api")
+    .request_timeout_ms(30_000)
     .acks(Acks::All)
     .build()
     .await?;
@@ -43,6 +44,7 @@ Current implementation status:
 - `ProducerConfig`, `ProducerRecord`, `Acks`, and `RecordMetadata` are public API types.
 - `ProducerConfig::build` creates a producer backed by a Kafka broker connection.
 - `Producer::send` performs metadata lookup, connects to the partition leader, encodes ProduceRequest v2, and decodes ProduceResponse v2.
+- `ProducerConfig::request_timeout_ms` controls the request timeout used for metadata and produce roundtrips.
 - The first wire path uses the legacy MessageSet v1 record format, so record headers are rejected until RecordBatch encoding is added.
 - `acks=0` is rejected for now because the current client request loop expects a broker response.
 - Stale metadata style produce errors are retried once after refreshing metadata.

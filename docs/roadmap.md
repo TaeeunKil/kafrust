@@ -181,11 +181,11 @@ Scope:
 
 ## M6 Production Behavior
 
-Status: Planned.
+Status: In progress.
 
 Scope:
 
-- timeouts
+- request timeouts (implemented through `ClientConfig::request_timeout_ms`)
 - retry policy
 - metadata refresh
 - reconnects

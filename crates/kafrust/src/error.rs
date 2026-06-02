@@ -9,6 +9,7 @@ pub enum Error {
     MissingLeader { topic: String, partition: i32 },
     MissingBroker { node_id: i32 },
     Broker { code: i16, context: String },
+    RequestTimedOut { timeout_ms: u64 },
     Unsupported(&'static str),
     Io(std::io::Error),
     Protocol(kafrust_protocol::Error),
@@ -28,6 +29,9 @@ impl fmt::Display for Error {
                 write!(f, "missing broker metadata for node {node_id}")
             }
             Self::Broker { code, context } => write!(f, "Kafka broker error {code}: {context}"),
+            Self::RequestTimedOut { timeout_ms } => {
+                write!(f, "Kafka request timed out after {timeout_ms}ms")
+            }
             Self::Unsupported(feature) => write!(f, "unsupported feature: {feature}"),
             Self::Io(error) => write!(f, "I/O error: {error}"),
             Self::Protocol(error) => write!(f, "Kafka protocol error: {error}"),
@@ -45,6 +49,7 @@ impl std::error::Error for Error {
             | Self::MissingLeader { .. }
             | Self::MissingBroker { .. }
             | Self::Broker { .. }
+            | Self::RequestTimedOut { .. }
             | Self::Unsupported(_) => None,
         }
     }

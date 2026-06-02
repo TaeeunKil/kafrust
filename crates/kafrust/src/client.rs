@@ -25,6 +25,7 @@ use kafrust_protocol::api::sync_group::{
 use kafrust_protocol::codec::Decoder;
 use kafrust_protocol::frame::encode_frame;
 use kafrust_protocol::header::ResponseHeader;
+use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
@@ -35,6 +36,7 @@ pub struct Client {
     stream: TcpStream,
     client_id: Option<String>,
     next_correlation_id: i32,
+    request_timeout: Option<Duration>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -58,6 +60,21 @@ impl Client {
             stream,
             client_id,
             next_correlation_id: 1,
+            request_timeout: None,
+        })
+    }
+
+    pub(crate) async fn connect_with_request_timeout(
+        server: impl tokio::net::ToSocketAddrs,
+        client_id: Option<String>,
+        request_timeout: Duration,
+    ) -> Result<Self> {
+        let stream = TcpStream::connect(server).await?;
+        Ok(Self {
+            stream,
+            client_id,
+            next_correlation_id: 1,
+            request_timeout: Some(request_timeout),
         })
     }
 
@@ -272,6 +289,18 @@ impl Client {
     }
 
     async fn send_request(&mut self, request: &[u8]) -> Result<Vec<u8>> {
+        if let Some(timeout) = self.request_timeout {
+            return tokio::time::timeout(timeout, self.send_request_unbounded(request))
+                .await
+                .map_err(|_| Error::RequestTimedOut {
+                    timeout_ms: duration_millis(timeout),
+                })?;
+        }
+
+        self.send_request_unbounded(request).await
+    }
+
+    async fn send_request_unbounded(&mut self, request: &[u8]) -> Result<Vec<u8>> {
         let frame = encode_frame(request)?;
         self.stream.write_all(&frame).await?;
         self.stream.flush().await?;
@@ -300,5 +329,44 @@ impl Client {
         let correlation_id = self.next_correlation_id;
         self.next_correlation_id = self.next_correlation_id.wrapping_add(1).max(1);
         correlation_id
+    }
+}
+
+fn duration_millis(duration: Duration) -> u64 {
+    u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::Client;
+    use crate::Error;
+    use std::time::Duration;
+    use tokio::io::AsyncReadExt;
+    use tokio::net::TcpListener;
+
+    #[tokio::test]
+    async fn times_out_when_broker_does_not_respond() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut size = [0u8; 4];
+            socket.read_exact(&mut size).await.unwrap();
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        });
+
+        let mut client = Client::connect_with_request_timeout(
+            addr,
+            Some("kafrust-timeout-test".to_owned()),
+            Duration::from_millis(5),
+        )
+        .await
+        .unwrap();
+
+        let error = client.api_versions().await.unwrap_err();
+
+        assert!(matches!(error, Error::RequestTimedOut { timeout_ms: 5 }));
+        server.await.unwrap();
     }
 }

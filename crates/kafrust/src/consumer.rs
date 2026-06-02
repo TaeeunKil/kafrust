@@ -115,9 +115,10 @@ impl Consumer {
         let metadata = self.client.metadata(Some(vec![topic.clone()])).await?;
         let leader = leader_for(&metadata, &topic, partition)?;
         let broker_addr = broker_addr_for(&metadata, leader)?;
-        let mut leader_client = Client::connect(
+        let mut leader_client = Client::connect_with_request_timeout(
             broker_addr,
             self.config.client.client_id_ref().map(str::to_owned),
+            self.config.client.request_timeout(),
         )
         .await?;
         let response = leader_client
@@ -231,6 +232,11 @@ impl ConsumerConfig {
         self
     }
 
+    pub fn request_timeout_ms(mut self, request_timeout_ms: u64) -> Self {
+        self.client = self.client.request_timeout_ms(request_timeout_ms);
+        self
+    }
+
     pub fn max_wait_ms(mut self, max_wait_ms: i32) -> Self {
         self.max_wait_ms = max_wait_ms;
         self
@@ -336,6 +342,7 @@ mod tests {
     fn builds_consumer_config() {
         let config = ConsumerConfig::new(["localhost:9092"])
             .client_id("orders-reader")
+            .request_timeout_ms(5_000)
             .max_wait_ms(250)
             .min_bytes(10)
             .max_partition_bytes(1024);
