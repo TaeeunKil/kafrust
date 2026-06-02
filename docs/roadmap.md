@@ -164,16 +164,16 @@ Next work:
 
 ## M5 Consumer Group Alpha
 
-Status: Planned.
+Status: In progress.
 
 Scope:
 
-- FindCoordinator
-- JoinGroup
-- SyncGroup
-- Heartbeat
-- OffsetFetch
-- OffsetCommit
+- FindCoordinator (implemented as protocol + client roundtrip)
+- JoinGroup (protocol v2 request/response implemented)
+- SyncGroup (protocol v2 request/response implemented)
+- Heartbeat (protocol v2 request/response implemented)
+- OffsetFetch (implemented as protocol + client roundtrip)
+- OffsetCommit (implemented as protocol + client roundtrip)
 - rebalance handling
 
 ## M6 Production Behavior

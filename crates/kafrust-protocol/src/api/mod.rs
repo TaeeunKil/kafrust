@@ -1,4 +1,10 @@
 pub mod api_versions;
 pub mod fetch;
+pub mod find_coordinator;
+pub mod heartbeat;
+pub mod join_group;
 pub mod metadata;
+pub mod offset_commit;
+pub mod offset_fetch;
 pub mod produce;
+pub mod sync_group;

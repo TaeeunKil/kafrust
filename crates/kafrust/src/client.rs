@@ -2,7 +2,16 @@ use kafrust_protocol::api::api_versions::{ApiVersionsRequestV0, ApiVersionsRespo
 use kafrust_protocol::api::fetch::{
     FetchPartitionV2, FetchRequestV2, FetchResponseV2, FetchTopicV2,
 };
+use kafrust_protocol::api::find_coordinator::{
+    CoordinatorType, FindCoordinatorRequestV1, FindCoordinatorResponseV1,
+};
 use kafrust_protocol::api::metadata::{MetadataRequestV1, MetadataResponseV1};
+use kafrust_protocol::api::offset_commit::{
+    OffsetCommitRequestV2, OffsetCommitResponseV2, OffsetCommitTopic,
+};
+use kafrust_protocol::api::offset_fetch::{
+    OffsetFetchRequestV2, OffsetFetchResponseV2, OffsetFetchTopic,
+};
 use kafrust_protocol::api::produce::{
     MessageSetMessage, ProducePartitionV2, ProduceRequestV2, ProduceResponseV2, ProduceTopicV2,
 };
@@ -66,6 +75,62 @@ impl Client {
         let mut decoder = Decoder::new(&response);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(MetadataResponseV1::decode_body(&mut decoder)?)
+    }
+
+    pub async fn find_group_coordinator(
+        &mut self,
+        group_id: impl Into<String>,
+    ) -> Result<FindCoordinatorResponseV1> {
+        let request = FindCoordinatorRequestV1 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            coordinator_key: group_id.into(),
+            coordinator_type: CoordinatorType::Group,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::new(&response);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(FindCoordinatorResponseV1::decode_body(&mut decoder)?)
+    }
+
+    pub async fn offset_fetch_v2(
+        &mut self,
+        group_id: impl Into<String>,
+        topics: Option<Vec<OffsetFetchTopic>>,
+    ) -> Result<OffsetFetchResponseV2> {
+        let request = OffsetFetchRequestV2 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            group_id: group_id.into(),
+            topics,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::new(&response);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(OffsetFetchResponseV2::decode_body(&mut decoder)?)
+    }
+
+    pub async fn offset_commit_v2(
+        &mut self,
+        group_id: impl Into<String>,
+        generation_id_or_member_epoch: i32,
+        member_id: impl Into<String>,
+        retention_time_ms: i64,
+        topics: Vec<OffsetCommitTopic>,
+    ) -> Result<OffsetCommitResponseV2> {
+        let request = OffsetCommitRequestV2 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            group_id: group_id.into(),
+            generation_id_or_member_epoch,
+            member_id: member_id.into(),
+            retention_time_ms,
+            topics,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::new(&response);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(OffsetCommitResponseV2::decode_body(&mut decoder)?)
     }
 
     pub(crate) async fn fetch_one_v2(
