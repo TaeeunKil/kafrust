@@ -173,6 +173,7 @@ Scope:
 - SyncGroup (implemented as protocol + client roundtrip)
 - Heartbeat (implemented as protocol + client roundtrip)
 - classic consumer protocol subscription/assignment v0 payloads
+- internal range assignment for classic rebalance leaders
 - OffsetFetch (implemented as protocol + client roundtrip)
 - OffsetCommit (implemented as protocol + client roundtrip)
 - rebalance handling

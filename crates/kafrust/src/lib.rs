@@ -5,6 +5,8 @@ pub mod client;
 pub mod config;
 pub mod consumer;
 pub mod error;
+#[allow(dead_code)]
+mod group;
 pub mod producer;
 
 pub use client::Client;
