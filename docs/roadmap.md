@@ -172,6 +172,7 @@ Scope:
 - JoinGroup (implemented as protocol + client roundtrip)
 - SyncGroup (implemented as protocol + client roundtrip)
 - Heartbeat (implemented as protocol + client roundtrip)
+- classic consumer protocol subscription/assignment v0 payloads
 - OffsetFetch (implemented as protocol + client roundtrip)
 - OffsetCommit (implemented as protocol + client roundtrip)
 - rebalance handling

@@ -24,6 +24,7 @@ Current implementation status:
 - SyncGroup v2 request/response protocol types exist.
 - Heartbeat v2 request/response protocol types exist.
 - `Client::join_group_v2`, `Client::sync_group_v2`, and `Client::heartbeat_v2` can send coordinator-scoped group membership requests.
+- Classic consumer protocol subscription and assignment v0 payloads can be encoded and decoded for JoinGroup/SyncGroup metadata.
 - OffsetFetch v2 request/response protocol types exist.
 - OffsetCommit v2 request/response protocol types exist.
 - `Client::offset_fetch_v2` and `Client::offset_commit_v2` can send coordinator-scoped offset requests.
