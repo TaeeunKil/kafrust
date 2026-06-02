@@ -3,7 +3,7 @@ use kafrust_protocol::api::metadata::{BrokerMetadata, MetadataResponseV1};
 
 use crate::client::{Client, FetchOneRequestV2};
 use crate::config::ClientConfig;
-use crate::error::{Error, Result};
+use crate::error::{BrokerErrorKind, Error, Result};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConsumerRecord {
@@ -112,8 +112,27 @@ impl Consumer {
         offset: i64,
     ) -> Result<Vec<ConsumerRecord>> {
         let topic = topic.into();
-        let metadata = self.client.metadata(Some(vec![topic.clone()])).await?;
-        let leader = leader_for(&metadata, &topic, partition)?;
+        let mut attempt = 0;
+
+        loop {
+            let result = self.fetch_once(&topic, partition, offset).await;
+            match result {
+                Err(error) if attempt < self.config.max_retries && can_retry_fetch(&error) => {
+                    attempt += 1;
+                }
+                result => return result,
+            }
+        }
+    }
+
+    async fn fetch_once(
+        &mut self,
+        topic: &str,
+        partition: i32,
+        offset: i64,
+    ) -> Result<Vec<ConsumerRecord>> {
+        let metadata = self.client.metadata(Some(vec![topic.to_owned()])).await?;
+        let leader = leader_for(&metadata, topic, partition)?;
         let broker_addr = broker_addr_for(&metadata, leader)?;
         let mut leader_client = Client::connect_with_request_timeout(
             broker_addr,
@@ -126,13 +145,13 @@ impl Consumer {
                 replica_id: -1,
                 max_wait_ms: self.config.max_wait_ms,
                 min_bytes: self.config.min_bytes,
-                topic: topic.clone(),
+                topic: topic.to_owned(),
                 partition_index: partition,
                 fetch_offset: offset,
                 max_bytes: self.config.max_partition_bytes,
             })
             .await?;
-        let partition_response = fetch_partition_response(&response, &topic, partition)?;
+        let partition_response = fetch_partition_response(&response, topic, partition)?;
         if partition_response.error_code != 0 {
             return Err(Error::Broker {
                 code: partition_response.error_code,
@@ -144,7 +163,7 @@ impl Consumer {
             .records
             .iter()
             .cloned()
-            .map(|record| ConsumerRecord::from_message_set(&topic, partition, record))
+            .map(|record| ConsumerRecord::from_message_set(topic, partition, record))
             .collect())
     }
 
@@ -215,6 +234,7 @@ pub struct ConsumerConfig {
     max_wait_ms: i32,
     min_bytes: i32,
     max_partition_bytes: i32,
+    max_retries: u32,
 }
 
 impl ConsumerConfig {
@@ -224,6 +244,7 @@ impl ConsumerConfig {
             max_wait_ms: 500,
             min_bytes: 1,
             max_partition_bytes: 1_048_576,
+            max_retries: 1,
         }
     }
 
@@ -250,6 +271,15 @@ impl ConsumerConfig {
     pub fn max_partition_bytes(mut self, max_partition_bytes: i32) -> Self {
         self.max_partition_bytes = max_partition_bytes;
         self
+    }
+
+    pub fn max_retries(mut self, max_retries: u32) -> Self {
+        self.max_retries = max_retries;
+        self
+    }
+
+    pub fn max_retries_ref(&self) -> u32 {
+        self.max_retries
     }
 
     pub fn client_config(&self) -> &ClientConfig {
@@ -329,10 +359,34 @@ fn fetch_partition_response<'a>(
         })
 }
 
+fn can_retry_fetch(error: &Error) -> bool {
+    match error {
+        Error::Broker { code, .. } => matches!(
+            BrokerErrorKind::from_code(*code),
+            BrokerErrorKind::UnknownTopicOrPartition
+                | BrokerErrorKind::LeaderNotAvailable
+                | BrokerErrorKind::NotLeaderOrFollower
+                | BrokerErrorKind::RequestTimedOut
+                | BrokerErrorKind::ReplicaNotAvailable
+        ),
+        Error::Io(_) | Error::RequestTimedOut { .. } => true,
+        Error::MissingBootstrapServer
+        | Error::UnknownTopicOrPartition { .. }
+        | Error::MissingLeader { .. }
+        | Error::MissingBroker { .. }
+        | Error::Unsupported(_)
+        | Error::Protocol(_) => false,
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
-    use super::{assign_partition, leader_for, ConsumerAssignment, ConsumerConfig, ConsumerRecord};
+    use super::{
+        assign_partition, can_retry_fetch, leader_for, ConsumerAssignment, ConsumerConfig,
+        ConsumerRecord,
+    };
+    use crate::Error;
     use kafrust_protocol::api::fetch::MessageSetRecord;
     use kafrust_protocol::api::metadata::{
         BrokerMetadata, MetadataResponseV1, PartitionMetadata, TopicMetadata,
@@ -345,12 +399,14 @@ mod tests {
             .request_timeout_ms(5_000)
             .max_wait_ms(250)
             .min_bytes(10)
-            .max_partition_bytes(1024);
+            .max_partition_bytes(1024)
+            .max_retries(3);
 
         assert_eq!(
             config.client_config().client_id_ref(),
             Some("orders-reader")
         );
+        assert_eq!(config.max_retries_ref(), 3);
     }
 
     #[test]
@@ -390,6 +446,20 @@ mod tests {
     #[test]
     fn resolves_partition_leader() {
         assert_eq!(leader_for(&metadata_fixture(), "orders", 0).unwrap(), 1);
+    }
+
+    #[test]
+    fn classifies_retriable_fetch_errors() {
+        assert!(can_retry_fetch(&Error::Broker {
+            code: 6,
+            context: "fetch orders-0@0".to_owned(),
+        }));
+        assert!(can_retry_fetch(&Error::RequestTimedOut { timeout_ms: 5 }));
+        assert!(can_retry_fetch(&Error::Io(std::io::Error::new(
+            std::io::ErrorKind::ConnectionReset,
+            "reset",
+        ))));
+        assert!(!can_retry_fetch(&Error::Unsupported("fetch v99")));
     }
 
     fn metadata_fixture() -> MetadataResponseV1 {

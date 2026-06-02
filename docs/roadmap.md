@@ -195,6 +195,7 @@ Scope:
 - producer retry policy (implemented through `ProducerConfig::max_retries`)
 - metadata refresh
 - producer reconnect on retriable send failures
+- consumer fetch retry and reconnect on transient failures
 - bootstrap failover (implemented by trying configured bootstrap servers in order)
 - error classification (initial `BrokerErrorKind` mapping implemented)
 - tracing

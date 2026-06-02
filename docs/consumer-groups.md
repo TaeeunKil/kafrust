@@ -8,6 +8,7 @@ use kafrust::ConsumerGroupConfig;
 let mut group = ConsumerGroupConfig::new(["localhost:9092"], "orders-group")
     .client_id("orders-reader")
     .request_timeout_ms(30_000)
+    .max_retries(1)
     .subscribe("orders")
     .join()
     .await?;
@@ -35,6 +36,7 @@ Current implementation status:
 - `Client::offset_fetch_v2` and `Client::offset_commit_v2` can send coordinator-scoped offset requests.
 - `ConsumerGroupConfig` and `ConsumerGroup` provide a minimal join, sync, heartbeat, poll, and commit path.
 - `ConsumerGroupConfig::request_timeout_ms` controls coordinator, metadata, fetch, heartbeat, and commit request timeouts.
+- `ConsumerGroupConfig::max_retries` is passed through to the direct fetch path after group assignment.
 - Broker error codes can be classified with `BrokerErrorKind` for common coordinator, generation, and rebalance errors.
 - Rebalance handling is limited to the initial classic range assignment. There is no automatic rejoin loop yet.
 
