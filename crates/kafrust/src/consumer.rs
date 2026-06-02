@@ -60,6 +60,18 @@ pub struct Consumer {
 }
 
 impl Consumer {
+    pub(crate) fn from_assignments(
+        client: Client,
+        config: ConsumerConfig,
+        assignments: Vec<ConsumerAssignment>,
+    ) -> Self {
+        Self {
+            client,
+            config,
+            assignments,
+        }
+    }
+
     pub fn assign(&mut self, topic: impl Into<String>, partition: i32, offset: i64) {
         assign_partition(&mut self.assignments, topic.into(), partition, offset);
     }
@@ -154,6 +166,14 @@ pub struct ConsumerAssignment {
 }
 
 impl ConsumerAssignment {
+    pub(crate) fn new(topic: String, partition: i32, next_offset: i64) -> Self {
+        Self {
+            topic,
+            partition,
+            next_offset,
+        }
+    }
+
     pub fn topic(&self) -> &str {
         &self.topic
     }

@@ -1,20 +1,23 @@
 # Consumer Group Direction
 
-Consumer groups should be added incrementally after the direct consumer path is stable. The first group milestone is coordinator discovery; group membership and offset commits build on top of it.
+Consumer groups are being added incrementally after the direct consumer path. The alpha path supports the classic consumer group protocol with the range assignor.
 
 ```rust
-use kafrust::ClientConfig;
+use kafrust::ConsumerGroupConfig;
 
-let mut client = ClientConfig::new(["localhost:9092"])
+let mut group = ConsumerGroupConfig::new(["localhost:9092"], "orders-group")
     .client_id("orders-reader")
-    .connect()
+    .subscribe("orders")
+    .join()
     .await?;
 
-let coordinator = client.find_group_coordinator("orders-group").await?;
-println!("coordinator {}:{}", coordinator.host, coordinator.port);
+let records = group.poll().await?;
+group.commit_offsets().await?;
 ```
 
-Offset fetches and commits are coordinator-scoped Kafka requests. Discover the coordinator first, connect to `coordinator.host:coordinator.port`, then issue `offset_fetch_v2` or `offset_commit_v2` on that coordinator connection.
+Under the hood, `ConsumerGroupConfig::join` discovers the coordinator, sends `JoinGroup v2`, computes range assignments if this member is the leader, sends `SyncGroup v2`, fetches committed offsets for assigned partitions, and builds a direct `Consumer` for fetching records. `ConsumerGroup::poll` sends a heartbeat before fetching assigned partitions, and `ConsumerGroup::commit_offsets` commits the current next offsets.
+
+Offset fetches and commits are coordinator-scoped Kafka requests. The lower-level `Client` methods remain available for protocol-focused experiments, but the alpha user path is `ConsumerGroupConfig`.
 
 Current implementation status:
 
@@ -29,12 +32,19 @@ Current implementation status:
 - OffsetFetch v2 request/response protocol types exist.
 - OffsetCommit v2 request/response protocol types exist.
 - `Client::offset_fetch_v2` and `Client::offset_commit_v2` can send coordinator-scoped offset requests.
-- Rebalance handling is not implemented yet.
+- `ConsumerGroupConfig` and `ConsumerGroup` provide a minimal join, sync, heartbeat, poll, and commit path.
+- Rebalance handling is limited to the initial classic range assignment. There is no automatic rejoin loop yet.
 
 Run the opt-in coordinator example against a local broker:
 
 ```bash
 KAFRUST_BOOTSTRAP_SERVERS=localhost:9092 KAFRUST_GROUP_ID=orders-group cargo run -p kafrust --example find_group_coordinator
+```
+
+Run the opt-in group poll example:
+
+```bash
+KAFRUST_BOOTSTRAP_SERVERS=localhost:9092 KAFRUST_GROUP_ID=orders-group KAFRUST_TOPIC=orders cargo run -p kafrust --example consumer_group_poll
 ```
 
 The opt-in broker roundtrip test also covers coordinator discovery when `KAFRUST_BOOTSTRAP_SERVERS` is set.

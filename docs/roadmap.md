@@ -176,7 +176,8 @@ Scope:
 - internal range assignment for classic rebalance leaders
 - OffsetFetch (implemented as protocol + client roundtrip)
 - OffsetCommit (implemented as protocol + client roundtrip)
-- rebalance handling
+- ConsumerGroup alpha API with join, sync, heartbeat, poll, and commit
+- rebalance handling (initial range assignment only; no automatic rejoin loop yet)
 
 ## M6 Production Behavior
 
