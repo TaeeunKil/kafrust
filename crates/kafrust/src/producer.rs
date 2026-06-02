@@ -192,10 +192,7 @@ impl Producer {
                 .await;
 
             match result {
-                Err(Error::Broker { code, .. })
-                    if attempt < self.config.max_retries
-                        && BrokerErrorKind::from_code(code).is_produce_retryable() =>
-                {
+                Err(error) if attempt < self.config.max_retries && can_retry_send(&error) => {
                     attempt += 1;
                 }
                 result => return result,
@@ -397,12 +394,27 @@ fn produce_partition_response<'a>(
         })
 }
 
+fn can_retry_send(error: &Error) -> bool {
+    match error {
+        Error::Broker { code, .. } => BrokerErrorKind::from_code(*code).is_produce_retryable(),
+        Error::Io(_) | Error::RequestTimedOut { .. } => true,
+        Error::MissingBootstrapServer
+        | Error::UnknownTopicOrPartition { .. }
+        | Error::MissingLeader { .. }
+        | Error::MissingBroker { .. }
+        | Error::Unsupported(_)
+        | Error::Protocol(_) => false,
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::{
-        choose_partition, leader_for, Acks, ProducerConfig, ProducerRecord, RecordMetadata,
+        can_retry_send, choose_partition, leader_for, Acks, ProducerConfig, ProducerRecord,
+        RecordMetadata,
     };
+    use crate::{BrokerErrorKind, Error};
     use kafrust_protocol::api::metadata::{
         BrokerMetadata, MetadataResponseV1, PartitionMetadata, TopicMetadata,
     };
@@ -474,6 +486,28 @@ mod tests {
         let metadata = metadata_fixture();
 
         assert_eq!(leader_for(&metadata, "orders", 0).unwrap(), 1);
+    }
+
+    #[test]
+    fn classifies_retriable_send_errors() {
+        assert!(can_retry_send(&Error::Broker {
+            code: 5,
+            context: "produce orders-0".to_owned(),
+        }));
+        assert!(can_retry_send(&Error::RequestTimedOut { timeout_ms: 5 }));
+        assert!(can_retry_send(&Error::Io(std::io::Error::new(
+            std::io::ErrorKind::ConnectionReset,
+            "reset",
+        ))));
+        assert!(!can_retry_send(&Error::Unsupported("record headers")));
+        assert_eq!(
+            Error::Broker {
+                code: 5,
+                context: "produce orders-0".to_owned(),
+            }
+            .broker_error_kind(),
+            Some(BrokerErrorKind::LeaderNotAvailable)
+        );
     }
 
     fn metadata_fixture() -> MetadataResponseV1 {

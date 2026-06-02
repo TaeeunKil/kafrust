@@ -46,7 +46,7 @@ Current implementation status:
 - `ProducerConfig::build` creates a producer backed by a Kafka broker connection.
 - `Producer::send` performs metadata lookup, connects to the partition leader, encodes ProduceRequest v2, and decodes ProduceResponse v2.
 - `ProducerConfig::request_timeout_ms` controls the request timeout used for metadata and produce roundtrips.
-- `ProducerConfig::max_retries` controls retry attempts for stale metadata and transient leader errors classified by `BrokerErrorKind`.
+- `ProducerConfig::max_retries` controls retry attempts for stale metadata, transient leader errors classified by `BrokerErrorKind`, request timeouts, and connection I/O failures.
 - The first wire path uses the legacy MessageSet v1 record format, so record headers are rejected until RecordBatch encoding is added.
 - `acks=0` is rejected for now because the current client request loop expects a broker response.
 - Stale metadata style produce errors are retried once after refreshing metadata.
