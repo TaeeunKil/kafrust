@@ -5,6 +5,10 @@ use kafrust_protocol::api::fetch::{
 use kafrust_protocol::api::find_coordinator::{
     CoordinatorType, FindCoordinatorRequestV1, FindCoordinatorResponseV1,
 };
+use kafrust_protocol::api::heartbeat::{HeartbeatRequestV2, HeartbeatResponseV2};
+use kafrust_protocol::api::join_group::{
+    JoinGroupProtocol, JoinGroupRequestV2, JoinGroupResponseV2,
+};
 use kafrust_protocol::api::metadata::{MetadataRequestV1, MetadataResponseV1};
 use kafrust_protocol::api::offset_commit::{
     OffsetCommitRequestV2, OffsetCommitResponseV2, OffsetCommitTopic,
@@ -14,6 +18,9 @@ use kafrust_protocol::api::offset_fetch::{
 };
 use kafrust_protocol::api::produce::{
     MessageSetMessage, ProducePartitionV2, ProduceRequestV2, ProduceResponseV2, ProduceTopicV2,
+};
+use kafrust_protocol::api::sync_group::{
+    SyncGroupAssignment, SyncGroupRequestV2, SyncGroupResponseV2,
 };
 use kafrust_protocol::codec::Decoder;
 use kafrust_protocol::frame::encode_frame;
@@ -108,6 +115,71 @@ impl Client {
         let mut decoder = Decoder::new(&response);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(OffsetFetchResponseV2::decode_body(&mut decoder)?)
+    }
+
+    pub async fn join_group_v2(
+        &mut self,
+        group_id: impl Into<String>,
+        session_timeout_ms: i32,
+        rebalance_timeout_ms: i32,
+        member_id: impl Into<String>,
+        protocol_type: impl Into<String>,
+        protocols: Vec<JoinGroupProtocol>,
+    ) -> Result<JoinGroupResponseV2> {
+        let request = JoinGroupRequestV2 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            group_id: group_id.into(),
+            session_timeout_ms,
+            rebalance_timeout_ms,
+            member_id: member_id.into(),
+            protocol_type: protocol_type.into(),
+            protocols,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::new(&response);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(JoinGroupResponseV2::decode_body(&mut decoder)?)
+    }
+
+    pub async fn sync_group_v2(
+        &mut self,
+        group_id: impl Into<String>,
+        generation_id: i32,
+        member_id: impl Into<String>,
+        assignments: Vec<SyncGroupAssignment>,
+    ) -> Result<SyncGroupResponseV2> {
+        let request = SyncGroupRequestV2 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            group_id: group_id.into(),
+            generation_id,
+            member_id: member_id.into(),
+            assignments,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::new(&response);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(SyncGroupResponseV2::decode_body(&mut decoder)?)
+    }
+
+    pub async fn heartbeat_v2(
+        &mut self,
+        group_id: impl Into<String>,
+        generation_id: i32,
+        member_id: impl Into<String>,
+    ) -> Result<HeartbeatResponseV2> {
+        let request = HeartbeatRequestV2 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            group_id: group_id.into(),
+            generation_id,
+            member_id: member_id.into(),
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::new(&response);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(HeartbeatResponseV2::decode_body(&mut decoder)?)
     }
 
     pub async fn offset_commit_v2(

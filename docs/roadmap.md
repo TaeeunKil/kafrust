@@ -169,9 +169,9 @@ Status: In progress.
 Scope:
 
 - FindCoordinator (implemented as protocol + client roundtrip)
-- JoinGroup (protocol v2 request/response implemented)
-- SyncGroup (protocol v2 request/response implemented)
-- Heartbeat (protocol v2 request/response implemented)
+- JoinGroup (implemented as protocol + client roundtrip)
+- SyncGroup (implemented as protocol + client roundtrip)
+- Heartbeat (implemented as protocol + client roundtrip)
 - OffsetFetch (implemented as protocol + client roundtrip)
 - OffsetCommit (implemented as protocol + client roundtrip)
 - rebalance handling
