@@ -85,13 +85,18 @@ impl Consumer {
         let mut records = Vec::new();
 
         for assignment in assignments {
-            let fetched = self
+            if records.len() >= self.config.max_poll_records {
+                break;
+            }
+
+            let mut fetched = self
                 .fetch(
                     &assignment.topic,
                     assignment.partition,
                     assignment.next_offset,
                 )
                 .await?;
+            limit_fetched_records(&mut fetched, records.len(), self.config.max_poll_records);
             if let Some(last) = fetched.last() {
                 self.update_assignment_offset(
                     &assignment.topic,
@@ -235,6 +240,7 @@ pub struct ConsumerConfig {
     min_bytes: i32,
     max_partition_bytes: i32,
     max_retries: u32,
+    max_poll_records: usize,
 }
 
 impl ConsumerConfig {
@@ -245,6 +251,7 @@ impl ConsumerConfig {
             min_bytes: 1,
             max_partition_bytes: 1_048_576,
             max_retries: 1,
+            max_poll_records: 500,
         }
     }
 
@@ -280,6 +287,15 @@ impl ConsumerConfig {
 
     pub fn max_retries_ref(&self) -> u32 {
         self.max_retries
+    }
+
+    pub fn max_poll_records(mut self, max_poll_records: usize) -> Self {
+        self.max_poll_records = max_poll_records;
+        self
+    }
+
+    pub fn max_poll_records_ref(&self) -> usize {
+        self.max_poll_records
     }
 
     pub fn client_config(&self) -> &ClientConfig {
@@ -379,12 +395,21 @@ fn can_retry_fetch(error: &Error) -> bool {
     }
 }
 
+fn limit_fetched_records(
+    fetched: &mut Vec<ConsumerRecord>,
+    current_record_count: usize,
+    max_poll_records: usize,
+) {
+    let remaining = max_poll_records.saturating_sub(current_record_count);
+    fetched.truncate(remaining);
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::{
-        assign_partition, can_retry_fetch, leader_for, ConsumerAssignment, ConsumerConfig,
-        ConsumerRecord,
+        assign_partition, can_retry_fetch, leader_for, limit_fetched_records, ConsumerAssignment,
+        ConsumerConfig, ConsumerRecord,
     };
     use crate::Error;
     use kafrust_protocol::api::fetch::MessageSetRecord;
@@ -400,13 +425,15 @@ mod tests {
             .max_wait_ms(250)
             .min_bytes(10)
             .max_partition_bytes(1024)
-            .max_retries(3);
+            .max_retries(3)
+            .max_poll_records(10);
 
         assert_eq!(
             config.client_config().client_id_ref(),
             Some("orders-reader")
         );
         assert_eq!(config.max_retries_ref(), 3);
+        assert_eq!(config.max_poll_records_ref(), 10);
     }
 
     #[test]
@@ -460,6 +487,38 @@ mod tests {
             "reset",
         ))));
         assert!(!can_retry_fetch(&Error::Unsupported("fetch v99")));
+    }
+
+    #[test]
+    fn limits_fetched_records_to_remaining_poll_budget() {
+        let mut records = vec![
+            ConsumerRecord::from_message_set("orders", 0, message(10)),
+            ConsumerRecord::from_message_set("orders", 0, message(11)),
+            ConsumerRecord::from_message_set("orders", 0, message(12)),
+        ];
+
+        limit_fetched_records(&mut records, 1, 3);
+
+        assert_eq!(records.len(), 2);
+        assert_eq!(records[1].offset(), 11);
+    }
+
+    #[test]
+    fn clears_fetched_records_when_poll_budget_is_exhausted() {
+        let mut records = vec![ConsumerRecord::from_message_set("orders", 0, message(10))];
+
+        limit_fetched_records(&mut records, 3, 3);
+
+        assert!(records.is_empty());
+    }
+
+    fn message(offset: i64) -> MessageSetRecord {
+        MessageSetRecord {
+            offset,
+            timestamp_ms: 123,
+            key: None,
+            value: None,
+        }
     }
 
     fn metadata_fixture() -> MetadataResponseV1 {

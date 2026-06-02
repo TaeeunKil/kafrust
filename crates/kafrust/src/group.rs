@@ -35,6 +35,7 @@ pub struct ConsumerGroupConfig {
     min_bytes: i32,
     max_partition_bytes: i32,
     max_retries: u32,
+    max_poll_records: usize,
 }
 
 impl ConsumerGroupConfig {
@@ -54,6 +55,7 @@ impl ConsumerGroupConfig {
             min_bytes: 1,
             max_partition_bytes: 1_048_576,
             max_retries: 1,
+            max_poll_records: 500,
         }
     }
 
@@ -109,6 +111,11 @@ impl ConsumerGroupConfig {
 
     pub fn max_retries(mut self, max_retries: u32) -> Self {
         self.max_retries = max_retries;
+        self
+    }
+
+    pub fn max_poll_records(mut self, max_poll_records: usize) -> Self {
+        self.max_poll_records = max_poll_records;
         self
     }
 
@@ -202,7 +209,8 @@ impl ConsumerGroupConfig {
                 .max_wait_ms(self.max_wait_ms)
                 .min_bytes(self.min_bytes)
                 .max_partition_bytes(self.max_partition_bytes)
-                .max_retries(self.max_retries);
+                .max_retries(self.max_retries)
+                .max_poll_records(self.max_poll_records);
         if let Some(client_id) = self.client.client_id_ref() {
             consumer_config = consumer_config.client_id(client_id);
         }
@@ -549,7 +557,8 @@ mod tests {
             .max_wait_ms(250)
             .min_bytes(10)
             .max_partition_bytes(1024)
-            .max_retries(3);
+            .max_retries(3)
+            .max_poll_records(10);
 
         assert_eq!(config.group_id(), "orders-group");
         assert_eq!(config.topics(), &["orders".to_owned()]);

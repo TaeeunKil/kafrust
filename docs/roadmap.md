@@ -199,7 +199,7 @@ Scope:
 - bootstrap failover (implemented by trying configured bootstrap servers in order)
 - error classification (initial `BrokerErrorKind` mapping implemented)
 - tracing
-- backpressure
+- poll backpressure (implemented through `ConsumerConfig::max_poll_records`)
 
 ## M7 Public Alpha
 

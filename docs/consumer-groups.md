@@ -9,6 +9,7 @@ let mut group = ConsumerGroupConfig::new(["localhost:9092"], "orders-group")
     .client_id("orders-reader")
     .request_timeout_ms(30_000)
     .max_retries(1)
+    .max_poll_records(500)
     .subscribe("orders")
     .join()
     .await?;
@@ -37,6 +38,7 @@ Current implementation status:
 - `ConsumerGroupConfig` and `ConsumerGroup` provide a minimal join, sync, heartbeat, poll, and commit path.
 - `ConsumerGroupConfig::request_timeout_ms` controls coordinator, metadata, fetch, heartbeat, and commit request timeouts.
 - `ConsumerGroupConfig::max_retries` is passed through to the direct fetch path after group assignment.
+- `ConsumerGroupConfig::max_poll_records` is passed through to the direct poll path after group assignment.
 - Broker error codes can be classified with `BrokerErrorKind` for common coordinator, generation, and rebalance errors.
 - Rebalance handling is limited to the initial classic range assignment. There is no automatic rejoin loop yet.
 
