@@ -193,7 +193,8 @@ impl Producer {
 
             match result {
                 Err(Error::Broker { code, .. })
-                    if attempt == 0 && BrokerErrorKind::from_code(code).is_produce_retryable() =>
+                    if attempt < self.config.max_retries
+                        && BrokerErrorKind::from_code(code).is_produce_retryable() =>
                 {
                     attempt += 1;
                 }
@@ -253,6 +254,7 @@ impl Producer {
 pub struct ProducerConfig {
     client: ClientConfig,
     acks: Acks,
+    max_retries: u32,
 }
 
 impl ProducerConfig {
@@ -260,6 +262,7 @@ impl ProducerConfig {
         Self {
             client: ClientConfig::new(bootstrap_servers),
             acks: Acks::Leader,
+            max_retries: 1,
         }
     }
 
@@ -278,8 +281,17 @@ impl ProducerConfig {
         self
     }
 
+    pub fn max_retries(mut self, max_retries: u32) -> Self {
+        self.max_retries = max_retries;
+        self
+    }
+
     pub fn acks_ref(&self) -> Acks {
         self.acks
+    }
+
+    pub fn max_retries_ref(&self) -> u32 {
+        self.max_retries
     }
 
     pub fn client_config(&self) -> &ClientConfig {
@@ -423,9 +435,11 @@ mod tests {
         let config = ProducerConfig::new(["localhost:9092"])
             .client_id("orders-api")
             .request_timeout_ms(5_000)
+            .max_retries(3)
             .acks(Acks::All);
 
         assert_eq!(config.acks_ref(), Acks::All);
+        assert_eq!(config.max_retries_ref(), 3);
         assert_eq!(config.client_config().client_id_ref(), Some("orders-api"));
     }
 

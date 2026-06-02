@@ -186,7 +186,7 @@ Status: In progress.
 Scope:
 
 - request timeouts (implemented through `ClientConfig::request_timeout_ms`)
-- retry policy
+- producer retry policy (implemented through `ProducerConfig::max_retries`)
 - metadata refresh
 - reconnects
 - failover
