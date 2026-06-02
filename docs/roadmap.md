@@ -189,7 +189,7 @@ Scope:
 - producer retry policy (implemented through `ProducerConfig::max_retries`)
 - metadata refresh
 - reconnects
-- failover
+- bootstrap failover (implemented by trying configured bootstrap servers in order)
 - error classification (initial `BrokerErrorKind` mapping implemented)
 - tracing
 - backpressure

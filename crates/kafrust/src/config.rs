@@ -43,12 +43,25 @@ impl ClientConfig {
     }
 
     pub async fn connect(self) -> Result<Client> {
-        let server = self
-            .bootstrap_servers
-            .first()
-            .ok_or(Error::MissingBootstrapServer)?
-            .clone();
-        Client::connect_with_request_timeout(server, self.client_id, self.request_timeout).await
+        if self.bootstrap_servers.is_empty() {
+            return Err(Error::MissingBootstrapServer);
+        }
+
+        let mut last_error = None;
+        for server in &self.bootstrap_servers {
+            match Client::connect_with_request_timeout(
+                server.clone(),
+                self.client_id.clone(),
+                self.request_timeout,
+            )
+            .await
+            {
+                Ok(client) => return Ok(client),
+                Err(error) => last_error = Some(error),
+            }
+        }
+
+        Err(last_error.unwrap_or(Error::MissingBootstrapServer))
     }
 }
 
@@ -57,6 +70,7 @@ impl ClientConfig {
 mod tests {
     use super::ClientConfig;
     use std::time::Duration;
+    use tokio::net::TcpListener;
 
     #[test]
     fn stores_bootstrap_servers_and_client_id() {
@@ -67,5 +81,22 @@ mod tests {
         assert_eq!(config.bootstrap_servers(), &["localhost:9092".to_owned()]);
         assert_eq!(config.client_id_ref(), Some("kafrust-test"));
         assert_eq!(config.request_timeout(), Duration::from_millis(5_000));
+    }
+
+    #[tokio::test]
+    async fn connects_to_later_bootstrap_server_when_first_fails() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let _accepted = listener.accept().await.unwrap();
+        });
+
+        let client = ClientConfig::new(["127.0.0.1:1".to_owned(), addr.to_string()])
+            .request_timeout_ms(5_000)
+            .connect()
+            .await;
+
+        assert!(client.is_ok());
+        server.await.unwrap();
     }
 }
