@@ -7,7 +7,7 @@ use kafrust_protocol::api::produce::{
 
 use crate::client::Client;
 use crate::config::ClientConfig;
-use crate::error::{Error, Result};
+use crate::error::{BrokerErrorKind, Error, Result};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Acks {
@@ -192,7 +192,9 @@ impl Producer {
                 .await;
 
             match result {
-                Err(Error::Broker { code, .. }) if attempt == 0 && can_retry_produce(code) => {
+                Err(Error::Broker { code, .. })
+                    if attempt == 0 && BrokerErrorKind::from_code(code).is_produce_retryable() =>
+                {
                     attempt += 1;
                 }
                 result => return result,
@@ -360,10 +362,6 @@ fn timestamp_millis(timestamp: SystemTime) -> i64 {
         Ok(value) => value,
         Err(_) => i64::MAX,
     }
-}
-
-fn can_retry_produce(code: i16) -> bool {
-    matches!(code, 3 | 5 | 6 | 7 | 9)
 }
 
 fn produce_partition_response<'a>(

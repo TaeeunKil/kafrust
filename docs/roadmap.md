@@ -190,7 +190,7 @@ Scope:
 - metadata refresh
 - reconnects
 - failover
-- error classification
+- error classification (initial `BrokerErrorKind` mapping implemented)
 - tracing
 - backpressure
 

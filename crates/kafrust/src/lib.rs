@@ -11,7 +11,7 @@ pub mod producer;
 pub use client::Client;
 pub use config::ClientConfig;
 pub use consumer::{Consumer, ConsumerAssignment, ConsumerConfig, ConsumerRecord};
-pub use error::{Error, Result};
+pub use error::{BrokerErrorKind, Error, Result};
 pub use group::{ConsumerGroup, ConsumerGroupConfig};
 pub use kafrust_protocol as protocol;
 pub use producer::{Acks, Header, ProducerConfig, ProducerRecord, RecordMetadata};
