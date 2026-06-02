@@ -1,11 +1,11 @@
 # Broker Roundtrip
 
-kafrust includes an opt-in broker roundtrip check for M2 development. It connects to one Kafka-compatible bootstrap broker, sends `ApiVersions v0`, then sends `Metadata v1`.
+kafrust includes opt-in broker roundtrip checks. The M2 check connects to one Kafka-compatible bootstrap broker, sends `ApiVersions v0`, then sends `Metadata v1`. The consumer group check sends `FindCoordinator v1` for `KAFRUST_GROUP_ID`.
 
 Run it against a local broker:
 
 ```sh
-KAFRUST_BOOTSTRAP_SERVERS=localhost:9092 cargo test -p kafrust --test broker_roundtrip -- --nocapture
+KAFRUST_BOOTSTRAP_SERVERS=localhost:9092 KAFRUST_GROUP_ID=kafrust-smoke cargo test -p kafrust --test broker_roundtrip -- --nocapture
 ```
 
 Or run the example:
