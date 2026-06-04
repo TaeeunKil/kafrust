@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use kafrust_protocol::api::fetch::{FetchPartitionResponseV2, FetchResponseV2, MessageSetRecord};
 use kafrust_protocol::api::metadata::{BrokerMetadata, MetadataResponseV1};
 
@@ -65,6 +67,7 @@ pub struct Consumer {
     client: Client,
     config: ConsumerConfig,
     assignments: Vec<ConsumerAssignment>,
+    metadata_cache: BTreeMap<String, MetadataResponseV1>,
 }
 
 impl Consumer {
@@ -77,6 +80,7 @@ impl Consumer {
             client,
             config,
             assignments,
+            metadata_cache: BTreeMap::new(),
         }
     }
 
@@ -135,6 +139,7 @@ impl Consumer {
             let result = self.fetch_once(&topic, partition, offset).await;
             match result {
                 Err(error) if attempt < self.config.max_retries && can_retry_fetch(&error) => {
+                    invalidate_metadata_cache(&mut self.metadata_cache, &topic);
                     attempt += 1;
                 }
                 result => return result,
@@ -148,7 +153,7 @@ impl Consumer {
         partition: i32,
         offset: i64,
     ) -> Result<Vec<ConsumerRecord>> {
-        let metadata = self.client.metadata(Some(vec![topic.to_owned()])).await?;
+        let metadata = self.metadata_for_topic(topic).await?;
         let leader = leader_for(&metadata, topic, partition)?;
         let broker_addr = broker_addr_for(&metadata, leader)?;
         let mut leader_client = Client::connect_with_request_timeout(
@@ -192,6 +197,17 @@ impl Consumer {
         {
             assignment.next_offset = next_offset;
         }
+    }
+
+    async fn metadata_for_topic(&mut self, topic: &str) -> Result<MetadataResponseV1> {
+        if let Some(metadata) = self.metadata_cache.get(topic) {
+            return Ok(metadata.clone());
+        }
+
+        let metadata = self.client.metadata(Some(vec![topic.to_owned()])).await?;
+        self.metadata_cache
+            .insert(topic.to_owned(), metadata.clone());
+        Ok(metadata)
     }
 }
 
@@ -337,6 +353,7 @@ impl ConsumerConfig {
             client,
             config: self,
             assignments: Vec::new(),
+            metadata_cache: BTreeMap::new(),
         })
     }
 }
@@ -434,18 +451,26 @@ fn limit_fetched_records(
     fetched.truncate(remaining);
 }
 
+fn invalidate_metadata_cache(
+    metadata_cache: &mut BTreeMap<String, MetadataResponseV1>,
+    topic: &str,
+) {
+    metadata_cache.remove(topic);
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::{
-        assign_partition, can_retry_fetch, leader_for, limit_fetched_records, ConsumerAssignment,
-        ConsumerConfig, ConsumerRecord,
+        assign_partition, can_retry_fetch, invalidate_metadata_cache, leader_for,
+        limit_fetched_records, ConsumerAssignment, ConsumerConfig, ConsumerRecord,
     };
     use crate::Error;
     use kafrust_protocol::api::fetch::MessageSetRecord;
     use kafrust_protocol::api::metadata::{
         BrokerMetadata, MetadataResponseV1, PartitionMetadata, TopicMetadata,
     };
+    use std::collections::BTreeMap;
 
     #[test]
     fn builds_consumer_config() {
@@ -540,6 +565,18 @@ mod tests {
         limit_fetched_records(&mut records, 3, 3);
 
         assert!(records.is_empty());
+    }
+
+    #[test]
+    fn invalidates_topic_metadata_cache() {
+        let mut cache = BTreeMap::new();
+        cache.insert("orders".to_owned(), metadata_fixture());
+        cache.insert("payments".to_owned(), metadata_fixture());
+
+        invalidate_metadata_cache(&mut cache, "orders");
+
+        assert!(!cache.contains_key("orders"));
+        assert!(cache.contains_key("payments"));
     }
 
     fn message(offset: i64) -> MessageSetRecord {

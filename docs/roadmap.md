@@ -204,7 +204,7 @@ Scope:
 Known limits:
 
 - Reconnects happen through operation retries, not long-lived connection recovery.
-- Metadata caching currently exists on the producer path only.
+- Metadata caching currently exists on the producer and direct consumer paths.
 - Tracing emits request lifecycle metadata but does not yet include higher-level producer, consumer, or group spans.
 - Backpressure is limited to per-poll record count, not socket or memory pressure.
 
