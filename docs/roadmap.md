@@ -164,40 +164,63 @@ Next work:
 
 ## M5 Consumer Group Alpha
 
-Status: Planned.
+Status: Implemented; live group verification is opt-in/manual.
 
 Scope:
 
-- FindCoordinator
-- JoinGroup
-- SyncGroup
-- Heartbeat
-- OffsetFetch
-- OffsetCommit
-- rebalance handling
+- FindCoordinator (implemented as protocol + client roundtrip)
+- JoinGroup (implemented as protocol + client roundtrip)
+- SyncGroup (implemented as protocol + client roundtrip)
+- Heartbeat (implemented as protocol + client roundtrip)
+- classic consumer protocol subscription/assignment v0 payloads
+- internal range assignment for classic rebalance leaders
+- OffsetFetch (implemented as protocol + client roundtrip)
+- OffsetCommit (implemented as protocol + client roundtrip)
+- ConsumerGroup alpha API with join, sync, heartbeat, poll, and commit
+- rebalance handling (initial range assignment only; no automatic rejoin loop yet)
+
+Known limits:
+
+- Rebalance handling does not yet run an automatic rejoin loop.
+- Heartbeats are sent explicitly through `ConsumerGroup::heartbeat` or before `ConsumerGroup::poll`; there is no background heartbeat task yet.
+- Live group validation still requires running the opt-in example against Kafka.
 
 ## M6 Production Behavior
 
-Status: Planned.
+Status: Implemented; deeper resilience behavior remains iterative.
 
 Scope:
 
-- timeouts
-- retry policy
-- metadata refresh
-- reconnects
-- failover
-- error classification
-- tracing
-- backpressure
+- request timeouts (implemented through `ClientConfig::request_timeout_ms`)
+- producer retry policy (implemented through `ProducerConfig::max_retries`)
+- producer metadata cache and refresh on retriable send failures
+- producer reconnect on retriable send failures
+- consumer fetch retry and reconnect on transient failures
+- bootstrap failover (implemented by trying configured bootstrap servers in order)
+- error classification (initial `BrokerErrorKind` mapping implemented)
+- request tracing (implemented with `tracing` events for request/response metadata)
+- poll backpressure (implemented through `ConsumerConfig::max_poll_records`)
+
+Known limits:
+
+- Reconnects happen through operation retries, not long-lived connection recovery.
+- Metadata caching currently exists on the producer path only.
+- Tracing emits request lifecycle metadata but does not yet include higher-level producer, consumer, or group spans.
+- Backpressure is limited to per-poll record count, not socket or memory pressure.
 
 ## M7 Public Alpha
 
-Status: Planned.
+Status: Implemented; publishing remains manual.
 
 Scope:
 
-- examples
-- API docs
-- integration tests
-- crates.io release preparation
+- examples (implemented for broker roundtrip, producer send, direct consumer fetch, coordinator discovery, and group poll)
+- API docs (implemented for the public `kafrust` API and enforced with `missing_docs`)
+- integration tests (implemented as opt-in broker roundtrip tests)
+- crates.io release preparation (documented in `docs/release.md`)
+
+Known limits:
+
+- No crate has been published yet.
+- Live broker checks are still manual and opt-in.
+- Crates are versioned for public alpha but have not been published yet.

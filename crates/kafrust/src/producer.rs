@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use kafrust_protocol::api::metadata::{BrokerMetadata, MetadataResponseV1};
@@ -7,16 +8,21 @@ use kafrust_protocol::api::produce::{
 
 use crate::client::Client;
 use crate::config::ClientConfig;
-use crate::error::{Error, Result};
+use crate::error::{BrokerErrorKind, Error, Result};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Kafka produce acknowledgement policy.
 pub enum Acks {
+    /// Do not wait for a broker response.
     None,
+    /// Wait for the partition leader to acknowledge the write.
     Leader,
+    /// Wait for all in-sync replicas required by the topic configuration.
     All,
 }
 
 impl Acks {
+    /// Returns the Kafka protocol value for this acknowledgement policy.
     pub fn as_i16(self) -> i16 {
         match self {
             Self::None => 0,
@@ -27,12 +33,14 @@ impl Acks {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Kafka record header.
 pub struct Header {
     key: String,
     value: Vec<u8>,
 }
 
 impl Header {
+    /// Creates a record header from a key and raw value bytes.
     pub fn new(key: impl Into<String>, value: impl Into<Vec<u8>>) -> Self {
         Self {
             key: key.into(),
@@ -40,16 +48,19 @@ impl Header {
         }
     }
 
+    /// Returns the header key.
     pub fn key(&self) -> &str {
         &self.key
     }
 
+    /// Returns the header value bytes.
     pub fn value(&self) -> &[u8] {
         &self.value
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Record to produce to a Kafka topic.
 pub struct ProducerRecord {
     topic: String,
     partition: Option<i32>,
@@ -60,6 +71,7 @@ pub struct ProducerRecord {
 }
 
 impl ProducerRecord {
+    /// Creates a record targeting a Kafka topic.
     pub fn to(topic: impl Into<String>) -> Self {
         Self {
             topic: topic.into(),
@@ -71,57 +83,69 @@ impl ProducerRecord {
         }
     }
 
+    /// Sets an explicit Kafka partition for this record.
     pub fn partition(mut self, partition: i32) -> Self {
         self.partition = Some(partition);
         self
     }
 
+    /// Sets the record key bytes.
     pub fn key(mut self, key: impl Into<Vec<u8>>) -> Self {
         self.key = Some(key.into());
         self
     }
 
+    /// Sets the record value bytes.
     pub fn value(mut self, value: impl Into<Vec<u8>>) -> Self {
         self.value = Some(value.into());
         self
     }
 
+    /// Adds a Kafka record header.
     pub fn header(mut self, key: impl Into<String>, value: impl Into<Vec<u8>>) -> Self {
         self.headers.push(Header::new(key, value));
         self
     }
 
+    /// Sets the record timestamp.
     pub fn timestamp(mut self, timestamp: SystemTime) -> Self {
         self.timestamp = Some(timestamp);
         self
     }
 
+    /// Returns the target Kafka topic.
     pub fn topic(&self) -> &str {
         &self.topic
     }
 
+    /// Returns the explicit partition, when one was set.
     pub fn partition_ref(&self) -> Option<i32> {
         self.partition
     }
 
+    /// Returns the record key bytes.
     pub fn key_ref(&self) -> Option<&[u8]> {
         self.key.as_deref()
     }
 
+    /// Returns the record value bytes.
     pub fn value_ref(&self) -> Option<&[u8]> {
         self.value.as_deref()
     }
 
+    /// Returns the configured record headers.
     pub fn headers(&self) -> &[Header] {
         &self.headers
     }
 
+    /// Returns the configured timestamp.
     pub fn timestamp_ref(&self) -> Option<SystemTime> {
         self.timestamp
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Metadata returned after a successful produce request.
 pub struct RecordMetadata {
     topic: String,
     partition: i32,
@@ -130,6 +154,7 @@ pub struct RecordMetadata {
 }
 
 impl RecordMetadata {
+    /// Creates metadata for a produced record.
     pub fn new(
         topic: impl Into<String>,
         partition: i32,
@@ -144,30 +169,37 @@ impl RecordMetadata {
         }
     }
 
+    /// Returns the Kafka topic that accepted the record.
     pub fn topic(&self) -> &str {
         &self.topic
     }
 
+    /// Returns the Kafka partition that accepted the record.
     pub fn partition(&self) -> i32 {
         self.partition
     }
 
+    /// Returns the base offset reported by Kafka.
     pub fn offset(&self) -> i64 {
         self.offset
     }
 
+    /// Returns the timestamp associated with the produced record.
     pub fn timestamp(&self) -> Option<SystemTime> {
         self.timestamp
     }
 }
 
 #[derive(Debug)]
+/// Kafka producer using metadata-based leader routing.
 pub struct Producer {
     client: Client,
     config: ProducerConfig,
+    metadata_cache: BTreeMap<String, MetadataResponseV1>,
 }
 
 impl Producer {
+    /// Sends one record and returns Kafka metadata for the accepted write.
     pub async fn send(&mut self, record: ProducerRecord) -> Result<RecordMetadata> {
         if self.config.acks == Acks::None {
             return Err(Error::Unsupported("producer acks=0 send without response"));
@@ -181,23 +213,33 @@ impl Producer {
         let timestamp = record.timestamp_ref().unwrap_or_else(SystemTime::now);
         let timestamp_ms = timestamp_millis(timestamp);
         let mut attempt = 0;
+        let topic = record.topic().to_owned();
 
         loop {
-            let metadata = self
-                .client
-                .metadata(Some(vec![record.topic().to_owned()]))
-                .await?;
+            let metadata = self.metadata_for_topic(&topic).await?;
             let result = self
                 .send_with_metadata(&record, &metadata, timestamp, timestamp_ms)
                 .await;
 
             match result {
-                Err(Error::Broker { code, .. }) if attempt == 0 && can_retry_produce(code) => {
+                Err(error) if attempt < self.config.max_retries && can_retry_send(&error) => {
+                    invalidate_metadata_cache(&mut self.metadata_cache, &topic);
                     attempt += 1;
                 }
                 result => return result,
             }
         }
+    }
+
+    async fn metadata_for_topic(&mut self, topic: &str) -> Result<MetadataResponseV1> {
+        if let Some(metadata) = self.metadata_cache.get(topic) {
+            return Ok(metadata.clone());
+        }
+
+        let metadata = self.client.metadata(Some(vec![topic.to_owned()])).await?;
+        self.metadata_cache
+            .insert(topic.to_owned(), metadata.clone());
+        Ok(metadata)
     }
 
     async fn send_with_metadata(
@@ -211,9 +253,10 @@ impl Producer {
         let leader = leader_for(metadata, record.topic(), partition)?;
         let broker_addr = broker_addr_for(metadata, leader)?;
 
-        let mut leader_client = Client::connect(
+        let mut leader_client = Client::connect_with_request_timeout(
             broker_addr,
             self.config.client.client_id_ref().map(str::to_owned),
+            self.config.client.request_timeout(),
         )
         .await?;
         let response = leader_client
@@ -247,42 +290,69 @@ impl Producer {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Configuration builder for [`Producer`].
 pub struct ProducerConfig {
     client: ClientConfig,
     acks: Acks,
+    max_retries: u32,
 }
 
 impl ProducerConfig {
+    /// Creates a producer configuration from one or more Kafka bootstrap servers.
     pub fn new(bootstrap_servers: impl IntoIterator<Item = impl Into<String>>) -> Self {
         Self {
             client: ClientConfig::new(bootstrap_servers),
             acks: Acks::Leader,
+            max_retries: 1,
         }
     }
 
+    /// Sets the Kafka client ID used by producer requests.
     pub fn client_id(mut self, client_id: impl Into<String>) -> Self {
         self.client = self.client.client_id(client_id);
         self
     }
 
+    /// Sets the request timeout in milliseconds.
+    pub fn request_timeout_ms(mut self, request_timeout_ms: u64) -> Self {
+        self.client = self.client.request_timeout_ms(request_timeout_ms);
+        self
+    }
+
+    /// Sets the Kafka produce acknowledgement policy.
     pub fn acks(mut self, acks: Acks) -> Self {
         self.acks = acks;
         self
     }
 
+    /// Sets the maximum number of retry attempts for retriable send failures.
+    pub fn max_retries(mut self, max_retries: u32) -> Self {
+        self.max_retries = max_retries;
+        self
+    }
+
+    /// Returns the configured acknowledgement policy.
     pub fn acks_ref(&self) -> Acks {
         self.acks
     }
 
+    /// Returns the configured maximum retry count.
+    pub fn max_retries_ref(&self) -> u32 {
+        self.max_retries
+    }
+
+    /// Returns the shared client configuration.
     pub fn client_config(&self) -> &ClientConfig {
         &self.client
     }
 
+    /// Connects to Kafka and builds a producer.
     pub async fn build(self) -> Result<Producer> {
         let client = self.client.clone().connect().await?;
         Ok(Producer {
             client,
             config: self,
+            metadata_cache: BTreeMap::new(),
         })
     }
 }
@@ -356,10 +426,6 @@ fn timestamp_millis(timestamp: SystemTime) -> i64 {
     }
 }
 
-fn can_retry_produce(code: i16) -> bool {
-    matches!(code, 3 | 5 | 6 | 7 | 9)
-}
-
 fn produce_partition_response<'a>(
     response: &'a ProduceResponseV2,
     topic_name: &str,
@@ -381,15 +447,38 @@ fn produce_partition_response<'a>(
         })
 }
 
+fn can_retry_send(error: &Error) -> bool {
+    match error {
+        Error::Broker { code, .. } => BrokerErrorKind::from_code(*code).is_produce_retryable(),
+        Error::Io(_) | Error::RequestTimedOut { .. } => true,
+        Error::MissingBootstrapServer
+        | Error::UnknownTopicOrPartition { .. }
+        | Error::MissingLeader { .. }
+        | Error::MissingBroker { .. }
+        | Error::Unsupported(_)
+        | Error::Protocol(_) => false,
+    }
+}
+
+fn invalidate_metadata_cache(
+    metadata_cache: &mut BTreeMap<String, MetadataResponseV1>,
+    topic: &str,
+) {
+    metadata_cache.remove(topic);
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::{
-        choose_partition, leader_for, Acks, ProducerConfig, ProducerRecord, RecordMetadata,
+        can_retry_send, choose_partition, invalidate_metadata_cache, leader_for, Acks,
+        ProducerConfig, ProducerRecord, RecordMetadata,
     };
+    use crate::{BrokerErrorKind, Error};
     use kafrust_protocol::api::metadata::{
         BrokerMetadata, MetadataResponseV1, PartitionMetadata, TopicMetadata,
     };
+    use std::collections::BTreeMap;
 
     #[test]
     fn maps_acks_to_kafka_values() {
@@ -418,9 +507,12 @@ mod tests {
     fn builds_producer_config() {
         let config = ProducerConfig::new(["localhost:9092"])
             .client_id("orders-api")
+            .request_timeout_ms(5_000)
+            .max_retries(3)
             .acks(Acks::All);
 
         assert_eq!(config.acks_ref(), Acks::All);
+        assert_eq!(config.max_retries_ref(), 3);
         assert_eq!(config.client_config().client_id_ref(), Some("orders-api"));
     }
 
@@ -455,6 +547,40 @@ mod tests {
         let metadata = metadata_fixture();
 
         assert_eq!(leader_for(&metadata, "orders", 0).unwrap(), 1);
+    }
+
+    #[test]
+    fn classifies_retriable_send_errors() {
+        assert!(can_retry_send(&Error::Broker {
+            code: 5,
+            context: "produce orders-0".to_owned(),
+        }));
+        assert!(can_retry_send(&Error::RequestTimedOut { timeout_ms: 5 }));
+        assert!(can_retry_send(&Error::Io(std::io::Error::new(
+            std::io::ErrorKind::ConnectionReset,
+            "reset",
+        ))));
+        assert!(!can_retry_send(&Error::Unsupported("record headers")));
+        assert_eq!(
+            Error::Broker {
+                code: 5,
+                context: "produce orders-0".to_owned(),
+            }
+            .broker_error_kind(),
+            Some(BrokerErrorKind::LeaderNotAvailable)
+        );
+    }
+
+    #[test]
+    fn invalidates_topic_metadata_cache() {
+        let mut cache = BTreeMap::new();
+        cache.insert("orders".to_owned(), metadata_fixture());
+        cache.insert("payments".to_owned(), metadata_fixture());
+
+        invalidate_metadata_cache(&mut cache, "orders");
+
+        assert!(!cache.contains_key("orders"));
+        assert!(cache.contains_key("payments"));
     }
 
     fn metadata_fixture() -> MetadataResponseV1 {

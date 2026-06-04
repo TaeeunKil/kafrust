@@ -1,16 +1,25 @@
 #![doc = include_str!("../../../README.md")]
 #![forbid(unsafe_code)]
+#![warn(missing_docs)]
 
+/// Low-level Kafka request client.
 pub mod client;
+/// Shared connection configuration.
 pub mod config;
+/// Direct topic/partition consumer API.
 pub mod consumer;
+/// Error and result types.
 pub mod error;
+/// Classic consumer group alpha API.
+pub mod group;
+/// Producer API.
 pub mod producer;
 
 pub use client::Client;
 pub use config::ClientConfig;
 pub use consumer::{Consumer, ConsumerAssignment, ConsumerConfig, ConsumerRecord};
-pub use error::{Error, Result};
+pub use error::{BrokerErrorKind, Error, Result};
+pub use group::{ConsumerGroup, ConsumerGroupConfig};
 pub use kafrust_protocol as protocol;
 pub use producer::{Acks, Header, ProducerConfig, ProducerRecord, RecordMetadata};
 

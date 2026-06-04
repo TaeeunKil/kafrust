@@ -8,6 +8,7 @@
 
 pub mod api;
 pub mod codec;
+pub mod consumer_group;
 pub mod error;
 pub mod frame;
 pub mod header;

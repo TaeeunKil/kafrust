@@ -7,6 +7,9 @@ use kafrust::ConsumerConfig;
 
 let mut consumer = ConsumerConfig::new(["localhost:9092"])
     .client_id("orders-reader")
+    .request_timeout_ms(30_000)
+    .max_retries(1)
+    .max_poll_records(500)
     .build()
     .await?;
 
@@ -29,5 +32,8 @@ Current implementation status:
 - `Consumer::fetch` accepts topic, partition, and offset directly.
 - `Consumer::assign` and `Consumer::poll` provide a stream-like path that advances assigned partition offsets after records are returned.
 - Fetch uses metadata lookup and partition leader routing.
+- `ConsumerConfig::request_timeout_ms` controls the request timeout used for metadata and fetch roundtrips.
+- `ConsumerConfig::max_retries` controls retry attempts for transient fetch broker errors, request timeouts, and connection I/O failures.
+- `ConsumerConfig::max_poll_records` limits how many records one `poll` call returns.
 - The decoder supports legacy MessageSet records and RecordBatch v2 records.
-- Consumer groups and offset commits are intentionally out of scope for the MVP.
+- Consumer groups and offset commits are available through the separate alpha `ConsumerGroupConfig` path.
