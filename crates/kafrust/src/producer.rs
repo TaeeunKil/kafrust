@@ -1,9 +1,11 @@
 use std::collections::BTreeMap;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use kafrust_protocol::api::api_versions::ApiVersionsResponseV0;
 use kafrust_protocol::api::metadata::{BrokerMetadata, MetadataResponseV1};
 use kafrust_protocol::api::produce::{
-    ProducePartitionResponseV2, ProduceResponseV2, RecordBatchMessage,
+    MessageSetMessage, ProducePartitionResponseV2, ProduceResponseV2, RecordBatchMessage,
+    API_KEY as PRODUCE_API_KEY,
 };
 
 use crate::client::Client;
@@ -254,16 +256,39 @@ impl Producer {
             self.config.client.request_timeout(),
         )
         .await?;
-        let response = leader_client
-            .produce_one_v3(
-                None,
-                self.config.acks.as_i16(),
-                30_000,
-                record.topic().to_owned(),
-                partition,
-                vec![record_batch_message(record, timestamp_ms)],
-            )
-            .await?;
+        let api_versions = leader_client.api_versions().await?;
+        if api_versions.error_code != 0 {
+            return Err(Error::Broker {
+                code: api_versions.error_code,
+                context: format!("api versions for produce {}-{}", record.topic(), partition),
+            });
+        }
+
+        let response = match select_produce_version(&api_versions, record)? {
+            ProduceVersion::V3 => {
+                leader_client
+                    .produce_one_v3(
+                        None,
+                        self.config.acks.as_i16(),
+                        30_000,
+                        record.topic().to_owned(),
+                        partition,
+                        vec![record_batch_message(record, timestamp_ms)],
+                    )
+                    .await?
+            }
+            ProduceVersion::V2 => {
+                leader_client
+                    .produce_one_v2(
+                        self.config.acks.as_i16(),
+                        30_000,
+                        record.topic().to_owned(),
+                        partition,
+                        vec![message_set_message(record, timestamp_ms)],
+                    )
+                    .await?
+            }
+        };
         let partition_response = produce_partition_response(&response, record.topic(), partition)?;
         if partition_response.error_code != 0 {
             return Err(Error::Broker {
@@ -430,6 +455,44 @@ fn record_batch_message(record: &ProducerRecord, timestamp_ms: i64) -> RecordBat
     message
 }
 
+fn message_set_message(record: &ProducerRecord, timestamp_ms: i64) -> MessageSetMessage {
+    MessageSetMessage::new(
+        record.key_ref().map(|key| key.to_vec()),
+        record.value_ref().map(|value| value.to_vec()),
+        timestamp_ms,
+    )
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ProduceVersion {
+    V2,
+    V3,
+}
+
+fn select_produce_version(
+    api_versions: &ApiVersionsResponseV0,
+    record: &ProducerRecord,
+) -> Result<ProduceVersion> {
+    if api_versions
+        .highest_supported_version(PRODUCE_API_KEY, 3)
+        .is_some_and(|version| version >= 3)
+    {
+        return Ok(ProduceVersion::V3);
+    }
+
+    if api_versions
+        .highest_supported_version(PRODUCE_API_KEY, 2)
+        .is_some_and(|version| version >= 2)
+    {
+        if record.headers().is_empty() {
+            return Ok(ProduceVersion::V2);
+        }
+        return Err(Error::Unsupported("record headers require Produce API v3"));
+    }
+
+    Err(Error::Unsupported("Produce API v2 or newer"))
+}
+
 fn produce_partition_response<'a>(
     response: &'a ProduceResponseV2,
     topic_name: &str,
@@ -476,12 +539,15 @@ fn invalidate_metadata_cache(
 mod tests {
     use super::{
         can_retry_send, choose_partition, invalidate_metadata_cache, leader_for,
-        record_batch_message, Acks, ProducerConfig, ProducerRecord, RecordMetadata,
+        message_set_message, record_batch_message, select_produce_version, Acks, ProduceVersion,
+        ProducerConfig, ProducerRecord, RecordMetadata,
     };
     use crate::{BrokerErrorKind, Error};
+    use kafrust_protocol::api::api_versions::{ApiKeyVersion, ApiVersionsResponseV0};
     use kafrust_protocol::api::metadata::{
         BrokerMetadata, MetadataResponseV1, PartitionMetadata, TopicMetadata,
     };
+    use kafrust_protocol::api::produce::API_KEY as PRODUCE_API_KEY;
     use std::collections::BTreeMap;
 
     #[test]
@@ -521,6 +587,52 @@ mod tests {
         assert_eq!(message.timestamp_ms, 1_000);
         assert_eq!(message.headers[0].key, "source");
         assert_eq!(message.headers[0].value.as_deref(), Some(&b"checkout"[..]));
+    }
+
+    #[test]
+    fn maps_producer_record_to_message_set_message() {
+        let record = ProducerRecord::to("orders")
+            .key("order-123")
+            .value("created");
+
+        let message = message_set_message(&record, 1_000);
+
+        assert_eq!(message.key.as_deref(), Some(&b"order-123"[..]));
+        assert_eq!(message.value.as_deref(), Some(&b"created"[..]));
+        assert_eq!(message.timestamp_ms, 1_000);
+    }
+
+    #[test]
+    fn selects_record_batch_when_produce_v3_is_available() {
+        let versions = api_versions(3);
+        let record = ProducerRecord::to("orders").header("source", "checkout");
+
+        assert_eq!(
+            select_produce_version(&versions, &record).unwrap(),
+            ProduceVersion::V3
+        );
+    }
+
+    #[test]
+    fn falls_back_to_message_set_without_headers_when_only_produce_v2_is_available() {
+        let versions = api_versions(2);
+        let record = ProducerRecord::to("orders");
+
+        assert_eq!(
+            select_produce_version(&versions, &record).unwrap(),
+            ProduceVersion::V2
+        );
+    }
+
+    #[test]
+    fn rejects_headers_when_only_produce_v2_is_available() {
+        let versions = api_versions(2);
+        let record = ProducerRecord::to("orders").header("source", "checkout");
+
+        assert!(matches!(
+            select_produce_version(&versions, &record).unwrap_err(),
+            Error::Unsupported("record headers require Produce API v3")
+        ));
     }
 
     #[test]
@@ -632,6 +744,17 @@ mod tests {
                         isr_nodes: vec![1],
                     },
                 ],
+            }],
+        }
+    }
+
+    fn api_versions(max_produce_version: i16) -> ApiVersionsResponseV0 {
+        ApiVersionsResponseV0 {
+            error_code: 0,
+            api_keys: vec![ApiKeyVersion {
+                api_key: PRODUCE_API_KEY,
+                min_version: 0,
+                max_version: max_produce_version,
             }],
         }
     }
