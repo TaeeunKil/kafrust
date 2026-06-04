@@ -18,7 +18,7 @@ let records = group.poll().await?;
 group.commit_offsets().await?;
 ```
 
-Under the hood, `ConsumerGroupConfig::join` discovers the coordinator, sends `JoinGroup v2`, computes range assignments if this member is the leader, sends `SyncGroup v2`, fetches committed offsets for assigned partitions, and builds a direct `Consumer` for fetching records. `ConsumerGroup::poll` sends a heartbeat before fetching assigned partitions, and `ConsumerGroup::commit_offsets` commits the current next offsets.
+Under the hood, `ConsumerGroupConfig::join` discovers the coordinator, sends `JoinGroup v2`, computes range assignments if this member is the leader, sends `SyncGroup v2`, fetches committed offsets for assigned partitions, and builds a direct `Consumer` for fetching records. `ConsumerGroup::poll` sends a heartbeat before fetching assigned partitions, rejoins the group when the heartbeat reports a rebalance, stale generation, stale member ID, or stale coordinator, and `ConsumerGroup::commit_offsets` commits the current next offsets.
 
 Offset fetches and commits are coordinator-scoped Kafka requests. The lower-level `Client` methods remain available for protocol-focused experiments, but the alpha user path is `ConsumerGroupConfig`.
 
@@ -35,12 +35,12 @@ Current implementation status:
 - OffsetFetch v2 request/response protocol types exist.
 - OffsetCommit v2 request/response protocol types exist.
 - `Client::offset_fetch_v2` and `Client::offset_commit_v2` can send coordinator-scoped offset requests.
-- `ConsumerGroupConfig` and `ConsumerGroup` provide a minimal join, sync, heartbeat, poll, and commit path.
+- `ConsumerGroupConfig` and `ConsumerGroup` provide a minimal join, sync, heartbeat, poll, rejoin, and commit path.
 - `ConsumerGroupConfig::request_timeout_ms` controls coordinator, metadata, fetch, heartbeat, and commit request timeouts.
 - `ConsumerGroupConfig::max_retries` is passed through to the direct fetch path after group assignment.
 - `ConsumerGroupConfig::max_poll_records` is passed through to the direct poll path after group assignment.
 - Broker error codes can be classified with `BrokerErrorKind` for common coordinator, generation, and rebalance errors.
-- Rebalance handling is limited to the initial classic range assignment. There is no automatic rejoin loop yet.
+- Rebalance handling can rejoin during `ConsumerGroup::poll` after coordinator, generation, member, or rebalance heartbeat errors. There is no background rejoin task yet.
 
 Run the opt-in coordinator example against a local broker:
 
