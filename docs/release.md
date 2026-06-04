@@ -72,3 +72,25 @@ cargo publish -p kafrust
 ```
 
 After publishing, tag the release with a Conventional Commit history summary and include known alpha limits from the roadmap.
+
+## Post-publish Verification
+
+After both crates are published:
+
+1. Confirm crates.io resolves both packages:
+
+   ```sh
+   cargo search kafrust --limit 5
+   ```
+
+2. Confirm a fresh project can compile against the published client crate. Replace `0.1.0` with the version being verified:
+
+   ```sh
+   cargo new --bin /tmp/kafrust-published-smoke
+   cargo add kafrust@0.1.0 --manifest-path /tmp/kafrust-published-smoke/Cargo.toml
+   cargo check --manifest-path /tmp/kafrust-published-smoke/Cargo.toml
+   ```
+
+3. Confirm docs.rs builds the published documentation for both crates.
+4. Push an annotated release tag and create a GitHub release.
+5. Run the `Live Kafka Smoke` workflow from GitHub Actions against `main`.
