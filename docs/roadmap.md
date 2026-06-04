@@ -186,7 +186,7 @@ Scope:
 Known limits:
 
 - Rebalance handling is poll-triggered, not background-driven.
-- Background heartbeats are opt-in and surface group errors through `ConsumerGroupHeartbeat::try_wait` or `ConsumerGroupHeartbeat::stop`; they do not rejoin automatically yet.
+- Background heartbeats are opt-in and surface group errors through `ConsumerGroupHeartbeat::try_wait` or `ConsumerGroupHeartbeat::stop`; they can trigger poll-time rejoin through `ConsumerGroup::poll_with_heartbeat`, but they are not restarted automatically yet.
 - Live group validation runs through the scheduled/manual `Live Kafka Smoke` workflow.
 
 ## M6 Production Behavior
@@ -273,7 +273,7 @@ Known limits:
 
 ## M9 Consumer Group Resilience
 
-Status: Planned.
+Status: In progress.
 
 Goal: make the consumer group alpha behavior safer under normal Kafka rebalances and coordinator changes.
 
@@ -292,9 +292,14 @@ Exit criteria:
 - offset commits fail predictably or recover after rejoin, with visible Kafka context
 - docs describe when users should spawn background heartbeats and how failures are surfaced
 
+Evidence:
+
+- `ConsumerGroup::poll_with_heartbeat` observes background heartbeat task completion before polling and uses the existing rejoin path for rejoinable group errors.
+- Focused unit tests cover running tasks, rejoinable background heartbeat errors, and non-rejoinable background heartbeat errors.
+
 Known limits:
 
-- Background heartbeats currently surface failures through `try_wait` or `stop`; they do not rejoin automatically.
+- Background heartbeats can trigger a rejoin when users call `ConsumerGroup::poll_with_heartbeat` with the heartbeat task handle, but the client does not restart a new background heartbeat task automatically after rejoin.
 - Range assignment is the only high-level group assignment strategy.
 
 ## M10 Producer Throughput
