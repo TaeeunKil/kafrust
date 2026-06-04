@@ -223,4 +223,4 @@ Known limits:
 
 - No crate has been published yet.
 - Live broker checks are still manual and opt-in.
-- Public alpha version numbers have not been cut from `0.0.0` yet.
+- Crates are versioned for public alpha but have not been published yet.
