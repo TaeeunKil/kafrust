@@ -322,6 +322,28 @@ impl ConsumerGroup {
         self.consumer.poll().await
     }
 
+    /// Checks a background heartbeat task before polling assigned partitions.
+    ///
+    /// If the background heartbeat task has completed with a group error that
+    /// requires a rejoin, this method rejoins the group before polling. Other
+    /// background heartbeat errors are returned to the caller. When the task is
+    /// still running, this behaves like [`ConsumerGroup::poll`].
+    pub async fn poll_with_heartbeat(
+        &mut self,
+        heartbeat: &mut ConsumerGroupHeartbeat,
+    ) -> Result<Vec<ConsumerRecord>> {
+        if should_rejoin_after_background_heartbeat(heartbeat).await? {
+            debug!(
+                group_id = self.group_id.as_str(),
+                member_id = self.member_id.as_str(),
+                generation_id = self.generation_id,
+                "rejoining kafka consumer group after background heartbeat"
+            );
+            self.rejoin().await?;
+        }
+        self.poll().await
+    }
+
     /// Starts a background heartbeat task for this joined group member.
     pub async fn spawn_heartbeat_task(&self, interval: Duration) -> Result<ConsumerGroupHeartbeat> {
         validate_heartbeat_interval(interval)?;
@@ -684,6 +706,16 @@ fn should_rejoin_group(error: &Error) -> bool {
     )
 }
 
+async fn should_rejoin_after_background_heartbeat(
+    heartbeat: &mut ConsumerGroupHeartbeat,
+) -> Result<bool> {
+    match heartbeat.try_wait().await {
+        Ok(None | Some(())) => Ok(false),
+        Err(error) if should_rejoin_group(&error) => Ok(true),
+        Err(error) => Err(error),
+    }
+}
+
 fn validate_heartbeat_interval(interval: Duration) -> Result<()> {
     if interval.is_zero() {
         return Err(Error::Unsupported(
@@ -785,8 +817,8 @@ fn range_for_topic(members: &[String], partitions: &[i32]) -> Vec<(String, Vec<i
 mod tests {
     use super::{
         check_offset_commit_response, committed_offset, offset_commit_topics, offset_fetch_topics,
-        range_assignments, should_rejoin_group, validate_heartbeat_interval, ConsumerGroupConfig,
-        ConsumerGroupHeartbeat,
+        range_assignments, should_rejoin_after_background_heartbeat, should_rejoin_group,
+        validate_heartbeat_interval, ConsumerGroupConfig, ConsumerGroupHeartbeat,
     };
     use crate::consumer::ConsumerAssignment;
     use crate::Error;
@@ -1010,6 +1042,74 @@ mod tests {
         assert!(matches!(
             heartbeat.try_wait().await,
             Err(Error::Broker { code: 27, .. })
+        ));
+        assert!(heartbeat.is_finished());
+    }
+
+    #[tokio::test]
+    async fn background_heartbeat_observation_ignores_running_task() {
+        let (shutdown, shutdown_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(async move {
+            let _ = shutdown_rx.await;
+            Ok(())
+        });
+        let mut heartbeat = ConsumerGroupHeartbeat {
+            shutdown: Some(shutdown),
+            handle: Some(handle),
+        };
+
+        assert!(!should_rejoin_after_background_heartbeat(&mut heartbeat)
+            .await
+            .unwrap());
+
+        heartbeat.stop().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn background_heartbeat_observation_requests_rejoin_for_group_error() {
+        let (shutdown, _shutdown_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(async {
+            Err(Error::Broker {
+                code: 27,
+                context: "background heartbeat group orders-group".to_owned(),
+            })
+        });
+        let mut heartbeat = ConsumerGroupHeartbeat {
+            shutdown: Some(shutdown),
+            handle: Some(handle),
+        };
+
+        while !heartbeat.is_finished() {
+            tokio::task::yield_now().await;
+        }
+
+        assert!(should_rejoin_after_background_heartbeat(&mut heartbeat)
+            .await
+            .unwrap());
+        assert!(heartbeat.is_finished());
+    }
+
+    #[tokio::test]
+    async fn background_heartbeat_observation_surfaces_non_rejoin_error() {
+        let (shutdown, _shutdown_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(async {
+            Err(Error::Broker {
+                code: 7,
+                context: "background heartbeat group orders-group".to_owned(),
+            })
+        });
+        let mut heartbeat = ConsumerGroupHeartbeat {
+            shutdown: Some(shutdown),
+            handle: Some(handle),
+        };
+
+        while !heartbeat.is_finished() {
+            tokio::task::yield_now().await;
+        }
+
+        assert!(matches!(
+            should_rejoin_after_background_heartbeat(&mut heartbeat).await,
+            Err(Error::Broker { code: 7, .. })
         ));
         assert!(heartbeat.is_finished());
     }
