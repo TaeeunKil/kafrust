@@ -107,6 +107,8 @@ pub enum Error {
     Unsupported(&'static str),
     /// I/O failure while connecting to or communicating with a broker.
     Io(std::io::Error),
+    /// A background Tokio task failed before returning its Kafka result.
+    TaskJoin(tokio::task::JoinError),
     /// Kafka protocol encoding or decoding failure.
     Protocol(kafrust_protocol::Error),
 }
@@ -140,6 +142,7 @@ impl fmt::Display for Error {
             }
             Self::Unsupported(feature) => write!(f, "unsupported feature: {feature}"),
             Self::Io(error) => write!(f, "I/O error: {error}"),
+            Self::TaskJoin(error) => write!(f, "background task join error: {error}"),
             Self::Protocol(error) => write!(f, "Kafka protocol error: {error}"),
         }
     }
@@ -149,6 +152,7 @@ impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::Io(error) => Some(error),
+            Self::TaskJoin(error) => Some(error),
             Self::Protocol(error) => Some(error),
             Self::MissingBootstrapServer
             | Self::UnknownTopicOrPartition { .. }
@@ -164,6 +168,12 @@ impl std::error::Error for Error {
 impl From<std::io::Error> for Error {
     fn from(error: std::io::Error) -> Self {
         Self::Io(error)
+    }
+}
+
+impl From<tokio::task::JoinError> for Error {
+    fn from(error: tokio::task::JoinError) -> Self {
+        Self::TaskJoin(error)
     }
 }
 

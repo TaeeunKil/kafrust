@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::time::Duration;
 
 use kafrust_protocol::api::find_coordinator::FindCoordinatorResponseV1;
 use kafrust_protocol::api::join_group::JoinGroupMember;
@@ -18,6 +19,9 @@ use crate::client::Client;
 use crate::config::ClientConfig;
 use crate::consumer::{Consumer, ConsumerAssignment, ConsumerConfig, ConsumerRecord};
 use crate::error::{BrokerErrorKind, Error, Result};
+use tokio::sync::oneshot;
+use tokio::task::JoinHandle;
+use tokio::time::{self, MissedTickBehavior};
 
 const PROTOCOL_TYPE: &str = "consumer";
 const RANGE_PROTOCOL: &str = "range";
@@ -295,6 +299,49 @@ impl ConsumerGroup {
         self.consumer.poll().await
     }
 
+    /// Starts a background heartbeat task for this joined group member.
+    pub async fn spawn_heartbeat_task(&self, interval: Duration) -> Result<ConsumerGroupHeartbeat> {
+        validate_heartbeat_interval(interval)?;
+
+        let mut bootstrap = self.config.client.clone().connect().await?;
+        let coordinator = bootstrap
+            .find_group_coordinator(self.group_id.clone())
+            .await?;
+        if coordinator.error_code != 0 {
+            return Err(Error::Broker {
+                code: coordinator.error_code,
+                context: format!("find group coordinator {}", self.group_id),
+            });
+        }
+
+        let mut coordinator = Client::connect_with_request_timeout(
+            coordinator_addr(&coordinator),
+            self.config.client.client_id_ref().map(str::to_owned),
+            self.config.client.request_timeout(),
+        )
+        .await?;
+        let group_id = self.group_id.clone();
+        let generation_id = self.generation_id;
+        let member_id = self.member_id.clone();
+        let (shutdown, shutdown_rx) = oneshot::channel();
+        let handle = tokio::spawn(async move {
+            run_background_heartbeat(
+                &mut coordinator,
+                group_id,
+                generation_id,
+                member_id,
+                interval,
+                shutdown_rx,
+            )
+            .await
+        });
+
+        Ok(ConsumerGroupHeartbeat {
+            shutdown: Some(shutdown),
+            handle: Some(handle),
+        })
+    }
+
     async fn rejoin(&mut self) -> Result<()> {
         let joined = self.config.clone().join().await?;
         *self = joined;
@@ -334,6 +381,39 @@ impl ConsumerGroup {
             )
             .await?;
         check_offset_commit_response(&self.group_id, &response.topics)
+    }
+}
+
+/// Handle for a background consumer group heartbeat task.
+#[derive(Debug)]
+pub struct ConsumerGroupHeartbeat {
+    shutdown: Option<oneshot::Sender<()>>,
+    handle: Option<JoinHandle<Result<()>>>,
+}
+
+impl ConsumerGroupHeartbeat {
+    /// Requests heartbeat task shutdown and waits for it to finish.
+    pub async fn stop(mut self) -> Result<()> {
+        self.signal_shutdown();
+        let Some(handle) = self.handle.take() else {
+            return Ok(());
+        };
+        handle.await?
+    }
+
+    fn signal_shutdown(&mut self) {
+        if let Some(shutdown) = self.shutdown.take() {
+            let _ = shutdown.send(());
+        }
+    }
+}
+
+impl Drop for ConsumerGroupHeartbeat {
+    fn drop(&mut self) {
+        self.signal_shutdown();
+        if let Some(handle) = &self.handle {
+            handle.abort();
+        }
     }
 }
 
@@ -522,6 +602,45 @@ fn should_rejoin_group(error: &Error) -> bool {
     )
 }
 
+fn validate_heartbeat_interval(interval: Duration) -> Result<()> {
+    if interval.is_zero() {
+        return Err(Error::Unsupported(
+            "heartbeat interval must be greater than zero",
+        ));
+    }
+    Ok(())
+}
+
+async fn run_background_heartbeat(
+    coordinator: &mut Client,
+    group_id: String,
+    generation_id: i32,
+    member_id: String,
+    interval: Duration,
+    mut shutdown: oneshot::Receiver<()>,
+) -> Result<()> {
+    let mut heartbeat = time::interval(interval);
+    heartbeat.set_missed_tick_behavior(MissedTickBehavior::Delay);
+    heartbeat.tick().await;
+
+    loop {
+        tokio::select! {
+            _ = &mut shutdown => return Ok(()),
+            _ = heartbeat.tick() => {
+                let response = coordinator
+                    .heartbeat_v2(group_id.clone(), generation_id, member_id.clone())
+                    .await?;
+                if response.error_code != 0 {
+                    return Err(Error::Broker {
+                        code: response.error_code,
+                        context: format!("background heartbeat group {group_id}"),
+                    });
+                }
+            }
+        }
+    }
+}
+
 fn coordinator_addr(coordinator: &FindCoordinatorResponseV1) -> String {
     format!("{}:{}", coordinator.host, coordinator.port)
 }
@@ -578,7 +697,7 @@ fn range_for_topic(members: &[String], partitions: &[i32]) -> Vec<(String, Vec<i
 mod tests {
     use super::{
         check_offset_commit_response, committed_offset, offset_commit_topics, offset_fetch_topics,
-        range_assignments, should_rejoin_group, ConsumerGroupConfig,
+        range_assignments, should_rejoin_group, validate_heartbeat_interval, ConsumerGroupConfig,
     };
     use crate::consumer::ConsumerAssignment;
     use crate::Error;
@@ -752,6 +871,15 @@ mod tests {
             context: "heartbeat group orders-group".to_owned(),
         }));
         assert!(!should_rejoin_group(&Error::Unsupported("group feature")));
+    }
+
+    #[test]
+    fn rejects_zero_background_heartbeat_interval() {
+        assert!(matches!(
+            validate_heartbeat_interval(std::time::Duration::ZERO).unwrap_err(),
+            Error::Unsupported("heartbeat interval must be greater than zero")
+        ));
+        validate_heartbeat_interval(std::time::Duration::from_millis(1)).unwrap();
     }
 
     fn member(member_id: &str, topics: &[&str]) -> JoinGroupMember {

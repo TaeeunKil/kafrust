@@ -420,6 +420,7 @@ fn can_retry_fetch(error: &Error) -> bool {
         | Error::MissingLeader { .. }
         | Error::MissingBroker { .. }
         | Error::Unsupported(_)
+        | Error::TaskJoin(_)
         | Error::Protocol(_) => false,
     }
 }
