@@ -198,7 +198,7 @@ Scope:
 - consumer fetch retry and reconnect on transient failures
 - bootstrap failover (implemented by trying configured bootstrap servers in order)
 - error classification (initial `BrokerErrorKind` mapping implemented)
-- tracing
+- request tracing (implemented with `tracing` events for request/response metadata)
 - poll backpressure (implemented through `ConsumerConfig::max_poll_records`)
 
 ## M7 Public Alpha

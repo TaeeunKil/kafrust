@@ -28,6 +28,7 @@ use kafrust_protocol::header::ResponseHeader;
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
+use tracing::debug;
 
 use crate::error::{Error, Result};
 
@@ -289,15 +290,21 @@ impl Client {
     }
 
     async fn send_request(&mut self, request: &[u8]) -> Result<Vec<u8>> {
-        if let Some(timeout) = self.request_timeout {
-            return tokio::time::timeout(timeout, self.send_request_unbounded(request))
+        let trace = RequestTrace::from_request(request);
+        RequestTrace::log_start(trace);
+
+        let result = if let Some(timeout) = self.request_timeout {
+            tokio::time::timeout(timeout, self.send_request_unbounded(request))
                 .await
                 .map_err(|_| Error::RequestTimedOut {
                     timeout_ms: duration_millis(timeout),
-                })?;
-        }
+                })?
+        } else {
+            self.send_request_unbounded(request).await
+        };
 
-        self.send_request_unbounded(request).await
+        RequestTrace::log_finish(trace, &result);
+        result
     }
 
     async fn send_request_unbounded(&mut self, request: &[u8]) -> Result<Vec<u8>> {
@@ -336,10 +343,69 @@ fn duration_millis(duration: Duration) -> u64 {
     u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct RequestTrace {
+    api_key: i16,
+    api_version: i16,
+    correlation_id: i32,
+    request_bytes: usize,
+}
+
+impl RequestTrace {
+    fn from_request(request: &[u8]) -> Option<Self> {
+        if request.len() < 8 {
+            return None;
+        }
+
+        Some(Self {
+            api_key: i16::from_be_bytes([request[0], request[1]]),
+            api_version: i16::from_be_bytes([request[2], request[3]]),
+            correlation_id: i32::from_be_bytes([request[4], request[5], request[6], request[7]]),
+            request_bytes: request.len(),
+        })
+    }
+
+    fn log_start(trace: Option<Self>) {
+        if let Some(trace) = trace {
+            debug!(
+                api_key = trace.api_key,
+                api_version = trace.api_version,
+                correlation_id = trace.correlation_id,
+                request_bytes = trace.request_bytes,
+                "sending kafka request"
+            );
+        }
+    }
+
+    fn log_finish(trace: Option<Self>, result: &Result<Vec<u8>>) {
+        match (trace, result) {
+            (Some(trace), Ok(response)) => {
+                debug!(
+                    api_key = trace.api_key,
+                    api_version = trace.api_version,
+                    correlation_id = trace.correlation_id,
+                    response_bytes = response.len(),
+                    "received kafka response"
+                );
+            }
+            (Some(trace), Err(error)) => {
+                debug!(
+                    api_key = trace.api_key,
+                    api_version = trace.api_version,
+                    correlation_id = trace.correlation_id,
+                    error = %error,
+                    "kafka request failed"
+                );
+            }
+            (None, _) => {}
+        }
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
-    use super::Client;
+    use super::{Client, RequestTrace};
     use crate::Error;
     use std::time::Duration;
     use tokio::io::AsyncReadExt;
@@ -368,5 +434,21 @@ mod tests {
 
         assert!(matches!(error, Error::RequestTimedOut { timeout_ms: 5 }));
         server.await.unwrap();
+    }
+
+    #[test]
+    fn reads_request_trace_from_encoded_header() {
+        let trace = RequestTrace::from_request(&[
+            0, 18, // api key
+            0, 3, // api version
+            0, 0, 0, 7, // correlation id
+            0, 0, // remaining bytes
+        ])
+        .unwrap();
+
+        assert_eq!(trace.api_key, 18);
+        assert_eq!(trace.api_version, 3);
+        assert_eq!(trace.correlation_id, 7);
+        assert_eq!(trace.request_bytes, 10);
     }
 }
