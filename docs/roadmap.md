@@ -126,7 +126,7 @@ Evidence:
 
 Known limits:
 
-- Current wire path uses legacy MessageSet v1, so record headers are rejected until RecordBatch encoding lands.
+- Current high-level producer path uses Produce API v3 with RecordBatch magic v2 records and headers.
 - `acks=0` is rejected because the current request loop expects a broker response.
 - Produce-to-real-topic validation still requires running the example against Kafka.
 

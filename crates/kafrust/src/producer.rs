@@ -3,7 +3,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use kafrust_protocol::api::metadata::{BrokerMetadata, MetadataResponseV1};
 use kafrust_protocol::api::produce::{
-    MessageSetMessage, ProducePartitionResponseV2, ProduceResponseV2,
+    ProducePartitionResponseV2, ProduceResponseV2, RecordBatchMessage,
 };
 
 use crate::client::Client;
@@ -204,11 +204,6 @@ impl Producer {
         if self.config.acks == Acks::None {
             return Err(Error::Unsupported("producer acks=0 send without response"));
         }
-        if !record.headers().is_empty() {
-            return Err(Error::Unsupported(
-                "record headers require Kafka record batch encoding",
-            ));
-        }
 
         let timestamp = record.timestamp_ref().unwrap_or_else(SystemTime::now);
         let timestamp_ms = timestamp_millis(timestamp);
@@ -260,16 +255,13 @@ impl Producer {
         )
         .await?;
         let response = leader_client
-            .produce_one_v2(
+            .produce_one_v3(
+                None,
                 self.config.acks.as_i16(),
                 30_000,
                 record.topic().to_owned(),
                 partition,
-                vec![MessageSetMessage::new(
-                    record.key_ref().map(|key| key.to_vec()),
-                    record.value_ref().map(|value| value.to_vec()),
-                    timestamp_ms,
-                )],
+                vec![record_batch_message(record, timestamp_ms)],
             )
             .await?;
         let partition_response = produce_partition_response(&response, record.topic(), partition)?;
@@ -426,6 +418,18 @@ fn timestamp_millis(timestamp: SystemTime) -> i64 {
     }
 }
 
+fn record_batch_message(record: &ProducerRecord, timestamp_ms: i64) -> RecordBatchMessage {
+    let mut message = RecordBatchMessage::new(
+        record.key_ref().map(|key| key.to_vec()),
+        record.value_ref().map(|value| value.to_vec()),
+        timestamp_ms,
+    );
+    for header in record.headers() {
+        message = message.header(header.key(), Some(header.value().to_vec()));
+    }
+    message
+}
+
 fn produce_partition_response<'a>(
     response: &'a ProduceResponseV2,
     topic_name: &str,
@@ -471,8 +475,8 @@ fn invalidate_metadata_cache(
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::{
-        can_retry_send, choose_partition, invalidate_metadata_cache, leader_for, Acks,
-        ProducerConfig, ProducerRecord, RecordMetadata,
+        can_retry_send, choose_partition, invalidate_metadata_cache, leader_for,
+        record_batch_message, Acks, ProducerConfig, ProducerRecord, RecordMetadata,
     };
     use crate::{BrokerErrorKind, Error};
     use kafrust_protocol::api::metadata::{
@@ -501,6 +505,22 @@ mod tests {
         assert_eq!(record.value_ref().unwrap(), b"created");
         assert_eq!(record.headers()[0].key(), "source");
         assert_eq!(record.headers()[0].value(), b"checkout");
+    }
+
+    #[test]
+    fn maps_producer_record_headers_to_record_batch_message() {
+        let record = ProducerRecord::to("orders")
+            .key("order-123")
+            .value("created")
+            .header("source", "checkout");
+
+        let message = record_batch_message(&record, 1_000);
+
+        assert_eq!(message.key.as_deref(), Some(&b"order-123"[..]));
+        assert_eq!(message.value.as_deref(), Some(&b"created"[..]));
+        assert_eq!(message.timestamp_ms, 1_000);
+        assert_eq!(message.headers[0].key, "source");
+        assert_eq!(message.headers[0].value.as_deref(), Some(&b"checkout"[..]));
     }
 
     #[test]
