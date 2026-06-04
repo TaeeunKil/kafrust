@@ -16,6 +16,8 @@ KAFRUST_BOOTSTRAP_SERVERS=localhost:9092 cargo run -p kafrust --example broker_r
 
 The test is skipped when `KAFRUST_BOOTSTRAP_SERVERS` is not set, so normal CI does not require a Kafka broker.
 
+Latest manual live smoke: on 2026-06-04, a local Kafka 3.7.2 KRaft broker passed the broker roundtrip test, `producer_send`, `consumer_fetch`, and `consumer_group_poll` against `kafrust-smoke`.
+
 Requests made through `ClientConfig`, `ProducerConfig`, `ConsumerConfig`, and `ConsumerGroupConfig` use a 30 second request timeout by default. Override it with `request_timeout_ms` when running broker checks against slow or intentionally delayed environments.
 
 When multiple bootstrap servers are configured, `ClientConfig::connect` tries them in order until one connection succeeds.
