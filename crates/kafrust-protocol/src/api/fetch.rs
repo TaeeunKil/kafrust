@@ -133,7 +133,7 @@ fn decode_message_set(bytes: &[u8]) -> Result<Vec<MessageSetRecord>> {
     let mut decoder = Decoder::new(bytes);
     let mut records = Vec::new();
 
-    while !decoder.is_empty() {
+    while decoder.remaining() >= 12 {
         let offset = decoder.read_i64()?;
         let message_size = decoder.read_i32()?;
         if message_size < 0 {
@@ -144,6 +144,10 @@ fn decode_message_set(bytes: &[u8]) -> Result<Vec<MessageSetRecord>> {
         }
         let message_size =
             usize::try_from(message_size).map_err(|_| Error::LengthOverflow("message"))?;
+        // Fetch responses may end with a partial trailing message set entry.
+        if decoder.remaining() < message_size {
+            break;
+        }
         let message = decoder.read_exact(message_size)?;
         records.extend(decode_message_or_batch(offset, message)?);
     }
@@ -328,6 +332,45 @@ mod tests {
         assert_eq!(response.throttle_time_ms, 0);
         assert_eq!(response.responses[0].partitions[0].high_watermark, 43);
         assert_eq!(response.responses[0].partitions[0].records, vec![record]);
+        assert!(decoder.is_empty());
+    }
+
+    #[test]
+    fn decodes_fetch_response_v2_ignores_partial_trailing_message_set_entry() {
+        let mut message = Encoder::new();
+        message.write_i32(0);
+        message.write_i8(1);
+        message.write_i8(0);
+        message.write_i64(123);
+        message.write_nullable_bytes(Some(b"order-1")).unwrap();
+        message.write_nullable_bytes(Some(b"created")).unwrap();
+        let message = message.into_bytes();
+
+        let mut set = Encoder::new();
+        set.write_i64(42);
+        set.write_i32(i32::try_from(message.len()).unwrap());
+        set.write_raw(&message);
+        set.write_i64(-1);
+        set.write_i32(61);
+        set.write_raw(&[0; 22]);
+        let set = set.into_bytes();
+
+        let mut bytes = Encoder::new();
+        bytes.write_i32(0);
+        bytes.write_i32(1);
+        bytes.write_string("orders").unwrap();
+        bytes.write_i32(1);
+        bytes.write_i32(0);
+        bytes.write_i16(0);
+        bytes.write_i64(43);
+        bytes.write_bytes(&set).unwrap();
+        let bytes = bytes.into_bytes();
+
+        let mut decoder = Decoder::new(&bytes);
+        let response = FetchResponseV2::decode_body(&mut decoder).unwrap();
+
+        assert_eq!(response.responses[0].partitions[0].records.len(), 1);
+        assert_eq!(response.responses[0].partitions[0].records[0].offset, 42);
         assert!(decoder.is_empty());
     }
 

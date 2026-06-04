@@ -37,5 +37,5 @@ Current implementation status:
 - `ConsumerConfig::max_poll_records` limits how many records one `poll` call returns.
 - Consumer metadata is cached by topic and refreshed when a retriable fetch failure invalidates that topic cache entry.
 - Consumer poll and fetch operations emit `tracing` events with operational metadata, but not key or value payload contents.
-- The decoder supports legacy MessageSet records and RecordBatch v2 records.
+- The decoder supports legacy MessageSet records, RecordBatch v2 records, and partial trailing MessageSet entries in Fetch responses.
 - Consumer groups and offset commits are available through the separate alpha `ConsumerGroupConfig` path.
