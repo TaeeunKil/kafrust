@@ -210,7 +210,7 @@ Known limits:
 
 ## M7 Public Alpha
 
-Status: In progress.
+Status: Implemented; publishing remains manual.
 
 Scope:
 
