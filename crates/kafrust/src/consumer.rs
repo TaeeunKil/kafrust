@@ -6,6 +6,7 @@ use crate::config::ClientConfig;
 use crate::error::{BrokerErrorKind, Error, Result};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Record fetched from a Kafka topic partition.
 pub struct ConsumerRecord {
     topic: String,
     partition: i32,
@@ -27,32 +28,39 @@ impl ConsumerRecord {
         }
     }
 
+    /// Returns the Kafka topic name.
     pub fn topic(&self) -> &str {
         &self.topic
     }
 
+    /// Returns the Kafka partition index.
     pub fn partition(&self) -> i32 {
         self.partition
     }
 
+    /// Returns the Kafka record offset.
     pub fn offset(&self) -> i64 {
         self.offset
     }
 
+    /// Returns the Kafka record timestamp in milliseconds since the Unix epoch.
     pub fn timestamp_ms(&self) -> i64 {
         self.timestamp_ms
     }
 
+    /// Returns the record key bytes.
     pub fn key(&self) -> Option<&[u8]> {
         self.key.as_deref()
     }
 
+    /// Returns the record value bytes.
     pub fn value(&self) -> Option<&[u8]> {
         self.value.as_deref()
     }
 }
 
 #[derive(Debug)]
+/// Direct Kafka consumer for manually assigned topic partitions.
 pub struct Consumer {
     client: Client,
     config: ConsumerConfig,
@@ -72,14 +80,17 @@ impl Consumer {
         }
     }
 
+    /// Assigns a topic partition and next offset to fetch.
     pub fn assign(&mut self, topic: impl Into<String>, partition: i32, offset: i64) {
         assign_partition(&mut self.assignments, topic.into(), partition, offset);
     }
 
+    /// Returns the current topic partition assignments.
     pub fn assignments(&self) -> &[ConsumerAssignment] {
         &self.assignments
     }
 
+    /// Polls assigned partitions and advances in-memory offsets for fetched records.
     pub async fn poll(&mut self) -> Result<Vec<ConsumerRecord>> {
         let assignments = self.assignments.clone();
         let mut records = Vec::new();
@@ -110,6 +121,7 @@ impl Consumer {
         Ok(records)
     }
 
+    /// Fetches records for one topic partition without changing assignment state.
     pub async fn fetch(
         &mut self,
         topic: impl Into<String>,
@@ -184,6 +196,7 @@ impl Consumer {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Direct consumer topic partition assignment.
 pub struct ConsumerAssignment {
     topic: String,
     partition: i32,
@@ -199,14 +212,17 @@ impl ConsumerAssignment {
         }
     }
 
+    /// Returns the Kafka topic name.
     pub fn topic(&self) -> &str {
         &self.topic
     }
 
+    /// Returns the Kafka partition index.
     pub fn partition(&self) -> i32 {
         self.partition
     }
 
+    /// Returns the next offset that will be fetched or committed.
     pub fn next_offset(&self) -> i64 {
         self.next_offset
     }
@@ -234,6 +250,7 @@ fn assign_partition(
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Configuration builder for [`Consumer`].
 pub struct ConsumerConfig {
     client: ClientConfig,
     max_wait_ms: i32,
@@ -244,6 +261,7 @@ pub struct ConsumerConfig {
 }
 
 impl ConsumerConfig {
+    /// Creates a consumer configuration from one or more Kafka bootstrap servers.
     pub fn new(bootstrap_servers: impl IntoIterator<Item = impl Into<String>>) -> Self {
         Self {
             client: ClientConfig::new(bootstrap_servers),
@@ -255,53 +273,64 @@ impl ConsumerConfig {
         }
     }
 
+    /// Sets the Kafka client ID used by consumer requests.
     pub fn client_id(mut self, client_id: impl Into<String>) -> Self {
         self.client = self.client.client_id(client_id);
         self
     }
 
+    /// Sets the request timeout in milliseconds.
     pub fn request_timeout_ms(mut self, request_timeout_ms: u64) -> Self {
         self.client = self.client.request_timeout_ms(request_timeout_ms);
         self
     }
 
+    /// Sets the Kafka fetch max wait time in milliseconds.
     pub fn max_wait_ms(mut self, max_wait_ms: i32) -> Self {
         self.max_wait_ms = max_wait_ms;
         self
     }
 
+    /// Sets the Kafka fetch minimum response bytes.
     pub fn min_bytes(mut self, min_bytes: i32) -> Self {
         self.min_bytes = min_bytes;
         self
     }
 
+    /// Sets the maximum bytes to fetch from each partition.
     pub fn max_partition_bytes(mut self, max_partition_bytes: i32) -> Self {
         self.max_partition_bytes = max_partition_bytes;
         self
     }
 
+    /// Sets the maximum number of retry attempts for transient fetch failures.
     pub fn max_retries(mut self, max_retries: u32) -> Self {
         self.max_retries = max_retries;
         self
     }
 
+    /// Returns the configured maximum retry count.
     pub fn max_retries_ref(&self) -> u32 {
         self.max_retries
     }
 
+    /// Sets the maximum number of records returned by one poll.
     pub fn max_poll_records(mut self, max_poll_records: usize) -> Self {
         self.max_poll_records = max_poll_records;
         self
     }
 
+    /// Returns the configured maximum records per poll.
     pub fn max_poll_records_ref(&self) -> usize {
         self.max_poll_records
     }
 
+    /// Returns the shared client configuration.
     pub fn client_config(&self) -> &ClientConfig {
         &self.client
     }
 
+    /// Connects to Kafka and builds a direct consumer.
     pub async fn build(self) -> Result<Consumer> {
         let client = self.client.clone().connect().await?;
         Ok(Consumer {

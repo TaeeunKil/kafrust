@@ -1,25 +1,41 @@
 use core::fmt;
 
+/// Result type returned by kafrust APIs.
 pub type Result<T> = core::result::Result<T, Error>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Kafka broker error categories used by kafrust retry and diagnostics code.
 pub enum BrokerErrorKind {
+    /// An error code that kafrust does not classify yet.
     Unknown,
+    /// Kafka reported an unknown topic or partition.
     UnknownTopicOrPartition,
+    /// Kafka reported that a partition leader is not currently available.
     LeaderNotAvailable,
+    /// Kafka reported that the target broker is not the leader or follower.
     NotLeaderOrFollower,
+    /// Kafka reported that the broker-side request timed out.
     RequestTimedOut,
+    /// Kafka reported that a replica is unavailable.
     ReplicaNotAvailable,
+    /// Kafka reported that the coordinator is unavailable.
     CoordinatorNotAvailable,
+    /// Kafka reported that the request was sent to the wrong coordinator.
     NotCoordinator,
+    /// Kafka reported an invalid consumer group generation.
     IllegalGeneration,
+    /// Kafka reported inconsistent group protocol metadata.
     InconsistentGroupProtocol,
+    /// Kafka reported an unknown consumer group member ID.
     UnknownMemberId,
+    /// Kafka rejected the configured session timeout.
     InvalidSessionTimeout,
+    /// Kafka reported that a group rebalance is in progress.
     RebalanceInProgress,
 }
 
 impl BrokerErrorKind {
+    /// Classifies a Kafka protocol error code.
     pub fn from_code(code: i16) -> Self {
         match code {
             3 => Self::UnknownTopicOrPartition,
@@ -38,6 +54,7 @@ impl BrokerErrorKind {
         }
     }
 
+    /// Returns whether this broker error is retryable for the current producer path.
     pub fn is_produce_retryable(self) -> bool {
         matches!(
             self,
@@ -51,19 +68,51 @@ impl BrokerErrorKind {
 }
 
 #[derive(Debug)]
+/// Error type returned by kafrust APIs.
 pub enum Error {
+    /// No bootstrap server was configured.
     MissingBootstrapServer,
-    UnknownTopicOrPartition { topic: String, partition: i32 },
-    MissingLeader { topic: String, partition: i32 },
-    MissingBroker { node_id: i32 },
-    Broker { code: i16, context: String },
-    RequestTimedOut { timeout_ms: u64 },
+    /// Metadata did not contain the requested topic partition.
+    UnknownTopicOrPartition {
+        /// Kafka topic name.
+        topic: String,
+        /// Kafka partition index.
+        partition: i32,
+    },
+    /// Metadata did not contain a usable leader for a topic partition.
+    MissingLeader {
+        /// Kafka topic name.
+        topic: String,
+        /// Kafka partition index.
+        partition: i32,
+    },
+    /// Metadata referenced a broker node that was not present in the broker list.
+    MissingBroker {
+        /// Kafka broker node ID.
+        node_id: i32,
+    },
+    /// Kafka returned a non-zero broker error code.
+    Broker {
+        /// Raw Kafka broker error code.
+        code: i16,
+        /// Operation context for the broker error.
+        context: String,
+    },
+    /// A Kafka request exceeded the configured request timeout.
+    RequestTimedOut {
+        /// Timeout in milliseconds.
+        timeout_ms: u64,
+    },
+    /// The requested Kafka feature is not implemented by this alpha API yet.
     Unsupported(&'static str),
+    /// I/O failure while connecting to or communicating with a broker.
     Io(std::io::Error),
+    /// Kafka protocol encoding or decoding failure.
     Protocol(kafrust_protocol::Error),
 }
 
 impl Error {
+    /// Returns the classified broker error kind when this is a broker error.
     pub fn broker_error_kind(&self) -> Option<BrokerErrorKind> {
         match self {
             Self::Broker { code, .. } => Some(BrokerErrorKind::from_code(*code)),

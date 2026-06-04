@@ -33,6 +33,7 @@ use tracing::debug;
 use crate::error::{Error, Result};
 
 #[derive(Debug)]
+/// Low-level Kafka request client over a single TCP connection.
 pub struct Client {
     stream: TcpStream,
     client_id: Option<String>,
@@ -52,6 +53,7 @@ pub(crate) struct FetchOneRequestV2 {
 }
 
 impl Client {
+    /// Opens a TCP connection to a Kafka broker.
     pub async fn connect(
         server: impl tokio::net::ToSocketAddrs,
         client_id: Option<String>,
@@ -79,6 +81,7 @@ impl Client {
         })
     }
 
+    /// Sends ApiVersions v0 and decodes the broker response.
     pub async fn api_versions(&mut self) -> Result<ApiVersionsResponseV0> {
         let request = ApiVersionsRequestV0 {
             correlation_id: self.next_correlation_id(),
@@ -90,6 +93,7 @@ impl Client {
         Ok(ApiVersionsResponseV0::decode_body(&mut decoder)?)
     }
 
+    /// Sends Metadata v1 for all topics or the provided topic names.
     pub async fn metadata(&mut self, topics: Option<Vec<String>>) -> Result<MetadataResponseV1> {
         let request = MetadataRequestV1 {
             correlation_id: self.next_correlation_id(),
@@ -102,6 +106,7 @@ impl Client {
         Ok(MetadataResponseV1::decode_body(&mut decoder)?)
     }
 
+    /// Sends FindCoordinator v1 for a consumer group ID.
     pub async fn find_group_coordinator(
         &mut self,
         group_id: impl Into<String>,
@@ -118,6 +123,7 @@ impl Client {
         Ok(FindCoordinatorResponseV1::decode_body(&mut decoder)?)
     }
 
+    /// Sends OffsetFetch v2 for a consumer group.
     pub async fn offset_fetch_v2(
         &mut self,
         group_id: impl Into<String>,
@@ -135,6 +141,7 @@ impl Client {
         Ok(OffsetFetchResponseV2::decode_body(&mut decoder)?)
     }
 
+    /// Sends JoinGroup v2 using the provided group protocol metadata.
     pub async fn join_group_v2(
         &mut self,
         group_id: impl Into<String>,
@@ -160,6 +167,7 @@ impl Client {
         Ok(JoinGroupResponseV2::decode_body(&mut decoder)?)
     }
 
+    /// Sends SyncGroup v2 using the provided member assignments.
     pub async fn sync_group_v2(
         &mut self,
         group_id: impl Into<String>,
@@ -181,6 +189,7 @@ impl Client {
         Ok(SyncGroupResponseV2::decode_body(&mut decoder)?)
     }
 
+    /// Sends Heartbeat v2 for a joined consumer group member.
     pub async fn heartbeat_v2(
         &mut self,
         group_id: impl Into<String>,
@@ -200,6 +209,7 @@ impl Client {
         Ok(HeartbeatResponseV2::decode_body(&mut decoder)?)
     }
 
+    /// Sends OffsetCommit v2 for a joined consumer group member.
     pub async fn offset_commit_v2(
         &mut self,
         group_id: impl Into<String>,
@@ -248,6 +258,7 @@ impl Client {
         Ok(FetchResponseV2::decode_body(&mut decoder)?)
     }
 
+    /// Sends Produce v2 for pre-built topic partition payloads.
     pub async fn produce_v2(
         &mut self,
         acks: i16,
@@ -267,6 +278,7 @@ impl Client {
         Ok(ProduceResponseV2::decode_body(&mut decoder)?)
     }
 
+    /// Sends Produce v2 for one topic partition.
     pub async fn produce_one_v2(
         &mut self,
         acks: i16,

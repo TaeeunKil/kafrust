@@ -5,6 +5,7 @@ use std::time::Duration;
 const DEFAULT_REQUEST_TIMEOUT_MS: u64 = 30_000;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Connection settings shared by low-level clients, producers, and consumers.
 pub struct ClientConfig {
     bootstrap_servers: Vec<String>,
     client_id: Option<String>,
@@ -12,6 +13,7 @@ pub struct ClientConfig {
 }
 
 impl ClientConfig {
+    /// Creates a client configuration from one or more Kafka bootstrap servers.
     pub fn new(bootstrap_servers: impl IntoIterator<Item = impl Into<String>>) -> Self {
         Self {
             bootstrap_servers: bootstrap_servers.into_iter().map(Into::into).collect(),
@@ -20,28 +22,34 @@ impl ClientConfig {
         }
     }
 
+    /// Sets the Kafka client ID sent in request headers.
     pub fn client_id(mut self, client_id: impl Into<String>) -> Self {
         self.client_id = Some(client_id.into());
         self
     }
 
+    /// Sets the request timeout applied after a broker connection is established.
     pub fn request_timeout_ms(mut self, request_timeout_ms: u64) -> Self {
         self.request_timeout = Duration::from_millis(request_timeout_ms);
         self
     }
 
+    /// Returns the configured bootstrap servers in connection order.
     pub fn bootstrap_servers(&self) -> &[String] {
         &self.bootstrap_servers
     }
 
+    /// Returns the configured Kafka client ID.
     pub fn client_id_ref(&self) -> Option<&str> {
         self.client_id.as_deref()
     }
 
+    /// Returns the configured request timeout.
     pub fn request_timeout(&self) -> Duration {
         self.request_timeout
     }
 
+    /// Connects to the first reachable bootstrap server.
     pub async fn connect(self) -> Result<Client> {
         if self.bootstrap_servers.is_empty() {
             return Err(Error::MissingBootstrapServer);

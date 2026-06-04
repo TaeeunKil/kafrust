@@ -1,11 +1,18 @@
 #![doc = include_str!("../../../README.md")]
 #![forbid(unsafe_code)]
+#![warn(missing_docs)]
 
+/// Low-level Kafka request client.
 pub mod client;
+/// Shared connection configuration.
 pub mod config;
+/// Direct topic/partition consumer API.
 pub mod consumer;
+/// Error and result types.
 pub mod error;
+/// Classic consumer group alpha API.
 pub mod group;
+/// Producer API.
 pub mod producer;
 
 pub use client::Client;

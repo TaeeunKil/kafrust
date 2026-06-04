@@ -11,13 +11,18 @@ use crate::config::ClientConfig;
 use crate::error::{BrokerErrorKind, Error, Result};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Kafka produce acknowledgement policy.
 pub enum Acks {
+    /// Do not wait for a broker response.
     None,
+    /// Wait for the partition leader to acknowledge the write.
     Leader,
+    /// Wait for all in-sync replicas required by the topic configuration.
     All,
 }
 
 impl Acks {
+    /// Returns the Kafka protocol value for this acknowledgement policy.
     pub fn as_i16(self) -> i16 {
         match self {
             Self::None => 0,
@@ -28,12 +33,14 @@ impl Acks {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Kafka record header.
 pub struct Header {
     key: String,
     value: Vec<u8>,
 }
 
 impl Header {
+    /// Creates a record header from a key and raw value bytes.
     pub fn new(key: impl Into<String>, value: impl Into<Vec<u8>>) -> Self {
         Self {
             key: key.into(),
@@ -41,16 +48,19 @@ impl Header {
         }
     }
 
+    /// Returns the header key.
     pub fn key(&self) -> &str {
         &self.key
     }
 
+    /// Returns the header value bytes.
     pub fn value(&self) -> &[u8] {
         &self.value
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Record to produce to a Kafka topic.
 pub struct ProducerRecord {
     topic: String,
     partition: Option<i32>,
@@ -61,6 +71,7 @@ pub struct ProducerRecord {
 }
 
 impl ProducerRecord {
+    /// Creates a record targeting a Kafka topic.
     pub fn to(topic: impl Into<String>) -> Self {
         Self {
             topic: topic.into(),
@@ -72,57 +83,69 @@ impl ProducerRecord {
         }
     }
 
+    /// Sets an explicit Kafka partition for this record.
     pub fn partition(mut self, partition: i32) -> Self {
         self.partition = Some(partition);
         self
     }
 
+    /// Sets the record key bytes.
     pub fn key(mut self, key: impl Into<Vec<u8>>) -> Self {
         self.key = Some(key.into());
         self
     }
 
+    /// Sets the record value bytes.
     pub fn value(mut self, value: impl Into<Vec<u8>>) -> Self {
         self.value = Some(value.into());
         self
     }
 
+    /// Adds a Kafka record header.
     pub fn header(mut self, key: impl Into<String>, value: impl Into<Vec<u8>>) -> Self {
         self.headers.push(Header::new(key, value));
         self
     }
 
+    /// Sets the record timestamp.
     pub fn timestamp(mut self, timestamp: SystemTime) -> Self {
         self.timestamp = Some(timestamp);
         self
     }
 
+    /// Returns the target Kafka topic.
     pub fn topic(&self) -> &str {
         &self.topic
     }
 
+    /// Returns the explicit partition, when one was set.
     pub fn partition_ref(&self) -> Option<i32> {
         self.partition
     }
 
+    /// Returns the record key bytes.
     pub fn key_ref(&self) -> Option<&[u8]> {
         self.key.as_deref()
     }
 
+    /// Returns the record value bytes.
     pub fn value_ref(&self) -> Option<&[u8]> {
         self.value.as_deref()
     }
 
+    /// Returns the configured record headers.
     pub fn headers(&self) -> &[Header] {
         &self.headers
     }
 
+    /// Returns the configured timestamp.
     pub fn timestamp_ref(&self) -> Option<SystemTime> {
         self.timestamp
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Metadata returned after a successful produce request.
 pub struct RecordMetadata {
     topic: String,
     partition: i32,
@@ -131,6 +154,7 @@ pub struct RecordMetadata {
 }
 
 impl RecordMetadata {
+    /// Creates metadata for a produced record.
     pub fn new(
         topic: impl Into<String>,
         partition: i32,
@@ -145,24 +169,29 @@ impl RecordMetadata {
         }
     }
 
+    /// Returns the Kafka topic that accepted the record.
     pub fn topic(&self) -> &str {
         &self.topic
     }
 
+    /// Returns the Kafka partition that accepted the record.
     pub fn partition(&self) -> i32 {
         self.partition
     }
 
+    /// Returns the base offset reported by Kafka.
     pub fn offset(&self) -> i64 {
         self.offset
     }
 
+    /// Returns the timestamp associated with the produced record.
     pub fn timestamp(&self) -> Option<SystemTime> {
         self.timestamp
     }
 }
 
 #[derive(Debug)]
+/// Kafka producer using metadata-based leader routing.
 pub struct Producer {
     client: Client,
     config: ProducerConfig,
@@ -170,6 +199,7 @@ pub struct Producer {
 }
 
 impl Producer {
+    /// Sends one record and returns Kafka metadata for the accepted write.
     pub async fn send(&mut self, record: ProducerRecord) -> Result<RecordMetadata> {
         if self.config.acks == Acks::None {
             return Err(Error::Unsupported("producer acks=0 send without response"));
@@ -260,6 +290,7 @@ impl Producer {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Configuration builder for [`Producer`].
 pub struct ProducerConfig {
     client: ClientConfig,
     acks: Acks,
@@ -267,6 +298,7 @@ pub struct ProducerConfig {
 }
 
 impl ProducerConfig {
+    /// Creates a producer configuration from one or more Kafka bootstrap servers.
     pub fn new(bootstrap_servers: impl IntoIterator<Item = impl Into<String>>) -> Self {
         Self {
             client: ClientConfig::new(bootstrap_servers),
@@ -275,38 +307,46 @@ impl ProducerConfig {
         }
     }
 
+    /// Sets the Kafka client ID used by producer requests.
     pub fn client_id(mut self, client_id: impl Into<String>) -> Self {
         self.client = self.client.client_id(client_id);
         self
     }
 
+    /// Sets the request timeout in milliseconds.
     pub fn request_timeout_ms(mut self, request_timeout_ms: u64) -> Self {
         self.client = self.client.request_timeout_ms(request_timeout_ms);
         self
     }
 
+    /// Sets the Kafka produce acknowledgement policy.
     pub fn acks(mut self, acks: Acks) -> Self {
         self.acks = acks;
         self
     }
 
+    /// Sets the maximum number of retry attempts for retriable send failures.
     pub fn max_retries(mut self, max_retries: u32) -> Self {
         self.max_retries = max_retries;
         self
     }
 
+    /// Returns the configured acknowledgement policy.
     pub fn acks_ref(&self) -> Acks {
         self.acks
     }
 
+    /// Returns the configured maximum retry count.
     pub fn max_retries_ref(&self) -> u32 {
         self.max_retries
     }
 
+    /// Returns the shared client configuration.
     pub fn client_config(&self) -> &ClientConfig {
         &self.client
     }
 
+    /// Connects to Kafka and builds a producer.
     pub async fn build(self) -> Result<Producer> {
         let client = self.client.clone().connect().await?;
         Ok(Producer {

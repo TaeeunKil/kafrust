@@ -23,6 +23,7 @@ const PROTOCOL_TYPE: &str = "consumer";
 const RANGE_PROTOCOL: &str = "range";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Configuration builder for the classic Kafka consumer group alpha API.
 pub struct ConsumerGroupConfig {
     client: ClientConfig,
     group_id: String,
@@ -39,6 +40,7 @@ pub struct ConsumerGroupConfig {
 }
 
 impl ConsumerGroupConfig {
+    /// Creates a consumer group configuration for a Kafka group ID.
     pub fn new(
         bootstrap_servers: impl IntoIterator<Item = impl Into<String>>,
         group_id: impl Into<String>,
@@ -59,74 +61,89 @@ impl ConsumerGroupConfig {
         }
     }
 
+    /// Sets the Kafka client ID used by group and fetch requests.
     pub fn client_id(mut self, client_id: impl Into<String>) -> Self {
         self.client = self.client.client_id(client_id);
         self
     }
 
+    /// Sets the request timeout in milliseconds.
     pub fn request_timeout_ms(mut self, request_timeout_ms: u64) -> Self {
         self.client = self.client.request_timeout_ms(request_timeout_ms);
         self
     }
 
+    /// Subscribes this group member to a Kafka topic.
     pub fn subscribe(mut self, topic: impl Into<String>) -> Self {
         self.topics.push(topic.into());
         self
     }
 
+    /// Sets the Kafka group session timeout in milliseconds.
     pub fn session_timeout_ms(mut self, session_timeout_ms: i32) -> Self {
         self.session_timeout_ms = session_timeout_ms;
         self
     }
 
+    /// Sets the Kafka group rebalance timeout in milliseconds.
     pub fn rebalance_timeout_ms(mut self, rebalance_timeout_ms: i32) -> Self {
         self.rebalance_timeout_ms = rebalance_timeout_ms;
         self
     }
 
+    /// Sets the offset retention time used by offset commits.
     pub fn retention_time_ms(mut self, retention_time_ms: i64) -> Self {
         self.retention_time_ms = retention_time_ms;
         self
     }
 
+    /// Sets the fallback start offset when no committed offset exists.
     pub fn start_offset(mut self, start_offset: i64) -> Self {
         self.start_offset = start_offset;
         self
     }
 
+    /// Sets the Kafka fetch max wait time in milliseconds.
     pub fn max_wait_ms(mut self, max_wait_ms: i32) -> Self {
         self.max_wait_ms = max_wait_ms;
         self
     }
 
+    /// Sets the Kafka fetch minimum response bytes.
     pub fn min_bytes(mut self, min_bytes: i32) -> Self {
         self.min_bytes = min_bytes;
         self
     }
 
+    /// Sets the maximum bytes to fetch from each partition.
     pub fn max_partition_bytes(mut self, max_partition_bytes: i32) -> Self {
         self.max_partition_bytes = max_partition_bytes;
         self
     }
 
+    /// Sets the maximum number of retry attempts for transient fetch failures.
     pub fn max_retries(mut self, max_retries: u32) -> Self {
         self.max_retries = max_retries;
         self
     }
 
+    /// Sets the maximum number of records returned by one group poll.
     pub fn max_poll_records(mut self, max_poll_records: usize) -> Self {
         self.max_poll_records = max_poll_records;
         self
     }
 
+    /// Returns the Kafka consumer group ID.
     pub fn group_id(&self) -> &str {
         &self.group_id
     }
 
+    /// Returns the subscribed topic names.
     pub fn topics(&self) -> &[String] {
         &self.topics
     }
 
+    /// Joins the group, syncs assignment, and builds a group consumer.
     pub async fn join(self) -> Result<ConsumerGroup> {
         if self.topics.is_empty() {
             return Err(Error::Unsupported("consumer group without subscriptions"));
@@ -234,6 +251,7 @@ impl ConsumerGroupConfig {
 }
 
 #[derive(Debug)]
+/// Joined Kafka consumer group member.
 pub struct ConsumerGroup {
     group_id: String,
     generation_id: i32,
@@ -244,27 +262,33 @@ pub struct ConsumerGroup {
 }
 
 impl ConsumerGroup {
+    /// Returns the Kafka consumer group ID.
     pub fn group_id(&self) -> &str {
         &self.group_id
     }
 
+    /// Returns the broker-assigned group member ID.
     pub fn member_id(&self) -> &str {
         &self.member_id
     }
 
+    /// Returns the current group generation ID.
     pub fn generation_id(&self) -> i32 {
         self.generation_id
     }
 
+    /// Returns the assigned topic partitions and next offsets.
     pub fn assignments(&self) -> &[ConsumerAssignment] {
         self.consumer.assignments()
     }
 
+    /// Sends a heartbeat, polls assigned partitions, and advances in-memory offsets.
     pub async fn poll(&mut self) -> Result<Vec<ConsumerRecord>> {
         self.heartbeat().await?;
         self.consumer.poll().await
     }
 
+    /// Sends an explicit heartbeat for this group member.
     pub async fn heartbeat(&mut self) -> Result<()> {
         let response = self
             .coordinator
@@ -283,6 +307,7 @@ impl ConsumerGroup {
         Ok(())
     }
 
+    /// Commits the current assignment offsets to the group coordinator.
     pub async fn commit_offsets(&mut self) -> Result<()> {
         let topics = offset_commit_topics(self.consumer.assignments());
         let response = self
