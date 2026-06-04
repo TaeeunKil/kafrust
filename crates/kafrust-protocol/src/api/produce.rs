@@ -13,6 +13,36 @@ pub struct ProduceRequestV2 {
     pub topics: Vec<ProduceTopicV2>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProduceRequestV3 {
+    pub correlation_id: i32,
+    pub client_id: Option<String>,
+    pub transactional_id: Option<String>,
+    pub acks: i16,
+    pub timeout_ms: i32,
+    pub topics: Vec<ProduceTopicV3>,
+}
+
+impl ProduceRequestV3 {
+    pub fn encode(&self) -> Result<Vec<u8>> {
+        let mut encoder = Encoder::new();
+        RequestHeader {
+            api_key: API_KEY,
+            api_version: 3,
+            correlation_id: self.correlation_id,
+            client_id: self.client_id.clone(),
+        }
+        .encode_v1(&mut encoder)?;
+        encoder.write_nullable_string(self.transactional_id.as_deref())?;
+        encoder.write_i16(self.acks);
+        encoder.write_i32(self.timeout_ms);
+        encoder.write_array(Some(self.topics.as_slice()), |encoder, topic| {
+            topic.encode(encoder)
+        })?;
+        Ok(encoder.into_bytes())
+    }
+}
+
 impl ProduceRequestV2 {
     pub fn encode(&self) -> Result<Vec<u8>> {
         let mut encoder = Encoder::new();
@@ -38,6 +68,21 @@ pub struct ProduceTopicV2 {
     pub partitions: Vec<ProducePartitionV2>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProduceTopicV3 {
+    pub name: String,
+    pub partitions: Vec<ProducePartitionV3>,
+}
+
+impl ProduceTopicV3 {
+    fn encode(&self, encoder: &mut Encoder) -> Result<()> {
+        encoder.write_string(&self.name)?;
+        encoder.write_array(Some(self.partitions.as_slice()), |encoder, partition| {
+            partition.encode(encoder)
+        })
+    }
+}
+
 impl ProduceTopicV2 {
     fn encode(&self, encoder: &mut Encoder) -> Result<()> {
         encoder.write_string(&self.name)?;
@@ -51,6 +96,20 @@ impl ProduceTopicV2 {
 pub struct ProducePartitionV2 {
     pub partition_index: i32,
     pub records: Vec<MessageSetMessage>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProducePartitionV3 {
+    pub partition_index: i32,
+    pub records: Vec<RecordBatchMessage>,
+}
+
+impl ProducePartitionV3 {
+    fn encode(&self, encoder: &mut Encoder) -> Result<()> {
+        encoder.write_i32(self.partition_index);
+        let record_set = encode_record_batch_set(&self.records)?;
+        encoder.write_bytes(&record_set)
+    }
 }
 
 impl ProducePartitionV2 {
@@ -75,6 +134,45 @@ impl MessageSetMessage {
             value,
             timestamp_ms,
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecordBatchHeader {
+    pub key: String,
+    pub value: Option<Vec<u8>>,
+}
+
+impl RecordBatchHeader {
+    pub fn new(key: impl Into<String>, value: Option<Vec<u8>>) -> Self {
+        Self {
+            key: key.into(),
+            value,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecordBatchMessage {
+    pub key: Option<Vec<u8>>,
+    pub value: Option<Vec<u8>>,
+    pub timestamp_ms: i64,
+    pub headers: Vec<RecordBatchHeader>,
+}
+
+impl RecordBatchMessage {
+    pub fn new(key: Option<Vec<u8>>, value: Option<Vec<u8>>, timestamp_ms: i64) -> Self {
+        Self {
+            key,
+            value,
+            timestamp_ms,
+            headers: Vec::new(),
+        }
+    }
+
+    pub fn header(mut self, key: impl Into<String>, value: Option<Vec<u8>>) -> Self {
+        self.headers.push(RecordBatchHeader::new(key, value));
+        self
     }
 }
 
@@ -160,6 +258,83 @@ fn encode_message(record: &MessageSetMessage) -> Result<Vec<u8>> {
     Ok(message.into_bytes())
 }
 
+fn encode_record_batch_set(records: &[RecordBatchMessage]) -> Result<Vec<u8>> {
+    let base_timestamp = records
+        .first()
+        .map(|record| record.timestamp_ms)
+        .unwrap_or_default();
+    let max_timestamp = records
+        .iter()
+        .map(|record| record.timestamp_ms)
+        .max()
+        .unwrap_or(base_timestamp);
+    let last_offset_delta = records
+        .len()
+        .checked_sub(1)
+        .map(|delta| i32::try_from(delta).map_err(|_| Error::LengthOverflow("record batch")))
+        .transpose()?
+        .unwrap_or_default();
+
+    let mut record_bytes = Encoder::new();
+    record_bytes.write_i32(
+        i32::try_from(records.len()).map_err(|_| Error::LengthOverflow("record batch records"))?,
+    );
+    for (offset_delta, record) in records.iter().enumerate() {
+        let encoded = encode_record(record, base_timestamp, offset_delta)?;
+        record_bytes.write_varint(
+            i32::try_from(encoded.len()).map_err(|_| Error::LengthOverflow("record"))?,
+        );
+        record_bytes.write_raw(&encoded);
+    }
+
+    let mut crc_payload = Encoder::new();
+    crc_payload.write_i16(0);
+    crc_payload.write_i32(last_offset_delta);
+    crc_payload.write_i64(base_timestamp);
+    crc_payload.write_i64(max_timestamp);
+    crc_payload.write_i64(-1);
+    crc_payload.write_i16(-1);
+    crc_payload.write_i32(-1);
+    crc_payload.write_raw(&record_bytes.into_bytes());
+    let crc_payload = crc_payload.into_bytes();
+
+    let mut batch = Encoder::new();
+    batch.write_i32(0);
+    batch.write_i8(2);
+    batch.write_i32(crc32c(&crc_payload) as i32);
+    batch.write_raw(&crc_payload);
+    let batch = batch.into_bytes();
+
+    let mut set = Encoder::new();
+    set.write_i64(0);
+    set.write_i32(i32::try_from(batch.len()).map_err(|_| Error::LengthOverflow("record batch"))?);
+    set.write_raw(&batch);
+    Ok(set.into_bytes())
+}
+
+fn encode_record(
+    record: &RecordBatchMessage,
+    base_timestamp: i64,
+    offset_delta: usize,
+) -> Result<Vec<u8>> {
+    let mut encoder = Encoder::new();
+    encoder.write_i8(0);
+    encoder.write_varlong(record.timestamp_ms.saturating_sub(base_timestamp));
+    encoder.write_varint(
+        i32::try_from(offset_delta).map_err(|_| Error::LengthOverflow("record offset delta"))?,
+    );
+    encoder.write_varint_nullable_bytes(record.key.as_deref())?;
+    encoder.write_varint_nullable_bytes(record.value.as_deref())?;
+    encoder.write_varint(
+        i32::try_from(record.headers.len()).map_err(|_| Error::LengthOverflow("record headers"))?,
+    );
+    for header in &record.headers {
+        encoder.write_varint_bytes(header.key.as_bytes())?;
+        encoder.write_varint_nullable_bytes(header.value.as_deref())?;
+    }
+    Ok(encoder.into_bytes())
+}
+
 fn crc32_ieee(bytes: &[u8]) -> u32 {
     let mut crc = 0xffff_ffffu32;
     for byte in bytes {
@@ -172,13 +347,28 @@ fn crc32_ieee(bytes: &[u8]) -> u32 {
     !crc
 }
 
+fn crc32c(bytes: &[u8]) -> u32 {
+    let mut crc = 0xffff_ffffu32;
+    for byte in bytes {
+        crc ^= u32::from(*byte);
+        for _ in 0..8 {
+            let mask = 0u32.wrapping_sub(crc & 1);
+            crc = (crc >> 1) ^ (0x82f6_3b78 & mask);
+        }
+    }
+    !crc
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::{
-        MessageSetMessage, ProducePartitionV2, ProduceRequestV2, ProduceResponseV2, ProduceTopicV2,
+        encode_record_batch_set, MessageSetMessage, ProducePartitionV2, ProducePartitionV3,
+        ProduceRequestV2, ProduceRequestV3, ProduceResponseV2, ProduceTopicV2, ProduceTopicV3,
+        RecordBatchMessage,
     };
     use crate::codec::Decoder;
+    use crate::{api::fetch::FetchResponseV2, codec::Encoder};
 
     #[test]
     fn encodes_produce_request_v2() {
@@ -206,6 +396,66 @@ mod tests {
             &[0, 0, 0, 2, 0, 0, 0, 5, 0, 7, b'k', b'a', b'f', b'r', b'u', b's', b't',]
         );
         assert!(bytes.len() > 60);
+    }
+
+    #[test]
+    fn encodes_produce_request_v3_with_record_batch() {
+        let request = ProduceRequestV3 {
+            correlation_id: 5,
+            client_id: Some("kafrust".to_owned()),
+            transactional_id: None,
+            acks: 1,
+            timeout_ms: 30_000,
+            topics: vec![ProduceTopicV3 {
+                name: "orders".to_owned(),
+                partitions: vec![ProducePartitionV3 {
+                    partition_index: 0,
+                    records: vec![RecordBatchMessage::new(
+                        Some(b"order-1".to_vec()),
+                        Some(b"created".to_vec()),
+                        1_000,
+                    )
+                    .header("source", Some(b"checkout".to_vec()))],
+                }],
+            }],
+        };
+
+        let bytes = request.encode().unwrap();
+
+        assert_eq!(&bytes[0..4], &[0, 0, 0, 3]);
+        assert!(bytes.len() > 80);
+    }
+
+    #[test]
+    fn record_batch_encoding_roundtrips_through_fetch_decoder() {
+        let record_set = encode_record_batch_set(&[RecordBatchMessage::new(
+            Some(b"order-1".to_vec()),
+            Some(b"created".to_vec()),
+            1_000,
+        )
+        .header("source", Some(b"checkout".to_vec()))])
+        .unwrap();
+
+        let mut bytes = Encoder::new();
+        bytes.write_i32(0);
+        bytes.write_i32(1);
+        bytes.write_string("orders").unwrap();
+        bytes.write_i32(1);
+        bytes.write_i32(0);
+        bytes.write_i16(0);
+        bytes.write_i64(43);
+        bytes.write_bytes(&record_set).unwrap();
+        let bytes = bytes.into_bytes();
+
+        let mut decoder = Decoder::new(&bytes);
+        let response = FetchResponseV2::decode_body(&mut decoder).unwrap();
+        let record = &response.responses[0].partitions[0].records[0];
+
+        assert_eq!(record.offset, 0);
+        assert_eq!(record.timestamp_ms, 1_000);
+        assert_eq!(record.key.as_deref(), Some(&b"order-1"[..]));
+        assert_eq!(record.value.as_deref(), Some(&b"created"[..]));
+        assert!(decoder.is_empty());
     }
 
     #[test]

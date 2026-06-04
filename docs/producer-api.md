@@ -15,7 +15,8 @@ let mut producer = ProducerConfig::new(["localhost:9092"])
 
 let record = ProducerRecord::to("orders")
     .key("order-123")
-    .value("created");
+    .value("created")
+    .header("source", "checkout");
 
 let metadata = producer.send(record).await?;
 println!("{}-{}@{}", metadata.topic(), metadata.partition(), metadata.offset());
@@ -44,10 +45,10 @@ Current implementation status:
 
 - `ProducerConfig`, `ProducerRecord`, `Acks`, and `RecordMetadata` are public API types.
 - `ProducerConfig::build` creates a producer backed by a Kafka broker connection.
-- `Producer::send` performs metadata lookup, connects to the partition leader, encodes ProduceRequest v2, and decodes ProduceResponse v2.
+- `Producer::send` performs metadata lookup, connects to the partition leader, encodes ProduceRequest v3 with RecordBatch records, and decodes ProduceResponse v3-compatible fields.
 - `ProducerConfig::request_timeout_ms` controls the request timeout used for metadata and produce roundtrips.
 - `ProducerConfig::max_retries` controls retry attempts for stale metadata, transient leader errors classified by `BrokerErrorKind`, request timeouts, and connection I/O failures.
 - Producer metadata is cached by topic and refreshed when a retriable send failure invalidates that topic cache entry.
-- The first wire path uses the legacy MessageSet v1 record format, so record headers are rejected until RecordBatch encoding is added.
+- Record headers are encoded with Kafka RecordBatch magic v2 through Produce API v3.
 - `acks=0` is rejected for now because the current client request loop expects a broker response.
 - Stale metadata style produce errors are retried once after refreshing metadata.

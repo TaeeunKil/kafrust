@@ -82,6 +82,43 @@ impl Encoder {
         }
     }
 
+    pub fn write_varint(&mut self, value: i32) {
+        self.write_unsigned_varint(((value as u32) << 1) ^ ((value >> 31) as u32));
+    }
+
+    pub fn write_varlong(&mut self, value: i64) {
+        let mut value = ((value as u64) << 1) ^ ((value >> 63) as u64);
+        loop {
+            let mut byte = (value & 0x7f) as u8;
+            value >>= 7;
+            if value != 0 {
+                byte |= 0x80;
+            }
+            self.output.push(byte);
+            if value == 0 {
+                break;
+            }
+        }
+    }
+
+    pub fn write_varint_bytes(&mut self, value: &[u8]) -> Result<()> {
+        let length =
+            i32::try_from(value.len()).map_err(|_| Error::LengthOverflow("varint bytes"))?;
+        self.write_varint(length);
+        self.output.extend_from_slice(value);
+        Ok(())
+    }
+
+    pub fn write_varint_nullable_bytes(&mut self, value: Option<&[u8]>) -> Result<()> {
+        match value {
+            Some(value) => self.write_varint_bytes(value),
+            None => {
+                self.write_varint(-1);
+                Ok(())
+            }
+        }
+    }
+
     pub fn write_compact_string(&mut self, value: &str) -> Result<()> {
         let length =
             u32::try_from(value.len()).map_err(|_| Error::LengthOverflow("compact string"))?;

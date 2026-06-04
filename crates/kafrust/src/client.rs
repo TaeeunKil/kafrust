@@ -17,7 +17,8 @@ use kafrust_protocol::api::offset_fetch::{
     OffsetFetchRequestV2, OffsetFetchResponseV2, OffsetFetchTopic,
 };
 use kafrust_protocol::api::produce::{
-    MessageSetMessage, ProducePartitionV2, ProduceRequestV2, ProduceResponseV2, ProduceTopicV2,
+    MessageSetMessage, ProducePartitionV2, ProducePartitionV3, ProduceRequestV2, ProduceRequestV3,
+    ProduceResponseV2, ProduceTopicV2, ProduceTopicV3, RecordBatchMessage,
 };
 use kafrust_protocol::api::sync_group::{
     SyncGroupAssignment, SyncGroupRequestV2, SyncGroupResponseV2,
@@ -293,6 +294,53 @@ impl Client {
             vec![ProduceTopicV2 {
                 name: topic,
                 partitions: vec![ProducePartitionV2 {
+                    partition_index,
+                    records,
+                }],
+            }],
+        )
+        .await
+    }
+
+    /// Sends Produce v3 for pre-built record batch topic partition payloads.
+    pub async fn produce_v3(
+        &mut self,
+        transactional_id: Option<String>,
+        acks: i16,
+        timeout_ms: i32,
+        topics: Vec<ProduceTopicV3>,
+    ) -> Result<ProduceResponseV2> {
+        let request = ProduceRequestV3 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            transactional_id,
+            acks,
+            timeout_ms,
+            topics,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::new(&response);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(ProduceResponseV2::decode_body(&mut decoder)?)
+    }
+
+    /// Sends Produce v3 for one topic partition using RecordBatch records.
+    pub async fn produce_one_v3(
+        &mut self,
+        transactional_id: Option<String>,
+        acks: i16,
+        timeout_ms: i32,
+        topic: String,
+        partition_index: i32,
+        records: Vec<RecordBatchMessage>,
+    ) -> Result<ProduceResponseV2> {
+        self.produce_v3(
+            transactional_id,
+            acks,
+            timeout_ms,
+            vec![ProduceTopicV3 {
+                name: topic,
+                partitions: vec![ProducePartitionV3 {
                     partition_index,
                     records,
                 }],
