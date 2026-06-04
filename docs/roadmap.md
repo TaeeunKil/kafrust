@@ -126,7 +126,7 @@ Evidence:
 
 Known limits:
 
-- Current high-level producer path uses Produce API v3 with RecordBatch magic v2 records and headers.
+- Current high-level producer path negotiates Produce API support, uses v3 RecordBatch for headers, and falls back to v2 MessageSet only for records without headers.
 - `acks=0` is rejected because the current request loop expects a broker response.
 - Produce-to-real-topic validation still requires running the example against Kafka.
 
