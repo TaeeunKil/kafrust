@@ -7,7 +7,7 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 description = "A pure Rust Kafka client with no librdkafka or C toolchain dependency."
-readme = "../../README.md"
+readme = "README.md"
 keywords.workspace = true
 categories.workspace = true
 
