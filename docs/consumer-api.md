@@ -35,5 +35,6 @@ Current implementation status:
 - `ConsumerConfig::request_timeout_ms` controls the request timeout used for metadata and fetch roundtrips.
 - `ConsumerConfig::max_retries` controls retry attempts for transient fetch broker errors, request timeouts, and connection I/O failures.
 - `ConsumerConfig::max_poll_records` limits how many records one `poll` call returns.
+- Consumer metadata is cached by topic and refreshed when a retriable fetch failure invalidates that topic cache entry.
 - The decoder supports legacy MessageSet records and RecordBatch v2 records.
 - Consumer groups and offset commits are available through the separate alpha `ConsumerGroupConfig` path.
