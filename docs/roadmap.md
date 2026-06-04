@@ -176,12 +176,12 @@ Scope:
 - internal range assignment for classic rebalance leaders
 - OffsetFetch (implemented as protocol + client roundtrip)
 - OffsetCommit (implemented as protocol + client roundtrip)
-- ConsumerGroup alpha API with join, sync, heartbeat, poll, and commit
-- rebalance handling (initial range assignment only; no automatic rejoin loop yet)
+- ConsumerGroup alpha API with join, sync, heartbeat, poll, rejoin, and commit
+- rebalance handling (poll-triggered rejoin for coordinator, generation, member, and rebalance heartbeat errors)
 
 Known limits:
 
-- Rebalance handling does not yet run an automatic rejoin loop.
+- Rebalance handling is poll-triggered, not background-driven.
 - Heartbeats are sent explicitly through `ConsumerGroup::heartbeat` or before `ConsumerGroup::poll`; there is no background heartbeat task yet.
 - Live group validation still requires running the opt-in example against Kafka.
 

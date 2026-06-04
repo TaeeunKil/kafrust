@@ -17,7 +17,7 @@ use kafrust_protocol::consumer_group::{
 use crate::client::Client;
 use crate::config::ClientConfig;
 use crate::consumer::{Consumer, ConsumerAssignment, ConsumerConfig, ConsumerRecord};
-use crate::error::{Error, Result};
+use crate::error::{BrokerErrorKind, Error, Result};
 
 const PROTOCOL_TYPE: &str = "consumer";
 const RANGE_PROTOCOL: &str = "range";
@@ -148,6 +148,7 @@ impl ConsumerGroupConfig {
         if self.topics.is_empty() {
             return Err(Error::Unsupported("consumer group without subscriptions"));
         }
+        let config = self.clone();
 
         let mut bootstrap = self.client.clone().connect().await?;
         let coordinator = bootstrap
@@ -236,6 +237,7 @@ impl ConsumerGroupConfig {
         let consumer_client = self.client.clone().connect().await?;
 
         Ok(ConsumerGroup {
+            config,
             group_id: self.group_id,
             generation_id: joined.generation_id,
             member_id: joined.member_id,
@@ -253,6 +255,7 @@ impl ConsumerGroupConfig {
 #[derive(Debug)]
 /// Joined Kafka consumer group member.
 pub struct ConsumerGroup {
+    config: ConsumerGroupConfig,
     group_id: String,
     generation_id: i32,
     member_id: String,
@@ -284,8 +287,18 @@ impl ConsumerGroup {
 
     /// Sends a heartbeat, polls assigned partitions, and advances in-memory offsets.
     pub async fn poll(&mut self) -> Result<Vec<ConsumerRecord>> {
-        self.heartbeat().await?;
+        match self.heartbeat().await {
+            Ok(()) => {}
+            Err(error) if should_rejoin_group(&error) => self.rejoin().await?,
+            Err(error) => return Err(error),
+        }
         self.consumer.poll().await
+    }
+
+    async fn rejoin(&mut self) -> Result<()> {
+        let joined = self.config.clone().join().await?;
+        *self = joined;
+        Ok(())
     }
 
     /// Sends an explicit heartbeat for this group member.
@@ -496,6 +509,19 @@ fn check_offset_commit_response(
     Ok(())
 }
 
+fn should_rejoin_group(error: &Error) -> bool {
+    matches!(
+        error.broker_error_kind(),
+        Some(
+            BrokerErrorKind::CoordinatorNotAvailable
+                | BrokerErrorKind::NotCoordinator
+                | BrokerErrorKind::IllegalGeneration
+                | BrokerErrorKind::UnknownMemberId
+                | BrokerErrorKind::RebalanceInProgress
+        )
+    )
+}
+
 fn coordinator_addr(coordinator: &FindCoordinatorResponseV1) -> String {
     format!("{}:{}", coordinator.host, coordinator.port)
 }
@@ -552,7 +578,7 @@ fn range_for_topic(members: &[String], partitions: &[i32]) -> Vec<(String, Vec<i
 mod tests {
     use super::{
         check_offset_commit_response, committed_offset, offset_commit_topics, offset_fetch_topics,
-        range_assignments, ConsumerGroupConfig,
+        range_assignments, should_rejoin_group, ConsumerGroupConfig,
     };
     use crate::consumer::ConsumerAssignment;
     use crate::Error;
@@ -710,6 +736,22 @@ mod tests {
             check_offset_commit_response("orders-group", &response).unwrap_err(),
             Error::Broker { code: 25, .. }
         ));
+    }
+
+    #[test]
+    fn classifies_group_errors_that_require_rejoin() {
+        for code in [15, 16, 22, 25, 27] {
+            assert!(should_rejoin_group(&Error::Broker {
+                code,
+                context: "heartbeat group orders-group".to_owned(),
+            }));
+        }
+
+        assert!(!should_rejoin_group(&Error::Broker {
+            code: 7,
+            context: "heartbeat group orders-group".to_owned(),
+        }));
+        assert!(!should_rejoin_group(&Error::Unsupported("group feature")));
     }
 
     fn member(member_id: &str, topics: &[&str]) -> JoinGroupMember {
