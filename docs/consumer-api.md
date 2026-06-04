@@ -36,5 +36,6 @@ Current implementation status:
 - `ConsumerConfig::max_retries` controls retry attempts for transient fetch broker errors, request timeouts, and connection I/O failures.
 - `ConsumerConfig::max_poll_records` limits how many records one `poll` call returns.
 - Consumer metadata is cached by topic and refreshed when a retriable fetch failure invalidates that topic cache entry.
+- Consumer poll and fetch operations emit `tracing` events with operational metadata, but not key or value payload contents.
 - The decoder supports legacy MessageSet records and RecordBatch v2 records.
 - Consumer groups and offset commits are available through the separate alpha `ConsumerGroupConfig` path.
