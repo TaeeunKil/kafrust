@@ -1,0 +1,43 @@
+name: API design question
+description: Discuss public API shape, naming, defaults, and Kafka concept exposure.
+title: "[api]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form when the public Rust API makes a Kafka concept unclear, too broad, too hidden, or hard to use.
+  - type: input
+    id: api-surface
+    attributes:
+      label: API surface
+      placeholder: "ProducerConfig, ConsumerGroup::poll, BrokerErrorKind"
+    validations:
+      required: true
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Kafka use case
+      description: Describe the Kafka workflow or operational behavior the API needs to represent.
+    validations:
+      required: true
+  - type: textarea
+    id: current-problem
+    attributes:
+      label: Current problem
+      description: Explain what is confusing, missing, too implicit, or too hard to configure.
+    validations:
+      required: true
+  - type: textarea
+    id: proposed-shape
+    attributes:
+      label: Proposed shape
+      description: Optional sketch of names, builder options, errors, or docs wording.
+    validations:
+      required: false
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility impact
+      description: Note whether this would be additive, breaking, or only documentation.
+    validations:
+      required: false

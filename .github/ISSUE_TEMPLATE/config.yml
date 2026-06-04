@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Compatibility notes
+    url: https://github.com/TaeeunKil/kafrust/blob/main/docs/compatibility.md
+    about: Check the currently verified Kafka broker versions and deployment modes.

@@ -238,7 +238,7 @@ Known limits:
 
 ## M8 Alpha Operations
 
-Status: In progress.
+Status: Done.
 
 Goal: make the alpha reliable to operate during development and small experiments.
 
@@ -263,11 +263,13 @@ Evidence:
 - `docs/broker-roundtrip.md` records the latest manual live smoke and the scheduled workflow.
 - v0.1.0 was verified from a fresh external project with `kafrust = "0.1.0"`.
 - `docs/release.md` includes post-publish crates.io, docs.rs, release tag, and live smoke verification.
+- `docs/compatibility.md` documents the current Kafka 3.7.2 compatibility claim and known non-claims.
+- GitHub issue forms route reports into protocol bugs, client runtime bugs, or API design questions.
 
-Next work:
+Known limits:
 
-- document tested broker versions and the current compatibility claim
-- add a lightweight issue triage structure
+- Compatibility has been verified against Kafka 3.7.2 only.
+- Issue forms provide triage structure, but repository labels are not required yet.
 
 ## M9 Consumer Group Resilience
 
