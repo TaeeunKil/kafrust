@@ -14,4 +14,4 @@ partitions, offsets, acknowledgements, metadata refresh, consumer groups,
 heartbeats, and commits are represented directly in the API.
 
 See the repository README and `docs/` directory for the roadmap, alpha limits,
-and broker smoke test workflow.
+compatibility notes, and broker smoke test workflow.

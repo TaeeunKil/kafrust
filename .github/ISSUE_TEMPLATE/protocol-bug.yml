@@ -1,0 +1,44 @@
+name: Protocol bug
+description: Report Kafka wire-format encoding, decoding, API version, or error-code behavior.
+title: "[protocol]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for bugs in Kafka request/response encoding, decoding, API key or version handling, fixtures, and broker error-code mapping.
+  - type: input
+    id: kafka-api
+    attributes:
+      label: Kafka API and version
+      description: Name the API and version involved, if known.
+      placeholder: "Produce v3, Fetch v2, JoinGroup v2"
+    validations:
+      required: true
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed behavior
+      description: Include the decoded fields, fixture, or short hex excerpt if useful. Do not include secrets or production payload data.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Kafka behavior
+      description: Cite the Kafka protocol behavior or broker response you expected.
+    validations:
+      required: true
+  - type: input
+    id: broker
+    attributes:
+      label: Broker version
+      placeholder: "Apache Kafka 3.7.2"
+    validations:
+      required: false
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Provide the smallest test, example command, or fixture that demonstrates the protocol issue.
+    validations:
+      required: false

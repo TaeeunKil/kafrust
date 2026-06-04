@@ -1,0 +1,54 @@
+name: Client runtime bug
+description: Report connection, timeout, retry, metadata, producer, consumer, or consumer group behavior.
+title: "[runtime]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for observable client behavior after requests are built, including networking, retries, metadata refresh, producer sends, direct consumer fetches, and consumer group operations.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Runtime area
+      options:
+        - Client connection or request loop
+        - Producer
+        - Direct consumer
+        - Consumer group
+        - Live Kafka Smoke or CI
+    validations:
+      required: true
+  - type: input
+    id: kafrust-version
+    attributes:
+      label: kafrust version or commit
+      placeholder: "0.1.0 or commit SHA"
+    validations:
+      required: true
+  - type: input
+    id: broker
+    attributes:
+      label: Broker version and mode
+      placeholder: "Apache Kafka 3.7.2, single-node KRaft, PLAINTEXT"
+    validations:
+      required: false
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Include commands, environment variables, topic setup, and expected topic or partition state.
+    validations:
+      required: true
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed behavior
+      description: Include error messages and relevant tracing fields. Do not include secrets, keys, values, or production payload data.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true

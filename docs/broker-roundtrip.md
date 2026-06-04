@@ -20,6 +20,8 @@ Latest manual live smoke: on 2026-06-04, a local Kafka 3.7.2 KRaft broker passed
 
 The `Live Kafka Smoke` GitHub Actions workflow runs the same broker roundtrip, producer, direct consumer, and consumer group checks against a Kafka 3.7.2 Docker container. It is available through manual dispatch and a weekly schedule, so the default pull request CI remains broker-free.
 
+See [Compatibility](compatibility.md) for the current tested broker matrix and the limits of the alpha compatibility claim.
+
 Requests made through `ClientConfig`, `ProducerConfig`, `ConsumerConfig`, and `ConsumerGroupConfig` use a 30 second request timeout by default. Override it with `request_timeout_ms` when running broker checks against slow or intentionally delayed environments.
 
 When multiple bootstrap servers are configured, `ClientConfig::connect` tries them in order until one connection succeeds.
