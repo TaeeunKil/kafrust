@@ -182,7 +182,7 @@ Scope:
 Known limits:
 
 - Rebalance handling is poll-triggered, not background-driven.
-- Background heartbeats are opt-in and surface group errors through `ConsumerGroupHeartbeat::stop`; they do not rejoin automatically yet.
+- Background heartbeats are opt-in and surface group errors through `ConsumerGroupHeartbeat::try_wait` or `ConsumerGroupHeartbeat::stop`; they do not rejoin automatically yet.
 - Live group validation still requires running the opt-in example against Kafka.
 
 ## M6 Production Behavior
