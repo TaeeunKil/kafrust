@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use kafrust_protocol::api::metadata::{BrokerMetadata, MetadataResponseV1};
@@ -165,6 +166,7 @@ impl RecordMetadata {
 pub struct Producer {
     client: Client,
     config: ProducerConfig,
+    metadata_cache: BTreeMap<String, MetadataResponseV1>,
 }
 
 impl Producer {
@@ -181,23 +183,33 @@ impl Producer {
         let timestamp = record.timestamp_ref().unwrap_or_else(SystemTime::now);
         let timestamp_ms = timestamp_millis(timestamp);
         let mut attempt = 0;
+        let topic = record.topic().to_owned();
 
         loop {
-            let metadata = self
-                .client
-                .metadata(Some(vec![record.topic().to_owned()]))
-                .await?;
+            let metadata = self.metadata_for_topic(&topic).await?;
             let result = self
                 .send_with_metadata(&record, &metadata, timestamp, timestamp_ms)
                 .await;
 
             match result {
                 Err(error) if attempt < self.config.max_retries && can_retry_send(&error) => {
+                    invalidate_metadata_cache(&mut self.metadata_cache, &topic);
                     attempt += 1;
                 }
                 result => return result,
             }
         }
+    }
+
+    async fn metadata_for_topic(&mut self, topic: &str) -> Result<MetadataResponseV1> {
+        if let Some(metadata) = self.metadata_cache.get(topic) {
+            return Ok(metadata.clone());
+        }
+
+        let metadata = self.client.metadata(Some(vec![topic.to_owned()])).await?;
+        self.metadata_cache
+            .insert(topic.to_owned(), metadata.clone());
+        Ok(metadata)
     }
 
     async fn send_with_metadata(
@@ -300,6 +312,7 @@ impl ProducerConfig {
         Ok(Producer {
             client,
             config: self,
+            metadata_cache: BTreeMap::new(),
         })
     }
 }
@@ -407,17 +420,25 @@ fn can_retry_send(error: &Error) -> bool {
     }
 }
 
+fn invalidate_metadata_cache(
+    metadata_cache: &mut BTreeMap<String, MetadataResponseV1>,
+    topic: &str,
+) {
+    metadata_cache.remove(topic);
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::{
-        can_retry_send, choose_partition, leader_for, Acks, ProducerConfig, ProducerRecord,
-        RecordMetadata,
+        can_retry_send, choose_partition, invalidate_metadata_cache, leader_for, Acks,
+        ProducerConfig, ProducerRecord, RecordMetadata,
     };
     use crate::{BrokerErrorKind, Error};
     use kafrust_protocol::api::metadata::{
         BrokerMetadata, MetadataResponseV1, PartitionMetadata, TopicMetadata,
     };
+    use std::collections::BTreeMap;
 
     #[test]
     fn maps_acks_to_kafka_values() {
@@ -508,6 +529,18 @@ mod tests {
             .broker_error_kind(),
             Some(BrokerErrorKind::LeaderNotAvailable)
         );
+    }
+
+    #[test]
+    fn invalidates_topic_metadata_cache() {
+        let mut cache = BTreeMap::new();
+        cache.insert("orders".to_owned(), metadata_fixture());
+        cache.insert("payments".to_owned(), metadata_fixture());
+
+        invalidate_metadata_cache(&mut cache, "orders");
+
+        assert!(!cache.contains_key("orders"));
+        assert!(cache.contains_key("payments"));
     }
 
     fn metadata_fixture() -> MetadataResponseV1 {

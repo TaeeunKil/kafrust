@@ -193,7 +193,7 @@ Scope:
 
 - request timeouts (implemented through `ClientConfig::request_timeout_ms`)
 - producer retry policy (implemented through `ProducerConfig::max_retries`)
-- metadata refresh
+- producer metadata cache and refresh on retriable send failures
 - producer reconnect on retriable send failures
 - consumer fetch retry and reconnect on transient failures
 - bootstrap failover (implemented by trying configured bootstrap servers in order)
