@@ -26,6 +26,7 @@ kafrust is developed with an agent-assisted workflow that keeps agent work revie
 - [Broker roundtrip](docs/broker-roundtrip.md)
 - [Producer API direction](docs/producer-api.md)
 - [Consumer group direction](docs/consumer-groups.md)
+- [Release preparation](docs/release.md)
 
 ## License
 

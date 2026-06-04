@@ -210,11 +210,17 @@ Known limits:
 
 ## M7 Public Alpha
 
-Status: Planned.
+Status: In progress.
 
 Scope:
 
-- examples
-- API docs
-- integration tests
-- crates.io release preparation
+- examples (implemented for broker roundtrip, producer send, direct consumer fetch, coordinator discovery, and group poll)
+- API docs (implemented for the public `kafrust` API and enforced with `missing_docs`)
+- integration tests (implemented as opt-in broker roundtrip tests)
+- crates.io release preparation (documented in `docs/release.md`)
+
+Known limits:
+
+- No crate has been published yet.
+- Live broker checks are still manual and opt-in.
+- Public alpha version numbers have not been cut from `0.0.0` yet.
