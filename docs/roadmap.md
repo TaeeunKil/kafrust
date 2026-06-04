@@ -187,7 +187,7 @@ Known limits:
 
 ## M6 Production Behavior
 
-Status: In progress.
+Status: Implemented; deeper resilience behavior remains iterative.
 
 Scope:
 
@@ -200,6 +200,13 @@ Scope:
 - error classification (initial `BrokerErrorKind` mapping implemented)
 - request tracing (implemented with `tracing` events for request/response metadata)
 - poll backpressure (implemented through `ConsumerConfig::max_poll_records`)
+
+Known limits:
+
+- Reconnects happen through operation retries, not long-lived connection recovery.
+- Metadata caching currently exists on the producer path only.
+- Tracing emits request lifecycle metadata but does not yet include higher-level producer, consumer, or group spans.
+- Backpressure is limited to per-poll record count, not socket or memory pressure.
 
 ## M7 Public Alpha
 
