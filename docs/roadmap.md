@@ -5,7 +5,8 @@ kafrust milestones are ordered by implementation risk and user-visible value. Th
 Status legend:
 
 - Done: implemented and covered by CI.
-- Implemented: code and examples exist, but live-broker verification is opt-in/manual.
+- Implemented: code and examples exist, with live-broker verification outside default PR CI.
+- Published: released on crates.io with release artifacts and post-release checks.
 - In progress: useful slices exist, but exit criteria are not fully met.
 - Planned: not started.
 
@@ -64,7 +65,7 @@ Evidence:
 
 ## M2 Broker Roundtrip
 
-Status: Implemented; live-broker verification is opt-in/manual.
+Status: Implemented; live-broker verification is opt-in and scheduled.
 
 Goal: prove kafrust can talk to a real Kafka broker.
 
@@ -89,14 +90,15 @@ Evidence:
 - `Client` can connect over Tokio TCP, frame requests, increment correlation IDs, and decode response headers.
 - `api_versions` and `metadata` roundtrip methods exist.
 - `broker_roundtrip` example and opt-in integration test use `KAFRUST_BOOTSTRAP_SERVERS`.
+- The `Live Kafka Smoke` workflow has passed the broker roundtrip test against Kafka 3.7.2.
 
-Remaining verification:
+Ongoing verification:
 
-- Run the opt-in broker test against a real Kafka broker in a local or CI service environment.
+- Keep the scheduled/manual `Live Kafka Smoke` workflow passing before release tags.
 
 ## M3 Producer MVP
 
-Status: Implemented; live produce verification is opt-in/manual.
+Status: Implemented; live produce verification is opt-in and scheduled.
 
 Goal: provide a familiar minimal producer for Kafka users.
 
@@ -123,16 +125,17 @@ Evidence:
 - `Producer::send` does metadata lookup, leader routing, Produce v2 encoding, ProduceResponse v2 decoding, and broker error surfacing.
 - Producer retries stale-metadata-style produce errors once after refreshing metadata.
 - `producer_send` example and `docs/producer-api.md` document the current path.
+- The `Live Kafka Smoke` workflow has produced records to Kafka 3.7.2.
 
 Known limits:
 
 - Current high-level producer path negotiates Produce API support, uses v3 RecordBatch for headers, and falls back to v2 MessageSet only for records without headers.
 - `acks=0` is rejected because the current request loop expects a broker response.
-- Produce-to-real-topic validation still requires running the example against Kafka.
+- Live produce validation runs through the scheduled/manual `Live Kafka Smoke` workflow.
 
 ## M4 Consumer MVP
 
-Status: Implemented; live fetch verification is opt-in/manual.
+Status: Implemented; live fetch verification is opt-in and scheduled.
 
 Goal: provide a minimal consumer path before implementing full consumer groups.
 
@@ -157,14 +160,15 @@ Evidence:
 - `ConsumerConfig`, `Consumer`, and `ConsumerRecord` expose direct topic/partition/offset fetch.
 - `Consumer::assign` and `Consumer::poll` provide a stream-like path with in-memory offset advancement.
 - `consumer_fetch` example and `docs/consumer-api.md` document the current path.
+- The `Live Kafka Smoke` workflow has fetched records from Kafka 3.7.2.
 
 Next work:
 
-- Run producer and consumer examples against a real broker.
+- Extend live fetch checks across more record shapes and broker versions.
 
 ## M5 Consumer Group Alpha
 
-Status: Implemented; live group verification is opt-in/manual.
+Status: Implemented; live group verification is opt-in and scheduled.
 
 Scope:
 
@@ -183,7 +187,7 @@ Known limits:
 
 - Rebalance handling is poll-triggered, not background-driven.
 - Background heartbeats are opt-in and surface group errors through `ConsumerGroupHeartbeat::try_wait` or `ConsumerGroupHeartbeat::stop`; they do not rejoin automatically yet.
-- Live group validation still requires running the opt-in example against Kafka.
+- Live group validation runs through the scheduled/manual `Live Kafka Smoke` workflow.
 
 ## M6 Production Behavior
 
@@ -210,17 +214,161 @@ Known limits:
 
 ## M7 Public Alpha
 
-Status: Implemented; publishing remains manual.
+Status: Published.
 
 Scope:
 
 - examples (implemented for broker roundtrip, producer send, direct consumer fetch, coordinator discovery, and group poll)
 - API docs (implemented for the public `kafrust` API and enforced with `missing_docs`)
 - integration tests (implemented as opt-in broker roundtrip tests)
-- crates.io release preparation (documented in `docs/release.md`)
+- crates.io release preparation and publish flow
+
+Evidence:
+
+- `kafrust-protocol v0.1.0` and `kafrust v0.1.0` are published on crates.io.
+- GitHub release `v0.1.0` is tagged and published.
+- A fresh external project can add `kafrust = "0.1.0"` and compile.
+- docs.rs pages for both crates build successfully.
+- The `Live Kafka Smoke` workflow runs the broker roundtrip, producer, direct consumer, and consumer group examples against Kafka 3.7.2.
 
 Known limits:
 
-- No crate has been published yet.
-- Live broker checks are still manual and opt-in.
-- Crates are versioned for public alpha but have not been published yet.
+- Live broker checks are opt-in and scheduled, not part of default pull request CI.
+- Published `0.1.x` APIs remain alpha APIs and may change while Kafka protocol coverage and runtime behavior stabilize.
+
+## M8 Alpha Operations
+
+Status: In progress.
+
+Goal: make the alpha reliable to operate during development and small experiments.
+
+Scope:
+
+- scheduled live Kafka smoke checks
+- docs.rs and published-crate install smoke
+- release checklist updates after each publish
+- issue templates or labels for protocol bugs, runtime bugs, and API design questions
+- documented compatibility notes for tested Kafka broker versions
+
+Exit criteria:
+
+- live smoke runs on a schedule and can be run manually before release tags
+- release docs include post-publish verification, not only pre-publish commands
+- known Kafka broker compatibility is visible in docs
+- reported failures can be triaged into protocol, client runtime, or API surface areas
+
+Evidence:
+
+- `Live Kafka Smoke` exists and has passed manually against Kafka 3.7.2.
+- `docs/broker-roundtrip.md` records the latest manual live smoke and the scheduled workflow.
+- v0.1.0 was verified from a fresh external project with `kafrust = "0.1.0"`.
+- `docs/release.md` includes post-publish crates.io, docs.rs, release tag, and live smoke verification.
+
+Next work:
+
+- document tested broker versions and the current compatibility claim
+- add a lightweight issue triage structure
+
+## M9 Consumer Group Resilience
+
+Status: Planned.
+
+Goal: make the consumer group alpha behavior safer under normal Kafka rebalances and coordinator changes.
+
+Scope:
+
+- background heartbeat error observation and recovery strategy
+- automatic rejoin coordination between foreground poll and background heartbeat
+- clearer member generation state transitions
+- offset commit behavior during rejoin and stale generations
+- focused tests for coordinator, generation, member, and rebalance error paths
+
+Exit criteria:
+
+- background heartbeat failures can trigger a controlled rejoin path or a clearly documented terminal state
+- foreground `poll` and background heartbeat do not race over stale generation or member IDs
+- offset commits fail predictably or recover after rejoin, with visible Kafka context
+- docs describe when users should spawn background heartbeats and how failures are surfaced
+
+Known limits:
+
+- Background heartbeats currently surface failures through `try_wait` or `stop`; they do not rejoin automatically.
+- Range assignment is the only high-level group assignment strategy.
+
+## M10 Producer Throughput
+
+Status: Planned.
+
+Goal: move from single-record send ergonomics toward practical producer throughput while keeping Kafka concepts visible.
+
+Scope:
+
+- multi-record produce requests
+- per-topic and per-partition batching
+- configurable linger and batch size
+- retry behavior for partial partition failures
+- clearer delivery metadata for batched sends
+
+Exit criteria:
+
+- users can send batches without manually building protocol structures
+- batching preserves topic, partition, key, value, headers, acks, and offset metadata
+- partial failures are surfaced per topic partition
+- live smoke covers at least one multi-record produce and fetch roundtrip
+
+Known limits:
+
+- The current high-level producer sends one record per request.
+- `acks=0` remains unsupported because the request loop expects a broker response.
+
+## M11 Security And Connectivity
+
+Status: Planned.
+
+Goal: support common secured Kafka deployments without adding librdkafka or C bindings.
+
+Scope:
+
+- TLS transport using a Rust TLS stack
+- SASL PLAIN and SCRAM evaluation
+- client configuration for security protocol and authentication material
+- secure error messages that do not leak secrets
+- docs for local plaintext, TLS, and SASL broker profiles
+
+Exit criteria:
+
+- plaintext behavior remains the default and stays simple
+- TLS connections can complete ApiVersions and Metadata roundtrips
+- at least one SASL mechanism can authenticate against a broker in live smoke or documented manual checks
+- credentials are kept out of tracing events and error displays
+
+Known limits:
+
+- Current networking is plaintext TCP only.
+- No SASL mechanisms are implemented yet.
+
+## M12 API Stabilization
+
+Status: Planned.
+
+Goal: prepare a stable pre-1.0 API shape with clear compatibility rules for downstream users.
+
+Scope:
+
+- audit public types for Kafka terminology, naming, and minimality
+- decide which protocol types remain public re-exports
+- builder validation and explicit error variants for common configuration failures
+- docs examples that compile from published crates
+- semver policy for `0.x` releases and migration notes
+
+Exit criteria:
+
+- public APIs have documented intended stability levels
+- examples cover producer, direct consumer, and consumer group happy paths from published crates
+- release notes call out breaking changes and migration steps
+- downstream users can evaluate whether kafrust is suitable for experiments, staging, or production-like tests
+
+Known limits:
+
+- The project is still pre-1.0 and can make breaking changes between minor versions.
+- Protocol coverage is intentionally incomplete and grows API by API.
