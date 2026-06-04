@@ -15,15 +15,18 @@ let mut group = ConsumerGroupConfig::new(["localhost:9092"], "orders-group")
     .join()
     .await?;
 
-let heartbeat = group
+let mut heartbeat = group
     .spawn_heartbeat_task(Duration::from_secs(3))
     .await?;
+if heartbeat.is_finished() {
+    heartbeat.try_wait().await?;
+}
 let records = group.poll().await?;
 group.commit_offsets().await?;
 heartbeat.stop().await?;
 ```
 
-Under the hood, `ConsumerGroupConfig::join` discovers the coordinator, sends `JoinGroup v2`, computes range assignments if this member is the leader, sends `SyncGroup v2`, fetches committed offsets for assigned partitions, and builds a direct `Consumer` for fetching records. `ConsumerGroup::poll` sends a heartbeat before fetching assigned partitions, rejoins the group when the heartbeat reports a rebalance, stale generation, stale member ID, or stale coordinator, and `ConsumerGroup::commit_offsets` commits the current next offsets. `ConsumerGroup::spawn_heartbeat_task` is an opt-in background heartbeat loop on a separate coordinator connection; call `ConsumerGroupHeartbeat::stop` to shut it down and observe any broker error returned by the task.
+Under the hood, `ConsumerGroupConfig::join` discovers the coordinator, sends `JoinGroup v2`, computes range assignments if this member is the leader, sends `SyncGroup v2`, fetches committed offsets for assigned partitions, and builds a direct `Consumer` for fetching records. `ConsumerGroup::poll` sends a heartbeat before fetching assigned partitions, rejoins the group when the heartbeat reports a rebalance, stale generation, stale member ID, or stale coordinator, and `ConsumerGroup::commit_offsets` commits the current next offsets. `ConsumerGroup::spawn_heartbeat_task` is an opt-in background heartbeat loop on a separate coordinator connection; call `ConsumerGroupHeartbeat::try_wait` to observe early task completion without stopping it, and call `ConsumerGroupHeartbeat::stop` to shut it down and observe any broker error returned by the task.
 
 Offset fetches and commits are coordinator-scoped Kafka requests. The lower-level `Client` methods remain available for protocol-focused experiments, but the alpha user path is `ConsumerGroupConfig`.
 
@@ -46,7 +49,7 @@ Current implementation status:
 - `ConsumerGroupConfig::max_poll_records` is passed through to the direct poll path after group assignment.
 - Broker error codes can be classified with `BrokerErrorKind` for common coordinator, generation, and rebalance errors.
 - Consumer group join, heartbeat, background heartbeat, rejoin, and commit operations emit `tracing` events with operational metadata.
-- Rebalance handling can rejoin during `ConsumerGroup::poll` after coordinator, generation, member, or rebalance heartbeat errors. Background heartbeats stop and surface the broker error through `ConsumerGroupHeartbeat::stop`; they do not rejoin on their own yet.
+- Rebalance handling can rejoin during `ConsumerGroup::poll` after coordinator, generation, member, or rebalance heartbeat errors. Background heartbeat failures can be observed with `ConsumerGroupHeartbeat::try_wait` or `ConsumerGroupHeartbeat::stop`; they do not rejoin on their own yet.
 
 Run the opt-in coordinator example against a local broker:
 

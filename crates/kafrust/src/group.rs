@@ -448,6 +448,32 @@ pub struct ConsumerGroupHeartbeat {
 }
 
 impl ConsumerGroupHeartbeat {
+    /// Returns whether the heartbeat task has completed.
+    pub fn is_finished(&self) -> bool {
+        match &self.handle {
+            Some(handle) => handle.is_finished(),
+            None => true,
+        }
+    }
+
+    /// Checks for heartbeat task completion without requesting shutdown.
+    ///
+    /// Returns `Ok(None)` while the task is still running, `Ok(Some(()))`
+    /// after a clean task completion, or the task error if a heartbeat failed.
+    pub async fn try_wait(&mut self) -> Result<Option<()>> {
+        let Some(handle) = &self.handle else {
+            return Ok(Some(()));
+        };
+        if !handle.is_finished() {
+            return Ok(None);
+        }
+
+        let Some(handle) = self.handle.take() else {
+            return Ok(Some(()));
+        };
+        handle.await?.map(Some)
+    }
+
     /// Requests heartbeat task shutdown and waits for it to finish.
     pub async fn stop(mut self) -> Result<()> {
         self.signal_shutdown();
@@ -760,6 +786,7 @@ mod tests {
     use super::{
         check_offset_commit_response, committed_offset, offset_commit_topics, offset_fetch_topics,
         range_assignments, should_rejoin_group, validate_heartbeat_interval, ConsumerGroupConfig,
+        ConsumerGroupHeartbeat,
     };
     use crate::consumer::ConsumerAssignment;
     use crate::Error;
@@ -942,6 +969,49 @@ mod tests {
             Error::Unsupported("heartbeat interval must be greater than zero")
         ));
         validate_heartbeat_interval(std::time::Duration::from_millis(1)).unwrap();
+    }
+
+    #[tokio::test]
+    async fn try_wait_reports_running_heartbeat_task() {
+        let (shutdown, shutdown_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(async move {
+            let _ = shutdown_rx.await;
+            Ok(())
+        });
+        let mut heartbeat = ConsumerGroupHeartbeat {
+            shutdown: Some(shutdown),
+            handle: Some(handle),
+        };
+
+        assert!(!heartbeat.is_finished());
+        assert_eq!(heartbeat.try_wait().await.unwrap(), None);
+
+        heartbeat.stop().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn try_wait_surfaces_finished_heartbeat_error() {
+        let (shutdown, _shutdown_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(async {
+            Err(Error::Broker {
+                code: 27,
+                context: "background heartbeat group orders-group".to_owned(),
+            })
+        });
+        let mut heartbeat = ConsumerGroupHeartbeat {
+            shutdown: Some(shutdown),
+            handle: Some(handle),
+        };
+
+        while !heartbeat.is_finished() {
+            tokio::task::yield_now().await;
+        }
+
+        assert!(matches!(
+            heartbeat.try_wait().await,
+            Err(Error::Broker { code: 27, .. })
+        ));
+        assert!(heartbeat.is_finished());
     }
 
     fn member(member_id: &str, topics: &[&str]) -> JoinGroupMember {
