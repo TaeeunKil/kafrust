@@ -198,14 +198,14 @@ Scope:
 - consumer fetch retry and reconnect on transient failures
 - bootstrap failover (implemented by trying configured bootstrap servers in order)
 - error classification (initial `BrokerErrorKind` mapping implemented)
-- request tracing (implemented with `tracing` events for request/response metadata)
+- request and operation tracing (implemented with `tracing` events for request/response, producer, direct consumer, and group metadata)
 - poll backpressure (implemented through `ConsumerConfig::max_poll_records`)
 
 Known limits:
 
 - Reconnects happen through operation retries, not long-lived connection recovery.
 - Metadata caching currently exists on the producer and direct consumer paths.
-- Tracing emits request lifecycle metadata but does not yet include higher-level producer, consumer, or group spans.
+- Tracing emits request lifecycle and high-level operation metadata, but does not yet use structured spans across complete workflows.
 - Backpressure is limited to per-poll record count, not socket or memory pressure.
 
 ## M7 Public Alpha

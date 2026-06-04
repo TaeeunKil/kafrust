@@ -49,6 +49,7 @@ Current implementation status:
 - `ProducerConfig::request_timeout_ms` controls the request timeout used for metadata and produce roundtrips.
 - `ProducerConfig::max_retries` controls retry attempts for stale metadata, transient leader errors classified by `BrokerErrorKind`, request timeouts, and connection I/O failures.
 - Producer metadata is cached by topic and refreshed when a retriable send failure invalidates that topic cache entry.
+- Producer send operations emit `tracing` events with operational metadata, but not key or value payload contents.
 - Record headers are encoded with Kafka RecordBatch magic v2 through Produce API v3.
 - When a broker only supports Produce API v2, records without headers fall back to the legacy MessageSet path.
 - Records with headers return `Unsupported` if the target broker does not support Produce API v3.

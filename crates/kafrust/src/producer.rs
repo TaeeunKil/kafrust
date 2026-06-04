@@ -11,6 +11,7 @@ use kafrust_protocol::api::produce::{
 use crate::client::Client;
 use crate::config::ClientConfig;
 use crate::error::{BrokerErrorKind, Error, Result};
+use tracing::debug;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Kafka produce acknowledgement policy.
@@ -206,6 +207,14 @@ impl Producer {
         if self.config.acks == Acks::None {
             return Err(Error::Unsupported("producer acks=0 send without response"));
         }
+        debug!(
+            topic = record.topic(),
+            partition = ?record.partition_ref(),
+            key_bytes = record.key_ref().map(|key| key.len()),
+            value_bytes = record.value_ref().map(|value| value.len()),
+            header_count = record.headers().len(),
+            "sending kafka record"
+        );
 
         let timestamp = record.timestamp_ref().unwrap_or_else(SystemTime::now);
         let timestamp_ms = timestamp_millis(timestamp);
@@ -223,7 +232,16 @@ impl Producer {
                     invalidate_metadata_cache(&mut self.metadata_cache, &topic);
                     attempt += 1;
                 }
-                result => return result,
+                Ok(metadata) => {
+                    debug!(
+                        topic = metadata.topic(),
+                        partition = metadata.partition(),
+                        offset = metadata.offset(),
+                        "sent kafka record"
+                    );
+                    return Ok(metadata);
+                }
+                Err(error) => return Err(error),
             }
         }
     }
@@ -249,6 +267,13 @@ impl Producer {
         let partition = choose_partition(record, metadata)?;
         let leader = leader_for(metadata, record.topic(), partition)?;
         let broker_addr = broker_addr_for(metadata, leader)?;
+        debug!(
+            topic = record.topic(),
+            partition,
+            leader,
+            broker_addr = broker_addr.as_str(),
+            "resolved produce leader"
+        );
 
         let mut leader_client = Client::connect_with_request_timeout(
             broker_addr,
@@ -264,7 +289,15 @@ impl Producer {
             });
         }
 
-        let response = match select_produce_version(&api_versions, record)? {
+        let produce_version = select_produce_version(&api_versions, record)?;
+        debug!(
+            topic = record.topic(),
+            partition,
+            produce_version = ?produce_version,
+            "selected produce api version"
+        );
+
+        let response = match produce_version {
             ProduceVersion::V3 => {
                 leader_client
                     .produce_one_v3(

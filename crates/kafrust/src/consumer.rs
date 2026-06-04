@@ -6,6 +6,7 @@ use kafrust_protocol::api::metadata::{BrokerMetadata, MetadataResponseV1};
 use crate::client::{Client, FetchOneRequestV2};
 use crate::config::ClientConfig;
 use crate::error::{BrokerErrorKind, Error, Result};
+use tracing::debug;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// Record fetched from a Kafka topic partition.
@@ -98,6 +99,11 @@ impl Consumer {
     pub async fn poll(&mut self) -> Result<Vec<ConsumerRecord>> {
         let assignments = self.assignments.clone();
         let mut records = Vec::new();
+        debug!(
+            assignment_count = assignments.len(),
+            max_poll_records = self.config.max_poll_records,
+            "polling kafka consumer assignments"
+        );
 
         for assignment in assignments {
             if records.len() >= self.config.max_poll_records {
@@ -122,6 +128,10 @@ impl Consumer {
             records.extend(fetched);
         }
 
+        debug!(
+            record_count = records.len(),
+            "polled kafka consumer records"
+        );
         Ok(records)
     }
 
@@ -134,6 +144,10 @@ impl Consumer {
     ) -> Result<Vec<ConsumerRecord>> {
         let topic = topic.into();
         let mut attempt = 0;
+        debug!(
+            topic = topic.as_str(),
+            partition, offset, "fetching kafka records"
+        );
 
         loop {
             let result = self.fetch_once(&topic, partition, offset).await;
@@ -142,7 +156,17 @@ impl Consumer {
                     invalidate_metadata_cache(&mut self.metadata_cache, &topic);
                     attempt += 1;
                 }
-                result => return result,
+                Ok(records) => {
+                    debug!(
+                        topic = topic.as_str(),
+                        partition,
+                        offset,
+                        record_count = records.len(),
+                        "fetched kafka records"
+                    );
+                    return Ok(records);
+                }
+                Err(error) => return Err(error),
             }
         }
     }
@@ -156,6 +180,13 @@ impl Consumer {
         let metadata = self.metadata_for_topic(topic).await?;
         let leader = leader_for(&metadata, topic, partition)?;
         let broker_addr = broker_addr_for(&metadata, leader)?;
+        debug!(
+            topic = topic,
+            partition,
+            leader,
+            broker_addr = broker_addr.as_str(),
+            "resolved fetch leader"
+        );
         let mut leader_client = Client::connect_with_request_timeout(
             broker_addr,
             self.config.client.client_id_ref().map(str::to_owned),

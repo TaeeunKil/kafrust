@@ -45,6 +45,7 @@ Current implementation status:
 - `ConsumerGroupConfig::max_retries` is passed through to the direct fetch path after group assignment.
 - `ConsumerGroupConfig::max_poll_records` is passed through to the direct poll path after group assignment.
 - Broker error codes can be classified with `BrokerErrorKind` for common coordinator, generation, and rebalance errors.
+- Consumer group join, heartbeat, background heartbeat, rejoin, and commit operations emit `tracing` events with operational metadata.
 - Rebalance handling can rejoin during `ConsumerGroup::poll` after coordinator, generation, member, or rebalance heartbeat errors. Background heartbeats stop and surface the broker error through `ConsumerGroupHeartbeat::stop`; they do not rejoin on their own yet.
 
 Run the opt-in coordinator example against a local broker:

@@ -22,6 +22,7 @@ use crate::error::{BrokerErrorKind, Error, Result};
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 use tokio::time::{self, MissedTickBehavior};
+use tracing::debug;
 
 const PROTOCOL_TYPE: &str = "consumer";
 const RANGE_PROTOCOL: &str = "range";
@@ -152,6 +153,11 @@ impl ConsumerGroupConfig {
         if self.topics.is_empty() {
             return Err(Error::Unsupported("consumer group without subscriptions"));
         }
+        debug!(
+            group_id = self.group_id.as_str(),
+            topic_count = self.topics.len(),
+            "joining kafka consumer group"
+        );
         let config = self.clone();
 
         let mut bootstrap = self.client.clone().connect().await?;
@@ -240,6 +246,14 @@ impl ConsumerGroupConfig {
             consumer_config.request_timeout_ms(duration_millis(self.client.request_timeout()));
         let consumer_client = self.client.clone().connect().await?;
 
+        debug!(
+            group_id = self.group_id.as_str(),
+            member_id = joined.member_id.as_str(),
+            generation_id = joined.generation_id,
+            assignment_count = consumer_assignments.len(),
+            "joined kafka consumer group"
+        );
+
         Ok(ConsumerGroup {
             config,
             group_id: self.group_id,
@@ -293,7 +307,16 @@ impl ConsumerGroup {
     pub async fn poll(&mut self) -> Result<Vec<ConsumerRecord>> {
         match self.heartbeat().await {
             Ok(()) => {}
-            Err(error) if should_rejoin_group(&error) => self.rejoin().await?,
+            Err(error) if should_rejoin_group(&error) => {
+                debug!(
+                    group_id = self.group_id.as_str(),
+                    member_id = self.member_id.as_str(),
+                    generation_id = self.generation_id,
+                    error = %error,
+                    "rejoining kafka consumer group after heartbeat"
+                );
+                self.rejoin().await?
+            }
             Err(error) => return Err(error),
         }
         self.consumer.poll().await
@@ -302,6 +325,13 @@ impl ConsumerGroup {
     /// Starts a background heartbeat task for this joined group member.
     pub async fn spawn_heartbeat_task(&self, interval: Duration) -> Result<ConsumerGroupHeartbeat> {
         validate_heartbeat_interval(interval)?;
+        debug!(
+            group_id = self.group_id.as_str(),
+            member_id = self.member_id.as_str(),
+            generation_id = self.generation_id,
+            interval_ms = duration_millis(interval),
+            "starting kafka consumer group heartbeat task"
+        );
 
         let mut bootstrap = self.config.client.clone().connect().await?;
         let coordinator = bootstrap
@@ -350,6 +380,12 @@ impl ConsumerGroup {
 
     /// Sends an explicit heartbeat for this group member.
     pub async fn heartbeat(&mut self) -> Result<()> {
+        debug!(
+            group_id = self.group_id.as_str(),
+            member_id = self.member_id.as_str(),
+            generation_id = self.generation_id,
+            "sending kafka consumer group heartbeat"
+        );
         let response = self
             .coordinator
             .heartbeat_v2(
@@ -364,12 +400,25 @@ impl ConsumerGroup {
                 context: format!("heartbeat group {}", self.group_id),
             });
         }
+        debug!(
+            group_id = self.group_id.as_str(),
+            member_id = self.member_id.as_str(),
+            generation_id = self.generation_id,
+            "sent kafka consumer group heartbeat"
+        );
         Ok(())
     }
 
     /// Commits the current assignment offsets to the group coordinator.
     pub async fn commit_offsets(&mut self) -> Result<()> {
         let topics = offset_commit_topics(self.consumer.assignments());
+        debug!(
+            group_id = self.group_id.as_str(),
+            member_id = self.member_id.as_str(),
+            generation_id = self.generation_id,
+            topic_count = topics.len(),
+            "committing kafka consumer group offsets"
+        );
         let response = self
             .coordinator
             .offset_commit_v2(
@@ -380,7 +429,14 @@ impl ConsumerGroup {
                 topics,
             )
             .await?;
-        check_offset_commit_response(&self.group_id, &response.topics)
+        check_offset_commit_response(&self.group_id, &response.topics)?;
+        debug!(
+            group_id = self.group_id.as_str(),
+            member_id = self.member_id.as_str(),
+            generation_id = self.generation_id,
+            "committed kafka consumer group offsets"
+        );
+        Ok(())
     }
 }
 
@@ -627,6 +683,12 @@ async fn run_background_heartbeat(
         tokio::select! {
             _ = &mut shutdown => return Ok(()),
             _ = heartbeat.tick() => {
+                debug!(
+                    group_id = group_id.as_str(),
+                    member_id = member_id.as_str(),
+                    generation_id,
+                    "sending background kafka consumer group heartbeat"
+                );
                 let response = coordinator
                     .heartbeat_v2(group_id.clone(), generation_id, member_id.clone())
                     .await?;

@@ -20,4 +20,4 @@ Requests made through `ClientConfig`, `ProducerConfig`, `ConsumerConfig`, and `C
 
 When multiple bootstrap servers are configured, `ClientConfig::connect` tries them in order until one connection succeeds.
 
-kafrust emits `tracing` events for Kafka request start, response receipt, and request failure. Events include API key, API version, correlation ID, and byte counts, but not request or response payload contents.
+kafrust emits `tracing` events for Kafka request start, response receipt, request failure, and high-level producer, direct consumer, and consumer group operations. Events include operational metadata such as API key, API version, correlation ID, topic, partition, offset, group ID, member ID, generation ID, and byte or record counts, but not request, response, key, or value payload contents.
