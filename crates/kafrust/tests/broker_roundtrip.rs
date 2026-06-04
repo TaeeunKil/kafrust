@@ -1,6 +1,8 @@
 #![allow(clippy::expect_used)]
 
+use kafrust::protocol::api::find_coordinator::FindCoordinatorResponseV1;
 use kafrust::ClientConfig;
+use tokio::time::{sleep, Duration, Instant};
 
 #[tokio::test]
 async fn api_versions_and_metadata_roundtrip_when_broker_is_configured() {
@@ -42,12 +44,28 @@ async fn find_group_coordinator_roundtrip_when_broker_is_configured() {
         .await
         .expect("connect to Kafka broker");
 
-    let coordinator = client
-        .find_group_coordinator(group_id)
+    let coordinator = wait_for_group_coordinator(&mut client, group_id)
         .await
-        .expect("FindCoordinator roundtrip should succeed");
+        .expect("FindCoordinator should return a ready coordinator");
 
     assert!(coordinator.node_id >= 0);
     assert!(!coordinator.host.is_empty());
     assert!(coordinator.port > 0);
+}
+
+async fn wait_for_group_coordinator(
+    client: &mut kafrust::Client,
+    group_id: String,
+) -> kafrust::Result<FindCoordinatorResponseV1> {
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        let coordinator = client.find_group_coordinator(group_id.clone()).await?;
+        if coordinator.node_id >= 0 {
+            return Ok(coordinator);
+        }
+        if Instant::now() >= deadline {
+            return Ok(coordinator);
+        }
+        sleep(Duration::from_millis(500)).await;
+    }
 }
