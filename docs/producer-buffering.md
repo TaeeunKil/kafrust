@@ -18,7 +18,7 @@ Buffered sends should let callers enqueue single records while kafrust batches r
 The first buffered API should be opt-in and separate from the immediate producer path:
 
 ```rust
-let producer = ProducerConfig::new(["localhost:9092"])
+let mut producer = ProducerConfig::new(["localhost:9092"])
     .client_id("orders-api")
     .linger_ms(5)
     .max_records_per_batch(500)
@@ -43,7 +43,7 @@ Names can change during implementation, but the behavioral split should remain:
 - `BufferedProducer::flush` waits until all records accepted before the flush have terminal delivery outcomes.
 - `BufferedProducer::close` flushes, stops the background task, and rejects later sends.
 
-Current implementation status: `ProducerConfig::linger_ms`, `ProducerConfig::build_buffered`, `BufferedProducer::send`, `BufferedProducer::flush`, `BufferedProducer::close`, `BufferedProducer::is_closed`, and per-record `ProducerDelivery` handles exist as the bounded enqueue skeleton. Kafka delivery execution is not wired yet, so `flush` or `close` completes pending delivery handles with an explicit unsupported error.
+Current implementation status: `ProducerConfig::linger_ms`, `ProducerConfig::build_buffered`, `BufferedProducer::send`, `BufferedProducer::flush`, `BufferedProducer::close`, `BufferedProducer::is_closed`, and per-record `ProducerDelivery` handles exist. `flush` and `close` send accepted records through the existing `send_batch_report` path and complete delivery handles from per-record outcomes. Automatic linger, record-count, and byte-count flush triggers are still planned.
 
 ## Flush Triggers
 
@@ -85,8 +85,8 @@ The background task should own the inner `Producer` so the immediate producer pa
 
 1. Done: add `ProducerConfig::linger_ms` and the `BufferedProducer` type skeleton with close/flush lifecycle tests.
 2. Done: add bounded enqueue and per-record delivery handles without network I/O by testing task shutdown and delivery cancellation.
-3. Next: wire the background task to `send_batch_report` and complete delivery handles from per-record outcomes.
-4. Add linger, record-count, and byte-count flush trigger tests with a controllable clock.
+3. Done: wire the background task to `send_batch_report` and complete delivery handles from per-record outcomes.
+4. Next: add linger, record-count, and byte-count flush trigger tests with a controllable clock.
 5. Add a live smoke example that enqueues multiple records and fetches them back from Kafka 3.7.2.
 
 M10 should move to Done only after the buffered path has focused tests for flush triggers and a live smoke result.
