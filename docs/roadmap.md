@@ -328,13 +328,14 @@ Exit criteria:
 
 Known limits:
 
-- The high-level producer can send multiple records with `Producer::send_batch`, grouping records by topic, partition, and leader. Linger-based buffering and per-partition retry recovery are still planned.
+- The high-level producer can send multiple records with `Producer::send_batch`, grouping records by topic, partition, and leader. Linger-based buffering is still planned.
 - `acks=0` remains unsupported because the request loop expects a broker response.
 
 Evidence:
 
 - `Producer::send_batch` accepts multiple records, batches same topic-partition groups into one Produce request, and returns metadata in input order.
 - `Producer::send_batch_report` surfaces per-record success and failure outcomes in input order, including broker Produce response errors for failed topic partitions.
+- Batch retry recovery keeps successful records fixed and retries only input records whose topic partition returned a retryable Produce response error.
 - Focused unit tests cover batch Produce API version selection and batch metadata cache invalidation.
 - The `Live Kafka Smoke` workflow runs the `producer_send_batch` example before direct fetch and group poll checks.
 

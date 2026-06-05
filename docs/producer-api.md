@@ -89,4 +89,6 @@ Current implementation status:
 - Records with headers return `Unsupported` if the target broker does not support Produce API v3.
 - `acks=0` is rejected for now because the current client request loop expects a broker response.
 - Stale metadata style produce errors are retried once after refreshing metadata.
-- Batch sends retry request-level retriable failures according to `ProducerConfig::max_retries`, but per-partition retry recovery and linger-based buffering are still planned.
+- Batch sends retry request-level retriable failures according to `ProducerConfig::max_retries`.
+- Retryable broker Produce response failures retry only the failed input records; records that already succeeded are not sent again by that batch call.
+- Linger-based buffering is still planned.
