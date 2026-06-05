@@ -22,8 +22,8 @@ pub use error::{BrokerErrorKind, Error, Result};
 pub use group::{ConsumerGroup, ConsumerGroupConfig, ConsumerGroupHeartbeat};
 pub use kafrust_protocol as protocol;
 pub use producer::{
-    Acks, Header, ProducerBatchFailure, ProducerBatchRecordOutcome, ProducerBatchReport,
-    ProducerConfig, ProducerRecord, RecordMetadata,
+    Acks, BufferedProducer, Header, ProducerBatchFailure, ProducerBatchRecordOutcome,
+    ProducerBatchReport, ProducerConfig, ProducerRecord, RecordMetadata,
 };
 
 /// Returns the crate version compiled into this build.

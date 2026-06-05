@@ -312,6 +312,71 @@ pub struct Producer {
     metadata_cache: BTreeMap<String, MetadataResponseV1>,
 }
 
+#[derive(Debug)]
+/// Opt-in producer skeleton for future linger-based buffered sends.
+///
+/// This type owns an inner [`Producer`] and exposes lifecycle operations for
+/// the buffered path. Record enqueue and delivery handles are planned in the
+/// next M10 slices.
+pub struct BufferedProducer {
+    _producer: Producer,
+    state: BufferedProducerState,
+}
+
+impl BufferedProducer {
+    /// Flushes accepted buffered records.
+    ///
+    /// The current skeleton has no enqueue path yet, so this is a no-op while
+    /// the producer is open.
+    pub async fn flush(&mut self) -> Result<()> {
+        self.state.ensure_open()
+    }
+
+    /// Flushes and closes the buffered producer.
+    ///
+    /// Close is idempotent. Future enqueue APIs will reject sends after close.
+    pub async fn close(&mut self) -> Result<()> {
+        if self.state.is_open() {
+            self.flush().await?;
+            self.state.close();
+        }
+        Ok(())
+    }
+
+    /// Returns whether the buffered producer has been closed.
+    pub fn is_closed(&self) -> bool {
+        self.state.is_closed()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BufferedProducerState {
+    Open,
+    Closed,
+}
+
+impl BufferedProducerState {
+    fn ensure_open(self) -> Result<()> {
+        if self.is_open() {
+            Ok(())
+        } else {
+            Err(Error::Unsupported("buffered producer is closed"))
+        }
+    }
+
+    fn is_open(self) -> bool {
+        matches!(self, Self::Open)
+    }
+
+    fn is_closed(self) -> bool {
+        matches!(self, Self::Closed)
+    }
+
+    fn close(&mut self) {
+        *self = Self::Closed;
+    }
+}
+
 impl Producer {
     /// Sends one record and returns Kafka metadata for the accepted write.
     pub async fn send(&mut self, record: ProducerRecord) -> Result<RecordMetadata> {
@@ -716,6 +781,7 @@ pub struct ProducerConfig {
     max_retries: u32,
     max_records_per_batch: usize,
     max_batch_bytes: usize,
+    linger: Duration,
 }
 
 impl ProducerConfig {
@@ -727,6 +793,7 @@ impl ProducerConfig {
             max_retries: 1,
             max_records_per_batch: usize::MAX,
             max_batch_bytes: usize::MAX,
+            linger: Duration::from_millis(0),
         }
     }
 
@@ -771,6 +838,15 @@ impl ProducerConfig {
         self
     }
 
+    /// Sets the producer linger duration in milliseconds for buffered sends.
+    ///
+    /// The immediate `send` and `send_batch` APIs do not wait on linger. Linger
+    /// applies to the opt-in buffered producer path.
+    pub fn linger_ms(mut self, linger_ms: u64) -> Self {
+        self.linger = Duration::from_millis(linger_ms);
+        self
+    }
+
     /// Returns the configured acknowledgement policy.
     pub fn acks_ref(&self) -> Acks {
         self.acks
@@ -791,6 +867,11 @@ impl ProducerConfig {
         self.max_batch_bytes
     }
 
+    /// Returns the configured linger duration for buffered sends.
+    pub fn linger(&self) -> Duration {
+        self.linger
+    }
+
     /// Returns the shared client configuration.
     pub fn client_config(&self) -> &ClientConfig {
         &self.client
@@ -803,6 +884,15 @@ impl ProducerConfig {
             client,
             config: self,
             metadata_cache: BTreeMap::new(),
+        })
+    }
+
+    /// Connects to Kafka and builds an opt-in buffered producer skeleton.
+    pub async fn build_buffered(self) -> Result<BufferedProducer> {
+        let producer = self.build().await?;
+        Ok(BufferedProducer {
+            _producer: producer,
+            state: BufferedProducerState::Open,
         })
     }
 }
@@ -1160,9 +1250,9 @@ mod tests {
         invalidate_metadata_cache, invalidate_metadata_cache_for_record_indexes, leader_for,
         message_set_message, record_batch_attempt_outcomes, record_batch_message,
         select_produce_batch_version, select_produce_version, Acks, BatchRecord,
-        PreparedBatchRecord, ProduceBatchKey, ProduceVersion, ProducerBatchFailure,
-        ProducerBatchRecordOutcome, ProducerBatchReport, ProducerConfig, ProducerRecord,
-        RecordMetadata,
+        BufferedProducerState, PreparedBatchRecord, ProduceBatchKey, ProduceVersion,
+        ProducerBatchFailure, ProducerBatchRecordOutcome, ProducerBatchReport, ProducerConfig,
+        ProducerRecord, RecordMetadata,
     };
     use crate::{BrokerErrorKind, Error};
     use kafrust_protocol::api::api_versions::{ApiKeyVersion, ApiVersionsResponseV0};
@@ -1307,12 +1397,14 @@ mod tests {
             .max_retries(3)
             .max_records_per_batch(128)
             .max_batch_bytes(64 * 1024)
+            .linger_ms(5)
             .acks(Acks::All);
 
         assert_eq!(config.acks_ref(), Acks::All);
         assert_eq!(config.max_retries_ref(), 3);
         assert_eq!(config.max_records_per_batch_ref(), 128);
         assert_eq!(config.max_batch_bytes_ref(), 64 * 1024);
+        assert_eq!(config.linger(), std::time::Duration::from_millis(5));
         assert_eq!(config.client_config().client_id_ref(), Some("orders-api"));
     }
 
@@ -1328,6 +1420,26 @@ mod tests {
         let config = ProducerConfig::new(["localhost:9092"]).max_batch_bytes(0);
 
         assert_eq!(config.max_batch_bytes_ref(), 1);
+    }
+
+    #[test]
+    fn tracks_buffered_producer_lifecycle_state() {
+        let mut state = BufferedProducerState::Open;
+
+        assert!(state.ensure_open().is_ok());
+        assert!(!state.is_closed());
+
+        state.close();
+
+        assert!(state.is_closed());
+        assert!(matches!(
+            state.ensure_open().unwrap_err(),
+            Error::Unsupported("buffered producer is closed")
+        ));
+
+        state.close();
+
+        assert!(state.is_closed());
     }
 
     #[test]

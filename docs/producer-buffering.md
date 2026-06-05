@@ -43,6 +43,8 @@ Names can change during implementation, but the behavioral split should remain:
 - `BufferedProducer::flush` waits until all records accepted before the flush have terminal delivery outcomes.
 - `BufferedProducer::close` flushes, stops the background task, and rejects later sends.
 
+Current implementation status: `ProducerConfig::linger_ms`, `ProducerConfig::build_buffered`, `BufferedProducer::flush`, `BufferedProducer::close`, and `BufferedProducer::is_closed` exist as the lifecycle skeleton. `BufferedProducer::send` and delivery handles are not implemented yet.
+
 ## Flush Triggers
 
 The background batching task should flush a topic-partition group when any of these happens:
@@ -81,8 +83,8 @@ The background task should own the inner `Producer` so the immediate producer pa
 
 ## Implementation Slices
 
-1. Add `ProducerConfig::linger_ms` and the `BufferedProducer` type skeleton with close/flush lifecycle tests.
-2. Add bounded enqueue and per-record delivery handles without network I/O by testing task shutdown and delivery cancellation.
+1. Done: add `ProducerConfig::linger_ms` and the `BufferedProducer` type skeleton with close/flush lifecycle tests.
+2. Next: add bounded enqueue and per-record delivery handles without network I/O by testing task shutdown and delivery cancellation.
 3. Wire the background task to `send_batch_report` and complete delivery handles from per-record outcomes.
 4. Add linger, record-count, and byte-count flush trigger tests with a controllable clock.
 5. Add a live smoke example that enqueues multiple records and fetches them back from Kafka 3.7.2.
