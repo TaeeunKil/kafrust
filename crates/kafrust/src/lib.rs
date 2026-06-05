@@ -23,7 +23,7 @@ pub use group::{ConsumerGroup, ConsumerGroupConfig, ConsumerGroupHeartbeat};
 pub use kafrust_protocol as protocol;
 pub use producer::{
     Acks, BufferedProducer, Header, ProducerBatchFailure, ProducerBatchRecordOutcome,
-    ProducerBatchReport, ProducerConfig, ProducerRecord, RecordMetadata,
+    ProducerBatchReport, ProducerConfig, ProducerDelivery, ProducerRecord, RecordMetadata,
 };
 
 /// Returns the crate version compiled into this build.
