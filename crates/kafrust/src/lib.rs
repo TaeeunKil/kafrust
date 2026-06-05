@@ -21,7 +21,10 @@ pub use consumer::{Consumer, ConsumerAssignment, ConsumerConfig, ConsumerRecord}
 pub use error::{BrokerErrorKind, Error, Result};
 pub use group::{ConsumerGroup, ConsumerGroupConfig, ConsumerGroupHeartbeat};
 pub use kafrust_protocol as protocol;
-pub use producer::{Acks, Header, ProducerConfig, ProducerRecord, RecordMetadata};
+pub use producer::{
+    Acks, Header, ProducerBatchFailure, ProducerBatchRecordOutcome, ProducerBatchReport,
+    ProducerConfig, ProducerRecord, RecordMetadata,
+};
 
 /// Returns the crate version compiled into this build.
 pub fn version() -> &'static str {

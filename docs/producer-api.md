@@ -30,6 +30,27 @@ let batch_metadata = producer
 for metadata in batch_metadata {
     println!("{}-{}@{}", metadata.topic(), metadata.partition(), metadata.offset());
 }
+
+let batch_report = producer
+    .send_batch_report([
+        ProducerRecord::to("orders").key("order-126").value("created"),
+        ProducerRecord::to("payments").key("payment-456").value("authorized"),
+    ])
+    .await?;
+for outcome in batch_report.records() {
+    if let Some(metadata) = outcome.metadata() {
+        println!("{}-{}@{}", metadata.topic(), metadata.partition(), metadata.offset());
+    }
+    if let Some(failure) = outcome.failure() {
+        eprintln!(
+            "record {} failed on {}-{}: {}",
+            failure.record_index(),
+            failure.topic(),
+            failure.partition(),
+            failure.error()
+        );
+    }
+}
 ```
 
 The public model intentionally keeps Kafka terms visible:
@@ -61,9 +82,11 @@ Current implementation status:
 - Producer metadata is cached by topic and refreshed when a retriable send failure invalidates that topic cache entry.
 - Producer send operations emit `tracing` events with operational metadata, but not key or value payload contents.
 - `Producer::send_batch` accepts multiple `ProducerRecord` values, groups them by topic, partition, and leader, sends each group in one Produce request, and returns `RecordMetadata` in input order.
+- `Producer::send_batch_report` returns per-record success or failure outcomes in input order, so broker Produce response errors can be inspected without losing partial successes.
+- `Producer::send_batch` remains the convenience API and returns the first per-record Produce response error as `Err(Error)`.
 - Record headers are encoded with Kafka RecordBatch magic v2 through Produce API v3.
 - When a broker only supports Produce API v2, records without headers fall back to the legacy MessageSet path.
 - Records with headers return `Unsupported` if the target broker does not support Produce API v3.
 - `acks=0` is rejected for now because the current client request loop expects a broker response.
 - Stale metadata style produce errors are retried once after refreshing metadata.
-- `send_batch` retries retriable batch failures according to `ProducerConfig::max_retries`, but partial per-partition recovery and linger-based buffering are still planned.
+- Batch sends retry request-level retriable failures according to `ProducerConfig::max_retries`, but per-partition retry recovery and linger-based buffering are still planned.
