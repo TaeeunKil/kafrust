@@ -71,6 +71,9 @@ jobs:
       - name: Run producer example
         run: cargo run -p kafrust --example producer_send
 
+      - name: Run producer batch example
+        run: cargo run -p kafrust --example producer_send_batch
+
       - name: Run direct consumer example
         env:
           KAFRUST_PARTITION: "0"

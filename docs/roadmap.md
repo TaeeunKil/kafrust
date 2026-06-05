@@ -335,6 +335,7 @@ Evidence:
 
 - `Producer::send_batch` accepts multiple records, batches same topic-partition groups into one Produce request, and returns metadata in input order.
 - Focused unit tests cover batch Produce API version selection and batch metadata cache invalidation.
+- The `Live Kafka Smoke` workflow runs the `producer_send_batch` example before direct fetch and group poll checks.
 
 ## M11 Security And Connectivity
 
