@@ -8,7 +8,7 @@ The `0.1.x` alpha line is verified against a single-node Apache Kafka 3.7.2 KRaf
 
 | Broker | Mode | Security | Verification | Status |
 | --- | --- | --- | --- | --- |
-| Apache Kafka 3.7.2 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, latest manual smoke on 2026-06-04 | Passing |
+| Apache Kafka 3.7.2 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, latest manual smoke on 2026-06-05 | Passing |
 
 ## Verified Paths
 
