@@ -398,15 +398,41 @@ impl Producer {
 
         debug!(record_count = records.len(), "sending kafka record batch");
 
+        let mut outcomes = std::iter::repeat_with(|| None)
+            .take(records.len())
+            .collect::<Vec<_>>();
+        let mut pending_indexes = (0..records.len()).collect::<Vec<_>>();
         let mut attempt = 0;
         loop {
-            let result = self.send_batch_once(&records).await;
+            let result = self.send_batch_once(&records, &pending_indexes).await;
             match result {
                 Err(error) if attempt < self.config.max_retries && can_retry_send(&error) => {
-                    invalidate_metadata_cache_for_records(&mut self.metadata_cache, &records);
+                    invalidate_metadata_cache_for_record_indexes(
+                        &mut self.metadata_cache,
+                        &records,
+                        &pending_indexes,
+                    );
                     attempt += 1;
                 }
-                Ok(report) => {
+                Ok(attempt_outcomes) => {
+                    let retry_indexes = record_batch_attempt_outcomes(
+                        &mut outcomes,
+                        attempt_outcomes,
+                        attempt,
+                        self.config.max_retries,
+                    )?;
+                    if !retry_indexes.is_empty() {
+                        invalidate_metadata_cache_for_record_indexes(
+                            &mut self.metadata_cache,
+                            &records,
+                            &retry_indexes,
+                        );
+                        pending_indexes = retry_indexes;
+                        attempt += 1;
+                        continue;
+                    }
+
+                    let report = batch_report_from_outcomes(outcomes)?;
                     debug!(
                         record_count = report.records().len(),
                         has_failures = report.has_failures(),
@@ -430,9 +456,16 @@ impl Producer {
         Ok(metadata)
     }
 
-    async fn send_batch_once(&mut self, records: &[BatchRecord]) -> Result<ProducerBatchReport> {
+    async fn send_batch_once(
+        &mut self,
+        records: &[BatchRecord],
+        record_indexes: &[usize],
+    ) -> Result<Vec<(usize, ProducerBatchRecordOutcome)>> {
         let mut groups = BTreeMap::<ProduceBatchKey, Vec<PreparedBatchRecord<'_>>>::new();
-        for (index, record) in records.iter().enumerate() {
+        for &index in record_indexes {
+            let record = records
+                .get(index)
+                .ok_or(Error::Unsupported("batch record index out of bounds"))?;
             let metadata = self.metadata_for_topic(record.record.topic()).await?;
             let partition = choose_partition(&record.record, &metadata)?;
             let leader = leader_for(&metadata, record.record.topic(), partition)?;
@@ -447,20 +480,14 @@ impl Producer {
                 .push(PreparedBatchRecord { index, record });
         }
 
-        let mut output = std::iter::repeat_with(|| None)
-            .take(records.len())
-            .collect::<Vec<_>>();
+        let mut output = Vec::with_capacity(record_indexes.len());
         for (key, records) in groups {
-            for (index, outcome) in self.send_batch_group(&key, &records).await? {
-                output[index] = Some(outcome);
-            }
+            output.extend(self.send_batch_group(&key, &records).await?);
         }
-
-        let records = output
-            .into_iter()
-            .map(|outcome| outcome.ok_or(Error::Unsupported("missing batch record metadata")))
-            .collect::<Result<Vec<_>>>()?;
-        Ok(ProducerBatchReport::new(records))
+        if output.len() != record_indexes.len() {
+            return Err(Error::Unsupported("missing batch record outcome"));
+        }
+        Ok(output)
     }
 
     async fn send_batch_group(
@@ -950,6 +977,48 @@ fn batch_failure_outcomes(
         .collect()
 }
 
+fn record_batch_attempt_outcomes(
+    output: &mut [Option<ProducerBatchRecordOutcome>],
+    outcomes: Vec<(usize, ProducerBatchRecordOutcome)>,
+    attempt: u32,
+    max_retries: u32,
+) -> Result<Vec<usize>> {
+    let mut retry_indexes = Vec::new();
+    for (index, outcome) in outcomes {
+        let output_slot = output
+            .get_mut(index)
+            .ok_or(Error::Unsupported("batch record index out of bounds"))?;
+        if should_retry_batch_outcome(&outcome, attempt, max_retries) {
+            retry_indexes.push(index);
+        } else {
+            *output_slot = Some(outcome);
+        }
+    }
+    Ok(retry_indexes)
+}
+
+fn should_retry_batch_outcome(
+    outcome: &ProducerBatchRecordOutcome,
+    attempt: u32,
+    max_retries: u32,
+) -> bool {
+    attempt < max_retries
+        && matches!(
+            outcome,
+            ProducerBatchRecordOutcome::Failure(failure) if can_retry_send(failure.error())
+        )
+}
+
+fn batch_report_from_outcomes(
+    outcomes: Vec<Option<ProducerBatchRecordOutcome>>,
+) -> Result<ProducerBatchReport> {
+    let records = outcomes
+        .into_iter()
+        .map(|outcome| outcome.ok_or(Error::Unsupported("missing batch record outcome")))
+        .collect::<Result<Vec<_>>>()?;
+    Ok(ProducerBatchReport::new(records))
+}
+
 fn can_retry_send(error: &Error) -> bool {
     match error {
         Error::Broker { code, .. } => BrokerErrorKind::from_code(*code).is_produce_retryable(),
@@ -971,12 +1040,15 @@ fn invalidate_metadata_cache(
     metadata_cache.remove(topic);
 }
 
-fn invalidate_metadata_cache_for_records(
+fn invalidate_metadata_cache_for_record_indexes(
     metadata_cache: &mut BTreeMap<String, MetadataResponseV1>,
     records: &[BatchRecord],
+    record_indexes: &[usize],
 ) {
-    for record in records {
-        metadata_cache.remove(record.record.topic());
+    for &index in record_indexes {
+        if let Some(record) = records.get(index) {
+            metadata_cache.remove(record.record.topic());
+        }
     }
 }
 
@@ -984,12 +1056,13 @@ fn invalidate_metadata_cache_for_records(
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::{
-        batch_failure_outcomes, batch_success_outcomes, can_retry_send, choose_partition,
-        invalidate_metadata_cache, invalidate_metadata_cache_for_records, leader_for,
-        message_set_message, record_batch_message, select_produce_batch_version,
-        select_produce_version, Acks, BatchRecord, PreparedBatchRecord, ProduceBatchKey,
-        ProduceVersion, ProducerBatchFailure, ProducerBatchRecordOutcome, ProducerBatchReport,
-        ProducerConfig, ProducerRecord, RecordMetadata,
+        batch_failure_outcomes, batch_report_from_outcomes, batch_success_outcomes, can_retry_send,
+        choose_partition, invalidate_metadata_cache, invalidate_metadata_cache_for_record_indexes,
+        leader_for, message_set_message, record_batch_attempt_outcomes, record_batch_message,
+        select_produce_batch_version, select_produce_version, Acks, BatchRecord,
+        PreparedBatchRecord, ProduceBatchKey, ProduceVersion, ProducerBatchFailure,
+        ProducerBatchRecordOutcome, ProducerBatchReport, ProducerConfig, ProducerRecord,
+        RecordMetadata,
     };
     use crate::{BrokerErrorKind, Error};
     use kafrust_protocol::api::api_versions::{ApiKeyVersion, ApiVersionsResponseV0};
@@ -1235,6 +1308,49 @@ mod tests {
     }
 
     #[test]
+    fn records_only_retryable_batch_failures_as_pending() {
+        let mut output = empty_batch_outcomes(3);
+        let attempt_outcomes = vec![
+            (
+                0,
+                ProducerBatchRecordOutcome::Success(RecordMetadata::new("orders", 0, 42, None)),
+            ),
+            (1, retryable_batch_failure(1)),
+            (
+                2,
+                ProducerBatchRecordOutcome::Failure(ProducerBatchFailure::new(
+                    2,
+                    "orders",
+                    0,
+                    Error::Unsupported("fatal batch failure"),
+                )),
+            ),
+        ];
+
+        let retry_indexes =
+            record_batch_attempt_outcomes(&mut output, attempt_outcomes, 0, 1).unwrap();
+
+        assert_eq!(retry_indexes, vec![1]);
+        assert!(output[0].as_ref().unwrap().metadata().is_some());
+        assert!(output[1].is_none());
+        assert!(output[2].as_ref().unwrap().failure().is_some());
+    }
+
+    #[test]
+    fn records_retryable_batch_failure_when_retries_are_exhausted() {
+        let mut output = empty_batch_outcomes(1);
+        let attempt_outcomes = vec![(0, retryable_batch_failure(0))];
+
+        let retry_indexes =
+            record_batch_attempt_outcomes(&mut output, attempt_outcomes, 1, 1).unwrap();
+
+        assert!(retry_indexes.is_empty());
+        let report = batch_report_from_outcomes(output).unwrap();
+        assert!(report.has_failures());
+        assert_eq!(report.records()[0].failure().unwrap().record_index(), 0);
+    }
+
+    #[test]
     fn chooses_explicit_partition() {
         let metadata = metadata_fixture();
         let record = ProducerRecord::to("orders").partition(1);
@@ -1292,7 +1408,7 @@ mod tests {
     }
 
     #[test]
-    fn invalidates_batch_record_topics() {
+    fn invalidates_batch_record_topics_for_selected_indexes() {
         let mut cache = BTreeMap::new();
         cache.insert("orders".to_owned(), metadata_fixture());
         cache.insert("payments".to_owned(), metadata_fixture());
@@ -1300,11 +1416,12 @@ mod tests {
         let records = vec![
             BatchRecord::new(ProducerRecord::to("orders")),
             BatchRecord::new(ProducerRecord::to("payments")),
+            BatchRecord::new(ProducerRecord::to("shipments")),
         ];
 
-        invalidate_metadata_cache_for_records(&mut cache, &records);
+        invalidate_metadata_cache_for_record_indexes(&mut cache, &records, &[1]);
 
-        assert!(!cache.contains_key("orders"));
+        assert!(cache.contains_key("orders"));
         assert!(!cache.contains_key("payments"));
         assert!(cache.contains_key("shipments"));
     }
@@ -1367,5 +1484,21 @@ mod tests {
             topic: "orders".to_owned(),
             partition: 0,
         }
+    }
+
+    fn empty_batch_outcomes(count: usize) -> Vec<Option<ProducerBatchRecordOutcome>> {
+        std::iter::repeat_with(|| None).take(count).collect()
+    }
+
+    fn retryable_batch_failure(record_index: usize) -> ProducerBatchRecordOutcome {
+        ProducerBatchRecordOutcome::Failure(ProducerBatchFailure::new(
+            record_index,
+            "orders",
+            0,
+            Error::Broker {
+                code: 5,
+                context: "produce orders-0".to_owned(),
+            },
+        ))
     }
 }
