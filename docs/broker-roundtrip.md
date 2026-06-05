@@ -16,9 +16,9 @@ KAFRUST_BOOTSTRAP_SERVERS=localhost:9092 cargo run -p kafrust --example broker_r
 
 The test is skipped when `KAFRUST_BOOTSTRAP_SERVERS` is not set, so normal CI does not require a Kafka broker.
 
-Latest manual live smoke: on 2026-06-05, GitHub Actions run `26989271377` passed against Kafka 3.7.2 with the broker roundtrip test, `producer_send`, `producer_send_batch`, `consumer_fetch`, and `consumer_group_poll` against `kafrust-smoke` after the M10 producer batch outcome, partial retry, and record-limit changes.
+Latest manual live smoke: on 2026-06-05, GitHub Actions run `26999258762` passed against Kafka 3.7.2 with the broker roundtrip test, `producer_send`, `producer_send_batch`, `producer_buffered`, `consumer_fetch`, and `consumer_group_poll` against `kafrust-smoke` after the M10 buffered producer flush trigger and smoke example changes.
 
-The `Live Kafka Smoke` GitHub Actions workflow runs the same broker roundtrip, single-record producer, batch producer, direct consumer, and consumer group checks against a Kafka 3.7.2 Docker container. It is available through manual dispatch and a weekly schedule, so the default pull request CI remains broker-free.
+The `Live Kafka Smoke` GitHub Actions workflow runs the same broker roundtrip, single-record producer, batch producer, buffered producer, direct consumer, and consumer group checks against a Kafka 3.7.2 Docker container. It is available through manual dispatch and a weekly schedule, so the default pull request CI remains broker-free.
 
 See [Compatibility](compatibility.md) for the current tested broker matrix and the limits of the alpha compatibility claim.
 

@@ -76,6 +76,12 @@ Run the opt-in producer example against a local broker and an existing or auto-c
 KAFRUST_BOOTSTRAP_SERVERS=localhost:9092 KAFRUST_TOPIC=kafrust-smoke cargo run -p kafrust --example producer_send
 ```
 
+Run the buffered producer smoke example to enqueue multiple records, await delivery handles, and fetch the produced records back:
+
+```bash
+KAFRUST_BOOTSTRAP_SERVERS=localhost:9092 KAFRUST_TOPIC=kafrust-smoke cargo run -p kafrust --example producer_buffered
+```
+
 Current implementation status:
 
 - `ProducerConfig`, `ProducerRecord`, `Acks`, and `RecordMetadata` are public API types.
@@ -101,4 +107,4 @@ Current implementation status:
 - Stale metadata style produce errors are retried once after refreshing metadata.
 - Batch sends retry request-level retriable failures according to `ProducerConfig::max_retries`.
 - Retryable broker Produce response failures retry only the failed input records; records that already succeeded are not sent again by that batch call.
-- A live buffered producer smoke example is still planned before M10 is complete.
+- The `producer_buffered` example and `Live Kafka Smoke` workflow cover buffered enqueue, delivery handles, and fetch-back verification against Kafka 3.7.2.
