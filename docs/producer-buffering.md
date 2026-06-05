@@ -89,6 +89,6 @@ The background task should own the inner `Producer` so the immediate producer pa
 2. Done: add bounded enqueue and per-record delivery handles without network I/O by testing task shutdown and delivery cancellation.
 3. Done: wire the background task to `send_batch_report` and complete delivery handles from per-record outcomes.
 4. Done: add linger, record-count, and byte-count flush trigger tests with a controllable clock.
-5. Next: add a live smoke example that enqueues multiple records and fetches them back from Kafka 3.7.2.
+5. Done: add a live smoke example that enqueues multiple records and fetches them back from Kafka 3.7.2.
 
-M10 should move to Done only after the buffered path has focused tests for flush triggers and a live smoke result.
+M10 has focused tests for flush triggers and a passing live smoke result in GitHub Actions run `26999258762`.

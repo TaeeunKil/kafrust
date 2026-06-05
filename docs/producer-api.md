@@ -107,4 +107,4 @@ Current implementation status:
 - Stale metadata style produce errors are retried once after refreshing metadata.
 - Batch sends retry request-level retriable failures according to `ProducerConfig::max_retries`.
 - Retryable broker Produce response failures retry only the failed input records; records that already succeeded are not sent again by that batch call.
-- A live buffered producer smoke example is still planned before M10 is complete.
+- The `producer_buffered` example and `Live Kafka Smoke` workflow cover buffered enqueue, delivery handles, and fetch-back verification against Kafka 3.7.2.

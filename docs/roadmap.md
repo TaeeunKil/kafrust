@@ -307,7 +307,7 @@ Known limits:
 
 ## M10 Producer Throughput
 
-Status: In progress.
+Status: Done.
 
 Goal: move from single-record send ergonomics toward practical producer throughput while keeping Kafka concepts visible.
 
@@ -328,7 +328,6 @@ Exit criteria:
 
 Known limits:
 
-- The high-level producer can send multiple records with `Producer::send_batch`, grouping records by topic, partition, and leader. Linger-based buffering can enqueue records, flush automatically through the existing batch path, and complete delivery handles from per-record outcomes. A live buffered producer smoke example is still pending.
 - `acks=0` remains unsupported because the request loop expects a broker response.
 
 Evidence:
@@ -339,8 +338,9 @@ Evidence:
 - `ProducerConfig::max_records_per_batch` splits large topic-partition groups across multiple Produce requests without changing input-order outcomes.
 - `ProducerConfig::max_batch_bytes` splits large topic-partition groups by encoded Kafka record-set bytes without preventing an oversized single record from being sent.
 - Focused unit tests cover batch Produce API version selection and batch metadata cache invalidation.
-- The `Live Kafka Smoke` workflow runs the `producer_send_batch` example before direct fetch and group poll checks.
+- The `Live Kafka Smoke` workflow runs the `producer_send_batch` and `producer_buffered` examples before direct fetch and group poll checks.
 - Manual `Live Kafka Smoke` run `26989271377` passed on 2026-06-05 after the batch outcome, partial retry, and record-limit changes.
+- Manual `Live Kafka Smoke` run `26999258762` passed on 2026-06-05 after the buffered producer flush trigger and smoke example changes.
 - `docs/producer-buffering.md` defines the planned opt-in buffered producer path, linger flush triggers, delivery semantics, and implementation slices.
 - `ProducerConfig::linger_ms` and `ProducerConfig::build_buffered` provide the first buffered producer lifecycle skeleton with `flush`, `close`, and `is_closed`.
 - `BufferedProducer::send` queues records through a bounded channel and returns per-record `ProducerDelivery` handles; `flush` and `close` send pending records through `send_batch_report` and complete delivery handles from per-record outcomes.
