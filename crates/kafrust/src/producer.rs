@@ -16,6 +16,7 @@ use crate::config::ClientConfig;
 use crate::error::{BrokerErrorKind, Error, Result};
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
+use tokio::time::{self, Instant};
 use tracing::debug;
 
 const BUFFERED_PRODUCER_CHANNEL_CAPACITY: usize = 1024;
@@ -449,6 +450,21 @@ enum BufferedProducerCommand {
 }
 
 #[derive(Debug)]
+enum BufferedProducerEvent {
+    Command(BufferedProducerCommand),
+    LingerElapsed,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BufferedFlushReason {
+    RecordCount,
+    ByteCount,
+    Linger,
+    Flush,
+    Close,
+}
+
+#[derive(Debug)]
 struct BufferedProduceRequest {
     record: ProducerRecord,
     delivery_sender: oneshot::Sender<Result<RecordMetadata>>,
@@ -489,21 +505,194 @@ async fn run_buffered_producer(
     mut commands: mpsc::Receiver<BufferedProducerCommand>,
 ) {
     let mut pending = Vec::new();
-    while let Some(command) = commands.recv().await {
-        match command {
-            BufferedProducerCommand::Send(request) => pending.push(request),
-            BufferedProducerCommand::Flush { result_sender } => {
-                let result = flush_buffered_deliveries(&mut producer, &mut pending).await;
-                let _ = result_sender.send(result);
-            }
-            BufferedProducerCommand::Close { result_sender } => {
-                let result = flush_buffered_deliveries(&mut producer, &mut pending).await;
-                let _ = result_sender.send(result);
-                return;
+    let mut first_enqueued_at = None;
+    while let Some(event) = receive_buffered_event(
+        &mut commands,
+        buffered_linger_deadline(first_enqueued_at, producer.config.linger()),
+    )
+    .await
+    {
+        match event {
+            BufferedProducerEvent::Command(command) => match command {
+                BufferedProducerCommand::Send(request) => {
+                    handle_buffered_send(
+                        &mut producer,
+                        &mut pending,
+                        &mut first_enqueued_at,
+                        request,
+                    )
+                    .await;
+                }
+                BufferedProducerCommand::Flush { result_sender } => {
+                    let result = flush_buffered_deliveries_for_reason(
+                        &mut producer,
+                        &mut pending,
+                        &mut first_enqueued_at,
+                        BufferedFlushReason::Flush,
+                    )
+                    .await;
+                    let _ = result_sender.send(result);
+                }
+                BufferedProducerCommand::Close { result_sender } => {
+                    let result = flush_buffered_deliveries_for_reason(
+                        &mut producer,
+                        &mut pending,
+                        &mut first_enqueued_at,
+                        BufferedFlushReason::Close,
+                    )
+                    .await;
+                    let _ = result_sender.send(result);
+                    return;
+                }
+            },
+            BufferedProducerEvent::LingerElapsed => {
+                let _ = flush_buffered_deliveries_for_reason(
+                    &mut producer,
+                    &mut pending,
+                    &mut first_enqueued_at,
+                    BufferedFlushReason::Linger,
+                )
+                .await;
             }
         }
     }
     fail_buffered_deliveries(&mut pending, buffered_delivery_canceled_error);
+}
+
+async fn handle_buffered_send(
+    producer: &mut Producer,
+    pending: &mut Vec<BufferedProduceRequest>,
+    first_enqueued_at: &mut Option<Instant>,
+    request: BufferedProduceRequest,
+) {
+    if pending.is_empty() {
+        *first_enqueued_at = Some(Instant::now());
+    }
+    pending.push(request);
+
+    match buffered_enqueue_flush_reason(pending, &producer.config) {
+        Ok(Some(reason)) => {
+            let _ =
+                flush_buffered_deliveries_for_reason(producer, pending, first_enqueued_at, reason)
+                    .await;
+        }
+        Ok(None) => {}
+        Err(error) => {
+            debug!(
+                error = %error,
+                "completing buffered deliveries after flush trigger failure"
+            );
+            let requests = std::mem::take(pending);
+            fail_buffered_delivery_requests(requests, &error);
+            *first_enqueued_at = None;
+        }
+    }
+}
+
+async fn receive_buffered_event(
+    commands: &mut mpsc::Receiver<BufferedProducerCommand>,
+    linger_deadline: Option<Instant>,
+) -> Option<BufferedProducerEvent> {
+    match linger_deadline {
+        Some(deadline) => {
+            tokio::select! {
+                biased;
+                command = commands.recv() => command.map(BufferedProducerEvent::Command),
+                _ = time::sleep_until(deadline) => Some(BufferedProducerEvent::LingerElapsed),
+            }
+        }
+        None => commands.recv().await.map(BufferedProducerEvent::Command),
+    }
+}
+
+fn buffered_linger_deadline(
+    first_enqueued_at: Option<Instant>,
+    linger: Duration,
+) -> Option<Instant> {
+    first_enqueued_at.map(|instant| instant + linger)
+}
+
+fn buffered_enqueue_flush_reason(
+    pending: &[BufferedProduceRequest],
+    config: &ProducerConfig,
+) -> Result<Option<BufferedFlushReason>> {
+    if pending.is_empty() {
+        return Ok(None);
+    }
+
+    let groups = buffered_pending_groups(pending);
+
+    if groups
+        .values()
+        .any(|record_indexes| record_indexes.len() >= config.max_records_per_batch)
+    {
+        return Ok(Some(BufferedFlushReason::RecordCount));
+    }
+
+    if config.max_batch_bytes != usize::MAX {
+        for record_indexes in groups.values() {
+            if buffered_pending_encoded_len(pending, record_indexes)? >= config.max_batch_bytes {
+                return Ok(Some(BufferedFlushReason::ByteCount));
+            }
+        }
+    }
+
+    Ok(None)
+}
+
+fn buffered_pending_groups(
+    pending: &[BufferedProduceRequest],
+) -> BTreeMap<(&str, Option<i32>), Vec<usize>> {
+    let mut groups = BTreeMap::new();
+    for (index, request) in pending.iter().enumerate() {
+        groups
+            .entry((request.record.topic(), request.record.partition_ref()))
+            .or_insert_with(Vec::new)
+            .push(index);
+    }
+    groups
+}
+
+fn buffered_pending_encoded_len(
+    pending: &[BufferedProduceRequest],
+    record_indexes: &[usize],
+) -> Result<usize> {
+    let records = record_indexes
+        .iter()
+        .map(|&index| {
+            pending
+                .get(index)
+                .map(|request| BatchRecord::new(request.record.clone()))
+                .ok_or(Error::Unsupported("buffered record index out of bounds"))
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let prepared_records = records
+        .iter()
+        .enumerate()
+        .map(|(index, record)| PreparedBatchRecord { index, record })
+        .collect::<Vec<_>>();
+
+    batch_records_encoded_len(&prepared_records, ProduceVersion::V3)
+}
+
+async fn flush_buffered_deliveries_for_reason(
+    producer: &mut Producer,
+    pending: &mut Vec<BufferedProduceRequest>,
+    first_enqueued_at: &mut Option<Instant>,
+    reason: BufferedFlushReason,
+) -> Result<()> {
+    if !pending.is_empty() {
+        debug!(
+            record_count = pending.len(),
+            reason = ?reason,
+            "flushing buffered producer records"
+        );
+    }
+    let result = flush_buffered_deliveries(producer, pending).await;
+    if pending.is_empty() {
+        *first_enqueued_at = None;
+    }
+    result
 }
 
 async fn flush_buffered_deliveries(
@@ -1478,15 +1667,15 @@ mod tests {
     use super::{
         batch_failure_outcomes, batch_record_chunks, batch_records_encoded_len,
         batch_report_from_outcomes, batch_success_outcomes, buffered_delivery_canceled_error,
-        can_retry_send, choose_partition, complete_buffered_deliveries,
-        delivery_error_from_request_error, enqueue_buffered_record, fail_buffered_deliveries,
-        invalidate_metadata_cache, invalidate_metadata_cache_for_record_indexes, leader_for,
-        message_set_message, record_batch_attempt_outcomes, record_batch_message,
-        select_produce_batch_version, select_produce_version, Acks, BatchRecord,
-        BufferedProduceRequest, BufferedProducerCommand, BufferedProducerState,
-        PreparedBatchRecord, ProduceBatchKey, ProduceVersion, ProducerBatchFailure,
-        ProducerBatchRecordOutcome, ProducerBatchReport, ProducerConfig, ProducerDelivery,
-        ProducerRecord, RecordMetadata,
+        buffered_enqueue_flush_reason, buffered_linger_deadline, can_retry_send, choose_partition,
+        complete_buffered_deliveries, delivery_error_from_request_error, enqueue_buffered_record,
+        fail_buffered_deliveries, invalidate_metadata_cache,
+        invalidate_metadata_cache_for_record_indexes, leader_for, message_set_message,
+        record_batch_attempt_outcomes, record_batch_message, select_produce_batch_version,
+        select_produce_version, Acks, BatchRecord, BufferedFlushReason, BufferedProduceRequest,
+        BufferedProducerCommand, BufferedProducerState, PreparedBatchRecord, ProduceBatchKey,
+        ProduceVersion, ProducerBatchFailure, ProducerBatchRecordOutcome, ProducerBatchReport,
+        ProducerConfig, ProducerDelivery, ProducerRecord, RecordMetadata,
     };
     use crate::{BrokerErrorKind, Error};
     use kafrust_protocol::api::api_versions::{ApiKeyVersion, ApiVersionsResponseV0};
@@ -1496,6 +1685,7 @@ mod tests {
     use kafrust_protocol::api::produce::API_KEY as PRODUCE_API_KEY;
     use std::collections::BTreeMap;
     use tokio::sync::{mpsc, oneshot};
+    use tokio::time::Instant;
 
     #[test]
     fn maps_acks_to_kafka_values() {
@@ -1655,6 +1845,78 @@ mod tests {
         let config = ProducerConfig::new(["localhost:9092"]).max_batch_bytes(0);
 
         assert_eq!(config.max_batch_bytes_ref(), 1);
+    }
+
+    #[test]
+    fn leaves_buffered_records_pending_before_flush_thresholds() {
+        let config = ProducerConfig::new(["localhost:9092"]).max_records_per_batch(2);
+        let pending = vec![buffered_request(
+            ProducerRecord::to("orders").key("order-1"),
+        )];
+
+        assert_eq!(
+            buffered_enqueue_flush_reason(&pending, &config).unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn triggers_buffered_flush_at_record_limit() {
+        let config = ProducerConfig::new(["localhost:9092"]).max_records_per_batch(2);
+        let pending = vec![
+            buffered_request(ProducerRecord::to("orders").key("order-1")),
+            buffered_request(ProducerRecord::to("orders").key("order-2")),
+        ];
+
+        assert_eq!(
+            buffered_enqueue_flush_reason(&pending, &config).unwrap(),
+            Some(BufferedFlushReason::RecordCount)
+        );
+    }
+
+    #[test]
+    fn keeps_buffered_record_limit_partition_scoped() {
+        let config = ProducerConfig::new(["localhost:9092"]).max_records_per_batch(2);
+        let pending = vec![
+            buffered_request(ProducerRecord::to("orders").partition(0).key("order-1")),
+            buffered_request(ProducerRecord::to("orders").partition(1).key("order-2")),
+        ];
+
+        assert_eq!(
+            buffered_enqueue_flush_reason(&pending, &config).unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn triggers_buffered_flush_at_byte_limit() {
+        let config = ProducerConfig::new(["localhost:9092"]).max_batch_bytes(1);
+        let pending = vec![buffered_request(
+            ProducerRecord::to("orders").value("created"),
+        )];
+
+        assert_eq!(
+            buffered_enqueue_flush_reason(&pending, &config).unwrap(),
+            Some(BufferedFlushReason::ByteCount)
+        );
+    }
+
+    #[test]
+    fn computes_buffered_linger_deadline_from_first_record() {
+        let first_enqueued_at = Instant::now();
+
+        assert_eq!(
+            buffered_linger_deadline(Some(first_enqueued_at), std::time::Duration::from_millis(5)),
+            Some(first_enqueued_at + std::time::Duration::from_millis(5))
+        );
+        assert_eq!(
+            buffered_linger_deadline(Some(first_enqueued_at), std::time::Duration::from_millis(0)),
+            Some(first_enqueued_at)
+        );
+        assert_eq!(
+            buffered_linger_deadline(None, std::time::Duration::from_millis(5)),
+            None
+        );
     }
 
     #[test]
@@ -2154,5 +2416,13 @@ mod tests {
                 context: "produce orders-0".to_owned(),
             },
         ))
+    }
+
+    fn buffered_request(record: ProducerRecord) -> BufferedProduceRequest {
+        let (delivery_sender, _delivery_receiver) = oneshot::channel();
+        BufferedProduceRequest {
+            record,
+            delivery_sender,
+        }
     }
 }

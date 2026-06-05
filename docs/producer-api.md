@@ -88,6 +88,7 @@ Current implementation status:
 - `ProducerConfig::linger_ms` stores the configured linger duration for the opt-in buffered producer path. The immediate `send` and `send_batch` APIs do not wait on linger.
 - `ProducerConfig::build_buffered` creates a `BufferedProducer` with bounded enqueue, per-record `ProducerDelivery` handles, `flush`, `close`, and `is_closed`.
 - `BufferedProducer::send` queues records for the buffered path, and `flush` or `close` sends accepted records through the existing batch Produce path before completing delivery handles from per-record outcomes.
+- `BufferedProducer` automatically flushes queued records when a topic and explicit-partition buffer reaches `max_records_per_batch` or `max_batch_bytes`, or when the oldest queued record reaches `linger_ms`. `linger_ms(0)` schedules a flush without intentional delay.
 - Producer metadata is cached by topic and refreshed when a retriable send failure invalidates that topic cache entry.
 - Producer send operations emit `tracing` events with operational metadata, but not key or value payload contents.
 - `Producer::send_batch` accepts multiple `ProducerRecord` values, groups them by topic, partition, and leader, sends each group in one Produce request, and returns `RecordMetadata` in input order.
@@ -100,4 +101,4 @@ Current implementation status:
 - Stale metadata style produce errors are retried once after refreshing metadata.
 - Batch sends retry request-level retriable failures according to `ProducerConfig::max_retries`.
 - Retryable broker Produce response failures retry only the failed input records; records that already succeeded are not sent again by that batch call.
-- Automatic linger, record-count, and byte-count flush triggers are still planned for the buffered producer path.
+- A live buffered producer smoke example is still planned before M10 is complete.
