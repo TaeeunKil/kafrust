@@ -1,4 +1,7 @@
 use std::collections::BTreeMap;
+use std::future::Future;
+use std::pin::Pin;
+use std::task::{Context, Poll};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use kafrust_protocol::api::api_versions::ApiVersionsResponseV0;
@@ -11,7 +14,11 @@ use kafrust_protocol::api::produce::{
 use crate::client::Client;
 use crate::config::ClientConfig;
 use crate::error::{BrokerErrorKind, Error, Result};
+use tokio::sync::{mpsc, oneshot};
+use tokio::task::JoinHandle;
 use tracing::debug;
+
+const BUFFERED_PRODUCER_CHANNEL_CAPACITY: usize = 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Kafka produce acknowledgement policy.
@@ -319,17 +326,36 @@ pub struct Producer {
 /// the buffered path. Record enqueue and delivery handles are planned in the
 /// next M10 slices.
 pub struct BufferedProducer {
-    _producer: Producer,
+    commands: mpsc::Sender<BufferedProducerCommand>,
+    worker: Option<JoinHandle<()>>,
     state: BufferedProducerState,
 }
 
 impl BufferedProducer {
+    /// Enqueues one record for the buffered producer path.
+    ///
+    /// The returned delivery handle resolves when the background task reaches a
+    /// terminal result for this record. The current slice does not wire queued
+    /// records to Kafka yet, so flush or close resolves pending deliveries with
+    /// an explicit unsupported error.
+    pub async fn send(&mut self, record: ProducerRecord) -> Result<ProducerDelivery> {
+        self.state.ensure_open()?;
+        enqueue_buffered_record(&self.commands, record).await
+    }
+
     /// Flushes accepted buffered records.
     ///
-    /// The current skeleton has no enqueue path yet, so this is a no-op while
-    /// the producer is open.
+    /// Until Kafka execution is wired to the background task, this completes
+    /// pending delivery handles with an explicit unsupported error.
     pub async fn flush(&mut self) -> Result<()> {
-        self.state.ensure_open()
+        self.state.ensure_open()?;
+        let (result_sender, result_receiver) = oneshot::channel();
+        send_buffered_command(
+            &self.commands,
+            BufferedProducerCommand::Flush { result_sender },
+        )
+        .await?;
+        receive_buffered_result(result_receiver).await
     }
 
     /// Flushes and closes the buffered producer.
@@ -337,8 +363,18 @@ impl BufferedProducer {
     /// Close is idempotent. Future enqueue APIs will reject sends after close.
     pub async fn close(&mut self) -> Result<()> {
         if self.state.is_open() {
-            self.flush().await?;
+            let (result_sender, result_receiver) = oneshot::channel();
+            send_buffered_command(
+                &self.commands,
+                BufferedProducerCommand::Close { result_sender },
+            )
+            .await?;
+            let result = receive_buffered_result(result_receiver).await;
+            if let Some(worker) = self.worker.take() {
+                worker.await?;
+            }
             self.state.close();
+            result?;
         }
         Ok(())
     }
@@ -346,6 +382,33 @@ impl BufferedProducer {
     /// Returns whether the buffered producer has been closed.
     pub fn is_closed(&self) -> bool {
         self.state.is_closed()
+    }
+}
+
+/// Delivery handle returned by [`BufferedProducer::send`].
+pub struct ProducerDelivery {
+    receiver: oneshot::Receiver<Result<RecordMetadata>>,
+}
+
+impl ProducerDelivery {
+    fn new(receiver: oneshot::Receiver<Result<RecordMetadata>>) -> Self {
+        Self { receiver }
+    }
+
+    /// Waits until the buffered record reaches a terminal delivery result.
+    pub async fn wait(self) -> Result<RecordMetadata> {
+        self.await
+    }
+}
+
+impl Future for ProducerDelivery {
+    type Output = Result<RecordMetadata>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let receiver = &mut self.get_mut().receiver;
+        Pin::new(receiver)
+            .poll(cx)
+            .map(|result| result.unwrap_or_else(|_| Err(buffered_delivery_canceled_error())))
     }
 }
 
@@ -375,6 +438,98 @@ impl BufferedProducerState {
     fn close(&mut self) {
         *self = Self::Closed;
     }
+}
+
+#[derive(Debug)]
+enum BufferedProducerCommand {
+    Send(BufferedProduceRequest),
+    Flush {
+        result_sender: oneshot::Sender<Result<()>>,
+    },
+    Close {
+        result_sender: oneshot::Sender<Result<()>>,
+    },
+}
+
+#[derive(Debug)]
+struct BufferedProduceRequest {
+    record: ProducerRecord,
+    delivery_sender: oneshot::Sender<Result<RecordMetadata>>,
+}
+
+async fn enqueue_buffered_record(
+    commands: &mpsc::Sender<BufferedProducerCommand>,
+    record: ProducerRecord,
+) -> Result<ProducerDelivery> {
+    let (delivery_sender, delivery_receiver) = oneshot::channel();
+    send_buffered_command(
+        commands,
+        BufferedProducerCommand::Send(BufferedProduceRequest {
+            record,
+            delivery_sender,
+        }),
+    )
+    .await?;
+    Ok(ProducerDelivery::new(delivery_receiver))
+}
+
+async fn send_buffered_command(
+    commands: &mpsc::Sender<BufferedProducerCommand>,
+    command: BufferedProducerCommand,
+) -> Result<()> {
+    commands
+        .send(command)
+        .await
+        .map_err(|_| buffered_task_stopped_error())
+}
+
+async fn receive_buffered_result(receiver: oneshot::Receiver<Result<()>>) -> Result<()> {
+    receiver.await.map_err(|_| buffered_task_stopped_error())?
+}
+
+async fn run_buffered_producer(
+    _producer: Producer,
+    mut commands: mpsc::Receiver<BufferedProducerCommand>,
+) {
+    let mut pending = Vec::new();
+    while let Some(command) = commands.recv().await {
+        match command {
+            BufferedProducerCommand::Send(request) => pending.push(request),
+            BufferedProducerCommand::Flush { result_sender } => {
+                fail_buffered_deliveries(&mut pending, buffered_delivery_not_wired_error);
+                let _ = result_sender.send(Ok(()));
+            }
+            BufferedProducerCommand::Close { result_sender } => {
+                fail_buffered_deliveries(&mut pending, buffered_delivery_not_wired_error);
+                let _ = result_sender.send(Ok(()));
+                return;
+            }
+        }
+    }
+    fail_buffered_deliveries(&mut pending, buffered_delivery_canceled_error);
+}
+
+fn fail_buffered_deliveries(pending: &mut Vec<BufferedProduceRequest>, error: fn() -> Error) {
+    for request in pending.drain(..) {
+        debug!(
+            topic = request.record.topic(),
+            partition = ?request.record.partition_ref(),
+            "completing buffered delivery with error"
+        );
+        let _ = request.delivery_sender.send(Err(error()));
+    }
+}
+
+fn buffered_task_stopped_error() -> Error {
+    Error::Unsupported("buffered producer task stopped")
+}
+
+fn buffered_delivery_not_wired_error() -> Error {
+    Error::Unsupported("buffered producer delivery is not wired to Kafka yet")
+}
+
+fn buffered_delivery_canceled_error() -> Error {
+    Error::Unsupported("buffered producer delivery canceled")
 }
 
 impl Producer {
@@ -890,8 +1045,11 @@ impl ProducerConfig {
     /// Connects to Kafka and builds an opt-in buffered producer skeleton.
     pub async fn build_buffered(self) -> Result<BufferedProducer> {
         let producer = self.build().await?;
+        let (commands, receiver) = mpsc::channel(BUFFERED_PRODUCER_CHANNEL_CAPACITY);
+        let worker = tokio::spawn(run_buffered_producer(producer, receiver));
         Ok(BufferedProducer {
-            _producer: producer,
+            commands,
+            worker: Some(worker),
             state: BufferedProducerState::Open,
         })
     }
@@ -1246,12 +1404,14 @@ fn invalidate_metadata_cache_for_record_indexes(
 mod tests {
     use super::{
         batch_failure_outcomes, batch_record_chunks, batch_records_encoded_len,
-        batch_report_from_outcomes, batch_success_outcomes, can_retry_send, choose_partition,
+        batch_report_from_outcomes, batch_success_outcomes, buffered_delivery_not_wired_error,
+        can_retry_send, choose_partition, enqueue_buffered_record, fail_buffered_deliveries,
         invalidate_metadata_cache, invalidate_metadata_cache_for_record_indexes, leader_for,
         message_set_message, record_batch_attempt_outcomes, record_batch_message,
         select_produce_batch_version, select_produce_version, Acks, BatchRecord,
-        BufferedProducerState, PreparedBatchRecord, ProduceBatchKey, ProduceVersion,
-        ProducerBatchFailure, ProducerBatchRecordOutcome, ProducerBatchReport, ProducerConfig,
+        BufferedProduceRequest, BufferedProducerCommand, BufferedProducerState,
+        PreparedBatchRecord, ProduceBatchKey, ProduceVersion, ProducerBatchFailure,
+        ProducerBatchRecordOutcome, ProducerBatchReport, ProducerConfig, ProducerDelivery,
         ProducerRecord, RecordMetadata,
     };
     use crate::{BrokerErrorKind, Error};
@@ -1261,6 +1421,7 @@ mod tests {
     };
     use kafrust_protocol::api::produce::API_KEY as PRODUCE_API_KEY;
     use std::collections::BTreeMap;
+    use tokio::sync::{mpsc, oneshot};
 
     #[test]
     fn maps_acks_to_kafka_values() {
@@ -1440,6 +1601,63 @@ mod tests {
         state.close();
 
         assert!(state.is_closed());
+    }
+
+    #[tokio::test]
+    async fn enqueues_buffered_record_and_returns_delivery_handle() {
+        let (commands, mut receiver) = mpsc::channel(1);
+        let delivery = enqueue_buffered_record(
+            &commands,
+            ProducerRecord::to("orders").key("order-1").value("created"),
+        )
+        .await
+        .unwrap();
+
+        let command = receiver.recv().await.unwrap();
+        assert!(matches!(command, BufferedProducerCommand::Send(_)));
+        if let BufferedProducerCommand::Send(request) = command {
+            assert_eq!(request.record.topic(), "orders");
+            assert_eq!(request.record.key_ref().unwrap(), b"order-1");
+            request
+                .delivery_sender
+                .send(Ok(RecordMetadata::new("orders", 0, 42, None)))
+                .unwrap();
+        }
+
+        let metadata = delivery.await.unwrap();
+        assert_eq!(metadata.topic(), "orders");
+        assert_eq!(metadata.partition(), 0);
+        assert_eq!(metadata.offset(), 42);
+    }
+
+    #[tokio::test]
+    async fn buffered_delivery_reports_canceled_sender() {
+        let (delivery_sender, delivery_receiver) = oneshot::channel();
+        let delivery = ProducerDelivery::new(delivery_receiver);
+        drop(delivery_sender);
+
+        assert!(matches!(
+            delivery.await.unwrap_err(),
+            Error::Unsupported("buffered producer delivery canceled")
+        ));
+    }
+
+    #[tokio::test]
+    async fn fails_pending_buffered_deliveries() {
+        let (delivery_sender, delivery_receiver) = oneshot::channel();
+        let delivery = ProducerDelivery::new(delivery_receiver);
+        let mut pending = vec![BufferedProduceRequest {
+            record: ProducerRecord::to("orders"),
+            delivery_sender,
+        }];
+
+        fail_buffered_deliveries(&mut pending, buffered_delivery_not_wired_error);
+
+        assert!(pending.is_empty());
+        assert!(matches!(
+            delivery.await.unwrap_err(),
+            Error::Unsupported("buffered producer delivery is not wired to Kafka yet")
+        ));
     }
 
     #[test]

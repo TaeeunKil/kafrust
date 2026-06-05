@@ -328,7 +328,7 @@ Exit criteria:
 
 Known limits:
 
-- The high-level producer can send multiple records with `Producer::send_batch`, grouping records by topic, partition, and leader. Linger-based buffering has a lifecycle skeleton, but enqueue and delivery handles are not implemented yet.
+- The high-level producer can send multiple records with `Producer::send_batch`, grouping records by topic, partition, and leader. Linger-based buffering has a bounded enqueue skeleton, but Kafka delivery execution is not wired to the background task yet.
 - `acks=0` remains unsupported because the request loop expects a broker response.
 
 Evidence:
@@ -343,6 +343,7 @@ Evidence:
 - Manual `Live Kafka Smoke` run `26989271377` passed on 2026-06-05 after the batch outcome, partial retry, and record-limit changes.
 - `docs/producer-buffering.md` defines the planned opt-in buffered producer path, linger flush triggers, delivery semantics, and implementation slices.
 - `ProducerConfig::linger_ms` and `ProducerConfig::build_buffered` provide the first buffered producer lifecycle skeleton with `flush`, `close`, and `is_closed`.
+- `BufferedProducer::send` queues records through a bounded channel and returns per-record `ProducerDelivery` handles; focused tests cover enqueue, delivery cancellation, and pending delivery failure without Kafka I/O.
 
 ## M11 Security And Connectivity
 
