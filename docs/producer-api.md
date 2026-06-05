@@ -68,6 +68,8 @@ The public model intentionally keeps Kafka terms visible:
 
 The first producer implementation should stay byte-first. Serialization adapters can be added later without forcing serde or another encoding choice into the core client.
 
+Buffered producer and linger behavior is planned as a separate opt-in path. See [Producer Buffering And Linger Design](producer-buffering.md) for the intended implementation direction.
+
 Run the opt-in producer example against a local broker and an existing or auto-created topic:
 
 ```bash
@@ -95,4 +97,4 @@ Current implementation status:
 - Stale metadata style produce errors are retried once after refreshing metadata.
 - Batch sends retry request-level retriable failures according to `ProducerConfig::max_retries`.
 - Retryable broker Produce response failures retry only the failed input records; records that already succeeded are not sent again by that batch call.
-- Linger-based buffering is still planned.
+- Linger-based buffering is still planned as a separate buffered producer path.
