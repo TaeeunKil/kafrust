@@ -9,6 +9,7 @@ let mut producer = ProducerConfig::new(["localhost:9092"])
     .client_id("orders-api")
     .request_timeout_ms(30_000)
     .max_retries(1)
+    .max_records_per_batch(500)
     .acks(Acks::All)
     .build()
     .await?;
@@ -79,6 +80,7 @@ Current implementation status:
 - `Producer::send` performs metadata lookup, connects to the partition leader, negotiates Produce API support with `ApiVersions`, and chooses Produce v3 RecordBatch or Produce v2 MessageSet.
 - `ProducerConfig::request_timeout_ms` controls the request timeout used for metadata and produce roundtrips.
 - `ProducerConfig::max_retries` controls retry attempts for stale metadata, transient leader errors classified by `BrokerErrorKind`, request timeouts, and connection I/O failures.
+- `ProducerConfig::max_records_per_batch` limits how many records are sent in one Produce request for a topic-partition group. Values below 1 are treated as 1.
 - Producer metadata is cached by topic and refreshed when a retriable send failure invalidates that topic cache entry.
 - Producer send operations emit `tracing` events with operational metadata, but not key or value payload contents.
 - `Producer::send_batch` accepts multiple `ProducerRecord` values, groups them by topic, partition, and leader, sends each group in one Produce request, and returns `RecordMetadata` in input order.
@@ -91,4 +93,4 @@ Current implementation status:
 - Stale metadata style produce errors are retried once after refreshing metadata.
 - Batch sends retry request-level retriable failures according to `ProducerConfig::max_retries`.
 - Retryable broker Produce response failures retry only the failed input records; records that already succeeded are not sent again by that batch call.
-- Linger-based buffering is still planned.
+- Byte-size batch limits and linger-based buffering are still planned.
