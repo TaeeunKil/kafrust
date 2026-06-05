@@ -339,6 +339,7 @@ Evidence:
 - `ProducerConfig::max_records_per_batch` splits large topic-partition groups across multiple Produce requests without changing input-order outcomes.
 - Focused unit tests cover batch Produce API version selection and batch metadata cache invalidation.
 - The `Live Kafka Smoke` workflow runs the `producer_send_batch` example before direct fetch and group poll checks.
+- Manual `Live Kafka Smoke` run `26989271377` passed on 2026-06-05 after the batch outcome, partial retry, and record-limit changes.
 
 ## M11 Security And Connectivity
 
