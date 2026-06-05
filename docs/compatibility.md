@@ -16,7 +16,7 @@ The Kafka 3.7.2 smoke path covers:
 
 - `ApiVersions v0` and `Metadata v1` roundtrips.
 - `FindCoordinator v1` for consumer group coordinator discovery.
-- High-level producer metadata lookup, leader routing, negotiated Produce API selection, and single-record send with `acks=1`. Against Kafka 3.7.2, the current path selects Produce v3 RecordBatch.
+- High-level producer metadata lookup, leader routing, negotiated Produce API selection, single-record send, and batch send with `acks=1`. Against Kafka 3.7.2, the current path selects Produce v3 RecordBatch.
 - Direct consumer fetch from an assigned topic partition using Fetch v2 response decoding.
 - Consumer group join, sync, heartbeat, poll, and offset commit through the alpha classic consumer group path with range assignment.
 
