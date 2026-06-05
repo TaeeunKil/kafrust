@@ -246,6 +246,46 @@ impl Producer {
         }
     }
 
+    /// Sends multiple records and returns one metadata entry per input record.
+    ///
+    /// Records are grouped by topic, partition, and partition leader. Records in
+    /// the same group are sent in one Produce request. Returned metadata keeps
+    /// the same order as the input records.
+    pub async fn send_batch(
+        &mut self,
+        records: impl IntoIterator<Item = ProducerRecord>,
+    ) -> Result<Vec<RecordMetadata>> {
+        if self.config.acks == Acks::None {
+            return Err(Error::Unsupported("producer acks=0 send without response"));
+        }
+
+        let records = records
+            .into_iter()
+            .map(BatchRecord::new)
+            .collect::<Vec<_>>();
+        if records.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        debug!(record_count = records.len(), "sending kafka record batch");
+
+        let mut attempt = 0;
+        loop {
+            let result = self.send_batch_once(&records).await;
+            match result {
+                Err(error) if attempt < self.config.max_retries && can_retry_send(&error) => {
+                    invalidate_metadata_cache_for_records(&mut self.metadata_cache, &records);
+                    attempt += 1;
+                }
+                Ok(metadata) => {
+                    debug!(record_count = metadata.len(), "sent kafka record batch");
+                    return Ok(metadata);
+                }
+                Err(error) => return Err(error),
+            }
+        }
+    }
+
     async fn metadata_for_topic(&mut self, topic: &str) -> Result<MetadataResponseV1> {
         if let Some(metadata) = self.metadata_cache.get(topic) {
             return Ok(metadata.clone());
@@ -255,6 +295,139 @@ impl Producer {
         self.metadata_cache
             .insert(topic.to_owned(), metadata.clone());
         Ok(metadata)
+    }
+
+    async fn send_batch_once(&mut self, records: &[BatchRecord]) -> Result<Vec<RecordMetadata>> {
+        let mut groups = BTreeMap::<ProduceBatchKey, Vec<PreparedBatchRecord<'_>>>::new();
+        for (index, record) in records.iter().enumerate() {
+            let metadata = self.metadata_for_topic(record.record.topic()).await?;
+            let partition = choose_partition(&record.record, &metadata)?;
+            let leader = leader_for(&metadata, record.record.topic(), partition)?;
+            let broker_addr = broker_addr_for(&metadata, leader)?;
+            groups
+                .entry(ProduceBatchKey {
+                    broker_addr,
+                    topic: record.record.topic().to_owned(),
+                    partition,
+                })
+                .or_default()
+                .push(PreparedBatchRecord { index, record });
+        }
+
+        let mut output = vec![None; records.len()];
+        for (key, records) in groups {
+            for (index, metadata) in self.send_batch_group(&key, &records).await? {
+                output[index] = Some(metadata);
+            }
+        }
+
+        output
+            .into_iter()
+            .map(|metadata| metadata.ok_or(Error::Unsupported("missing batch record metadata")))
+            .collect()
+    }
+
+    async fn send_batch_group(
+        &self,
+        key: &ProduceBatchKey,
+        records: &[PreparedBatchRecord<'_>],
+    ) -> Result<Vec<(usize, RecordMetadata)>> {
+        debug!(
+            topic = key.topic.as_str(),
+            partition = key.partition,
+            broker_addr = key.broker_addr.as_str(),
+            record_count = records.len(),
+            "resolved produce batch leader"
+        );
+
+        let mut leader_client = Client::connect_with_request_timeout(
+            key.broker_addr.clone(),
+            self.config.client.client_id_ref().map(str::to_owned),
+            self.config.client.request_timeout(),
+        )
+        .await?;
+        let api_versions = leader_client.api_versions().await?;
+        if api_versions.error_code != 0 {
+            return Err(Error::Broker {
+                code: api_versions.error_code,
+                context: format!("api versions for produce {}-{}", key.topic, key.partition),
+            });
+        }
+
+        let produce_version = select_produce_batch_version(&api_versions, records)?;
+        debug!(
+            topic = key.topic.as_str(),
+            partition = key.partition,
+            produce_version = ?produce_version,
+            record_count = records.len(),
+            "selected produce batch api version"
+        );
+
+        let response = match produce_version {
+            ProduceVersion::V3 => {
+                leader_client
+                    .produce_one_v3(
+                        None,
+                        self.config.acks.as_i16(),
+                        30_000,
+                        key.topic.clone(),
+                        key.partition,
+                        records
+                            .iter()
+                            .map(|record| {
+                                record_batch_message(
+                                    &record.record.record,
+                                    record.record.timestamp_ms,
+                                )
+                            })
+                            .collect(),
+                    )
+                    .await?
+            }
+            ProduceVersion::V2 => {
+                leader_client
+                    .produce_one_v2(
+                        self.config.acks.as_i16(),
+                        30_000,
+                        key.topic.clone(),
+                        key.partition,
+                        records
+                            .iter()
+                            .map(|record| {
+                                message_set_message(
+                                    &record.record.record,
+                                    record.record.timestamp_ms,
+                                )
+                            })
+                            .collect(),
+                    )
+                    .await?
+            }
+        };
+        let partition_response = produce_partition_response(&response, &key.topic, key.partition)?;
+        if partition_response.error_code != 0 {
+            return Err(Error::Broker {
+                code: partition_response.error_code,
+                context: format!("produce {}-{}", key.topic, key.partition),
+            });
+        }
+
+        records
+            .iter()
+            .enumerate()
+            .map(|(relative_offset, record)| {
+                Ok((
+                    record.index,
+                    RecordMetadata::new(
+                        key.topic.clone(),
+                        key.partition,
+                        partition_response.base_offset
+                            + i64::try_from(relative_offset).unwrap_or(0),
+                        Some(record.record.timestamp),
+                    ),
+                ))
+            })
+            .collect()
     }
 
     async fn send_with_metadata(
@@ -337,6 +510,37 @@ impl Producer {
             Some(timestamp),
         ))
     }
+}
+
+#[derive(Debug)]
+struct BatchRecord {
+    record: ProducerRecord,
+    timestamp: SystemTime,
+    timestamp_ms: i64,
+}
+
+impl BatchRecord {
+    fn new(record: ProducerRecord) -> Self {
+        let timestamp = record.timestamp_ref().unwrap_or_else(SystemTime::now);
+        Self {
+            record,
+            timestamp,
+            timestamp_ms: timestamp_millis(timestamp),
+        }
+    }
+}
+
+#[derive(Debug)]
+struct PreparedBatchRecord<'a> {
+    index: usize,
+    record: &'a BatchRecord,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct ProduceBatchKey {
+    broker_addr: String,
+    topic: String,
+    partition: i32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -526,6 +730,33 @@ fn select_produce_version(
     Err(Error::Unsupported("Produce API v2 or newer"))
 }
 
+fn select_produce_batch_version(
+    api_versions: &ApiVersionsResponseV0,
+    records: &[PreparedBatchRecord<'_>],
+) -> Result<ProduceVersion> {
+    if api_versions
+        .highest_supported_version(PRODUCE_API_KEY, 3)
+        .is_some_and(|version| version >= 3)
+    {
+        return Ok(ProduceVersion::V3);
+    }
+
+    if api_versions
+        .highest_supported_version(PRODUCE_API_KEY, 2)
+        .is_some_and(|version| version >= 2)
+    {
+        if records
+            .iter()
+            .all(|record| record.record.record.headers().is_empty())
+        {
+            return Ok(ProduceVersion::V2);
+        }
+        return Err(Error::Unsupported("record headers require Produce API v3"));
+    }
+
+    Err(Error::Unsupported("Produce API v2 or newer"))
+}
+
 fn produce_partition_response<'a>(
     response: &'a ProduceResponseV2,
     topic_name: &str,
@@ -568,13 +799,24 @@ fn invalidate_metadata_cache(
     metadata_cache.remove(topic);
 }
 
+fn invalidate_metadata_cache_for_records(
+    metadata_cache: &mut BTreeMap<String, MetadataResponseV1>,
+    records: &[BatchRecord],
+) {
+    for record in records {
+        metadata_cache.remove(record.record.topic());
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::{
-        can_retry_send, choose_partition, invalidate_metadata_cache, leader_for,
-        message_set_message, record_batch_message, select_produce_version, Acks, ProduceVersion,
-        ProducerConfig, ProducerRecord, RecordMetadata,
+        can_retry_send, choose_partition, invalidate_metadata_cache,
+        invalidate_metadata_cache_for_records, leader_for, message_set_message,
+        record_batch_message, select_produce_batch_version, select_produce_version, Acks,
+        BatchRecord, PreparedBatchRecord, ProduceVersion, ProducerConfig, ProducerRecord,
+        RecordMetadata,
     };
     use crate::{BrokerErrorKind, Error};
     use kafrust_protocol::api::api_versions::{ApiKeyVersion, ApiVersionsResponseV0};
@@ -670,6 +912,48 @@ mod tests {
     }
 
     #[test]
+    fn selects_record_batch_for_batch_when_produce_v3_is_available() {
+        let versions = api_versions(3);
+        let first = BatchRecord::new(ProducerRecord::to("orders").header("source", "checkout"));
+        let second = BatchRecord::new(ProducerRecord::to("orders"));
+        let batch = [first, second];
+        let records = prepared_records(&batch);
+
+        assert_eq!(
+            select_produce_batch_version(&versions, &records).unwrap(),
+            ProduceVersion::V3
+        );
+    }
+
+    #[test]
+    fn falls_back_to_message_set_for_batch_without_headers_when_only_produce_v2_is_available() {
+        let versions = api_versions(2);
+        let first = BatchRecord::new(ProducerRecord::to("orders"));
+        let second = BatchRecord::new(ProducerRecord::to("orders").key("order-2"));
+        let batch = [first, second];
+        let records = prepared_records(&batch);
+
+        assert_eq!(
+            select_produce_batch_version(&versions, &records).unwrap(),
+            ProduceVersion::V2
+        );
+    }
+
+    #[test]
+    fn rejects_batch_headers_when_only_produce_v2_is_available() {
+        let versions = api_versions(2);
+        let first = BatchRecord::new(ProducerRecord::to("orders"));
+        let second = BatchRecord::new(ProducerRecord::to("orders").header("source", "checkout"));
+        let batch = [first, second];
+        let records = prepared_records(&batch);
+
+        assert!(matches!(
+            select_produce_batch_version(&versions, &records).unwrap_err(),
+            Error::Unsupported("record headers require Produce API v3")
+        ));
+    }
+
+    #[test]
     fn builds_producer_config() {
         let config = ProducerConfig::new(["localhost:9092"])
             .client_id("orders-api")
@@ -749,6 +1033,24 @@ mod tests {
         assert!(cache.contains_key("payments"));
     }
 
+    #[test]
+    fn invalidates_batch_record_topics() {
+        let mut cache = BTreeMap::new();
+        cache.insert("orders".to_owned(), metadata_fixture());
+        cache.insert("payments".to_owned(), metadata_fixture());
+        cache.insert("shipments".to_owned(), metadata_fixture());
+        let records = vec![
+            BatchRecord::new(ProducerRecord::to("orders")),
+            BatchRecord::new(ProducerRecord::to("payments")),
+        ];
+
+        invalidate_metadata_cache_for_records(&mut cache, &records);
+
+        assert!(!cache.contains_key("orders"));
+        assert!(!cache.contains_key("payments"));
+        assert!(cache.contains_key("shipments"));
+    }
+
     fn metadata_fixture() -> MetadataResponseV1 {
         MetadataResponseV1 {
             brokers: vec![BrokerMetadata {
@@ -791,5 +1093,13 @@ mod tests {
                 max_version: max_produce_version,
             }],
         }
+    }
+
+    fn prepared_records(records: &[BatchRecord]) -> Vec<PreparedBatchRecord<'_>> {
+        records
+            .iter()
+            .enumerate()
+            .map(|(index, record)| PreparedBatchRecord { index, record })
+            .collect()
     }
 }
