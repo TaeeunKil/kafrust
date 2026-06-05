@@ -328,7 +328,7 @@ Exit criteria:
 
 Known limits:
 
-- The high-level producer can send multiple records with `Producer::send_batch`, grouping records by topic, partition, and leader. Linger-based buffering is still planned.
+- The high-level producer can send multiple records with `Producer::send_batch`, grouping records by topic, partition, and leader. Linger-based buffering is designed but not implemented yet.
 - `acks=0` remains unsupported because the request loop expects a broker response.
 
 Evidence:
@@ -341,6 +341,7 @@ Evidence:
 - Focused unit tests cover batch Produce API version selection and batch metadata cache invalidation.
 - The `Live Kafka Smoke` workflow runs the `producer_send_batch` example before direct fetch and group poll checks.
 - Manual `Live Kafka Smoke` run `26989271377` passed on 2026-06-05 after the batch outcome, partial retry, and record-limit changes.
+- `docs/producer-buffering.md` defines the planned opt-in buffered producer path, linger flush triggers, delivery semantics, and implementation slices.
 
 ## M11 Security And Connectivity
 
