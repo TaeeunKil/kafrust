@@ -120,6 +120,16 @@ impl ProducePartitionV2 {
     }
 }
 
+/// Returns the encoded byte length of a Produce v2 message set.
+pub fn encoded_message_set_len(records: &[MessageSetMessage]) -> Result<usize> {
+    Ok(encode_message_set(records)?.len())
+}
+
+/// Returns the encoded byte length of a Produce v3 record batch set.
+pub fn encoded_record_batch_set_len(records: &[RecordBatchMessage]) -> Result<usize> {
+    Ok(encode_record_batch_set(records)?.len())
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MessageSetMessage {
     pub key: Option<Vec<u8>>,
@@ -363,7 +373,8 @@ fn crc32c(bytes: &[u8]) -> u32 {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::{
-        encode_record_batch_set, MessageSetMessage, ProducePartitionV2, ProducePartitionV3,
+        encode_message_set, encode_record_batch_set, encoded_message_set_len,
+        encoded_record_batch_set_len, MessageSetMessage, ProducePartitionV2, ProducePartitionV3,
         ProduceRequestV2, ProduceRequestV3, ProduceResponseV2, ProduceTopicV2, ProduceTopicV3,
         RecordBatchMessage,
     };
@@ -456,6 +467,38 @@ mod tests {
         assert_eq!(record.key.as_deref(), Some(&b"order-1"[..]));
         assert_eq!(record.value.as_deref(), Some(&b"created"[..]));
         assert!(decoder.is_empty());
+    }
+
+    #[test]
+    fn reports_message_set_encoded_len() {
+        let records = [MessageSetMessage::new(
+            Some(b"order-1".to_vec()),
+            Some(b"created".to_vec()),
+            1_000,
+        )];
+
+        assert_eq!(
+            encoded_message_set_len(&records).unwrap(),
+            encode_message_set(&records).unwrap().len()
+        );
+    }
+
+    #[test]
+    fn reports_record_batch_set_encoded_len() {
+        let records =
+            [
+                RecordBatchMessage::new(
+                    Some(b"order-1".to_vec()),
+                    Some(b"created".to_vec()),
+                    1_000,
+                )
+                .header("source", Some(b"checkout".to_vec())),
+            ];
+
+        assert_eq!(
+            encoded_record_batch_set_len(&records).unwrap(),
+            encode_record_batch_set(&records).unwrap().len()
+        );
     }
 
     #[test]
