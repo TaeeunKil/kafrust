@@ -482,7 +482,9 @@ impl Producer {
 
         let mut output = Vec::with_capacity(record_indexes.len());
         for (key, records) in groups {
-            output.extend(self.send_batch_group(&key, &records).await?);
+            for records in batch_record_chunks(&records, self.config.max_records_per_batch) {
+                output.extend(self.send_batch_group(&key, records).await?);
+            }
         }
         if output.len() != record_indexes.len() {
             return Err(Error::Unsupported("missing batch record outcome"));
@@ -702,6 +704,7 @@ pub struct ProducerConfig {
     client: ClientConfig,
     acks: Acks,
     max_retries: u32,
+    max_records_per_batch: usize,
 }
 
 impl ProducerConfig {
@@ -711,6 +714,7 @@ impl ProducerConfig {
             client: ClientConfig::new(bootstrap_servers),
             acks: Acks::Leader,
             max_retries: 1,
+            max_records_per_batch: usize::MAX,
         }
     }
 
@@ -738,6 +742,14 @@ impl ProducerConfig {
         self
     }
 
+    /// Sets the maximum records sent in one Produce request per topic partition.
+    ///
+    /// Values below 1 are treated as 1 so batch sends always make progress.
+    pub fn max_records_per_batch(mut self, max_records_per_batch: usize) -> Self {
+        self.max_records_per_batch = max_records_per_batch.max(1);
+        self
+    }
+
     /// Returns the configured acknowledgement policy.
     pub fn acks_ref(&self) -> Acks {
         self.acks
@@ -746,6 +758,11 @@ impl ProducerConfig {
     /// Returns the configured maximum retry count.
     pub fn max_retries_ref(&self) -> u32 {
         self.max_retries
+    }
+
+    /// Returns the configured maximum records per Produce request.
+    pub fn max_records_per_batch_ref(&self) -> usize {
+        self.max_records_per_batch
     }
 
     /// Returns the shared client configuration.
@@ -977,6 +994,13 @@ fn batch_failure_outcomes(
         .collect()
 }
 
+fn batch_record_chunks<'records, 'batch>(
+    records: &'records [PreparedBatchRecord<'batch>],
+    max_records_per_batch: usize,
+) -> impl Iterator<Item = &'records [PreparedBatchRecord<'batch>]> {
+    records.chunks(max_records_per_batch.max(1))
+}
+
 fn record_batch_attempt_outcomes(
     output: &mut [Option<ProducerBatchRecordOutcome>],
     outcomes: Vec<(usize, ProducerBatchRecordOutcome)>,
@@ -1056,13 +1080,13 @@ fn invalidate_metadata_cache_for_record_indexes(
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::{
-        batch_failure_outcomes, batch_report_from_outcomes, batch_success_outcomes, can_retry_send,
-        choose_partition, invalidate_metadata_cache, invalidate_metadata_cache_for_record_indexes,
-        leader_for, message_set_message, record_batch_attempt_outcomes, record_batch_message,
-        select_produce_batch_version, select_produce_version, Acks, BatchRecord,
-        PreparedBatchRecord, ProduceBatchKey, ProduceVersion, ProducerBatchFailure,
-        ProducerBatchRecordOutcome, ProducerBatchReport, ProducerConfig, ProducerRecord,
-        RecordMetadata,
+        batch_failure_outcomes, batch_record_chunks, batch_report_from_outcomes,
+        batch_success_outcomes, can_retry_send, choose_partition, invalidate_metadata_cache,
+        invalidate_metadata_cache_for_record_indexes, leader_for, message_set_message,
+        record_batch_attempt_outcomes, record_batch_message, select_produce_batch_version,
+        select_produce_version, Acks, BatchRecord, PreparedBatchRecord, ProduceBatchKey,
+        ProduceVersion, ProducerBatchFailure, ProducerBatchRecordOutcome, ProducerBatchReport,
+        ProducerConfig, ProducerRecord, RecordMetadata,
     };
     use crate::{BrokerErrorKind, Error};
     use kafrust_protocol::api::api_versions::{ApiKeyVersion, ApiVersionsResponseV0};
@@ -1205,11 +1229,20 @@ mod tests {
             .client_id("orders-api")
             .request_timeout_ms(5_000)
             .max_retries(3)
+            .max_records_per_batch(128)
             .acks(Acks::All);
 
         assert_eq!(config.acks_ref(), Acks::All);
         assert_eq!(config.max_retries_ref(), 3);
+        assert_eq!(config.max_records_per_batch_ref(), 128);
         assert_eq!(config.client_config().client_id_ref(), Some("orders-api"));
+    }
+
+    #[test]
+    fn clamps_zero_max_records_per_batch_to_one() {
+        let config = ProducerConfig::new(["localhost:9092"]).max_records_per_batch(0);
+
+        assert_eq!(config.max_records_per_batch_ref(), 1);
     }
 
     #[test]
@@ -1283,6 +1316,38 @@ mod tests {
             failure.error(),
             Error::Broker { code: 5, context } if context == "produce orders-0"
         ));
+    }
+
+    #[test]
+    fn chunks_batch_records_by_configured_record_limit() {
+        let first = BatchRecord::new(ProducerRecord::to("orders"));
+        let second = BatchRecord::new(ProducerRecord::to("orders"));
+        let third = BatchRecord::new(ProducerRecord::to("orders"));
+        let batch = [first, second, third];
+        let records = prepared_records(&batch);
+
+        let chunks = batch_record_chunks(&records, 2).collect::<Vec<_>>();
+
+        assert_eq!(chunks.len(), 2);
+        assert_eq!(chunks[0].len(), 2);
+        assert_eq!(chunks[0][0].index, 0);
+        assert_eq!(chunks[0][1].index, 1);
+        assert_eq!(chunks[1].len(), 1);
+        assert_eq!(chunks[1][0].index, 2);
+    }
+
+    #[test]
+    fn chunks_batch_records_with_minimum_size_one() {
+        let first = BatchRecord::new(ProducerRecord::to("orders"));
+        let second = BatchRecord::new(ProducerRecord::to("orders"));
+        let batch = [first, second];
+        let records = prepared_records(&batch);
+
+        let chunks = batch_record_chunks(&records, 0).collect::<Vec<_>>();
+
+        assert_eq!(chunks.len(), 2);
+        assert_eq!(chunks[0][0].index, 0);
+        assert_eq!(chunks[1][0].index, 1);
     }
 
     #[test]
