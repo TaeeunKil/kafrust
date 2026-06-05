@@ -273,7 +273,7 @@ Known limits:
 
 ## M9 Consumer Group Resilience
 
-Status: In progress.
+Status: Done.
 
 Goal: make the consumer group alpha behavior safer under normal Kafka rebalances and coordinator changes.
 
@@ -298,6 +298,7 @@ Evidence:
 - Focused unit tests cover running tasks, rejoinable background heartbeat errors, and non-rejoinable background heartbeat errors.
 - `ConsumerGroupHeartbeat` records the group ID, member ID, and generation ID it was spawned for, and stale same-group handles are stopped before polling to avoid sending heartbeats for an older generation.
 - `ConsumerGroup::commit_offsets` rejoins after rejoinable offset commit errors and returns the original commit error instead of retrying stale assignment offsets under a new generation.
+- `docs/consumer-groups.md` describes when to spawn background heartbeats, how heartbeat failures are surfaced, and how offset commit rejoin behavior works.
 
 Known limits:
 
