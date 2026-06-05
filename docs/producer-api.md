@@ -86,8 +86,8 @@ Current implementation status:
 - `ProducerConfig::max_records_per_batch` limits how many records are sent in one Produce request for a topic-partition group. Values below 1 are treated as 1.
 - `ProducerConfig::max_batch_bytes` limits the encoded Kafka record-set bytes sent in one Produce request for a topic-partition group. Values below 1 are treated as 1, and an oversized single record is still sent by itself.
 - `ProducerConfig::linger_ms` stores the configured linger duration for the opt-in buffered producer path. The immediate `send` and `send_batch` APIs do not wait on linger.
-- `ProducerConfig::build_buffered` creates a `BufferedProducer` lifecycle skeleton with bounded enqueue, per-record `ProducerDelivery` handles, `flush`, `close`, and `is_closed`.
-- `BufferedProducer::send` queues records for the future buffered path. Kafka delivery execution is not wired yet, so `flush` or `close` completes pending delivery handles with an explicit unsupported error until the next M10 slice lands.
+- `ProducerConfig::build_buffered` creates a `BufferedProducer` with bounded enqueue, per-record `ProducerDelivery` handles, `flush`, `close`, and `is_closed`.
+- `BufferedProducer::send` queues records for the buffered path, and `flush` or `close` sends accepted records through the existing batch Produce path before completing delivery handles from per-record outcomes.
 - Producer metadata is cached by topic and refreshed when a retriable send failure invalidates that topic cache entry.
 - Producer send operations emit `tracing` events with operational metadata, but not key or value payload contents.
 - `Producer::send_batch` accepts multiple `ProducerRecord` values, groups them by topic, partition, and leader, sends each group in one Produce request, and returns `RecordMetadata` in input order.
@@ -100,4 +100,4 @@ Current implementation status:
 - Stale metadata style produce errors are retried once after refreshing metadata.
 - Batch sends retry request-level retriable failures according to `ProducerConfig::max_retries`.
 - Retryable broker Produce response failures retry only the failed input records; records that already succeeded are not sent again by that batch call.
-- Linger-based buffering execution is still planned as a separate buffered producer path.
+- Automatic linger, record-count, and byte-count flush triggers are still planned for the buffered producer path.

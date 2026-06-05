@@ -320,11 +320,10 @@ pub struct Producer {
 }
 
 #[derive(Debug)]
-/// Opt-in producer skeleton for future linger-based buffered sends.
+/// Opt-in producer for linger-based buffered sends.
 ///
 /// This type owns an inner [`Producer`] and exposes lifecycle operations for
-/// the buffered path. Record enqueue and delivery handles are planned in the
-/// next M10 slices.
+/// the buffered path.
 pub struct BufferedProducer {
     commands: mpsc::Sender<BufferedProducerCommand>,
     worker: Option<JoinHandle<()>>,
@@ -335,9 +334,7 @@ impl BufferedProducer {
     /// Enqueues one record for the buffered producer path.
     ///
     /// The returned delivery handle resolves when the background task reaches a
-    /// terminal result for this record. The current slice does not wire queued
-    /// records to Kafka yet, so flush or close resolves pending deliveries with
-    /// an explicit unsupported error.
+    /// terminal result for this record.
     pub async fn send(&mut self, record: ProducerRecord) -> Result<ProducerDelivery> {
         self.state.ensure_open()?;
         enqueue_buffered_record(&self.commands, record).await
@@ -345,8 +342,8 @@ impl BufferedProducer {
 
     /// Flushes accepted buffered records.
     ///
-    /// Until Kafka execution is wired to the background task, this completes
-    /// pending delivery handles with an explicit unsupported error.
+    /// Pending delivery handles are completed from the underlying batch
+    /// Produce outcomes before this returns.
     pub async fn flush(&mut self) -> Result<()> {
         self.state.ensure_open()?;
         let (result_sender, result_receiver) = oneshot::channel();
@@ -488,7 +485,7 @@ async fn receive_buffered_result(receiver: oneshot::Receiver<Result<()>>) -> Res
 }
 
 async fn run_buffered_producer(
-    _producer: Producer,
+    mut producer: Producer,
     mut commands: mpsc::Receiver<BufferedProducerCommand>,
 ) {
     let mut pending = Vec::new();
@@ -496,17 +493,71 @@ async fn run_buffered_producer(
         match command {
             BufferedProducerCommand::Send(request) => pending.push(request),
             BufferedProducerCommand::Flush { result_sender } => {
-                fail_buffered_deliveries(&mut pending, buffered_delivery_not_wired_error);
-                let _ = result_sender.send(Ok(()));
+                let result = flush_buffered_deliveries(&mut producer, &mut pending).await;
+                let _ = result_sender.send(result);
             }
             BufferedProducerCommand::Close { result_sender } => {
-                fail_buffered_deliveries(&mut pending, buffered_delivery_not_wired_error);
-                let _ = result_sender.send(Ok(()));
+                let result = flush_buffered_deliveries(&mut producer, &mut pending).await;
+                let _ = result_sender.send(result);
                 return;
             }
         }
     }
     fail_buffered_deliveries(&mut pending, buffered_delivery_canceled_error);
+}
+
+async fn flush_buffered_deliveries(
+    producer: &mut Producer,
+    pending: &mut Vec<BufferedProduceRequest>,
+) -> Result<()> {
+    if pending.is_empty() {
+        return Ok(());
+    }
+
+    let requests = std::mem::take(pending);
+    let records = requests
+        .iter()
+        .map(|request| request.record.clone())
+        .collect::<Vec<_>>();
+
+    match producer.send_batch_report(records).await {
+        Ok(report) => {
+            complete_buffered_deliveries(requests, report.into_records());
+            Ok(())
+        }
+        Err(error) => {
+            fail_buffered_delivery_requests(requests, &error);
+            Err(error)
+        }
+    }
+}
+
+fn complete_buffered_deliveries(
+    requests: Vec<BufferedProduceRequest>,
+    outcomes: Vec<ProducerBatchRecordOutcome>,
+) {
+    let mut outcomes = outcomes.into_iter();
+    for request in requests {
+        let result = outcomes
+            .next()
+            .map(ProducerBatchRecordOutcome::into_metadata)
+            .unwrap_or_else(|| Err(Error::Unsupported("missing buffered delivery outcome")));
+        let _ = request.delivery_sender.send(result);
+    }
+}
+
+fn fail_buffered_delivery_requests(requests: Vec<BufferedProduceRequest>, error: &Error) {
+    for request in requests {
+        debug!(
+            topic = request.record.topic(),
+            partition = ?request.record.partition_ref(),
+            error = %error,
+            "completing buffered delivery after batch request failure"
+        );
+        let _ = request
+            .delivery_sender
+            .send(Err(delivery_error_from_request_error(error)));
+    }
 }
 
 fn fail_buffered_deliveries(pending: &mut Vec<BufferedProduceRequest>, error: fn() -> Error) {
@@ -524,12 +575,34 @@ fn buffered_task_stopped_error() -> Error {
     Error::Unsupported("buffered producer task stopped")
 }
 
-fn buffered_delivery_not_wired_error() -> Error {
-    Error::Unsupported("buffered producer delivery is not wired to Kafka yet")
-}
-
 fn buffered_delivery_canceled_error() -> Error {
     Error::Unsupported("buffered producer delivery canceled")
+}
+
+fn delivery_error_from_request_error(error: &Error) -> Error {
+    match error {
+        Error::MissingBootstrapServer => Error::MissingBootstrapServer,
+        Error::UnknownTopicOrPartition { topic, partition } => Error::UnknownTopicOrPartition {
+            topic: topic.clone(),
+            partition: *partition,
+        },
+        Error::MissingLeader { topic, partition } => Error::MissingLeader {
+            topic: topic.clone(),
+            partition: *partition,
+        },
+        Error::MissingBroker { node_id } => Error::MissingBroker { node_id: *node_id },
+        Error::Broker { code, context } => Error::Broker {
+            code: *code,
+            context: context.clone(),
+        },
+        Error::RequestTimedOut { timeout_ms } => Error::RequestTimedOut {
+            timeout_ms: *timeout_ms,
+        },
+        Error::Unsupported(feature) => Error::Unsupported(feature),
+        Error::Io(error) => Error::Io(std::io::Error::new(error.kind(), error.to_string())),
+        Error::TaskJoin(_) => Error::Unsupported("buffered producer task join failed"),
+        Error::Protocol(error) => Error::Protocol(error.clone()),
+    }
 }
 
 impl Producer {
@@ -1404,8 +1477,9 @@ fn invalidate_metadata_cache_for_record_indexes(
 mod tests {
     use super::{
         batch_failure_outcomes, batch_record_chunks, batch_records_encoded_len,
-        batch_report_from_outcomes, batch_success_outcomes, buffered_delivery_not_wired_error,
-        can_retry_send, choose_partition, enqueue_buffered_record, fail_buffered_deliveries,
+        batch_report_from_outcomes, batch_success_outcomes, buffered_delivery_canceled_error,
+        can_retry_send, choose_partition, complete_buffered_deliveries,
+        delivery_error_from_request_error, enqueue_buffered_record, fail_buffered_deliveries,
         invalidate_metadata_cache, invalidate_metadata_cache_for_record_indexes, leader_for,
         message_set_message, record_batch_attempt_outcomes, record_batch_message,
         select_produce_batch_version, select_produce_version, Acks, BatchRecord,
@@ -1651,12 +1725,80 @@ mod tests {
             delivery_sender,
         }];
 
-        fail_buffered_deliveries(&mut pending, buffered_delivery_not_wired_error);
+        fail_buffered_deliveries(&mut pending, buffered_delivery_canceled_error);
 
         assert!(pending.is_empty());
         assert!(matches!(
             delivery.await.unwrap_err(),
-            Error::Unsupported("buffered producer delivery is not wired to Kafka yet")
+            Error::Unsupported("buffered producer delivery canceled")
+        ));
+    }
+
+    #[tokio::test]
+    async fn completes_buffered_deliveries_from_batch_outcomes() {
+        let (first_sender, first_receiver) = oneshot::channel();
+        let (second_sender, second_receiver) = oneshot::channel();
+        let first_delivery = ProducerDelivery::new(first_receiver);
+        let second_delivery = ProducerDelivery::new(second_receiver);
+        let requests = vec![
+            BufferedProduceRequest {
+                record: ProducerRecord::to("orders").key("order-1"),
+                delivery_sender: first_sender,
+            },
+            BufferedProduceRequest {
+                record: ProducerRecord::to("orders").key("order-2"),
+                delivery_sender: second_sender,
+            },
+        ];
+        let outcomes = vec![
+            ProducerBatchRecordOutcome::Success(RecordMetadata::new("orders", 0, 42, None)),
+            ProducerBatchRecordOutcome::Failure(ProducerBatchFailure::new(
+                1,
+                "orders",
+                0,
+                Error::Broker {
+                    code: 5,
+                    context: "produce orders-0".to_owned(),
+                },
+            )),
+        ];
+
+        complete_buffered_deliveries(requests, outcomes);
+
+        assert_eq!(first_delivery.await.unwrap().offset(), 42);
+        assert!(matches!(
+            second_delivery.await.unwrap_err(),
+            Error::Broker { code: 5, context } if context == "produce orders-0"
+        ));
+    }
+
+    #[tokio::test]
+    async fn completes_missing_buffered_outcome_with_error() {
+        let (delivery_sender, delivery_receiver) = oneshot::channel();
+        let delivery = ProducerDelivery::new(delivery_receiver);
+        let requests = vec![BufferedProduceRequest {
+            record: ProducerRecord::to("orders"),
+            delivery_sender,
+        }];
+
+        complete_buffered_deliveries(requests, Vec::new());
+
+        assert!(matches!(
+            delivery.await.unwrap_err(),
+            Error::Unsupported("missing buffered delivery outcome")
+        ));
+    }
+
+    #[test]
+    fn copies_request_error_for_buffered_delivery() {
+        let error = Error::Broker {
+            code: 5,
+            context: "produce orders-0".to_owned(),
+        };
+
+        assert!(matches!(
+            delivery_error_from_request_error(&error),
+            Error::Broker { code: 5, context } if context == "produce orders-0"
         ));
     }
 
