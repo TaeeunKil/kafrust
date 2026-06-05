@@ -193,6 +193,117 @@ impl RecordMetadata {
     }
 }
 
+/// Per-record failure returned by a batch produce report.
+#[derive(Debug)]
+pub struct ProducerBatchFailure {
+    record_index: usize,
+    topic: String,
+    partition: i32,
+    error: Error,
+}
+
+impl ProducerBatchFailure {
+    fn new(record_index: usize, topic: impl Into<String>, partition: i32, error: Error) -> Self {
+        Self {
+            record_index,
+            topic: topic.into(),
+            partition,
+            error,
+        }
+    }
+
+    /// Returns the index of the input record that failed.
+    pub fn record_index(&self) -> usize {
+        self.record_index
+    }
+
+    /// Returns the Kafka topic for the failed record.
+    pub fn topic(&self) -> &str {
+        &self.topic
+    }
+
+    /// Returns the Kafka partition for the failed record.
+    pub fn partition(&self) -> i32 {
+        self.partition
+    }
+
+    /// Returns the Kafka client error for the failed record.
+    pub fn error(&self) -> &Error {
+        &self.error
+    }
+
+    /// Consumes this failure and returns the underlying error.
+    pub fn into_error(self) -> Error {
+        self.error
+    }
+}
+
+/// Per-record outcome returned by a batch produce report.
+#[derive(Debug)]
+pub enum ProducerBatchRecordOutcome {
+    /// Kafka accepted the record and returned produce metadata.
+    Success(RecordMetadata),
+    /// Kafka rejected the record's topic partition in the Produce response.
+    Failure(ProducerBatchFailure),
+}
+
+impl ProducerBatchRecordOutcome {
+    /// Returns whether this record was accepted by Kafka.
+    pub fn is_success(&self) -> bool {
+        matches!(self, Self::Success(_))
+    }
+
+    /// Returns the successful record metadata, when present.
+    pub fn metadata(&self) -> Option<&RecordMetadata> {
+        match self {
+            Self::Success(metadata) => Some(metadata),
+            Self::Failure(_) => None,
+        }
+    }
+
+    /// Returns the record failure, when present.
+    pub fn failure(&self) -> Option<&ProducerBatchFailure> {
+        match self {
+            Self::Success(_) => None,
+            Self::Failure(failure) => Some(failure),
+        }
+    }
+
+    fn into_metadata(self) -> Result<RecordMetadata> {
+        match self {
+            Self::Success(metadata) => Ok(metadata),
+            Self::Failure(failure) => Err(failure.into_error()),
+        }
+    }
+}
+
+/// Report returned by a batch produce operation.
+#[derive(Debug)]
+pub struct ProducerBatchReport {
+    records: Vec<ProducerBatchRecordOutcome>,
+}
+
+impl ProducerBatchReport {
+    fn new(records: Vec<ProducerBatchRecordOutcome>) -> Self {
+        Self { records }
+    }
+
+    /// Returns per-record outcomes in the same order as input records.
+    pub fn records(&self) -> &[ProducerBatchRecordOutcome] {
+        &self.records
+    }
+
+    /// Consumes this report and returns per-record outcomes.
+    pub fn into_records(self) -> Vec<ProducerBatchRecordOutcome> {
+        self.records
+    }
+
+    /// Returns whether at least one record failed in the Produce response.
+    pub fn has_failures(&self) -> bool {
+        self.records.iter().any(|record| !record.is_success())
+    }
+}
+
 #[derive(Debug)]
 /// Kafka producer using metadata-based leader routing.
 pub struct Producer {
@@ -255,6 +366,24 @@ impl Producer {
         &mut self,
         records: impl IntoIterator<Item = ProducerRecord>,
     ) -> Result<Vec<RecordMetadata>> {
+        let report = self.send_batch_report(records).await?;
+        report
+            .into_records()
+            .into_iter()
+            .map(ProducerBatchRecordOutcome::into_metadata)
+            .collect()
+    }
+
+    /// Sends multiple records and returns one outcome per input record.
+    ///
+    /// Request-level failures such as metadata lookup, connection failures, or
+    /// timeouts are returned as [`Error`]. Broker Produce response failures for
+    /// a topic partition are returned inside the report so callers can inspect
+    /// partial success and failure by input record.
+    pub async fn send_batch_report(
+        &mut self,
+        records: impl IntoIterator<Item = ProducerRecord>,
+    ) -> Result<ProducerBatchReport> {
         if self.config.acks == Acks::None {
             return Err(Error::Unsupported("producer acks=0 send without response"));
         }
@@ -264,7 +393,7 @@ impl Producer {
             .map(BatchRecord::new)
             .collect::<Vec<_>>();
         if records.is_empty() {
-            return Ok(Vec::new());
+            return Ok(ProducerBatchReport::new(Vec::new()));
         }
 
         debug!(record_count = records.len(), "sending kafka record batch");
@@ -277,9 +406,13 @@ impl Producer {
                     invalidate_metadata_cache_for_records(&mut self.metadata_cache, &records);
                     attempt += 1;
                 }
-                Ok(metadata) => {
-                    debug!(record_count = metadata.len(), "sent kafka record batch");
-                    return Ok(metadata);
+                Ok(report) => {
+                    debug!(
+                        record_count = report.records().len(),
+                        has_failures = report.has_failures(),
+                        "sent kafka record batch"
+                    );
+                    return Ok(report);
                 }
                 Err(error) => return Err(error),
             }
@@ -297,7 +430,7 @@ impl Producer {
         Ok(metadata)
     }
 
-    async fn send_batch_once(&mut self, records: &[BatchRecord]) -> Result<Vec<RecordMetadata>> {
+    async fn send_batch_once(&mut self, records: &[BatchRecord]) -> Result<ProducerBatchReport> {
         let mut groups = BTreeMap::<ProduceBatchKey, Vec<PreparedBatchRecord<'_>>>::new();
         for (index, record) in records.iter().enumerate() {
             let metadata = self.metadata_for_topic(record.record.topic()).await?;
@@ -314,24 +447,27 @@ impl Producer {
                 .push(PreparedBatchRecord { index, record });
         }
 
-        let mut output = vec![None; records.len()];
+        let mut output = std::iter::repeat_with(|| None)
+            .take(records.len())
+            .collect::<Vec<_>>();
         for (key, records) in groups {
-            for (index, metadata) in self.send_batch_group(&key, &records).await? {
-                output[index] = Some(metadata);
+            for (index, outcome) in self.send_batch_group(&key, &records).await? {
+                output[index] = Some(outcome);
             }
         }
 
-        output
+        let records = output
             .into_iter()
-            .map(|metadata| metadata.ok_or(Error::Unsupported("missing batch record metadata")))
-            .collect()
+            .map(|outcome| outcome.ok_or(Error::Unsupported("missing batch record metadata")))
+            .collect::<Result<Vec<_>>>()?;
+        Ok(ProducerBatchReport::new(records))
     }
 
     async fn send_batch_group(
         &self,
         key: &ProduceBatchKey,
         records: &[PreparedBatchRecord<'_>],
-    ) -> Result<Vec<(usize, RecordMetadata)>> {
+    ) -> Result<Vec<(usize, ProducerBatchRecordOutcome)>> {
         debug!(
             topic = key.topic.as_str(),
             partition = key.partition,
@@ -406,28 +542,18 @@ impl Producer {
         };
         let partition_response = produce_partition_response(&response, &key.topic, key.partition)?;
         if partition_response.error_code != 0 {
-            return Err(Error::Broker {
-                code: partition_response.error_code,
-                context: format!("produce {}-{}", key.topic, key.partition),
-            });
+            return Ok(batch_failure_outcomes(
+                key,
+                records,
+                partition_response.error_code,
+            ));
         }
 
-        records
-            .iter()
-            .enumerate()
-            .map(|(relative_offset, record)| {
-                Ok((
-                    record.index,
-                    RecordMetadata::new(
-                        key.topic.clone(),
-                        key.partition,
-                        partition_response.base_offset
-                            + i64::try_from(relative_offset).unwrap_or(0),
-                        Some(record.record.timestamp),
-                    ),
-                ))
-            })
-            .collect()
+        Ok(batch_success_outcomes(
+            key,
+            records,
+            partition_response.base_offset,
+        ))
     }
 
     async fn send_with_metadata(
@@ -778,6 +904,52 @@ fn produce_partition_response<'a>(
         })
 }
 
+fn batch_success_outcomes(
+    key: &ProduceBatchKey,
+    records: &[PreparedBatchRecord<'_>],
+    base_offset: i64,
+) -> Vec<(usize, ProducerBatchRecordOutcome)> {
+    records
+        .iter()
+        .enumerate()
+        .map(|(relative_offset, record)| {
+            (
+                record.index,
+                ProducerBatchRecordOutcome::Success(RecordMetadata::new(
+                    key.topic.clone(),
+                    key.partition,
+                    base_offset + i64::try_from(relative_offset).unwrap_or(0),
+                    Some(record.record.timestamp),
+                )),
+            )
+        })
+        .collect()
+}
+
+fn batch_failure_outcomes(
+    key: &ProduceBatchKey,
+    records: &[PreparedBatchRecord<'_>],
+    error_code: i16,
+) -> Vec<(usize, ProducerBatchRecordOutcome)> {
+    records
+        .iter()
+        .map(|record| {
+            (
+                record.index,
+                ProducerBatchRecordOutcome::Failure(ProducerBatchFailure::new(
+                    record.index,
+                    key.topic.clone(),
+                    key.partition,
+                    Error::Broker {
+                        code: error_code,
+                        context: format!("produce {}-{}", key.topic, key.partition),
+                    },
+                )),
+            )
+        })
+        .collect()
+}
+
 fn can_retry_send(error: &Error) -> bool {
     match error {
         Error::Broker { code, .. } => BrokerErrorKind::from_code(*code).is_produce_retryable(),
@@ -812,11 +984,12 @@ fn invalidate_metadata_cache_for_records(
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::{
-        can_retry_send, choose_partition, invalidate_metadata_cache,
-        invalidate_metadata_cache_for_records, leader_for, message_set_message,
-        record_batch_message, select_produce_batch_version, select_produce_version, Acks,
-        BatchRecord, PreparedBatchRecord, ProduceVersion, ProducerConfig, ProducerRecord,
-        RecordMetadata,
+        batch_failure_outcomes, batch_success_outcomes, can_retry_send, choose_partition,
+        invalidate_metadata_cache, invalidate_metadata_cache_for_records, leader_for,
+        message_set_message, record_batch_message, select_produce_batch_version,
+        select_produce_version, Acks, BatchRecord, PreparedBatchRecord, ProduceBatchKey,
+        ProduceVersion, ProducerBatchFailure, ProducerBatchRecordOutcome, ProducerBatchReport,
+        ProducerConfig, ProducerRecord, RecordMetadata,
     };
     use crate::{BrokerErrorKind, Error};
     use kafrust_protocol::api::api_versions::{ApiKeyVersion, ApiVersionsResponseV0};
@@ -977,6 +1150,91 @@ mod tests {
     }
 
     #[test]
+    fn builds_batch_success_outcomes_with_original_indexes() {
+        let first = BatchRecord::new(ProducerRecord::to("orders"));
+        let second = BatchRecord::new(ProducerRecord::to("orders"));
+        let batch = [first, second];
+        let records = vec![
+            PreparedBatchRecord {
+                index: 3,
+                record: &batch[0],
+            },
+            PreparedBatchRecord {
+                index: 7,
+                record: &batch[1],
+            },
+        ];
+        let key = batch_key();
+
+        let outcomes = batch_success_outcomes(&key, &records, 42);
+
+        assert_eq!(outcomes.len(), 2);
+        assert_eq!(outcomes[0].0, 3);
+        assert_eq!(outcomes[1].0, 7);
+        let first = outcomes[0].1.metadata().unwrap();
+        assert_eq!(first.topic(), "orders");
+        assert_eq!(first.partition(), 0);
+        assert_eq!(first.offset(), 42);
+        assert!(first.timestamp().is_some());
+        let second = outcomes[1].1.metadata().unwrap();
+        assert_eq!(second.offset(), 43);
+    }
+
+    #[test]
+    fn builds_batch_failure_outcomes_with_partition_error() {
+        let first = BatchRecord::new(ProducerRecord::to("orders"));
+        let second = BatchRecord::new(ProducerRecord::to("orders"));
+        let batch = [first, second];
+        let records = vec![
+            PreparedBatchRecord {
+                index: 3,
+                record: &batch[0],
+            },
+            PreparedBatchRecord {
+                index: 7,
+                record: &batch[1],
+            },
+        ];
+        let key = batch_key();
+
+        let outcomes = batch_failure_outcomes(&key, &records, 5);
+
+        assert_eq!(outcomes.len(), 2);
+        assert_eq!(outcomes[0].0, 3);
+        assert_eq!(outcomes[1].0, 7);
+        let failure = outcomes[1].1.failure().unwrap();
+        assert_eq!(failure.record_index(), 7);
+        assert_eq!(failure.topic(), "orders");
+        assert_eq!(failure.partition(), 0);
+        assert!(matches!(
+            failure.error(),
+            Error::Broker { code: 5, context } if context == "produce orders-0"
+        ));
+    }
+
+    #[test]
+    fn batch_report_exposes_record_failures() {
+        let report = ProducerBatchReport::new(vec![
+            ProducerBatchRecordOutcome::Success(RecordMetadata::new("orders", 0, 42, None)),
+            ProducerBatchRecordOutcome::Failure(ProducerBatchFailure::new(
+                1,
+                "orders",
+                0,
+                Error::Broker {
+                    code: 5,
+                    context: "produce orders-0".to_owned(),
+                },
+            )),
+        ]);
+
+        assert!(report.has_failures());
+        assert_eq!(report.records().len(), 2);
+        assert!(report.records()[0].metadata().is_some());
+        assert_eq!(report.records()[1].failure().unwrap().record_index(), 1);
+        assert_eq!(report.into_records().len(), 2);
+    }
+
+    #[test]
     fn chooses_explicit_partition() {
         let metadata = metadata_fixture();
         let record = ProducerRecord::to("orders").partition(1);
@@ -1101,5 +1359,13 @@ mod tests {
             .enumerate()
             .map(|(index, record)| PreparedBatchRecord { index, record })
             .collect()
+    }
+
+    fn batch_key() -> ProduceBatchKey {
+        ProduceBatchKey {
+            broker_addr: "localhost:9092".to_owned(),
+            topic: "orders".to_owned(),
+            partition: 0,
+        }
     }
 }
