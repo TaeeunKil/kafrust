@@ -76,6 +76,12 @@ Run the opt-in producer example against a local broker and an existing or auto-c
 KAFRUST_BOOTSTRAP_SERVERS=localhost:9092 KAFRUST_TOPIC=kafrust-smoke cargo run -p kafrust --example producer_send
 ```
 
+Run the buffered producer smoke example to enqueue multiple records, await delivery handles, and fetch the produced records back:
+
+```bash
+KAFRUST_BOOTSTRAP_SERVERS=localhost:9092 KAFRUST_TOPIC=kafrust-smoke cargo run -p kafrust --example producer_buffered
+```
+
 Current implementation status:
 
 - `ProducerConfig`, `ProducerRecord`, `Acks`, and `RecordMetadata` are public API types.

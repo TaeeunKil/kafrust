@@ -74,6 +74,11 @@ jobs:
       - name: Run producer batch example
         run: cargo run -p kafrust --example producer_send_batch
 
+      - name: Run buffered producer example
+        env:
+          KAFRUST_BUFFERED_COUNT: "3"
+        run: cargo run -p kafrust --example producer_buffered
+
       - name: Run direct consumer example
         env:
           KAFRUST_PARTITION: "0"
