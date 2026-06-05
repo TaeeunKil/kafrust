@@ -186,7 +186,7 @@ Scope:
 Known limits:
 
 - Rebalance handling is poll-triggered, not background-driven.
-- Background heartbeats are opt-in and surface group errors through `ConsumerGroupHeartbeat::try_wait` or `ConsumerGroupHeartbeat::stop`; they can trigger poll-time rejoin through `ConsumerGroup::poll_with_heartbeat`, but they are not restarted automatically yet.
+- Background heartbeats are opt-in and surface group errors through `ConsumerGroupHeartbeat::try_wait` or `ConsumerGroupHeartbeat::stop`; they can trigger poll-time rejoin through `ConsumerGroup::poll_with_heartbeat`, and stale same-group heartbeat handles are stopped before polling, but background tasks are not restarted automatically yet.
 - Live group validation runs through the scheduled/manual `Live Kafka Smoke` workflow.
 
 ## M6 Production Behavior
@@ -296,6 +296,7 @@ Evidence:
 
 - `ConsumerGroup::poll_with_heartbeat` observes background heartbeat task completion before polling and uses the existing rejoin path for rejoinable group errors.
 - Focused unit tests cover running tasks, rejoinable background heartbeat errors, and non-rejoinable background heartbeat errors.
+- `ConsumerGroupHeartbeat` records the group ID, member ID, and generation ID it was spawned for, and stale same-group handles are stopped before polling to avoid sending heartbeats for an older generation.
 
 Known limits:
 

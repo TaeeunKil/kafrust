@@ -332,14 +332,34 @@ impl ConsumerGroup {
         &mut self,
         heartbeat: &mut ConsumerGroupHeartbeat,
     ) -> Result<Vec<ConsumerRecord>> {
-        if should_rejoin_after_background_heartbeat(heartbeat).await? {
-            debug!(
-                group_id = self.group_id.as_str(),
-                member_id = self.member_id.as_str(),
-                generation_id = self.generation_id,
-                "rejoining kafka consumer group after background heartbeat"
-            );
-            self.rejoin().await?;
+        match heartbeat.state_for(&self.group_id, &self.member_id, self.generation_id) {
+            HeartbeatHandleState::Current => {
+                if should_rejoin_after_background_heartbeat(heartbeat).await? {
+                    debug!(
+                        group_id = self.group_id.as_str(),
+                        member_id = self.member_id.as_str(),
+                        generation_id = self.generation_id,
+                        "rejoining kafka consumer group after background heartbeat"
+                    );
+                    self.rejoin().await?;
+                }
+            }
+            HeartbeatHandleState::StaleGeneration => {
+                debug!(
+                    group_id = self.group_id.as_str(),
+                    member_id = self.member_id.as_str(),
+                    generation_id = self.generation_id,
+                    heartbeat_member_id = heartbeat.member_id(),
+                    heartbeat_generation_id = heartbeat.generation_id(),
+                    "stopping stale kafka consumer group heartbeat task"
+                );
+                heartbeat.stop_stale_generation().await?;
+            }
+            HeartbeatHandleState::DifferentGroup => {
+                return Err(Error::Unsupported(
+                    "background heartbeat handle belongs to a different consumer group",
+                ));
+            }
         }
         self.poll().await
     }
@@ -389,6 +409,9 @@ impl ConsumerGroup {
         });
 
         Ok(ConsumerGroupHeartbeat {
+            group_id: self.group_id.clone(),
+            generation_id: self.generation_id,
+            member_id: self.member_id.clone(),
             shutdown: Some(shutdown),
             handle: Some(handle),
         })
@@ -465,11 +488,29 @@ impl ConsumerGroup {
 /// Handle for a background consumer group heartbeat task.
 #[derive(Debug)]
 pub struct ConsumerGroupHeartbeat {
+    group_id: String,
+    generation_id: i32,
+    member_id: String,
     shutdown: Option<oneshot::Sender<()>>,
     handle: Option<JoinHandle<Result<()>>>,
 }
 
 impl ConsumerGroupHeartbeat {
+    /// Returns the Kafka consumer group ID this heartbeat task was created for.
+    pub fn group_id(&self) -> &str {
+        &self.group_id
+    }
+
+    /// Returns the group generation ID this heartbeat task was created for.
+    pub fn generation_id(&self) -> i32 {
+        self.generation_id
+    }
+
+    /// Returns the broker-assigned member ID this heartbeat task was created for.
+    pub fn member_id(&self) -> &str {
+        &self.member_id
+    }
+
     /// Returns whether the heartbeat task has completed.
     pub fn is_finished(&self) -> bool {
         match &self.handle {
@@ -505,6 +546,33 @@ impl ConsumerGroupHeartbeat {
         handle.await?
     }
 
+    fn state_for(
+        &self,
+        group_id: &str,
+        member_id: &str,
+        generation_id: i32,
+    ) -> HeartbeatHandleState {
+        if self.group_id != group_id {
+            return HeartbeatHandleState::DifferentGroup;
+        }
+        if self.member_id != member_id || self.generation_id != generation_id {
+            return HeartbeatHandleState::StaleGeneration;
+        }
+        HeartbeatHandleState::Current
+    }
+
+    async fn stop_stale_generation(&mut self) -> Result<()> {
+        self.signal_shutdown();
+        let Some(handle) = self.handle.take() else {
+            return Ok(());
+        };
+        match handle.await? {
+            Ok(()) => Ok(()),
+            Err(error) if should_rejoin_group(&error) => Ok(()),
+            Err(error) => Err(error),
+        }
+    }
+
     fn signal_shutdown(&mut self) {
         if let Some(shutdown) = self.shutdown.take() {
             let _ = shutdown.send(());
@@ -519,6 +587,13 @@ impl Drop for ConsumerGroupHeartbeat {
             handle.abort();
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum HeartbeatHandleState {
+    Current,
+    StaleGeneration,
+    DifferentGroup,
 }
 
 pub(crate) fn range_assignments(
@@ -819,6 +894,7 @@ mod tests {
         check_offset_commit_response, committed_offset, offset_commit_topics, offset_fetch_topics,
         range_assignments, should_rejoin_after_background_heartbeat, should_rejoin_group,
         validate_heartbeat_interval, ConsumerGroupConfig, ConsumerGroupHeartbeat,
+        HeartbeatHandleState,
     };
     use crate::consumer::ConsumerAssignment;
     use crate::Error;
@@ -1010,10 +1086,7 @@ mod tests {
             let _ = shutdown_rx.await;
             Ok(())
         });
-        let mut heartbeat = ConsumerGroupHeartbeat {
-            shutdown: Some(shutdown),
-            handle: Some(handle),
-        };
+        let mut heartbeat = heartbeat_handle(shutdown, handle, "orders-group", "member-a", 1);
 
         assert!(!heartbeat.is_finished());
         assert_eq!(heartbeat.try_wait().await.unwrap(), None);
@@ -1030,10 +1103,7 @@ mod tests {
                 context: "background heartbeat group orders-group".to_owned(),
             })
         });
-        let mut heartbeat = ConsumerGroupHeartbeat {
-            shutdown: Some(shutdown),
-            handle: Some(handle),
-        };
+        let mut heartbeat = heartbeat_handle(shutdown, handle, "orders-group", "member-a", 1);
 
         while !heartbeat.is_finished() {
             tokio::task::yield_now().await;
@@ -1053,10 +1123,7 @@ mod tests {
             let _ = shutdown_rx.await;
             Ok(())
         });
-        let mut heartbeat = ConsumerGroupHeartbeat {
-            shutdown: Some(shutdown),
-            handle: Some(handle),
-        };
+        let mut heartbeat = heartbeat_handle(shutdown, handle, "orders-group", "member-a", 1);
 
         assert!(!should_rejoin_after_background_heartbeat(&mut heartbeat)
             .await
@@ -1074,10 +1141,7 @@ mod tests {
                 context: "background heartbeat group orders-group".to_owned(),
             })
         });
-        let mut heartbeat = ConsumerGroupHeartbeat {
-            shutdown: Some(shutdown),
-            handle: Some(handle),
-        };
+        let mut heartbeat = heartbeat_handle(shutdown, handle, "orders-group", "member-a", 1);
 
         while !heartbeat.is_finished() {
             tokio::task::yield_now().await;
@@ -1098,10 +1162,7 @@ mod tests {
                 context: "background heartbeat group orders-group".to_owned(),
             })
         });
-        let mut heartbeat = ConsumerGroupHeartbeat {
-            shutdown: Some(shutdown),
-            handle: Some(handle),
-        };
+        let mut heartbeat = heartbeat_handle(shutdown, handle, "orders-group", "member-a", 1);
 
         while !heartbeat.is_finished() {
             tokio::task::yield_now().await;
@@ -1109,6 +1170,89 @@ mod tests {
 
         assert!(matches!(
             should_rejoin_after_background_heartbeat(&mut heartbeat).await,
+            Err(Error::Broker { code: 7, .. })
+        ));
+        assert!(heartbeat.is_finished());
+    }
+
+    #[tokio::test]
+    async fn heartbeat_handle_exposes_group_identity() {
+        let (shutdown, shutdown_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(async move {
+            let _ = shutdown_rx.await;
+            Ok(())
+        });
+        let heartbeat = heartbeat_handle(shutdown, handle, "orders-group", "member-a", 7);
+
+        assert_eq!(heartbeat.group_id(), "orders-group");
+        assert_eq!(heartbeat.member_id(), "member-a");
+        assert_eq!(heartbeat.generation_id(), 7);
+        assert_eq!(
+            heartbeat.state_for("orders-group", "member-a", 7),
+            HeartbeatHandleState::Current
+        );
+        assert_eq!(
+            heartbeat.state_for("orders-group", "member-b", 8),
+            HeartbeatHandleState::StaleGeneration
+        );
+        assert_eq!(
+            heartbeat.state_for("payments-group", "member-a", 7),
+            HeartbeatHandleState::DifferentGroup
+        );
+        heartbeat.stop().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn stale_heartbeat_shutdown_stops_running_task() {
+        let (shutdown, shutdown_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(async move {
+            let _ = shutdown_rx.await;
+            Ok(())
+        });
+        let mut heartbeat = heartbeat_handle(shutdown, handle, "orders-group", "member-a", 1);
+
+        heartbeat.stop_stale_generation().await.unwrap();
+
+        assert!(heartbeat.is_finished());
+        assert_eq!(heartbeat.try_wait().await.unwrap(), Some(()));
+    }
+
+    #[tokio::test]
+    async fn stale_heartbeat_shutdown_ignores_rejoinable_group_error() {
+        let (shutdown, _shutdown_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(async {
+            Err(Error::Broker {
+                code: 27,
+                context: "background heartbeat group orders-group".to_owned(),
+            })
+        });
+        let mut heartbeat = heartbeat_handle(shutdown, handle, "orders-group", "member-a", 1);
+
+        while !heartbeat.is_finished() {
+            tokio::task::yield_now().await;
+        }
+
+        heartbeat.stop_stale_generation().await.unwrap();
+        assert!(heartbeat.is_finished());
+    }
+
+    #[tokio::test]
+    async fn stale_heartbeat_shutdown_surfaces_non_rejoin_error() {
+        let (shutdown, _shutdown_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(async {
+            Err(Error::Broker {
+                code: 7,
+                context: "background heartbeat group orders-group".to_owned(),
+            })
+        });
+        let mut heartbeat = heartbeat_handle(shutdown, handle, "orders-group", "member-a", 1);
+
+        while !heartbeat.is_finished() {
+            tokio::task::yield_now().await;
+        }
+
+        assert!(matches!(
+            heartbeat.stop_stale_generation().await,
             Err(Error::Broker { code: 7, .. })
         ));
         assert!(heartbeat.is_finished());
@@ -1123,6 +1267,22 @@ mod tests {
             }
             .encode()
             .unwrap(),
+        }
+    }
+
+    fn heartbeat_handle(
+        shutdown: tokio::sync::oneshot::Sender<()>,
+        handle: tokio::task::JoinHandle<crate::Result<()>>,
+        group_id: &str,
+        member_id: &str,
+        generation_id: i32,
+    ) -> ConsumerGroupHeartbeat {
+        ConsumerGroupHeartbeat {
+            group_id: group_id.to_owned(),
+            generation_id,
+            member_id: member_id.to_owned(),
+            shutdown: Some(shutdown),
+            handle: Some(handle),
         }
     }
 
