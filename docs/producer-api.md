@@ -20,6 +20,16 @@ let record = ProducerRecord::to("orders")
 
 let metadata = producer.send(record).await?;
 println!("{}-{}@{}", metadata.topic(), metadata.partition(), metadata.offset());
+
+let batch_metadata = producer
+    .send_batch([
+        ProducerRecord::to("orders").key("order-124").value("created"),
+        ProducerRecord::to("orders").key("order-125").value("created"),
+    ])
+    .await?;
+for metadata in batch_metadata {
+    println!("{}-{}@{}", metadata.topic(), metadata.partition(), metadata.offset());
+}
 ```
 
 The public model intentionally keeps Kafka terms visible:
@@ -50,8 +60,10 @@ Current implementation status:
 - `ProducerConfig::max_retries` controls retry attempts for stale metadata, transient leader errors classified by `BrokerErrorKind`, request timeouts, and connection I/O failures.
 - Producer metadata is cached by topic and refreshed when a retriable send failure invalidates that topic cache entry.
 - Producer send operations emit `tracing` events with operational metadata, but not key or value payload contents.
+- `Producer::send_batch` accepts multiple `ProducerRecord` values, groups them by topic, partition, and leader, sends each group in one Produce request, and returns `RecordMetadata` in input order.
 - Record headers are encoded with Kafka RecordBatch magic v2 through Produce API v3.
 - When a broker only supports Produce API v2, records without headers fall back to the legacy MessageSet path.
 - Records with headers return `Unsupported` if the target broker does not support Produce API v3.
 - `acks=0` is rejected for now because the current client request loop expects a broker response.
 - Stale metadata style produce errors are retried once after refreshing metadata.
+- `send_batch` retries retriable batch failures according to `ProducerConfig::max_retries`, but partial per-partition recovery and linger-based buffering are still planned.

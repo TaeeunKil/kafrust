@@ -307,7 +307,7 @@ Known limits:
 
 ## M10 Producer Throughput
 
-Status: Planned.
+Status: In progress.
 
 Goal: move from single-record send ergonomics toward practical producer throughput while keeping Kafka concepts visible.
 
@@ -328,8 +328,13 @@ Exit criteria:
 
 Known limits:
 
-- The current high-level producer sends one record per request.
+- The high-level producer can send multiple records with `Producer::send_batch`, grouping records by topic, partition, and leader. Linger-based buffering and partial per-partition recovery are still planned.
 - `acks=0` remains unsupported because the request loop expects a broker response.
+
+Evidence:
+
+- `Producer::send_batch` accepts multiple records, batches same topic-partition groups into one Produce request, and returns metadata in input order.
+- Focused unit tests cover batch Produce API version selection and batch metadata cache invalidation.
 
 ## M11 Security And Connectivity
 
