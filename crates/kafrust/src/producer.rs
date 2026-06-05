@@ -4,8 +4,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use kafrust_protocol::api::api_versions::ApiVersionsResponseV0;
 use kafrust_protocol::api::metadata::{BrokerMetadata, MetadataResponseV1};
 use kafrust_protocol::api::produce::{
-    MessageSetMessage, ProducePartitionResponseV2, ProduceResponseV2, RecordBatchMessage,
-    API_KEY as PRODUCE_API_KEY,
+    encoded_message_set_len, encoded_record_batch_set_len, MessageSetMessage,
+    ProducePartitionResponseV2, ProduceResponseV2, RecordBatchMessage, API_KEY as PRODUCE_API_KEY,
 };
 
 use crate::client::Client;
@@ -482,9 +482,7 @@ impl Producer {
 
         let mut output = Vec::with_capacity(record_indexes.len());
         for (key, records) in groups {
-            for records in batch_record_chunks(&records, self.config.max_records_per_batch) {
-                output.extend(self.send_batch_group(&key, records).await?);
-            }
+            output.extend(self.send_batch_group(&key, &records).await?);
         }
         if output.len() != record_indexes.len() {
             return Err(Error::Unsupported("missing batch record outcome"));
@@ -528,61 +526,73 @@ impl Producer {
             "selected produce batch api version"
         );
 
-        let response = match produce_version {
-            ProduceVersion::V3 => {
-                leader_client
-                    .produce_one_v3(
-                        None,
-                        self.config.acks.as_i16(),
-                        30_000,
-                        key.topic.clone(),
-                        key.partition,
-                        records
-                            .iter()
-                            .map(|record| {
-                                record_batch_message(
-                                    &record.record.record,
-                                    record.record.timestamp_ms,
-                                )
-                            })
-                            .collect(),
-                    )
-                    .await?
+        let chunks = batch_record_chunks(
+            records,
+            self.config.max_records_per_batch,
+            self.config.max_batch_bytes,
+            produce_version,
+        )?;
+        let mut output = Vec::with_capacity(records.len());
+        for records in chunks {
+            let response = match produce_version {
+                ProduceVersion::V3 => {
+                    leader_client
+                        .produce_one_v3(
+                            None,
+                            self.config.acks.as_i16(),
+                            30_000,
+                            key.topic.clone(),
+                            key.partition,
+                            records
+                                .iter()
+                                .map(|record| {
+                                    record_batch_message(
+                                        &record.record.record,
+                                        record.record.timestamp_ms,
+                                    )
+                                })
+                                .collect(),
+                        )
+                        .await?
+                }
+                ProduceVersion::V2 => {
+                    leader_client
+                        .produce_one_v2(
+                            self.config.acks.as_i16(),
+                            30_000,
+                            key.topic.clone(),
+                            key.partition,
+                            records
+                                .iter()
+                                .map(|record| {
+                                    message_set_message(
+                                        &record.record.record,
+                                        record.record.timestamp_ms,
+                                    )
+                                })
+                                .collect(),
+                        )
+                        .await?
+                }
+            };
+            let partition_response =
+                produce_partition_response(&response, &key.topic, key.partition)?;
+            if partition_response.error_code != 0 {
+                output.extend(batch_failure_outcomes(
+                    key,
+                    records,
+                    partition_response.error_code,
+                ));
+            } else {
+                output.extend(batch_success_outcomes(
+                    key,
+                    records,
+                    partition_response.base_offset,
+                ));
             }
-            ProduceVersion::V2 => {
-                leader_client
-                    .produce_one_v2(
-                        self.config.acks.as_i16(),
-                        30_000,
-                        key.topic.clone(),
-                        key.partition,
-                        records
-                            .iter()
-                            .map(|record| {
-                                message_set_message(
-                                    &record.record.record,
-                                    record.record.timestamp_ms,
-                                )
-                            })
-                            .collect(),
-                    )
-                    .await?
-            }
-        };
-        let partition_response = produce_partition_response(&response, &key.topic, key.partition)?;
-        if partition_response.error_code != 0 {
-            return Ok(batch_failure_outcomes(
-                key,
-                records,
-                partition_response.error_code,
-            ));
         }
 
-        Ok(batch_success_outcomes(
-            key,
-            records,
-            partition_response.base_offset,
-        ))
+        Ok(output)
     }
 
     async fn send_with_metadata(
@@ -705,6 +715,7 @@ pub struct ProducerConfig {
     acks: Acks,
     max_retries: u32,
     max_records_per_batch: usize,
+    max_batch_bytes: usize,
 }
 
 impl ProducerConfig {
@@ -715,6 +726,7 @@ impl ProducerConfig {
             acks: Acks::Leader,
             max_retries: 1,
             max_records_per_batch: usize::MAX,
+            max_batch_bytes: usize::MAX,
         }
     }
 
@@ -750,6 +762,15 @@ impl ProducerConfig {
         self
     }
 
+    /// Sets the maximum encoded record-set bytes sent in one Produce request per topic partition.
+    ///
+    /// Values below 1 are treated as 1 so batch sends always make progress. A
+    /// single record that exceeds the limit is still sent by itself.
+    pub fn max_batch_bytes(mut self, max_batch_bytes: usize) -> Self {
+        self.max_batch_bytes = max_batch_bytes.max(1);
+        self
+    }
+
     /// Returns the configured acknowledgement policy.
     pub fn acks_ref(&self) -> Acks {
         self.acks
@@ -763,6 +784,11 @@ impl ProducerConfig {
     /// Returns the configured maximum records per Produce request.
     pub fn max_records_per_batch_ref(&self) -> usize {
         self.max_records_per_batch
+    }
+
+    /// Returns the configured maximum encoded record-set bytes per Produce request.
+    pub fn max_batch_bytes_ref(&self) -> usize {
+        self.max_batch_bytes
     }
 
     /// Returns the shared client configuration.
@@ -997,8 +1023,57 @@ fn batch_failure_outcomes(
 fn batch_record_chunks<'records, 'batch>(
     records: &'records [PreparedBatchRecord<'batch>],
     max_records_per_batch: usize,
-) -> impl Iterator<Item = &'records [PreparedBatchRecord<'batch>]> {
-    records.chunks(max_records_per_batch.max(1))
+    max_batch_bytes: usize,
+    produce_version: ProduceVersion,
+) -> Result<Vec<&'records [PreparedBatchRecord<'batch>]>> {
+    let max_records_per_batch = max_records_per_batch.max(1);
+    let max_batch_bytes = max_batch_bytes.max(1);
+    let mut chunks = Vec::new();
+    let mut start = 0;
+    while start < records.len() {
+        let mut end = start;
+        while end < records.len() && end - start < max_records_per_batch {
+            let candidate_end = end + 1;
+            let candidate = &records[start..candidate_end];
+            let candidate_len = batch_records_encoded_len(candidate, produce_version)?;
+            if candidate_len > max_batch_bytes && end > start {
+                break;
+            }
+            end = candidate_end;
+            if candidate_len > max_batch_bytes {
+                break;
+            }
+        }
+        chunks.push(&records[start..end]);
+        start = end;
+    }
+    Ok(chunks)
+}
+
+fn batch_records_encoded_len(
+    records: &[PreparedBatchRecord<'_>],
+    produce_version: ProduceVersion,
+) -> Result<usize> {
+    match produce_version {
+        ProduceVersion::V3 => {
+            let records = records
+                .iter()
+                .map(|record| {
+                    record_batch_message(&record.record.record, record.record.timestamp_ms)
+                })
+                .collect::<Vec<_>>();
+            encoded_record_batch_set_len(&records).map_err(Error::from)
+        }
+        ProduceVersion::V2 => {
+            let records = records
+                .iter()
+                .map(|record| {
+                    message_set_message(&record.record.record, record.record.timestamp_ms)
+                })
+                .collect::<Vec<_>>();
+            encoded_message_set_len(&records).map_err(Error::from)
+        }
+    }
 }
 
 fn record_batch_attempt_outcomes(
@@ -1080,13 +1155,14 @@ fn invalidate_metadata_cache_for_record_indexes(
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::{
-        batch_failure_outcomes, batch_record_chunks, batch_report_from_outcomes,
-        batch_success_outcomes, can_retry_send, choose_partition, invalidate_metadata_cache,
-        invalidate_metadata_cache_for_record_indexes, leader_for, message_set_message,
-        record_batch_attempt_outcomes, record_batch_message, select_produce_batch_version,
-        select_produce_version, Acks, BatchRecord, PreparedBatchRecord, ProduceBatchKey,
-        ProduceVersion, ProducerBatchFailure, ProducerBatchRecordOutcome, ProducerBatchReport,
-        ProducerConfig, ProducerRecord, RecordMetadata,
+        batch_failure_outcomes, batch_record_chunks, batch_records_encoded_len,
+        batch_report_from_outcomes, batch_success_outcomes, can_retry_send, choose_partition,
+        invalidate_metadata_cache, invalidate_metadata_cache_for_record_indexes, leader_for,
+        message_set_message, record_batch_attempt_outcomes, record_batch_message,
+        select_produce_batch_version, select_produce_version, Acks, BatchRecord,
+        PreparedBatchRecord, ProduceBatchKey, ProduceVersion, ProducerBatchFailure,
+        ProducerBatchRecordOutcome, ProducerBatchReport, ProducerConfig, ProducerRecord,
+        RecordMetadata,
     };
     use crate::{BrokerErrorKind, Error};
     use kafrust_protocol::api::api_versions::{ApiKeyVersion, ApiVersionsResponseV0};
@@ -1230,11 +1306,13 @@ mod tests {
             .request_timeout_ms(5_000)
             .max_retries(3)
             .max_records_per_batch(128)
+            .max_batch_bytes(64 * 1024)
             .acks(Acks::All);
 
         assert_eq!(config.acks_ref(), Acks::All);
         assert_eq!(config.max_retries_ref(), 3);
         assert_eq!(config.max_records_per_batch_ref(), 128);
+        assert_eq!(config.max_batch_bytes_ref(), 64 * 1024);
         assert_eq!(config.client_config().client_id_ref(), Some("orders-api"));
     }
 
@@ -1243,6 +1321,13 @@ mod tests {
         let config = ProducerConfig::new(["localhost:9092"]).max_records_per_batch(0);
 
         assert_eq!(config.max_records_per_batch_ref(), 1);
+    }
+
+    #[test]
+    fn clamps_zero_max_batch_bytes_to_one() {
+        let config = ProducerConfig::new(["localhost:9092"]).max_batch_bytes(0);
+
+        assert_eq!(config.max_batch_bytes_ref(), 1);
     }
 
     #[test]
@@ -1326,7 +1411,7 @@ mod tests {
         let batch = [first, second, third];
         let records = prepared_records(&batch);
 
-        let chunks = batch_record_chunks(&records, 2).collect::<Vec<_>>();
+        let chunks = batch_record_chunks(&records, 2, usize::MAX, ProduceVersion::V3).unwrap();
 
         assert_eq!(chunks.len(), 2);
         assert_eq!(chunks[0].len(), 2);
@@ -1343,11 +1428,43 @@ mod tests {
         let batch = [first, second];
         let records = prepared_records(&batch);
 
-        let chunks = batch_record_chunks(&records, 0).collect::<Vec<_>>();
+        let chunks = batch_record_chunks(&records, 0, usize::MAX, ProduceVersion::V3).unwrap();
 
         assert_eq!(chunks.len(), 2);
         assert_eq!(chunks[0][0].index, 0);
         assert_eq!(chunks[1][0].index, 1);
+    }
+
+    #[test]
+    fn chunks_record_batches_by_configured_byte_limit() {
+        let first = BatchRecord::new(ProducerRecord::to("orders").value("created"));
+        let second = BatchRecord::new(ProducerRecord::to("orders").value("updated"));
+        let third = BatchRecord::new(ProducerRecord::to("orders").value("shipped"));
+        let batch = [first, second, third];
+        let records = prepared_records(&batch);
+        let one_record_len = batch_records_encoded_len(&records[0..1], ProduceVersion::V3).unwrap();
+
+        let chunks =
+            batch_record_chunks(&records, usize::MAX, one_record_len, ProduceVersion::V3).unwrap();
+
+        assert_eq!(chunks.len(), 3);
+        assert_eq!(chunks[0][0].index, 0);
+        assert_eq!(chunks[1][0].index, 1);
+        assert_eq!(chunks[2][0].index, 2);
+    }
+
+    #[test]
+    fn keeps_oversized_record_as_single_chunk() {
+        let first = BatchRecord::new(ProducerRecord::to("orders").value("created"));
+        let second = BatchRecord::new(ProducerRecord::to("orders").value("updated"));
+        let batch = [first, second];
+        let records = prepared_records(&batch);
+
+        let chunks = batch_record_chunks(&records, usize::MAX, 1, ProduceVersion::V3).unwrap();
+
+        assert_eq!(chunks.len(), 2);
+        assert_eq!(chunks[0].len(), 1);
+        assert_eq!(chunks[1].len(), 1);
     }
 
     #[test]
