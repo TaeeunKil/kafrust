@@ -474,7 +474,19 @@ impl ConsumerGroup {
                 topics,
             )
             .await?;
-        check_offset_commit_response(&self.group_id, &response.topics)?;
+        if let Some(error) = offset_commit_response_error(&self.group_id, &response.topics) {
+            if should_rejoin_group(&error) {
+                debug!(
+                    group_id = self.group_id.as_str(),
+                    member_id = self.member_id.as_str(),
+                    generation_id = self.generation_id,
+                    error = %error,
+                    "rejoining kafka consumer group after offset commit"
+                );
+                self.rejoin().await?;
+            }
+            return Err(error);
+        }
         debug!(
             group_id = self.group_id.as_str(),
             member_id = self.member_id.as_str(),
@@ -748,14 +760,14 @@ fn offset_commit_topics(assignments: &[ConsumerAssignment]) -> Vec<OffsetCommitT
         .collect()
 }
 
-fn check_offset_commit_response(
+fn offset_commit_response_error(
     group_id: &str,
     topics: &[OffsetCommitTopicResponse],
-) -> Result<()> {
+) -> Option<Error> {
     for topic in topics {
         for partition in &topic.partitions {
             if partition.error_code != 0 {
-                return Err(Error::Broker {
+                return Some(Error::Broker {
                     code: partition.error_code,
                     context: format!(
                         "offset commit group {group_id} {}-{}",
@@ -765,7 +777,7 @@ fn check_offset_commit_response(
             }
         }
     }
-    Ok(())
+    None
 }
 
 fn should_rejoin_group(error: &Error) -> bool {
@@ -891,7 +903,7 @@ fn range_for_topic(members: &[String], partitions: &[i32]) -> Vec<(String, Vec<i
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::{
-        check_offset_commit_response, committed_offset, offset_commit_topics, offset_fetch_topics,
+        committed_offset, offset_commit_response_error, offset_commit_topics, offset_fetch_topics,
         range_assignments, should_rejoin_after_background_heartbeat, should_rejoin_group,
         validate_heartbeat_interval, ConsumerGroupConfig, ConsumerGroupHeartbeat,
         HeartbeatHandleState,
@@ -1048,10 +1060,40 @@ mod tests {
             }],
         }];
 
-        assert!(matches!(
-            check_offset_commit_response("orders-group", &response).unwrap_err(),
-            Error::Broker { code: 25, .. }
-        ));
+        let error = offset_commit_response_error("orders-group", &response).unwrap();
+        assert!(matches!(error, Error::Broker { code: 25, .. }));
+    }
+
+    #[test]
+    fn classifies_offset_commit_rejoin_error() {
+        let response = vec![OffsetCommitTopicResponse {
+            name: "orders".to_owned(),
+            partitions: vec![OffsetCommitPartitionResponse {
+                partition_index: 0,
+                error_code: 27,
+            }],
+        }];
+
+        let error = offset_commit_response_error("orders-group", &response).unwrap();
+
+        assert!(should_rejoin_group(&error));
+        assert!(matches!(error, Error::Broker { code: 27, .. }));
+    }
+
+    #[test]
+    fn classifies_offset_commit_non_rejoin_error() {
+        let response = vec![OffsetCommitTopicResponse {
+            name: "orders".to_owned(),
+            partitions: vec![OffsetCommitPartitionResponse {
+                partition_index: 0,
+                error_code: 7,
+            }],
+        }];
+
+        let error = offset_commit_response_error("orders-group", &response).unwrap();
+
+        assert!(!should_rejoin_group(&error));
+        assert!(matches!(error, Error::Broker { code: 7, .. }));
     }
 
     #[test]
