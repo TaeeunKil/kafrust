@@ -2,6 +2,8 @@
 
 kafrust milestones are ordered by implementation risk and user-visible value. The project should keep Kafka concepts familiar to existing Kafka users while building a native Rust implementation underneath.
 
+See [Project Strategy](project-strategy.md) for the replacement target, non-goals, existing alternatives, completion tiers, and the rationale for building a pure Rust client instead of wrapping librdkafka.
+
 Status legend:
 
 - Done: implemented and covered by CI.
@@ -225,16 +227,16 @@ Scope:
 
 Evidence:
 
-- `kafrust-protocol v0.1.0` and `kafrust v0.1.0` are published on crates.io.
-- GitHub release `v0.1.0` is tagged and published.
-- A fresh external project can add `kafrust = "0.1.0"` and compile.
+- `kafrust-protocol v0.1.0`, `kafrust v0.1.0`, `kafrust-protocol v0.2.0`, and `kafrust v0.2.0` are published on crates.io.
+- GitHub releases `v0.1.0` and `v0.2.0` are tagged and published.
+- A fresh external project can add `kafrust = "0.2.0"` and compile.
 - docs.rs pages for both crates build successfully.
 - The `Live Kafka Smoke` workflow runs the broker roundtrip, producer, direct consumer, and consumer group examples against Kafka 3.7.2.
 
 Known limits:
 
 - Live broker checks are opt-in and scheduled, not part of default pull request CI.
-- Published `0.1.x` APIs remain alpha APIs and may change while Kafka protocol coverage and runtime behavior stabilize.
+- Published `0.x` APIs remain alpha APIs and may change while Kafka protocol coverage and runtime behavior stabilize.
 
 ## M8 Alpha Operations
 
@@ -261,7 +263,7 @@ Evidence:
 
 - `Live Kafka Smoke` exists and has passed manually against Kafka 3.7.2.
 - `docs/broker-roundtrip.md` records the latest manual live smoke and the scheduled workflow.
-- v0.1.0 was verified from a fresh external project with `kafrust = "0.1.0"`.
+- v0.1.0 and v0.2.0 were verified from fresh external projects.
 - `docs/release.md` includes post-publish crates.io, docs.rs, release tag, and live smoke verification.
 - `docs/compatibility.md` documents the current Kafka 3.7.2 compatibility claim and known non-claims.
 - GitHub issue forms route reports into protocol bugs, client runtime bugs, or API design questions.
@@ -372,6 +374,10 @@ Known limits:
 
 - Current networking is plaintext TCP only.
 - No SASL mechanisms are implemented yet.
+
+Strategic role:
+
+- This milestone is the next gate for real-world adoption. Without TLS and SASL, kafrust remains limited to local, plaintext, or unusually permissive Kafka deployments.
 
 ## M12 API Stabilization
 

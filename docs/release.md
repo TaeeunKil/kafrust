@@ -83,11 +83,11 @@ After both crates are published:
    cargo search kafrust --limit 5
    ```
 
-2. Confirm a fresh project can compile against the published client crate. Replace `0.1.0` with the version being verified:
+2. Confirm a fresh project can compile against the published client crate. Replace `0.2.0` with the version being verified:
 
    ```sh
    cargo new --bin /tmp/kafrust-published-smoke
-   cargo add kafrust@0.1.0 --manifest-path /tmp/kafrust-published-smoke/Cargo.toml
+   cargo add kafrust@0.2.0 --manifest-path /tmp/kafrust-published-smoke/Cargo.toml
    cargo check --manifest-path /tmp/kafrust-published-smoke/Cargo.toml
    ```
 

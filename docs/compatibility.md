@@ -4,7 +4,7 @@ kafrust compatibility claims are scoped to behavior that has been verified again
 
 ## Current Compatibility Claim
 
-The `0.1.x` alpha line is verified against a single-node Apache Kafka 3.7.2 KRaft broker over plaintext TCP.
+The `0.2.x` alpha line is verified against a single-node Apache Kafka 3.7.2 KRaft broker over plaintext TCP.
 
 | Broker | Mode | Security | Verification | Status |
 | --- | --- | --- | --- | --- |
@@ -16,7 +16,7 @@ The Kafka 3.7.2 smoke path covers:
 
 - `ApiVersions v0` and `Metadata v1` roundtrips.
 - `FindCoordinator v1` for consumer group coordinator discovery.
-- High-level producer metadata lookup, leader routing, negotiated Produce API selection, single-record send, and batch send with `acks=1`. Against Kafka 3.7.2, the current path selects Produce v3 RecordBatch.
+- High-level producer metadata lookup, leader routing, negotiated Produce API selection, single-record send, batch send, and buffered send with `acks=1`. Against Kafka 3.7.2, the current path selects Produce v3 RecordBatch.
 - Direct consumer fetch from an assigned topic partition using Fetch v2 response decoding.
 - Consumer group join, sync, heartbeat, poll, and offset commit through the alpha classic consumer group path with range assignment.
 
