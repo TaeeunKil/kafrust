@@ -12,7 +12,7 @@ use kafrust_protocol::api::produce::{
 };
 
 use crate::client::Client;
-use crate::config::ClientConfig;
+use crate::config::{ClientConfig, SecurityProtocol};
 use crate::error::{BrokerErrorKind, Error, Result};
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
@@ -985,12 +985,11 @@ impl Producer {
             "resolved produce batch leader"
         );
 
-        let mut leader_client = Client::connect_with_request_timeout(
-            key.broker_addr.clone(),
-            self.config.client.client_id_ref().map(str::to_owned),
-            self.config.client.request_timeout(),
-        )
-        .await?;
+        let mut leader_client = self
+            .config
+            .client
+            .connect_broker(key.broker_addr.clone())
+            .await?;
         let api_versions = leader_client.api_versions().await?;
         if api_versions.error_code != 0 {
             return Err(Error::Broker {
@@ -1095,12 +1094,7 @@ impl Producer {
             "resolved produce leader"
         );
 
-        let mut leader_client = Client::connect_with_request_timeout(
-            broker_addr,
-            self.config.client.client_id_ref().map(str::to_owned),
-            self.config.client.request_timeout(),
-        )
-        .await?;
+        let mut leader_client = self.config.client.connect_broker(broker_addr).await?;
         let api_versions = leader_client.api_versions().await?;
         if api_versions.error_code != 0 {
             return Err(Error::Broker {
@@ -1223,6 +1217,12 @@ impl ProducerConfig {
     /// Sets the request timeout in milliseconds.
     pub fn request_timeout_ms(mut self, request_timeout_ms: u64) -> Self {
         self.client = self.client.request_timeout_ms(request_timeout_ms);
+        self
+    }
+
+    /// Sets the Kafka security protocol used for producer broker connections.
+    pub fn security_protocol(mut self, security_protocol: SecurityProtocol) -> Self {
+        self.client = self.client.security_protocol(security_protocol);
         self
     }
 
@@ -1675,7 +1675,7 @@ mod tests {
         select_produce_version, Acks, BatchRecord, BufferedFlushReason, BufferedProduceRequest,
         BufferedProducerCommand, BufferedProducerState, PreparedBatchRecord, ProduceBatchKey,
         ProduceVersion, ProducerBatchFailure, ProducerBatchRecordOutcome, ProducerBatchReport,
-        ProducerConfig, ProducerDelivery, ProducerRecord, RecordMetadata,
+        ProducerConfig, ProducerDelivery, ProducerRecord, RecordMetadata, SecurityProtocol,
     };
     use crate::{BrokerErrorKind, Error};
     use kafrust_protocol::api::api_versions::{ApiKeyVersion, ApiVersionsResponseV0};
@@ -1819,6 +1819,7 @@ mod tests {
         let config = ProducerConfig::new(["localhost:9092"])
             .client_id("orders-api")
             .request_timeout_ms(5_000)
+            .security_protocol(SecurityProtocol::SaslTls)
             .max_retries(3)
             .max_records_per_batch(128)
             .max_batch_bytes(64 * 1024)
@@ -1831,6 +1832,10 @@ mod tests {
         assert_eq!(config.max_batch_bytes_ref(), 64 * 1024);
         assert_eq!(config.linger(), std::time::Duration::from_millis(5));
         assert_eq!(config.client_config().client_id_ref(), Some("orders-api"));
+        assert_eq!(
+            config.client_config().security_protocol_ref(),
+            SecurityProtocol::SaslTls
+        );
     }
 
     #[test]

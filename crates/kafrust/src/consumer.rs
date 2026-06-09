@@ -4,7 +4,7 @@ use kafrust_protocol::api::fetch::{FetchPartitionResponseV2, FetchResponseV2, Me
 use kafrust_protocol::api::metadata::{BrokerMetadata, MetadataResponseV1};
 
 use crate::client::{Client, FetchOneRequestV2};
-use crate::config::ClientConfig;
+use crate::config::{ClientConfig, SecurityProtocol};
 use crate::error::{BrokerErrorKind, Error, Result};
 use tracing::debug;
 
@@ -187,12 +187,7 @@ impl Consumer {
             broker_addr = broker_addr.as_str(),
             "resolved fetch leader"
         );
-        let mut leader_client = Client::connect_with_request_timeout(
-            broker_addr,
-            self.config.client.client_id_ref().map(str::to_owned),
-            self.config.client.request_timeout(),
-        )
-        .await?;
+        let mut leader_client = self.config.client.connect_broker(broker_addr).await?;
         let response = leader_client
             .fetch_one_v2(FetchOneRequestV2 {
                 replica_id: -1,
@@ -329,6 +324,12 @@ impl ConsumerConfig {
     /// Sets the request timeout in milliseconds.
     pub fn request_timeout_ms(mut self, request_timeout_ms: u64) -> Self {
         self.client = self.client.request_timeout_ms(request_timeout_ms);
+        self
+    }
+
+    /// Sets the Kafka security protocol used for consumer broker connections.
+    pub fn security_protocol(mut self, security_protocol: SecurityProtocol) -> Self {
+        self.client = self.client.security_protocol(security_protocol);
         self
     }
 
@@ -495,6 +496,7 @@ mod tests {
     use super::{
         assign_partition, can_retry_fetch, invalidate_metadata_cache, leader_for,
         limit_fetched_records, ConsumerAssignment, ConsumerConfig, ConsumerRecord,
+        SecurityProtocol,
     };
     use crate::Error;
     use kafrust_protocol::api::fetch::MessageSetRecord;
@@ -508,6 +510,7 @@ mod tests {
         let config = ConsumerConfig::new(["localhost:9092"])
             .client_id("orders-reader")
             .request_timeout_ms(5_000)
+            .security_protocol(SecurityProtocol::Tls)
             .max_wait_ms(250)
             .min_bytes(10)
             .max_partition_bytes(1024)
@@ -517,6 +520,10 @@ mod tests {
         assert_eq!(
             config.client_config().client_id_ref(),
             Some("orders-reader")
+        );
+        assert_eq!(
+            config.client_config().security_protocol_ref(),
+            SecurityProtocol::Tls
         );
         assert_eq!(config.max_retries_ref(), 3);
         assert_eq!(config.max_poll_records_ref(), 10);

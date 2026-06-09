@@ -24,7 +24,7 @@ The Kafka 3.7.2 smoke path covers:
 
 The current compatibility claim does not cover:
 
-- TLS or SASL. Networking is plaintext TCP only.
+- TLS or SASL. Security protocol configuration exists, but non-plaintext protocols currently return `Unsupported`; networking is plaintext TCP only.
 - Multi-broker clusters, leader failover, rack awareness, or partition expansion.
 - Idempotent producers, transactions, compression, or high-throughput batching.
 - A full Kafka broker version matrix.

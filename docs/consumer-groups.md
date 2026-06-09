@@ -60,6 +60,7 @@ Current implementation status:
 - `Client::offset_fetch_v2` and `Client::offset_commit_v2` can send coordinator-scoped offset requests.
 - `ConsumerGroupConfig`, `ConsumerGroup`, and `ConsumerGroupHeartbeat` provide a minimal join, sync, heartbeat, background heartbeat, poll, rejoin, and commit path.
 - `ConsumerGroupConfig::request_timeout_ms` controls coordinator, metadata, fetch, heartbeat, and commit request timeouts.
+- `ConsumerGroupConfig::security_protocol` stores the Kafka security protocol for coordinator and fetch connections. `Plaintext` is the only implemented transport; TLS and SASL variants return `Unsupported` until M11 implements them.
 - `ConsumerGroupConfig::max_retries` is passed through to the direct fetch path after group assignment.
 - `ConsumerGroupConfig::max_poll_records` is passed through to the direct poll path after group assignment.
 - Broker error codes can be classified with `BrokerErrorKind` for common coordinator, generation, and rebalance errors.

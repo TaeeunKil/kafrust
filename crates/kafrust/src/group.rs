@@ -16,7 +16,7 @@ use kafrust_protocol::consumer_group::{
 };
 
 use crate::client::Client;
-use crate::config::ClientConfig;
+use crate::config::{ClientConfig, SecurityProtocol};
 use crate::consumer::{Consumer, ConsumerAssignment, ConsumerConfig, ConsumerRecord};
 use crate::error::{BrokerErrorKind, Error, Result};
 use tokio::sync::oneshot;
@@ -75,6 +75,12 @@ impl ConsumerGroupConfig {
     /// Sets the request timeout in milliseconds.
     pub fn request_timeout_ms(mut self, request_timeout_ms: u64) -> Self {
         self.client = self.client.request_timeout_ms(request_timeout_ms);
+        self
+    }
+
+    /// Sets the Kafka security protocol used for group, coordinator, and fetch requests.
+    pub fn security_protocol(mut self, security_protocol: SecurityProtocol) -> Self {
+        self.client = self.client.security_protocol(security_protocol);
         self
     }
 
@@ -172,12 +178,7 @@ impl ConsumerGroupConfig {
         }
 
         let coordinator_addr = coordinator_addr(&coordinator);
-        let mut coordinator_client = Client::connect_with_request_timeout(
-            coordinator_addr,
-            self.client.client_id_ref().map(str::to_owned),
-            self.client.request_timeout(),
-        )
-        .await?;
+        let mut coordinator_client = self.client.connect_broker(coordinator_addr).await?;
         let subscription = ConsumerProtocolSubscriptionV0 {
             topics: self.topics.clone(),
             user_data: None,
@@ -386,12 +387,11 @@ impl ConsumerGroup {
             });
         }
 
-        let mut coordinator = Client::connect_with_request_timeout(
-            coordinator_addr(&coordinator),
-            self.config.client.client_id_ref().map(str::to_owned),
-            self.config.client.request_timeout(),
-        )
-        .await?;
+        let mut coordinator = self
+            .config
+            .client
+            .connect_broker(coordinator_addr(&coordinator))
+            .await?;
         let group_id = self.group_id.clone();
         let generation_id = self.generation_id;
         let member_id = self.member_id.clone();
@@ -906,7 +906,7 @@ mod tests {
         committed_offset, offset_commit_response_error, offset_commit_topics, offset_fetch_topics,
         range_assignments, should_rejoin_after_background_heartbeat, should_rejoin_group,
         validate_heartbeat_interval, ConsumerGroupConfig, ConsumerGroupHeartbeat,
-        HeartbeatHandleState,
+        HeartbeatHandleState, SecurityProtocol,
     };
     use crate::consumer::ConsumerAssignment;
     use crate::Error;
@@ -928,6 +928,7 @@ mod tests {
         let config = ConsumerGroupConfig::new(["localhost:9092"], "orders-group")
             .client_id("orders-reader")
             .request_timeout_ms(5_000)
+            .security_protocol(SecurityProtocol::SaslPlaintext)
             .subscribe("orders")
             .session_timeout_ms(8_000)
             .rebalance_timeout_ms(20_000)
@@ -941,6 +942,10 @@ mod tests {
 
         assert_eq!(config.group_id(), "orders-group");
         assert_eq!(config.topics(), &["orders".to_owned()]);
+        assert_eq!(
+            config.client.security_protocol_ref(),
+            SecurityProtocol::SaslPlaintext
+        );
     }
 
     #[test]
