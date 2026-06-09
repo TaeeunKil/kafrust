@@ -1,5 +1,7 @@
 # kafrust
 
+[English](README.md) | [한국어](README.ko.md)
+
 [![Crates.io](https://img.shields.io/crates/v/kafrust.svg)](https://crates.io/crates/kafrust)
 [![Docs.rs](https://docs.rs/kafrust/badge.svg)](https://docs.rs/kafrust)
 [![CI](https://github.com/TaeeunKil/kafrust/actions/workflows/ci.yml/badge.svg)](https://github.com/TaeeunKil/kafrust/actions/workflows/ci.yml)
@@ -277,9 +279,14 @@ Generated API documentation:
 
 `README.md` is the canonical English README.
 
-If translated READMEs are added, name them with BCP 47 language tags, such as
-`README.ko.md`, and keep release facts, compatibility claims, and limits aligned
-with this file.
+Available translations:
+
+- [English](README.md)
+- [한국어](README.ko.md)
+
+If more translated READMEs are added, name them with BCP 47 language tags, such
+as `README.ja.md`, and keep release facts, compatibility claims, and limits
+aligned with this file.
 
 ## Contributing
 
