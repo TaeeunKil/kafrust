@@ -351,7 +351,7 @@ Evidence:
 
 ## M11 Security And Connectivity
 
-Status: Planned.
+Status: In progress.
 
 Goal: support common secured Kafka deployments without adding librdkafka or C bindings.
 
@@ -372,8 +372,15 @@ Exit criteria:
 
 Known limits:
 
-- Current networking is plaintext TCP only.
-- No SASL mechanisms are implemented yet.
+- Security protocol configuration exists and defaults to plaintext.
+- Current networking is still plaintext TCP only.
+- TLS and SASL variants return `Unsupported`; no TLS transport or SASL mechanism is implemented yet.
+
+Evidence:
+
+- `SecurityProtocol` models Kafka `PLAINTEXT`, `SSL`, `SASL_PLAINTEXT`, and `SASL_SSL` connection modes.
+- `ClientConfig`, `ProducerConfig`, `ConsumerConfig`, and `ConsumerGroupConfig` expose `security_protocol` builders.
+- All current internal broker connection paths go through `ClientConfig`, so future TLS/SASL transport work has one configuration source.
 
 Strategic role:
 
