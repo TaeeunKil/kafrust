@@ -135,6 +135,8 @@ Estimated effort: 18-36 months for a small team or sustained focused effort.
 
 Target users can consider kafrust as a serious alternative to mature Kafka clients for a broad set of Rust services.
 
+This is the complete replacement target for this repository: kafrust should be able to replace a Kafka client dependency in Rust applications. It does not mean replacing Apache Kafka brokers or implementing server-side Kafka storage, replication, controllers, or group coordination.
+
 Required work:
 
 - idempotent producer
@@ -147,7 +149,7 @@ Required work:
 - load, soak, and failure-injection testing
 - migration notes and semver discipline
 
-This tier is where comparisons with `rust-rdkafka` become meaningful. It should not be promised from the current alpha line.
+This tier is where comparisons with `rust-rdkafka` and pure Rust alternatives become meaningful. It should not be promised from the current alpha line. The execution path for this target is tracked in roadmap milestones M13 through M21.
 
 ### Kafka Broker Replacement
 
@@ -161,10 +163,12 @@ The next work should be ordered by user unlock, not by protocol completeness alo
 
 1. Security and connectivity: TLS and SASL are required for common company Kafka deployments.
 2. Multi-broker behavior: metadata refresh, leader changes, and failover need live verification.
-3. Consumer group hardening: background heartbeat restart, rebalance handling, and assignment strategy behavior.
-4. Compression: common record batches need snappy, gzip, lz4, and zstd compatibility.
-5. Observability and limits: metrics, structured spans, memory limits, and benchmark baselines.
-6. Admin and advanced producer semantics: admin APIs, idempotence, and transactions.
+3. Compression: common record batches need snappy, gzip, lz4, and zstd compatibility.
+4. Admin APIs: topic, config, and group administration are needed for integration tests and service bootstrap.
+5. Idempotent producer: duplicate-safe retries are required for serious producer replacement.
+6. Transactions and read-committed consumers: exactly-once workflows are required for broad replacement.
+7. Observability and limits: metrics, structured spans, memory limits, and benchmark baselines are required for production operation.
+8. Compatibility matrix and migration guide: replacement decisions need dated broker evidence and clear migration paths.
 
 Do not expand public APIs just to look complete. Add public surface only when the protocol behavior and runtime behavior are tested enough to document.
 

@@ -411,3 +411,257 @@ Known limits:
 
 - The project is still pre-1.0 and can make breaking changes between minor versions.
 - Protocol coverage is intentionally incomplete and grows API by API.
+
+## M13 Secured Enterprise Connectivity
+
+Status: Planned.
+
+Goal: make kafrust usable against common secured Kafka deployments.
+
+Scope:
+
+- TLS transport with a pure Rust TLS stack
+- configurable root certificates and server name validation
+- SASL PLAIN
+- SASL SCRAM-SHA-256 and SCRAM-SHA-512
+- credential redaction in errors, debug output, logs, and tracing
+- secured broker examples and manual smoke instructions
+
+Exit criteria:
+
+- `SecurityProtocol::Tls` can complete ApiVersions and Metadata roundtrips against a TLS broker
+- `SecurityProtocol::SaslPlaintext` authenticates with at least SASL PLAIN
+- `SecurityProtocol::SaslTls` authenticates with at least one SCRAM mechanism
+- failed authentication errors do not expose passwords, tokens, salts, nonce material, or raw credentials
+- compatibility docs list plaintext, TLS, SASL_PLAINTEXT, and SASL_SSL broker profiles with verification dates
+
+Strategic role:
+
+- This is the first milestone where kafrust can plausibly be tested in typical company Kafka environments.
+
+## M14 Multi-Broker And Failover Compatibility
+
+Status: Planned.
+
+Goal: handle normal multi-broker cluster behavior instead of only single-node broker checks.
+
+Scope:
+
+- metadata refresh across multiple brokers
+- leader movement and partition leader failover
+- bootstrap server failover beyond initial connect
+- coordinator movement for consumer groups
+- partition expansion handling
+- broker disconnect and reconnect behavior under load
+- live smoke workflows for at least one multi-broker Kafka profile
+
+Exit criteria:
+
+- producer sends recover after leader movement without user-visible duplicate success reports
+- direct consumers recover after partition leader movement
+- consumer groups recover after coordinator movement or a controlled rebalance
+- compatibility docs distinguish single-node, multi-broker plaintext, and multi-broker secured claims
+- tests cover stale metadata, unknown leader, coordinator movement, and reconnect paths
+
+Strategic role:
+
+- This milestone moves kafrust from local/simple broker evaluation toward production-like cluster evaluation.
+
+## M15 Compression Compatibility
+
+Status: Planned.
+
+Goal: support common compressed Kafka record batches while preserving the no-required-C-toolchain policy.
+
+Scope:
+
+- gzip
+- snappy
+- lz4
+- zstd evaluation under the project rule against required C toolchains
+- compressed Produce request encoding
+- compressed Fetch response decoding
+- size and decompression safety limits
+
+Exit criteria:
+
+- producer can send compressed record batches with supported pure Rust codecs
+- consumer can decode compressed batches for supported codecs
+- unsupported or disabled codecs fail with typed, documented errors
+- decompression limits prevent unbounded allocation or decompression bomb behavior
+- live smoke or focused broker checks cover at least gzip, snappy, and lz4
+
+Strategic role:
+
+- Compression is required for realistic Kafka throughput and for compatibility with existing topics.
+
+## M16 Admin API MVP
+
+Status: Planned.
+
+Goal: provide the admin operations needed by common applications and test harnesses.
+
+Scope:
+
+- list topics and describe cluster metadata
+- create topics
+- delete topics
+- describe topic configs
+- alter basic topic configs
+- describe consumer groups
+- delete consumer group offsets evaluation
+- admin examples and typed request errors
+
+Exit criteria:
+
+- users can provision and inspect test topics without external Kafka CLI tools
+- admin APIs expose Kafka concepts directly instead of generic resource abstractions
+- live smoke covers create, describe, produce/fetch, and cleanup for a topic
+- unsupported admin APIs are explicit and documented
+
+Strategic role:
+
+- Admin support reduces friction for integration tests, smoke workflows, and service bootstrap code.
+
+## M17 Idempotent Producer
+
+Status: Planned.
+
+Goal: support Kafka idempotent producer semantics for duplicate-safe retries within a producer session.
+
+Scope:
+
+- InitProducerId
+- producer ID and epoch tracking
+- per-topic-partition sequence numbers
+- max in-flight request limits compatible with idempotence
+- retry behavior that preserves Kafka ordering and sequence rules
+- broker error handling for producer fencing, out-of-order sequence, and duplicate sequence cases
+
+Exit criteria:
+
+- idempotence can be enabled explicitly through producer configuration
+- retries do not produce duplicate acknowledged records within the supported broker profile
+- sequence state is scoped per topic partition and reset only under documented conditions
+- focused tests cover sequence assignment, retry, fencing, and fatal idempotence errors
+- live smoke verifies an idempotent send path against a real broker
+
+Strategic role:
+
+- This is a major requirement before kafrust can replace mature clients for many write-heavy services.
+
+## M18 Transactions And Read-Committed Consumers
+
+Status: Planned.
+
+Goal: support Kafka exactly-once workflows where applications need transactional produce and read-committed consumption.
+
+Scope:
+
+- transactional producer API
+- begin, commit, and abort transaction flows
+- AddPartitionsToTxn
+- AddOffsetsToTxn
+- TxnOffsetCommit
+- EndTxn
+- transactional error classification and producer fencing
+- read-committed consumer behavior
+
+Exit criteria:
+
+- users can produce to multiple partitions in one transaction
+- users can commit consumed offsets as part of a transaction where supported
+- aborted transaction records are hidden from read-committed consumers
+- transaction state transitions are explicit and documented
+- live smoke verifies commit and abort paths against a real broker
+
+Strategic role:
+
+- This is required for broad replacement of clients used in exactly-once and stream-processing-style services.
+
+## M19 Observability, Limits, And Performance
+
+Status: Planned.
+
+Goal: make kafrust measurable, tunable, and safe under sustained load.
+
+Scope:
+
+- metrics for requests, retries, errors, bytes, records, batches, queue depth, and latency
+- structured tracing spans across complete producer, consumer, and group operations
+- memory limits for producer buffers, fetch responses, decompression, and decode arrays
+- producer and consumer throughput benchmarks
+- latency benchmarks for common record sizes
+- load, soak, and failure-injection test profiles
+
+Exit criteria:
+
+- users can observe throughput, latency, retries, and broker errors without inspecting payloads
+- benchmark baselines are published for selected broker profiles
+- configured memory limits produce typed errors instead of unbounded growth
+- soak tests run long enough to catch connection, timer, and background task leaks
+- docs explain operational tuning knobs and tradeoffs
+
+Strategic role:
+
+- Without observability and limits, kafrust cannot be responsibly adopted as a production client dependency.
+
+## M20 Compatibility Matrix And Migration Guide
+
+Status: Planned.
+
+Goal: make replacement decisions concrete for teams comparing kafrust with existing Kafka clients.
+
+Scope:
+
+- broker version matrix across Kafka 3.7, 3.8, 3.9, and current stable Kafka
+- plaintext, TLS, SASL_PLAINTEXT, and SASL_SSL profiles
+- single-node and multi-broker profiles
+- producer, consumer, group, admin, compression, idempotence, and transaction checklists
+- migration guide from `rust-rdkafka`
+- comparison notes for pure Rust alternatives
+- release qualification checklist
+
+Exit criteria:
+
+- compatibility claims are backed by dated workflow runs or documented manual checks
+- migration docs show how to map common producer, consumer, group, and admin usage
+- unsupported features are listed with alternatives or planned milestones
+- release qualification requires docs.rs success, fresh published-crate compile, CI, and relevant live smoke profiles
+
+Strategic role:
+
+- This milestone turns kafrust from a project into an evaluable replacement candidate.
+
+## M21 Broad Kafka Client Replacement
+
+Status: Planned.
+
+Goal: make kafrust a credible pure Rust replacement for Kafka client dependencies in a broad set of Rust services.
+
+Scope:
+
+- stable 1.0 candidate API surface
+- producer, consumer, group, admin, security, compression, idempotence, and transaction workflows
+- compatibility matrix maintained across supported Kafka versions
+- documented operational limits and performance baselines
+- migration guide and release notes with semver discipline
+- security review of credential handling and unsafe-free dependency posture
+- deprecation and compatibility policy for future Kafka protocol growth
+
+Exit criteria:
+
+- kafrust can replace an existing Kafka client dependency for representative producer-only, consumer-only, consumer group, admin, secured, compressed, idempotent, and transactional workloads
+- default docs direct production users to supported broker profiles instead of broad unsupported claims
+- `docs.rs` builds are green for every release candidate
+- fresh external projects compile and run documented examples from published crates
+- live compatibility workflows pass for every supported broker/security profile before release
+- public APIs have clear stability guarantees and migration notes
+
+Non-goal:
+
+- This milestone does not replace Apache Kafka brokers, controllers, storage, replication, or server-side group coordination.
+
+Strategic role:
+
+- This is the "complete replacement" target for Kafka client dependencies in Rust applications.
