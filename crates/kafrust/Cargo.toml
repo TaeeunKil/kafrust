@@ -1,6 +1,6 @@
 [package]
 name = "kafrust"
-version = "0.2.0"
+version = "0.2.1"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -15,7 +15,7 @@ categories.workspace = true
 workspace = true
 
 [dependencies]
-kafrust-protocol = { version = "0.2.0", path = "../kafrust-protocol" }
+kafrust-protocol = { version = "0.2.1", path = "../kafrust-protocol" }
 tokio = { version = "1", features = ["io-util", "macros", "net", "rt", "sync", "time"] }
 tracing = "0.1"
 

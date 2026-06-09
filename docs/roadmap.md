@@ -227,9 +227,9 @@ Scope:
 
 Evidence:
 
-- `kafrust-protocol v0.1.0`, `kafrust v0.1.0`, `kafrust-protocol v0.2.0`, and `kafrust v0.2.0` are published on crates.io.
-- GitHub releases `v0.1.0` and `v0.2.0` are tagged and published.
-- A fresh external project can add `kafrust = "0.2.0"` and compile.
+- `kafrust-protocol v0.1.0`, `kafrust v0.1.0`, `kafrust-protocol v0.2.0`, `kafrust v0.2.0`, `kafrust-protocol v0.2.1`, and `kafrust v0.2.1` are published on crates.io.
+- GitHub releases `v0.1.0`, `v0.2.0`, and `v0.2.1` are tagged and published.
+- A fresh external project can add `kafrust = "0.2.1"` and compile.
 - docs.rs pages for both crates build successfully.
 - The `Live Kafka Smoke` workflow runs the broker roundtrip, producer, direct consumer, and consumer group examples against Kafka 3.7.2.
 
@@ -263,7 +263,7 @@ Evidence:
 
 - `Live Kafka Smoke` exists and has passed manually against Kafka 3.7.2.
 - `docs/broker-roundtrip.md` records the latest manual live smoke and the scheduled workflow.
-- v0.1.0 and v0.2.0 were verified from fresh external projects.
+- v0.1.0, v0.2.0, and v0.2.1 were verified from fresh external projects.
 - `docs/release.md` includes post-publish crates.io, docs.rs, release tag, and live smoke verification.
 - `docs/compatibility.md` documents the current Kafka 3.7.2 compatibility claim and known non-claims.
 - GitHub issue forms route reports into protocol bugs, client runtime bugs, or API design questions.

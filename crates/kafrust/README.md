@@ -11,7 +11,7 @@ Tokio-based producer, direct consumer, and alpha classic consumer group APIs on
 top of the companion [`kafrust-protocol`](https://docs.rs/kafrust-protocol)
 wire-format crate.
 
-Current release: `0.2.0`.
+Current release: `0.2.1`.
 
 This crate is alpha. Use it for experiments, local broker checks, simple
 internal tools, and API evaluation. For broad production Kafka workloads that
@@ -216,7 +216,7 @@ async fn main() -> kafrust::Result<()> {
 - `SaslPlaintext`
 - `SaslTls`
 
-Plaintext is the default and the only implemented transport in `0.2.0`.
+Plaintext is the default and the only implemented transport in `0.2.1`.
 TLS and SASL variants are configuration targets and currently return
 `Error::Unsupported` before connecting.
 

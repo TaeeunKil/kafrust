@@ -15,7 +15,7 @@ visible in public APIs: bootstrap servers, client IDs, topics, partitions,
 offsets, acknowledgements, metadata refresh, consumer groups, heartbeats, and
 commits.
 
-Current release: `0.2.0`.
+Current release: `0.2.1`.
 
 Use kafrust today for experiments, local broker checks, simple internal tools,
 and API evaluation. For broad production Kafka workloads that need mature
@@ -257,8 +257,8 @@ Primary public entry points:
 
 Generated API documentation:
 
-- [`kafrust`](https://docs.rs/kafrust/0.2.0/kafrust/)
-- [`kafrust-protocol`](https://docs.rs/kafrust-protocol/0.2.0/kafrust_protocol/)
+- [`kafrust`](https://docs.rs/kafrust/0.2.1/kafrust/)
+- [`kafrust-protocol`](https://docs.rs/kafrust-protocol/0.2.1/kafrust_protocol/)
 
 ## Documentation
 
