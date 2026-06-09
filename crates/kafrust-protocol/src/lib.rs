@@ -1,10 +1,5 @@
 #![forbid(unsafe_code)]
-
-//! Kafka wire protocol support for kafrust.
-//!
-//! This crate is intentionally runtime-free. It owns Kafka request/response
-//! encoding and decoding so the public client can stay focused on user-facing
-//! producer and consumer behavior.
+#![doc = include_str!("../README.md")]
 
 pub mod api;
 pub mod codec;
