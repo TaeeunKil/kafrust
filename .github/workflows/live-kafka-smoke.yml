@@ -91,3 +91,115 @@ jobs:
       - name: Dump Kafka logs
         if: failure()
         run: docker logs kafrust-kafka
+
+  kafka-tls:
+    name: Kafka 3.7.2 TLS
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      KAFRUST_BOOTSTRAP_SERVERS: localhost:9093
+      KAFRUST_SECURITY_PROTOCOL: tls
+      KAFRUST_GROUP_ID: kafrust-smoke
+      KAFRUST_TOPIC: kafrust-smoke
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.75.0"
+
+      - name: Generate TLS certificates
+        run: |
+          mkdir -p tls
+          openssl req -x509 -newkey rsa:2048 -days 1 -nodes \
+            -subj "/CN=kafrust-test-ca" \
+            -keyout tls/ca.key \
+            -out tls/ca.crt
+          openssl req -newkey rsa:2048 -nodes \
+            -subj "/CN=localhost" \
+            -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" \
+            -keyout tls/server.key \
+            -out tls/server.csr
+          openssl x509 -req \
+            -in tls/server.csr \
+            -CA tls/ca.crt \
+            -CAkey tls/ca.key \
+            -CAcreateserial \
+            -days 1 \
+            -sha256 \
+            -copy_extensions copy \
+            -out tls/server.crt
+          openssl pkcs12 -export \
+            -in tls/server.crt \
+            -inkey tls/server.key \
+            -certfile tls/ca.crt \
+            -name localhost \
+            -out tls/kafka.server.keystore.p12 \
+            -password pass:kafrust
+          printf kafrust > tls/keystore-password
+          printf kafrust > tls/key-password
+          sudo cp tls/ca.crt /usr/local/share/ca-certificates/kafrust-test-ca.crt
+          sudo update-ca-certificates
+
+      - name: Start TLS Kafka
+        run: |
+          docker run -d --name kafrust-kafka-tls \
+            -p 9093:9093 \
+            -v "$PWD/tls:/etc/kafka/secrets:ro" \
+            -e KAFKA_NODE_ID=1 \
+            -e KAFKA_PROCESS_ROLES=broker,controller \
+            -e KAFKA_LISTENERS=PLAINTEXT://:9092,SSL://:9093,CONTROLLER://:9094 \
+            -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092,SSL://localhost:9093 \
+            -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+            -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,SSL:SSL \
+            -e KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT \
+            -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@localhost:9094 \
+            -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
+            -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1 \
+            -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1 \
+            -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 \
+            -e KAFKA_SSL_KEYSTORE_FILENAME=kafka.server.keystore.p12 \
+            -e KAFKA_SSL_KEYSTORE_CREDENTIALS=keystore-password \
+            -e KAFKA_SSL_KEY_CREDENTIALS=key-password \
+            -e KAFKA_SSL_KEYSTORE_TYPE=PKCS12 \
+            -e KAFKA_SSL_CLIENT_AUTH=none \
+            apache/kafka:3.7.2
+
+      - name: Wait for TLS Kafka
+        run: |
+          for attempt in {1..90}; do
+            if openssl s_client \
+              -connect 127.0.0.1:9093 \
+              -servername localhost \
+              -CAfile tls/ca.crt \
+              </dev/null >/tmp/kafrust-tls-probe.log 2>&1; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/kafrust-tls-probe.log || true
+          docker logs kafrust-kafka-tls
+          exit 1
+
+      - name: Create smoke topic
+        run: |
+          docker exec kafrust-kafka-tls /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server localhost:9092 \
+            --create \
+            --if-not-exists \
+            --topic "$KAFRUST_TOPIC" \
+            --partitions 1 \
+            --replication-factor 1
+
+      - name: Run TLS broker roundtrip
+        run: cargo test -p kafrust --features tls --test broker_roundtrip -- --nocapture
+
+      - name: Run TLS broker roundtrip example
+        run: cargo run -p kafrust --features tls --example broker_roundtrip
+
+      - name: Dump TLS Kafka logs
+        if: failure()
+        run: docker logs kafrust-kafka-tls
