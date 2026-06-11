@@ -143,6 +143,7 @@ jobs:
           printf kafrust > tls/key-password
           sudo cp tls/ca.crt /usr/local/share/ca-certificates/kafrust-test-ca.crt
           sudo update-ca-certificates
+          chmod 644 tls/*
 
       - name: Start TLS Kafka
         run: |
