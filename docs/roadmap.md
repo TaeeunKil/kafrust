@@ -386,6 +386,7 @@ Evidence:
 - `Client` owns an internal broker stream abstraction instead of storing `TcpStream` directly, so the TLS stream reuses the same Kafka request framing, timeout, and tracing path.
 - The non-default `tls` crate feature wires `SecurityProtocol::Tls` through `tokio-rustls`, `rustls`, and `rustls-platform-verifier` without pulling `aws-lc-rs`; plaintext remains the default build.
 - Focused tests cover TLS bootstrap server-name extraction, invalid TLS server names, SASL unsupported behavior, and TLS unsupported behavior when the feature is disabled.
+- CI runs `check`, `clippy`, and `test` for both the default workspace path and the `kafrust --features tls` path.
 
 Strategic role:
 

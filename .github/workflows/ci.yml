@@ -36,8 +36,17 @@ jobs:
       - name: Check build
         run: cargo check --workspace --all-targets
 
+      - name: Check TLS feature build
+        run: cargo check -p kafrust --features tls --all-targets
+
       - name: Run clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
 
+      - name: Run TLS feature clippy
+        run: cargo clippy -p kafrust --features tls --all-targets -- -D warnings
+
       - name: Run tests
         run: cargo test --workspace --all-targets
+
+      - name: Run TLS feature tests
+        run: cargo test -p kafrust --features tls --all-targets
