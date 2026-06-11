@@ -42,7 +42,7 @@ pub struct Client {
     request_timeout: Option<Duration>,
 }
 
-trait BrokerStream: AsyncRead + AsyncWrite + Unpin + Send + Sync {}
+pub(crate) trait BrokerStream: AsyncRead + AsyncWrite + Unpin + Send + Sync {}
 
 impl<T> BrokerStream for T where T: AsyncRead + AsyncWrite + Unpin + Send + Sync {}
 
@@ -80,7 +80,7 @@ impl Client {
         ))
     }
 
-    fn from_stream(
+    pub(crate) fn from_stream(
         stream: Box<dyn BrokerStream>,
         client_id: Option<String>,
         request_timeout: Option<Duration>,

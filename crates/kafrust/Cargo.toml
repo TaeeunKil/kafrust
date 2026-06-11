@@ -14,9 +14,20 @@ categories.workspace = true
 [lints]
 workspace = true
 
+[features]
+default = []
+tls = [
+    "dep:rustls",
+    "dep:rustls-platform-verifier",
+    "dep:tokio-rustls",
+]
+
 [dependencies]
 kafrust-protocol = { version = "0.2.1", path = "../kafrust-protocol" }
+rustls = { version = "0.23.35", default-features = false, features = ["std", "ring", "tls12"], optional = true }
+rustls-platform-verifier = { version = "=0.6.2", optional = true }
 tokio = { version = "1", features = ["io-util", "macros", "net", "rt", "sync", "time"] }
+tokio-rustls = { version = "0.26.4", default-features = false, features = ["ring", "tls12"], optional = true }
 tracing = "0.1"
 
 [dev-dependencies]

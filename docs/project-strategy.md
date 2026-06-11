@@ -70,7 +70,7 @@ Required evidence:
 
 Known limits:
 
-- plaintext-only networking; TLS and SASL are explicit config targets but not implemented yet
+- plaintext remains the default networking path; TLS transport is feature-gated and not yet live-verified; SASL is not implemented yet
 - narrow broker compatibility matrix
 - incomplete protocol coverage
 - pre-1.0 public API

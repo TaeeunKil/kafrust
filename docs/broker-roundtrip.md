@@ -24,7 +24,7 @@ See [Compatibility](compatibility.md) for the current tested broker matrix and t
 
 Requests made through `ClientConfig`, `ProducerConfig`, `ConsumerConfig`, and `ConsumerGroupConfig` use a 30 second request timeout by default. Override it with `request_timeout_ms` when running broker checks against slow or intentionally delayed environments.
 
-`ClientConfig::security_protocol` and the matching producer, consumer, and group builders default to `SecurityProtocol::Plaintext`. TLS and SASL security protocols are explicit configuration targets for M11, but currently return `Unsupported` instead of falling back to plaintext.
+`ClientConfig::security_protocol` and the matching producer, consumer, and group builders default to `SecurityProtocol::Plaintext`. `SecurityProtocol::Tls` uses the non-default `tls` crate feature and is not yet covered by the recorded live smoke profile. SASL security protocols are explicit configuration targets for M11, but currently return `Unsupported` instead of falling back to plaintext.
 
 When multiple bootstrap servers are configured, `ClientConfig::connect` tries them in order until one connection succeeds.
 
