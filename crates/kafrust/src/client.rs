@@ -26,21 +26,25 @@ use kafrust_protocol::api::sync_group::{
 use kafrust_protocol::codec::Decoder;
 use kafrust_protocol::frame::encode_frame;
 use kafrust_protocol::header::ResponseHeader;
+use std::fmt;
 use std::time::Duration;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tracing::debug;
 
 use crate::error::{Error, Result};
 
-#[derive(Debug)]
-/// Low-level Kafka request client over a single TCP connection.
+/// Low-level Kafka request client over a single broker connection.
 pub struct Client {
-    stream: TcpStream,
+    stream: Box<dyn BrokerStream>,
     client_id: Option<String>,
     next_correlation_id: i32,
     request_timeout: Option<Duration>,
 }
+
+trait BrokerStream: AsyncRead + AsyncWrite + Unpin + Send + Sync {}
+
+impl<T> BrokerStream for T where T: AsyncRead + AsyncWrite + Unpin + Send + Sync {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct FetchOneRequestV2 {
@@ -60,12 +64,7 @@ impl Client {
         client_id: Option<String>,
     ) -> Result<Self> {
         let stream = TcpStream::connect(server).await?;
-        Ok(Self {
-            stream,
-            client_id,
-            next_correlation_id: 1,
-            request_timeout: None,
-        })
+        Ok(Self::from_stream(Box::new(stream), client_id, None))
     }
 
     pub(crate) async fn connect_with_request_timeout(
@@ -74,12 +73,24 @@ impl Client {
         request_timeout: Duration,
     ) -> Result<Self> {
         let stream = TcpStream::connect(server).await?;
-        Ok(Self {
+        Ok(Self::from_stream(
+            Box::new(stream),
+            client_id,
+            Some(request_timeout),
+        ))
+    }
+
+    fn from_stream(
+        stream: Box<dyn BrokerStream>,
+        client_id: Option<String>,
+        request_timeout: Option<Duration>,
+    ) -> Self {
+        Self {
             stream,
             client_id,
             next_correlation_id: 1,
-            request_timeout: Some(request_timeout),
-        })
+            request_timeout,
+        }
     }
 
     /// Sends ApiVersions v0 and decodes the broker response.
@@ -399,6 +410,16 @@ impl Client {
     }
 }
 
+impl fmt::Debug for Client {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Client")
+            .field("client_id", &self.client_id)
+            .field("next_correlation_id", &self.next_correlation_id)
+            .field("request_timeout", &self.request_timeout)
+            .finish_non_exhaustive()
+    }
+}
+
 fn duration_millis(duration: Duration) -> u64 {
     u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
 }
@@ -468,7 +489,7 @@ mod tests {
     use super::{Client, RequestTrace};
     use crate::Error;
     use std::time::Duration;
-    use tokio::io::AsyncReadExt;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
 
     #[tokio::test]
@@ -494,6 +515,47 @@ mod tests {
 
         assert!(matches!(error, Error::RequestTimedOut { timeout_ms: 5 }));
         server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn sends_request_over_injected_broker_stream() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(1024);
+        let broker = tokio::spawn(async move {
+            let mut request_size = [0u8; 4];
+            broker_stream.read_exact(&mut request_size).await.unwrap();
+            let request_size = usize::try_from(i32::from_be_bytes(request_size)).unwrap();
+            let mut request = vec![0u8; request_size];
+            broker_stream.read_exact(&mut request).await.unwrap();
+
+            assert_eq!(&request[0..2], &[0, 18]);
+            assert_eq!(&request[2..4], &[0, 0]);
+            assert_eq!(&request[4..8], &[0, 0, 0, 1]);
+
+            let response = [
+                0, 0, 0, 1, // correlation id
+                0, 0, // error code
+                0, 0, 0, 1, // api key count
+                0, 18, 0, 0, 0, 4, // ApiVersions min/max
+            ];
+            broker_stream
+                .write_all(&(response.len() as i32).to_be_bytes())
+                .await
+                .unwrap();
+            broker_stream.write_all(&response).await.unwrap();
+            broker_stream.flush().await.unwrap();
+        });
+
+        let mut client = Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-stream-test".to_owned()),
+            Some(Duration::from_secs(1)),
+        );
+
+        let response = client.api_versions().await.unwrap();
+
+        assert_eq!(response.error_code, 0);
+        assert_eq!(response.highest_supported_version(18, 4), Some(4));
+        broker.await.unwrap();
     }
 
     #[test]
