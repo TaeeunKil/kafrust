@@ -387,6 +387,7 @@ Evidence:
 - The non-default `tls` crate feature wires `SecurityProtocol::Tls` through `tokio-rustls`, `rustls`, and `rustls-platform-verifier` without pulling `aws-lc-rs`; plaintext remains the default build.
 - Focused tests cover TLS bootstrap server-name extraction, invalid TLS server names, SASL unsupported behavior, and TLS unsupported behavior when the feature is disabled.
 - CI runs `check`, `clippy`, and `test` for both the default workspace path and the `kafrust --features tls` path.
+- The broker roundtrip test and example accept `KAFRUST_SECURITY_PROTOCOL`, so plaintext and future TLS/SASL broker profiles can use the same smoke entry point.
 
 Strategic role:
 

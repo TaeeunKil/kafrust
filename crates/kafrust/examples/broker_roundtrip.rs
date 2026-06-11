@@ -1,4 +1,4 @@
-use kafrust::ClientConfig;
+use kafrust::{ClientConfig, SecurityProtocol};
 
 #[tokio::main]
 async fn main() -> kafrust::Result<()> {
@@ -7,6 +7,7 @@ async fn main() -> kafrust::Result<()> {
 
     let mut client = ClientConfig::new([bootstrap])
         .client_id("kafrust-roundtrip")
+        .security_protocol(security_protocol_from_env()?)
         .connect()
         .await?;
 
@@ -22,4 +23,25 @@ async fn main() -> kafrust::Result<()> {
     );
 
     Ok(())
+}
+
+fn security_protocol_from_env() -> kafrust::Result<SecurityProtocol> {
+    let Ok(value) = std::env::var("KAFRUST_SECURITY_PROTOCOL") else {
+        return Ok(SecurityProtocol::Plaintext);
+    };
+
+    parse_security_protocol(&value)
+}
+
+fn parse_security_protocol(value: &str) -> kafrust::Result<SecurityProtocol> {
+    let normalized = value.trim().to_ascii_lowercase().replace('-', "_");
+    match normalized.as_str() {
+        "" | "plaintext" => Ok(SecurityProtocol::Plaintext),
+        "ssl" | "tls" => Ok(SecurityProtocol::Tls),
+        "sasl_plaintext" => Ok(SecurityProtocol::SaslPlaintext),
+        "sasl_ssl" | "sasl_tls" => Ok(SecurityProtocol::SaslTls),
+        _ => Err(kafrust::Error::Unsupported(
+            "unsupported KAFRUST_SECURITY_PROTOCOL; expected plaintext, tls, ssl, sasl_plaintext, sasl_ssl, or sasl_tls",
+        )),
+    }
 }

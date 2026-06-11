@@ -8,6 +8,18 @@ Run it against a local broker:
 KAFRUST_BOOTSTRAP_SERVERS=localhost:9092 KAFRUST_GROUP_ID=kafrust-smoke cargo test -p kafrust --test broker_roundtrip -- --nocapture
 ```
 
+The roundtrip test and `broker_roundtrip` example accept
+`KAFRUST_SECURITY_PROTOCOL`. Supported values are `plaintext`, `tls`/`ssl`,
+`sasl_plaintext`, and `sasl_tls`/`sasl_ssl`. TLS requires building kafrust with
+the non-default `tls` feature and using a broker certificate chain trusted by
+the host OS:
+
+```sh
+KAFRUST_BOOTSTRAP_SERVERS=localhost:9093 \
+KAFRUST_SECURITY_PROTOCOL=tls \
+cargo test -p kafrust --features tls --test broker_roundtrip -- --nocapture
+```
+
 Or run the example:
 
 ```sh

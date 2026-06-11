@@ -1,7 +1,7 @@
 #![allow(clippy::expect_used)]
 
 use kafrust::protocol::api::find_coordinator::FindCoordinatorResponseV1;
-use kafrust::ClientConfig;
+use kafrust::{ClientConfig, SecurityProtocol};
 use tokio::time::{sleep, Duration, Instant};
 
 #[tokio::test]
@@ -13,6 +13,7 @@ async fn api_versions_and_metadata_roundtrip_when_broker_is_configured() {
 
     let mut client = ClientConfig::new([bootstrap])
         .client_id("kafrust-integration")
+        .security_protocol(security_protocol_from_env())
         .connect()
         .await
         .expect("connect to Kafka broker");
@@ -40,6 +41,7 @@ async fn find_group_coordinator_roundtrip_when_broker_is_configured() {
 
     let mut client = ClientConfig::new([bootstrap])
         .client_id("kafrust-integration")
+        .security_protocol(security_protocol_from_env())
         .connect()
         .await
         .expect("connect to Kafka broker");
@@ -51,6 +53,43 @@ async fn find_group_coordinator_roundtrip_when_broker_is_configured() {
     assert!(coordinator.node_id >= 0);
     assert!(!coordinator.host.is_empty());
     assert!(coordinator.port > 0);
+}
+
+fn security_protocol_from_env() -> SecurityProtocol {
+    let Ok(value) = std::env::var("KAFRUST_SECURITY_PROTOCOL") else {
+        return SecurityProtocol::Plaintext;
+    };
+
+    parse_security_protocol(&value).expect("valid KAFRUST_SECURITY_PROTOCOL")
+}
+
+fn parse_security_protocol(value: &str) -> kafrust::Result<SecurityProtocol> {
+    let normalized = value.trim().to_ascii_lowercase().replace('-', "_");
+    match normalized.as_str() {
+        "" | "plaintext" => Ok(SecurityProtocol::Plaintext),
+        "ssl" | "tls" => Ok(SecurityProtocol::Tls),
+        "sasl_plaintext" => Ok(SecurityProtocol::SaslPlaintext),
+        "sasl_ssl" | "sasl_tls" => Ok(SecurityProtocol::SaslTls),
+        _ => Err(kafrust::Error::Unsupported(
+            "unsupported KAFRUST_SECURITY_PROTOCOL; expected plaintext, tls, ssl, sasl_plaintext, sasl_ssl, or sasl_tls",
+        )),
+    }
+}
+
+#[test]
+fn parses_security_protocol_from_environment_value() {
+    assert_eq!(
+        parse_security_protocol("plaintext").expect("plaintext should parse"),
+        SecurityProtocol::Plaintext
+    );
+    assert_eq!(
+        parse_security_protocol("SSL").expect("SSL should parse"),
+        SecurityProtocol::Tls
+    );
+    assert_eq!(
+        parse_security_protocol("sasl-ssl").expect("sasl-ssl should parse"),
+        SecurityProtocol::SaslTls
+    );
 }
 
 async fn wait_for_group_coordinator(
