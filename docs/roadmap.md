@@ -373,7 +373,7 @@ Exit criteria:
 Known limits:
 
 - Security protocol configuration exists and defaults to plaintext.
-- Current networking is still plaintext TCP only.
+- Current configured broker connections are still plaintext TCP only.
 - TLS and SASL variants return `Unsupported`; no TLS transport or SASL mechanism is implemented yet.
 
 Evidence:
@@ -381,6 +381,7 @@ Evidence:
 - `SecurityProtocol` models Kafka `PLAINTEXT`, `SSL`, `SASL_PLAINTEXT`, and `SASL_SSL` connection modes.
 - `ClientConfig`, `ProducerConfig`, `ConsumerConfig`, and `ConsumerGroupConfig` expose `security_protocol` builders.
 - All current internal broker connection paths go through `ClientConfig`, so future TLS/SASL transport work has one configuration source.
+- `Client` now owns an internal broker stream abstraction instead of storing `TcpStream` directly, so a future TLS stream can reuse the same Kafka request framing, timeout, and tracing path.
 
 Strategic role:
 
