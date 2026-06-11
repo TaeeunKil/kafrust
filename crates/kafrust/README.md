@@ -247,7 +247,7 @@ Verified high-level paths include:
 
 - APIs are pre-`1.0` and can change between minor versions.
 - TLS is feature-gated, currently uses the `rustls` ring crypto provider, and
-  is not yet covered by the live broker compatibility claim; SASL is not
+  is verified for the broker roundtrip path against Kafka `3.7.2`; SASL is not
   implemented yet.
 - Broker compatibility is verified against Kafka `3.7.2` only.
 - Multi-broker clusters, leader failover, rack awareness, and partition

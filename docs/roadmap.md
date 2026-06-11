@@ -373,7 +373,8 @@ Exit criteria:
 Known limits:
 
 - Security protocol configuration exists and defaults to plaintext.
-- TLS transport exists behind the non-default `tls` crate feature, but has not completed a recorded ApiVersions or Metadata roundtrip against a TLS broker yet.
+- TLS transport exists behind the non-default `tls` crate feature and has completed recorded ApiVersions, Metadata, and FindCoordinator roundtrips against a TLS broker.
+- Producer, direct consumer, and full consumer group workflows over TLS are not claimed beyond the broker roundtrip path yet.
 - The current `tls` feature uses the `rustls` ring crypto provider, which can require native build tooling in some environments; the default kafrust build still has no required C toolchain.
 - `SecurityProtocol::Tls` returns `Unsupported` when kafrust is built without the `tls` feature.
 - SASL variants return `Unsupported`; no SASL mechanism is implemented yet.
@@ -387,11 +388,12 @@ Evidence:
 - The non-default `tls` crate feature wires `SecurityProtocol::Tls` through `tokio-rustls`, `rustls`, and `rustls-platform-verifier` without pulling `aws-lc-rs`; plaintext remains the default build.
 - Focused tests cover TLS bootstrap server-name extraction, invalid TLS server names, SASL unsupported behavior, and TLS unsupported behavior when the feature is disabled.
 - CI runs `check`, `clippy`, and `test` for both the default workspace path and the `kafrust --features tls` path.
-- The broker roundtrip test and example accept `KAFRUST_SECURITY_PROTOCOL`, so plaintext and future TLS/SASL broker profiles can use the same smoke entry point.
+- The broker roundtrip test and example accept `KAFRUST_SECURITY_PROTOCOL`, so plaintext, TLS, and future SASL broker profiles can use the same smoke entry point.
+- Manual `Live Kafka Smoke` run `27326596181` passed on 2026-06-11 from `main`; the TLS job completed broker roundtrip test and example checks against Kafka 3.7.2 with `SecurityProtocol::Tls`.
 
 Strategic role:
 
-- This milestone is the next gate for real-world adoption. Without TLS and SASL, kafrust remains limited to local, plaintext, or unusually permissive Kafka deployments.
+- This milestone is the next gate for real-world adoption. TLS broker roundtrips are now covered, but without SASL kafrust remains limited for many secured enterprise Kafka deployments.
 
 ## M12 API Stabilization
 

@@ -28,15 +28,15 @@ KAFRUST_BOOTSTRAP_SERVERS=localhost:9092 cargo run -p kafrust --example broker_r
 
 The test is skipped when `KAFRUST_BOOTSTRAP_SERVERS` is not set, so normal CI does not require a Kafka broker.
 
-Latest manual live smoke: on 2026-06-09, GitHub Actions run `27179583991` passed from `main` against Kafka 3.7.2 with the broker roundtrip test, `producer_send`, `producer_send_batch`, `producer_buffered`, `consumer_fetch`, and `consumer_group_poll` against `kafrust-smoke` after the v0.2.1 release.
+Latest manual live smoke: on 2026-06-11, GitHub Actions run `27326596181` passed from `main` against Kafka 3.7.2. The plaintext job covered the broker roundtrip test, `producer_send`, `producer_send_batch`, `producer_buffered`, `consumer_fetch`, and `consumer_group_poll` against `kafrust-smoke`. The TLS job covered the broker roundtrip test and `broker_roundtrip` example with `KAFRUST_SECURITY_PROTOCOL=tls`.
 
-The `Live Kafka Smoke` GitHub Actions workflow runs the same broker roundtrip, single-record producer, batch producer, buffered producer, direct consumer, and consumer group checks against a Kafka 3.7.2 Docker container. It is available through manual dispatch and a weekly schedule, so the default pull request CI remains broker-free.
+The `Live Kafka Smoke` GitHub Actions workflow runs plaintext broker roundtrip, single-record producer, batch producer, buffered producer, direct consumer, and consumer group checks against a Kafka 3.7.2 Docker container. It also runs a TLS broker roundtrip job against a Kafka 3.7.2 Docker container with an SSL listener. The workflow is available through manual dispatch and a weekly schedule, so the default pull request CI remains broker-free.
 
 See [Compatibility](compatibility.md) for the current tested broker matrix and the limits of the alpha compatibility claim.
 
 Requests made through `ClientConfig`, `ProducerConfig`, `ConsumerConfig`, and `ConsumerGroupConfig` use a 30 second request timeout by default. Override it with `request_timeout_ms` when running broker checks against slow or intentionally delayed environments.
 
-`ClientConfig::security_protocol` and the matching producer, consumer, and group builders default to `SecurityProtocol::Plaintext`. `SecurityProtocol::Tls` uses the non-default `tls` crate feature and is not yet covered by the recorded live smoke profile. SASL security protocols are explicit configuration targets for M11, but currently return `Unsupported` instead of falling back to plaintext.
+`ClientConfig::security_protocol` and the matching producer, consumer, and group builders default to `SecurityProtocol::Plaintext`. `SecurityProtocol::Tls` uses the non-default `tls` crate feature and is covered by the recorded broker roundtrip smoke profile. SASL security protocols are explicit configuration targets for M11, but currently return `Unsupported` instead of falling back to plaintext.
 
 When multiple bootstrap servers are configured, `ClientConfig::connect` tries them in order until one connection succeeds.
 

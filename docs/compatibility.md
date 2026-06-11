@@ -4,15 +4,16 @@ kafrust compatibility claims are scoped to behavior that has been verified again
 
 ## Current Compatibility Claim
 
-The `0.2.x` alpha line is verified against a single-node Apache Kafka 3.7.2 KRaft broker over plaintext TCP.
+The `0.2.x` alpha line is verified against a single-node Apache Kafka 3.7.2 KRaft broker over plaintext TCP. TLS is verified for the broker roundtrip path only.
 
 | Broker | Mode | Security | Verification | Status |
 | --- | --- | --- | --- | --- |
-| Apache Kafka 3.7.2 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, latest manual smoke on 2026-06-05 | Passing |
+| Apache Kafka 3.7.2 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, latest manual smoke run `27326596181` on 2026-06-11 | Passing |
+| Apache Kafka 3.7.2 | single-node KRaft | TLS | `Live Kafka Smoke` TLS job, latest manual smoke run `27326596181` on 2026-06-11 | Passing |
 
 ## Verified Paths
 
-The Kafka 3.7.2 smoke path covers:
+The Kafka 3.7.2 plaintext smoke path covers:
 
 - `ApiVersions v0` and `Metadata v1` roundtrips.
 - `FindCoordinator v1` for consumer group coordinator discovery.
@@ -20,11 +21,18 @@ The Kafka 3.7.2 smoke path covers:
 - Direct consumer fetch from an assigned topic partition using Fetch v2 response decoding.
 - Consumer group join, sync, heartbeat, poll, and offset commit through the alpha classic consumer group path with range assignment.
 
+The Kafka 3.7.2 TLS smoke path covers:
+
+- `ApiVersions v0` and `Metadata v1` roundtrips through `SecurityProtocol::Tls`.
+- `FindCoordinator v1` for consumer group coordinator discovery through `SecurityProtocol::Tls`.
+- The `broker_roundtrip` example through `SecurityProtocol::Tls`.
+
 ## Not Yet Claimed
 
 The current compatibility claim does not cover:
 
-- TLS or SASL broker profiles. TLS transport exists behind the non-default `tls` crate feature, but has not completed a recorded live broker verification yet. SASL mechanisms are not implemented.
+- SASL broker profiles. SASL mechanisms are not implemented.
+- Producer, direct consumer, or full consumer group workflows over TLS beyond the broker roundtrip path.
 - Multi-broker clusters, leader failover, rack awareness, or partition expansion.
 - Idempotent producers, transactions, compression, or high-throughput batching.
 - A full Kafka broker version matrix.
