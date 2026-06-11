@@ -233,9 +233,10 @@ See [Compatibility](docs/compatibility.md) and
 ## Current Limits
 
 - Public APIs are pre-`1.0` and can change between minor releases.
-- Networking is plaintext TCP only.
-- TLS and SASL are modeled in configuration, but currently return
-  `Error::Unsupported`.
+- Plaintext TCP remains the default networking path.
+- TLS transport is available behind the non-default `tls` crate feature, but is
+  not yet included in the live broker compatibility claim.
+- SASL is modeled in configuration, but currently returns `Error::Unsupported`.
 - Broker compatibility is verified against Kafka `3.7.2` only.
 - Multi-broker clusters, leader failover, rack awareness, and partition
   expansion are not yet claimed.

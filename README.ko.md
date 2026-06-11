@@ -232,9 +232,10 @@ kafrust의 호환성 주장은 실제 broker로 검증된 동작으로 제한합
 ## 현재 한계
 
 - 공개 API는 pre-`1.0`이며 minor release 사이에 변경될 수 있습니다.
-- networking은 plaintext TCP만 지원합니다.
-- TLS와 SASL은 configuration에 모델링되어 있지만 현재는 `Error::Unsupported`를
-  반환합니다.
+- plaintext TCP는 기본 networking path로 유지됩니다.
+- TLS transport는 non-default `tls` crate feature 뒤에서 사용할 수 있지만, 아직
+  live broker compatibility claim에는 포함하지 않습니다.
+- SASL은 configuration에 모델링되어 있지만 현재는 `Error::Unsupported`를 반환합니다.
 - broker compatibility는 Kafka `3.7.2`에 대해서만 검증되었습니다.
 - multi-broker cluster, leader failover, rack awareness, partition expansion은 아직
   지원 범위로 주장하지 않습니다.

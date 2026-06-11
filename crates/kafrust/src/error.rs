@@ -103,6 +103,16 @@ pub enum Error {
         /// Timeout in milliseconds.
         timeout_ms: u64,
     },
+    /// TLS configuration could not be built.
+    TlsConfig {
+        /// Redacted TLS configuration failure reason.
+        reason: String,
+    },
+    /// Bootstrap server could not be converted to a TLS server name.
+    InvalidTlsServerName {
+        /// Original bootstrap server value.
+        server: String,
+    },
     /// The requested Kafka feature is not implemented by this alpha API yet.
     Unsupported(&'static str),
     /// I/O failure while connecting to or communicating with a broker.
@@ -140,6 +150,10 @@ impl fmt::Display for Error {
             Self::RequestTimedOut { timeout_ms } => {
                 write!(f, "Kafka request timed out after {timeout_ms}ms")
             }
+            Self::TlsConfig { reason } => write!(f, "TLS configuration error: {reason}"),
+            Self::InvalidTlsServerName { server } => {
+                write!(f, "invalid TLS server name in bootstrap server {server}")
+            }
             Self::Unsupported(feature) => write!(f, "unsupported feature: {feature}"),
             Self::Io(error) => write!(f, "I/O error: {error}"),
             Self::TaskJoin(error) => write!(f, "background task join error: {error}"),
@@ -160,6 +174,8 @@ impl std::error::Error for Error {
             | Self::MissingBroker { .. }
             | Self::Broker { .. }
             | Self::RequestTimedOut { .. }
+            | Self::TlsConfig { .. }
+            | Self::InvalidTlsServerName { .. }
             | Self::Unsupported(_) => None,
         }
     }

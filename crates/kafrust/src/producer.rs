@@ -787,6 +787,12 @@ fn delivery_error_from_request_error(error: &Error) -> Error {
         Error::RequestTimedOut { timeout_ms } => Error::RequestTimedOut {
             timeout_ms: *timeout_ms,
         },
+        Error::TlsConfig { reason } => Error::TlsConfig {
+            reason: reason.clone(),
+        },
+        Error::InvalidTlsServerName { server } => Error::InvalidTlsServerName {
+            server: server.clone(),
+        },
         Error::Unsupported(feature) => Error::Unsupported(feature),
         Error::Io(error) => Error::Io(std::io::Error::new(error.kind(), error.to_string())),
         Error::TaskJoin(_) => Error::Unsupported("buffered producer task join failed"),
@@ -1636,6 +1642,8 @@ fn can_retry_send(error: &Error) -> bool {
         | Error::UnknownTopicOrPartition { .. }
         | Error::MissingLeader { .. }
         | Error::MissingBroker { .. }
+        | Error::TlsConfig { .. }
+        | Error::InvalidTlsServerName { .. }
         | Error::Unsupported(_)
         | Error::TaskJoin(_)
         | Error::Protocol(_) => false,

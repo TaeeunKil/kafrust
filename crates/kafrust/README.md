@@ -216,9 +216,20 @@ async fn main() -> kafrust::Result<()> {
 - `SaslPlaintext`
 - `SaslTls`
 
-Plaintext is the default and the only implemented transport in `0.2.1`.
-TLS and SASL variants are configuration targets and currently return
-`Error::Unsupported` before connecting.
+Plaintext is the default transport. TLS transport is available only when the
+non-default `tls` crate feature is enabled:
+
+```toml
+kafrust = { version = "0.2", features = ["tls"] }
+```
+
+Without that feature, `SecurityProtocol::Tls` returns `Error::Unsupported`
+before connecting. SASL variants are configuration targets and currently return
+`Error::Unsupported`.
+
+The default build does not include TLS dependencies. The current `tls` feature
+uses the `rustls` ring crypto provider, which can require native build tooling
+in some environments; this is not part of the default kafrust toolchain.
 
 ## Compatibility
 
@@ -235,7 +246,9 @@ Verified high-level paths include:
 ## Current Limits
 
 - APIs are pre-`1.0` and can change between minor versions.
-- TLS and SASL are not implemented yet.
+- TLS is feature-gated, currently uses the `rustls` ring crypto provider, and
+  is not yet covered by the live broker compatibility claim; SASL is not
+  implemented yet.
 - Broker compatibility is verified against Kafka `3.7.2` only.
 - Multi-broker clusters, leader failover, rack awareness, and partition
   expansion are not yet claimed.
