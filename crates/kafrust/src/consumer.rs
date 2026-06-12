@@ -305,8 +305,12 @@ pub struct ConsumerConfig {
 impl ConsumerConfig {
     /// Creates a consumer configuration from one or more Kafka bootstrap servers.
     pub fn new(bootstrap_servers: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        Self::from_client_config(ClientConfig::new(bootstrap_servers))
+    }
+
+    pub(crate) fn from_client_config(client: ClientConfig) -> Self {
         Self {
-            client: ClientConfig::new(bootstrap_servers),
+            client,
             max_wait_ms: 500,
             min_bytes: 1,
             max_partition_bytes: 1_048_576,

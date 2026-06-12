@@ -160,6 +160,15 @@ impl ConsumerGroupConfig {
         &self.topics
     }
 
+    fn consumer_config(&self) -> ConsumerConfig {
+        ConsumerConfig::from_client_config(self.client.clone())
+            .max_wait_ms(self.max_wait_ms)
+            .min_bytes(self.min_bytes)
+            .max_partition_bytes(self.max_partition_bytes)
+            .max_retries(self.max_retries)
+            .max_poll_records(self.max_poll_records)
+    }
+
     /// Joins the group, syncs assignment, and builds a group consumer.
     pub async fn join(self) -> Result<ConsumerGroup> {
         if self.topics.is_empty() {
@@ -239,18 +248,7 @@ impl ConsumerGroupConfig {
             &assignment,
         )
         .await?;
-        let mut consumer_config =
-            ConsumerConfig::new(self.client.bootstrap_servers().iter().cloned())
-                .max_wait_ms(self.max_wait_ms)
-                .min_bytes(self.min_bytes)
-                .max_partition_bytes(self.max_partition_bytes)
-                .max_retries(self.max_retries)
-                .max_poll_records(self.max_poll_records);
-        if let Some(client_id) = self.client.client_id_ref() {
-            consumer_config = consumer_config.client_id(client_id);
-        }
-        consumer_config =
-            consumer_config.request_timeout_ms(duration_millis(self.client.request_timeout()));
+        let consumer_config = self.consumer_config();
         let consumer_client = self.client.clone().connect().await?;
 
         debug!(
@@ -957,6 +955,33 @@ mod tests {
             config.client.sasl_credentials_ref().unwrap().username(),
             "alice"
         );
+    }
+
+    #[test]
+    fn group_fetch_consumer_preserves_client_security_config() {
+        let config = ConsumerGroupConfig::new(["localhost:9092"], "orders-group")
+            .client_id("orders-reader")
+            .request_timeout_ms(5_000)
+            .security_protocol(SecurityProtocol::SaslPlaintext)
+            .sasl_plain("alice", "secret-password")
+            .max_retries(3)
+            .max_poll_records(10);
+
+        let consumer_config = config.consumer_config();
+        let client_config = consumer_config.client_config();
+
+        assert_eq!(client_config.client_id_ref(), Some("orders-reader"));
+        assert_eq!(client_config.request_timeout().as_millis(), 5_000);
+        assert_eq!(
+            client_config.security_protocol_ref(),
+            SecurityProtocol::SaslPlaintext
+        );
+        assert_eq!(
+            client_config.sasl_credentials_ref().unwrap().username(),
+            "alice"
+        );
+        assert_eq!(consumer_config.max_retries_ref(), 3);
+        assert_eq!(consumer_config.max_poll_records_ref(), 10);
     }
 
     #[test]
