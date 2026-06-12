@@ -272,6 +272,10 @@ KAFRUST_TOPIC=kafrust-smoke \
 cargo run -p kafrust --example producer_send
 ```
 
+The smoke examples accept `KAFRUST_SECURITY_PROTOCOL`,
+`KAFRUST_SASL_USERNAME`, and `KAFRUST_SASL_PASSWORD` so the same examples can be
+run against plaintext, TLS, and SASL/PLAIN broker profiles.
+
 Available examples include:
 
 - `broker_roundtrip`

@@ -1,3 +1,5 @@
+mod common;
+
 use kafrust::{Acks, ConsumerConfig, Error, ProducerConfig, ProducerRecord, RecordMetadata};
 
 #[tokio::main]
@@ -11,14 +13,15 @@ async fn main() -> kafrust::Result<()> {
         .unwrap_or(3)
         .max(1);
 
-    let mut producer = ProducerConfig::new([bootstrap.clone()])
-        .client_id("kafrust-buffered-producer-example")
-        .acks(Acks::Leader)
-        .linger_ms(60_000)
-        .max_records_per_batch(count)
-        .max_batch_bytes(64 * 1024)
-        .build_buffered()
-        .await?;
+    let mut producer = common::apply_security(
+        ProducerConfig::new([bootstrap.clone()]).client_id("kafrust-buffered-producer-example"),
+    )?
+    .acks(Acks::Leader)
+    .linger_ms(60_000)
+    .max_records_per_batch(count)
+    .max_batch_bytes(64 * 1024)
+    .build_buffered()
+    .await?;
 
     let mut expected = Vec::with_capacity(count);
     let mut deliveries = Vec::with_capacity(count);
@@ -65,11 +68,12 @@ async fn fetch_buffered_records(
     let first = metadata.first().ok_or(Error::Unsupported(
         "buffered producer smoke missing metadata",
     ))?;
-    let mut consumer = ConsumerConfig::new([bootstrap.to_owned()])
-        .client_id("kafrust-buffered-consumer-example")
-        .max_wait_ms(500)
-        .build()
-        .await?;
+    let mut consumer = common::apply_security(
+        ConsumerConfig::new([bootstrap.to_owned()]).client_id("kafrust-buffered-consumer-example"),
+    )?
+    .max_wait_ms(500)
+    .build()
+    .await?;
     let fetched = consumer
         .fetch(topic.to_owned(), first.partition(), first.offset())
         .await?;

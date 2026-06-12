@@ -86,6 +86,8 @@ cargo add kafrust@0.2
 
 Set the broker address with `KAFRUST_BOOTSTRAP_SERVERS` when running examples.
 If the variable is omitted, the examples use `localhost:9092`.
+Smoke examples also accept `KAFRUST_SECURITY_PROTOCOL`,
+`KAFRUST_SASL_USERNAME`, and `KAFRUST_SASL_PASSWORD` for secured broker checks.
 
 ```sh
 KAFRUST_BOOTSTRAP_SERVERS=localhost:9092 \
