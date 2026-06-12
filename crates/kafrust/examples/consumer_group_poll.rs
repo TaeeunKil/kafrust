@@ -1,3 +1,5 @@
+mod common;
+
 use kafrust::ConsumerGroupConfig;
 
 #[tokio::main]
@@ -7,11 +9,12 @@ async fn main() -> kafrust::Result<()> {
     let group_id = std::env::var("KAFRUST_GROUP_ID").unwrap_or_else(|_| "kafrust-smoke".to_owned());
     let topic = std::env::var("KAFRUST_TOPIC").unwrap_or_else(|_| "kafrust-smoke".to_owned());
 
-    let mut group = ConsumerGroupConfig::new([bootstrap], group_id)
-        .client_id("kafrust-consumer-group")
-        .subscribe(topic)
-        .join()
-        .await?;
+    let mut group = common::apply_security(
+        ConsumerGroupConfig::new([bootstrap], group_id).client_id("kafrust-consumer-group"),
+    )?
+    .subscribe(topic)
+    .join()
+    .await?;
 
     println!(
         "joined group {} as member {} generation {} with {} assignments",

@@ -1,3 +1,5 @@
+mod common;
+
 use kafrust::ConsumerConfig;
 
 #[tokio::main]
@@ -14,10 +16,11 @@ async fn main() -> kafrust::Result<()> {
         .and_then(|value| value.parse::<i64>().ok())
         .unwrap_or(0);
 
-    let mut consumer = ConsumerConfig::new([bootstrap])
-        .client_id("kafrust-consumer-example")
-        .build()
-        .await?;
+    let mut consumer = common::apply_security(
+        ConsumerConfig::new([bootstrap]).client_id("kafrust-consumer-example"),
+    )?
+    .build()
+    .await?;
 
     consumer.assign(topic, partition, offset);
     let records = consumer.poll().await?;

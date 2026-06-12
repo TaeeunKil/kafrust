@@ -296,6 +296,26 @@ jobs:
       - name: Run SASL broker roundtrip example
         run: cargo run -p kafrust --example broker_roundtrip
 
+      - name: Run SASL producer example
+        run: cargo run -p kafrust --example producer_send
+
+      - name: Run SASL producer batch example
+        run: cargo run -p kafrust --example producer_send_batch
+
+      - name: Run SASL buffered producer example
+        env:
+          KAFRUST_BUFFERED_COUNT: "3"
+        run: cargo run -p kafrust --example producer_buffered
+
+      - name: Run SASL direct consumer example
+        env:
+          KAFRUST_PARTITION: "0"
+          KAFRUST_OFFSET: "0"
+        run: cargo run -p kafrust --example consumer_fetch
+
+      - name: Run SASL consumer group example
+        run: cargo run -p kafrust --example consumer_group_poll
+
       - name: Dump SASL Kafka logs
         if: failure()
         run: docker logs kafrust-kafka-sasl

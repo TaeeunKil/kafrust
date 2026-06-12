@@ -8,11 +8,10 @@ Run it against a local broker:
 KAFRUST_BOOTSTRAP_SERVERS=localhost:9092 KAFRUST_GROUP_ID=kafrust-smoke cargo test -p kafrust --test broker_roundtrip -- --nocapture
 ```
 
-The roundtrip test and `broker_roundtrip` example accept
-`KAFRUST_SECURITY_PROTOCOL`. Supported values are `plaintext`, `tls`/`ssl`,
-`sasl_plaintext`, and `sasl_tls`/`sasl_ssl`. TLS requires building kafrust with
-the non-default `tls` feature and using a broker certificate chain trusted by
-the host OS:
+The roundtrip test and smoke examples accept `KAFRUST_SECURITY_PROTOCOL`.
+Supported values are `plaintext`, `tls`/`ssl`, `sasl_plaintext`, and
+`sasl_tls`/`sasl_ssl`. TLS requires building kafrust with the non-default `tls`
+feature and using a broker certificate chain trusted by the host OS:
 
 ```sh
 KAFRUST_BOOTSTRAP_SERVERS=localhost:9093 \
@@ -34,7 +33,7 @@ The test is skipped when `KAFRUST_BOOTSTRAP_SERVERS` is not set, so normal CI do
 
 Latest manual live smoke: on 2026-06-12, GitHub Actions run `27397850803` passed from `main` against Kafka 3.7.2. The plaintext job covered the broker roundtrip test, `producer_send`, `producer_send_batch`, `producer_buffered`, `consumer_fetch`, and `consumer_group_poll` against `kafrust-smoke`. The TLS job covered the broker roundtrip test and `broker_roundtrip` example with `KAFRUST_SECURITY_PROTOCOL=tls`. The SASL_PLAINTEXT job covered the broker roundtrip test and `broker_roundtrip` example with `KAFRUST_SECURITY_PROTOCOL=sasl_plaintext` and SASL/PLAIN credentials.
 
-The `Live Kafka Smoke` GitHub Actions workflow runs plaintext broker roundtrip, single-record producer, batch producer, buffered producer, direct consumer, and consumer group checks against a Kafka 3.7.2 Docker container. It also runs TLS and SASL_PLAINTEXT broker roundtrip jobs against Kafka 3.7.2 Docker containers with secured listeners. The workflow is available through manual dispatch and a weekly schedule, so the default pull request CI remains broker-free.
+The `Live Kafka Smoke` GitHub Actions workflow runs plaintext broker roundtrip, single-record producer, batch producer, buffered producer, direct consumer, and consumer group checks against a Kafka 3.7.2 Docker container. It also runs TLS broker roundtrip checks and SASL_PLAINTEXT broker roundtrip, producer, direct consumer, and consumer group checks against Kafka 3.7.2 Docker containers with secured listeners. The workflow is available through manual dispatch and a weekly schedule, so the default pull request CI remains broker-free.
 
 See [Compatibility](compatibility.md) for the current tested broker matrix and the limits of the alpha compatibility claim.
 

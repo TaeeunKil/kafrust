@@ -1,3 +1,5 @@
+mod common;
+
 use kafrust::{Acks, ProducerConfig, ProducerRecord};
 
 #[tokio::main]
@@ -10,11 +12,12 @@ async fn main() -> kafrust::Result<()> {
         .and_then(|value| value.parse::<usize>().ok())
         .unwrap_or(3);
 
-    let mut producer = ProducerConfig::new([bootstrap])
-        .client_id("kafrust-producer-batch-example")
-        .acks(Acks::Leader)
-        .build()
-        .await?;
+    let mut producer = common::apply_security(
+        ProducerConfig::new([bootstrap]).client_id("kafrust-producer-batch-example"),
+    )?
+    .acks(Acks::Leader)
+    .build()
+    .await?;
 
     let records = (0..count)
         .map(|index| {
