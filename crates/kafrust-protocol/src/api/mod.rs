@@ -7,4 +7,5 @@ pub mod metadata;
 pub mod offset_commit;
 pub mod offset_fetch;
 pub mod produce;
+pub mod sasl;
 pub mod sync_group;
