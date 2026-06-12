@@ -377,12 +377,15 @@ Known limits:
 - Producer, direct consumer, and full consumer group workflows over TLS are not claimed beyond the broker roundtrip path yet.
 - The current `tls` feature uses the `rustls` ring crypto provider, which can require native build tooling in some environments; the default kafrust build still has no required C toolchain.
 - `SecurityProtocol::Tls` returns `Unsupported` when kafrust is built without the `tls` feature.
-- SASL variants return `Unsupported`; no SASL mechanism is implemented yet.
+- SASL variants return `Unsupported`; SASL/PLAIN credentials can be configured
+  and redacted in debug output, but no SASL authentication flow is implemented
+  yet.
 
 Evidence:
 
 - `SecurityProtocol` models Kafka `PLAINTEXT`, `SSL`, `SASL_PLAINTEXT`, and `SASL_SSL` connection modes.
 - `ClientConfig`, `ProducerConfig`, `ConsumerConfig`, and `ConsumerGroupConfig` expose `security_protocol` builders.
+- `SaslMechanism::Plain` and `SaslCredentials::plain` model SASL/PLAIN authentication material separately from `SecurityProtocol`, and config debug output redacts passwords.
 - All current internal broker connection paths go through `ClientConfig`, so future TLS/SASL transport work has one configuration source.
 - `Client` owns an internal broker stream abstraction instead of storing `TcpStream` directly, so the TLS stream reuses the same Kafka request framing, timeout, and tracing path.
 - The non-default `tls` crate feature wires `SecurityProtocol::Tls` through `tokio-rustls`, `rustls`, and `rustls-platform-verifier` without pulling `aws-lc-rs`; plaintext remains the default build.

@@ -333,6 +333,12 @@ impl ConsumerConfig {
         self
     }
 
+    /// Sets SASL/PLAIN credentials for consumer broker connections.
+    pub fn sasl_plain(mut self, username: impl Into<String>, password: impl Into<String>) -> Self {
+        self.client = self.client.sasl_plain(username, password);
+        self
+    }
+
     /// Sets the Kafka fetch max wait time in milliseconds.
     pub fn max_wait_ms(mut self, max_wait_ms: i32) -> Self {
         self.max_wait_ms = max_wait_ms;
@@ -513,6 +519,7 @@ mod tests {
             .client_id("orders-reader")
             .request_timeout_ms(5_000)
             .security_protocol(SecurityProtocol::Tls)
+            .sasl_plain("alice", "secret-password")
             .max_wait_ms(250)
             .min_bytes(10)
             .max_partition_bytes(1024)
@@ -526,6 +533,14 @@ mod tests {
         assert_eq!(
             config.client_config().security_protocol_ref(),
             SecurityProtocol::Tls
+        );
+        assert_eq!(
+            config
+                .client_config()
+                .sasl_credentials_ref()
+                .unwrap()
+                .username(),
+            "alice"
         );
         assert_eq!(config.max_retries_ref(), 3);
         assert_eq!(config.max_poll_records_ref(), 10);

@@ -16,7 +16,7 @@ pub mod group;
 pub mod producer;
 
 pub use client::Client;
-pub use config::{ClientConfig, SecurityProtocol};
+pub use config::{ClientConfig, SaslCredentials, SaslMechanism, SecurityProtocol};
 pub use consumer::{Consumer, ConsumerAssignment, ConsumerConfig, ConsumerRecord};
 pub use error::{BrokerErrorKind, Error, Result};
 pub use group::{ConsumerGroup, ConsumerGroupConfig, ConsumerGroupHeartbeat};
