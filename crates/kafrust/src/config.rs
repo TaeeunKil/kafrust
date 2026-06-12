@@ -11,9 +11,8 @@ const DEFAULT_REQUEST_TIMEOUT_MS: u64 = 30_000;
 /// Kafka client security protocol.
 ///
 /// `Plaintext` is the default transport. `Tls` is implemented when the
-/// non-default `tls` crate feature is enabled. SASL variants are explicit
-/// configuration targets for M11 and currently return [`Error::Unsupported`]
-/// instead of silently falling back to plaintext.
+/// non-default `tls` crate feature is enabled. SASL/PLAIN authentication is
+/// implemented for SASL security protocols when credentials are configured.
 pub enum SecurityProtocol {
     /// Kafka `PLAINTEXT`: raw TCP without TLS or SASL authentication.
     Plaintext,
@@ -192,13 +191,34 @@ impl ClientConfig {
                 .await
             }
             SecurityProtocol::Tls => self.connect_tls_broker(server).await,
-            SecurityProtocol::SaslPlaintext => Err(Error::Unsupported(
-                "SASL authentication is not implemented yet",
-            )),
-            SecurityProtocol::SaslTls => {
-                Err(Error::Unsupported("SASL over TLS is not implemented yet"))
-            }
+            SecurityProtocol::SaslPlaintext => self.connect_sasl_plaintext_broker(server).await,
+            SecurityProtocol::SaslTls => self.connect_sasl_tls_broker(server).await,
         }
+    }
+
+    async fn connect_sasl_plaintext_broker(&self, server: String) -> Result<Client> {
+        let credentials = self
+            .sasl_credentials
+            .as_ref()
+            .ok_or(Error::MissingSaslCredentials)?;
+        let mut client = Client::connect_with_request_timeout(
+            server,
+            self.client_id.clone(),
+            self.request_timeout,
+        )
+        .await?;
+        authenticate_sasl_plain(&mut client, credentials).await?;
+        Ok(client)
+    }
+
+    async fn connect_sasl_tls_broker(&self, server: String) -> Result<Client> {
+        let credentials = self
+            .sasl_credentials
+            .as_ref()
+            .ok_or(Error::MissingSaslCredentials)?;
+        let mut client = self.connect_tls_broker(server).await?;
+        authenticate_sasl_plain(&mut client, credentials).await?;
+        Ok(client)
     }
 
     #[cfg(feature = "tls")]
@@ -245,6 +265,39 @@ impl ClientConfig {
     }
 }
 
+async fn authenticate_sasl_plain(client: &mut Client, credentials: &SaslCredentials) -> Result<()> {
+    let mechanism = credentials.mechanism().as_str();
+    let handshake = client.sasl_handshake_v1(mechanism).await?;
+    if handshake.error_code != 0 {
+        return Err(Error::Broker {
+            code: handshake.error_code,
+            context: format!("sasl handshake {mechanism}"),
+        });
+    }
+
+    let response = client
+        .sasl_authenticate_v0(sasl_plain_auth_bytes(credentials))
+        .await?;
+    if response.error_code != 0 {
+        return Err(Error::Broker {
+            code: response.error_code,
+            context: format!("sasl authenticate {mechanism}"),
+        });
+    }
+
+    Ok(())
+}
+
+fn sasl_plain_auth_bytes(credentials: &SaslCredentials) -> Vec<u8> {
+    let mut bytes =
+        Vec::with_capacity(credentials.username().len() + credentials.password().len() + 2);
+    bytes.push(0);
+    bytes.extend_from_slice(credentials.username().as_bytes());
+    bytes.push(0);
+    bytes.extend_from_slice(credentials.password().as_bytes());
+    bytes
+}
+
 #[cfg(any(feature = "tls", test))]
 fn tls_server_name_from_bootstrap_server(server: &str) -> Result<String> {
     let trimmed = server.trim();
@@ -285,6 +338,7 @@ mod tests {
     };
     use crate::Error;
     use std::time::Duration;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
 
     #[test]
@@ -350,17 +404,125 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn rejects_sasl_security_protocol_before_connecting() {
+    async fn rejects_sasl_security_protocol_without_credentials_before_connecting() {
         let error = ClientConfig::new(["localhost:9092"])
             .security_protocol(SecurityProtocol::SaslPlaintext)
             .connect()
             .await
             .unwrap_err();
 
+        assert!(matches!(error, Error::MissingSaslCredentials));
+    }
+
+    #[tokio::test]
+    async fn sasl_plaintext_connect_sends_handshake_and_authenticate() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+
+            let handshake = read_frame(&mut socket).await;
+            assert_eq!(
+                handshake,
+                [
+                    0, 17, // api key
+                    0, 1, // api version
+                    0, 0, 0, 1, // correlation id
+                    0xff, 0xff, // null client id
+                    0, 5, b'P', b'L', b'A', b'I', b'N', // mechanism
+                ]
+            );
+            write_frame(
+                &mut socket,
+                &[
+                    0, 0, 0, 1, // correlation id
+                    0, 0, // error code
+                    0, 0, 0, 1, // mechanism count
+                    0, 5, b'P', b'L', b'A', b'I', b'N', // mechanism
+                ],
+            )
+            .await;
+
+            let authenticate = read_frame(&mut socket).await;
+            assert_eq!(
+                authenticate,
+                [
+                    0, 36, // api key
+                    0, 0, // api version
+                    0, 0, 0, 2, // correlation id
+                    0xff, 0xff, // null client id
+                    0, 0, 0, 13, // auth bytes length
+                    0, b'a', b'l', b'i', b'c', b'e', 0, b's', b'e', b'c', b'r', b'e', b't',
+                ]
+            );
+            write_frame(
+                &mut socket,
+                &[
+                    0, 0, 0, 2, // correlation id
+                    0, 0, // error code
+                    0xff, 0xff, // null error message
+                    0, 0, 0, 0, // auth bytes
+                ],
+            )
+            .await;
+        });
+
+        let client = ClientConfig::new([addr.to_string()])
+            .security_protocol(SecurityProtocol::SaslPlaintext)
+            .sasl_plain("alice", "secret")
+            .request_timeout_ms(1_000)
+            .connect()
+            .await;
+
+        assert!(client.is_ok());
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn sasl_authenticate_error_does_not_expose_secret() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let _handshake = read_frame(&mut socket).await;
+            write_frame(
+                &mut socket,
+                &[
+                    0, 0, 0, 1, // correlation id
+                    0, 0, // error code
+                    0, 0, 0, 1, // mechanism count
+                    0, 5, b'P', b'L', b'A', b'I', b'N', // mechanism
+                ],
+            )
+            .await;
+
+            let _authenticate = read_frame(&mut socket).await;
+            write_frame(
+                &mut socket,
+                &[
+                    0, 0, 0, 2, // correlation id
+                    0, 58, // error code
+                    0, 6, b's', b'e', b'c', b'r', b'e', b't', // error message
+                    0, 0, 0, 0, // auth bytes
+                ],
+            )
+            .await;
+        });
+
+        let error = ClientConfig::new([addr.to_string()])
+            .security_protocol(SecurityProtocol::SaslPlaintext)
+            .sasl_plain("alice", "secret")
+            .request_timeout_ms(1_000)
+            .connect()
+            .await
+            .unwrap_err();
+
         assert!(matches!(
-            error,
-            Error::Unsupported("SASL authentication is not implemented yet")
+            &error,
+            Error::Broker { code: 58, context } if context == "sasl authenticate PLAIN"
         ));
+        assert!(!error.to_string().contains("secret"));
+        server.await.unwrap();
     }
 
     #[cfg(not(feature = "tls"))]
@@ -368,6 +530,22 @@ mod tests {
     async fn rejects_tls_without_tls_feature() {
         let error = ClientConfig::new(["localhost:9092"])
             .security_protocol(SecurityProtocol::Tls)
+            .connect()
+            .await
+            .unwrap_err();
+
+        assert!(matches!(
+            error,
+            Error::Unsupported("TLS connections require the `tls` feature")
+        ));
+    }
+
+    #[cfg(not(feature = "tls"))]
+    #[tokio::test]
+    async fn rejects_sasl_tls_without_tls_feature_after_credentials() {
+        let error = ClientConfig::new(["localhost:9092"])
+            .security_protocol(SecurityProtocol::SaslTls)
+            .sasl_plain("alice", "secret")
             .connect()
             .await
             .unwrap_err();
@@ -416,5 +594,23 @@ mod tests {
             tls_server_name_from_bootstrap_server("[2001:db8::1"),
             Err(Error::InvalidTlsServerName { .. })
         ));
+    }
+
+    async fn read_frame(socket: &mut tokio::net::TcpStream) -> Vec<u8> {
+        let mut size = [0u8; 4];
+        socket.read_exact(&mut size).await.unwrap();
+        let size = usize::try_from(i32::from_be_bytes(size)).unwrap();
+        let mut frame = vec![0u8; size];
+        socket.read_exact(&mut frame).await.unwrap();
+        frame
+    }
+
+    async fn write_frame(socket: &mut tokio::net::TcpStream, frame: &[u8]) {
+        socket
+            .write_all(&(frame.len() as i32).to_be_bytes())
+            .await
+            .unwrap();
+        socket.write_all(frame).await.unwrap();
+        socket.flush().await.unwrap();
     }
 }

@@ -4,7 +4,7 @@ kafrust compatibility claims are scoped to behavior that has been verified again
 
 ## Current Compatibility Claim
 
-The `0.2.x` alpha line is verified against a single-node Apache Kafka 3.7.2 KRaft broker over plaintext TCP. TLS is verified for the broker roundtrip path only.
+The `0.2.x` alpha line is verified against a single-node Apache Kafka 3.7.2 KRaft broker over plaintext TCP. TLS is verified for the broker roundtrip path only. SASL/PLAIN has mock-broker coverage, but no live SASL broker profile is claimed yet.
 
 | Broker | Mode | Security | Verification | Status |
 | --- | --- | --- | --- | --- |
@@ -31,7 +31,7 @@ The Kafka 3.7.2 TLS smoke path covers:
 
 The current compatibility claim does not cover:
 
-- SASL broker profiles. SASL mechanisms are not implemented.
+- SASL broker profiles. SASL/PLAIN connection handshakes have mock-broker coverage, but no SASL listener has been verified against a real broker yet.
 - Producer, direct consumer, or full consumer group workflows over TLS beyond the broker roundtrip path.
 - Multi-broker clusters, leader failover, rack awareness, or partition expansion.
 - Idempotent producers, transactions, compression, or high-throughput batching.

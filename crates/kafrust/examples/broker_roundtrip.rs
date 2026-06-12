@@ -5,9 +5,7 @@ async fn main() -> kafrust::Result<()> {
     let bootstrap =
         std::env::var("KAFRUST_BOOTSTRAP_SERVERS").unwrap_or_else(|_| "localhost:9092".to_owned());
 
-    let mut client = ClientConfig::new([bootstrap])
-        .client_id("kafrust-roundtrip")
-        .security_protocol(security_protocol_from_env()?)
+    let mut client = client_config_from_env(bootstrap, "kafrust-roundtrip")?
         .connect()
         .await?;
 
@@ -31,6 +29,22 @@ fn security_protocol_from_env() -> kafrust::Result<SecurityProtocol> {
     };
 
     parse_security_protocol(&value)
+}
+
+fn client_config_from_env(bootstrap: String, client_id: &str) -> kafrust::Result<ClientConfig> {
+    let mut config = ClientConfig::new([bootstrap])
+        .client_id(client_id)
+        .security_protocol(security_protocol_from_env()?);
+    if let Some((username, password)) = sasl_credentials_from_env() {
+        config = config.sasl_plain(username, password);
+    }
+    Ok(config)
+}
+
+fn sasl_credentials_from_env() -> Option<(String, String)> {
+    let username = std::env::var("KAFRUST_SASL_USERNAME").ok()?;
+    let password = std::env::var("KAFRUST_SASL_PASSWORD").ok()?;
+    Some((username, password))
 }
 
 fn parse_security_protocol(value: &str) -> kafrust::Result<SecurityProtocol> {

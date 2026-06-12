@@ -224,14 +224,13 @@ kafrust = { version = "0.2", features = ["tls"] }
 ```
 
 Without that feature, `SecurityProtocol::Tls` returns `Error::Unsupported`
-before connecting. SASL variants are configuration targets and currently return
-`Error::Unsupported`.
+before connecting.
 
 SASL/PLAIN credentials can be stored on the shared client configuration with
 `sasl_plain(username, password)`. This does not change the selected
 `SecurityProtocol`; choose `SaslPlaintext` or `SaslTls` separately. Credential
-debug output redacts the password, and high-level SASL authentication is still
-future M11 work.
+debug output redacts the password. The SASL/PLAIN handshake path is covered by
+mock broker tests; live SASL broker compatibility is not claimed yet.
 
 The default build does not include TLS dependencies. The current `tls` feature
 uses the `rustls` ring crypto provider, which can require native build tooling

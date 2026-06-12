@@ -70,7 +70,7 @@ Required evidence:
 
 Known limits:
 
-- plaintext remains the default networking path; TLS transport is feature-gated and live-verified for broker roundtrips; SASL is not implemented yet
+- plaintext remains the default networking path; TLS transport is feature-gated and live-verified for broker roundtrips; SASL/PLAIN is implemented with mock-broker coverage but is not live-verified yet
 - narrow broker compatibility matrix
 - incomplete protocol coverage
 - pre-1.0 public API

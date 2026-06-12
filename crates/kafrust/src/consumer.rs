@@ -474,6 +474,7 @@ fn can_retry_fetch(error: &Error) -> bool {
         | Error::UnknownTopicOrPartition { .. }
         | Error::MissingLeader { .. }
         | Error::MissingBroker { .. }
+        | Error::MissingSaslCredentials
         | Error::TlsConfig { .. }
         | Error::InvalidTlsServerName { .. }
         | Error::Unsupported(_)

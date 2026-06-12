@@ -780,6 +780,7 @@ fn delivery_error_from_request_error(error: &Error) -> Error {
             partition: *partition,
         },
         Error::MissingBroker { node_id } => Error::MissingBroker { node_id: *node_id },
+        Error::MissingSaslCredentials => Error::MissingSaslCredentials,
         Error::Broker { code, context } => Error::Broker {
             code: *code,
             context: context.clone(),
@@ -1648,6 +1649,7 @@ fn can_retry_send(error: &Error) -> bool {
         | Error::UnknownTopicOrPartition { .. }
         | Error::MissingLeader { .. }
         | Error::MissingBroker { .. }
+        | Error::MissingSaslCredentials
         | Error::TlsConfig { .. }
         | Error::InvalidTlsServerName { .. }
         | Error::Unsupported(_)
