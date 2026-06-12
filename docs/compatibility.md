@@ -4,13 +4,13 @@ kafrust compatibility claims are scoped to behavior that has been verified again
 
 ## Current Compatibility Claim
 
-The `0.2.x` alpha line is verified against a single-node Apache Kafka 3.7.2 KRaft broker over plaintext TCP. TLS and SASL/PLAIN are verified for the broker roundtrip path only.
+The `0.2.x` alpha line is verified against a single-node Apache Kafka 3.7.2 KRaft broker over plaintext TCP. TLS is verified for the broker roundtrip path only. SASL/PLAIN over SASL_PLAINTEXT is verified for broker roundtrip, producer, direct consumer, and consumer group smoke paths.
 
 | Broker | Mode | Security | Verification | Status |
 | --- | --- | --- | --- | --- |
-| Apache Kafka 3.7.2 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, latest manual smoke run `27397850803` on 2026-06-12 | Passing |
-| Apache Kafka 3.7.2 | single-node KRaft | TLS | `Live Kafka Smoke` TLS job, latest manual smoke run `27397850803` on 2026-06-12 | Passing |
-| Apache Kafka 3.7.2 | single-node KRaft | SASL_PLAINTEXT with SASL/PLAIN | `Live Kafka Smoke` SASL_PLAINTEXT job, latest manual smoke run `27397850803` on 2026-06-12 | Passing |
+| Apache Kafka 3.7.2 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, latest manual smoke run `27399057735` on 2026-06-12 | Passing |
+| Apache Kafka 3.7.2 | single-node KRaft | TLS | `Live Kafka Smoke` TLS job, latest manual smoke run `27399057735` on 2026-06-12 | Passing |
+| Apache Kafka 3.7.2 | single-node KRaft | SASL_PLAINTEXT with SASL/PLAIN | `Live Kafka Smoke` SASL_PLAINTEXT job, latest manual smoke run `27399057735` on 2026-06-12 | Passing |
 
 ## Verified Paths
 
@@ -33,13 +33,16 @@ The Kafka 3.7.2 SASL_PLAINTEXT smoke path covers:
 - `ApiVersions v0` and `Metadata v1` roundtrips through `SecurityProtocol::SaslPlaintext` using SASL/PLAIN.
 - `FindCoordinator v1` for consumer group coordinator discovery through `SecurityProtocol::SaslPlaintext`.
 - The `broker_roundtrip` example through `SecurityProtocol::SaslPlaintext`.
+- High-level producer metadata lookup, leader routing, single-record send, batch send, and buffered send through `SecurityProtocol::SaslPlaintext`.
+- Direct consumer fetch from an assigned topic partition through `SecurityProtocol::SaslPlaintext`.
+- Consumer group join, sync, heartbeat, poll, and offset commit through `SecurityProtocol::SaslPlaintext`.
 
 ## Not Yet Claimed
 
 The current compatibility claim does not cover:
 
 - Producer, direct consumer, or full consumer group workflows over TLS beyond the broker roundtrip path.
-- Producer, direct consumer, or full consumer group workflows over SASL beyond the broker roundtrip path.
+- SASL workflows beyond the listed SASL_PLAINTEXT smoke examples.
 - SASL_SSL broker profiles.
 - Multi-broker clusters, leader failover, rack awareness, or partition expansion.
 - Idempotent producers, transactions, compression, or high-throughput batching.
