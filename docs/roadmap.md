@@ -408,7 +408,7 @@ Strategic role:
 
 ## M12 API Stabilization
 
-Status: Planned.
+Status: In progress.
 
 Goal: prepare a stable pre-1.0 API shape with clear compatibility rules for downstream users.
 
@@ -431,6 +431,11 @@ Known limits:
 
 - The project is still pre-1.0 and can make breaking changes between minor versions.
 - Protocol coverage is intentionally incomplete and grows API by API.
+
+Evidence:
+
+- `docs/api-stability.md` documents the current pre-1.0 versioning policy,
+  stability levels, change rules, and migration note expectations.
 
 ## M13 Secured Enterprise Connectivity
 

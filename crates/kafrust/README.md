@@ -294,4 +294,5 @@ Available examples include:
 - Repository: <https://github.com/TaeeunKil/kafrust>
 - Roadmap: <https://github.com/TaeeunKil/kafrust/blob/main/docs/roadmap.md>
 - Compatibility: <https://github.com/TaeeunKil/kafrust/blob/main/docs/compatibility.md>
+- API stability: <https://github.com/TaeeunKil/kafrust/blob/main/docs/api-stability.md>
 - Project strategy: <https://github.com/TaeeunKil/kafrust/blob/main/docs/project-strategy.md>
