@@ -351,14 +351,14 @@ Evidence:
 
 ## M11 Security And Connectivity
 
-Status: In progress.
+Status: Complete.
 
 Goal: support common secured Kafka deployments without adding librdkafka or C bindings.
 
 Scope:
 
 - TLS transport using a Rust TLS stack
-- SASL PLAIN and SCRAM evaluation
+- SASL PLAIN secured client path
 - client configuration for security protocol and authentication material
 - secure error messages that do not leak secrets
 - docs for local plaintext, TLS, and SASL broker profiles
@@ -382,6 +382,7 @@ Known limits:
   SASL_PLAINTEXT broker.
 - SASL_SSL and SASL workflows beyond the listed SASL_PLAINTEXT smoke examples
   are not claimed yet.
+- SCRAM and SASL_SSL are deferred to M13 Secured Enterprise Connectivity.
 
 Evidence:
 
@@ -403,7 +404,7 @@ Evidence:
 
 Strategic role:
 
-- This milestone is the next gate for real-world adoption. TLS and SASL_PLAINTEXT producer, direct consumer, and consumer group smoke paths are now covered, but SASL_SSL, SCRAM, multi-broker secured profiles, and broader enterprise compatibility are still unclaimed.
+- This milestone established the baseline secured client path. TLS and SASL_PLAINTEXT producer, direct consumer, and consumer group smoke paths are now covered; M13 owns SASL_SSL, SCRAM, multi-broker secured profiles, and broader enterprise compatibility.
 
 ## M12 API Stabilization
 
