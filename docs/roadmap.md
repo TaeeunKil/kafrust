@@ -377,8 +377,11 @@ Known limits:
 - Producer, direct consumer, and full consumer group workflows over TLS are not claimed beyond the broker roundtrip path yet.
 - The current `tls` feature uses the `rustls` ring crypto provider, which can require native build tooling in some environments; the default kafrust build still has no required C toolchain.
 - `SecurityProtocol::Tls` returns `Unsupported` when kafrust is built without the `tls` feature.
-- SASL/PLAIN authentication is implemented for configured `SaslPlaintext` and
-  `SaslTls` connections, but no live SASL broker profile has been recorded yet.
+- SASL/PLAIN authentication is implemented and has completed recorded
+  `ApiVersions`, `Metadata`, and `FindCoordinator` roundtrips against a
+  SASL_PLAINTEXT broker.
+- Producer, direct consumer, and full consumer group workflows over SASL are not
+  claimed beyond the broker roundtrip path yet.
 
 Evidence:
 
@@ -391,13 +394,14 @@ Evidence:
 - The non-default `tls` crate feature wires `SecurityProtocol::Tls` through `tokio-rustls`, `rustls`, and `rustls-platform-verifier` without pulling `aws-lc-rs`; plaintext remains the default build.
 - Focused tests cover TLS bootstrap server-name extraction, invalid TLS server names, SASL missing-credential behavior, SASL/PLAIN handshake behavior, and TLS unsupported behavior when the feature is disabled.
 - CI runs `check`, `clippy`, and `test` for both the default workspace path and the `kafrust --features tls` path.
-- The broker roundtrip test and example accept `KAFRUST_SECURITY_PROTOCOL`, `KAFRUST_SASL_USERNAME`, and `KAFRUST_SASL_PASSWORD`, so plaintext, TLS, and future SASL broker profiles can use the same smoke entry point.
+- The broker roundtrip test and example accept `KAFRUST_SECURITY_PROTOCOL`, `KAFRUST_SASL_USERNAME`, and `KAFRUST_SASL_PASSWORD`, so plaintext, TLS, and SASL broker profiles can use the same smoke entry point.
 - `kafrust-protocol` includes `SaslHandshake v1` and `SaslAuthenticate v0` request/response wire types with byte-level tests.
 - Manual `Live Kafka Smoke` run `27326596181` passed on 2026-06-11 from `main`; the TLS job completed broker roundtrip test and example checks against Kafka 3.7.2 with `SecurityProtocol::Tls`.
+- Manual `Live Kafka Smoke` run `27397850803` passed on 2026-06-12 from `main`; the SASL_PLAINTEXT job completed broker roundtrip test and example checks against Kafka 3.7.2 with `SecurityProtocol::SaslPlaintext`.
 
 Strategic role:
 
-- This milestone is the next gate for real-world adoption. TLS broker roundtrips and mock-tested SASL/PLAIN are now covered, but a recorded live SASL broker profile is still needed before claiming secured enterprise compatibility.
+- This milestone is the next gate for real-world adoption. TLS and SASL_PLAINTEXT broker roundtrips are now covered, but broader secured producer, consumer, and group workflows still need recorded live checks before claiming secured enterprise compatibility.
 
 ## M12 API Stabilization
 

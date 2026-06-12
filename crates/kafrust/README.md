@@ -229,8 +229,8 @@ before connecting.
 SASL/PLAIN credentials can be stored on the shared client configuration with
 `sasl_plain(username, password)`. This does not change the selected
 `SecurityProtocol`; choose `SaslPlaintext` or `SaslTls` separately. Credential
-debug output redacts the password. The SASL/PLAIN handshake path is covered by
-mock broker tests; live SASL broker compatibility is not claimed yet.
+debug output redacts the password. The `SaslPlaintext` broker roundtrip path is
+verified against Kafka `3.7.2`; broader SASL workflows are not claimed yet.
 
 The default build does not include TLS dependencies. The current `tls` feature
 uses the `rustls` ring crypto provider, which can require native build tooling
@@ -252,8 +252,8 @@ Verified high-level paths include:
 
 - APIs are pre-`1.0` and can change between minor versions.
 - TLS is feature-gated, currently uses the `rustls` ring crypto provider, and
-  is verified for the broker roundtrip path against Kafka `3.7.2`; SASL is not
-  implemented yet.
+  is verified for the broker roundtrip path against Kafka `3.7.2`;
+  SASL/PLAIN is verified for the `SaslPlaintext` broker roundtrip path.
 - Broker compatibility is verified against Kafka `3.7.2` only.
 - Multi-broker clusters, leader failover, rack awareness, and partition
   expansion are not yet claimed.

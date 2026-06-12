@@ -235,8 +235,8 @@ kafrust의 호환성 주장은 실제 broker로 검증된 동작으로 제한합
 - plaintext TCP는 기본 networking path로 유지됩니다.
 - TLS transport는 non-default `tls` crate feature 뒤에서 사용할 수 있으며,
   Kafka `3.7.2` broker roundtrip path에 대해 검증되었습니다.
-- SASL/PLAIN 인증은 설정된 `SaslPlaintext`/`SaslTls` 연결에서 구현되어 있지만,
-  아직 live SASL broker profile은 호환성 범위로 주장하지 않습니다.
+- SASL/PLAIN 인증은 Kafka `3.7.2` `SaslPlaintext` broker roundtrip path에서
+  검증되었습니다. 더 넓은 SASL workflow는 아직 지원 범위로 주장하지 않습니다.
 - broker compatibility는 Kafka `3.7.2`에 대해서만 검증되었습니다.
 - multi-broker cluster, leader failover, rack awareness, partition expansion은 아직
   지원 범위로 주장하지 않습니다.
