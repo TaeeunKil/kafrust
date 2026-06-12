@@ -44,6 +44,8 @@ client paths:
 - `Heartbeat v2`
 - `OffsetFetch v2`
 - `OffsetCommit v2`
+- `SaslHandshake v1`
+- `SaslAuthenticate v0`
 - classic consumer protocol subscription and assignment payloads
 
 ## Encoding Example
@@ -97,6 +99,7 @@ single-node KRaft, over `PLAINTEXT`.
 - This crate does not implement a broker.
 - This crate does not perform network I/O.
 - Protocol coverage is intentionally incomplete.
+- SASL protocol structs do not perform authentication by themselves.
 - Compression, transactions, idempotent producer protocol paths, and admin APIs
   are not complete yet.
 - Public APIs are pre-`1.0` and can change between minor versions.

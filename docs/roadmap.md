@@ -389,6 +389,7 @@ Evidence:
 - Focused tests cover TLS bootstrap server-name extraction, invalid TLS server names, SASL unsupported behavior, and TLS unsupported behavior when the feature is disabled.
 - CI runs `check`, `clippy`, and `test` for both the default workspace path and the `kafrust --features tls` path.
 - The broker roundtrip test and example accept `KAFRUST_SECURITY_PROTOCOL`, so plaintext, TLS, and future SASL broker profiles can use the same smoke entry point.
+- `kafrust-protocol` includes `SaslHandshake v1` and `SaslAuthenticate v0` request/response wire types with byte-level tests; high-level authentication is still intentionally not claimed.
 - Manual `Live Kafka Smoke` run `27326596181` passed on 2026-06-11 from `main`; the TLS job completed broker roundtrip test and example checks against Kafka 3.7.2 with `SecurityProtocol::Tls`.
 
 Strategic role:
