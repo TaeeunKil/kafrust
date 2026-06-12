@@ -377,11 +377,11 @@ Known limits:
 - Producer, direct consumer, and full consumer group workflows over TLS are not claimed beyond the broker roundtrip path yet.
 - The current `tls` feature uses the `rustls` ring crypto provider, which can require native build tooling in some environments; the default kafrust build still has no required C toolchain.
 - `SecurityProtocol::Tls` returns `Unsupported` when kafrust is built without the `tls` feature.
-- SASL/PLAIN authentication is implemented and has completed recorded
-  `ApiVersions`, `Metadata`, and `FindCoordinator` roundtrips against a
+- SASL/PLAIN authentication is implemented and has completed recorded broker
+  roundtrip, producer, direct consumer, and consumer group smoke paths against a
   SASL_PLAINTEXT broker.
-- Producer, direct consumer, and full consumer group workflows over SASL are not
-  claimed beyond the broker roundtrip path yet.
+- SASL_SSL and SASL workflows beyond the listed SASL_PLAINTEXT smoke examples
+  are not claimed yet.
 
 Evidence:
 
@@ -398,10 +398,11 @@ Evidence:
 - `kafrust-protocol` includes `SaslHandshake v1` and `SaslAuthenticate v0` request/response wire types with byte-level tests.
 - Manual `Live Kafka Smoke` run `27326596181` passed on 2026-06-11 from `main`; the TLS job completed broker roundtrip test and example checks against Kafka 3.7.2 with `SecurityProtocol::Tls`.
 - Manual `Live Kafka Smoke` run `27397850803` passed on 2026-06-12 from `main`; the SASL_PLAINTEXT job completed broker roundtrip test and example checks against Kafka 3.7.2 with `SecurityProtocol::SaslPlaintext`.
+- Manual `Live Kafka Smoke` run `27399057735` passed on 2026-06-12 from `main`; the SASL_PLAINTEXT job completed broker roundtrip, producer, direct consumer, and consumer group checks against Kafka 3.7.2 with `SecurityProtocol::SaslPlaintext`.
 
 Strategic role:
 
-- This milestone is the next gate for real-world adoption. TLS and SASL_PLAINTEXT broker roundtrips are now covered, but broader secured producer, consumer, and group workflows still need recorded live checks before claiming secured enterprise compatibility.
+- This milestone is the next gate for real-world adoption. TLS broker roundtrips and SASL_PLAINTEXT producer, direct consumer, and consumer group smoke paths are now covered, but SASL_SSL, SCRAM, multi-broker secured profiles, and broader enterprise compatibility are still unclaimed.
 
 ## M12 API Stabilization
 
