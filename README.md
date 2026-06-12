@@ -275,6 +275,7 @@ Generated API documentation:
 - [Roadmap](docs/roadmap.md)
 - [Broker roundtrip](docs/broker-roundtrip.md)
 - [Compatibility](docs/compatibility.md)
+- [API stability](docs/api-stability.md)
 - [Producer API direction](docs/producer-api.md)
 - [Producer buffering and linger design](docs/producer-buffering.md)
 - [Consumer API direction](docs/consumer-api.md)
