@@ -20,6 +20,10 @@ use kafrust_protocol::api::produce::{
     MessageSetMessage, ProducePartitionV2, ProducePartitionV3, ProduceRequestV2, ProduceRequestV3,
     ProduceResponseV2, ProduceTopicV2, ProduceTopicV3, RecordBatchMessage,
 };
+use kafrust_protocol::api::sasl::{
+    SaslAuthenticateRequestV0, SaslAuthenticateResponseV0, SaslHandshakeRequestV1,
+    SaslHandshakeResponseV1,
+};
 use kafrust_protocol::api::sync_group::{
     SyncGroupAssignment, SyncGroupRequestV2, SyncGroupResponseV2,
 };
@@ -103,6 +107,36 @@ impl Client {
         let mut decoder = Decoder::new(&response);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(ApiVersionsResponseV0::decode_body(&mut decoder)?)
+    }
+
+    pub(crate) async fn sasl_handshake_v1(
+        &mut self,
+        mechanism: impl Into<String>,
+    ) -> Result<SaslHandshakeResponseV1> {
+        let request = SaslHandshakeRequestV1 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            mechanism: mechanism.into(),
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::new(&response);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(SaslHandshakeResponseV1::decode_body(&mut decoder)?)
+    }
+
+    pub(crate) async fn sasl_authenticate_v0(
+        &mut self,
+        auth_bytes: Vec<u8>,
+    ) -> Result<SaslAuthenticateResponseV0> {
+        let request = SaslAuthenticateRequestV0 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            auth_bytes,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::new(&response);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(SaslAuthenticateResponseV0::decode_body(&mut decoder)?)
     }
 
     /// Sends Metadata v1 for all topics or the provided topic names.

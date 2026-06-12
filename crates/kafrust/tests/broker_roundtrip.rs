@@ -11,9 +11,7 @@ async fn api_versions_and_metadata_roundtrip_when_broker_is_configured() {
         return;
     };
 
-    let mut client = ClientConfig::new([bootstrap])
-        .client_id("kafrust-integration")
-        .security_protocol(security_protocol_from_env())
+    let mut client = client_config_from_env(bootstrap, "kafrust-integration")
         .connect()
         .await
         .expect("connect to Kafka broker");
@@ -39,9 +37,7 @@ async fn find_group_coordinator_roundtrip_when_broker_is_configured() {
     };
     let group_id = std::env::var("KAFRUST_GROUP_ID").unwrap_or_else(|_| "kafrust-smoke".to_owned());
 
-    let mut client = ClientConfig::new([bootstrap])
-        .client_id("kafrust-integration")
-        .security_protocol(security_protocol_from_env())
+    let mut client = client_config_from_env(bootstrap, "kafrust-integration")
         .connect()
         .await
         .expect("connect to Kafka broker");
@@ -61,6 +57,22 @@ fn security_protocol_from_env() -> SecurityProtocol {
     };
 
     parse_security_protocol(&value).expect("valid KAFRUST_SECURITY_PROTOCOL")
+}
+
+fn client_config_from_env(bootstrap: String, client_id: &str) -> ClientConfig {
+    let mut config = ClientConfig::new([bootstrap])
+        .client_id(client_id)
+        .security_protocol(security_protocol_from_env());
+    if let Some((username, password)) = sasl_credentials_from_env() {
+        config = config.sasl_plain(username, password);
+    }
+    config
+}
+
+fn sasl_credentials_from_env() -> Option<(String, String)> {
+    let username = std::env::var("KAFRUST_SASL_USERNAME").ok()?;
+    let password = std::env::var("KAFRUST_SASL_PASSWORD").ok()?;
+    Some((username, password))
 }
 
 fn parse_security_protocol(value: &str) -> kafrust::Result<SecurityProtocol> {

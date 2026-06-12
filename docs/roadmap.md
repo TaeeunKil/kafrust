@@ -377,27 +377,27 @@ Known limits:
 - Producer, direct consumer, and full consumer group workflows over TLS are not claimed beyond the broker roundtrip path yet.
 - The current `tls` feature uses the `rustls` ring crypto provider, which can require native build tooling in some environments; the default kafrust build still has no required C toolchain.
 - `SecurityProtocol::Tls` returns `Unsupported` when kafrust is built without the `tls` feature.
-- SASL variants return `Unsupported`; SASL/PLAIN credentials can be configured
-  and redacted in debug output, but no SASL authentication flow is implemented
-  yet.
+- SASL/PLAIN authentication is implemented for configured `SaslPlaintext` and
+  `SaslTls` connections, but no live SASL broker profile has been recorded yet.
 
 Evidence:
 
 - `SecurityProtocol` models Kafka `PLAINTEXT`, `SSL`, `SASL_PLAINTEXT`, and `SASL_SSL` connection modes.
 - `ClientConfig`, `ProducerConfig`, `ConsumerConfig`, and `ConsumerGroupConfig` expose `security_protocol` builders.
 - `SaslMechanism::Plain` and `SaslCredentials::plain` model SASL/PLAIN authentication material separately from `SecurityProtocol`, and config debug output redacts passwords.
+- `ClientConfig` performs `SaslHandshake v1` followed by `SaslAuthenticate v0` for configured SASL/PLAIN connections; mock broker tests verify request ordering, PLAIN auth bytes, missing-credential errors, and authentication error redaction.
 - All current internal broker connection paths go through `ClientConfig`, so future TLS/SASL transport work has one configuration source.
 - `Client` owns an internal broker stream abstraction instead of storing `TcpStream` directly, so the TLS stream reuses the same Kafka request framing, timeout, and tracing path.
 - The non-default `tls` crate feature wires `SecurityProtocol::Tls` through `tokio-rustls`, `rustls`, and `rustls-platform-verifier` without pulling `aws-lc-rs`; plaintext remains the default build.
-- Focused tests cover TLS bootstrap server-name extraction, invalid TLS server names, SASL unsupported behavior, and TLS unsupported behavior when the feature is disabled.
+- Focused tests cover TLS bootstrap server-name extraction, invalid TLS server names, SASL missing-credential behavior, SASL/PLAIN handshake behavior, and TLS unsupported behavior when the feature is disabled.
 - CI runs `check`, `clippy`, and `test` for both the default workspace path and the `kafrust --features tls` path.
-- The broker roundtrip test and example accept `KAFRUST_SECURITY_PROTOCOL`, so plaintext, TLS, and future SASL broker profiles can use the same smoke entry point.
-- `kafrust-protocol` includes `SaslHandshake v1` and `SaslAuthenticate v0` request/response wire types with byte-level tests; high-level authentication is still intentionally not claimed.
+- The broker roundtrip test and example accept `KAFRUST_SECURITY_PROTOCOL`, `KAFRUST_SASL_USERNAME`, and `KAFRUST_SASL_PASSWORD`, so plaintext, TLS, and future SASL broker profiles can use the same smoke entry point.
+- `kafrust-protocol` includes `SaslHandshake v1` and `SaslAuthenticate v0` request/response wire types with byte-level tests.
 - Manual `Live Kafka Smoke` run `27326596181` passed on 2026-06-11 from `main`; the TLS job completed broker roundtrip test and example checks against Kafka 3.7.2 with `SecurityProtocol::Tls`.
 
 Strategic role:
 
-- This milestone is the next gate for real-world adoption. TLS broker roundtrips are now covered, but without SASL kafrust remains limited for many secured enterprise Kafka deployments.
+- This milestone is the next gate for real-world adoption. TLS broker roundtrips and mock-tested SASL/PLAIN are now covered, but a recorded live SASL broker profile is still needed before claiming secured enterprise compatibility.
 
 ## M12 API Stabilization
 
