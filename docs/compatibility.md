@@ -4,13 +4,13 @@ kafrust compatibility claims are scoped to behavior that has been verified again
 
 ## Current Compatibility Claim
 
-The `0.2.x` alpha line is verified against a single-node Apache Kafka 3.7.2 KRaft broker over plaintext TCP. TLS is verified for the broker roundtrip path only. SASL/PLAIN over SASL_PLAINTEXT is verified for broker roundtrip, producer, direct consumer, and consumer group smoke paths.
+The `0.2.x` alpha line is verified against a single-node Apache Kafka 3.7.2 KRaft broker over plaintext TCP. TLS and SASL/PLAIN over SASL_PLAINTEXT are verified for broker roundtrip, producer, direct consumer, and consumer group smoke paths.
 
 | Broker | Mode | Security | Verification | Status |
 | --- | --- | --- | --- | --- |
-| Apache Kafka 3.7.2 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, latest manual smoke run `27399057735` on 2026-06-12 | Passing |
-| Apache Kafka 3.7.2 | single-node KRaft | TLS | `Live Kafka Smoke` TLS job, latest manual smoke run `27399057735` on 2026-06-12 | Passing |
-| Apache Kafka 3.7.2 | single-node KRaft | SASL_PLAINTEXT with SASL/PLAIN | `Live Kafka Smoke` SASL_PLAINTEXT job, latest manual smoke run `27399057735` on 2026-06-12 | Passing |
+| Apache Kafka 3.7.2 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, latest manual smoke run `27399394544` on 2026-06-12 | Passing |
+| Apache Kafka 3.7.2 | single-node KRaft | TLS | `Live Kafka Smoke` TLS job, latest manual smoke run `27399394544` on 2026-06-12 | Passing |
+| Apache Kafka 3.7.2 | single-node KRaft | SASL_PLAINTEXT with SASL/PLAIN | `Live Kafka Smoke` SASL_PLAINTEXT job, latest manual smoke run `27399394544` on 2026-06-12 | Passing |
 
 ## Verified Paths
 
@@ -27,6 +27,9 @@ The Kafka 3.7.2 TLS smoke path covers:
 - `ApiVersions v0` and `Metadata v1` roundtrips through `SecurityProtocol::Tls`.
 - `FindCoordinator v1` for consumer group coordinator discovery through `SecurityProtocol::Tls`.
 - The `broker_roundtrip` example through `SecurityProtocol::Tls`.
+- High-level producer metadata lookup, leader routing, single-record send, batch send, and buffered send through `SecurityProtocol::Tls`.
+- Direct consumer fetch from an assigned topic partition through `SecurityProtocol::Tls`.
+- Consumer group join, sync, heartbeat, poll, and offset commit through `SecurityProtocol::Tls`.
 
 The Kafka 3.7.2 SASL_PLAINTEXT smoke path covers:
 
@@ -41,7 +44,7 @@ The Kafka 3.7.2 SASL_PLAINTEXT smoke path covers:
 
 The current compatibility claim does not cover:
 
-- Producer, direct consumer, or full consumer group workflows over TLS beyond the broker roundtrip path.
+- TLS workflows beyond the listed TLS smoke examples.
 - SASL workflows beyond the listed SASL_PLAINTEXT smoke examples.
 - SASL_SSL broker profiles.
 - Multi-broker clusters, leader failover, rack awareness, or partition expansion.
