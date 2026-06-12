@@ -236,9 +236,9 @@ See [Compatibility](docs/compatibility.md) and
 - Plaintext TCP remains the default networking path.
 - TLS transport is available behind the non-default `tls` crate feature and is
   verified for the broker roundtrip path against Kafka `3.7.2`.
-- SASL/PLAIN authentication is implemented for configured
-  `SaslPlaintext`/`SaslTls` connections, but no live SASL broker profile is
-  claimed yet.
+- SASL/PLAIN authentication is verified for the broker roundtrip path against
+  Kafka `3.7.2` over `SaslPlaintext`; broader SASL workflows are not claimed
+  yet.
 - Broker compatibility is verified against Kafka `3.7.2` only.
 - Multi-broker clusters, leader failover, rack awareness, and partition
   expansion are not yet claimed.
