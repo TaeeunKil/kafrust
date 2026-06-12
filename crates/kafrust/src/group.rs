@@ -84,6 +84,12 @@ impl ConsumerGroupConfig {
         self
     }
 
+    /// Sets SASL/PLAIN credentials for group, coordinator, and fetch requests.
+    pub fn sasl_plain(mut self, username: impl Into<String>, password: impl Into<String>) -> Self {
+        self.client = self.client.sasl_plain(username, password);
+        self
+    }
+
     /// Subscribes this group member to a Kafka topic.
     pub fn subscribe(mut self, topic: impl Into<String>) -> Self {
         self.topics.push(topic.into());
@@ -929,6 +935,7 @@ mod tests {
             .client_id("orders-reader")
             .request_timeout_ms(5_000)
             .security_protocol(SecurityProtocol::SaslPlaintext)
+            .sasl_plain("alice", "secret-password")
             .subscribe("orders")
             .session_timeout_ms(8_000)
             .rebalance_timeout_ms(20_000)
@@ -945,6 +952,10 @@ mod tests {
         assert_eq!(
             config.client.security_protocol_ref(),
             SecurityProtocol::SaslPlaintext
+        );
+        assert_eq!(
+            config.client.sasl_credentials_ref().unwrap().username(),
+            "alice"
         );
     }
 

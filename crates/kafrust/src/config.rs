@@ -1,5 +1,6 @@
 use crate::client::Client;
 use crate::error::{Error, Result};
+use core::fmt;
 #[cfg(feature = "tls")]
 use std::sync::Arc;
 use std::time::Duration;
@@ -24,6 +25,70 @@ pub enum SecurityProtocol {
     SaslTls,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Kafka SASL mechanism selected for authentication.
+pub enum SaslMechanism {
+    /// Kafka `PLAIN` SASL mechanism.
+    Plain,
+}
+
+impl SaslMechanism {
+    /// Returns the Kafka protocol mechanism name.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Plain => "PLAIN",
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq)]
+/// SASL authentication material.
+///
+/// `Debug` output redacts the password so config diagnostics do not expose raw
+/// credentials. The password accessor is still available because callers own
+/// the configured secret and future authentication code needs the raw value.
+pub struct SaslCredentials {
+    mechanism: SaslMechanism,
+    username: String,
+    password: String,
+}
+
+impl SaslCredentials {
+    /// Creates SASL/PLAIN credentials from a username and password.
+    pub fn plain(username: impl Into<String>, password: impl Into<String>) -> Self {
+        Self {
+            mechanism: SaslMechanism::Plain,
+            username: username.into(),
+            password: password.into(),
+        }
+    }
+
+    /// Returns the configured SASL mechanism.
+    pub fn mechanism(&self) -> SaslMechanism {
+        self.mechanism
+    }
+
+    /// Returns the configured SASL username.
+    pub fn username(&self) -> &str {
+        &self.username
+    }
+
+    /// Returns the configured SASL password.
+    pub fn password(&self) -> &str {
+        &self.password
+    }
+}
+
+impl fmt::Debug for SaslCredentials {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SaslCredentials")
+            .field("mechanism", &self.mechanism)
+            .field("username", &self.username)
+            .field("password", &"<redacted>")
+            .finish()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// Connection settings shared by low-level clients, producers, and consumers.
 pub struct ClientConfig {
@@ -31,6 +96,7 @@ pub struct ClientConfig {
     client_id: Option<String>,
     request_timeout: Duration,
     security_protocol: SecurityProtocol,
+    sasl_credentials: Option<SaslCredentials>,
 }
 
 impl ClientConfig {
@@ -41,6 +107,7 @@ impl ClientConfig {
             client_id: None,
             request_timeout: Duration::from_millis(DEFAULT_REQUEST_TIMEOUT_MS),
             security_protocol: SecurityProtocol::Plaintext,
+            sasl_credentials: None,
         }
     }
 
@@ -62,6 +129,16 @@ impl ClientConfig {
         self
     }
 
+    /// Sets SASL/PLAIN credentials without changing the configured security protocol.
+    ///
+    /// Use [`SecurityProtocol::SaslPlaintext`] or [`SecurityProtocol::SaslTls`]
+    /// to choose the transport. This separation mirrors Kafka's
+    /// `security.protocol` and `sasl.mechanism` configuration model.
+    pub fn sasl_plain(mut self, username: impl Into<String>, password: impl Into<String>) -> Self {
+        self.sasl_credentials = Some(SaslCredentials::plain(username, password));
+        self
+    }
+
     /// Returns the configured bootstrap servers in connection order.
     pub fn bootstrap_servers(&self) -> &[String] {
         &self.bootstrap_servers
@@ -80,6 +157,11 @@ impl ClientConfig {
     /// Returns the configured Kafka security protocol.
     pub fn security_protocol_ref(&self) -> SecurityProtocol {
         self.security_protocol
+    }
+
+    /// Returns the configured SASL credentials, when present.
+    pub fn sasl_credentials_ref(&self) -> Option<&SaslCredentials> {
+        self.sasl_credentials.as_ref()
     }
 
     /// Connects to the first reachable bootstrap server.
@@ -197,7 +279,10 @@ fn tls_server_name_from_bootstrap_server(server: &str) -> Result<String> {
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
-    use super::{tls_server_name_from_bootstrap_server, ClientConfig, SecurityProtocol};
+    use super::{
+        tls_server_name_from_bootstrap_server, ClientConfig, SaslCredentials, SaslMechanism,
+        SecurityProtocol,
+    };
     use crate::Error;
     use std::time::Duration;
     use tokio::net::TcpListener;
@@ -220,6 +305,31 @@ mod tests {
             ClientConfig::new(["localhost:9092"]).security_protocol(SecurityProtocol::SaslTls);
 
         assert_eq!(config.security_protocol_ref(), SecurityProtocol::SaslTls);
+    }
+
+    #[test]
+    fn stores_sasl_plain_credentials_without_changing_security_protocol() {
+        let config = ClientConfig::new(["localhost:9092"]).sasl_plain("alice", "secret-password");
+        let credentials = config.sasl_credentials_ref().unwrap();
+
+        assert_eq!(config.security_protocol_ref(), SecurityProtocol::Plaintext);
+        assert_eq!(credentials.mechanism(), SaslMechanism::Plain);
+        assert_eq!(credentials.mechanism().as_str(), "PLAIN");
+        assert_eq!(credentials.username(), "alice");
+        assert_eq!(credentials.password(), "secret-password");
+    }
+
+    #[test]
+    fn redacts_sasl_password_in_debug_output() {
+        let credentials = SaslCredentials::plain("alice", "secret-password");
+        let config = ClientConfig::new(["localhost:9092"])
+            .security_protocol(SecurityProtocol::SaslPlaintext)
+            .sasl_plain("alice", "secret-password");
+
+        assert!(!format!("{credentials:?}").contains("secret-password"));
+        assert!(format!("{credentials:?}").contains("<redacted>"));
+        assert!(!format!("{config:?}").contains("secret-password"));
+        assert!(format!("{config:?}").contains("<redacted>"));
     }
 
     #[tokio::test]

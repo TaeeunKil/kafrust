@@ -1232,6 +1232,12 @@ impl ProducerConfig {
         self
     }
 
+    /// Sets SASL/PLAIN credentials for producer broker connections.
+    pub fn sasl_plain(mut self, username: impl Into<String>, password: impl Into<String>) -> Self {
+        self.client = self.client.sasl_plain(username, password);
+        self
+    }
+
     /// Sets the Kafka produce acknowledgement policy.
     pub fn acks(mut self, acks: Acks) -> Self {
         self.acks = acks;
@@ -1828,6 +1834,7 @@ mod tests {
             .client_id("orders-api")
             .request_timeout_ms(5_000)
             .security_protocol(SecurityProtocol::SaslTls)
+            .sasl_plain("alice", "secret-password")
             .max_retries(3)
             .max_records_per_batch(128)
             .max_batch_bytes(64 * 1024)
@@ -1843,6 +1850,14 @@ mod tests {
         assert_eq!(
             config.client_config().security_protocol_ref(),
             SecurityProtocol::SaslTls
+        );
+        assert_eq!(
+            config
+                .client_config()
+                .sasl_credentials_ref()
+                .unwrap()
+                .username(),
+            "alice"
         );
     }
 
