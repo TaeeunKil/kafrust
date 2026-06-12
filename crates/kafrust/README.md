@@ -253,7 +253,8 @@ Verified high-level paths include:
 
 - APIs are pre-`1.0` and can change between minor versions.
 - TLS is feature-gated, currently uses the `rustls` ring crypto provider, and
-  is verified for the broker roundtrip path against Kafka `3.7.2`;
+  is verified for the broker roundtrip, producer, direct consumer, and consumer
+  group smoke paths against Kafka `3.7.2`;
   SASL/PLAIN is verified for the `SaslPlaintext` broker roundtrip, producer,
   direct consumer, and consumer group smoke paths.
 - Broker compatibility is verified against Kafka `3.7.2` only.

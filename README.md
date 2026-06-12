@@ -237,7 +237,8 @@ See [Compatibility](docs/compatibility.md) and
 - Public APIs are pre-`1.0` and can change between minor releases.
 - Plaintext TCP remains the default networking path.
 - TLS transport is available behind the non-default `tls` crate feature and is
-  verified for the broker roundtrip path against Kafka `3.7.2`.
+  verified against Kafka `3.7.2` for broker roundtrip, producer, direct
+  consumer, and consumer group smoke paths.
 - SASL/PLAIN authentication is verified against Kafka `3.7.2` over
   `SaslPlaintext` for broker roundtrip, producer, direct consumer, and consumer
   group smoke paths; `SaslTls` and broader SASL workflows are not claimed yet.

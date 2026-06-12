@@ -70,7 +70,7 @@ Required evidence:
 
 Known limits:
 
-- plaintext remains the default networking path; TLS transport is feature-gated and live-verified for broker roundtrips; SASL/PLAIN is live-verified for SASL_PLAINTEXT broker roundtrip, producer, direct consumer, and consumer group smoke paths
+- plaintext remains the default networking path; TLS and SASL/PLAIN are live-verified for broker roundtrip, producer, direct consumer, and consumer group smoke paths on single-node secured Kafka profiles
 - narrow broker compatibility matrix
 - incomplete protocol coverage
 - pre-1.0 public API
