@@ -201,6 +201,26 @@ jobs:
       - name: Run TLS broker roundtrip example
         run: cargo run -p kafrust --features tls --example broker_roundtrip
 
+      - name: Run TLS producer example
+        run: cargo run -p kafrust --features tls --example producer_send
+
+      - name: Run TLS producer batch example
+        run: cargo run -p kafrust --features tls --example producer_send_batch
+
+      - name: Run TLS buffered producer example
+        env:
+          KAFRUST_BUFFERED_COUNT: "3"
+        run: cargo run -p kafrust --features tls --example producer_buffered
+
+      - name: Run TLS direct consumer example
+        env:
+          KAFRUST_PARTITION: "0"
+          KAFRUST_OFFSET: "0"
+        run: cargo run -p kafrust --features tls --example consumer_fetch
+
+      - name: Run TLS consumer group example
+        run: cargo run -p kafrust --features tls --example consumer_group_poll
+
       - name: Dump TLS Kafka logs
         if: failure()
         run: docker logs kafrust-kafka-tls
