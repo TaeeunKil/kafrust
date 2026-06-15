@@ -483,6 +483,10 @@ Evidence:
   server name when the bootstrap host differs from the broker certificate
   subject alternative name. Broker smoke examples accept
   `KAFRUST_TLS_SERVER_NAME`.
+- `ClientConfig::tls_root_certificate_der` and the matching producer, consumer,
+  and consumer group builders add DER-encoded root certificates while keeping
+  platform roots enabled. Broker smoke examples accept
+  `KAFRUST_TLS_ROOT_CERT_DER_PATH`.
 
 Strategic role:
 

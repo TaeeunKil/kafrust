@@ -12,6 +12,7 @@ async fn api_versions_and_metadata_roundtrip_when_broker_is_configured() {
     };
 
     let mut client = client_config_from_env(bootstrap, "kafrust-integration")
+        .expect("valid broker test configuration")
         .connect()
         .await
         .expect("connect to Kafka broker");
@@ -38,6 +39,7 @@ async fn find_group_coordinator_roundtrip_when_broker_is_configured() {
     let group_id = std::env::var("KAFRUST_GROUP_ID").unwrap_or_else(|_| "kafrust-smoke".to_owned());
 
     let mut client = client_config_from_env(bootstrap, "kafrust-integration")
+        .expect("valid broker test configuration")
         .connect()
         .await
         .expect("connect to Kafka broker");
@@ -59,7 +61,7 @@ fn security_protocol_from_env() -> SecurityProtocol {
     parse_security_protocol(&value).expect("valid KAFRUST_SECURITY_PROTOCOL")
 }
 
-fn client_config_from_env(bootstrap: String, client_id: &str) -> ClientConfig {
+fn client_config_from_env(bootstrap: String, client_id: &str) -> kafrust::Result<ClientConfig> {
     let mut config = ClientConfig::new([bootstrap])
         .client_id(client_id)
         .security_protocol(security_protocol_from_env());
@@ -69,7 +71,10 @@ fn client_config_from_env(bootstrap: String, client_id: &str) -> ClientConfig {
     if let Some(server_name) = tls_server_name_from_env() {
         config = config.tls_server_name(server_name);
     }
-    config
+    if let Some(certificate) = tls_root_certificate_der_from_env()? {
+        config = config.tls_root_certificate_der(certificate);
+    }
+    Ok(config)
 }
 
 fn sasl_credentials_from_env() -> Option<(String, String)> {
@@ -80,6 +85,14 @@ fn sasl_credentials_from_env() -> Option<(String, String)> {
 
 fn tls_server_name_from_env() -> Option<String> {
     std::env::var("KAFRUST_TLS_SERVER_NAME").ok()
+}
+
+fn tls_root_certificate_der_from_env() -> kafrust::Result<Option<Vec<u8>>> {
+    let Ok(path) = std::env::var("KAFRUST_TLS_ROOT_CERT_DER_PATH") else {
+        return Ok(None);
+    };
+
+    Ok(Some(std::fs::read(path)?))
 }
 
 fn parse_security_protocol(value: &str) -> kafrust::Result<SecurityProtocol> {

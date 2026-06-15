@@ -96,6 +96,7 @@ pub struct ClientConfig {
     request_timeout: Duration,
     security_protocol: SecurityProtocol,
     tls_server_name: Option<String>,
+    tls_root_certificates_der: Vec<Vec<u8>>,
     sasl_credentials: Option<SaslCredentials>,
 }
 
@@ -108,6 +109,7 @@ impl ClientConfig {
             request_timeout: Duration::from_millis(DEFAULT_REQUEST_TIMEOUT_MS),
             security_protocol: SecurityProtocol::Plaintext,
             tls_server_name: None,
+            tls_root_certificates_der: Vec::new(),
             sasl_credentials: None,
         }
     }
@@ -138,6 +140,15 @@ impl ClientConfig {
     /// and [`SecurityProtocol::SaslTls`].
     pub fn tls_server_name(mut self, server_name: impl Into<String>) -> Self {
         self.tls_server_name = Some(server_name.into());
+        self
+    }
+
+    /// Adds a DER-encoded TLS root certificate for broker certificate validation.
+    ///
+    /// Extra roots augment the platform verifier when [`SecurityProtocol::Tls`]
+    /// or [`SecurityProtocol::SaslTls`] is used. Platform roots are still used.
+    pub fn tls_root_certificate_der(mut self, certificate: impl Into<Vec<u8>>) -> Self {
+        self.tls_root_certificates_der.push(certificate.into());
         self
     }
 
@@ -174,6 +185,11 @@ impl ClientConfig {
     /// Returns the configured TLS server name override, when present.
     pub fn tls_server_name_ref(&self) -> Option<&str> {
         self.tls_server_name.as_deref()
+    }
+
+    /// Returns configured DER-encoded TLS root certificates.
+    pub fn tls_root_certificates_der(&self) -> &[Vec<u8>] {
+        &self.tls_root_certificates_der
     }
 
     /// Returns the configured SASL credentials, when present.
@@ -241,8 +257,8 @@ impl ClientConfig {
 
     #[cfg(feature = "tls")]
     async fn connect_tls_broker(&self, server: String) -> Result<Client> {
-        use rustls::pki_types::ServerName;
-        use rustls_platform_verifier::BuilderVerifierExt;
+        use rustls::pki_types::{CertificateDer, ServerName};
+        use rustls_platform_verifier::{BuilderVerifierExt, Verifier};
         use tokio_rustls::TlsConnector;
 
         let server_name_text = self.tls_server_name_for_connection(&server)?;
@@ -253,16 +269,33 @@ impl ClientConfig {
         })?;
 
         let provider = Arc::new(rustls::crypto::ring::default_provider());
-        let tls_config = rustls::ClientConfig::builder_with_provider(provider)
+        let tls_builder = rustls::ClientConfig::builder_with_provider(provider.clone())
             .with_safe_default_protocol_versions()
             .map_err(|error| Error::TlsConfig {
                 reason: format!("failed to configure TLS protocol versions: {error}"),
-            })?
-            .with_platform_verifier()
+            })?;
+        let tls_builder = if self.tls_root_certificates_der.is_empty() {
+            tls_builder
+                .with_platform_verifier()
+                .map_err(|error| Error::TlsConfig {
+                    reason: format!("failed to configure platform certificate verifier: {error}"),
+                })?
+        } else {
+            let verifier = Verifier::new_with_extra_roots(
+                self.tls_root_certificates_der
+                    .iter()
+                    .cloned()
+                    .map(CertificateDer::from),
+                provider,
+            )
             .map_err(|error| Error::TlsConfig {
-                reason: format!("failed to configure platform certificate verifier: {error}"),
-            })?
-            .with_no_client_auth();
+                reason: format!("failed to configure TLS certificate verifier: {error}"),
+            })?;
+            tls_builder
+                .dangerous()
+                .with_custom_certificate_verifier(Arc::new(verifier))
+        };
+        let tls_config = tls_builder.with_no_client_auth();
 
         let tcp_stream = tokio::net::TcpStream::connect(server.as_str()).await?;
         let tls_stream = TlsConnector::from(Arc::new(tls_config))
@@ -414,6 +447,19 @@ mod tests {
                 .tls_server_name_for_connection("127.0.0.1:9093")
                 .unwrap(),
             "broker.example.com"
+        );
+    }
+
+    #[test]
+    fn stores_tls_root_certificate_der() {
+        let config = ClientConfig::new(["localhost:9093"])
+            .security_protocol(SecurityProtocol::Tls)
+            .tls_root_certificate_der([1, 2, 3])
+            .tls_root_certificate_der([4, 5, 6]);
+
+        assert_eq!(
+            config.tls_root_certificates_der(),
+            &[vec![1, 2, 3], vec![4, 5, 6]]
         );
     }
 
@@ -644,6 +690,19 @@ mod tests {
             .unwrap_err();
 
         assert!(matches!(error, Error::InvalidTlsServerName { .. }));
+    }
+
+    #[cfg(feature = "tls")]
+    #[tokio::test]
+    async fn rejects_invalid_tls_root_certificate_before_connecting() {
+        let error = ClientConfig::new(["localhost:9093"])
+            .security_protocol(SecurityProtocol::Tls)
+            .tls_root_certificate_der([1, 2, 3])
+            .connect()
+            .await
+            .unwrap_err();
+
+        assert!(matches!(error, Error::TlsConfig { .. }));
     }
 
     #[test]

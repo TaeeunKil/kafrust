@@ -13,12 +13,16 @@ where
     if let Some(server_name) = tls_server_name_from_env() {
         config = config.tls_server_name(server_name);
     }
+    if let Some(certificate) = tls_root_certificate_der_from_env()? {
+        config = config.tls_root_certificate_der(certificate);
+    }
     Ok(config)
 }
 
 pub(crate) trait ExampleSecurityConfig: Sized {
     fn security_protocol(self, security_protocol: SecurityProtocol) -> Self;
     fn tls_server_name(self, server_name: String) -> Self;
+    fn tls_root_certificate_der(self, certificate: Vec<u8>) -> Self;
     fn sasl_plain(self, username: String, password: String) -> Self;
 }
 
@@ -29,6 +33,10 @@ impl ExampleSecurityConfig for ClientConfig {
 
     fn tls_server_name(self, server_name: String) -> Self {
         ClientConfig::tls_server_name(self, server_name)
+    }
+
+    fn tls_root_certificate_der(self, certificate: Vec<u8>) -> Self {
+        ClientConfig::tls_root_certificate_der(self, certificate)
     }
 
     fn sasl_plain(self, username: String, password: String) -> Self {
@@ -45,6 +53,10 @@ impl ExampleSecurityConfig for ProducerConfig {
         ProducerConfig::tls_server_name(self, server_name)
     }
 
+    fn tls_root_certificate_der(self, certificate: Vec<u8>) -> Self {
+        ProducerConfig::tls_root_certificate_der(self, certificate)
+    }
+
     fn sasl_plain(self, username: String, password: String) -> Self {
         ProducerConfig::sasl_plain(self, username, password)
     }
@@ -59,6 +71,10 @@ impl ExampleSecurityConfig for ConsumerConfig {
         ConsumerConfig::tls_server_name(self, server_name)
     }
 
+    fn tls_root_certificate_der(self, certificate: Vec<u8>) -> Self {
+        ConsumerConfig::tls_root_certificate_der(self, certificate)
+    }
+
     fn sasl_plain(self, username: String, password: String) -> Self {
         ConsumerConfig::sasl_plain(self, username, password)
     }
@@ -71,6 +87,10 @@ impl ExampleSecurityConfig for ConsumerGroupConfig {
 
     fn tls_server_name(self, server_name: String) -> Self {
         ConsumerGroupConfig::tls_server_name(self, server_name)
+    }
+
+    fn tls_root_certificate_der(self, certificate: Vec<u8>) -> Self {
+        ConsumerGroupConfig::tls_root_certificate_der(self, certificate)
     }
 
     fn sasl_plain(self, username: String, password: String) -> Self {
@@ -94,6 +114,14 @@ fn sasl_credentials_from_env() -> Option<(String, String)> {
 
 fn tls_server_name_from_env() -> Option<String> {
     std::env::var("KAFRUST_TLS_SERVER_NAME").ok()
+}
+
+fn tls_root_certificate_der_from_env() -> kafrust::Result<Option<Vec<u8>>> {
+    let Ok(path) = std::env::var("KAFRUST_TLS_ROOT_CERT_DER_PATH") else {
+        return Ok(None);
+    };
+
+    Ok(Some(std::fs::read(path)?))
 }
 
 fn parse_security_protocol(value: &str) -> kafrust::Result<SecurityProtocol> {

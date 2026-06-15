@@ -20,7 +20,9 @@ cargo test -p kafrust --features tls --test broker_roundtrip -- --nocapture
 ```
 
 Set `KAFRUST_TLS_SERVER_NAME` when the bootstrap host or IP address differs
-from the broker certificate subject alternative name.
+from the broker certificate subject alternative name. Set
+`KAFRUST_TLS_ROOT_CERT_DER_PATH` to add one DER-encoded root certificate while
+keeping platform roots enabled.
 
 For SASL/PLAIN broker checks, set `KAFRUST_SECURITY_PROTOCOL` to
 `sasl_plaintext` or `sasl_tls` and provide `KAFRUST_SASL_USERNAME` plus
@@ -42,7 +44,7 @@ See [Compatibility](compatibility.md) for the current tested broker matrix and t
 
 Requests made through `ClientConfig`, `ProducerConfig`, `ConsumerConfig`, and `ConsumerGroupConfig` use a 30 second request timeout by default. Override it with `request_timeout_ms` when running broker checks against slow or intentionally delayed environments.
 
-`ClientConfig::security_protocol` and the matching producer, consumer, and group builders default to `SecurityProtocol::Plaintext`. `SecurityProtocol::Tls` uses the non-default `tls` crate feature and is covered by the recorded broker roundtrip, producer, direct consumer, and consumer group smoke profile. TLS server name validation defaults to the bootstrap host and can be overridden with `tls_server_name(name)` or `KAFRUST_TLS_SERVER_NAME` for examples and broker checks. SASL/PLAIN authentication is implemented for configured `SaslPlaintext` and `SaslTls` connections; `SaslPlaintext` is covered by the recorded broker roundtrip, producer, direct consumer, and consumer group smoke profile.
+`ClientConfig::security_protocol` and the matching producer, consumer, and group builders default to `SecurityProtocol::Plaintext`. `SecurityProtocol::Tls` uses the non-default `tls` crate feature and is covered by the recorded broker roundtrip, producer, direct consumer, and consumer group smoke profile. TLS server name validation defaults to the bootstrap host and can be overridden with `tls_server_name(name)` or `KAFRUST_TLS_SERVER_NAME` for examples and broker checks. Extra DER root certificates can be added with `tls_root_certificate_der(bytes)` or `KAFRUST_TLS_ROOT_CERT_DER_PATH` for examples and broker checks. SASL/PLAIN authentication is implemented for configured `SaslPlaintext` and `SaslTls` connections; `SaslPlaintext` is covered by the recorded broker roundtrip, producer, direct consumer, and consumer group smoke profile.
 
 When multiple bootstrap servers are configured, `ClientConfig::connect` tries them in order until one connection succeeds.
 
