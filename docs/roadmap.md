@@ -408,7 +408,7 @@ Strategic role:
 
 ## M12 API Stabilization
 
-Status: In progress.
+Status: Complete.
 
 Goal: prepare a stable pre-1.0 API shape with clear compatibility rules for downstream users.
 
@@ -445,6 +445,13 @@ Evidence:
 - `docs/release.md` defines a release note template with required breaking
   change, migration note, compatibility evidence, verification, and known-limit
   sections.
+
+Strategic role:
+
+- This milestone made the current alpha public surface explicit before adding
+  more Kafka feature coverage. Future milestones can still change APIs before
+  `1.0`, but those changes now have a documented stability policy, root export
+  audit, compiled rustdoc examples, and release note migration format.
 
 ## M13 Secured Enterprise Connectivity
 
