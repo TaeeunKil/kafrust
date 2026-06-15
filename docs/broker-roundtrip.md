@@ -4,6 +4,8 @@ kafrust includes opt-in broker roundtrip checks. The M2 check connects to one Ka
 `KAFRUST_BOOTSTRAP_SERVERS` accepts Kafka's comma-separated bootstrap format,
 for example `localhost:19092,localhost:19093`, so broker checks and smoke
 examples can exercise bootstrap failover and multi-broker metadata.
+Set `KAFRUST_EXPECTED_BROKERS` to make the metadata roundtrip assert a minimum
+broker count in multi-broker profiles.
 
 Run it against a local broker:
 

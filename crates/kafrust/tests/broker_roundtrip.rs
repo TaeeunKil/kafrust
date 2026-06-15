@@ -29,6 +29,13 @@ async fn api_versions_and_metadata_roundtrip_when_broker_is_configured() {
         .await
         .expect("Metadata roundtrip should succeed");
     assert!(!metadata.brokers.is_empty());
+    if let Some(expected_brokers) = expected_brokers_from_env() {
+        assert!(
+            metadata.brokers.len() >= expected_brokers,
+            "expected at least {expected_brokers} brokers, got {}",
+            metadata.brokers.len()
+        );
+    }
 }
 
 #[tokio::test]
@@ -172,6 +179,12 @@ fn parse_bootstrap_servers(value: &str) -> Vec<String> {
         .filter(|server| !server.is_empty())
         .map(ToOwned::to_owned)
         .collect()
+}
+
+fn expected_brokers_from_env() -> Option<usize> {
+    std::env::var("KAFRUST_EXPECTED_BROKERS")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
 }
 
 #[test]
