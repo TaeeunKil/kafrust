@@ -439,6 +439,9 @@ Evidence:
 - `docs/public-api-audit.md` records the current root re-export surface,
   module visibility decision points, and the `kafrust::protocol` re-export
   policy.
+- `cargo test -p kafrust --doc` compiles the crate README examples for
+  producer, batch producer, buffered producer, direct consumer, and consumer
+  group usage; CI runs this explicitly.
 
 ## M13 Secured Enterprise Connectivity
 
