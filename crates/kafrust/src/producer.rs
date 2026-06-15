@@ -1679,11 +1679,12 @@ fn batch_report_from_outcomes(
 fn can_retry_send(error: &Error) -> bool {
     match error {
         Error::Broker { code, .. } => BrokerErrorKind::from_code(*code).is_produce_retryable(),
-        Error::Io(_) | Error::RequestTimedOut { .. } => true,
+        Error::Io(_)
+        | Error::RequestTimedOut { .. }
+        | Error::MissingLeader { .. }
+        | Error::MissingBroker { .. } => true,
         Error::MissingBootstrapServer
         | Error::UnknownTopicOrPartition { .. }
-        | Error::MissingLeader { .. }
-        | Error::MissingBroker { .. }
         | Error::MissingSaslCredentials
         | Error::InvalidSaslResponse { .. }
         | Error::TlsConfig { .. }
@@ -2376,6 +2377,11 @@ mod tests {
             std::io::ErrorKind::ConnectionReset,
             "reset",
         ))));
+        assert!(can_retry_send(&Error::MissingLeader {
+            topic: "orders".to_owned(),
+            partition: 0,
+        }));
+        assert!(can_retry_send(&Error::MissingBroker { node_id: 2 }));
         assert!(!can_retry_send(&Error::Unsupported("record headers")));
         assert_eq!(
             Error::Broker {

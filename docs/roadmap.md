@@ -526,7 +526,7 @@ Strategic role:
 
 ## M14 Multi-Broker And Failover Compatibility
 
-Status: Planned.
+Status: In progress.
 
 Goal: handle normal multi-broker cluster behavior instead of only single-node broker checks.
 
@@ -551,6 +551,13 @@ Exit criteria:
 Strategic role:
 
 - This milestone moves kafrust from local/simple broker evaluation toward production-like cluster evaluation.
+
+Evidence:
+
+- Producer and direct consumer retry classification treats missing partition
+  leaders and missing broker metadata as stale metadata, invalidates the topic
+  metadata cache, and refreshes metadata before retrying within the configured
+  retry budget.
 
 ## M15 Compression Compatibility
 
