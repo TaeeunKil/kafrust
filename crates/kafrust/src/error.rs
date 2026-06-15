@@ -110,9 +110,9 @@ pub enum Error {
         /// Redacted TLS configuration failure reason.
         reason: String,
     },
-    /// Bootstrap server could not be converted to a TLS server name.
+    /// Configured or derived TLS server name is invalid.
     InvalidTlsServerName {
-        /// Original bootstrap server value.
+        /// Original configured or derived server name value.
         server: String,
     },
     /// The requested Kafka feature is not implemented by this alpha API yet.
@@ -155,7 +155,7 @@ impl fmt::Display for Error {
             }
             Self::TlsConfig { reason } => write!(f, "TLS configuration error: {reason}"),
             Self::InvalidTlsServerName { server } => {
-                write!(f, "invalid TLS server name in bootstrap server {server}")
+                write!(f, "invalid TLS server name {server}")
             }
             Self::Unsupported(feature) => write!(f, "unsupported feature: {feature}"),
             Self::Io(error) => write!(f, "I/O error: {error}"),

@@ -95,6 +95,7 @@ pub struct ClientConfig {
     client_id: Option<String>,
     request_timeout: Duration,
     security_protocol: SecurityProtocol,
+    tls_server_name: Option<String>,
     sasl_credentials: Option<SaslCredentials>,
 }
 
@@ -106,6 +107,7 @@ impl ClientConfig {
             client_id: None,
             request_timeout: Duration::from_millis(DEFAULT_REQUEST_TIMEOUT_MS),
             security_protocol: SecurityProtocol::Plaintext,
+            tls_server_name: None,
             sasl_credentials: None,
         }
     }
@@ -125,6 +127,17 @@ impl ClientConfig {
     /// Sets the Kafka security protocol used for broker connections.
     pub fn security_protocol(mut self, security_protocol: SecurityProtocol) -> Self {
         self.security_protocol = security_protocol;
+        self
+    }
+
+    /// Sets the TLS server name used for certificate validation.
+    ///
+    /// By default kafrust derives the TLS server name from the bootstrap host.
+    /// Use this when the bootstrap address differs from the broker certificate
+    /// subject alternative name. The value is used by [`SecurityProtocol::Tls`]
+    /// and [`SecurityProtocol::SaslTls`].
+    pub fn tls_server_name(mut self, server_name: impl Into<String>) -> Self {
+        self.tls_server_name = Some(server_name.into());
         self
     }
 
@@ -156,6 +169,11 @@ impl ClientConfig {
     /// Returns the configured Kafka security protocol.
     pub fn security_protocol_ref(&self) -> SecurityProtocol {
         self.security_protocol
+    }
+
+    /// Returns the configured TLS server name override, when present.
+    pub fn tls_server_name_ref(&self) -> Option<&str> {
+        self.tls_server_name.as_deref()
     }
 
     /// Returns the configured SASL credentials, when present.
@@ -227,11 +245,12 @@ impl ClientConfig {
         use rustls_platform_verifier::BuilderVerifierExt;
         use tokio_rustls::TlsConnector;
 
-        let server_name_text = tls_server_name_from_bootstrap_server(&server)?;
-        let server_name =
-            ServerName::try_from(server_name_text).map_err(|_| Error::InvalidTlsServerName {
-                server: server.clone(),
-            })?;
+        let server_name_text = self.tls_server_name_for_connection(&server)?;
+        let server_name = ServerName::try_from(server_name_text.clone()).map_err(|_| {
+            Error::InvalidTlsServerName {
+                server: server_name_text,
+            }
+        })?;
 
         let provider = Arc::new(rustls::crypto::ring::default_provider());
         let tls_config = rustls::ClientConfig::builder_with_provider(provider)
@@ -262,6 +281,28 @@ impl ClientConfig {
         Err(Error::Unsupported(
             "TLS connections require the `tls` feature",
         ))
+    }
+}
+
+#[cfg(any(feature = "tls", test))]
+fn tls_configured_server_name(server_name: &str) -> Result<String> {
+    let trimmed = server_name.trim();
+    if trimmed.is_empty() {
+        return Err(Error::InvalidTlsServerName {
+            server: server_name.to_owned(),
+        });
+    }
+
+    Ok(trimmed.to_owned())
+}
+
+#[cfg(any(feature = "tls", test))]
+impl ClientConfig {
+    fn tls_server_name_for_connection(&self, server: &str) -> Result<String> {
+        self.tls_server_name
+            .as_deref()
+            .map(tls_configured_server_name)
+            .unwrap_or_else(|| tls_server_name_from_bootstrap_server(server))
     }
 }
 
@@ -359,6 +400,43 @@ mod tests {
             ClientConfig::new(["localhost:9092"]).security_protocol(SecurityProtocol::SaslTls);
 
         assert_eq!(config.security_protocol_ref(), SecurityProtocol::SaslTls);
+    }
+
+    #[test]
+    fn stores_tls_server_name_override() {
+        let config = ClientConfig::new(["127.0.0.1:9093"])
+            .security_protocol(SecurityProtocol::Tls)
+            .tls_server_name("broker.example.com");
+
+        assert_eq!(config.tls_server_name_ref(), Some("broker.example.com"));
+        assert_eq!(
+            config
+                .tls_server_name_for_connection("127.0.0.1:9093")
+                .unwrap(),
+            "broker.example.com"
+        );
+    }
+
+    #[test]
+    fn derives_tls_server_name_from_bootstrap_when_override_is_absent() {
+        let config = ClientConfig::new(["broker.example.com:9093"]);
+
+        assert_eq!(
+            config
+                .tls_server_name_for_connection("broker.example.com:9093")
+                .unwrap(),
+            "broker.example.com"
+        );
+    }
+
+    #[test]
+    fn rejects_empty_tls_server_name_override() {
+        let config = ClientConfig::new(["localhost:9093"]).tls_server_name("   ");
+
+        assert!(matches!(
+            config.tls_server_name_for_connection("localhost:9093"),
+            Err(Error::InvalidTlsServerName { .. })
+        ));
     }
 
     #[test]

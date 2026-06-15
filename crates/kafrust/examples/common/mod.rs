@@ -10,17 +10,25 @@ where
     if let Some((username, password)) = sasl_credentials_from_env() {
         config = config.sasl_plain(username, password);
     }
+    if let Some(server_name) = tls_server_name_from_env() {
+        config = config.tls_server_name(server_name);
+    }
     Ok(config)
 }
 
 pub(crate) trait ExampleSecurityConfig: Sized {
     fn security_protocol(self, security_protocol: SecurityProtocol) -> Self;
+    fn tls_server_name(self, server_name: String) -> Self;
     fn sasl_plain(self, username: String, password: String) -> Self;
 }
 
 impl ExampleSecurityConfig for ClientConfig {
     fn security_protocol(self, security_protocol: SecurityProtocol) -> Self {
         ClientConfig::security_protocol(self, security_protocol)
+    }
+
+    fn tls_server_name(self, server_name: String) -> Self {
+        ClientConfig::tls_server_name(self, server_name)
     }
 
     fn sasl_plain(self, username: String, password: String) -> Self {
@@ -33,6 +41,10 @@ impl ExampleSecurityConfig for ProducerConfig {
         ProducerConfig::security_protocol(self, security_protocol)
     }
 
+    fn tls_server_name(self, server_name: String) -> Self {
+        ProducerConfig::tls_server_name(self, server_name)
+    }
+
     fn sasl_plain(self, username: String, password: String) -> Self {
         ProducerConfig::sasl_plain(self, username, password)
     }
@@ -43,6 +55,10 @@ impl ExampleSecurityConfig for ConsumerConfig {
         ConsumerConfig::security_protocol(self, security_protocol)
     }
 
+    fn tls_server_name(self, server_name: String) -> Self {
+        ConsumerConfig::tls_server_name(self, server_name)
+    }
+
     fn sasl_plain(self, username: String, password: String) -> Self {
         ConsumerConfig::sasl_plain(self, username, password)
     }
@@ -51,6 +67,10 @@ impl ExampleSecurityConfig for ConsumerConfig {
 impl ExampleSecurityConfig for ConsumerGroupConfig {
     fn security_protocol(self, security_protocol: SecurityProtocol) -> Self {
         ConsumerGroupConfig::security_protocol(self, security_protocol)
+    }
+
+    fn tls_server_name(self, server_name: String) -> Self {
+        ConsumerGroupConfig::tls_server_name(self, server_name)
     }
 
     fn sasl_plain(self, username: String, password: String) -> Self {
@@ -70,6 +90,10 @@ fn sasl_credentials_from_env() -> Option<(String, String)> {
     let username = std::env::var("KAFRUST_SASL_USERNAME").ok()?;
     let password = std::env::var("KAFRUST_SASL_PASSWORD").ok()?;
     Some((username, password))
+}
+
+fn tls_server_name_from_env() -> Option<String> {
+    std::env::var("KAFRUST_TLS_SERVER_NAME").ok()
 }
 
 fn parse_security_protocol(value: &str) -> kafrust::Result<SecurityProtocol> {

@@ -455,7 +455,7 @@ Strategic role:
 
 ## M13 Secured Enterprise Connectivity
 
-Status: Planned.
+Status: In progress.
 
 Goal: make kafrust usable against common secured Kafka deployments.
 
@@ -475,6 +475,14 @@ Exit criteria:
 - `SecurityProtocol::SaslTls` authenticates with at least one SCRAM mechanism
 - failed authentication errors do not expose passwords, tokens, salts, nonce material, or raw credentials
 - compatibility docs list plaintext, TLS, SASL_PLAINTEXT, and SASL_SSL broker profiles with verification dates
+
+Evidence:
+
+- `ClientConfig::tls_server_name` and the matching producer, consumer, and
+  consumer group builders allow TLS certificate validation to use an explicit
+  server name when the bootstrap host differs from the broker certificate
+  subject alternative name. Broker smoke examples accept
+  `KAFRUST_TLS_SERVER_NAME`.
 
 Strategic role:
 

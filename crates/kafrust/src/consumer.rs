@@ -337,6 +337,12 @@ impl ConsumerConfig {
         self
     }
 
+    /// Sets the TLS server name used for consumer broker certificate validation.
+    pub fn tls_server_name(mut self, server_name: impl Into<String>) -> Self {
+        self.client = self.client.tls_server_name(server_name);
+        self
+    }
+
     /// Sets SASL/PLAIN credentials for consumer broker connections.
     pub fn sasl_plain(mut self, username: impl Into<String>, password: impl Into<String>) -> Self {
         self.client = self.client.sasl_plain(username, password);
@@ -524,6 +530,7 @@ mod tests {
             .client_id("orders-reader")
             .request_timeout_ms(5_000)
             .security_protocol(SecurityProtocol::Tls)
+            .tls_server_name("broker.example.com")
             .sasl_plain("alice", "secret-password")
             .max_wait_ms(250)
             .min_bytes(10)
@@ -538,6 +545,10 @@ mod tests {
         assert_eq!(
             config.client_config().security_protocol_ref(),
             SecurityProtocol::Tls
+        );
+        assert_eq!(
+            config.client_config().tls_server_name_ref(),
+            Some("broker.example.com")
         );
         assert_eq!(
             config

@@ -226,6 +226,11 @@ kafrust = { version = "0.2", features = ["tls"] }
 Without that feature, `SecurityProtocol::Tls` returns `Error::Unsupported`
 before connecting.
 
+TLS server name validation defaults to the bootstrap host. Use
+`tls_server_name(name)` on `ClientConfig`, `ProducerConfig`, `ConsumerConfig`, or
+`ConsumerGroupConfig` when the bootstrap address differs from the broker
+certificate subject alternative name.
+
 SASL/PLAIN credentials can be stored on the shared client configuration with
 `sasl_plain(username, password)`. This does not change the selected
 `SecurityProtocol`; choose `SaslPlaintext` or `SaslTls` separately. Credential
