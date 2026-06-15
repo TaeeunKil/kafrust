@@ -565,7 +565,7 @@ Evidence:
   profile that creates a replicated topic and runs broker roundtrip, producer,
   direct consumer, and consumer group smoke paths against comma-separated
   bootstrap servers.
-- Manual `Live Kafka Smoke` run `27532954478` passed on 2026-06-15 from
+- Manual `Live Kafka Smoke` run `27533468647` passed on 2026-06-15 from
   `main`; the multi-broker job completed broker roundtrip, producer, direct
   consumer, and consumer group checks against a three-broker Kafka 3.7.2 KRaft
   cluster.
