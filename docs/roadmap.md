@@ -436,6 +436,9 @@ Evidence:
 
 - `docs/api-stability.md` documents the current pre-1.0 versioning policy,
   stability levels, change rules, and migration note expectations.
+- `docs/public-api-audit.md` records the current root re-export surface,
+  module visibility decision points, and the `kafrust::protocol` re-export
+  policy.
 
 ## M13 Secured Enterprise Connectivity
 
