@@ -395,11 +395,13 @@ jobs:
             -name localhost \
             -out sasl-ssl/kafka.server.keystore.p12 \
             -password pass:kafrust
-          openssl pkcs12 -export \
-            -nokeys \
-            -in sasl-ssl/ca.crt \
-            -out sasl-ssl/kafka.client.truststore.p12 \
-            -password pass:kafrust
+          keytool -importcert \
+            -noprompt \
+            -alias kafrust-test-ca \
+            -file sasl-ssl/ca.crt \
+            -keystore sasl-ssl/kafka.client.truststore.p12 \
+            -storetype PKCS12 \
+            -storepass kafrust
           printf kafrust > sasl-ssl/keystore-password
           printf kafrust > sasl-ssl/key-password
           chmod 644 sasl-ssl/*
