@@ -500,7 +500,7 @@ impl ConsumerGroup {
             topic_count = topics.len(),
             "committing kafka consumer group offsets"
         );
-        let response = self
+        let response = match self
             .coordinator
             .offset_commit_v2(
                 self.group_id.clone(),
@@ -509,7 +509,22 @@ impl ConsumerGroup {
                 self.retention_time_ms,
                 topics,
             )
-            .await?;
+            .await
+        {
+            Ok(response) => response,
+            Err(error) if should_rejoin_group(&error) => {
+                debug!(
+                    group_id = self.group_id.as_str(),
+                    member_id = self.member_id.as_str(),
+                    generation_id = self.generation_id,
+                    error = %error,
+                    "rejoining kafka consumer group after offset commit request"
+                );
+                self.rejoin().await?;
+                return Err(error);
+            }
+            Err(error) => return Err(error),
+        };
         if let Some(error) = offset_commit_response_error(&self.group_id, &response.topics) {
             if should_rejoin_group(&error) {
                 debug!(
@@ -817,6 +832,10 @@ fn offset_commit_response_error(
 }
 
 fn should_rejoin_group(error: &Error) -> bool {
+    if matches!(error, Error::Io(_) | Error::RequestTimedOut { .. }) {
+        return true;
+    }
+
     matches!(
         error.broker_error_kind(),
         Some(
@@ -1196,6 +1215,13 @@ mod tests {
             code: 7,
             context: "heartbeat group orders-group".to_owned(),
         }));
+        assert!(should_rejoin_group(&Error::RequestTimedOut {
+            timeout_ms: 5
+        }));
+        assert!(should_rejoin_group(&Error::Io(std::io::Error::new(
+            std::io::ErrorKind::ConnectionReset,
+            "reset",
+        ))));
         assert!(!should_rejoin_group(&Error::Unsupported("group feature")));
     }
 

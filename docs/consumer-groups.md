@@ -33,7 +33,7 @@ The alpha path uses the classic consumer group protocol with range assignment. A
 
 ## Polling And Rejoin
 
-`ConsumerGroup::poll` sends a foreground heartbeat before fetching assigned partitions. If that heartbeat reports a rebalance, stale generation, stale member ID, or stale coordinator, `poll` rejoins the group before fetching records.
+`ConsumerGroup::poll` sends a foreground heartbeat before fetching assigned partitions. If that heartbeat reports a rebalance, stale generation, stale member ID, stale coordinator, coordinator connection I/O error, or coordinator request timeout, `poll` rejoins the group before fetching records.
 
 Use `ConsumerGroup::spawn_heartbeat_task` when application work between polls can approach the group session timeout. It starts an opt-in background heartbeat loop on a separate coordinator connection. The returned `ConsumerGroupHeartbeat` records the group ID, member ID, and generation ID it belongs to.
 
@@ -43,7 +43,7 @@ Call `ConsumerGroupHeartbeat::try_wait` to observe early task completion without
 
 ## Offset Commits
 
-`ConsumerGroup::commit_offsets` commits the current next offsets for assigned partitions. If Kafka reports a rejoinable generation, member, rebalance, or coordinator error, `commit_offsets` rejoins the group and returns the original broker error instead of retrying the old assignment offsets under the new generation. After that, callers should poll the refreshed assignment state before deciding whether to commit again.
+`ConsumerGroup::commit_offsets` commits the current next offsets for assigned partitions. If Kafka reports a rejoinable generation, member, rebalance, or coordinator error, or if the coordinator request fails with I/O or timeout, `commit_offsets` rejoins the group and returns the original commit error instead of retrying the old assignment offsets under the new generation. After that, callers should poll the refreshed assignment state before deciding whether to commit again.
 
 Current implementation status:
 
@@ -66,7 +66,7 @@ Current implementation status:
 - Broker error codes can be classified with `BrokerErrorKind` for common coordinator, generation, and rebalance errors.
 - Consumer group join, heartbeat, background heartbeat, rejoin, and commit operations emit `tracing` events with operational metadata.
 - Rebalance handling can rejoin during `ConsumerGroup::poll` after coordinator, generation, member, or rebalance heartbeat errors.
-- Offset commit handling rejoins on coordinator, generation, member, or rebalance commit errors and returns the original commit error so callers can decide when to poll and commit again.
+- Offset commit handling rejoins on coordinator, generation, member, rebalance, coordinator I/O, or coordinator timeout commit errors and returns the original commit error so callers can decide when to poll and commit again.
 - `ConsumerGroup::poll_with_heartbeat` observes a background heartbeat task before polling, rejoins when the task ended with a rejoinable group error, and stops same-group heartbeat handles that belong to an older member ID or generation ID. It does not restart a new background heartbeat task after rejoin.
 
 Run the opt-in coordinator example against a local broker:
