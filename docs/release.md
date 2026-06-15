@@ -18,6 +18,47 @@ Before publishing:
 3. Update roadmap status and any user-facing API direction document affected by the release.
 4. Keep `Cargo.lock` out of the commit unless the repository policy changes.
 
+## Release Notes
+
+Every GitHub release should use a consistent structure so downstream users can
+evaluate alpha risk without reading the full diff. Use `None` explicitly when a
+section does not apply.
+
+```md
+## Summary
+
+- What changed for users.
+
+## Breaking changes
+
+- Renamed, removed, or behavior-changing public APIs.
+- Changed defaults, feature flags, environment variables, or broker assumptions.
+
+## Migration notes
+
+- Old API or behavior.
+- Replacement API or behavior.
+- Required caller changes.
+
+## Compatibility evidence
+
+- Broker versions and security profiles verified for this release.
+- Published crate or fresh-project checks completed after release.
+
+## Verification
+
+- Local, CI, packaging, docs, and broker smoke checks used for the tag.
+
+## Known limits
+
+- Alpha limitations users should consider before adoption.
+```
+
+Patch releases should usually have `None` under `Breaking changes` and
+`Migration notes`. Any `0.x` minor release with public API changes should call
+out the affected types, methods, variants, or defaults and link to the relevant
+API direction document or roadmap entry.
+
 ## Required Checks
 
 Run the same checks used by CI:

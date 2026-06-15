@@ -442,6 +442,9 @@ Evidence:
 - `cargo test -p kafrust --doc` compiles the crate README examples for
   producer, batch producer, buffered producer, direct consumer, and consumer
   group usage; CI runs this explicitly.
+- `docs/release.md` defines a release note template with required breaking
+  change, migration note, compatibility evidence, verification, and known-limit
+  sections.
 
 ## M13 Secured Enterprise Connectivity
 
