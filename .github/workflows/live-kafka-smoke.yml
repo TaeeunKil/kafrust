@@ -195,10 +195,54 @@ jobs:
       - name: Run multi-broker consumer group example
         run: cargo run -p kafrust --example consumer_group_poll
 
+      - name: Stop first multi-broker Kafka broker
+        run: docker stop kafrust-kafka-multi-1
+
+      - name: Wait for multi-broker Kafka after broker stop
+        run: |
+          for attempt in {1..120}; do
+            if docker exec kafrust-kafka-multi-2 /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server kafrust-kafka-multi-2:29092 \
+              >/tmp/kafrust-multi-after-stop-probe.log 2>&1; then
+              docker exec kafrust-kafka-multi-2 /opt/kafka/bin/kafka-topics.sh \
+                --bootstrap-server kafrust-kafka-multi-2:29092 \
+                --describe \
+                --topic "$KAFRUST_TOPIC" \
+                >/tmp/kafrust-multi-after-stop-topic.log 2>&1
+              if ! grep -Eq "Leader: -1|Leader: none" /tmp/kafrust-multi-after-stop-topic.log; then
+                cat /tmp/kafrust-multi-after-stop-topic.log
+                exit 0
+              fi
+            fi
+            sleep 2
+          done
+          cat /tmp/kafrust-multi-after-stop-probe.log || true
+          cat /tmp/kafrust-multi-after-stop-topic.log || true
+          docker logs kafrust-kafka-multi-2
+          docker logs kafrust-kafka-multi-3
+          exit 1
+
+      - name: Run multi-broker producer batch after broker stop
+        env:
+          KAFRUST_BATCH_COUNT: "6"
+          KAFRUST_BATCH_PARTITIONS: "0,1,2,3,4,5"
+        run: cargo run -p kafrust --example producer_send_batch
+
+      - name: Run multi-broker direct consumer after broker stop
+        env:
+          KAFRUST_PARTITION: "0"
+          KAFRUST_OFFSET: "0"
+        run: cargo run -p kafrust --example consumer_fetch
+
+      - name: Run multi-broker consumer group after broker stop
+        env:
+          KAFRUST_GROUP_ID: kafrust-smoke-multi-after-stop
+        run: cargo run -p kafrust --example consumer_group_poll
+
       - name: Dump multi-broker Kafka logs
         if: failure()
         run: |
-          docker logs kafrust-kafka-multi-1
+          docker logs kafrust-kafka-multi-1 || true
           docker logs kafrust-kafka-multi-2
           docker logs kafrust-kafka-multi-3
 

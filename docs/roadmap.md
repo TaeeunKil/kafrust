@@ -572,6 +572,9 @@ Evidence:
 - The batch producer smoke example accepts explicit partition lists so the
   multi-broker workflow can route one batch call across multiple partition
   leaders.
+- The multi-broker smoke workflow stops the first configured bootstrap broker
+  and reruns batch producer, direct consumer, and consumer group checks through
+  the remaining brokers.
 
 ## M15 Compression Compatibility
 
