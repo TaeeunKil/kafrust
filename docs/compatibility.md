@@ -4,14 +4,15 @@ kafrust compatibility claims are scoped to behavior that has been verified again
 
 ## Current Compatibility Claim
 
-The `0.2.x` alpha line is verified against a single-node Apache Kafka 3.7.2 KRaft broker over plaintext TCP. TLS, SASL/PLAIN over SASL_PLAINTEXT, and SASL/SCRAM-SHA-256 over SASL_SSL are verified for broker roundtrip, producer, direct consumer, and consumer group smoke paths. SASL/SCRAM-SHA-512 client exchanges are implemented, but the live broker profile is not claimed yet.
+The `0.2.x` alpha line is verified against Apache Kafka 3.7.2 KRaft brokers over plaintext TCP in both single-node and three-broker profiles. TLS, SASL/PLAIN over SASL_PLAINTEXT, and SASL/SCRAM-SHA-256 over SASL_SSL are verified for single-node broker roundtrip, producer, direct consumer, and consumer group smoke paths. SASL/SCRAM-SHA-512 client exchanges are implemented, but the live broker profile is not claimed yet.
 
 | Broker | Mode | Security | Verification | Status |
 | --- | --- | --- | --- | --- |
-| Apache Kafka 3.7.2 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, latest manual smoke run `27531812308` on 2026-06-15 | Passing |
-| Apache Kafka 3.7.2 | single-node KRaft | TLS | `Live Kafka Smoke` TLS job, latest manual smoke run `27531812308` on 2026-06-15 | Passing |
-| Apache Kafka 3.7.2 | single-node KRaft | SASL_PLAINTEXT with SASL/PLAIN | `Live Kafka Smoke` SASL_PLAINTEXT job, latest manual smoke run `27531812308` on 2026-06-15 | Passing |
-| Apache Kafka 3.7.2 | single-node KRaft | SASL_SSL with SCRAM-SHA-256 | `Live Kafka Smoke` SASL_SSL SCRAM job, latest manual smoke run `27531812308` on 2026-06-15 | Passing |
+| Apache Kafka 3.7.2 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, latest manual smoke run `27532954478` on 2026-06-15 | Passing |
+| Apache Kafka 3.7.2 | three-broker KRaft | PLAINTEXT | `Live Kafka Smoke` multi-broker job, latest manual smoke run `27532954478` on 2026-06-15 | Passing |
+| Apache Kafka 3.7.2 | single-node KRaft | TLS | `Live Kafka Smoke` TLS job, latest manual smoke run `27532954478` on 2026-06-15 | Passing |
+| Apache Kafka 3.7.2 | single-node KRaft | SASL_PLAINTEXT with SASL/PLAIN | `Live Kafka Smoke` SASL_PLAINTEXT job, latest manual smoke run `27532954478` on 2026-06-15 | Passing |
+| Apache Kafka 3.7.2 | single-node KRaft | SASL_SSL with SCRAM-SHA-256 | `Live Kafka Smoke` SASL_SSL SCRAM job, latest manual smoke run `27532954478` on 2026-06-15 | Passing |
 
 ## Verified Paths
 
@@ -22,6 +23,15 @@ The Kafka 3.7.2 plaintext smoke path covers:
 - High-level producer metadata lookup, leader routing, negotiated Produce API selection, single-record send, batch send, and buffered send with `acks=1`. Against Kafka 3.7.2, the current path selects Produce v3 RecordBatch.
 - Direct consumer fetch from an assigned topic partition using Fetch v2 response decoding.
 - Consumer group join, sync, heartbeat, poll, and offset commit through the alpha classic consumer group path with range assignment.
+
+The Kafka 3.7.2 multi-broker plaintext smoke path covers:
+
+- A three-broker KRaft cluster with comma-separated bootstrap servers and a replicated smoke topic.
+- Metadata roundtrip with at least three brokers visible to kafrust.
+- The `broker_roundtrip` example against multi-broker advertised listener metadata.
+- High-level producer single-record send, batch send, and buffered send against broker metadata returned by the cluster.
+- Direct consumer fetch from an assigned topic partition.
+- Consumer group join, sync, heartbeat, poll, and offset commit through the alpha classic consumer group path.
 
 The Kafka 3.7.2 TLS smoke path covers:
 
@@ -58,7 +68,7 @@ The current compatibility claim does not cover:
 - TLS workflows beyond the listed TLS smoke examples.
 - SASL workflows beyond the listed SASL_PLAINTEXT and SASL_SSL smoke examples.
 - SASL/SCRAM-SHA-512 live broker profiles.
-- Multi-broker clusters, leader failover, rack awareness, or partition expansion.
+- Secured multi-broker clusters, leader failover, rack awareness, or partition expansion.
 - Idempotent producers, transactions, compression, or high-throughput batching.
 - A full Kafka broker version matrix.
 - Kafka APIs that are not listed in the verified paths.
