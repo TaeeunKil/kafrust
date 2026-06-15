@@ -339,3 +339,192 @@ jobs:
       - name: Dump SASL Kafka logs
         if: failure()
         run: docker logs kafrust-kafka-sasl
+
+  kafka-sasl-ssl-scram:
+    name: Kafka 3.7.2 SASL_SSL SCRAM
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      KAFRUST_BOOTSTRAP_SERVERS: localhost:9095
+      KAFRUST_SECURITY_PROTOCOL: sasl_tls
+      KAFRUST_SASL_MECHANISM: scram-sha-256
+      KAFRUST_SASL_USERNAME: kafrust
+      KAFRUST_SASL_PASSWORD: kafrust-secret
+      KAFRUST_TLS_ROOT_CERT_DER_PATH: ${{ github.workspace }}/sasl-ssl/ca.der
+      KAFRUST_GROUP_ID: kafrust-smoke
+      KAFRUST_TOPIC: kafrust-smoke
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.75.0"
+
+      - name: Generate TLS certificates
+        run: |
+          mkdir -p sasl-ssl
+          openssl req -x509 -newkey rsa:2048 -days 1 -nodes \
+            -subj "/CN=kafrust-test-ca" \
+            -keyout sasl-ssl/ca.key \
+            -out sasl-ssl/ca.crt
+          openssl x509 \
+            -in sasl-ssl/ca.crt \
+            -outform DER \
+            -out sasl-ssl/ca.der
+          openssl req -newkey rsa:2048 -nodes \
+            -subj "/CN=localhost" \
+            -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" \
+            -keyout sasl-ssl/server.key \
+            -out sasl-ssl/server.csr
+          openssl x509 -req \
+            -in sasl-ssl/server.csr \
+            -CA sasl-ssl/ca.crt \
+            -CAkey sasl-ssl/ca.key \
+            -CAcreateserial \
+            -days 1 \
+            -sha256 \
+            -copy_extensions copy \
+            -out sasl-ssl/server.crt
+          openssl pkcs12 -export \
+            -in sasl-ssl/server.crt \
+            -inkey sasl-ssl/server.key \
+            -certfile sasl-ssl/ca.crt \
+            -name localhost \
+            -out sasl-ssl/kafka.server.keystore.p12 \
+            -password pass:kafrust
+          keytool -importcert \
+            -noprompt \
+            -alias kafrust-test-ca \
+            -file sasl-ssl/ca.crt \
+            -keystore sasl-ssl/kafka.client.truststore.p12 \
+            -storetype PKCS12 \
+            -storepass kafrust
+          printf kafrust > sasl-ssl/keystore-password
+          printf kafrust > sasl-ssl/key-password
+          chmod 644 sasl-ssl/*
+
+      - name: Write SASL_SSL SCRAM config
+        run: |
+          cat > sasl-ssl/kafka_server_jaas.conf <<'EOF'
+          KafkaServer {
+            org.apache.kafka.common.security.scram.ScramLoginModule required
+            username="broker"
+            password="broker-secret";
+          };
+          EOF
+          cat > sasl-ssl/client.properties <<'EOF'
+          security.protocol=SASL_SSL
+          sasl.mechanism=SCRAM-SHA-256
+          sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required username="kafrust" password="kafrust-secret";
+          ssl.truststore.location=/etc/kafka/secrets/kafka.client.truststore.p12
+          ssl.truststore.password=kafrust
+          ssl.truststore.type=PKCS12
+          EOF
+          chmod 644 sasl-ssl/*
+
+      - name: Start SASL_SSL SCRAM Kafka
+        run: |
+          docker run -d --name kafrust-kafka-sasl-ssl \
+            -p 9095:9095 \
+            -v "$PWD/sasl-ssl:/etc/kafka/secrets:ro" \
+            -e KAFKA_OPTS="-Djava.security.auth.login.config=/etc/kafka/secrets/kafka_server_jaas.conf" \
+            -e KAFKA_NODE_ID=1 \
+            -e KAFKA_PROCESS_ROLES=broker,controller \
+            -e KAFKA_LISTENERS=PLAINTEXT://:9092,SASL_SSL://:9095,CONTROLLER://:9093 \
+            -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092,SASL_SSL://localhost:9095 \
+            -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+            -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,SASL_SSL:SASL_SSL \
+            -e KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT \
+            -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@localhost:9093 \
+            -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
+            -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1 \
+            -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1 \
+            -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 \
+            -e KAFKA_SASL_ENABLED_MECHANISMS=SCRAM-SHA-256 \
+            -e KAFKA_SSL_KEYSTORE_FILENAME=kafka.server.keystore.p12 \
+            -e KAFKA_SSL_KEYSTORE_CREDENTIALS=keystore-password \
+            -e KAFKA_SSL_KEY_CREDENTIALS=key-password \
+            -e KAFKA_SSL_KEYSTORE_TYPE=PKCS12 \
+            -e KAFKA_SSL_CLIENT_AUTH=none \
+            apache/kafka:3.7.2
+
+      - name: Wait for SASL_SSL SCRAM Kafka
+        run: |
+          for attempt in {1..90}; do
+            if docker exec kafrust-kafka-sasl-ssl /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server localhost:9092 \
+              >/tmp/kafrust-sasl-ssl-startup.log 2>&1; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/kafrust-sasl-ssl-startup.log || true
+          docker logs kafrust-kafka-sasl-ssl
+          exit 1
+
+      - name: Create SCRAM user
+        run: |
+          docker exec kafrust-kafka-sasl-ssl /opt/kafka/bin/kafka-configs.sh \
+            --bootstrap-server localhost:9092 \
+            --alter \
+            --add-config 'SCRAM-SHA-256=[iterations=4096,password=kafrust-secret]' \
+            --entity-type users \
+            --entity-name kafrust
+
+      - name: Verify SCRAM listener
+        run: |
+          for attempt in {1..90}; do
+            if docker exec kafrust-kafka-sasl-ssl /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server localhost:9095 \
+              --command-config /etc/kafka/secrets/client.properties \
+              >/tmp/kafrust-sasl-ssl-probe.log 2>&1; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/kafrust-sasl-ssl-probe.log || true
+          docker logs kafrust-kafka-sasl-ssl
+          exit 1
+
+      - name: Create smoke topic
+        run: |
+          docker exec kafrust-kafka-sasl-ssl /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server localhost:9092 \
+            --create \
+            --if-not-exists \
+            --topic "$KAFRUST_TOPIC" \
+            --partitions 1 \
+            --replication-factor 1
+
+      - name: Run SASL_SSL SCRAM broker roundtrip
+        run: cargo test -p kafrust --features tls --test broker_roundtrip -- --nocapture
+
+      - name: Run SASL_SSL SCRAM broker roundtrip example
+        run: cargo run -p kafrust --features tls --example broker_roundtrip
+
+      - name: Run SASL_SSL SCRAM producer example
+        run: cargo run -p kafrust --features tls --example producer_send
+
+      - name: Run SASL_SSL SCRAM producer batch example
+        run: cargo run -p kafrust --features tls --example producer_send_batch
+
+      - name: Run SASL_SSL SCRAM buffered producer example
+        env:
+          KAFRUST_BUFFERED_COUNT: "3"
+        run: cargo run -p kafrust --features tls --example producer_buffered
+
+      - name: Run SASL_SSL SCRAM direct consumer example
+        env:
+          KAFRUST_PARTITION: "0"
+          KAFRUST_OFFSET: "0"
+        run: cargo run -p kafrust --features tls --example consumer_fetch
+
+      - name: Run SASL_SSL SCRAM consumer group example
+        run: cargo run -p kafrust --features tls --example consumer_group_poll
+
+      - name: Dump SASL_SSL SCRAM Kafka logs
+        if: failure()
+        run: docker logs kafrust-kafka-sasl-ssl
