@@ -1,6 +1,8 @@
 use crate::client::Client;
 use crate::error::{Error, Result};
+use crate::scram::{self, ScramHash};
 use core::fmt;
+use std::str;
 #[cfg(feature = "tls")]
 use std::sync::Arc;
 use std::time::Duration;
@@ -29,6 +31,10 @@ pub enum SecurityProtocol {
 pub enum SaslMechanism {
     /// Kafka `PLAIN` SASL mechanism.
     Plain,
+    /// Kafka `SCRAM-SHA-256` SASL mechanism.
+    ScramSha256,
+    /// Kafka `SCRAM-SHA-512` SASL mechanism.
+    ScramSha512,
 }
 
 impl SaslMechanism {
@@ -36,6 +42,16 @@ impl SaslMechanism {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Plain => "PLAIN",
+            Self::ScramSha256 => "SCRAM-SHA-256",
+            Self::ScramSha512 => "SCRAM-SHA-512",
+        }
+    }
+
+    fn scram_hash(self) -> Option<ScramHash> {
+        match self {
+            Self::Plain => None,
+            Self::ScramSha256 => Some(ScramHash::Sha256),
+            Self::ScramSha512 => Some(ScramHash::Sha512),
         }
     }
 }
@@ -57,6 +73,24 @@ impl SaslCredentials {
     pub fn plain(username: impl Into<String>, password: impl Into<String>) -> Self {
         Self {
             mechanism: SaslMechanism::Plain,
+            username: username.into(),
+            password: password.into(),
+        }
+    }
+
+    /// Creates SASL/SCRAM-SHA-256 credentials from a username and password.
+    pub fn scram_sha_256(username: impl Into<String>, password: impl Into<String>) -> Self {
+        Self {
+            mechanism: SaslMechanism::ScramSha256,
+            username: username.into(),
+            password: password.into(),
+        }
+    }
+
+    /// Creates SASL/SCRAM-SHA-512 credentials from a username and password.
+    pub fn scram_sha_512(username: impl Into<String>, password: impl Into<String>) -> Self {
+        Self {
+            mechanism: SaslMechanism::ScramSha512,
             username: username.into(),
             password: password.into(),
         }
@@ -162,6 +196,26 @@ impl ClientConfig {
         self
     }
 
+    /// Sets SASL/SCRAM-SHA-256 credentials without changing the configured security protocol.
+    pub fn sasl_scram_sha_256(
+        mut self,
+        username: impl Into<String>,
+        password: impl Into<String>,
+    ) -> Self {
+        self.sasl_credentials = Some(SaslCredentials::scram_sha_256(username, password));
+        self
+    }
+
+    /// Sets SASL/SCRAM-SHA-512 credentials without changing the configured security protocol.
+    pub fn sasl_scram_sha_512(
+        mut self,
+        username: impl Into<String>,
+        password: impl Into<String>,
+    ) -> Self {
+        self.sasl_credentials = Some(SaslCredentials::scram_sha_512(username, password));
+        self
+    }
+
     /// Returns the configured bootstrap servers in connection order.
     pub fn bootstrap_servers(&self) -> &[String] {
         &self.bootstrap_servers
@@ -241,7 +295,7 @@ impl ClientConfig {
             self.request_timeout,
         )
         .await?;
-        authenticate_sasl_plain(&mut client, credentials).await?;
+        authenticate_sasl(&mut client, credentials).await?;
         Ok(client)
     }
 
@@ -251,7 +305,7 @@ impl ClientConfig {
             .as_ref()
             .ok_or(Error::MissingSaslCredentials)?;
         let mut client = self.connect_tls_broker(server).await?;
-        authenticate_sasl_plain(&mut client, credentials).await?;
+        authenticate_sasl(&mut client, credentials).await?;
         Ok(client)
     }
 
@@ -339,7 +393,7 @@ impl ClientConfig {
     }
 }
 
-async fn authenticate_sasl_plain(client: &mut Client, credentials: &SaslCredentials) -> Result<()> {
+async fn authenticate_sasl(client: &mut Client, credentials: &SaslCredentials) -> Result<()> {
     let mechanism = credentials.mechanism().as_str();
     let handshake = client.sasl_handshake_v1(mechanism).await?;
     if handshake.error_code != 0 {
@@ -349,6 +403,18 @@ async fn authenticate_sasl_plain(client: &mut Client, credentials: &SaslCredenti
         });
     }
 
+    if let Some(hash) = credentials.mechanism().scram_hash() {
+        return authenticate_sasl_scram(client, credentials, mechanism, hash).await;
+    }
+
+    authenticate_sasl_plain(client, credentials, mechanism).await
+}
+
+async fn authenticate_sasl_plain(
+    client: &mut Client,
+    credentials: &SaslCredentials,
+    mechanism: &'static str,
+) -> Result<()> {
     let response = client
         .sasl_authenticate_v0(sasl_plain_auth_bytes(credentials))
         .await?;
@@ -358,6 +424,65 @@ async fn authenticate_sasl_plain(client: &mut Client, credentials: &SaslCredenti
             context: format!("sasl authenticate {mechanism}"),
         });
     }
+
+    Ok(())
+}
+
+async fn authenticate_sasl_scram(
+    client: &mut Client,
+    credentials: &SaslCredentials,
+    mechanism: &'static str,
+    hash: ScramHash,
+) -> Result<()> {
+    let nonce = scram::generate_nonce();
+    let client_first = scram::client_first(credentials.username(), &nonce);
+
+    let server_first = client
+        .sasl_authenticate_v0(client_first.message.into_bytes())
+        .await?;
+    if server_first.error_code != 0 {
+        return Err(Error::Broker {
+            code: server_first.error_code,
+            context: format!("sasl authenticate {mechanism} client-first"),
+        });
+    }
+    let server_first_text =
+        str::from_utf8(&server_first.auth_bytes).map_err(|_| Error::InvalidSaslResponse {
+            mechanism,
+            reason: "server-first message was not UTF-8",
+        })?;
+
+    let client_final = scram::client_final(
+        hash,
+        credentials.password(),
+        &client_first.bare,
+        &nonce,
+        server_first_text,
+    )
+    .map_err(|error| Error::InvalidSaslResponse {
+        mechanism,
+        reason: error.safe_reason(),
+    })?;
+
+    let server_final = client
+        .sasl_authenticate_v0(client_final.message.into_bytes())
+        .await?;
+    if server_final.error_code != 0 {
+        return Err(Error::Broker {
+            code: server_final.error_code,
+            context: format!("sasl authenticate {mechanism} client-final"),
+        });
+    }
+    let server_final_text =
+        str::from_utf8(&server_final.auth_bytes).map_err(|_| Error::InvalidSaslResponse {
+            mechanism,
+            reason: "server-final message was not UTF-8",
+        })?;
+    scram::verify_server_final(&client_final.expected_server_signature, server_final_text)
+        .map_err(|error| Error::InvalidSaslResponse {
+            mechanism,
+            reason: error.safe_reason(),
+        })?;
 
     Ok(())
 }
@@ -410,7 +535,11 @@ mod tests {
         tls_server_name_from_bootstrap_server, ClientConfig, SaslCredentials, SaslMechanism,
         SecurityProtocol,
     };
+    use crate::scram::{self, ScramHash};
     use crate::Error;
+    use base64::engine::general_purpose::STANDARD as BASE64;
+    use base64::Engine as _;
+    use std::str;
     use std::time::Duration;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
@@ -495,6 +624,27 @@ mod tests {
         assert_eq!(credentials.mechanism().as_str(), "PLAIN");
         assert_eq!(credentials.username(), "alice");
         assert_eq!(credentials.password(), "secret-password");
+    }
+
+    #[test]
+    fn stores_sasl_scram_credentials_without_changing_security_protocol() {
+        let config =
+            ClientConfig::new(["localhost:9092"]).sasl_scram_sha_256("alice", "secret-password");
+        let credentials = config.sasl_credentials_ref().unwrap();
+
+        assert_eq!(config.security_protocol_ref(), SecurityProtocol::Plaintext);
+        assert_eq!(credentials.mechanism(), SaslMechanism::ScramSha256);
+        assert_eq!(credentials.mechanism().as_str(), "SCRAM-SHA-256");
+        assert_eq!(credentials.username(), "alice");
+        assert_eq!(credentials.password(), "secret-password");
+
+        let config =
+            ClientConfig::new(["localhost:9092"]).sasl_scram_sha_512("alice", "secret-password");
+        let credentials = config.sasl_credentials_ref().unwrap();
+
+        assert_eq!(config.security_protocol_ref(), SecurityProtocol::Plaintext);
+        assert_eq!(credentials.mechanism(), SaslMechanism::ScramSha512);
+        assert_eq!(credentials.mechanism().as_str(), "SCRAM-SHA-512");
     }
 
     #[test]
@@ -603,6 +753,75 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn sasl_scram_sha256_connect_sends_scram_exchange() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+
+            let handshake = read_frame(&mut socket).await;
+            assert_eq!(
+                handshake,
+                [
+                    0, 17, // api key
+                    0, 1, // api version
+                    0, 0, 0, 1, // correlation id
+                    0xff, 0xff, // null client id
+                    0, 13, b'S', b'C', b'R', b'A', b'M', b'-', b'S', b'H', b'A', b'-', b'2', b'5',
+                    b'6', // mechanism
+                ]
+            );
+            write_frame(
+                &mut socket,
+                &[
+                    0, 0, 0, 1, // correlation id
+                    0, 0, // error code
+                    0, 0, 0, 1, // mechanism count
+                    0, 13, b'S', b'C', b'R', b'A', b'M', b'-', b'S', b'H', b'A', b'-', b'2', b'5',
+                    b'6', // mechanism
+                ],
+            )
+            .await;
+
+            let client_first_frame = read_frame(&mut socket).await;
+            let client_first =
+                str::from_utf8(sasl_authenticate_auth_bytes(&client_first_frame, 2)).unwrap();
+            assert!(client_first.starts_with("n,,n=alice,r="));
+            let client_first_bare = client_first.strip_prefix("n,,").unwrap();
+            let (_, client_nonce) = client_first_bare.split_once("r=").unwrap();
+            let server_first = format!("r={client_nonce}servernonce,s=QSXCR+Q6sek8bf92,i=4096");
+            write_sasl_authenticate_response(&mut socket, 2, server_first.as_bytes()).await;
+
+            let client_final_frame = read_frame(&mut socket).await;
+            let client_final =
+                str::from_utf8(sasl_authenticate_auth_bytes(&client_final_frame, 3)).unwrap();
+            let expected_final = scram::client_final(
+                ScramHash::Sha256,
+                "secret",
+                client_first_bare,
+                client_nonce,
+                &server_first,
+            )
+            .unwrap();
+            assert_eq!(client_final, expected_final.message);
+
+            let server_signature = BASE64.encode(expected_final.expected_server_signature);
+            let server_final = format!("v={server_signature}");
+            write_sasl_authenticate_response(&mut socket, 3, server_final.as_bytes()).await;
+        });
+
+        let client = ClientConfig::new([addr.to_string()])
+            .security_protocol(SecurityProtocol::SaslPlaintext)
+            .sasl_scram_sha_256("alice", "secret")
+            .request_timeout_ms(1_000)
+            .connect()
+            .await;
+
+        assert!(client.is_ok());
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn sasl_authenticate_error_does_not_expose_secret() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -644,6 +863,56 @@ mod tests {
         assert!(matches!(
             &error,
             Error::Broker { code: 58, context } if context == "sasl authenticate PLAIN"
+        ));
+        assert!(!error.to_string().contains("secret"));
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn sasl_scram_invalid_server_final_does_not_expose_secret() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let _handshake = read_frame(&mut socket).await;
+            write_frame(
+                &mut socket,
+                &[
+                    0, 0, 0, 1, // correlation id
+                    0, 0, // error code
+                    0, 0, 0, 1, // mechanism count
+                    0, 13, b'S', b'C', b'R', b'A', b'M', b'-', b'S', b'H', b'A', b'-', b'2', b'5',
+                    b'6', // mechanism
+                ],
+            )
+            .await;
+
+            let client_first_frame = read_frame(&mut socket).await;
+            let client_first =
+                str::from_utf8(sasl_authenticate_auth_bytes(&client_first_frame, 2)).unwrap();
+            let client_first_bare = client_first.strip_prefix("n,,").unwrap();
+            let (_, client_nonce) = client_first_bare.split_once("r=").unwrap();
+            let server_first = format!("r={client_nonce}servernonce,s=QSXCR+Q6sek8bf92,i=4096");
+            write_sasl_authenticate_response(&mut socket, 2, server_first.as_bytes()).await;
+
+            let _client_final = read_frame(&mut socket).await;
+            write_sasl_authenticate_response(&mut socket, 3, b"v=AAAA").await;
+        });
+
+        let error = ClientConfig::new([addr.to_string()])
+            .security_protocol(SecurityProtocol::SaslPlaintext)
+            .sasl_scram_sha_256("alice", "secret")
+            .request_timeout_ms(1_000)
+            .connect()
+            .await
+            .unwrap_err();
+
+        assert!(matches!(
+            &error,
+            Error::InvalidSaslResponse {
+                mechanism: "SCRAM-SHA-256",
+                reason: "server signature did not match"
+            }
         ));
         assert!(!error.to_string().contains("secret"));
         server.await.unwrap();
@@ -740,6 +1009,31 @@ mod tests {
         let mut frame = vec![0u8; size];
         socket.read_exact(&mut frame).await.unwrap();
         frame
+    }
+
+    fn sasl_authenticate_auth_bytes(frame: &[u8], correlation_id: i32) -> &[u8] {
+        assert_eq!(&frame[0..2], &[0, 36]);
+        assert_eq!(&frame[2..4], &[0, 0]);
+        assert_eq!(&frame[4..8], &correlation_id.to_be_bytes());
+        assert_eq!(&frame[8..10], &[0xff, 0xff]);
+        let auth_len = i32::from_be_bytes(frame[10..14].try_into().unwrap());
+        let auth_len = usize::try_from(auth_len).unwrap();
+        assert_eq!(frame.len(), 14 + auth_len);
+        &frame[14..]
+    }
+
+    async fn write_sasl_authenticate_response(
+        socket: &mut tokio::net::TcpStream,
+        correlation_id: i32,
+        auth_bytes: &[u8],
+    ) {
+        let mut frame = Vec::with_capacity(12 + auth_bytes.len());
+        frame.extend_from_slice(&correlation_id.to_be_bytes());
+        frame.extend_from_slice(&0i16.to_be_bytes());
+        frame.extend_from_slice(&(-1i16).to_be_bytes());
+        frame.extend_from_slice(&(auth_bytes.len() as i32).to_be_bytes());
+        frame.extend_from_slice(auth_bytes);
+        write_frame(socket, &frame).await;
     }
 
     async fn write_frame(socket: &mut tokio::net::TcpStream, frame: &[u8]) {

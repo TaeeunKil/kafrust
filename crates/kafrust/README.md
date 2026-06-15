@@ -234,12 +234,14 @@ certificate subject alternative name.
 Use `tls_root_certificate_der(bytes)` to add DER-encoded root certificates while
 still keeping platform roots enabled.
 
-SASL/PLAIN credentials can be stored on the shared client configuration with
-`sasl_plain(username, password)`. This does not change the selected
+SASL credentials can be stored on the shared client configuration with
+`sasl_plain(username, password)`, `sasl_scram_sha_256(username, password)`, or
+`sasl_scram_sha_512(username, password)`. This does not change the selected
 `SecurityProtocol`; choose `SaslPlaintext` or `SaslTls` separately. Credential
-debug output redacts the password. The `SaslPlaintext` broker roundtrip,
-producer, direct consumer, and consumer group smoke paths are verified against
-Kafka `3.7.2`; `SaslTls` and broader SASL workflows are not claimed yet.
+debug output redacts the password. The SASL/PLAIN `SaslPlaintext` broker
+roundtrip, producer, direct consumer, and consumer group smoke paths are
+verified against Kafka `3.7.2`; SCRAM is covered by mock-broker client exchange
+tests, but live SCRAM and `SaslTls` broker profiles are not claimed yet.
 
 The default build does not include TLS dependencies. The current `tls` feature
 uses the `rustls` ring crypto provider, which can require native build tooling
@@ -265,6 +267,9 @@ Verified high-level paths include:
   group smoke paths against Kafka `3.7.2`;
   SASL/PLAIN is verified for the `SaslPlaintext` broker roundtrip, producer,
   direct consumer, and consumer group smoke paths.
+- SASL/SCRAM-SHA-256 and SASL/SCRAM-SHA-512 client exchanges are implemented
+  and covered by mock-broker tests, but live SCRAM and `SaslTls` smoke profiles
+  are not claimed yet.
 - Broker compatibility is verified against Kafka `3.7.2` only.
 - Multi-broker clusters, leader failover, rack awareness, and partition
   expansion are not yet claimed.
@@ -284,8 +289,10 @@ cargo run -p kafrust --example producer_send
 ```
 
 The smoke examples accept `KAFRUST_SECURITY_PROTOCOL`,
-`KAFRUST_SASL_USERNAME`, and `KAFRUST_SASL_PASSWORD` so the same examples can be
-run against plaintext, TLS, and SASL/PLAIN broker profiles.
+`KAFRUST_SASL_USERNAME`, `KAFRUST_SASL_PASSWORD`, and
+`KAFRUST_SASL_MECHANISM` so the same examples can be run against plaintext,
+TLS, and SASL broker profiles. `KAFRUST_SASL_MECHANISM` defaults to `plain` and
+also accepts `scram-sha-256` or `scram-sha-512`.
 
 Available examples include:
 

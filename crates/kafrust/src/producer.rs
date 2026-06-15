@@ -781,6 +781,9 @@ fn delivery_error_from_request_error(error: &Error) -> Error {
         },
         Error::MissingBroker { node_id } => Error::MissingBroker { node_id: *node_id },
         Error::MissingSaslCredentials => Error::MissingSaslCredentials,
+        Error::InvalidSaslResponse { mechanism, reason } => {
+            Error::InvalidSaslResponse { mechanism, reason }
+        }
         Error::Broker { code, context } => Error::Broker {
             code: *code,
             context: context.clone(),
@@ -1251,6 +1254,26 @@ impl ProducerConfig {
         self
     }
 
+    /// Sets SASL/SCRAM-SHA-256 credentials for producer broker connections.
+    pub fn sasl_scram_sha_256(
+        mut self,
+        username: impl Into<String>,
+        password: impl Into<String>,
+    ) -> Self {
+        self.client = self.client.sasl_scram_sha_256(username, password);
+        self
+    }
+
+    /// Sets SASL/SCRAM-SHA-512 credentials for producer broker connections.
+    pub fn sasl_scram_sha_512(
+        mut self,
+        username: impl Into<String>,
+        password: impl Into<String>,
+    ) -> Self {
+        self.client = self.client.sasl_scram_sha_512(username, password);
+        self
+    }
+
     /// Sets the Kafka produce acknowledgement policy.
     pub fn acks(mut self, acks: Acks) -> Self {
         self.acks = acks;
@@ -1662,6 +1685,7 @@ fn can_retry_send(error: &Error) -> bool {
         | Error::MissingLeader { .. }
         | Error::MissingBroker { .. }
         | Error::MissingSaslCredentials
+        | Error::InvalidSaslResponse { .. }
         | Error::TlsConfig { .. }
         | Error::InvalidTlsServerName { .. }
         | Error::Unsupported(_)

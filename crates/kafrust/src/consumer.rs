@@ -355,6 +355,26 @@ impl ConsumerConfig {
         self
     }
 
+    /// Sets SASL/SCRAM-SHA-256 credentials for consumer broker connections.
+    pub fn sasl_scram_sha_256(
+        mut self,
+        username: impl Into<String>,
+        password: impl Into<String>,
+    ) -> Self {
+        self.client = self.client.sasl_scram_sha_256(username, password);
+        self
+    }
+
+    /// Sets SASL/SCRAM-SHA-512 credentials for consumer broker connections.
+    pub fn sasl_scram_sha_512(
+        mut self,
+        username: impl Into<String>,
+        password: impl Into<String>,
+    ) -> Self {
+        self.client = self.client.sasl_scram_sha_512(username, password);
+        self
+    }
+
     /// Sets the Kafka fetch max wait time in milliseconds.
     pub fn max_wait_ms(mut self, max_wait_ms: i32) -> Self {
         self.max_wait_ms = max_wait_ms;
@@ -491,6 +511,7 @@ fn can_retry_fetch(error: &Error) -> bool {
         | Error::MissingLeader { .. }
         | Error::MissingBroker { .. }
         | Error::MissingSaslCredentials
+        | Error::InvalidSaslResponse { .. }
         | Error::TlsConfig { .. }
         | Error::InvalidTlsServerName { .. }
         | Error::Unsupported(_)

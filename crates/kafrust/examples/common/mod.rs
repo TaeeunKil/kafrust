@@ -7,8 +7,18 @@ where
     T: ExampleSecurityConfig,
 {
     let mut config = config.security_protocol(security_protocol_from_env()?);
-    if let Some((username, password)) = sasl_credentials_from_env() {
-        config = config.sasl_plain(username, password);
+    if let Some(credentials) = sasl_credentials_from_env()? {
+        config = match credentials.mechanism {
+            ExampleSaslMechanism::Plain => {
+                config.sasl_plain(credentials.username, credentials.password)
+            }
+            ExampleSaslMechanism::ScramSha256 => {
+                config.sasl_scram_sha_256(credentials.username, credentials.password)
+            }
+            ExampleSaslMechanism::ScramSha512 => {
+                config.sasl_scram_sha_512(credentials.username, credentials.password)
+            }
+        };
     }
     if let Some(server_name) = tls_server_name_from_env() {
         config = config.tls_server_name(server_name);
@@ -24,6 +34,8 @@ pub(crate) trait ExampleSecurityConfig: Sized {
     fn tls_server_name(self, server_name: String) -> Self;
     fn tls_root_certificate_der(self, certificate: Vec<u8>) -> Self;
     fn sasl_plain(self, username: String, password: String) -> Self;
+    fn sasl_scram_sha_256(self, username: String, password: String) -> Self;
+    fn sasl_scram_sha_512(self, username: String, password: String) -> Self;
 }
 
 impl ExampleSecurityConfig for ClientConfig {
@@ -41,6 +53,14 @@ impl ExampleSecurityConfig for ClientConfig {
 
     fn sasl_plain(self, username: String, password: String) -> Self {
         ClientConfig::sasl_plain(self, username, password)
+    }
+
+    fn sasl_scram_sha_256(self, username: String, password: String) -> Self {
+        ClientConfig::sasl_scram_sha_256(self, username, password)
+    }
+
+    fn sasl_scram_sha_512(self, username: String, password: String) -> Self {
+        ClientConfig::sasl_scram_sha_512(self, username, password)
     }
 }
 
@@ -60,6 +80,14 @@ impl ExampleSecurityConfig for ProducerConfig {
     fn sasl_plain(self, username: String, password: String) -> Self {
         ProducerConfig::sasl_plain(self, username, password)
     }
+
+    fn sasl_scram_sha_256(self, username: String, password: String) -> Self {
+        ProducerConfig::sasl_scram_sha_256(self, username, password)
+    }
+
+    fn sasl_scram_sha_512(self, username: String, password: String) -> Self {
+        ProducerConfig::sasl_scram_sha_512(self, username, password)
+    }
 }
 
 impl ExampleSecurityConfig for ConsumerConfig {
@@ -77,6 +105,14 @@ impl ExampleSecurityConfig for ConsumerConfig {
 
     fn sasl_plain(self, username: String, password: String) -> Self {
         ConsumerConfig::sasl_plain(self, username, password)
+    }
+
+    fn sasl_scram_sha_256(self, username: String, password: String) -> Self {
+        ConsumerConfig::sasl_scram_sha_256(self, username, password)
+    }
+
+    fn sasl_scram_sha_512(self, username: String, password: String) -> Self {
+        ConsumerConfig::sasl_scram_sha_512(self, username, password)
     }
 }
 
@@ -96,6 +132,14 @@ impl ExampleSecurityConfig for ConsumerGroupConfig {
     fn sasl_plain(self, username: String, password: String) -> Self {
         ConsumerGroupConfig::sasl_plain(self, username, password)
     }
+
+    fn sasl_scram_sha_256(self, username: String, password: String) -> Self {
+        ConsumerGroupConfig::sasl_scram_sha_256(self, username, password)
+    }
+
+    fn sasl_scram_sha_512(self, username: String, password: String) -> Self {
+        ConsumerGroupConfig::sasl_scram_sha_512(self, username, password)
+    }
 }
 
 fn security_protocol_from_env() -> kafrust::Result<SecurityProtocol> {
@@ -106,10 +150,48 @@ fn security_protocol_from_env() -> kafrust::Result<SecurityProtocol> {
     parse_security_protocol(&value)
 }
 
-fn sasl_credentials_from_env() -> Option<(String, String)> {
-    let username = std::env::var("KAFRUST_SASL_USERNAME").ok()?;
-    let password = std::env::var("KAFRUST_SASL_PASSWORD").ok()?;
-    Some((username, password))
+struct ExampleSaslCredentials {
+    mechanism: ExampleSaslMechanism,
+    username: String,
+    password: String,
+}
+
+enum ExampleSaslMechanism {
+    Plain,
+    ScramSha256,
+    ScramSha512,
+}
+
+fn sasl_credentials_from_env() -> kafrust::Result<Option<ExampleSaslCredentials>> {
+    let Some(username) = std::env::var("KAFRUST_SASL_USERNAME").ok() else {
+        return Ok(None);
+    };
+    let password = std::env::var("KAFRUST_SASL_PASSWORD").map_err(|_| {
+        kafrust::Error::Unsupported(
+            "KAFRUST_SASL_PASSWORD is required when KAFRUST_SASL_USERNAME is set",
+        )
+    })?;
+    Ok(Some(ExampleSaslCredentials {
+        mechanism: sasl_mechanism_from_env()?,
+        username,
+        password,
+    }))
+}
+
+fn sasl_mechanism_from_env() -> kafrust::Result<ExampleSaslMechanism> {
+    let Ok(value) = std::env::var("KAFRUST_SASL_MECHANISM") else {
+        return Ok(ExampleSaslMechanism::Plain);
+    };
+
+    let normalized = value.trim().to_ascii_lowercase().replace('_', "-");
+    match normalized.as_str() {
+        "" | "plain" => Ok(ExampleSaslMechanism::Plain),
+        "scram-sha-256" => Ok(ExampleSaslMechanism::ScramSha256),
+        "scram-sha-512" => Ok(ExampleSaslMechanism::ScramSha512),
+        _ => Err(kafrust::Error::Unsupported(
+            "unsupported KAFRUST_SASL_MECHANISM; expected plain, scram-sha-256, or scram-sha-512",
+        )),
+    }
 }
 
 fn tls_server_name_from_env() -> Option<String> {

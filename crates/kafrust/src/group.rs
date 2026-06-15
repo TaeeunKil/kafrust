@@ -102,6 +102,26 @@ impl ConsumerGroupConfig {
         self
     }
 
+    /// Sets SASL/SCRAM-SHA-256 credentials for group, coordinator, and fetch requests.
+    pub fn sasl_scram_sha_256(
+        mut self,
+        username: impl Into<String>,
+        password: impl Into<String>,
+    ) -> Self {
+        self.client = self.client.sasl_scram_sha_256(username, password);
+        self
+    }
+
+    /// Sets SASL/SCRAM-SHA-512 credentials for group, coordinator, and fetch requests.
+    pub fn sasl_scram_sha_512(
+        mut self,
+        username: impl Into<String>,
+        password: impl Into<String>,
+    ) -> Self {
+        self.client = self.client.sasl_scram_sha_512(username, password);
+        self
+    }
+
     /// Subscribes this group member to a Kafka topic.
     pub fn subscribe(mut self, topic: impl Into<String>) -> Self {
         self.topics.push(topic.into());
