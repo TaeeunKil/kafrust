@@ -8,11 +8,11 @@ The `0.2.x` alpha line is verified against Apache Kafka 3.7.2 KRaft brokers over
 
 | Broker | Mode | Security | Verification | Status |
 | --- | --- | --- | --- | --- |
-| Apache Kafka 3.7.2 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, latest manual smoke run `27534520446` on 2026-06-15 | Passing |
-| Apache Kafka 3.7.2 | three-broker KRaft | PLAINTEXT | `Live Kafka Smoke` multi-broker job, latest manual smoke run `27534520446` on 2026-06-15 | Passing |
-| Apache Kafka 3.7.2 | single-node KRaft | TLS | `Live Kafka Smoke` TLS job, latest manual smoke run `27534520446` on 2026-06-15 | Passing |
-| Apache Kafka 3.7.2 | single-node KRaft | SASL_PLAINTEXT with SASL/PLAIN | `Live Kafka Smoke` SASL_PLAINTEXT job, latest manual smoke run `27534520446` on 2026-06-15 | Passing |
-| Apache Kafka 3.7.2 | single-node KRaft | SASL_SSL with SCRAM-SHA-256 | `Live Kafka Smoke` SASL_SSL SCRAM job, latest manual smoke run `27534520446` on 2026-06-15 | Passing |
+| Apache Kafka 3.7.2 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, latest manual smoke run `27535018323` on 2026-06-15 | Passing |
+| Apache Kafka 3.7.2 | three-broker KRaft | PLAINTEXT | `Live Kafka Smoke` multi-broker job, latest manual smoke run `27535018323` on 2026-06-15 | Passing |
+| Apache Kafka 3.7.2 | single-node KRaft | TLS | `Live Kafka Smoke` TLS job, latest manual smoke run `27535018323` on 2026-06-15 | Passing |
+| Apache Kafka 3.7.2 | single-node KRaft | SASL_PLAINTEXT with SASL/PLAIN | `Live Kafka Smoke` SASL_PLAINTEXT job, latest manual smoke run `27535018323` on 2026-06-15 | Passing |
+| Apache Kafka 3.7.2 | single-node KRaft | SASL_SSL with SCRAM-SHA-256 | `Live Kafka Smoke` SASL_SSL SCRAM job, latest manual smoke run `27535018323` on 2026-06-15 | Passing |
 
 ## Verified Paths
 
@@ -29,7 +29,7 @@ The Kafka 3.7.2 multi-broker plaintext smoke path covers:
 - A three-broker KRaft cluster with comma-separated bootstrap servers and a replicated smoke topic.
 - Metadata roundtrip with at least three brokers visible to kafrust.
 - The `broker_roundtrip` example against multi-broker advertised listener metadata.
-- High-level producer single-record send, buffered send, and batch send with explicit partition routing across the replicated smoke topic.
+- High-level producer single-record send with explicit partition routing, buffered send, and batch send with explicit partition routing across the replicated smoke topic.
 - Direct consumer fetch from an assigned topic partition.
 - Consumer group join, sync, heartbeat, poll, and offset commit through the alpha classic consumer group path.
 - First configured bootstrap broker stop followed by batch producer, direct consumer, and consumer group checks through the remaining brokers.
