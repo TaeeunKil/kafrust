@@ -350,7 +350,7 @@ jobs:
       KAFRUST_SASL_MECHANISM: scram-sha-256
       KAFRUST_SASL_USERNAME: kafrust
       KAFRUST_SASL_PASSWORD: kafrust-secret
-      KAFRUST_TLS_ROOT_CERT_DER_PATH: sasl-ssl/ca.der
+      KAFRUST_TLS_ROOT_CERT_DER_PATH: ${{ github.workspace }}/sasl-ssl/ca.der
       KAFRUST_GROUP_ID: kafrust-smoke
       KAFRUST_TOPIC: kafrust-smoke
 
