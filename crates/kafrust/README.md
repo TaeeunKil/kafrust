@@ -240,8 +240,9 @@ SASL credentials can be stored on the shared client configuration with
 `SecurityProtocol`; choose `SaslPlaintext` or `SaslTls` separately. Credential
 debug output redacts the password. The SASL/PLAIN `SaslPlaintext` broker
 roundtrip, producer, direct consumer, and consumer group smoke paths are
-verified against Kafka `3.7.2`; SCRAM is covered by mock-broker client exchange
-tests, but live SCRAM and `SaslTls` broker profiles are not claimed yet.
+verified against Kafka `3.7.2`; SASL/SCRAM-SHA-256 over `SaslTls` is verified
+for those same paths. SASL/SCRAM-SHA-512 is implemented and covered by focused
+tests, but its live broker profile is not claimed yet.
 
 The default build does not include TLS dependencies. The current `tls` feature
 uses the `rustls` ring crypto provider, which can require native build tooling
@@ -267,9 +268,10 @@ Verified high-level paths include:
   group smoke paths against Kafka `3.7.2`;
   SASL/PLAIN is verified for the `SaslPlaintext` broker roundtrip, producer,
   direct consumer, and consumer group smoke paths.
-- SASL/SCRAM-SHA-256 and SASL/SCRAM-SHA-512 client exchanges are implemented
-  and covered by mock-broker tests, but live SCRAM and `SaslTls` smoke profiles
-  are not claimed yet.
+- SASL/SCRAM-SHA-256 is verified over `SaslTls` for the broker roundtrip,
+  producer, direct consumer, and consumer group smoke paths; SASL/SCRAM-SHA-512
+  is implemented and covered by focused tests, but its live broker profile is
+  not claimed yet.
 - Broker compatibility is verified against Kafka `3.7.2` only.
 - Multi-broker clusters, leader failover, rack awareness, and partition
   expansion are not yet claimed.

@@ -224,6 +224,7 @@ brokers.
 | `0.2.x` | Apache Kafka `3.7.2` | single-node KRaft | `PLAINTEXT` | Passing live smoke |
 | `0.2.x` | Apache Kafka `3.7.2` | single-node KRaft | `TLS` | Passing live smoke |
 | `0.2.x` | Apache Kafka `3.7.2` | single-node KRaft | `SASL_PLAINTEXT` with SASL/PLAIN | Passing live smoke |
+| `0.2.x` | Apache Kafka `3.7.2` | single-node KRaft | `SASL_SSL` with SCRAM-SHA-256 | Passing live smoke |
 
 Verified paths currently include:
 
@@ -247,9 +248,9 @@ See [Compatibility](docs/compatibility.md) and
   `tls_root_certificate_der(bytes)`.
 - SASL/PLAIN authentication is verified against Kafka `3.7.2` over
   `SaslPlaintext` for broker roundtrip, producer, direct consumer, and consumer
-  group smoke paths. SASL/SCRAM-SHA-256 and SASL/SCRAM-SHA-512 client
-  exchanges are implemented and covered by mock-broker tests, but live SCRAM
-  and `SaslTls` broker profiles are not claimed yet.
+  group smoke paths. SASL/SCRAM-SHA-256 is verified over `SaslTls` for those
+  same smoke paths. SASL/SCRAM-SHA-512 is implemented and covered by focused
+  tests, but its live broker profile is not claimed yet.
 - Broker compatibility is verified against Kafka `3.7.2` only.
 - Multi-broker clusters, leader failover, rack awareness, and partition
   expansion are not yet claimed.

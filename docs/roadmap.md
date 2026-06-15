@@ -455,7 +455,7 @@ Strategic role:
 
 ## M13 Secured Enterprise Connectivity
 
-Status: In progress.
+Status: Complete.
 
 Goal: make kafrust usable against common secured Kafka deployments.
 
@@ -475,6 +475,12 @@ Exit criteria:
 - `SecurityProtocol::SaslTls` authenticates with at least one SCRAM mechanism
 - failed authentication errors do not expose passwords, tokens, salts, nonce material, or raw credentials
 - compatibility docs list plaintext, TLS, SASL_PLAINTEXT, and SASL_SSL broker profiles with verification dates
+
+Known limits:
+
+- SASL/SCRAM-SHA-512 is implemented and covered by focused tests, but the live
+  broker profile is not claimed yet.
+- SASL mechanisms beyond PLAIN and SCRAM-SHA-256/512 are not implemented.
 
 Evidence:
 
@@ -503,6 +509,16 @@ Evidence:
   `KAFRUST_SASL_MECHANISM` with `plain`, `scram-sha-256`, and
   `scram-sha-512`, so live broker profiles can exercise the same entry points
   once SCRAM users are configured.
+- The `Live Kafka Smoke` workflow includes a SASL_SSL SCRAM profile that
+  creates a Kafka SCRAM-SHA-256 user, configures kafrust with
+  `KAFRUST_SECURITY_PROTOCOL=sasl_tls`,
+  `KAFRUST_SASL_MECHANISM=scram-sha-256`, and a DER root certificate, then runs
+  the broker roundtrip, producer, direct consumer, and consumer group smoke
+  paths.
+- Manual `Live Kafka Smoke` run `27531812308` passed on 2026-06-15 from
+  `main`; the plaintext, TLS, SASL_PLAINTEXT, and SASL_SSL SCRAM jobs completed
+  broker roundtrip, producer, direct consumer, and consumer group checks against
+  Kafka 3.7.2.
 
 Strategic role:
 
