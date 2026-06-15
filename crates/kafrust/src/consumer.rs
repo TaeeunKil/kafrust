@@ -505,11 +505,12 @@ fn can_retry_fetch(error: &Error) -> bool {
                 | BrokerErrorKind::RequestTimedOut
                 | BrokerErrorKind::ReplicaNotAvailable
         ),
-        Error::Io(_) | Error::RequestTimedOut { .. } => true,
+        Error::Io(_)
+        | Error::RequestTimedOut { .. }
+        | Error::MissingLeader { .. }
+        | Error::MissingBroker { .. } => true,
         Error::MissingBootstrapServer
         | Error::UnknownTopicOrPartition { .. }
-        | Error::MissingLeader { .. }
-        | Error::MissingBroker { .. }
         | Error::MissingSaslCredentials
         | Error::InvalidSaslResponse { .. }
         | Error::TlsConfig { .. }
@@ -644,6 +645,11 @@ mod tests {
             std::io::ErrorKind::ConnectionReset,
             "reset",
         ))));
+        assert!(can_retry_fetch(&Error::MissingLeader {
+            topic: "orders".to_owned(),
+            partition: 0,
+        }));
+        assert!(can_retry_fetch(&Error::MissingBroker { node_id: 2 }));
         assert!(!can_retry_fetch(&Error::Unsupported("fetch v99")));
     }
 
