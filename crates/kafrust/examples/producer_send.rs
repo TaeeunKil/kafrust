@@ -1,6 +1,6 @@
 mod common;
 
-use kafrust::{Acks, ProducerConfig, ProducerRecord};
+use kafrust::{Acks, Error, ProducerConfig, ProducerRecord};
 
 #[tokio::main]
 async fn main() -> kafrust::Result<()> {
@@ -8,6 +8,7 @@ async fn main() -> kafrust::Result<()> {
     let topic = std::env::var("KAFRUST_TOPIC").unwrap_or_else(|_| "kafrust-smoke".to_owned());
     let key = std::env::var("KAFRUST_KEY").unwrap_or_else(|_| "kafrust-key".to_owned());
     let value = std::env::var("KAFRUST_VALUE").unwrap_or_else(|_| "hello from kafrust".to_owned());
+    let partition = partition_from_env()?;
 
     let mut producer = common::apply_security(
         ProducerConfig::new(bootstrap_servers).client_id("kafrust-producer-example"),
@@ -16,9 +17,12 @@ async fn main() -> kafrust::Result<()> {
     .build()
     .await?;
 
-    let metadata = producer
-        .send(ProducerRecord::to(topic).key(key).value(value))
-        .await?;
+    let mut record = ProducerRecord::to(topic).key(key).value(value);
+    if let Some(partition) = partition {
+        record = record.partition(partition);
+    }
+
+    let metadata = producer.send(record).await?;
 
     println!(
         "produced {}-{}@{}",
@@ -28,4 +32,34 @@ async fn main() -> kafrust::Result<()> {
     );
 
     Ok(())
+}
+
+fn partition_from_env() -> kafrust::Result<Option<i32>> {
+    let Some(value) = std::env::var("KAFRUST_PARTITION").ok() else {
+        return Ok(None);
+    };
+
+    parse_partition(&value).map(Some)
+}
+
+fn parse_partition(value: &str) -> kafrust::Result<i32> {
+    value
+        .trim()
+        .parse::<i32>()
+        .map_err(|_| Error::Unsupported("KAFRUST_PARTITION must be a partition index"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_partition;
+
+    #[test]
+    fn parses_partition() {
+        assert_eq!(parse_partition(" 2 ").expect("partition should parse"), 2);
+    }
+
+    #[test]
+    fn rejects_invalid_partition() {
+        assert!(parse_partition("not-a-partition").is_err());
+    }
 }

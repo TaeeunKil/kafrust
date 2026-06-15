@@ -578,6 +578,8 @@ Evidence:
 - The batch producer smoke example accepts explicit partition lists so the
   multi-broker workflow can route one batch call across multiple partition
   leaders.
+- The single-record producer smoke example accepts an explicit partition so the
+  multi-broker workflow can cover both single-record and batch leader routing.
 - The multi-broker smoke workflow stops the first configured bootstrap broker
   and reruns batch producer, direct consumer, and consumer group checks through
   the remaining brokers.
