@@ -561,6 +561,10 @@ Evidence:
 - Smoke examples and opt-in broker roundtrip tests accept comma-separated
   `KAFRUST_BOOTSTRAP_SERVERS` values, so multi-broker live checks can use the
   same environment format as Kafka's standard client configuration.
+- The `Live Kafka Smoke` workflow includes a plaintext three-broker Kafka 3.7.2
+  profile that creates a replicated topic and runs broker roundtrip, producer,
+  direct consumer, and consumer group smoke paths against comma-separated
+  bootstrap servers.
 
 ## M15 Compression Compatibility
 

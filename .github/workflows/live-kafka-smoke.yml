@@ -92,6 +92,115 @@ jobs:
         if: failure()
         run: docker logs kafrust-kafka
 
+  kafka-multi-broker:
+    name: Kafka 3.7.2 multi-broker
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      KAFRUST_BOOTSTRAP_SERVERS: localhost:19092,localhost:19093,localhost:19094
+      KAFRUST_EXPECTED_BROKERS: "3"
+      KAFRUST_GROUP_ID: kafrust-smoke-multi
+      KAFRUST_TOPIC: kafrust-smoke-multi
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.75.0"
+
+      - name: Start multi-broker Kafka
+        run: |
+          docker network create kafrust-multi
+          KAFKA_CLUSTER_ID="$(docker run --rm apache/kafka:3.7.2 /opt/kafka/bin/kafka-storage.sh random-uuid)"
+          for node in 1 2 3; do
+            external_port=$((19091 + node))
+            docker run -d --name "kafrust-kafka-multi-${node}" \
+              --network kafrust-multi \
+              -p "${external_port}:9092" \
+              -e KAFKA_CLUSTER_ID="${KAFKA_CLUSTER_ID}" \
+              -e KAFKA_NODE_ID="${node}" \
+              -e KAFKA_PROCESS_ROLES=broker,controller \
+              -e KAFKA_LISTENERS=INTERNAL://:29092,EXTERNAL://:9092,CONTROLLER://:9093 \
+              -e KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafrust-kafka-multi-${node}:29092,EXTERNAL://localhost:${external_port} \
+              -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+              -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT \
+              -e KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL \
+              -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafrust-kafka-multi-1:9093,2@kafrust-kafka-multi-2:9093,3@kafrust-kafka-multi-3:9093 \
+              -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=3 \
+              -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=3 \
+              -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=2 \
+              -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 \
+              apache/kafka:3.7.2
+          done
+
+      - name: Wait for multi-broker Kafka
+        run: |
+          for attempt in {1..120}; do
+            if docker exec kafrust-kafka-multi-1 /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server kafrust-kafka-multi-1:29092 \
+              >/tmp/kafrust-multi-probe.log 2>&1; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/kafrust-multi-probe.log || true
+          docker logs kafrust-kafka-multi-1
+          docker logs kafrust-kafka-multi-2
+          docker logs kafrust-kafka-multi-3
+          exit 1
+
+      - name: Create multi-broker smoke topic
+        run: |
+          docker exec kafrust-kafka-multi-1 /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server kafrust-kafka-multi-1:29092 \
+            --create \
+            --if-not-exists \
+            --topic "$KAFRUST_TOPIC" \
+            --partitions 6 \
+            --replication-factor 3
+          docker exec kafrust-kafka-multi-1 /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server kafrust-kafka-multi-1:29092 \
+            --describe \
+            --topic "$KAFRUST_TOPIC"
+
+      - name: Run multi-broker roundtrip
+        run: cargo test -p kafrust --test broker_roundtrip -- --nocapture
+
+      - name: Run multi-broker roundtrip example
+        run: cargo run -p kafrust --example broker_roundtrip
+
+      - name: Run multi-broker producer example
+        run: cargo run -p kafrust --example producer_send
+
+      - name: Run multi-broker producer batch example
+        env:
+          KAFRUST_BATCH_COUNT: "6"
+        run: cargo run -p kafrust --example producer_send_batch
+
+      - name: Run multi-broker buffered producer example
+        env:
+          KAFRUST_BUFFERED_COUNT: "6"
+        run: cargo run -p kafrust --example producer_buffered
+
+      - name: Run multi-broker direct consumer example
+        env:
+          KAFRUST_PARTITION: "0"
+          KAFRUST_OFFSET: "0"
+        run: cargo run -p kafrust --example consumer_fetch
+
+      - name: Run multi-broker consumer group example
+        run: cargo run -p kafrust --example consumer_group_poll
+
+      - name: Dump multi-broker Kafka logs
+        if: failure()
+        run: |
+          docker logs kafrust-kafka-multi-1
+          docker logs kafrust-kafka-multi-2
+          docker logs kafrust-kafka-multi-3
+
   kafka-tls:
     name: Kafka 3.7.2 TLS
     runs-on: ubuntu-latest
