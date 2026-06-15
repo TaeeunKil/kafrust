@@ -84,8 +84,10 @@ cargo add kafrust@0.2
 
 ## Usage
 
-Set the broker address with `KAFRUST_BOOTSTRAP_SERVERS` when running examples.
-If the variable is omitted, the examples use `localhost:9092`.
+Set broker addresses with `KAFRUST_BOOTSTRAP_SERVERS` when running examples.
+Use Kafka's comma-separated bootstrap format for multiple brokers, for example
+`localhost:19092,localhost:19093`. If the variable is omitted, the examples use
+`localhost:9092`.
 Smoke examples also accept `KAFRUST_SECURITY_PROTOCOL`,
 `KAFRUST_SASL_USERNAME`, `KAFRUST_SASL_PASSWORD`, and
 `KAFRUST_SASL_MECHANISM` for secured broker checks.

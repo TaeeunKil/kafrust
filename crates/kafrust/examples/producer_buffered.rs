@@ -4,8 +4,7 @@ use kafrust::{Acks, ConsumerConfig, Error, ProducerConfig, ProducerRecord, Recor
 
 #[tokio::main]
 async fn main() -> kafrust::Result<()> {
-    let bootstrap =
-        std::env::var("KAFRUST_BOOTSTRAP_SERVERS").unwrap_or_else(|_| "localhost:9092".to_owned());
+    let bootstrap_servers = common::bootstrap_servers_from_env();
     let topic = std::env::var("KAFRUST_TOPIC").unwrap_or_else(|_| "kafrust-smoke".to_owned());
     let count = std::env::var("KAFRUST_BUFFERED_COUNT")
         .ok()
@@ -14,7 +13,8 @@ async fn main() -> kafrust::Result<()> {
         .max(1);
 
     let mut producer = common::apply_security(
-        ProducerConfig::new([bootstrap.clone()]).client_id("kafrust-buffered-producer-example"),
+        ProducerConfig::new(bootstrap_servers.clone())
+            .client_id("kafrust-buffered-producer-example"),
     )?
     .acks(Acks::Leader)
     .linger_ms(60_000)
@@ -54,13 +54,13 @@ async fn main() -> kafrust::Result<()> {
         );
     }
 
-    fetch_buffered_records(&bootstrap, &topic, &expected, &metadata).await?;
+    fetch_buffered_records(&bootstrap_servers, &topic, &expected, &metadata).await?;
 
     Ok(())
 }
 
 async fn fetch_buffered_records(
-    bootstrap: &str,
+    bootstrap_servers: &[String],
     topic: &str,
     expected: &[(String, String)],
     metadata: &[RecordMetadata],
@@ -69,7 +69,8 @@ async fn fetch_buffered_records(
         "buffered producer smoke missing metadata",
     ))?;
     let mut consumer = common::apply_security(
-        ConsumerConfig::new([bootstrap.to_owned()]).client_id("kafrust-buffered-consumer-example"),
+        ConsumerConfig::new(bootstrap_servers.to_owned())
+            .client_id("kafrust-buffered-consumer-example"),
     )?
     .max_wait_ms(500)
     .build()

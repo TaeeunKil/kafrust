@@ -4,12 +4,11 @@ use kafrust::ClientConfig;
 
 #[tokio::main]
 async fn main() -> kafrust::Result<()> {
-    let bootstrap =
-        std::env::var("KAFRUST_BOOTSTRAP_SERVERS").unwrap_or_else(|_| "localhost:9092".to_owned());
+    let bootstrap_servers = common::bootstrap_servers_from_env();
     let group_id = std::env::var("KAFRUST_GROUP_ID").unwrap_or_else(|_| "kafrust-smoke".to_owned());
 
     let mut client = common::apply_security(
-        ClientConfig::new([bootstrap]).client_id("kafrust-find-coordinator"),
+        ClientConfig::new(bootstrap_servers).client_id("kafrust-find-coordinator"),
     )?
     .connect()
     .await?;

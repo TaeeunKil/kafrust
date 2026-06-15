@@ -4,8 +4,7 @@ use kafrust::{Acks, ProducerConfig, ProducerRecord};
 
 #[tokio::main]
 async fn main() -> kafrust::Result<()> {
-    let bootstrap =
-        std::env::var("KAFRUST_BOOTSTRAP_SERVERS").unwrap_or_else(|_| "localhost:9092".to_owned());
+    let bootstrap_servers = common::bootstrap_servers_from_env();
     let topic = std::env::var("KAFRUST_TOPIC").unwrap_or_else(|_| "kafrust-smoke".to_owned());
     let count = std::env::var("KAFRUST_BATCH_COUNT")
         .ok()
@@ -13,7 +12,7 @@ async fn main() -> kafrust::Result<()> {
         .unwrap_or(3);
 
     let mut producer = common::apply_security(
-        ProducerConfig::new([bootstrap]).client_id("kafrust-producer-batch-example"),
+        ProducerConfig::new(bootstrap_servers).client_id("kafrust-producer-batch-example"),
     )?
     .acks(Acks::Leader)
     .build()

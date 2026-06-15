@@ -1,6 +1,9 @@
 # Broker Roundtrip
 
 kafrust includes opt-in broker roundtrip checks. The M2 check connects to one Kafka-compatible bootstrap broker, sends `ApiVersions v0`, then sends `Metadata v1`. The consumer group check sends `FindCoordinator v1` for `KAFRUST_GROUP_ID`.
+`KAFRUST_BOOTSTRAP_SERVERS` accepts Kafka's comma-separated bootstrap format,
+for example `localhost:19092,localhost:19093`, so broker checks and smoke
+examples can exercise bootstrap failover and multi-broker metadata.
 
 Run it against a local broker:
 
@@ -48,6 +51,6 @@ Requests made through `ClientConfig`, `ProducerConfig`, `ConsumerConfig`, and `C
 
 `ClientConfig::security_protocol` and the matching producer, consumer, and group builders default to `SecurityProtocol::Plaintext`. `SecurityProtocol::Tls` uses the non-default `tls` crate feature and is covered by the recorded broker roundtrip, producer, direct consumer, and consumer group smoke profile. TLS server name validation defaults to the bootstrap host and can be overridden with `tls_server_name(name)` or `KAFRUST_TLS_SERVER_NAME` for examples and broker checks. Extra DER root certificates can be added with `tls_root_certificate_der(bytes)` or `KAFRUST_TLS_ROOT_CERT_DER_PATH` for examples and broker checks. SASL/PLAIN and SASL/SCRAM-SHA-256/512 authentication are implemented for configured `SaslPlaintext` and `SaslTls` connections; SASL/PLAIN over `SaslPlaintext` and SASL/SCRAM-SHA-256 over `SaslTls` are covered by recorded broker roundtrip, producer, direct consumer, and consumer group smoke profiles.
 
-When multiple bootstrap servers are configured, `ClientConfig::connect` tries them in order until one connection succeeds.
+When multiple bootstrap servers are configured, `ClientConfig::connect` tries them in order until one connection succeeds. Examples and opt-in broker tests parse comma-separated `KAFRUST_BOOTSTRAP_SERVERS` values into that same ordered list.
 
 kafrust emits `tracing` events for Kafka request start, response receipt, request failure, and high-level producer, direct consumer, and consumer group operations. Events include operational metadata such as API key, API version, correlation ID, topic, partition, offset, group ID, member ID, generation ID, and byte or record counts, but not request, response, key, or value payload contents.

@@ -2,6 +2,21 @@ use kafrust::{
     ClientConfig, ConsumerConfig, ConsumerGroupConfig, ProducerConfig, SecurityProtocol,
 };
 
+pub(crate) fn bootstrap_servers_from_env() -> Vec<String> {
+    let value =
+        std::env::var("KAFRUST_BOOTSTRAP_SERVERS").unwrap_or_else(|_| "localhost:9092".to_owned());
+    parse_bootstrap_servers(&value)
+}
+
+fn parse_bootstrap_servers(value: &str) -> Vec<String> {
+    value
+        .split(',')
+        .map(str::trim)
+        .filter(|server| !server.is_empty())
+        .map(ToOwned::to_owned)
+        .collect()
+}
+
 pub(crate) fn apply_security<T>(config: T) -> kafrust::Result<T>
 where
     T: ExampleSecurityConfig,

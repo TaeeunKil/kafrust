@@ -11,11 +11,12 @@ async fn api_versions_and_metadata_roundtrip_when_broker_is_configured() {
         return;
     };
 
-    let mut client = client_config_from_env(bootstrap, "kafrust-integration")
-        .expect("valid broker test configuration")
-        .connect()
-        .await
-        .expect("connect to Kafka broker");
+    let mut client =
+        client_config_from_env(parse_bootstrap_servers(&bootstrap), "kafrust-integration")
+            .expect("valid broker test configuration")
+            .connect()
+            .await
+            .expect("connect to Kafka broker");
 
     let api_versions = client
         .api_versions()
@@ -38,11 +39,12 @@ async fn find_group_coordinator_roundtrip_when_broker_is_configured() {
     };
     let group_id = std::env::var("KAFRUST_GROUP_ID").unwrap_or_else(|_| "kafrust-smoke".to_owned());
 
-    let mut client = client_config_from_env(bootstrap, "kafrust-integration")
-        .expect("valid broker test configuration")
-        .connect()
-        .await
-        .expect("connect to Kafka broker");
+    let mut client =
+        client_config_from_env(parse_bootstrap_servers(&bootstrap), "kafrust-integration")
+            .expect("valid broker test configuration")
+            .connect()
+            .await
+            .expect("connect to Kafka broker");
 
     let coordinator = wait_for_group_coordinator(&mut client, group_id)
         .await
@@ -61,8 +63,11 @@ fn security_protocol_from_env() -> SecurityProtocol {
     parse_security_protocol(&value).expect("valid KAFRUST_SECURITY_PROTOCOL")
 }
 
-fn client_config_from_env(bootstrap: String, client_id: &str) -> kafrust::Result<ClientConfig> {
-    let mut config = ClientConfig::new([bootstrap])
+fn client_config_from_env(
+    bootstrap_servers: Vec<String>,
+    client_id: &str,
+) -> kafrust::Result<ClientConfig> {
+    let mut config = ClientConfig::new(bootstrap_servers)
         .client_id(client_id)
         .security_protocol(security_protocol_from_env());
     if let Some(credentials) = sasl_credentials_from_env()? {
@@ -160,6 +165,15 @@ fn parse_security_protocol(value: &str) -> kafrust::Result<SecurityProtocol> {
     }
 }
 
+fn parse_bootstrap_servers(value: &str) -> Vec<String> {
+    value
+        .split(',')
+        .map(str::trim)
+        .filter(|server| !server.is_empty())
+        .map(ToOwned::to_owned)
+        .collect()
+}
+
 #[test]
 fn parses_security_protocol_from_environment_value() {
     assert_eq!(
@@ -182,6 +196,18 @@ fn parses_sasl_mechanism_from_environment_value() {
         parse_sasl_mechanism("scram_sha_512").expect("SCRAM mechanism should parse"),
         TestSaslMechanism::ScramSha512
     ));
+}
+
+#[test]
+fn parses_bootstrap_server_list_from_environment_value() {
+    assert_eq!(
+        parse_bootstrap_servers(" localhost:19092,localhost:19093,,localhost:19094 "),
+        vec![
+            "localhost:19092".to_owned(),
+            "localhost:19093".to_owned(),
+            "localhost:19094".to_owned(),
+        ]
+    );
 }
 
 async fn wait_for_group_coordinator(
