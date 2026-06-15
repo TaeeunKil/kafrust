@@ -48,5 +48,8 @@ jobs:
       - name: Run tests
         run: cargo test --workspace --all-targets
 
+      - name: Run kafrust doc tests
+        run: cargo test -p kafrust --doc
+
       - name: Run TLS feature tests
         run: cargo test -p kafrust --features tls --all-targets
