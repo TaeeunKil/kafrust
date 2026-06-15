@@ -581,6 +581,11 @@ Evidence:
 - The multi-broker smoke workflow stops the first configured bootstrap broker
   and reruns batch producer, direct consumer, and consumer group checks through
   the remaining brokers.
+- Consumer group coordinator connection I/O failures and coordinator request
+  timeouts are classified as rejoinable in group contexts, so poll,
+  background-heartbeat observation, stale-heartbeat shutdown, and offset commit
+  paths can rediscover the coordinator instead of treating only broker error
+  codes as rejoin signals.
 
 ## M15 Compression Compatibility
 
