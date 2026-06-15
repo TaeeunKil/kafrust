@@ -84,6 +84,12 @@ impl ConsumerGroupConfig {
         self
     }
 
+    /// Sets the TLS server name used for group, coordinator, and fetch certificate validation.
+    pub fn tls_server_name(mut self, server_name: impl Into<String>) -> Self {
+        self.client = self.client.tls_server_name(server_name);
+        self
+    }
+
     /// Sets SASL/PLAIN credentials for group, coordinator, and fetch requests.
     pub fn sasl_plain(mut self, username: impl Into<String>, password: impl Into<String>) -> Self {
         self.client = self.client.sasl_plain(username, password);
@@ -933,6 +939,7 @@ mod tests {
             .client_id("orders-reader")
             .request_timeout_ms(5_000)
             .security_protocol(SecurityProtocol::SaslPlaintext)
+            .tls_server_name("broker.example.com")
             .sasl_plain("alice", "secret-password")
             .subscribe("orders")
             .session_timeout_ms(8_000)
@@ -952,6 +959,10 @@ mod tests {
             SecurityProtocol::SaslPlaintext
         );
         assert_eq!(
+            config.client.tls_server_name_ref(),
+            Some("broker.example.com")
+        );
+        assert_eq!(
             config.client.sasl_credentials_ref().unwrap().username(),
             "alice"
         );
@@ -963,6 +974,7 @@ mod tests {
             .client_id("orders-reader")
             .request_timeout_ms(5_000)
             .security_protocol(SecurityProtocol::SaslPlaintext)
+            .tls_server_name("broker.example.com")
             .sasl_plain("alice", "secret-password")
             .max_retries(3)
             .max_poll_records(10);
@@ -975,6 +987,10 @@ mod tests {
         assert_eq!(
             client_config.security_protocol_ref(),
             SecurityProtocol::SaslPlaintext
+        );
+        assert_eq!(
+            client_config.tls_server_name_ref(),
+            Some("broker.example.com")
         );
         assert_eq!(
             client_config.sasl_credentials_ref().unwrap().username(),

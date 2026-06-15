@@ -1233,6 +1233,12 @@ impl ProducerConfig {
         self
     }
 
+    /// Sets the TLS server name used for producer broker certificate validation.
+    pub fn tls_server_name(mut self, server_name: impl Into<String>) -> Self {
+        self.client = self.client.tls_server_name(server_name);
+        self
+    }
+
     /// Sets SASL/PLAIN credentials for producer broker connections.
     pub fn sasl_plain(mut self, username: impl Into<String>, password: impl Into<String>) -> Self {
         self.client = self.client.sasl_plain(username, password);
@@ -1836,6 +1842,7 @@ mod tests {
             .client_id("orders-api")
             .request_timeout_ms(5_000)
             .security_protocol(SecurityProtocol::SaslTls)
+            .tls_server_name("broker.example.com")
             .sasl_plain("alice", "secret-password")
             .max_retries(3)
             .max_records_per_batch(128)
@@ -1852,6 +1859,10 @@ mod tests {
         assert_eq!(
             config.client_config().security_protocol_ref(),
             SecurityProtocol::SaslTls
+        );
+        assert_eq!(
+            config.client_config().tls_server_name_ref(),
+            Some("broker.example.com")
         );
         assert_eq!(
             config

@@ -33,7 +33,7 @@ Current implementation status:
 - `Consumer::assign` and `Consumer::poll` provide a stream-like path that advances assigned partition offsets after records are returned.
 - Fetch uses metadata lookup and partition leader routing.
 - `ConsumerConfig::request_timeout_ms` controls the request timeout used for metadata and fetch roundtrips.
-- `ConsumerConfig::security_protocol` stores the Kafka security protocol for consumer broker connections. `Plaintext` is the default transport; TLS requires the non-default `tls` crate feature; `sasl_plain(username, password)` provides SASL/PLAIN credentials for `SaslPlaintext` or `SaslTls`.
+- `ConsumerConfig::security_protocol` stores the Kafka security protocol for consumer broker connections. `Plaintext` is the default transport; TLS requires the non-default `tls` crate feature; `tls_server_name(name)` overrides the certificate validation name when the bootstrap host differs from the broker certificate; `sasl_plain(username, password)` provides SASL/PLAIN credentials for `SaslPlaintext` or `SaslTls`.
 - `ConsumerConfig::max_retries` controls retry attempts for transient fetch broker errors, request timeouts, and connection I/O failures.
 - `ConsumerConfig::max_poll_records` limits how many records one `poll` call returns.
 - Consumer metadata is cached by topic and refreshed when a retriable fetch failure invalidates that topic cache entry.

@@ -66,6 +66,9 @@ fn client_config_from_env(bootstrap: String, client_id: &str) -> ClientConfig {
     if let Some((username, password)) = sasl_credentials_from_env() {
         config = config.sasl_plain(username, password);
     }
+    if let Some(server_name) = tls_server_name_from_env() {
+        config = config.tls_server_name(server_name);
+    }
     config
 }
 
@@ -73,6 +76,10 @@ fn sasl_credentials_from_env() -> Option<(String, String)> {
     let username = std::env::var("KAFRUST_SASL_USERNAME").ok()?;
     let password = std::env::var("KAFRUST_SASL_PASSWORD").ok()?;
     Some((username, password))
+}
+
+fn tls_server_name_from_env() -> Option<String> {
+    std::env::var("KAFRUST_TLS_SERVER_NAME").ok()
 }
 
 fn parse_security_protocol(value: &str) -> kafrust::Result<SecurityProtocol> {

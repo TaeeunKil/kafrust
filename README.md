@@ -238,7 +238,9 @@ See [Compatibility](docs/compatibility.md) and
 - Plaintext TCP remains the default networking path.
 - TLS transport is available behind the non-default `tls` crate feature and is
   verified against Kafka `3.7.2` for broker roundtrip, producer, direct
-  consumer, and consumer group smoke paths.
+  consumer, and consumer group smoke paths. TLS certificate server name
+  validation defaults to the bootstrap host and can be overridden with
+  `tls_server_name(name)`.
 - SASL/PLAIN authentication is verified against Kafka `3.7.2` over
   `SaslPlaintext` for broker roundtrip, producer, direct consumer, and consumer
   group smoke paths; `SaslTls` and broader SASL workflows are not claimed yet.
