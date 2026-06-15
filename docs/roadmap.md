@@ -569,6 +569,9 @@ Evidence:
   `main`; the multi-broker job completed broker roundtrip, producer, direct
   consumer, and consumer group checks against a three-broker Kafka 3.7.2 KRaft
   cluster.
+- The batch producer smoke example accepts explicit partition lists so the
+  multi-broker workflow can route one batch call across multiple partition
+  leaders.
 
 ## M15 Compression Compatibility
 
