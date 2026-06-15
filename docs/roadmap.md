@@ -558,6 +558,10 @@ Evidence:
   leaders and missing broker metadata as stale metadata, invalidates the topic
   metadata cache, and refreshes metadata before retrying within the configured
   retry budget.
+- Producer and direct consumer retry classification also treats unknown
+  topic-partition entries from cached metadata as refreshable, which gives
+  partition expansion and just-created topic metadata one retry budget to
+  converge before surfacing the original Kafka concept to callers.
 - Smoke examples and opt-in broker roundtrip tests accept comma-separated
   `KAFRUST_BOOTSTRAP_SERVERS` values, so multi-broker live checks can use the
   same environment format as Kafka's standard client configuration.

@@ -507,10 +507,10 @@ fn can_retry_fetch(error: &Error) -> bool {
         ),
         Error::Io(_)
         | Error::RequestTimedOut { .. }
+        | Error::UnknownTopicOrPartition { .. }
         | Error::MissingLeader { .. }
         | Error::MissingBroker { .. } => true,
         Error::MissingBootstrapServer
-        | Error::UnknownTopicOrPartition { .. }
         | Error::MissingSaslCredentials
         | Error::InvalidSaslResponse { .. }
         | Error::TlsConfig { .. }
@@ -645,6 +645,10 @@ mod tests {
             std::io::ErrorKind::ConnectionReset,
             "reset",
         ))));
+        assert!(can_retry_fetch(&Error::UnknownTopicOrPartition {
+            topic: "orders".to_owned(),
+            partition: 3,
+        }));
         assert!(can_retry_fetch(&Error::MissingLeader {
             topic: "orders".to_owned(),
             partition: 0,
