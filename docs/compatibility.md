@@ -4,7 +4,7 @@ kafrust compatibility claims are scoped to behavior that has been verified again
 
 ## Current Compatibility Claim
 
-The `0.2.x` alpha line is verified against a single-node Apache Kafka 3.7.2 KRaft broker over plaintext TCP. TLS and SASL/PLAIN over SASL_PLAINTEXT are verified for broker roundtrip, producer, direct consumer, and consumer group smoke paths.
+The `0.2.x` alpha line is verified against a single-node Apache Kafka 3.7.2 KRaft broker over plaintext TCP. TLS and SASL/PLAIN over SASL_PLAINTEXT are verified for broker roundtrip, producer, direct consumer, and consumer group smoke paths. SASL/SCRAM-SHA-256 and SASL/SCRAM-SHA-512 client exchanges are implemented, but live SCRAM broker profiles are not claimed yet.
 
 | Broker | Mode | Security | Verification | Status |
 | --- | --- | --- | --- | --- |
@@ -46,6 +46,7 @@ The current compatibility claim does not cover:
 
 - TLS workflows beyond the listed TLS smoke examples.
 - SASL workflows beyond the listed SASL_PLAINTEXT smoke examples.
+- SCRAM broker profiles until a dated live smoke run is recorded.
 - SASL_SSL broker profiles.
 - Multi-broker clusters, leader failover, rack awareness, or partition expansion.
 - Idempotent producers, transactions, compression, or high-throughput batching.

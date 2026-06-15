@@ -382,7 +382,7 @@ Known limits:
   SASL_PLAINTEXT broker.
 - SASL_SSL and SASL workflows beyond the listed SASL_PLAINTEXT smoke examples
   are not claimed yet.
-- SCRAM and SASL_SSL are deferred to M13 Secured Enterprise Connectivity.
+- SCRAM live smoke and SASL_SSL are owned by M13 Secured Enterprise Connectivity.
 
 Evidence:
 
@@ -487,6 +487,22 @@ Evidence:
   and consumer group builders add DER-encoded root certificates while keeping
   platform roots enabled. Broker smoke examples accept
   `KAFRUST_TLS_ROOT_CERT_DER_PATH`.
+- `SaslMechanism` models Kafka `PLAIN`, `SCRAM-SHA-256`, and
+  `SCRAM-SHA-512`; `SaslCredentials` has matching constructors and the shared
+  client, producer, consumer, and consumer group configs expose SCRAM builder
+  methods without changing `SecurityProtocol`.
+- `ClientConfig` performs SCRAM client-first and client-final
+  `SaslAuthenticate v0` exchanges after `SaslHandshake v1`, verifies the
+  server-final signature, and reports invalid SCRAM responses without exposing
+  passwords or raw credentials.
+- Focused tests cover SCRAM-SHA-256 and SCRAM-SHA-512 proof generation,
+  username escaping, nonce mismatch handling, server-final verification, mock
+  broker SCRAM authentication ordering, and secret-safe invalid server-final
+  errors.
+- The broker roundtrip test and smoke examples accept
+  `KAFRUST_SASL_MECHANISM` with `plain`, `scram-sha-256`, and
+  `scram-sha-512`, so live broker profiles can exercise the same entry points
+  once SCRAM users are configured.
 
 Strategic role:
 

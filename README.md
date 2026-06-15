@@ -87,7 +87,8 @@ cargo add kafrust@0.2
 Set the broker address with `KAFRUST_BOOTSTRAP_SERVERS` when running examples.
 If the variable is omitted, the examples use `localhost:9092`.
 Smoke examples also accept `KAFRUST_SECURITY_PROTOCOL`,
-`KAFRUST_SASL_USERNAME`, and `KAFRUST_SASL_PASSWORD` for secured broker checks.
+`KAFRUST_SASL_USERNAME`, `KAFRUST_SASL_PASSWORD`, and
+`KAFRUST_SASL_MECHANISM` for secured broker checks.
 
 ```sh
 KAFRUST_BOOTSTRAP_SERVERS=localhost:9092 \
@@ -221,6 +222,8 @@ brokers.
 | kafrust | Broker | Mode | Security | Status |
 | --- | --- | --- | --- | --- |
 | `0.2.x` | Apache Kafka `3.7.2` | single-node KRaft | `PLAINTEXT` | Passing live smoke |
+| `0.2.x` | Apache Kafka `3.7.2` | single-node KRaft | `TLS` | Passing live smoke |
+| `0.2.x` | Apache Kafka `3.7.2` | single-node KRaft | `SASL_PLAINTEXT` with SASL/PLAIN | Passing live smoke |
 
 Verified paths currently include:
 
@@ -244,7 +247,9 @@ See [Compatibility](docs/compatibility.md) and
   `tls_root_certificate_der(bytes)`.
 - SASL/PLAIN authentication is verified against Kafka `3.7.2` over
   `SaslPlaintext` for broker roundtrip, producer, direct consumer, and consumer
-  group smoke paths; `SaslTls` and broader SASL workflows are not claimed yet.
+  group smoke paths. SASL/SCRAM-SHA-256 and SASL/SCRAM-SHA-512 client
+  exchanges are implemented and covered by mock-broker tests, but live SCRAM
+  and `SaslTls` broker profiles are not claimed yet.
 - Broker compatibility is verified against Kafka `3.7.2` only.
 - Multi-broker clusters, leader failover, rack awareness, and partition
   expansion are not yet claimed.
@@ -261,7 +266,8 @@ Primary public entry points:
 - `ProducerConfig`, `Producer`, `BufferedProducer`, and `ProducerRecord`.
 - `ConsumerConfig`, `Consumer`, `ConsumerAssignment`, and `ConsumerRecord`.
 - `ConsumerGroupConfig`, `ConsumerGroup`, and `ConsumerGroupHeartbeat`.
-- `SecurityProtocol` for plaintext, TLS, and SASL connection modes.
+- `SecurityProtocol`, `SaslMechanism`, and `SaslCredentials` for plaintext,
+  TLS, and SASL connection modes.
 - `kafrust::protocol` for the companion `kafrust-protocol` crate.
 
 Generated API documentation:

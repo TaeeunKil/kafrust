@@ -93,6 +93,13 @@ pub enum Error {
     },
     /// SASL security protocol was selected without configuring credentials.
     MissingSaslCredentials,
+    /// SASL authentication response could not be validated.
+    InvalidSaslResponse {
+        /// SASL mechanism being authenticated.
+        mechanism: &'static str,
+        /// Redacted validation failure reason.
+        reason: &'static str,
+    },
     /// Kafka returned a non-zero broker error code.
     Broker {
         /// Raw Kafka broker error code.
@@ -149,6 +156,9 @@ impl fmt::Display for Error {
                 write!(f, "missing broker metadata for node {node_id}")
             }
             Self::MissingSaslCredentials => f.write_str("missing Kafka SASL credentials"),
+            Self::InvalidSaslResponse { mechanism, reason } => {
+                write!(f, "invalid SASL {mechanism} response: {reason}")
+            }
             Self::Broker { code, context } => write!(f, "Kafka broker error {code}: {context}"),
             Self::RequestTimedOut { timeout_ms } => {
                 write!(f, "Kafka request timed out after {timeout_ms}ms")
@@ -176,6 +186,7 @@ impl std::error::Error for Error {
             | Self::MissingLeader { .. }
             | Self::MissingBroker { .. }
             | Self::MissingSaslCredentials
+            | Self::InvalidSaslResponse { .. }
             | Self::Broker { .. }
             | Self::RequestTimedOut { .. }
             | Self::TlsConfig { .. }

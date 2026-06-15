@@ -15,6 +15,8 @@ pub mod group;
 /// Producer API.
 pub mod producer;
 
+mod scram;
+
 pub use client::Client;
 pub use config::{ClientConfig, SaslCredentials, SaslMechanism, SecurityProtocol};
 pub use consumer::{Consumer, ConsumerAssignment, ConsumerConfig, ConsumerRecord};
