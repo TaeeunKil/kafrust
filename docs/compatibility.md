@@ -4,13 +4,14 @@ kafrust compatibility claims are scoped to behavior that has been verified again
 
 ## Current Compatibility Claim
 
-The `0.2.x` alpha line is verified against a single-node Apache Kafka 3.7.2 KRaft broker over plaintext TCP. TLS and SASL/PLAIN over SASL_PLAINTEXT are verified for broker roundtrip, producer, direct consumer, and consumer group smoke paths. SASL/SCRAM-SHA-256 and SASL/SCRAM-SHA-512 client exchanges are implemented, but live SCRAM broker profiles are not claimed yet.
+The `0.2.x` alpha line is verified against a single-node Apache Kafka 3.7.2 KRaft broker over plaintext TCP. TLS, SASL/PLAIN over SASL_PLAINTEXT, and SASL/SCRAM-SHA-256 over SASL_SSL are verified for broker roundtrip, producer, direct consumer, and consumer group smoke paths. SASL/SCRAM-SHA-512 client exchanges are implemented, but the live broker profile is not claimed yet.
 
 | Broker | Mode | Security | Verification | Status |
 | --- | --- | --- | --- | --- |
-| Apache Kafka 3.7.2 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, latest manual smoke run `27399394544` on 2026-06-12 | Passing |
-| Apache Kafka 3.7.2 | single-node KRaft | TLS | `Live Kafka Smoke` TLS job, latest manual smoke run `27399394544` on 2026-06-12 | Passing |
-| Apache Kafka 3.7.2 | single-node KRaft | SASL_PLAINTEXT with SASL/PLAIN | `Live Kafka Smoke` SASL_PLAINTEXT job, latest manual smoke run `27399394544` on 2026-06-12 | Passing |
+| Apache Kafka 3.7.2 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, latest manual smoke run `27531812308` on 2026-06-15 | Passing |
+| Apache Kafka 3.7.2 | single-node KRaft | TLS | `Live Kafka Smoke` TLS job, latest manual smoke run `27531812308` on 2026-06-15 | Passing |
+| Apache Kafka 3.7.2 | single-node KRaft | SASL_PLAINTEXT with SASL/PLAIN | `Live Kafka Smoke` SASL_PLAINTEXT job, latest manual smoke run `27531812308` on 2026-06-15 | Passing |
+| Apache Kafka 3.7.2 | single-node KRaft | SASL_SSL with SCRAM-SHA-256 | `Live Kafka Smoke` SASL_SSL SCRAM job, latest manual smoke run `27531812308` on 2026-06-15 | Passing |
 
 ## Verified Paths
 
@@ -40,14 +41,23 @@ The Kafka 3.7.2 SASL_PLAINTEXT smoke path covers:
 - Direct consumer fetch from an assigned topic partition through `SecurityProtocol::SaslPlaintext`.
 - Consumer group join, sync, heartbeat, poll, and offset commit through `SecurityProtocol::SaslPlaintext`.
 
+The Kafka 3.7.2 SASL_SSL SCRAM smoke path covers:
+
+- `ApiVersions v0` and `Metadata v1` roundtrips through `SecurityProtocol::SaslTls` using SASL/SCRAM-SHA-256.
+- `FindCoordinator v1` for consumer group coordinator discovery through `SecurityProtocol::SaslTls`.
+- The `broker_roundtrip` example through `SecurityProtocol::SaslTls`.
+- High-level producer metadata lookup, leader routing, single-record send, batch send, and buffered send through `SecurityProtocol::SaslTls`.
+- Direct consumer fetch from an assigned topic partition through `SecurityProtocol::SaslTls`.
+- Consumer group join, sync, heartbeat, poll, and offset commit through `SecurityProtocol::SaslTls`.
+- TLS certificate validation with an extra DER root certificate configured through `tls_root_certificate_der`.
+
 ## Not Yet Claimed
 
 The current compatibility claim does not cover:
 
 - TLS workflows beyond the listed TLS smoke examples.
-- SASL workflows beyond the listed SASL_PLAINTEXT smoke examples.
-- SCRAM broker profiles until a dated live smoke run is recorded.
-- SASL_SSL broker profiles.
+- SASL workflows beyond the listed SASL_PLAINTEXT and SASL_SSL smoke examples.
+- SASL/SCRAM-SHA-512 live broker profiles.
 - Multi-broker clusters, leader failover, rack awareness, or partition expansion.
 - Idempotent producers, transactions, compression, or high-throughput batching.
 - A full Kafka broker version matrix.
