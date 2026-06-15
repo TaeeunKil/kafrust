@@ -558,6 +558,9 @@ Evidence:
   leaders and missing broker metadata as stale metadata, invalidates the topic
   metadata cache, and refreshes metadata before retrying within the configured
   retry budget.
+- Smoke examples and opt-in broker roundtrip tests accept comma-separated
+  `KAFRUST_BOOTSTRAP_SERVERS` values, so multi-broker live checks can use the
+  same environment format as Kafka's standard client configuration.
 
 ## M15 Compression Compatibility
 

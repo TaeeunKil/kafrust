@@ -295,6 +295,8 @@ The smoke examples accept `KAFRUST_SECURITY_PROTOCOL`,
 `KAFRUST_SASL_MECHANISM` so the same examples can be run against plaintext,
 TLS, and SASL broker profiles. `KAFRUST_SASL_MECHANISM` defaults to `plain` and
 also accepts `scram-sha-256` or `scram-sha-512`.
+`KAFRUST_BOOTSTRAP_SERVERS` accepts Kafka's comma-separated bootstrap format for
+multiple brokers, for example `localhost:19092,localhost:19093`.
 
 Available examples include:
 

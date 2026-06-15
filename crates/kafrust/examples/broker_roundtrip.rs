@@ -4,13 +4,13 @@ use kafrust::ClientConfig;
 
 #[tokio::main]
 async fn main() -> kafrust::Result<()> {
-    let bootstrap =
-        std::env::var("KAFRUST_BOOTSTRAP_SERVERS").unwrap_or_else(|_| "localhost:9092".to_owned());
+    let bootstrap_servers = common::bootstrap_servers_from_env();
 
-    let mut client =
-        common::apply_security(ClientConfig::new([bootstrap]).client_id("kafrust-roundtrip"))?
-            .connect()
-            .await?;
+    let mut client = common::apply_security(
+        ClientConfig::new(bootstrap_servers).client_id("kafrust-roundtrip"),
+    )?
+    .connect()
+    .await?;
 
     let api_versions = client.api_versions().await?;
     println!("api_versions: {} APIs", api_versions.api_keys.len());

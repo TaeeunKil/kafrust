@@ -4,8 +4,7 @@ use kafrust::ConsumerConfig;
 
 #[tokio::main]
 async fn main() -> kafrust::Result<()> {
-    let bootstrap =
-        std::env::var("KAFRUST_BOOTSTRAP_SERVERS").unwrap_or_else(|_| "localhost:9092".to_owned());
+    let bootstrap_servers = common::bootstrap_servers_from_env();
     let topic = std::env::var("KAFRUST_TOPIC").unwrap_or_else(|_| "kafrust-smoke".to_owned());
     let partition = std::env::var("KAFRUST_PARTITION")
         .ok()
@@ -17,7 +16,7 @@ async fn main() -> kafrust::Result<()> {
         .unwrap_or(0);
 
     let mut consumer = common::apply_security(
-        ConsumerConfig::new([bootstrap]).client_id("kafrust-consumer-example"),
+        ConsumerConfig::new(bootstrap_servers).client_id("kafrust-consumer-example"),
     )?
     .build()
     .await?;
