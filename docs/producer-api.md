@@ -82,6 +82,11 @@ Run the buffered producer smoke example to enqueue multiple records, await deliv
 KAFRUST_BOOTSTRAP_SERVERS=localhost:9092 KAFRUST_TOPIC=kafrust-smoke cargo run -p kafrust --example producer_buffered
 ```
 
+The `producer_send_batch` example also accepts `KAFRUST_BATCH_PARTITIONS` as a
+comma-separated list of explicit partition indexes. This is useful for
+multi-broker smoke profiles that need one batch call to route records through
+multiple partition leaders.
+
 Current implementation status:
 
 - `ProducerConfig`, `ProducerRecord`, `Acks`, and `RecordMetadata` are public API types.

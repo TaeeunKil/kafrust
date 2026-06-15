@@ -178,6 +178,7 @@ jobs:
       - name: Run multi-broker producer batch example
         env:
           KAFRUST_BATCH_COUNT: "6"
+          KAFRUST_BATCH_PARTITIONS: "0,1,2,3,4,5"
         run: cargo run -p kafrust --example producer_send_batch
 
       - name: Run multi-broker buffered producer example
