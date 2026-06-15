@@ -33,6 +33,9 @@ The `kafrust-protocol` crate is also alpha. Wire-format behavior should be
 grounded in Kafka API/version details, but protocol structs can be renamed,
 moved, or revised as API coverage grows.
 
+The current root re-export audit is tracked in
+[Public API Audit](public-api-audit.md).
+
 ## Change Rules
 
 - Keep public API additions minimal until the related broker behavior is tested.
