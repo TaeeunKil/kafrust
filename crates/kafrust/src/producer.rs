@@ -1681,10 +1681,10 @@ fn can_retry_send(error: &Error) -> bool {
         Error::Broker { code, .. } => BrokerErrorKind::from_code(*code).is_produce_retryable(),
         Error::Io(_)
         | Error::RequestTimedOut { .. }
+        | Error::UnknownTopicOrPartition { .. }
         | Error::MissingLeader { .. }
         | Error::MissingBroker { .. } => true,
         Error::MissingBootstrapServer
-        | Error::UnknownTopicOrPartition { .. }
         | Error::MissingSaslCredentials
         | Error::InvalidSaslResponse { .. }
         | Error::TlsConfig { .. }
@@ -2377,6 +2377,10 @@ mod tests {
             std::io::ErrorKind::ConnectionReset,
             "reset",
         ))));
+        assert!(can_retry_send(&Error::UnknownTopicOrPartition {
+            topic: "orders".to_owned(),
+            partition: 3,
+        }));
         assert!(can_retry_send(&Error::MissingLeader {
             topic: "orders".to_owned(),
             partition: 0,
