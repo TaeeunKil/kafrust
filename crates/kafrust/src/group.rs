@@ -90,6 +90,12 @@ impl ConsumerGroupConfig {
         self
     }
 
+    /// Adds a DER-encoded TLS root certificate for group, coordinator, and fetch validation.
+    pub fn tls_root_certificate_der(mut self, certificate: impl Into<Vec<u8>>) -> Self {
+        self.client = self.client.tls_root_certificate_der(certificate);
+        self
+    }
+
     /// Sets SASL/PLAIN credentials for group, coordinator, and fetch requests.
     pub fn sasl_plain(mut self, username: impl Into<String>, password: impl Into<String>) -> Self {
         self.client = self.client.sasl_plain(username, password);
@@ -940,6 +946,7 @@ mod tests {
             .request_timeout_ms(5_000)
             .security_protocol(SecurityProtocol::SaslPlaintext)
             .tls_server_name("broker.example.com")
+            .tls_root_certificate_der([1, 2, 3])
             .sasl_plain("alice", "secret-password")
             .subscribe("orders")
             .session_timeout_ms(8_000)
@@ -962,6 +969,7 @@ mod tests {
             config.client.tls_server_name_ref(),
             Some("broker.example.com")
         );
+        assert_eq!(config.client.tls_root_certificates_der(), &[vec![1, 2, 3]]);
         assert_eq!(
             config.client.sasl_credentials_ref().unwrap().username(),
             "alice"
@@ -975,6 +983,7 @@ mod tests {
             .request_timeout_ms(5_000)
             .security_protocol(SecurityProtocol::SaslPlaintext)
             .tls_server_name("broker.example.com")
+            .tls_root_certificate_der([1, 2, 3])
             .sasl_plain("alice", "secret-password")
             .max_retries(3)
             .max_poll_records(10);
@@ -992,6 +1001,7 @@ mod tests {
             client_config.tls_server_name_ref(),
             Some("broker.example.com")
         );
+        assert_eq!(client_config.tls_root_certificates_der(), &[vec![1, 2, 3]]);
         assert_eq!(
             client_config.sasl_credentials_ref().unwrap().username(),
             "alice"

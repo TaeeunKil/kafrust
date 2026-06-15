@@ -231,6 +231,9 @@ TLS server name validation defaults to the bootstrap host. Use
 `ConsumerGroupConfig` when the bootstrap address differs from the broker
 certificate subject alternative name.
 
+Use `tls_root_certificate_der(bytes)` to add DER-encoded root certificates while
+still keeping platform roots enabled.
+
 SASL/PLAIN credentials can be stored on the shared client configuration with
 `sasl_plain(username, password)`. This does not change the selected
 `SecurityProtocol`; choose `SaslPlaintext` or `SaslTls` separately. Credential

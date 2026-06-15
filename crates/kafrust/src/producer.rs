@@ -1239,6 +1239,12 @@ impl ProducerConfig {
         self
     }
 
+    /// Adds a DER-encoded TLS root certificate for producer broker validation.
+    pub fn tls_root_certificate_der(mut self, certificate: impl Into<Vec<u8>>) -> Self {
+        self.client = self.client.tls_root_certificate_der(certificate);
+        self
+    }
+
     /// Sets SASL/PLAIN credentials for producer broker connections.
     pub fn sasl_plain(mut self, username: impl Into<String>, password: impl Into<String>) -> Self {
         self.client = self.client.sasl_plain(username, password);
@@ -1843,6 +1849,7 @@ mod tests {
             .request_timeout_ms(5_000)
             .security_protocol(SecurityProtocol::SaslTls)
             .tls_server_name("broker.example.com")
+            .tls_root_certificate_der([1, 2, 3])
             .sasl_plain("alice", "secret-password")
             .max_retries(3)
             .max_records_per_batch(128)
@@ -1863,6 +1870,10 @@ mod tests {
         assert_eq!(
             config.client_config().tls_server_name_ref(),
             Some("broker.example.com")
+        );
+        assert_eq!(
+            config.client_config().tls_root_certificates_der(),
+            &[vec![1, 2, 3]]
         );
         assert_eq!(
             config

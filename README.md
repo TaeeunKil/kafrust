@@ -240,7 +240,8 @@ See [Compatibility](docs/compatibility.md) and
   verified against Kafka `3.7.2` for broker roundtrip, producer, direct
   consumer, and consumer group smoke paths. TLS certificate server name
   validation defaults to the bootstrap host and can be overridden with
-  `tls_server_name(name)`.
+  `tls_server_name(name)`. DER-encoded extra root certificates can be added with
+  `tls_root_certificate_der(bytes)`.
 - SASL/PLAIN authentication is verified against Kafka `3.7.2` over
   `SaslPlaintext` for broker roundtrip, producer, direct consumer, and consumer
   group smoke paths; `SaslTls` and broader SASL workflows are not claimed yet.
