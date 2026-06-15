@@ -173,6 +173,8 @@ jobs:
         run: cargo run -p kafrust --example broker_roundtrip
 
       - name: Run multi-broker producer example
+        env:
+          KAFRUST_PARTITION: "1"
         run: cargo run -p kafrust --example producer_send
 
       - name: Run multi-broker producer batch example

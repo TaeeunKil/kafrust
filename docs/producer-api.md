@@ -86,6 +86,8 @@ The `producer_send_batch` example also accepts `KAFRUST_BATCH_PARTITIONS` as a
 comma-separated list of explicit partition indexes. This is useful for
 multi-broker smoke profiles that need one batch call to route records through
 multiple partition leaders.
+The `producer_send` example accepts `KAFRUST_PARTITION` to send one record to
+an explicit partition.
 
 Current implementation status:
 
