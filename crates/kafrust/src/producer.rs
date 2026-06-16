@@ -825,9 +825,8 @@ impl Producer {
         let topic = record.topic().to_owned();
 
         loop {
-            let metadata = self.metadata_for_topic(&topic).await?;
             let result = self
-                .send_with_metadata(&record, &metadata, timestamp, timestamp_ms)
+                .send_once(&record, &topic, timestamp, timestamp_ms)
                 .await;
 
             match result {
@@ -847,6 +846,18 @@ impl Producer {
                 Err(error) => return Err(error),
             }
         }
+    }
+
+    async fn send_once(
+        &mut self,
+        record: &ProducerRecord,
+        topic: &str,
+        timestamp: SystemTime,
+        timestamp_ms: i64,
+    ) -> Result<RecordMetadata> {
+        let metadata = self.metadata_for_topic(topic).await?;
+        self.send_with_metadata(record, &metadata, timestamp, timestamp_ms)
+            .await
     }
 
     /// Sends multiple records and returns one metadata entry per input record.
@@ -942,10 +953,27 @@ impl Producer {
             return Ok(metadata.clone());
         }
 
-        let metadata = self.client.metadata(Some(vec![topic.to_owned()])).await?;
+        let metadata = self.request_metadata_for_topic(topic).await?;
         self.metadata_cache
             .insert(topic.to_owned(), metadata.clone());
         Ok(metadata)
+    }
+
+    async fn request_metadata_for_topic(&mut self, topic: &str) -> Result<MetadataResponseV1> {
+        let topics = Some(vec![topic.to_owned()]);
+        match self.client.metadata(topics.clone()).await {
+            Ok(metadata) => Ok(metadata),
+            Err(error) if can_retry_send(&error) => {
+                debug!(
+                    topic,
+                    error = %error,
+                    "reconnecting metadata client after metadata request failure"
+                );
+                self.client = self.config.client.clone().connect().await?;
+                self.client.metadata(topics).await
+            }
+            Err(error) => Err(error),
+        }
     }
 
     async fn send_batch_once(
@@ -1727,16 +1755,19 @@ mod tests {
         record_batch_attempt_outcomes, record_batch_message, select_produce_batch_version,
         select_produce_version, Acks, BatchRecord, BufferedFlushReason, BufferedProduceRequest,
         BufferedProducerCommand, BufferedProducerState, PreparedBatchRecord, ProduceBatchKey,
-        ProduceVersion, ProducerBatchFailure, ProducerBatchRecordOutcome, ProducerBatchReport,
-        ProducerConfig, ProducerDelivery, ProducerRecord, RecordMetadata, SecurityProtocol,
+        ProduceVersion, Producer, ProducerBatchFailure, ProducerBatchRecordOutcome,
+        ProducerBatchReport, ProducerConfig, ProducerDelivery, ProducerRecord, RecordMetadata,
+        SecurityProtocol,
     };
-    use crate::{BrokerErrorKind, Error};
+    use crate::{BrokerErrorKind, Client, Error};
     use kafrust_protocol::api::api_versions::{ApiKeyVersion, ApiVersionsResponseV0};
     use kafrust_protocol::api::metadata::{
         BrokerMetadata, MetadataResponseV1, PartitionMetadata, TopicMetadata,
     };
     use kafrust_protocol::api::produce::API_KEY as PRODUCE_API_KEY;
     use std::collections::BTreeMap;
+    use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+    use tokio::net::TcpListener;
     use tokio::sync::{mpsc, oneshot};
     use tokio::time::Instant;
 
@@ -2428,6 +2459,39 @@ mod tests {
         assert!(cache.contains_key("shipments"));
     }
 
+    #[tokio::test]
+    async fn reconnects_metadata_client_after_request_io_error() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let request = read_frame(&mut socket).await;
+            assert_eq!(&request[0..2], &[0, 3]);
+            write_frame(&mut socket, &metadata_response_frame()).await;
+        });
+
+        let (client_stream, broker_stream) = tokio::io::duplex(64);
+        drop(broker_stream);
+        let client = Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-producer-test".to_owned()),
+            Some(std::time::Duration::from_millis(50)),
+        );
+        let config = ProducerConfig::new([addr.to_string()]).request_timeout_ms(500);
+        let mut producer = Producer {
+            client,
+            config,
+            metadata_cache: BTreeMap::new(),
+        };
+
+        let metadata = producer.metadata_for_topic("orders").await.unwrap();
+
+        assert_eq!(metadata.brokers[0].node_id, 1);
+        assert_eq!(metadata.topics[0].name, "orders");
+        assert!(producer.metadata_cache.contains_key("orders"));
+        server.await.unwrap();
+    }
+
     fn metadata_fixture() -> MetadataResponseV1 {
         MetadataResponseV1 {
             brokers: vec![BrokerMetadata {
@@ -2459,6 +2523,54 @@ mod tests {
                 ],
             }],
         }
+    }
+
+    async fn read_frame<T>(stream: &mut T) -> Vec<u8>
+    where
+        T: AsyncRead + Unpin,
+    {
+        let mut size = [0u8; 4];
+        stream.read_exact(&mut size).await.unwrap();
+        let size = usize::try_from(i32::from_be_bytes(size)).unwrap();
+        let mut request = vec![0u8; size];
+        stream.read_exact(&mut request).await.unwrap();
+        request
+    }
+
+    async fn write_frame<T>(stream: &mut T, frame: &[u8])
+    where
+        T: AsyncWrite + Unpin,
+    {
+        stream
+            .write_all(&(frame.len() as i32).to_be_bytes())
+            .await
+            .unwrap();
+        stream.write_all(frame).await.unwrap();
+        stream.flush().await.unwrap();
+    }
+
+    fn metadata_response_frame() -> Vec<u8> {
+        vec![
+            0, 0, 0, 1, // correlation id
+            0, 0, 0, 1, // brokers count
+            0, 0, 0, 1, // node id
+            0, 9, b'l', b'o', b'c', b'a', b'l', b'h', b'o', b's', b't', // host
+            0, 0, 35, 132, // port 9092
+            0xff, 0xff, // null rack
+            0, 0, 0, 1, // controller id
+            0, 0, 0, 1, // topics count
+            0, 0, // topic error code
+            0, 6, b'o', b'r', b'd', b'e', b'r', b's', // topic name
+            0,    // is internal false
+            0, 0, 0, 1, // partition count
+            0, 0, // partition error code
+            0, 0, 0, 0, // partition index
+            0, 0, 0, 1, // leader id
+            0, 0, 0, 1, // replica count
+            0, 0, 0, 1, // replica node
+            0, 0, 0, 1, // isr count
+            0, 0, 0, 1, // isr node
+        ]
     }
 
     fn api_versions(max_produce_version: i16) -> ApiVersionsResponseV0 {
