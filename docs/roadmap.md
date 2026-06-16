@@ -569,12 +569,12 @@ Evidence:
   profile that creates a replicated topic and runs broker roundtrip, producer,
   direct consumer, and consumer group smoke paths against comma-separated
   bootstrap servers.
-- Manual `Live Kafka Smoke` run `27535018323` passed on 2026-06-15 from
-  `main`; the multi-broker job completed broker roundtrip, producer, direct
-  consumer, and consumer group checks against a three-broker Kafka 3.7.2 KRaft
-  cluster, then stopped the first configured bootstrap broker and reran batch
-  producer, direct consumer, and consumer group checks through the remaining
-  brokers.
+- Manual `Live Kafka Smoke` run `27600195208` passed on 2026-06-16; the
+  multi-broker job completed broker roundtrip, producer, direct consumer, and
+  consumer group checks against a three-broker Kafka 3.7.2 KRaft cluster,
+  verified a long-lived producer send across a stopped partition leader, then
+  reran batch producer, direct consumer, and consumer group checks through the
+  remaining brokers.
 - The batch producer smoke example accepts explicit partition lists so the
   multi-broker workflow can route one batch call across multiple partition
   leaders.
