@@ -109,6 +109,8 @@ Current implementation status:
 - `BufferedProducer::send` queues records for the buffered path, and `flush` or `close` sends accepted records through the existing batch Produce path before completing delivery handles from per-record outcomes.
 - `BufferedProducer` automatically flushes queued records when a topic and explicit-partition buffer reaches `max_records_per_batch` or `max_batch_bytes`, or when the oldest queued record reaches `linger_ms`. `linger_ms(0)` schedules a flush without intentional delay.
 - Producer metadata is cached by topic and refreshed when a retriable send failure invalidates that topic cache entry.
+- Retryable metadata request I/O failures reconnect the producer's bootstrap
+  metadata client before the next metadata refresh attempt.
 - Producer send operations emit `tracing` events with operational metadata, but not key or value payload contents.
 - `Producer::send_batch` accepts multiple `ProducerRecord` values, groups them by topic, partition, and leader, sends each group in one Produce request, and returns `RecordMetadata` in input order.
 - `Producer::send_batch_report` returns per-record success or failure outcomes in input order, so broker Produce response errors can be inspected without losing partial successes.
