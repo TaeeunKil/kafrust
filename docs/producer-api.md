@@ -88,6 +88,11 @@ multi-broker smoke profiles that need one batch call to route records through
 multiple partition leaders.
 The `producer_send` example accepts `KAFRUST_PARTITION` to send one record to
 an explicit partition.
+The `producer_failover` example sends two records through the same producer
+instance to one explicit partition. It accepts `KAFRUST_PARTITION` and
+`KAFRUST_FAILOVER_PAUSE_MS`, so orchestrated smoke workflows can stop the
+current partition leader during the pause and verify metadata refresh plus
+retry on the second send.
 
 Current implementation status:
 

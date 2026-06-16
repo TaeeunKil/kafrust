@@ -583,6 +583,10 @@ Evidence:
 - The multi-broker smoke workflow stops the first configured bootstrap broker
   and reruns batch producer, direct consumer, and consumer group checks through
   the remaining brokers.
+- The `producer_failover` smoke example sends twice through one producer
+  instance, and the multi-broker workflow selects a partition led by the first
+  broker, stops that broker during the configured pause, and then requires the
+  second send to complete through refreshed metadata.
 - Consumer group coordinator connection I/O failures and coordinator request
   timeouts are classified as rejoinable in group contexts, so poll,
   background-heartbeat observation, stale-heartbeat shutdown, and offset commit

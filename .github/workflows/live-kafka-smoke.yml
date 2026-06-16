@@ -164,7 +164,15 @@ jobs:
           docker exec kafrust-kafka-multi-1 /opt/kafka/bin/kafka-topics.sh \
             --bootstrap-server kafrust-kafka-multi-1:29092 \
             --describe \
-            --topic "$KAFRUST_TOPIC"
+            --topic "$KAFRUST_TOPIC" \
+            | tee /tmp/kafrust-multi-topic.log
+          failover_partition="$(awk '/Partition:/ && /Leader: 1/ { for (i = 1; i <= NF; i++) if ($i == "Partition:") { print $(i + 1); exit } }' /tmp/kafrust-multi-topic.log)"
+          if [ -z "$failover_partition" ]; then
+            echo "could not find a partition led by broker 1"
+            cat /tmp/kafrust-multi-topic.log
+            exit 1
+          fi
+          echo "KAFRUST_FAILOVER_PARTITION=${failover_partition}" >> "$GITHUB_ENV"
 
       - name: Run multi-broker roundtrip
         run: cargo test -p kafrust --test broker_roundtrip -- --nocapture
@@ -197,8 +205,69 @@ jobs:
       - name: Run multi-broker consumer group example
         run: cargo run -p kafrust --example consumer_group_poll
 
-      - name: Stop first multi-broker Kafka broker
-        run: docker stop kafrust-kafka-multi-1
+      - name: Run multi-broker producer failover through broker stop
+        run: |
+          KAFRUST_PARTITION="$KAFRUST_FAILOVER_PARTITION" \
+          KAFRUST_FAILOVER_PAUSE_MS=30000 \
+          cargo run -p kafrust --example producer_failover \
+            >/tmp/kafrust-producer-failover.log 2>&1 &
+          producer_pid=$!
+
+          first_send_seen=""
+          for attempt in {1..60}; do
+            if grep -q "failover before produced" /tmp/kafrust-producer-failover.log; then
+              first_send_seen=1
+              break
+            fi
+            if ! kill -0 "$producer_pid" 2>/dev/null; then
+              cat /tmp/kafrust-producer-failover.log || true
+              wait "$producer_pid"
+            fi
+            sleep 1
+          done
+
+          if [ -z "$first_send_seen" ]; then
+            echo "producer failover example did not reach the first send"
+            cat /tmp/kafrust-producer-failover.log || true
+            kill "$producer_pid" 2>/dev/null || true
+            wait "$producer_pid" || true
+            exit 1
+          fi
+
+          docker stop kafrust-kafka-multi-1
+
+          cluster_ready=""
+          for attempt in {1..120}; do
+            if docker exec kafrust-kafka-multi-2 /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server kafrust-kafka-multi-2:29092 \
+              >/tmp/kafrust-multi-failover-probe.log 2>&1; then
+              docker exec kafrust-kafka-multi-2 /opt/kafka/bin/kafka-topics.sh \
+                --bootstrap-server kafrust-kafka-multi-2:29092 \
+                --describe \
+                --topic "$KAFRUST_TOPIC" \
+                >/tmp/kafrust-multi-failover-topic.log 2>&1
+              if ! grep -Eq "Leader: -1|Leader: none" /tmp/kafrust-multi-failover-topic.log; then
+                cluster_ready=1
+                break
+              fi
+            fi
+            sleep 2
+          done
+
+          if [ -z "$cluster_ready" ]; then
+            cat /tmp/kafrust-multi-failover-probe.log || true
+            cat /tmp/kafrust-multi-failover-topic.log || true
+            docker logs kafrust-kafka-multi-2
+            docker logs kafrust-kafka-multi-3
+            kill "$producer_pid" 2>/dev/null || true
+            wait "$producer_pid" || true
+            exit 1
+          fi
+
+          producer_status=0
+          wait "$producer_pid" || producer_status=$?
+          cat /tmp/kafrust-producer-failover.log
+          exit "$producer_status"
 
       - name: Wait for multi-broker Kafka after broker stop
         run: |
