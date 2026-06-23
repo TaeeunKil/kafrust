@@ -8,11 +8,11 @@ The `0.2.x` alpha line is verified against Apache Kafka 3.7.2 KRaft brokers over
 
 | Broker | Mode | Security | Verification | Status |
 | --- | --- | --- | --- | --- |
-| Apache Kafka 3.7.2 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, latest manual smoke run `27600195208` on 2026-06-16 | Passing |
-| Apache Kafka 3.7.2 | three-broker KRaft | PLAINTEXT | `Live Kafka Smoke` multi-broker job, latest manual smoke run `27600195208` on 2026-06-16 | Passing |
-| Apache Kafka 3.7.2 | single-node KRaft | TLS | `Live Kafka Smoke` TLS job, latest manual smoke run `27600195208` on 2026-06-16 | Passing |
-| Apache Kafka 3.7.2 | single-node KRaft | SASL_PLAINTEXT with SASL/PLAIN | `Live Kafka Smoke` SASL_PLAINTEXT job, latest manual smoke run `27600195208` on 2026-06-16 | Passing |
-| Apache Kafka 3.7.2 | single-node KRaft | SASL_SSL with SCRAM-SHA-256 | `Live Kafka Smoke` SASL_SSL SCRAM job, latest manual smoke run `27600195208` on 2026-06-16 | Passing |
+| Apache Kafka 3.7.2 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, latest manual smoke run `28007168457` on 2026-06-23 | Passing |
+| Apache Kafka 3.7.2 | three-broker KRaft | PLAINTEXT | `Live Kafka Smoke` multi-broker job, latest manual smoke run `28007168457` on 2026-06-23 | Passing |
+| Apache Kafka 3.7.2 | single-node KRaft | TLS | `Live Kafka Smoke` TLS job, latest manual smoke run `28007168457` on 2026-06-23 | Passing |
+| Apache Kafka 3.7.2 | single-node KRaft | SASL_PLAINTEXT with SASL/PLAIN | `Live Kafka Smoke` SASL_PLAINTEXT job, latest manual smoke run `28007168457` on 2026-06-23 | Passing |
+| Apache Kafka 3.7.2 | single-node KRaft | SASL_SSL with SCRAM-SHA-256 | `Live Kafka Smoke` SASL_SSL SCRAM job, latest manual smoke run `28007168457` on 2026-06-23 | Passing |
 
 ## Verified Paths
 
@@ -33,6 +33,9 @@ The Kafka 3.7.2 multi-broker plaintext smoke path covers:
 - Long-lived producer metadata refresh after stopping the broker that leads the
   selected partition between two sends from the same producer instance.
 - Direct consumer fetch from an assigned topic partition.
+- Long-lived direct consumer metadata refresh after stopping the broker that
+  leads the selected partition between two fetches from the same consumer
+  instance.
 - Consumer group join, sync, heartbeat, poll, and offset commit through the alpha classic consumer group path.
 - First configured bootstrap broker stop followed by batch producer, direct consumer, and consumer group checks through the remaining brokers.
 
@@ -71,7 +74,7 @@ The current compatibility claim does not cover:
 - TLS workflows beyond the listed TLS smoke examples.
 - SASL workflows beyond the listed SASL_PLAINTEXT and SASL_SSL smoke examples.
 - SASL/SCRAM-SHA-512 live broker profiles.
-- Secured multi-broker clusters, direct-consumer leader failover, broader consumer-group failover beyond the listed coordinator reconnect checks, rack awareness, or partition expansion.
+- Secured multi-broker clusters, broader consumer-group failover beyond the listed coordinator reconnect checks, rack awareness, or partition expansion.
 - Idempotent producers, transactions, compression, or high-throughput batching.
 - A full Kafka broker version matrix.
 - Kafka APIs that are not listed in the verified paths.
