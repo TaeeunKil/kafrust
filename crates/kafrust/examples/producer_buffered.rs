@@ -17,6 +17,7 @@ async fn main() -> kafrust::Result<()> {
             .client_id("kafrust-buffered-producer-example"),
     )?
     .acks(Acks::Leader)
+    .compression(common::compression_from_env()?)
     .linger_ms(60_000)
     .max_records_per_batch(count)
     .max_batch_bytes(64 * 1024)

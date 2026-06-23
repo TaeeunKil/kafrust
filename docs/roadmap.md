@@ -598,7 +598,7 @@ Evidence:
 
 ## M15 Compression Compatibility
 
-Status: Planned.
+Status: In progress.
 
 Goal: support common compressed Kafka record batches while preserving the no-required-C-toolchain policy.
 
@@ -623,6 +623,25 @@ Exit criteria:
 Strategic role:
 
 - Compression is required for realistic Kafka throughput and for compatibility with existing topics.
+
+Evidence:
+
+- Gzip compression is implemented with a Rust backend and no required C
+  toolchain.
+- Produce v3 RecordBatch encoding can write gzip-compressed record payloads.
+- Fetch v2 RecordBatch decoding can read gzip-compressed record payloads.
+- `ProducerConfig::compression(Compression::Gzip)` enables gzip for immediate,
+  batch, and buffered producer paths when Produce API v3 is available.
+- Unsupported codecs currently return typed protocol errors instead of being
+  decoded as uncompressed data.
+- Gzip decompression is bounded to prevent unbounded decoded record payload
+  growth.
+
+Remaining:
+
+- snappy, lz4, and zstd support
+- live broker compression smoke coverage
+- configurable decompression limits
 
 ## M16 Admin API MVP
 

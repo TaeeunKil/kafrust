@@ -24,7 +24,7 @@ pub use error::{BrokerErrorKind, Error, Result};
 pub use group::{ConsumerGroup, ConsumerGroupConfig, ConsumerGroupHeartbeat};
 pub use kafrust_protocol as protocol;
 pub use producer::{
-    Acks, BufferedProducer, Header, ProducerBatchFailure, ProducerBatchRecordOutcome,
+    Acks, BufferedProducer, Compression, Header, ProducerBatchFailure, ProducerBatchRecordOutcome,
     ProducerBatchReport, ProducerConfig, ProducerDelivery, ProducerRecord, RecordMetadata,
 };
 

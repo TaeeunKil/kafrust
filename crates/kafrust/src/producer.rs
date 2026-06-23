@@ -7,9 +7,11 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use kafrust_protocol::api::api_versions::ApiVersionsResponseV0;
 use kafrust_protocol::api::metadata::{BrokerMetadata, MetadataResponseV1};
 use kafrust_protocol::api::produce::{
-    encoded_message_set_len, encoded_record_batch_set_len, MessageSetMessage,
-    ProducePartitionResponseV2, ProduceResponseV2, RecordBatchMessage, API_KEY as PRODUCE_API_KEY,
+    encoded_message_set_len, encoded_record_batch_set_len_with_compression, MessageSetMessage,
+    ProducePartitionResponseV2, ProducePartitionV3, ProduceResponseV2, ProduceTopicV3,
+    RecordBatchMessage, API_KEY as PRODUCE_API_KEY,
 };
+use kafrust_protocol::record_batch::RecordBatchCompression;
 
 use crate::client::Client;
 use crate::config::{ClientConfig, SecurityProtocol};
@@ -40,6 +42,29 @@ impl Acks {
             Self::Leader => 1,
             Self::All => -1,
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+/// Kafka record batch compression policy for producer sends.
+pub enum Compression {
+    /// Do not compress produced record batches.
+    None,
+    /// Compress produced RecordBatch v2 payloads with gzip.
+    Gzip,
+}
+
+impl Compression {
+    fn as_record_batch_compression(self) -> RecordBatchCompression {
+        match self {
+            Self::None => RecordBatchCompression::None,
+            Self::Gzip => RecordBatchCompression::Gzip,
+        }
+    }
+
+    fn requires_record_batch(self) -> bool {
+        self != Self::None
     }
 }
 
@@ -631,7 +656,9 @@ fn buffered_enqueue_flush_reason(
 
     if config.max_batch_bytes != usize::MAX {
         for record_indexes in groups.values() {
-            if buffered_pending_encoded_len(pending, record_indexes)? >= config.max_batch_bytes {
+            if buffered_pending_encoded_len(pending, record_indexes, config.compression)?
+                >= config.max_batch_bytes
+            {
                 return Ok(Some(BufferedFlushReason::ByteCount));
             }
         }
@@ -656,6 +683,7 @@ fn buffered_pending_groups(
 fn buffered_pending_encoded_len(
     pending: &[BufferedProduceRequest],
     record_indexes: &[usize],
+    compression: Compression,
 ) -> Result<usize> {
     let records = record_indexes
         .iter()
@@ -672,7 +700,7 @@ fn buffered_pending_encoded_len(
         .map(|(index, record)| PreparedBatchRecord { index, record })
         .collect::<Vec<_>>();
 
-    batch_records_encoded_len(&prepared_records, ProduceVersion::V3)
+    batch_records_encoded_len(&prepared_records, ProduceVersion::V3, compression)
 }
 
 async fn flush_buffered_deliveries_for_reason(
@@ -1036,7 +1064,8 @@ impl Producer {
             });
         }
 
-        let produce_version = select_produce_batch_version(&api_versions, records)?;
+        let produce_version =
+            select_produce_batch_version(&api_versions, records, self.config.compression)?;
         debug!(
             topic = key.topic.as_str(),
             partition = key.partition,
@@ -1050,27 +1079,36 @@ impl Producer {
             self.config.max_records_per_batch,
             self.config.max_batch_bytes,
             produce_version,
+            self.config.compression,
         )?;
         let mut output = Vec::with_capacity(records.len());
         for records in chunks {
             let response = match produce_version {
                 ProduceVersion::V3 => {
                     leader_client
-                        .produce_one_v3(
+                        .produce_v3(
                             None,
                             self.config.acks.as_i16(),
                             30_000,
-                            key.topic.clone(),
-                            key.partition,
-                            records
-                                .iter()
-                                .map(|record| {
-                                    record_batch_message(
-                                        &record.record.record,
-                                        record.record.timestamp_ms,
-                                    )
-                                })
-                                .collect(),
+                            vec![ProduceTopicV3 {
+                                name: key.topic.clone(),
+                                partitions: vec![ProducePartitionV3 {
+                                    partition_index: key.partition,
+                                    compression: self
+                                        .config
+                                        .compression
+                                        .as_record_batch_compression(),
+                                    records: records
+                                        .iter()
+                                        .map(|record| {
+                                            record_batch_message(
+                                                &record.record.record,
+                                                record.record.timestamp_ms,
+                                            )
+                                        })
+                                        .collect(),
+                                }],
+                            }],
                         )
                         .await?
                 }
@@ -1141,7 +1179,8 @@ impl Producer {
             });
         }
 
-        let produce_version = select_produce_version(&api_versions, record)?;
+        let produce_version =
+            select_produce_version(&api_versions, record, self.config.compression)?;
         debug!(
             topic = record.topic(),
             partition,
@@ -1152,13 +1191,18 @@ impl Producer {
         let response = match produce_version {
             ProduceVersion::V3 => {
                 leader_client
-                    .produce_one_v3(
+                    .produce_v3(
                         None,
                         self.config.acks.as_i16(),
                         30_000,
-                        record.topic().to_owned(),
-                        partition,
-                        vec![record_batch_message(record, timestamp_ms)],
+                        vec![ProduceTopicV3 {
+                            name: record.topic().to_owned(),
+                            partitions: vec![ProducePartitionV3 {
+                                partition_index: partition,
+                                compression: self.config.compression.as_record_batch_compression(),
+                                records: vec![record_batch_message(record, timestamp_ms)],
+                            }],
+                        }],
                     )
                     .await?
             }
@@ -1231,6 +1275,7 @@ pub struct ProducerConfig {
     max_records_per_batch: usize,
     max_batch_bytes: usize,
     linger: Duration,
+    compression: Compression,
 }
 
 impl ProducerConfig {
@@ -1243,6 +1288,7 @@ impl ProducerConfig {
             max_records_per_batch: usize::MAX,
             max_batch_bytes: usize::MAX,
             linger: Duration::from_millis(0),
+            compression: Compression::None,
         }
     }
 
@@ -1340,6 +1386,15 @@ impl ProducerConfig {
         self
     }
 
+    /// Sets the compression policy used for Produce API v3 record batches.
+    ///
+    /// Compression currently requires Produce API v3 because the legacy
+    /// MessageSet fallback path does not encode compressed batches.
+    pub fn compression(mut self, compression: Compression) -> Self {
+        self.compression = compression;
+        self
+    }
+
     /// Returns the configured acknowledgement policy.
     pub fn acks_ref(&self) -> Acks {
         self.acks
@@ -1363,6 +1418,11 @@ impl ProducerConfig {
     /// Returns the configured linger duration for buffered sends.
     pub fn linger(&self) -> Duration {
         self.linger
+    }
+
+    /// Returns the configured producer compression policy.
+    pub fn compression_ref(&self) -> Compression {
+        self.compression
     }
 
     /// Returns the shared client configuration.
@@ -1491,6 +1551,7 @@ enum ProduceVersion {
 fn select_produce_version(
     api_versions: &ApiVersionsResponseV0,
     record: &ProducerRecord,
+    compression: Compression,
 ) -> Result<ProduceVersion> {
     if api_versions
         .highest_supported_version(PRODUCE_API_KEY, 3)
@@ -1503,6 +1564,11 @@ fn select_produce_version(
         .highest_supported_version(PRODUCE_API_KEY, 2)
         .is_some_and(|version| version >= 2)
     {
+        if compression.requires_record_batch() {
+            return Err(Error::Unsupported(
+                "producer compression requires Produce API v3",
+            ));
+        }
         if record.headers().is_empty() {
             return Ok(ProduceVersion::V2);
         }
@@ -1515,6 +1581,7 @@ fn select_produce_version(
 fn select_produce_batch_version(
     api_versions: &ApiVersionsResponseV0,
     records: &[PreparedBatchRecord<'_>],
+    compression: Compression,
 ) -> Result<ProduceVersion> {
     if api_versions
         .highest_supported_version(PRODUCE_API_KEY, 3)
@@ -1527,6 +1594,11 @@ fn select_produce_batch_version(
         .highest_supported_version(PRODUCE_API_KEY, 2)
         .is_some_and(|version| version >= 2)
     {
+        if compression.requires_record_batch() {
+            return Err(Error::Unsupported(
+                "producer compression requires Produce API v3",
+            ));
+        }
         if records
             .iter()
             .all(|record| record.record.record.headers().is_empty())
@@ -1611,6 +1683,7 @@ fn batch_record_chunks<'records, 'batch>(
     max_records_per_batch: usize,
     max_batch_bytes: usize,
     produce_version: ProduceVersion,
+    compression: Compression,
 ) -> Result<Vec<&'records [PreparedBatchRecord<'batch>]>> {
     let max_records_per_batch = max_records_per_batch.max(1);
     let max_batch_bytes = max_batch_bytes.max(1);
@@ -1621,7 +1694,7 @@ fn batch_record_chunks<'records, 'batch>(
         while end < records.len() && end - start < max_records_per_batch {
             let candidate_end = end + 1;
             let candidate = &records[start..candidate_end];
-            let candidate_len = batch_records_encoded_len(candidate, produce_version)?;
+            let candidate_len = batch_records_encoded_len(candidate, produce_version, compression)?;
             if candidate_len > max_batch_bytes && end > start {
                 break;
             }
@@ -1639,6 +1712,7 @@ fn batch_record_chunks<'records, 'batch>(
 fn batch_records_encoded_len(
     records: &[PreparedBatchRecord<'_>],
     produce_version: ProduceVersion,
+    compression: Compression,
 ) -> Result<usize> {
     match produce_version {
         ProduceVersion::V3 => {
@@ -1648,7 +1722,11 @@ fn batch_records_encoded_len(
                     record_batch_message(&record.record.record, record.record.timestamp_ms)
                 })
                 .collect::<Vec<_>>();
-            encoded_record_batch_set_len(&records).map_err(Error::from)
+            encoded_record_batch_set_len_with_compression(
+                &records,
+                compression.as_record_batch_compression(),
+            )
+            .map_err(Error::from)
         }
         ProduceVersion::V2 => {
             let records = records
@@ -1754,10 +1832,10 @@ mod tests {
         invalidate_metadata_cache_for_record_indexes, leader_for, message_set_message,
         record_batch_attempt_outcomes, record_batch_message, select_produce_batch_version,
         select_produce_version, Acks, BatchRecord, BufferedFlushReason, BufferedProduceRequest,
-        BufferedProducerCommand, BufferedProducerState, PreparedBatchRecord, ProduceBatchKey,
-        ProduceVersion, Producer, ProducerBatchFailure, ProducerBatchRecordOutcome,
-        ProducerBatchReport, ProducerConfig, ProducerDelivery, ProducerRecord, RecordMetadata,
-        SecurityProtocol,
+        BufferedProducerCommand, BufferedProducerState, Compression, PreparedBatchRecord,
+        ProduceBatchKey, ProduceVersion, Producer, ProducerBatchFailure,
+        ProducerBatchRecordOutcome, ProducerBatchReport, ProducerConfig, ProducerDelivery,
+        ProducerRecord, RecordMetadata, SecurityProtocol,
     };
     use crate::{BrokerErrorKind, Client, Error};
     use kafrust_protocol::api::api_versions::{ApiKeyVersion, ApiVersionsResponseV0};
@@ -1829,7 +1907,7 @@ mod tests {
         let record = ProducerRecord::to("orders").header("source", "checkout");
 
         assert_eq!(
-            select_produce_version(&versions, &record).unwrap(),
+            select_produce_version(&versions, &record, Compression::None).unwrap(),
             ProduceVersion::V3
         );
     }
@@ -1840,8 +1918,19 @@ mod tests {
         let record = ProducerRecord::to("orders");
 
         assert_eq!(
-            select_produce_version(&versions, &record).unwrap(),
+            select_produce_version(&versions, &record, Compression::None).unwrap(),
             ProduceVersion::V2
+        );
+    }
+
+    #[test]
+    fn selects_record_batch_when_gzip_compression_is_configured() {
+        let versions = api_versions(3);
+        let record = ProducerRecord::to("orders");
+
+        assert_eq!(
+            select_produce_version(&versions, &record, Compression::Gzip).unwrap(),
+            ProduceVersion::V3
         );
     }
 
@@ -1851,8 +1940,19 @@ mod tests {
         let record = ProducerRecord::to("orders").header("source", "checkout");
 
         assert!(matches!(
-            select_produce_version(&versions, &record).unwrap_err(),
+            select_produce_version(&versions, &record, Compression::None).unwrap_err(),
             Error::Unsupported("record headers require Produce API v3")
+        ));
+    }
+
+    #[test]
+    fn rejects_gzip_compression_when_only_produce_v2_is_available() {
+        let versions = api_versions(2);
+        let record = ProducerRecord::to("orders");
+
+        assert!(matches!(
+            select_produce_version(&versions, &record, Compression::Gzip).unwrap_err(),
+            Error::Unsupported("producer compression requires Produce API v3")
         ));
     }
 
@@ -1865,7 +1965,7 @@ mod tests {
         let records = prepared_records(&batch);
 
         assert_eq!(
-            select_produce_batch_version(&versions, &records).unwrap(),
+            select_produce_batch_version(&versions, &records, Compression::None).unwrap(),
             ProduceVersion::V3
         );
     }
@@ -1879,8 +1979,22 @@ mod tests {
         let records = prepared_records(&batch);
 
         assert_eq!(
-            select_produce_batch_version(&versions, &records).unwrap(),
+            select_produce_batch_version(&versions, &records, Compression::None).unwrap(),
             ProduceVersion::V2
+        );
+    }
+
+    #[test]
+    fn selects_record_batch_for_gzip_batch_when_produce_v3_is_available() {
+        let versions = api_versions(3);
+        let first = BatchRecord::new(ProducerRecord::to("orders"));
+        let second = BatchRecord::new(ProducerRecord::to("orders").key("order-2"));
+        let batch = [first, second];
+        let records = prepared_records(&batch);
+
+        assert_eq!(
+            select_produce_batch_version(&versions, &records, Compression::Gzip).unwrap(),
+            ProduceVersion::V3
         );
     }
 
@@ -1893,8 +2007,22 @@ mod tests {
         let records = prepared_records(&batch);
 
         assert!(matches!(
-            select_produce_batch_version(&versions, &records).unwrap_err(),
+            select_produce_batch_version(&versions, &records, Compression::None).unwrap_err(),
             Error::Unsupported("record headers require Produce API v3")
+        ));
+    }
+
+    #[test]
+    fn rejects_gzip_batch_when_only_produce_v2_is_available() {
+        let versions = api_versions(2);
+        let first = BatchRecord::new(ProducerRecord::to("orders"));
+        let second = BatchRecord::new(ProducerRecord::to("orders").key("order-2"));
+        let batch = [first, second];
+        let records = prepared_records(&batch);
+
+        assert!(matches!(
+            select_produce_batch_version(&versions, &records, Compression::Gzip).unwrap_err(),
+            Error::Unsupported("producer compression requires Produce API v3")
         ));
     }
 
@@ -1911,6 +2039,7 @@ mod tests {
             .max_records_per_batch(128)
             .max_batch_bytes(64 * 1024)
             .linger_ms(5)
+            .compression(Compression::Gzip)
             .acks(Acks::All);
 
         assert_eq!(config.acks_ref(), Acks::All);
@@ -1918,6 +2047,7 @@ mod tests {
         assert_eq!(config.max_records_per_batch_ref(), 128);
         assert_eq!(config.max_batch_bytes_ref(), 64 * 1024);
         assert_eq!(config.linger(), std::time::Duration::from_millis(5));
+        assert_eq!(config.compression_ref(), Compression::Gzip);
         assert_eq!(config.client_config().client_id_ref(), Some("orders-api"));
         assert_eq!(
             config.client_config().security_protocol_ref(),
@@ -2253,7 +2383,14 @@ mod tests {
         let batch = [first, second, third];
         let records = prepared_records(&batch);
 
-        let chunks = batch_record_chunks(&records, 2, usize::MAX, ProduceVersion::V3).unwrap();
+        let chunks = batch_record_chunks(
+            &records,
+            2,
+            usize::MAX,
+            ProduceVersion::V3,
+            Compression::None,
+        )
+        .unwrap();
 
         assert_eq!(chunks.len(), 2);
         assert_eq!(chunks[0].len(), 2);
@@ -2270,7 +2407,14 @@ mod tests {
         let batch = [first, second];
         let records = prepared_records(&batch);
 
-        let chunks = batch_record_chunks(&records, 0, usize::MAX, ProduceVersion::V3).unwrap();
+        let chunks = batch_record_chunks(
+            &records,
+            0,
+            usize::MAX,
+            ProduceVersion::V3,
+            Compression::None,
+        )
+        .unwrap();
 
         assert_eq!(chunks.len(), 2);
         assert_eq!(chunks[0][0].index, 0);
@@ -2284,10 +2428,18 @@ mod tests {
         let third = BatchRecord::new(ProducerRecord::to("orders").value("shipped"));
         let batch = [first, second, third];
         let records = prepared_records(&batch);
-        let one_record_len = batch_records_encoded_len(&records[0..1], ProduceVersion::V3).unwrap();
+        let one_record_len =
+            batch_records_encoded_len(&records[0..1], ProduceVersion::V3, Compression::None)
+                .unwrap();
 
-        let chunks =
-            batch_record_chunks(&records, usize::MAX, one_record_len, ProduceVersion::V3).unwrap();
+        let chunks = batch_record_chunks(
+            &records,
+            usize::MAX,
+            one_record_len,
+            ProduceVersion::V3,
+            Compression::None,
+        )
+        .unwrap();
 
         assert_eq!(chunks.len(), 3);
         assert_eq!(chunks[0][0].index, 0);
@@ -2302,7 +2454,14 @@ mod tests {
         let batch = [first, second];
         let records = prepared_records(&batch);
 
-        let chunks = batch_record_chunks(&records, usize::MAX, 1, ProduceVersion::V3).unwrap();
+        let chunks = batch_record_chunks(
+            &records,
+            usize::MAX,
+            1,
+            ProduceVersion::V3,
+            Compression::None,
+        )
+        .unwrap();
 
         assert_eq!(chunks.len(), 2);
         assert_eq!(chunks[0].len(), 1);

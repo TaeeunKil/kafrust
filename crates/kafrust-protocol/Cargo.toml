@@ -15,3 +15,4 @@ categories.workspace = true
 workspace = true
 
 [dependencies]
+flate2 = { version = ">=1.0.35, <1.1", default-features = false, features = ["rust_backend"] }

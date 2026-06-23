@@ -11,6 +11,8 @@ pub enum Error {
     InvalidUtf8,
     VarintTooLong,
     UnsupportedVersion { kind: &'static str, version: i16 },
+    UnsupportedCompression { codec: &'static str },
+    Compression { codec: &'static str, reason: String },
 }
 
 impl fmt::Display for Error {
@@ -29,6 +31,12 @@ impl fmt::Display for Error {
             Self::VarintTooLong => f.write_str("unsigned varint is too long"),
             Self::UnsupportedVersion { kind, version } => {
                 write!(f, "unsupported {kind} version {version}")
+            }
+            Self::UnsupportedCompression { codec } => {
+                write!(f, "unsupported record batch compression codec {codec}")
+            }
+            Self::Compression { codec, reason } => {
+                write!(f, "{codec} record batch compression error: {reason}")
             }
         }
     }

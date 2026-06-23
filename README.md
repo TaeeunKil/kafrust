@@ -256,8 +256,11 @@ See [Compatibility](docs/compatibility.md) and
 - Broker compatibility is verified against Kafka `3.7.2` only.
 - Multi-broker clusters, leader failover, rack awareness, and partition
   expansion are not yet claimed.
-- Idempotent producers, transactions, compression, admin APIs, and broad
-  observability are not implemented yet.
+- Gzip compression is implemented for Produce v3 RecordBatch encoding and Fetch
+  v2 RecordBatch decoding, with focused tests. Snappy, lz4, zstd, and live
+  broker compression profiles are not claimed yet.
+- Idempotent producers, transactions, admin APIs, and broad observability are
+  not implemented yet.
 - `acks=0` remains unsupported because the current request loop expects a broker
   response.
 
@@ -267,6 +270,7 @@ Primary public entry points:
 
 - `Client` for low-level Kafka request roundtrips.
 - `ProducerConfig`, `Producer`, `BufferedProducer`, and `ProducerRecord`.
+- `Compression` for opt-in producer RecordBatch compression.
 - `ConsumerConfig`, `Consumer`, `ConsumerAssignment`, and `ConsumerRecord`.
 - `ConsumerGroupConfig`, `ConsumerGroup`, and `ConsumerGroupHeartbeat`.
 - `SecurityProtocol`, `SaslMechanism`, and `SaslCredentials` for plaintext,
