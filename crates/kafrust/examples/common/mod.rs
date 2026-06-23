@@ -1,5 +1,6 @@
 use kafrust::{
-    ClientConfig, ConsumerConfig, ConsumerGroupConfig, ProducerConfig, SecurityProtocol,
+    ClientConfig, Compression, ConsumerConfig, ConsumerGroupConfig, ProducerConfig,
+    SecurityProtocol,
 };
 
 pub(crate) fn bootstrap_servers_from_env() -> Vec<String> {
@@ -42,6 +43,15 @@ where
         config = config.tls_root_certificate_der(certificate);
     }
     Ok(config)
+}
+
+#[allow(dead_code)]
+pub(crate) fn compression_from_env() -> kafrust::Result<Compression> {
+    let Ok(value) = std::env::var("KAFRUST_COMPRESSION") else {
+        return Ok(Compression::None);
+    };
+
+    parse_compression(&value)
 }
 
 pub(crate) trait ExampleSecurityConfig: Sized {
@@ -230,6 +240,18 @@ fn parse_security_protocol(value: &str) -> kafrust::Result<SecurityProtocol> {
         "sasl_ssl" | "sasl_tls" => Ok(SecurityProtocol::SaslTls),
         _ => Err(kafrust::Error::Unsupported(
             "unsupported KAFRUST_SECURITY_PROTOCOL; expected plaintext, tls, ssl, sasl_plaintext, sasl_ssl, or sasl_tls",
+        )),
+    }
+}
+
+#[allow(dead_code)]
+fn parse_compression(value: &str) -> kafrust::Result<Compression> {
+    let normalized = value.trim().to_ascii_lowercase().replace('-', "_");
+    match normalized.as_str() {
+        "" | "none" => Ok(Compression::None),
+        "gzip" => Ok(Compression::Gzip),
+        _ => Err(kafrust::Error::Unsupported(
+            "unsupported KAFRUST_COMPRESSION; expected none or gzip",
         )),
     }
 }

@@ -7,6 +7,7 @@ pub mod consumer_group;
 pub mod error;
 pub mod frame;
 pub mod header;
+pub mod record_batch;
 
 pub use error::{Error, Result};
 

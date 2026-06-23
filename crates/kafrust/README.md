@@ -44,7 +44,7 @@ feature in the application.
 ## Producer
 
 ```rust,no_run
-use kafrust::{Acks, ProducerConfig, ProducerRecord};
+use kafrust::{Acks, Compression, ProducerConfig, ProducerRecord};
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> kafrust::Result<()> {
@@ -81,13 +81,14 @@ async fn main() -> kafrust::Result<()> {
 inspected without losing successful records.
 
 ```rust,no_run
-use kafrust::{Acks, ProducerConfig, ProducerRecord};
+use kafrust::{Acks, Compression, ProducerConfig, ProducerRecord};
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> kafrust::Result<()> {
     let mut producer = ProducerConfig::new(["localhost:9092"])
         .client_id("example-batch-producer")
         .acks(Acks::Leader)
+        .compression(Compression::Gzip)
         .max_records_per_batch(500)
         .max_batch_bytes(64 * 1024)
         .build()
@@ -118,6 +119,10 @@ async fn main() -> kafrust::Result<()> {
     Ok(())
 }
 ```
+
+`Compression::Gzip` uses Produce API v3 RecordBatch encoding. Brokers that only
+support the older Produce API v2 MessageSet path return an explicit
+`Unsupported` error when compression is enabled.
 
 ## Buffered Producer
 

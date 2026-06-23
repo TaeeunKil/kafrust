@@ -14,6 +14,7 @@ async fn main() -> kafrust::Result<()> {
         ProducerConfig::new(bootstrap_servers).client_id("kafrust-producer-example"),
     )?
     .acks(Acks::Leader)
+    .compression(common::compression_from_env()?)
     .build()
     .await?;
 

@@ -569,7 +569,7 @@ Evidence:
   profile that creates a replicated topic and runs broker roundtrip, producer,
   direct consumer, and consumer group smoke paths against comma-separated
   bootstrap servers.
-- Manual `Live Kafka Smoke` run `28007168457` passed on 2026-06-23; the
+- Manual `Live Kafka Smoke` run `28009105074` passed on 2026-06-23; the
   multi-broker job completed broker roundtrip, producer, direct consumer, and
   consumer group checks against a three-broker Kafka 3.7.2 KRaft cluster,
   verified long-lived producer and direct consumer operations across a stopped
@@ -598,7 +598,7 @@ Evidence:
 
 ## M15 Compression Compatibility
 
-Status: Planned.
+Status: In progress.
 
 Goal: support common compressed Kafka record batches while preserving the no-required-C-toolchain policy.
 
@@ -623,6 +623,28 @@ Exit criteria:
 Strategic role:
 
 - Compression is required for realistic Kafka throughput and for compatibility with existing topics.
+
+Evidence:
+
+- Gzip compression is implemented with a Rust backend and no required C
+  toolchain.
+- Produce v3 RecordBatch encoding can write gzip-compressed record payloads.
+- Fetch v2 RecordBatch decoding can read gzip-compressed record payloads.
+- `ProducerConfig::compression(Compression::Gzip)` enables gzip for immediate,
+  batch, and buffered producer paths when Produce API v3 is available.
+- Manual `Live Kafka Smoke` run `28009105074` passed on 2026-06-23; the
+  single-node and multi-broker plaintext jobs completed gzip batch producer
+  checks against Kafka 3.7.2.
+- Unsupported codecs currently return typed protocol errors instead of being
+  decoded as uncompressed data.
+- Gzip decompression is bounded to prevent unbounded decoded record payload
+  growth.
+
+Remaining:
+
+- snappy, lz4, and zstd support
+- secured live broker compression smoke coverage
+- configurable decompression limits
 
 ## M16 Admin API MVP
 

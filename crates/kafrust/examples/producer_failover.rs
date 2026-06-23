@@ -16,6 +16,7 @@ async fn main() -> kafrust::Result<()> {
         ProducerConfig::new(bootstrap_servers).client_id("kafrust-producer-failover-example"),
     )?
     .acks(Acks::Leader)
+    .compression(common::compression_from_env()?)
     .max_retries(5)
     .build()
     .await?;

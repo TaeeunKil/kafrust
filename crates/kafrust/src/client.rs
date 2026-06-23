@@ -387,6 +387,7 @@ impl Client {
                 name: topic,
                 partitions: vec![ProducePartitionV3 {
                     partition_index,
+                    compression: kafrust_protocol::record_batch::RecordBatchCompression::None,
                     records,
                 }],
             }],

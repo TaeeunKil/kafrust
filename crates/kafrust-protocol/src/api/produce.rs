@@ -1,6 +1,7 @@
 use crate::codec::{Decoder, Encoder};
 use crate::error::{Error, Result};
 use crate::header::RequestHeader;
+use crate::record_batch::{compress_record_batch_records, RecordBatchCompression};
 
 pub const API_KEY: i16 = 0;
 
@@ -102,12 +103,13 @@ pub struct ProducePartitionV2 {
 pub struct ProducePartitionV3 {
     pub partition_index: i32,
     pub records: Vec<RecordBatchMessage>,
+    pub compression: RecordBatchCompression,
 }
 
 impl ProducePartitionV3 {
     fn encode(&self, encoder: &mut Encoder) -> Result<()> {
         encoder.write_i32(self.partition_index);
-        let record_set = encode_record_batch_set(&self.records)?;
+        let record_set = encode_record_batch_set_with_compression(&self.records, self.compression)?;
         encoder.write_bytes(&record_set)
     }
 }
@@ -128,6 +130,14 @@ pub fn encoded_message_set_len(records: &[MessageSetMessage]) -> Result<usize> {
 /// Returns the encoded byte length of a Produce v3 record batch set.
 pub fn encoded_record_batch_set_len(records: &[RecordBatchMessage]) -> Result<usize> {
     Ok(encode_record_batch_set(records)?.len())
+}
+
+/// Returns the encoded byte length of a Produce v3 record batch set.
+pub fn encoded_record_batch_set_len_with_compression(
+    records: &[RecordBatchMessage],
+    compression: RecordBatchCompression,
+) -> Result<usize> {
+    Ok(encode_record_batch_set_with_compression(records, compression)?.len())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -269,6 +279,13 @@ fn encode_message(record: &MessageSetMessage) -> Result<Vec<u8>> {
 }
 
 fn encode_record_batch_set(records: &[RecordBatchMessage]) -> Result<Vec<u8>> {
+    encode_record_batch_set_with_compression(records, RecordBatchCompression::None)
+}
+
+fn encode_record_batch_set_with_compression(
+    records: &[RecordBatchMessage],
+    compression: RecordBatchCompression,
+) -> Result<Vec<u8>> {
     let base_timestamp = records
         .first()
         .map(|record| record.timestamp_ms)
@@ -285,10 +302,9 @@ fn encode_record_batch_set(records: &[RecordBatchMessage]) -> Result<Vec<u8>> {
         .transpose()?
         .unwrap_or_default();
 
+    let record_count =
+        i32::try_from(records.len()).map_err(|_| Error::LengthOverflow("record batch records"))?;
     let mut record_bytes = Encoder::new();
-    record_bytes.write_i32(
-        i32::try_from(records.len()).map_err(|_| Error::LengthOverflow("record batch records"))?,
-    );
     for (offset_delta, record) in records.iter().enumerate() {
         let encoded = encode_record(record, base_timestamp, offset_delta)?;
         record_bytes.write_varint(
@@ -296,16 +312,18 @@ fn encode_record_batch_set(records: &[RecordBatchMessage]) -> Result<Vec<u8>> {
         );
         record_bytes.write_raw(&encoded);
     }
+    let record_bytes = compress_record_batch_records(compression, &record_bytes.into_bytes())?;
 
     let mut crc_payload = Encoder::new();
-    crc_payload.write_i16(0);
+    crc_payload.write_i16(compression.attributes());
     crc_payload.write_i32(last_offset_delta);
     crc_payload.write_i64(base_timestamp);
     crc_payload.write_i64(max_timestamp);
     crc_payload.write_i64(-1);
     crc_payload.write_i16(-1);
     crc_payload.write_i32(-1);
-    crc_payload.write_raw(&record_bytes.into_bytes());
+    crc_payload.write_i32(record_count);
+    crc_payload.write_raw(&record_bytes);
     let crc_payload = crc_payload.into_bytes();
 
     let mut batch = Encoder::new();
@@ -373,12 +391,13 @@ fn crc32c(bytes: &[u8]) -> u32 {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::{
-        encode_message_set, encode_record_batch_set, encoded_message_set_len,
-        encoded_record_batch_set_len, MessageSetMessage, ProducePartitionV2, ProducePartitionV3,
-        ProduceRequestV2, ProduceRequestV3, ProduceResponseV2, ProduceTopicV2, ProduceTopicV3,
-        RecordBatchMessage,
+        encode_message_set, encode_record_batch_set, encode_record_batch_set_with_compression,
+        encoded_message_set_len, encoded_record_batch_set_len, MessageSetMessage,
+        ProducePartitionV2, ProducePartitionV3, ProduceRequestV2, ProduceRequestV3,
+        ProduceResponseV2, ProduceTopicV2, ProduceTopicV3, RecordBatchMessage,
     };
     use crate::codec::Decoder;
+    use crate::record_batch::RecordBatchCompression;
     use crate::{api::fetch::FetchResponseV2, codec::Encoder};
 
     #[test]
@@ -421,6 +440,7 @@ mod tests {
                 name: "orders".to_owned(),
                 partitions: vec![ProducePartitionV3 {
                     partition_index: 0,
+                    compression: RecordBatchCompression::None,
                     records: vec![RecordBatchMessage::new(
                         Some(b"order-1".to_vec()),
                         Some(b"created".to_vec()),
@@ -446,6 +466,42 @@ mod tests {
         )
         .header("source", Some(b"checkout".to_vec()))])
         .unwrap();
+
+        let mut bytes = Encoder::new();
+        bytes.write_i32(0);
+        bytes.write_i32(1);
+        bytes.write_string("orders").unwrap();
+        bytes.write_i32(1);
+        bytes.write_i32(0);
+        bytes.write_i16(0);
+        bytes.write_i64(43);
+        bytes.write_bytes(&record_set).unwrap();
+        let bytes = bytes.into_bytes();
+
+        let mut decoder = Decoder::new(&bytes);
+        let response = FetchResponseV2::decode_body(&mut decoder).unwrap();
+        let record = &response.responses[0].partitions[0].records[0];
+
+        assert_eq!(record.offset, 0);
+        assert_eq!(record.timestamp_ms, 1_000);
+        assert_eq!(record.key.as_deref(), Some(&b"order-1"[..]));
+        assert_eq!(record.value.as_deref(), Some(&b"created"[..]));
+        assert!(decoder.is_empty());
+    }
+
+    #[test]
+    fn gzip_record_batch_encoding_roundtrips_through_fetch_decoder() {
+        let record_set =
+            encode_record_batch_set_with_compression(
+                &[RecordBatchMessage::new(
+                    Some(b"order-1".to_vec()),
+                    Some(b"created".to_vec()),
+                    1_000,
+                )
+                .header("source", Some(b"checkout".to_vec()))],
+                RecordBatchCompression::Gzip,
+            )
+            .unwrap();
 
         let mut bytes = Encoder::new();
         bytes.write_i32(0);

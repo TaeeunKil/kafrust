@@ -1,6 +1,7 @@
 use crate::codec::{Decoder, Encoder};
 use crate::error::{Error, Result};
 use crate::header::RequestHeader;
+use crate::record_batch::{decompress_record_batch_records, RecordBatchCompression};
 
 pub const API_KEY: i16 = 1;
 
@@ -199,7 +200,8 @@ fn decode_record_batch(base_offset: i64, bytes: &[u8]) -> Result<Vec<MessageSetR
         });
     }
     let _crc = decoder.read_i32()?;
-    let _attributes = decoder.read_i16()?;
+    let attributes = decoder.read_i16()?;
+    let compression = RecordBatchCompression::from_attributes(attributes)?;
     let _last_offset_delta = decoder.read_i32()?;
     let base_timestamp = decoder.read_i64()?;
     let _max_timestamp = decoder.read_i64()?;
@@ -216,9 +218,16 @@ fn decode_record_batch(base_offset: i64, bytes: &[u8]) -> Result<Vec<MessageSetR
 
     let record_count =
         usize::try_from(record_count).map_err(|_| Error::LengthOverflow("record batch records"))?;
+    let record_bytes = if compression.is_compressed() {
+        let compressed = decoder.read_exact(decoder.remaining())?;
+        decompress_record_batch_records(compression, compressed)?
+    } else {
+        decoder.read_exact(decoder.remaining())?.to_vec()
+    };
+    let mut record_decoder = Decoder::new(&record_bytes);
     let mut records = Vec::with_capacity(record_count);
     for _ in 0..record_count {
-        let record_length = decoder.read_varint()?;
+        let record_length = record_decoder.read_varint()?;
         if record_length < 0 {
             return Err(Error::NegativeLength {
                 kind: "record",
@@ -227,7 +236,7 @@ fn decode_record_batch(base_offset: i64, bytes: &[u8]) -> Result<Vec<MessageSetR
         }
         let record_length =
             usize::try_from(record_length).map_err(|_| Error::LengthOverflow("record"))?;
-        let record_bytes = decoder.read_exact(record_length)?;
+        let record_bytes = record_decoder.read_exact(record_length)?;
         records.push(decode_record(base_offset, base_timestamp, record_bytes)?);
     }
 
