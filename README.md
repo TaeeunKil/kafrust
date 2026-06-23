@@ -257,8 +257,9 @@ See [Compatibility](docs/compatibility.md) and
 - Multi-broker clusters, leader failover, rack awareness, and partition
   expansion are not yet claimed.
 - Gzip compression is implemented for Produce v3 RecordBatch encoding and Fetch
-  v2 RecordBatch decoding, with focused tests. Snappy, lz4, zstd, and live
-  broker compression profiles are not claimed yet.
+  v2 RecordBatch decoding, and is verified against Kafka `3.7.2` plaintext
+  single-node and multi-broker smoke profiles. Snappy, lz4, zstd, and secured
+  compression profiles are not claimed yet.
 - Idempotent producers, transactions, admin APIs, and broad observability are
   not implemented yet.
 - `acks=0` remains unsupported because the current request loop expects a broker
