@@ -26,6 +26,12 @@ Run the opt-in fetch example against a local broker:
 KAFRUST_BOOTSTRAP_SERVERS=localhost:9092 KAFRUST_TOPIC=kafrust-smoke cargo run -p kafrust --example consumer_fetch
 ```
 
+The `consumer_failover` example fetches the same topic partition twice through
+one consumer instance. It accepts `KAFRUST_PARTITION`, `KAFRUST_OFFSET`, and
+`KAFRUST_FAILOVER_PAUSE_MS`, so orchestrated smoke workflows can stop the
+current partition leader during the pause and verify metadata refresh plus
+retry on the second fetch.
+
 Current implementation status:
 
 - `ConsumerConfig`, `Consumer`, and `ConsumerRecord` are public API types.
@@ -37,6 +43,8 @@ Current implementation status:
 - `ConsumerConfig::max_retries` controls retry attempts for stale metadata, unknown topic-partition entries in cached metadata, missing leader or broker metadata, transient fetch broker errors, request timeouts, and connection I/O failures.
 - `ConsumerConfig::max_poll_records` limits how many records one `poll` call returns.
 - Consumer metadata is cached by topic and refreshed when a retriable fetch failure invalidates that topic cache entry.
+- Retryable metadata request I/O failures reconnect the consumer's bootstrap
+  metadata client before the next metadata refresh attempt.
 - Consumer poll and fetch operations emit `tracing` events with operational metadata, but not key or value payload contents.
 - The decoder supports legacy MessageSet records, RecordBatch v2 records, and partial trailing MessageSet entries in Fetch responses.
 - Consumer groups and offset commits are available through the separate alpha `ConsumerGroupConfig` path.
