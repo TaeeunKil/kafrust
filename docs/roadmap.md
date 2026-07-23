@@ -671,7 +671,9 @@ Evidence:
 - Focused tests cover the Zstd frame magic, multi-block roundtrips, malformed
   frames, declared window limits, decoded output limits, and Produce-to-Fetch
   RecordBatch roundtrips.
-- Manual `Live Kafka Smoke` run `29988390924` passed on 2026-07-23; the
+- Manual `Live Kafka Smoke` run
+  [`29988390924`](https://github.com/TaeeunKil/kafrust/actions/runs/29988390924)
+  passed on 2026-07-23; the
   single-node and multi-broker plaintext jobs completed Zstd Produce v7 batch
   checks against Kafka 3.7.2.
 
