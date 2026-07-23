@@ -150,9 +150,8 @@ async fn main() -> kafrust::Result<()> {
 }
 ```
 
-The high-level commit, abort, and read-committed isolation paths are verified
-against Kafka `3.7.2` and `4.3.1`. Transactional consumed-offset integration is
-not available yet.
+The high-level commit, abort, read-committed isolation, and transactional
+consumer group offset paths are verified against Kafka `3.7.2` and `4.3.1`.
 
 ## Buffered Producer
 
@@ -316,9 +315,10 @@ Verified high-level paths include:
   `ProducerConfig::enable_idempotence(true)`. Transactional immediate and batch
   sends support explicit begin, commit, and abort.
   `IsolationLevel::ReadCommitted` hides aborted transaction records for direct
-  and group consumers. Transactional buffered sends, consumed-offset
-  integration, admin APIs, live broker failure injection, and broad
-  observability are not implemented yet.
+  and group consumers, and current group assignments can be committed through
+  `Producer::send_offsets_to_transaction`. Transactional buffered sends, admin
+  APIs, live broker failure injection, and broad observability are not
+  implemented yet.
 - `acks=0` remains unsupported because the current request loop expects a broker
   response.
 

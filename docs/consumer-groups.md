@@ -50,6 +50,9 @@ Current implementation status:
 - `ConsumerGroupConfig::isolation_level` forwards `ReadUncommitted` or
   `ReadCommitted` to the group's fetch consumer. Read-committed polls hide
   aborted transaction records and Kafka control records.
+- `ConsumerGroup::assignments` can be passed to
+  `Producer::send_offsets_to_transaction` after polling so the current next
+  offsets are committed atomically with transactional output records.
 - FindCoordinator v1 request/response protocol types exist.
 - `Client::find_group_coordinator` can ask Kafka for a group coordinator.
 - JoinGroup v2 request/response protocol types exist.

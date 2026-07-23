@@ -765,7 +765,7 @@ Evidence:
 
 ## M18 Transactions And Read-Committed Consumers
 
-Status: In progress.
+Status: Complete.
 
 Goal: support Kafka exactly-once workflows where applications need transactional produce and read-committed consumption.
 
@@ -825,16 +825,23 @@ Evidence:
   configurations. Fetch v4 preserves producer and transactional/control batch
   metadata, hides control records, and filters aborted producer ranges while
   advancing poll offsets past hidden records.
-- Manual `Live Kafka Smoke` run `29995122439` passed commit followed by abort,
-  then verified that `ReadUncommitted` returned both records while
-  `ReadCommitted` returned only the committed record against Kafka 3.7.2 and
+- `Producer::send_offsets_to_transaction` binds current
+  `ConsumerGroup::assignments` through `AddOffsetsToTxn v0` and commits the
+  partition offsets through `TxnOffsetCommit v0` before EndTxn. Transaction
+  initialization, partition registration, offset integration, and completion
+  rediscover coordinators and retry transient coordinator errors within the
+  configured retry limit.
+- Manual `Live Kafka Smoke` run `29995762812` passed commit, abort,
+  read-uncommitted versus read-committed isolation, and a consume-transform-
+  produce transaction that committed group offsets against Kafka 3.7.2 and
   Kafka 4.3.1. All six plaintext, multi-broker, TLS, SASL_PLAINTEXT, and
   SASL_SSL jobs passed.
 
-Remaining:
+Known limits:
 
-- coordinator retry handling for the remaining EndTxn and offset paths
-- high-level consumed-offset transaction integration
+- Transactional buffered production is not implemented.
+- Multi-broker transaction coordinator failover and live transaction
+  failure-injection profiles are not yet claimed.
 
 ## M19 Observability, Limits, And Performance
 
