@@ -23,6 +23,10 @@ The Kafka 3.7.2 plaintext smoke path covers:
 - High-level producer metadata lookup, leader routing, negotiated Produce API selection, single-record send, batch send, gzip-compressed batch send, and buffered send with `acks=1`. Against Kafka 3.7.2, the current path selects Produce v3 RecordBatch.
 - Gzip Produce v3 RecordBatch encoding and Fetch v2 RecordBatch decoding are
   covered by focused tests and the plaintext live smoke profile.
+- Snappy Produce v3 RecordBatch encoding and Fetch v2 RecordBatch decoding are
+  covered by focused tests using Kafka-compatible Xerial framing. The live
+  smoke workflow includes Snappy producer checks, but a passing run has not
+  been recorded yet.
 - Direct consumer fetch from an assigned topic partition using Fetch v2 response decoding.
 - Consumer group join, sync, heartbeat, poll, and offset commit through the alpha classic consumer group path with range assignment.
 
@@ -77,8 +81,8 @@ The current compatibility claim does not cover:
 - SASL workflows beyond the listed SASL_PLAINTEXT and SASL_SSL smoke examples.
 - SASL/SCRAM-SHA-512 live broker profiles.
 - Secured multi-broker clusters, broader consumer-group failover beyond the listed coordinator reconnect checks, rack awareness, or partition expansion.
-- Snappy, lz4, zstd, secured compression profiles, idempotent producers,
-  transactions, or high-throughput batching.
+- Snappy live broker profiles, lz4, zstd, secured compression profiles,
+  idempotent producers, transactions, or high-throughput batching.
 - A full Kafka broker version matrix.
 - Kafka APIs that are not listed in the verified paths.
 
