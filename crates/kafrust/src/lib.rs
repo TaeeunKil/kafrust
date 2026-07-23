@@ -12,6 +12,8 @@ pub mod consumer;
 pub mod error;
 /// Classic consumer group alpha API.
 pub mod group;
+/// Lock-free client request metrics.
+pub mod metrics;
 /// Producer API.
 pub mod producer;
 
@@ -23,6 +25,7 @@ pub use consumer::{Consumer, ConsumerAssignment, ConsumerConfig, ConsumerRecord,
 pub use error::{BrokerErrorKind, Error, Result};
 pub use group::{ConsumerGroup, ConsumerGroupConfig, ConsumerGroupHeartbeat};
 pub use kafrust_protocol as protocol;
+pub use metrics::{ClientMetrics, ClientMetricsSnapshot};
 pub use producer::{
     Acks, BufferedProducer, Compression, Header, ProducerBatchFailure, ProducerBatchRecordOutcome,
     ProducerBatchReport, ProducerConfig, ProducerDelivery, ProducerRecord, RecordMetadata,

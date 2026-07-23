@@ -21,6 +21,7 @@ use crate::consumer::{
     Consumer, ConsumerAssignment, ConsumerConfig, ConsumerRecord, IsolationLevel,
 };
 use crate::error::{BrokerErrorKind, Error, Result};
+use crate::metrics::ClientMetrics;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 use tokio::time::{self, MissedTickBehavior};
@@ -79,6 +80,12 @@ impl ConsumerGroupConfig {
     /// Sets the request timeout in milliseconds.
     pub fn request_timeout_ms(mut self, request_timeout_ms: u64) -> Self {
         self.client = self.client.request_timeout_ms(request_timeout_ms);
+        self
+    }
+
+    /// Sets the shared metrics handle used by group and fetch broker connections.
+    pub fn metrics(mut self, metrics: ClientMetrics) -> Self {
+        self.client = self.client.metrics(metrics);
         self
     }
 

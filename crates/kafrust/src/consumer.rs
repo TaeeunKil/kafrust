@@ -6,6 +6,7 @@ use kafrust_protocol::api::metadata::{BrokerMetadata, MetadataResponseV1};
 use crate::client::{Client, FetchOneRequestV4};
 use crate::config::{ClientConfig, SecurityProtocol};
 use crate::error::{BrokerErrorKind, Error, Result};
+use crate::metrics::ClientMetrics;
 use tracing::debug;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -399,6 +400,12 @@ impl ConsumerConfig {
     /// Sets the request timeout in milliseconds.
     pub fn request_timeout_ms(mut self, request_timeout_ms: u64) -> Self {
         self.client = self.client.request_timeout_ms(request_timeout_ms);
+        self
+    }
+
+    /// Sets the shared metrics handle used by consumer broker connections.
+    pub fn metrics(mut self, metrics: ClientMetrics) -> Self {
+        self.client = self.client.metrics(metrics);
         self
     }
 

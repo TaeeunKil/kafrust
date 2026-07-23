@@ -282,6 +282,40 @@ The default build does not include TLS dependencies. The current `tls` feature
 uses the `rustls` ring crypto provider, which can require native build tooling
 in some environments; this is not part of the default kafrust toolchain.
 
+## Request Metrics
+
+`ClientMetrics` provides lock-free request counters shared by all broker
+connections created from a configuration:
+
+```rust,no_run
+use kafrust::{ClientMetrics, ProducerConfig};
+
+# async fn example() -> kafrust::Result<()> {
+let metrics = ClientMetrics::new();
+let producer = ProducerConfig::new(["localhost:9092"])
+    .metrics(metrics.clone())
+    .build()
+    .await?;
+
+// Send records with `producer`, then export a point-in-time snapshot.
+let snapshot = metrics.snapshot();
+println!(
+    "requests={} failures={} max_latency={:?}",
+    snapshot.requests_started,
+    snapshot.requests_failed,
+    snapshot.max_latency,
+);
+# Ok(())
+# }
+```
+
+Snapshots include request success, failure, timeout, and cancellation counts,
+request and response payload bytes, in-flight requests, and total and maximum
+latency. Individual atomic fields are sampled independently, so a snapshot
+taken while requests are changing is not a transactional view. Request metrics
+and `tracing` spans contain operational metadata only; key, value, request, and
+response payload contents are not recorded.
+
 ## Compatibility
 
 The `0.2.x` alpha line is verified against single-node Apache Kafka `3.7.2` and
@@ -317,8 +351,8 @@ Verified high-level paths include:
   `IsolationLevel::ReadCommitted` hides aborted transaction records for direct
   and group consumers, and current group assignments can be committed through
   `Producer::send_offsets_to_transaction`. Transactional buffered sends, admin
-  APIs, live broker failure injection, and broad observability are not
-  implemented yet.
+  APIs, live broker failure injection, and producer/consumer operation metrics
+  are not implemented yet. Request-level metrics and spans are available.
 - `acks=0` remains unsupported because the current request loop expects a broker
   response.
 
