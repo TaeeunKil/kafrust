@@ -258,14 +258,14 @@ in some environments; this is not part of the default kafrust toolchain.
 
 ## Compatibility
 
-The `0.2.x` alpha line is verified against a single-node Apache Kafka `3.7.2`
-KRaft broker over `PLAINTEXT`.
+The `0.2.x` alpha line is verified against single-node Apache Kafka `3.7.2` and
+`4.3.1` KRaft brokers over `PLAINTEXT`.
 
 Verified high-level paths include:
 
 - `ApiVersions v0` and `Metadata v1` roundtrips.
 - Producer single-record, batch, and buffered sends.
-- Direct topic-partition fetch using Fetch v2 response decoding.
+- Direct topic-partition fetch using Fetch v4 response decoding.
 - Classic consumer group join, sync, heartbeat, poll, and offset commit.
 
 ## Current Limits
@@ -280,7 +280,9 @@ Verified high-level paths include:
   producer, direct consumer, and consumer group smoke paths; SASL/SCRAM-SHA-512
   is implemented and covered by focused tests, but its live broker profile is
   not claimed yet.
-- Broker compatibility is verified against Kafka `3.7.2` only.
+- Broker compatibility is verified against Kafka `3.7.2` and `4.3.1` for the
+  single-node plaintext profile. Secured and multi-broker profiles currently
+  remain verified against `3.7.2`.
 - Multi-broker clusters, leader failover, rack awareness, and partition
   expansion are not yet claimed.
 - Idempotent producers, transactions, admin APIs, and broad observability are

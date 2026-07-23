@@ -224,6 +224,7 @@ brokers.
 | kafrust | Broker | Mode | Security | Status |
 | --- | --- | --- | --- | --- |
 | `0.2.x` | Apache Kafka `3.7.2` | single-node KRaft | `PLAINTEXT` | Passing live smoke |
+| `0.2.x` | Apache Kafka `4.3.1` | single-node KRaft | `PLAINTEXT` | Passing live smoke |
 | `0.2.x` | Apache Kafka `3.7.2` | single-node KRaft | `TLS` | Passing live smoke |
 | `0.2.x` | Apache Kafka `3.7.2` | single-node KRaft | `SASL_PLAINTEXT` with SASL/PLAIN | Passing live smoke |
 | `0.2.x` | Apache Kafka `3.7.2` | single-node KRaft | `SASL_SSL` with SCRAM-SHA-256 | Passing live smoke |
@@ -232,7 +233,7 @@ Verified paths currently include:
 
 - `ApiVersions v0` and `Metadata v1` roundtrips.
 - High-level producer single-record, batch, and buffered sends.
-- Direct topic-partition fetch with Fetch v2 response decoding.
+- Direct topic-partition fetch with Fetch v4 response decoding.
 - Classic consumer group join, sync, heartbeat, poll, and offset commit.
 
 See [Compatibility](docs/compatibility.md) and
@@ -253,14 +254,16 @@ See [Compatibility](docs/compatibility.md) and
   group smoke paths. SASL/SCRAM-SHA-256 is verified over `SaslTls` for those
   same smoke paths. SASL/SCRAM-SHA-512 is implemented and covered by focused
   tests, but its live broker profile is not claimed yet.
-- Broker compatibility is verified against Kafka `3.7.2` only.
-- Multi-broker clusters, leader failover, rack awareness, and partition
-  expansion are not yet claimed.
+- Single-node plaintext compatibility is verified against Kafka `3.7.2` and
+  `4.3.1`. Secured and multi-broker profiles remain verified against `3.7.2`.
+- Three-broker leader failover is verified for the documented producer and
+  direct consumer paths. Rack awareness and partition expansion are not yet
+  claimed.
 - Gzip, Snappy, and LZ4 compression use Produce v3 RecordBatch encoding; Zstd
-  requires and negotiates Produce v7. Fetch v2 decodes all four codecs. They are
+  requires and negotiates Produce v7. Fetch v4 decodes all four codecs. They are
   verified against Kafka `3.7.2` plaintext single-node and multi-broker smoke
-  profiles. Snappy uses Kafka-compatible Xerial framing and accepts raw Snappy
-  blocks when decoding. Secured compression profiles are not claimed yet.
+  profiles and the single-node TLS profile. Snappy uses Kafka-compatible Xerial
+  framing and accepts raw Snappy blocks when decoding.
 - Idempotent producers, transactions, admin APIs, and broad observability are
   not implemented yet.
 - `acks=0` remains unsupported because the current request loop expects a broker
