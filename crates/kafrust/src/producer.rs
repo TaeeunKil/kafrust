@@ -12,10 +12,12 @@ use kafrust_protocol::api::produce::{
     ProducePartitionV3, ProduceResponseV2, ProduceResponseV7, ProduceTopicV3, RecordBatchIdentity,
     RecordBatchMessage, API_KEY as PRODUCE_API_KEY,
 };
+use kafrust_protocol::api::txn_offset_commit::{TxnOffsetCommitPartition, TxnOffsetCommitTopic};
 use kafrust_protocol::record_batch::RecordBatchCompression;
 
 use crate::client::Client;
 use crate::config::{ClientConfig, SecurityProtocol};
+use crate::consumer::ConsumerAssignment;
 use crate::error::{BrokerErrorKind, Error, Result};
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
@@ -1112,6 +1114,55 @@ impl Producer {
         Ok(())
     }
 
+    /// Adds current consumer group offsets to the active transaction.
+    ///
+    /// The offsets are committed only if [`Producer::commit_transaction`]
+    /// succeeds. Pass the assignments returned by [`crate::ConsumerGroup::assignments`]
+    /// after polling the records processed by this transaction.
+    pub async fn send_offsets_to_transaction(
+        &mut self,
+        group_id: impl Into<String>,
+        assignments: &[ConsumerAssignment],
+    ) -> Result<()> {
+        self.ensure_idempotent_producer_usable()?;
+        self.ensure_transaction_active()?;
+        if assignments.is_empty() {
+            return Err(Error::Unsupported(
+                "transaction offset commit requires at least one assignment",
+            ));
+        }
+
+        let group_id = group_id.into();
+        let state = self
+            .transaction_state
+            .as_ref()
+            .ok_or(Error::Unsupported("producer is not transactional"))?;
+        let transactional_id = state.transactional_id.clone();
+        let identity = self
+            .idempotent_state
+            .as_ref()
+            .ok_or(Error::Unsupported(
+                "transactional producer has no producer identity",
+            ))?
+            .identity("", 0);
+
+        self.add_group_offsets_to_transaction(
+            &transactional_id,
+            &group_id,
+            identity.producer_id,
+            identity.producer_epoch,
+        )
+        .await?;
+        self.commit_group_offsets_to_transaction(
+            &transactional_id,
+            &group_id,
+            identity.producer_id,
+            identity.producer_epoch,
+            transaction_offset_topics(assignments),
+        )
+        .await
+    }
+
     /// Commits the active transaction.
     pub async fn commit_transaction(&mut self) -> Result<()> {
         self.end_transaction(true).await
@@ -1788,6 +1839,143 @@ impl Producer {
         Ok(())
     }
 
+    async fn add_group_offsets_to_transaction(
+        &mut self,
+        transactional_id: &str,
+        group_id: &str,
+        producer_id: i64,
+        producer_epoch: i16,
+    ) -> Result<()> {
+        let mut attempt = 0;
+        loop {
+            let coordinator = self
+                .client
+                .find_transaction_coordinator(transactional_id.to_owned())
+                .await?;
+            if coordinator.error_code != 0 {
+                if attempt < self.config.max_retries
+                    && is_retryable_transaction_coordinator_error(coordinator.error_code)
+                {
+                    attempt += 1;
+                    time::sleep(IDEMPOTENT_INIT_RETRY_BACKOFF).await;
+                    continue;
+                }
+                return Err(Error::Broker {
+                    code: coordinator.error_code,
+                    context: "find transaction coordinator".to_owned(),
+                });
+            }
+            let mut client = self
+                .config
+                .client
+                .connect_broker(format!("{}:{}", coordinator.host, coordinator.port))
+                .await?;
+            let response = client
+                .add_offsets_to_txn_v0(
+                    transactional_id.to_owned(),
+                    producer_id,
+                    producer_epoch,
+                    group_id.to_owned(),
+                )
+                .await?;
+            if response.error_code == 0 {
+                return Ok(());
+            }
+            if attempt < self.config.max_retries
+                && is_retryable_transaction_coordinator_error(response.error_code)
+            {
+                attempt += 1;
+                time::sleep(IDEMPOTENT_INIT_RETRY_BACKOFF).await;
+                continue;
+            }
+            if idempotent_produce_error_disposition(response.error_code)
+                == IdempotentProduceErrorDisposition::Fatal
+            {
+                self.record_idempotent_fatal_error(response.error_code);
+            }
+            return Err(Error::Broker {
+                code: response.error_code,
+                context: format!("add offsets for group {group_id} to transaction"),
+            });
+        }
+    }
+
+    async fn commit_group_offsets_to_transaction(
+        &mut self,
+        transactional_id: &str,
+        group_id: &str,
+        producer_id: i64,
+        producer_epoch: i16,
+        topics: Vec<TxnOffsetCommitTopic>,
+    ) -> Result<()> {
+        let mut attempt = 0;
+        loop {
+            let coordinator = self
+                .client
+                .find_group_coordinator(group_id.to_owned())
+                .await?;
+            if coordinator.error_code != 0 {
+                if attempt < self.config.max_retries
+                    && is_retryable_transaction_coordinator_error(coordinator.error_code)
+                {
+                    attempt += 1;
+                    time::sleep(IDEMPOTENT_INIT_RETRY_BACKOFF).await;
+                    continue;
+                }
+                return Err(Error::Broker {
+                    code: coordinator.error_code,
+                    context: format!("find group coordinator {group_id}"),
+                });
+            }
+            let mut client = self
+                .config
+                .client
+                .connect_broker(format!("{}:{}", coordinator.host, coordinator.port))
+                .await?;
+            let response = client
+                .txn_offset_commit_v0(
+                    transactional_id.to_owned(),
+                    group_id.to_owned(),
+                    producer_id,
+                    producer_epoch,
+                    topics.clone(),
+                )
+                .await?;
+            let error = response.topics.iter().find_map(|topic| {
+                topic
+                    .partitions
+                    .iter()
+                    .find(|partition| partition.error_code != 0)
+                    .map(|partition| {
+                        (
+                            partition.error_code,
+                            topic.name.as_str(),
+                            partition.partition_index,
+                        )
+                    })
+            });
+            let Some((error_code, topic, partition)) = error else {
+                return Ok(());
+            };
+            if attempt < self.config.max_retries
+                && is_retryable_transaction_coordinator_error(error_code)
+            {
+                attempt += 1;
+                time::sleep(IDEMPOTENT_INIT_RETRY_BACKOFF).await;
+                continue;
+            }
+            if idempotent_produce_error_disposition(error_code)
+                == IdempotentProduceErrorDisposition::Fatal
+            {
+                self.record_idempotent_fatal_error(error_code);
+            }
+            return Err(Error::Broker {
+                code: error_code,
+                context: format!("transaction offset commit {group_id} {topic}-{partition}"),
+            });
+        }
+    }
+
     async fn end_transaction(&mut self, committed: bool) -> Result<()> {
         self.ensure_idempotent_producer_usable()?;
         self.ensure_transaction_active()?;
@@ -2217,6 +2405,24 @@ fn is_retryable_transaction_coordinator_error(error_code: i16) -> bool {
             | BrokerErrorKind::NotCoordinator
             | BrokerErrorKind::ConcurrentTransactions
     )
+}
+
+fn transaction_offset_topics(assignments: &[ConsumerAssignment]) -> Vec<TxnOffsetCommitTopic> {
+    let mut topics = BTreeMap::<String, Vec<TxnOffsetCommitPartition>>::new();
+    for assignment in assignments {
+        topics
+            .entry(assignment.topic().to_owned())
+            .or_default()
+            .push(TxnOffsetCommitPartition {
+                partition_index: assignment.partition(),
+                committed_offset: assignment.next_offset(),
+                committed_metadata: None,
+            });
+    }
+    topics
+        .into_iter()
+        .map(|(name, partitions)| TxnOffsetCommitTopic { name, partitions })
+        .collect()
 }
 
 fn choose_partition(record: &ProducerRecord, metadata: &MetadataResponseV1) -> Result<i32> {
@@ -2670,13 +2876,14 @@ mod tests {
         idempotent_produce_error_disposition, invalidate_metadata_cache,
         invalidate_metadata_cache_for_record_indexes, leader_for, message_set_message,
         record_batch_attempt_outcomes, record_batch_message, select_produce_batch_version,
-        select_produce_version, Acks, BatchRecord, BufferedFlushReason, BufferedProduceRequest,
-        BufferedProducerCommand, BufferedProducerState, Compression,
+        select_produce_version, transaction_offset_topics, Acks, BatchRecord, BufferedFlushReason,
+        BufferedProduceRequest, BufferedProducerCommand, BufferedProducerState, Compression,
         IdempotentBatchSequenceTracker, IdempotentProduceErrorDisposition, IdempotentProducerState,
         PreparedBatchRecord, ProduceBatchKey, ProduceVersion, Producer, ProducerBatchFailure,
         ProducerBatchRecordOutcome, ProducerBatchReport, ProducerConfig, ProducerDelivery,
         ProducerRecord, RecordMetadata, SecurityProtocol,
     };
+    use crate::consumer::ConsumerAssignment;
     use crate::{BrokerErrorKind, Client, Error};
     use kafrust_protocol::api::api_versions::{ApiKeyVersion, ApiVersionsResponseV0};
     use kafrust_protocol::api::metadata::{
@@ -3222,6 +3429,25 @@ mod tests {
         assert!(config.idempotence_enabled());
         assert_eq!(config.acks_ref(), Acks::All);
         assert_eq!(config.max_retries_ref(), 10);
+    }
+
+    #[test]
+    fn builds_transaction_offset_topics_from_consumer_assignments() {
+        let assignments = vec![
+            ConsumerAssignment::new("payments".to_owned(), 0, 21),
+            ConsumerAssignment::new("orders".to_owned(), 1, 12),
+            ConsumerAssignment::new("orders".to_owned(), 0, 11),
+        ];
+
+        let topics = transaction_offset_topics(&assignments);
+
+        assert_eq!(topics.len(), 2);
+        assert_eq!(topics[0].name, "orders");
+        assert_eq!(topics[0].partitions[0].partition_index, 1);
+        assert_eq!(topics[0].partitions[0].committed_offset, 12);
+        assert_eq!(topics[0].partitions[1].partition_index, 0);
+        assert_eq!(topics[1].name, "payments");
+        assert_eq!(topics[1].partitions[0].committed_offset, 21);
     }
 
     #[tokio::test]
