@@ -6,6 +6,7 @@ use kafrust_protocol::api::find_coordinator::{
     CoordinatorType, FindCoordinatorRequestV1, FindCoordinatorResponseV1,
 };
 use kafrust_protocol::api::heartbeat::{HeartbeatRequestV2, HeartbeatResponseV2};
+use kafrust_protocol::api::init_producer_id::{InitProducerIdRequestV0, InitProducerIdResponseV0};
 use kafrust_protocol::api::join_group::{
     JoinGroupProtocol, JoinGroupRequestV2, JoinGroupResponseV2,
 };
@@ -151,6 +152,24 @@ impl Client {
         let mut decoder = Decoder::new(&response);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(MetadataResponseV1::decode_body(&mut decoder)?)
+    }
+
+    /// Sends InitProducerId v0 for an idempotent or transactional producer session.
+    pub async fn init_producer_id_v0(
+        &mut self,
+        transactional_id: Option<String>,
+        transaction_timeout_ms: i32,
+    ) -> Result<InitProducerIdResponseV0> {
+        let request = InitProducerIdRequestV0 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            transactional_id,
+            transaction_timeout_ms,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::new(&response);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(InitProducerIdResponseV0::decode_body(&mut decoder)?)
     }
 
     /// Sends FindCoordinator v1 for a consumer group ID.
@@ -613,6 +632,49 @@ mod tests {
 
         assert_eq!(response.error_code, 0);
         assert_eq!(response.highest_supported_version(18, 4), Some(4));
+        broker.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn initializes_producer_id_over_injected_broker_stream() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(1024);
+        let broker = tokio::spawn(async move {
+            let mut request_size = [0u8; 4];
+            broker_stream.read_exact(&mut request_size).await.unwrap();
+            let request_size = usize::try_from(i32::from_be_bytes(request_size)).unwrap();
+            let mut request = vec![0u8; request_size];
+            broker_stream.read_exact(&mut request).await.unwrap();
+
+            assert_eq!(&request[0..2], &[0, 22]);
+            assert_eq!(&request[2..4], &[0, 0]);
+            assert_eq!(&request[4..8], &[0, 0, 0, 1]);
+
+            let response = [
+                0, 0, 0, 1, // correlation id
+                0, 0, 0, 0, // throttle time
+                0, 0, // error code
+                0, 0, 0, 0, 0, 0, 0, 42, // producer id
+                0, 3, // producer epoch
+            ];
+            broker_stream
+                .write_all(&(response.len() as i32).to_be_bytes())
+                .await
+                .unwrap();
+            broker_stream.write_all(&response).await.unwrap();
+            broker_stream.flush().await.unwrap();
+        });
+
+        let mut client = Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-stream-test".to_owned()),
+            Some(Duration::from_secs(1)),
+        );
+
+        let response = client.init_producer_id_v0(None, 60_000).await.unwrap();
+
+        assert_eq!(response.error_code, 0);
+        assert_eq!(response.producer_id, 42);
+        assert_eq!(response.producer_epoch, 3);
         broker.await.unwrap();
     }
 
