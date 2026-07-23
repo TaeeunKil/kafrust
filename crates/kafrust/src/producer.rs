@@ -1991,30 +1991,48 @@ impl Producer {
                 "transactional producer has no producer identity",
             ))?
             .identity("", 0);
-        let coordinator = self
-            .client
-            .find_transaction_coordinator(transactional_id.clone())
-            .await?;
-        if coordinator.error_code != 0 {
-            return Err(Error::Broker {
-                code: coordinator.error_code,
-                context: "find transaction coordinator".to_owned(),
-            });
-        }
-        let mut client = self
-            .config
-            .client
-            .connect_broker(format!("{}:{}", coordinator.host, coordinator.port))
-            .await?;
-        let response = client
-            .end_txn_v0(
-                transactional_id,
-                identity.producer_id,
-                identity.producer_epoch,
-                committed,
-            )
-            .await?;
-        if response.error_code != 0 {
+        let mut attempt = 0;
+        loop {
+            let coordinator = self
+                .client
+                .find_transaction_coordinator(transactional_id.clone())
+                .await?;
+            if coordinator.error_code != 0 {
+                if attempt < self.config.max_retries
+                    && is_retryable_transaction_coordinator_error(coordinator.error_code)
+                {
+                    attempt += 1;
+                    time::sleep(IDEMPOTENT_INIT_RETRY_BACKOFF).await;
+                    continue;
+                }
+                return Err(Error::Broker {
+                    code: coordinator.error_code,
+                    context: "find transaction coordinator".to_owned(),
+                });
+            }
+            let mut client = self
+                .config
+                .client
+                .connect_broker(format!("{}:{}", coordinator.host, coordinator.port))
+                .await?;
+            let response = client
+                .end_txn_v0(
+                    transactional_id.clone(),
+                    identity.producer_id,
+                    identity.producer_epoch,
+                    committed,
+                )
+                .await?;
+            if response.error_code == 0 {
+                break;
+            }
+            if attempt < self.config.max_retries
+                && is_retryable_transaction_coordinator_error(response.error_code)
+            {
+                attempt += 1;
+                time::sleep(IDEMPOTENT_INIT_RETRY_BACKOFF).await;
+                continue;
+            }
             if idempotent_produce_error_disposition(response.error_code)
                 == IdempotentProduceErrorDisposition::Fatal
             {
