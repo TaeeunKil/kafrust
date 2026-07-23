@@ -20,6 +20,8 @@ pub enum BrokerErrorKind {
     ReplicaNotAvailable,
     /// Kafka reported that the coordinator is unavailable.
     CoordinatorNotAvailable,
+    /// Kafka reported that the coordinator is still loading its state.
+    CoordinatorLoadInProgress,
     /// Kafka reported that the request was sent to the wrong coordinator.
     NotCoordinator,
     /// Kafka reported an invalid consumer group generation.
@@ -43,6 +45,7 @@ impl BrokerErrorKind {
             6 => Self::NotLeaderOrFollower,
             7 => Self::RequestTimedOut,
             9 => Self::ReplicaNotAvailable,
+            14 => Self::CoordinatorLoadInProgress,
             15 => Self::CoordinatorNotAvailable,
             16 => Self::NotCoordinator,
             22 => Self::IllegalGeneration,
@@ -227,6 +230,10 @@ mod tests {
         assert_eq!(
             BrokerErrorKind::from_code(16),
             BrokerErrorKind::NotCoordinator
+        );
+        assert_eq!(
+            BrokerErrorKind::from_code(14),
+            BrokerErrorKind::CoordinatorLoadInProgress
         );
         assert_eq!(
             BrokerErrorKind::from_code(27),

@@ -22,6 +22,7 @@ use tokio::time::{self, Instant};
 use tracing::debug;
 
 const BUFFERED_PRODUCER_CHANNEL_CAPACITY: usize = 1024;
+const IDEMPOTENT_INIT_RETRY_BACKOFF: Duration = Duration::from_millis(100);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Kafka produce acknowledgement policy.
@@ -1530,7 +1531,7 @@ impl ProducerConfig {
         self.idempotence = enabled;
         if enabled {
             self.acks = Acks::All;
-            self.max_retries = self.max_retries.max(1);
+            self.max_retries = self.max_retries.max(5);
         }
         self
     }
@@ -1584,17 +1585,7 @@ impl ProducerConfig {
         }
         let mut client = self.client.clone().connect().await?;
         let idempotent_state = if self.idempotence {
-            let response = client.init_producer_id_v0(None, 60_000).await?;
-            if response.error_code != 0 {
-                return Err(Error::Broker {
-                    code: response.error_code,
-                    context: "initialize idempotent producer".to_owned(),
-                });
-            }
-            Some(IdempotentProducerState::new(
-                response.producer_id,
-                response.producer_epoch,
-            ))
+            Some(initialize_idempotent_producer(&mut client, self.max_retries).await?)
         } else {
             None
         };
@@ -1616,6 +1607,37 @@ impl ProducerConfig {
             worker: Some(worker),
             state: BufferedProducerState::Open,
         })
+    }
+}
+
+async fn initialize_idempotent_producer(
+    client: &mut Client,
+    max_retries: u32,
+) -> Result<IdempotentProducerState> {
+    let mut attempt = 0;
+    loop {
+        let response = client.init_producer_id_v0(None, 60_000).await?;
+        if response.error_code == 0 {
+            return Ok(IdempotentProducerState::new(
+                response.producer_id,
+                response.producer_epoch,
+            ));
+        }
+        if attempt < max_retries
+            && matches!(
+                BrokerErrorKind::from_code(response.error_code),
+                BrokerErrorKind::CoordinatorLoadInProgress
+                    | BrokerErrorKind::CoordinatorNotAvailable
+            )
+        {
+            attempt += 1;
+            time::sleep(IDEMPOTENT_INIT_RETRY_BACKOFF).await;
+            continue;
+        }
+        return Err(Error::Broker {
+            code: response.error_code,
+            context: "initialize idempotent producer".to_owned(),
+        });
     }
 }
 
@@ -2433,7 +2455,7 @@ mod tests {
 
         assert!(config.idempotence_enabled());
         assert_eq!(config.acks_ref(), Acks::All);
-        assert_eq!(config.max_retries_ref(), 1);
+        assert_eq!(config.max_retries_ref(), 5);
     }
 
     #[tokio::test]
@@ -2466,6 +2488,51 @@ mod tests {
 
         assert_eq!(state.producer_id, 42);
         assert_eq!(state.producer_epoch, 3);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn retries_idempotent_initialization_while_coordinator_loads() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let first = read_frame(&mut socket).await;
+            assert_eq!(&first[0..4], &[0, 22, 0, 0]);
+            write_frame(
+                &mut socket,
+                &[
+                    0, 0, 0, 1, // correlation id
+                    0, 0, 0, 0, // throttle time
+                    0, 14, // coordinator load in progress
+                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, // producer id
+                    0xff, 0xff, // producer epoch
+                ],
+            )
+            .await;
+
+            let second = read_frame(&mut socket).await;
+            assert_eq!(&second[0..4], &[0, 22, 0, 0]);
+            write_frame(
+                &mut socket,
+                &[
+                    0, 0, 0, 2, // correlation id
+                    0, 0, 0, 0, // throttle time
+                    0, 0, // error code
+                    0, 0, 0, 0, 0, 0, 0, 42, // producer id
+                    0, 3, // producer epoch
+                ],
+            )
+            .await;
+        });
+
+        let producer = ProducerConfig::new([addr.to_string()])
+            .enable_idempotence(true)
+            .build()
+            .await
+            .unwrap();
+
+        assert_eq!(producer.idempotent_state.unwrap().producer_id, 42);
         server.await.unwrap();
     }
 
