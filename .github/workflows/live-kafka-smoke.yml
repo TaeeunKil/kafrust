@@ -13,9 +13,17 @@ env:
 
 jobs:
   kafka:
-    name: Kafka 3.7.2
+    name: Kafka ${{ matrix.kafka-version }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        kafka-version:
+          - 3.7.2
+          - 4.3.1
+    env:
+      KAFKA_VERSION: ${{ matrix.kafka-version }}
 
     steps:
       - name: Checkout
@@ -42,7 +50,7 @@ jobs:
             -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1 \
             -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1 \
             -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 \
-            apache/kafka:3.7.2
+            "apache/kafka:${KAFKA_VERSION}"
 
       - name: Wait for Kafka
         run: |
@@ -516,6 +524,30 @@ jobs:
         run: cargo run -p kafrust --features tls --example producer_send
 
       - name: Run TLS producer batch example
+        run: cargo run -p kafrust --features tls --example producer_send_batch
+
+      - name: Run TLS gzip producer batch example
+        env:
+          KAFRUST_COMPRESSION: gzip
+          KAFRUST_BATCH_COUNT: "3"
+        run: cargo run -p kafrust --features tls --example producer_send_batch
+
+      - name: Run TLS snappy producer batch example
+        env:
+          KAFRUST_COMPRESSION: snappy
+          KAFRUST_BATCH_COUNT: "3"
+        run: cargo run -p kafrust --features tls --example producer_send_batch
+
+      - name: Run TLS lz4 producer batch example
+        env:
+          KAFRUST_COMPRESSION: lz4
+          KAFRUST_BATCH_COUNT: "3"
+        run: cargo run -p kafrust --features tls --example producer_send_batch
+
+      - name: Run TLS zstd producer batch example
+        env:
+          KAFRUST_COMPRESSION: zstd
+          KAFRUST_BATCH_COUNT: "3"
         run: cargo run -p kafrust --features tls --example producer_send_batch
 
       - name: Run TLS buffered producer example
