@@ -251,8 +251,9 @@ fn parse_compression(value: &str) -> kafrust::Result<Compression> {
         "" | "none" => Ok(Compression::None),
         "gzip" => Ok(Compression::Gzip),
         "snappy" => Ok(Compression::Snappy),
+        "lz4" => Ok(Compression::Lz4),
         _ => Err(kafrust::Error::Unsupported(
-            "unsupported KAFRUST_COMPRESSION; expected none, gzip, or snappy",
+            "unsupported KAFRUST_COMPRESSION; expected none, gzip, snappy, or lz4",
         )),
     }
 }

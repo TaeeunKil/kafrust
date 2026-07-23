@@ -67,11 +67,10 @@ pub(crate) fn compress_record_batch_records(
         RecordBatchCompression::None => Ok(records.to_vec()),
         RecordBatchCompression::Gzip => gzip_compress(records),
         RecordBatchCompression::Snappy => snappy_compress(records),
-        RecordBatchCompression::Lz4 | RecordBatchCompression::Zstd => {
-            Err(Error::UnsupportedCompression {
-                codec: compression.name(),
-            })
-        }
+        RecordBatchCompression::Lz4 => lz4_compress(records),
+        RecordBatchCompression::Zstd => Err(Error::UnsupportedCompression {
+            codec: compression.name(),
+        }),
     }
 }
 
@@ -83,11 +82,10 @@ pub(crate) fn decompress_record_batch_records(
         RecordBatchCompression::None => Ok(records.to_vec()),
         RecordBatchCompression::Gzip => gzip_decompress(records),
         RecordBatchCompression::Snappy => snappy_decompress(records),
-        RecordBatchCompression::Lz4 | RecordBatchCompression::Zstd => {
-            Err(Error::UnsupportedCompression {
-                codec: compression.name(),
-            })
-        }
+        RecordBatchCompression::Lz4 => lz4_decompress(records),
+        RecordBatchCompression::Zstd => Err(Error::UnsupportedCompression {
+            codec: compression.name(),
+        }),
     }
 }
 
@@ -200,26 +198,60 @@ fn ensure_snappy_output_limit(block: &[u8], already_decompressed: usize) -> Resu
     Ok(())
 }
 
-fn compression_error(codec: &'static str, error: std::io::Error) -> Error {
-    Error::Compression {
-        codec,
-        reason: error.to_string(),
+fn lz4_compress(records: &[u8]) -> Result<Vec<u8>> {
+    let mut settings = lz_fear::CompressionSettings::default();
+    settings
+        .independent_blocks(true)
+        .block_checksums(false)
+        .content_checksum(false)
+        .block_size(64 * 1024);
+    let mut output = Vec::new();
+    settings
+        .compress(records, &mut output)
+        .map_err(|error| compression_reason("lz4", error.to_string()))?;
+    Ok(output)
+}
+
+fn lz4_decompress(records: &[u8]) -> Result<Vec<u8>> {
+    lz4_decompress_with_limit(records, MAX_DECOMPRESSED_RECORD_BYTES)
+}
+
+fn lz4_decompress_with_limit(records: &[u8], max_decompressed_bytes: u64) -> Result<Vec<u8>> {
+    let decoder = lz_fear::LZ4FrameReader::new(records)
+        .map_err(|error| compression_reason("lz4", error.to_string()))?
+        .into_read();
+    let read_limit = max_decompressed_bytes
+        .checked_add(1)
+        .ok_or(Error::LengthOverflow("decompressed record batch"))?;
+    let mut limited = decoder.take(read_limit);
+    let mut output = Vec::new();
+    limited
+        .read_to_end(&mut output)
+        .map_err(|error| compression_error("lz4", error))?;
+    if output.len() as u64 > max_decompressed_bytes {
+        return Err(Error::LengthOverflow("decompressed record batch"));
     }
+    Ok(output)
+}
+
+fn compression_error(codec: &'static str, error: std::io::Error) -> Error {
+    compression_reason(codec, error.to_string())
+}
+
+fn compression_reason(codec: &'static str, reason: String) -> Error {
+    Error::Compression { codec, reason }
 }
 
 fn snappy_error(reason: String) -> Error {
-    Error::Compression {
-        codec: "snappy",
-        reason,
-    }
+    compression_reason("snappy", reason)
 }
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::{
-        compress_record_batch_records, decompress_record_batch_records, RecordBatchCompression,
-        MAX_DECOMPRESSED_RECORD_BYTES, XERIAL_SNAPPY_HEADER,
+        compress_record_batch_records, decompress_record_batch_records, lz4_decompress_with_limit,
+        RecordBatchCompression, MAX_DECOMPRESSED_RECORD_BYTES, XERIAL_SNAPPY_HEADER,
     };
     use crate::error::Error;
 
@@ -276,6 +308,39 @@ mod tests {
                 codec: "snappy",
                 ..
             })
+        ));
+    }
+
+    #[test]
+    fn lz4_frame_roundtrips_with_kafka_magic() {
+        let records = vec![b'x'; 70 * 1024];
+
+        let compressed =
+            compress_record_batch_records(RecordBatchCompression::Lz4, &records).unwrap();
+        let decompressed =
+            decompress_record_batch_records(RecordBatchCompression::Lz4, &compressed).unwrap();
+
+        assert_eq!(&compressed[..4], &[0x04, 0x22, 0x4d, 0x18]);
+        assert_eq!(decompressed, records);
+    }
+
+    #[test]
+    fn lz4_decoder_rejects_output_over_limit() {
+        let records = vec![b'x'; 1024];
+        let compressed =
+            compress_record_batch_records(RecordBatchCompression::Lz4, &records).unwrap();
+
+        assert_eq!(
+            lz4_decompress_with_limit(&compressed, 64).unwrap_err(),
+            Error::LengthOverflow("decompressed record batch")
+        );
+    }
+
+    #[test]
+    fn lz4_decoder_rejects_malformed_frame() {
+        assert!(matches!(
+            decompress_record_batch_records(RecordBatchCompression::Lz4, b"not an lz4 frame"),
+            Err(Error::Compression { codec: "lz4", .. })
         ));
     }
 }

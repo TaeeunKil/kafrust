@@ -651,10 +651,20 @@ Evidence:
 - Manual `Live Kafka Smoke` run `29984929590` passed on 2026-07-23; the
   single-node and multi-broker plaintext jobs completed Snappy batch producer
   checks against Kafka 3.7.2.
+- LZ4 compression uses the pure-Rust `lz-fear` backend with independent blocks
+  and no C toolchain dependency.
+- Produce v3 RecordBatch encoding writes standard LZ4 frames, and Fetch v2
+  RecordBatch decoding reads those frames with a bounded output size.
+- Focused tests cover the Kafka LZ4 frame magic, multi-block roundtrips,
+  malformed frames, decompression limits, and Produce-to-Fetch RecordBatch
+  roundtrips.
+- The live smoke workflow includes LZ4 batch producer checks in its single-node
+  and multi-broker plaintext jobs; a passing run is not recorded yet.
 
 Remaining:
 
-- lz4 and zstd support
+- zstd support
+- recorded LZ4 live broker verification
 - secured live broker compression smoke coverage
 - configurable decompression limits
 
