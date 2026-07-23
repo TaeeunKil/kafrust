@@ -8,8 +8,8 @@ use kafrust_protocol::api::api_versions::ApiVersionsResponseV0;
 use kafrust_protocol::api::metadata::{BrokerMetadata, MetadataResponseV1};
 use kafrust_protocol::api::produce::{
     encoded_message_set_len, encoded_record_batch_set_len_with_compression, MessageSetMessage,
-    ProducePartitionV3, ProduceResponseV2, ProduceResponseV7, ProduceTopicV3, RecordBatchMessage,
-    API_KEY as PRODUCE_API_KEY,
+    ProducePartitionV3, ProduceResponseV2, ProduceResponseV7, ProduceTopicV3, RecordBatchIdentity,
+    RecordBatchMessage, API_KEY as PRODUCE_API_KEY,
 };
 use kafrust_protocol::record_batch::RecordBatchCompression;
 
@@ -352,6 +352,49 @@ pub struct Producer {
     client: Client,
     config: ProducerConfig,
     metadata_cache: BTreeMap<String, MetadataResponseV1>,
+    idempotent_state: Option<IdempotentProducerState>,
+}
+
+#[derive(Debug)]
+struct IdempotentProducerState {
+    producer_id: i64,
+    producer_epoch: i16,
+    next_sequences: BTreeMap<(String, i32), i32>,
+}
+
+impl IdempotentProducerState {
+    fn new(producer_id: i64, producer_epoch: i16) -> Self {
+        Self {
+            producer_id,
+            producer_epoch,
+            next_sequences: BTreeMap::new(),
+        }
+    }
+
+    fn identity(&self, topic: &str, partition: i32) -> RecordBatchIdentity {
+        RecordBatchIdentity {
+            producer_id: self.producer_id,
+            producer_epoch: self.producer_epoch,
+            base_sequence: self
+                .next_sequences
+                .get(&(topic.to_owned(), partition))
+                .copied()
+                .unwrap_or(0),
+        }
+    }
+
+    fn acknowledge(&mut self, topic: &str, partition: i32, record_count: usize) {
+        let key = (topic.to_owned(), partition);
+        let current = self.next_sequences.get(&key).copied().unwrap_or(0);
+        self.next_sequences
+            .insert(key, advance_producer_sequence(current, record_count));
+    }
+}
+
+fn advance_producer_sequence(current: i32, record_count: usize) -> i32 {
+    const SEQUENCE_MODULUS: u64 = i32::MAX as u64 + 1;
+    let increment = (record_count as u64) % SEQUENCE_MODULUS;
+    ((current as u64 + increment) % SEQUENCE_MODULUS) as i32
 }
 
 #[derive(Debug)]
@@ -929,6 +972,11 @@ impl Producer {
         &mut self,
         records: impl IntoIterator<Item = ProducerRecord>,
     ) -> Result<ProducerBatchReport> {
+        if self.idempotent_state.is_some() {
+            return Err(Error::Unsupported(
+                "idempotent batch and buffered producer sends",
+            ));
+        }
         if self.config.acks == Acks::None {
             return Err(Error::Unsupported("producer acks=0 send without response"));
         }
@@ -1112,6 +1160,7 @@ impl Producer {
                                         .config
                                         .compression
                                         .as_record_batch_compression(),
+                                    identity: RecordBatchIdentity::NON_IDEMPOTENT,
                                     records: records
                                         .iter()
                                         .map(|record| {
@@ -1140,6 +1189,7 @@ impl Producer {
                                         .config
                                         .compression
                                         .as_record_batch_compression(),
+                                    identity: RecordBatchIdentity::NON_IDEMPOTENT,
                                     records: records
                                         .iter()
                                         .map(|record| {
@@ -1195,7 +1245,7 @@ impl Producer {
     }
 
     async fn send_with_metadata(
-        &self,
+        &mut self,
         record: &ProducerRecord,
         metadata: &MetadataResponseV1,
         timestamp: SystemTime,
@@ -1223,6 +1273,16 @@ impl Producer {
 
         let produce_version =
             select_produce_version(&api_versions, record, self.config.compression)?;
+        if self.idempotent_state.is_some() && produce_version == ProduceVersion::V2 {
+            return Err(Error::Unsupported(
+                "idempotent producer requires Produce API v3 or newer",
+            ));
+        }
+        let identity = self
+            .idempotent_state
+            .as_ref()
+            .map(|state| state.identity(record.topic(), partition))
+            .unwrap_or(RecordBatchIdentity::NON_IDEMPOTENT);
         debug!(
             topic = record.topic(),
             partition,
@@ -1242,6 +1302,7 @@ impl Producer {
                             partitions: vec![ProducePartitionV3 {
                                 partition_index: partition,
                                 compression: self.config.compression.as_record_batch_compression(),
+                                identity,
                                 records: vec![record_batch_message(record, timestamp_ms)],
                             }],
                         }],
@@ -1259,6 +1320,7 @@ impl Producer {
                             partitions: vec![ProducePartitionV3 {
                                 partition_index: partition,
                                 compression: self.config.compression.as_record_batch_compression(),
+                                identity,
                                 records: vec![record_batch_message(record, timestamp_ms)],
                             }],
                         }],
@@ -1283,6 +1345,9 @@ impl Producer {
                 code: partition_response.error_code,
                 context: format!("produce {}-{}", record.topic(), partition),
             });
+        }
+        if let Some(state) = &mut self.idempotent_state {
+            state.acknowledge(record.topic(), partition, 1);
         }
 
         Ok(RecordMetadata::new(
@@ -1335,6 +1400,7 @@ pub struct ProducerConfig {
     max_batch_bytes: usize,
     linger: Duration,
     compression: Compression,
+    idempotence: bool,
 }
 
 impl ProducerConfig {
@@ -1348,6 +1414,7 @@ impl ProducerConfig {
             max_batch_bytes: usize::MAX,
             linger: Duration::from_millis(0),
             compression: Compression::None,
+            idempotence: false,
         }
     }
 
@@ -1454,6 +1521,20 @@ impl ProducerConfig {
         self
     }
 
+    /// Enables Kafka idempotent producer identity and sequence tracking.
+    ///
+    /// Idempotence requires `acks=all`, at least one retry, and Produce API v3
+    /// or newer. The current alpha supports single-record [`Producer::send`];
+    /// batch and buffered idempotent sends remain under development.
+    pub fn enable_idempotence(mut self, enabled: bool) -> Self {
+        self.idempotence = enabled;
+        if enabled {
+            self.acks = Acks::All;
+            self.max_retries = self.max_retries.max(1);
+        }
+        self
+    }
+
     /// Returns the configured acknowledgement policy.
     pub fn acks_ref(&self) -> Acks {
         self.acks
@@ -1484,6 +1565,11 @@ impl ProducerConfig {
         self.compression
     }
 
+    /// Returns whether idempotent producer behavior is enabled.
+    pub fn idempotence_enabled(&self) -> bool {
+        self.idempotence
+    }
+
     /// Returns the shared client configuration.
     pub fn client_config(&self) -> &ClientConfig {
         &self.client
@@ -1491,11 +1577,32 @@ impl ProducerConfig {
 
     /// Connects to Kafka and builds a producer.
     pub async fn build(self) -> Result<Producer> {
-        let client = self.client.clone().connect().await?;
+        if self.idempotence && (self.acks != Acks::All || self.max_retries == 0) {
+            return Err(Error::Unsupported(
+                "idempotence requires acks=all and at least one retry",
+            ));
+        }
+        let mut client = self.client.clone().connect().await?;
+        let idempotent_state = if self.idempotence {
+            let response = client.init_producer_id_v0(None, 60_000).await?;
+            if response.error_code != 0 {
+                return Err(Error::Broker {
+                    code: response.error_code,
+                    context: "initialize idempotent producer".to_owned(),
+                });
+            }
+            Some(IdempotentProducerState::new(
+                response.producer_id,
+                response.producer_epoch,
+            ))
+        } else {
+            None
+        };
         Ok(Producer {
             client,
             config: self,
             metadata_cache: BTreeMap::new(),
+            idempotent_state,
         })
     }
 
@@ -1935,15 +2042,16 @@ fn invalidate_metadata_cache_for_record_indexes(
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::{
-        batch_failure_outcomes, batch_record_chunks, batch_records_encoded_len,
-        batch_report_from_outcomes, batch_success_outcomes, buffered_delivery_canceled_error,
-        buffered_enqueue_flush_reason, buffered_linger_deadline, can_retry_send, choose_partition,
-        complete_buffered_deliveries, delivery_error_from_request_error, enqueue_buffered_record,
-        fail_buffered_deliveries, invalidate_metadata_cache,
-        invalidate_metadata_cache_for_record_indexes, leader_for, message_set_message,
-        record_batch_attempt_outcomes, record_batch_message, select_produce_batch_version,
-        select_produce_version, Acks, BatchRecord, BufferedFlushReason, BufferedProduceRequest,
-        BufferedProducerCommand, BufferedProducerState, Compression, PreparedBatchRecord,
+        advance_producer_sequence, batch_failure_outcomes, batch_record_chunks,
+        batch_records_encoded_len, batch_report_from_outcomes, batch_success_outcomes,
+        buffered_delivery_canceled_error, buffered_enqueue_flush_reason, buffered_linger_deadline,
+        can_retry_send, choose_partition, complete_buffered_deliveries,
+        delivery_error_from_request_error, enqueue_buffered_record, fail_buffered_deliveries,
+        invalidate_metadata_cache, invalidate_metadata_cache_for_record_indexes, leader_for,
+        message_set_message, record_batch_attempt_outcomes, record_batch_message,
+        select_produce_batch_version, select_produce_version, Acks, BatchRecord,
+        BufferedFlushReason, BufferedProduceRequest, BufferedProducerCommand,
+        BufferedProducerState, Compression, IdempotentProducerState, PreparedBatchRecord,
         ProduceBatchKey, ProduceVersion, Producer, ProducerBatchFailure,
         ProducerBatchRecordOutcome, ProducerBatchReport, ProducerConfig, ProducerDelivery,
         ProducerRecord, RecordMetadata, SecurityProtocol,
@@ -1965,6 +2073,40 @@ mod tests {
         assert_eq!(Acks::None.as_i16(), 0);
         assert_eq!(Acks::Leader.as_i16(), 1);
         assert_eq!(Acks::All.as_i16(), -1);
+    }
+
+    #[test]
+    fn keeps_idempotent_sequence_partition_scoped() {
+        let mut state = IdempotentProducerState::new(42, 3);
+
+        let first = state.identity("orders", 0);
+        assert_eq!(first.producer_id, 42);
+        assert_eq!(first.producer_epoch, 3);
+        assert_eq!(first.base_sequence, 0);
+
+        state.acknowledge("orders", 0, 4);
+
+        assert_eq!(state.identity("orders", 0).base_sequence, 4);
+        assert_eq!(state.identity("orders", 1).base_sequence, 0);
+        assert_eq!(state.identity("payments", 0).base_sequence, 0);
+    }
+
+    #[test]
+    fn preserves_idempotent_sequence_until_acknowledged() {
+        let mut state = IdempotentProducerState::new(42, 3);
+
+        let first_attempt = state.identity("orders", 0);
+        let retry_attempt = state.identity("orders", 0);
+        assert_eq!(retry_attempt, first_attempt);
+
+        state.acknowledge("orders", 0, 2);
+        assert_eq!(state.identity("orders", 0).base_sequence, 2);
+    }
+
+    #[test]
+    fn wraps_idempotent_sequence_after_i32_max() {
+        assert_eq!(advance_producer_sequence(i32::MAX, 1), 0);
+        assert_eq!(advance_producer_sequence(i32::MAX - 1, 3), 1);
     }
 
     #[test]
@@ -2258,6 +2400,7 @@ mod tests {
         assert_eq!(config.max_batch_bytes_ref(), 64 * 1024);
         assert_eq!(config.linger(), std::time::Duration::from_millis(5));
         assert_eq!(config.compression_ref(), Compression::Lz4);
+        assert!(!config.idempotence_enabled());
         assert_eq!(config.client_config().client_id_ref(), Some("orders-api"));
         assert_eq!(
             config.client_config().security_protocol_ref(),
@@ -2279,6 +2422,51 @@ mod tests {
                 .username(),
             "alice"
         );
+    }
+
+    #[test]
+    fn enabling_idempotence_sets_required_defaults() {
+        let config = ProducerConfig::new(["localhost:9092"])
+            .max_retries(0)
+            .acks(Acks::Leader)
+            .enable_idempotence(true);
+
+        assert!(config.idempotence_enabled());
+        assert_eq!(config.acks_ref(), Acks::All);
+        assert_eq!(config.max_retries_ref(), 1);
+    }
+
+    #[tokio::test]
+    async fn initializes_idempotent_producer_during_build() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let request = read_frame(&mut socket).await;
+            assert_eq!(&request[0..4], &[0, 22, 0, 0]);
+            write_frame(
+                &mut socket,
+                &[
+                    0, 0, 0, 1, // correlation id
+                    0, 0, 0, 0, // throttle time
+                    0, 0, // error code
+                    0, 0, 0, 0, 0, 0, 0, 42, // producer id
+                    0, 3, // producer epoch
+                ],
+            )
+            .await;
+        });
+
+        let producer = ProducerConfig::new([addr.to_string()])
+            .enable_idempotence(true)
+            .build()
+            .await
+            .unwrap();
+        let state = producer.idempotent_state.unwrap();
+
+        assert_eq!(state.producer_id, 42);
+        assert_eq!(state.producer_epoch, 3);
+        server.await.unwrap();
     }
 
     #[test]
@@ -2851,6 +3039,7 @@ mod tests {
             client,
             config,
             metadata_cache: BTreeMap::new(),
+            idempotent_state: None,
         };
 
         let metadata = producer.metadata_for_topic("orders").await.unwrap();

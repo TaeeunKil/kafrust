@@ -711,7 +711,7 @@ Strategic role:
 
 ## M17 Idempotent Producer
 
-Status: Planned.
+Status: In progress.
 
 Goal: support Kafka idempotent producer semantics for duplicate-safe retries within a producer session.
 
@@ -735,6 +735,22 @@ Exit criteria:
 Strategic role:
 
 - This is a major requirement before kafrust can replace mature clients for many write-heavy services.
+
+Evidence:
+
+- `InitProducerId v0` request/response protocol types and the low-level client
+  roundtrip are implemented with byte-level and injected-broker tests.
+- RecordBatch v2 encoding accepts producer ID, producer epoch, and base
+  sequence metadata while preserving the non-idempotent sentinel values.
+- `ProducerConfig::enable_idempotence(true)` initializes a non-transactional
+  producer ID, enforces `acks=all` with retries, and keeps acknowledged
+  sequences scoped per topic partition for single-record sends.
+
+Remaining:
+
+- preserve assigned sequences across chunked batch and buffered retries
+- classify fencing, out-of-order sequence, and duplicate sequence errors
+- live broker idempotent producer smoke evidence
 
 ## M18 Transactions And Read-Committed Consumers
 
