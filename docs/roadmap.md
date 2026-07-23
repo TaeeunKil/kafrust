@@ -639,10 +639,22 @@ Evidence:
   decoded as uncompressed data.
 - Gzip decompression is bounded to prevent unbounded decoded record payload
   growth.
+- Snappy compression uses the pure-Rust `snap` backend with
+  Kafka-compatible Xerial framing and no C toolchain dependency.
+- Produce v3 RecordBatch encoding writes chunked Snappy frames, while Fetch v2
+  RecordBatch decoding accepts both Xerial-framed and raw Snappy payloads.
+- Snappy decoding validates each block's declared output length before
+  allocation and enforces the record batch decompression limit.
+- Focused tests cover multi-block Snappy roundtrips, raw-block compatibility,
+  oversized declared output, malformed framing, and Produce-to-Fetch RecordBatch
+  roundtrips.
+- Manual `Live Kafka Smoke` run `29984929590` passed on 2026-07-23; the
+  single-node and multi-broker plaintext jobs completed Snappy batch producer
+  checks against Kafka 3.7.2.
 
 Remaining:
 
-- snappy, lz4, and zstd support
+- lz4 and zstd support
 - secured live broker compression smoke coverage
 - configurable decompression limits
 
