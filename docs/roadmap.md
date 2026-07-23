@@ -648,13 +648,13 @@ Evidence:
 - Focused tests cover multi-block Snappy roundtrips, raw-block compatibility,
   oversized declared output, malformed framing, and Produce-to-Fetch RecordBatch
   roundtrips.
-- The live Kafka smoke workflow includes single-node and multi-broker Snappy
-  producer checks, pending a recorded passing run.
+- Manual `Live Kafka Smoke` run `29984929590` passed on 2026-07-23; the
+  single-node and multi-broker plaintext jobs completed Snappy batch producer
+  checks against Kafka 3.7.2.
 
 Remaining:
 
 - lz4 and zstd support
-- recorded Snappy live broker verification
 - secured live broker compression smoke coverage
 - configurable decompression limits
 
