@@ -2,6 +2,7 @@ pub mod api_versions;
 pub mod fetch;
 pub mod find_coordinator;
 pub mod heartbeat;
+pub mod init_producer_id;
 pub mod join_group;
 pub mod metadata;
 pub mod offset_commit;
