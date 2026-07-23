@@ -745,12 +745,14 @@ Evidence:
 - `ProducerConfig::enable_idempotence(true)` initializes a non-transactional
   producer ID, enforces `acks=all` with retries, and keeps acknowledged
   sequences scoped per topic partition for single-record sends.
+- Manual `Live Kafka Smoke` run `29990529966` passed the idempotent
+  single-record producer path against Kafka 3.7.2 and Kafka 4.3.1; all six
+  plaintext, multi-broker, TLS, SASL_PLAINTEXT, and SASL_SSL jobs passed.
 
 Remaining:
 
 - preserve assigned sequences across chunked batch and buffered retries
 - classify fencing, out-of-order sequence, and duplicate sequence errors
-- live broker idempotent producer smoke evidence
 
 ## M18 Transactions And Read-Committed Consumers
 
