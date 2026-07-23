@@ -2034,7 +2034,9 @@ impl ProducerConfig {
     /// Configures the transactional ID and enables idempotence.
     pub fn transactional_id(mut self, transactional_id: impl Into<String>) -> Self {
         self.transactional_id = Some(transactional_id.into());
-        self.enable_idempotence(true)
+        self = self.enable_idempotence(true);
+        self.max_retries = self.max_retries.max(10);
+        self
     }
 
     /// Sets the broker transaction timeout used by InitProducerId.
@@ -3219,7 +3221,7 @@ mod tests {
         assert_eq!(config.transaction_timeout_ms_ref(), 30_000);
         assert!(config.idempotence_enabled());
         assert_eq!(config.acks_ref(), Acks::All);
-        assert_eq!(config.max_retries_ref(), 5);
+        assert_eq!(config.max_retries_ref(), 10);
     }
 
     #[tokio::test]
