@@ -1,9 +1,9 @@
 use std::collections::BTreeMap;
 
-use kafrust_protocol::api::fetch::{FetchPartitionResponseV2, FetchResponseV2, MessageSetRecord};
+use kafrust_protocol::api::fetch::{FetchPartitionResponseV4, FetchResponseV4, MessageSetRecord};
 use kafrust_protocol::api::metadata::{BrokerMetadata, MetadataResponseV1};
 
-use crate::client::{Client, FetchOneRequestV2};
+use crate::client::{Client, FetchOneRequestV4};
 use crate::config::{ClientConfig, SecurityProtocol};
 use crate::error::{BrokerErrorKind, Error, Result};
 use tracing::debug;
@@ -189,14 +189,16 @@ impl Consumer {
         );
         let mut leader_client = self.config.client.connect_broker(broker_addr).await?;
         let response = leader_client
-            .fetch_one_v2(FetchOneRequestV2 {
+            .fetch_one_v4(FetchOneRequestV4 {
                 replica_id: -1,
                 max_wait_ms: self.config.max_wait_ms,
                 min_bytes: self.config.min_bytes,
+                max_bytes: self.config.max_partition_bytes,
+                isolation_level: 0,
                 topic: topic.to_owned(),
                 partition_index: partition,
                 fetch_offset: offset,
-                max_bytes: self.config.max_partition_bytes,
+                max_partition_bytes: self.config.max_partition_bytes,
             })
             .await?;
         let partition_response = fetch_partition_response(&response, topic, partition)?;
@@ -492,10 +494,10 @@ fn broker_addr(broker: &BrokerMetadata) -> String {
 }
 
 fn fetch_partition_response<'a>(
-    response: &'a FetchResponseV2,
+    response: &'a FetchResponseV4,
     topic_name: &str,
     partition_index: i32,
-) -> Result<&'a FetchPartitionResponseV2> {
+) -> Result<&'a FetchPartitionResponseV4> {
     response
         .responses
         .iter()

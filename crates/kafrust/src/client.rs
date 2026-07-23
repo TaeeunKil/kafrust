@@ -1,6 +1,6 @@
 use kafrust_protocol::api::api_versions::{ApiVersionsRequestV0, ApiVersionsResponseV0};
 use kafrust_protocol::api::fetch::{
-    FetchPartitionV2, FetchRequestV2, FetchResponseV2, FetchTopicV2,
+    FetchPartitionV2, FetchRequestV4, FetchResponseV4, FetchTopicV2,
 };
 use kafrust_protocol::api::find_coordinator::{
     CoordinatorType, FindCoordinatorRequestV1, FindCoordinatorResponseV1,
@@ -52,14 +52,16 @@ pub(crate) trait BrokerStream: AsyncRead + AsyncWrite + Unpin + Send + Sync {}
 impl<T> BrokerStream for T where T: AsyncRead + AsyncWrite + Unpin + Send + Sync {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct FetchOneRequestV2 {
+pub(crate) struct FetchOneRequestV4 {
     pub replica_id: i32,
     pub max_wait_ms: i32,
     pub min_bytes: i32,
+    pub max_bytes: i32,
+    pub isolation_level: i8,
     pub topic: String,
     pub partition_index: i32,
     pub fetch_offset: i64,
-    pub max_bytes: i32,
+    pub max_partition_bytes: i32,
 }
 
 impl Client {
@@ -280,29 +282,31 @@ impl Client {
         Ok(OffsetCommitResponseV2::decode_body(&mut decoder)?)
     }
 
-    pub(crate) async fn fetch_one_v2(
+    pub(crate) async fn fetch_one_v4(
         &mut self,
-        request: FetchOneRequestV2,
-    ) -> Result<FetchResponseV2> {
-        let request = FetchRequestV2 {
+        request: FetchOneRequestV4,
+    ) -> Result<FetchResponseV4> {
+        let request = FetchRequestV4 {
             correlation_id: self.next_correlation_id(),
             client_id: self.client_id.clone(),
             replica_id: request.replica_id,
             max_wait_ms: request.max_wait_ms,
             min_bytes: request.min_bytes,
+            max_bytes: request.max_bytes,
+            isolation_level: request.isolation_level,
             topics: vec![FetchTopicV2 {
                 name: request.topic,
                 partitions: vec![FetchPartitionV2 {
                     partition_index: request.partition_index,
                     fetch_offset: request.fetch_offset,
-                    max_bytes: request.max_bytes,
+                    max_bytes: request.max_partition_bytes,
                 }],
             }],
         };
         let response = self.send_request(&request.encode()?).await?;
         let mut decoder = Decoder::new(&response);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
-        Ok(FetchResponseV2::decode_body(&mut decoder)?)
+        Ok(FetchResponseV4::decode_body(&mut decoder)?)
     }
 
     /// Sends Produce v2 for pre-built topic partition payloads.

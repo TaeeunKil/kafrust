@@ -15,6 +15,40 @@ pub struct FetchRequestV2 {
     pub topics: Vec<FetchTopicV2>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FetchRequestV4 {
+    pub correlation_id: i32,
+    pub client_id: Option<String>,
+    pub replica_id: i32,
+    pub max_wait_ms: i32,
+    pub min_bytes: i32,
+    pub max_bytes: i32,
+    pub isolation_level: i8,
+    pub topics: Vec<FetchTopicV2>,
+}
+
+impl FetchRequestV4 {
+    pub fn encode(&self) -> Result<Vec<u8>> {
+        let mut encoder = Encoder::new();
+        RequestHeader {
+            api_key: API_KEY,
+            api_version: 4,
+            correlation_id: self.correlation_id,
+            client_id: self.client_id.clone(),
+        }
+        .encode_v1(&mut encoder)?;
+        encoder.write_i32(self.replica_id);
+        encoder.write_i32(self.max_wait_ms);
+        encoder.write_i32(self.min_bytes);
+        encoder.write_i32(self.max_bytes);
+        encoder.write_i8(self.isolation_level);
+        encoder.write_array(Some(self.topics.as_slice()), |encoder, topic| {
+            topic.encode(encoder)
+        })?;
+        Ok(encoder.into_bytes())
+    }
+}
+
 impl FetchRequestV2 {
     pub fn encode(&self) -> Result<Vec<u8>> {
         let mut encoder = Encoder::new();
@@ -70,6 +104,83 @@ impl FetchPartitionV2 {
 pub struct FetchResponseV2 {
     pub throttle_time_ms: i32,
     pub responses: Vec<FetchTopicResponseV2>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FetchResponseV4 {
+    pub throttle_time_ms: i32,
+    pub responses: Vec<FetchTopicResponseV4>,
+}
+
+impl FetchResponseV4 {
+    pub fn decode_body(decoder: &mut Decoder<'_>) -> Result<Self> {
+        Ok(Self {
+            throttle_time_ms: decoder.read_i32()?,
+            responses: decoder
+                .read_array("fetch responses", FetchTopicResponseV4::decode)?
+                .unwrap_or_default(),
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FetchTopicResponseV4 {
+    pub name: String,
+    pub partitions: Vec<FetchPartitionResponseV4>,
+}
+
+impl FetchTopicResponseV4 {
+    fn decode(decoder: &mut Decoder<'_>) -> Result<Self> {
+        Ok(Self {
+            name: decoder.read_string()?,
+            partitions: decoder
+                .read_array(
+                    "fetch partition responses",
+                    FetchPartitionResponseV4::decode,
+                )?
+                .unwrap_or_default(),
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FetchPartitionResponseV4 {
+    pub partition_index: i32,
+    pub error_code: i16,
+    pub high_watermark: i64,
+    pub last_stable_offset: i64,
+    pub aborted_transactions: Vec<AbortedTransactionV4>,
+    pub records: Vec<MessageSetRecord>,
+}
+
+impl FetchPartitionResponseV4 {
+    fn decode(decoder: &mut Decoder<'_>) -> Result<Self> {
+        Ok(Self {
+            partition_index: decoder.read_i32()?,
+            error_code: decoder.read_i16()?,
+            high_watermark: decoder.read_i64()?,
+            last_stable_offset: decoder.read_i64()?,
+            aborted_transactions: decoder
+                .read_array("aborted transactions", AbortedTransactionV4::decode)?
+                .unwrap_or_default(),
+            records: decode_message_set(&decoder.read_bytes()?)?,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AbortedTransactionV4 {
+    pub producer_id: i64,
+    pub first_offset: i64,
+}
+
+impl AbortedTransactionV4 {
+    fn decode(decoder: &mut Decoder<'_>) -> Result<Self> {
+        Ok(Self {
+            producer_id: decoder.read_i64()?,
+            first_offset: decoder.read_i64()?,
+        })
+    }
 }
 
 impl FetchResponseV2 {
@@ -274,7 +385,8 @@ fn decode_record(base_offset: i64, base_timestamp: i64, bytes: &[u8]) -> Result<
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::{
-        FetchPartitionV2, FetchRequestV2, FetchResponseV2, FetchTopicV2, MessageSetRecord,
+        FetchPartitionV2, FetchRequestV2, FetchRequestV4, FetchResponseV2, FetchResponseV4,
+        FetchTopicV2, MessageSetRecord,
     };
     use crate::codec::{Decoder, Encoder};
 
@@ -299,6 +411,61 @@ mod tests {
         let bytes = request.encode().unwrap();
         assert_eq!(&bytes[0..4], &[0, 1, 0, 2]);
         assert!(bytes.len() > 40);
+    }
+
+    #[test]
+    fn encodes_fetch_request_v4() {
+        let request = FetchRequestV4 {
+            correlation_id: 8,
+            client_id: Some("kafrust".to_owned()),
+            replica_id: -1,
+            max_wait_ms: 500,
+            min_bytes: 1,
+            max_bytes: 1_048_576,
+            isolation_level: 0,
+            topics: vec![FetchTopicV2 {
+                name: "orders".to_owned(),
+                partitions: vec![FetchPartitionV2 {
+                    partition_index: 0,
+                    fetch_offset: 42,
+                    max_bytes: 1_048_576,
+                }],
+            }],
+        };
+
+        let bytes = request.encode().unwrap();
+        assert_eq!(&bytes[0..4], &[0, 1, 0, 4]);
+        assert_eq!(&bytes[4..8], &[0, 0, 0, 8]);
+        assert!(bytes.len() > 45);
+    }
+
+    #[test]
+    fn decodes_fetch_response_v4_with_aborted_transaction() {
+        let mut bytes = Encoder::new();
+        bytes.write_i32(0);
+        bytes.write_i32(1);
+        bytes.write_string("orders").unwrap();
+        bytes.write_i32(1);
+        bytes.write_i32(0);
+        bytes.write_i16(0);
+        bytes.write_i64(43);
+        bytes.write_i64(42);
+        bytes.write_i32(1);
+        bytes.write_i64(7);
+        bytes.write_i64(40);
+        bytes.write_bytes(&[]).unwrap();
+        let bytes = bytes.into_bytes();
+
+        let mut decoder = Decoder::new(&bytes);
+        let response = FetchResponseV4::decode_body(&mut decoder).unwrap();
+        let partition = &response.responses[0].partitions[0];
+
+        assert_eq!(partition.high_watermark, 43);
+        assert_eq!(partition.last_stable_offset, 42);
+        assert_eq!(partition.aborted_transactions[0].producer_id, 7);
+        assert_eq!(partition.aborted_transactions[0].first_offset, 40);
+        assert!(partition.records.is_empty());
+        assert!(decoder.is_empty());
     }
 
     #[test]
