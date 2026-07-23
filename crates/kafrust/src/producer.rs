@@ -2095,6 +2095,7 @@ impl ProducerConfig {
             Some(
                 initialize_idempotent_producer(
                     &mut client,
+                    &self.client,
                     self.max_retries,
                     self.transactional_id.clone(),
                     self.transaction_timeout_ms,
@@ -2134,27 +2135,48 @@ impl ProducerConfig {
 
 async fn initialize_idempotent_producer(
     client: &mut Client,
+    client_config: &ClientConfig,
     max_retries: u32,
     transactional_id: Option<String>,
     transaction_timeout_ms: i32,
 ) -> Result<IdempotentProducerState> {
     let mut attempt = 0;
     loop {
-        let response = client
-            .init_producer_id_v0(transactional_id.clone(), transaction_timeout_ms)
-            .await?;
+        let response = if let Some(transactional_id) = transactional_id.as_ref() {
+            let coordinator = client
+                .find_transaction_coordinator(transactional_id.clone())
+                .await?;
+            if coordinator.error_code != 0 {
+                if attempt < max_retries
+                    && is_retryable_transaction_coordinator_error(coordinator.error_code)
+                {
+                    attempt += 1;
+                    time::sleep(IDEMPOTENT_INIT_RETRY_BACKOFF).await;
+                    continue;
+                }
+                return Err(Error::Broker {
+                    code: coordinator.error_code,
+                    context: "find transaction coordinator".to_owned(),
+                });
+            }
+            let mut coordinator_client = client_config
+                .connect_broker(format!("{}:{}", coordinator.host, coordinator.port))
+                .await?;
+            coordinator_client
+                .init_producer_id_v0(Some(transactional_id.clone()), transaction_timeout_ms)
+                .await?
+        } else {
+            client
+                .init_producer_id_v0(None, transaction_timeout_ms)
+                .await?
+        };
         if response.error_code == 0 {
             return Ok(IdempotentProducerState::new(
                 response.producer_id,
                 response.producer_epoch,
             ));
         }
-        if attempt < max_retries
-            && matches!(
-                BrokerErrorKind::from_code(response.error_code),
-                BrokerErrorKind::CoordinatorLoadInProgress
-                    | BrokerErrorKind::CoordinatorNotAvailable
-            )
+        if attempt < max_retries && is_retryable_transaction_coordinator_error(response.error_code)
         {
             attempt += 1;
             time::sleep(IDEMPOTENT_INIT_RETRY_BACKOFF).await;
@@ -2165,6 +2187,15 @@ async fn initialize_idempotent_producer(
             context: "initialize idempotent producer".to_owned(),
         });
     }
+}
+
+fn is_retryable_transaction_coordinator_error(error_code: i16) -> bool {
+    matches!(
+        BrokerErrorKind::from_code(error_code),
+        BrokerErrorKind::CoordinatorLoadInProgress
+            | BrokerErrorKind::CoordinatorNotAvailable
+            | BrokerErrorKind::NotCoordinator
+    )
 }
 
 fn choose_partition(record: &ProducerRecord, metadata: &MetadataResponseV1) -> Result<i32> {
@@ -3210,15 +3241,44 @@ mod tests {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
         let server = tokio::spawn(async move {
-            let (mut socket, _) = listener.accept().await.unwrap();
-            let request = read_frame(&mut socket).await;
-            assert_eq!(&request[0..4], &[0, 22, 0, 0]);
-            assert!(request
+            let (mut bootstrap_socket, _) = listener.accept().await.unwrap();
+            let find_coordinator = read_frame(&mut bootstrap_socket).await;
+            assert_eq!(&find_coordinator[0..4], &[0, 10, 0, 1]);
+            assert_eq!(find_coordinator.last(), Some(&1));
+            let host = b"127.0.0.1";
+            let mut coordinator_response = vec![
+                0,
+                0,
+                0,
+                1, // correlation id
+                0,
+                0,
+                0,
+                0, // throttle time
+                0,
+                0, // error code
+                0xff,
+                0xff, // null error message
+                0,
+                0,
+                0,
+                0, // node id
+                0,
+                host.len() as u8,
+            ];
+            coordinator_response.extend_from_slice(host);
+            coordinator_response.extend_from_slice(&(addr.port() as i32).to_be_bytes());
+            write_frame(&mut bootstrap_socket, &coordinator_response).await;
+
+            let (mut coordinator_socket, _) = listener.accept().await.unwrap();
+            let init_producer_id = read_frame(&mut coordinator_socket).await;
+            assert_eq!(&init_producer_id[0..4], &[0, 22, 0, 0]);
+            assert!(init_producer_id
                 .windows(b"orders-tx".len())
                 .any(|window| window == b"orders-tx"));
-            assert!(request.ends_with(&30_000_i32.to_be_bytes()));
+            assert!(init_producer_id.ends_with(&30_000_i32.to_be_bytes()));
             write_frame(
-                &mut socket,
+                &mut coordinator_socket,
                 &[
                     0, 0, 0, 1, // correlation id
                     0, 0, 0, 0, // throttle time
