@@ -82,9 +82,26 @@ producer.commit_transaction().await?;
 
 Transactional producers require an active transaction before `send` or
 `send_batch`. `commit_transaction` and `abort_transaction` complete the current
-transaction through the Kafka transaction coordinator. Buffered transactional
-production and consumed-offset integration are not available yet;
-`IsolationLevel::ReadCommitted` is available on consumer configurations.
+transaction through the Kafka transaction coordinator. After polling a
+consumer group, pass its current assignments to the producer before committing:
+
+```rust
+let group_id = group.group_id().to_owned();
+let offsets = group.assignments().to_vec();
+
+producer.begin_transaction()?;
+producer
+    .send(ProducerRecord::to("output").value("processed"))
+    .await?;
+producer
+    .send_offsets_to_transaction(group_id, &offsets)
+    .await?;
+producer.commit_transaction().await?;
+```
+
+The group offsets become visible only with the transaction commit. Buffered
+transactional production is not available yet; `IsolationLevel::ReadCommitted`
+is available on consumer configurations.
 
 The public model intentionally keeps Kafka terms visible:
 
@@ -151,6 +168,10 @@ Current implementation status:
   `commit_transaction`, and `abort_transaction` expose the transaction
   lifecycle; transactional sends register partitions before Produce. The
   high-level commit and abort path is verified against Kafka 3.7.2 and 4.3.1.
+- `Producer::send_offsets_to_transaction` adds a consumer group to the active
+  transaction and commits the supplied `ConsumerAssignment` next offsets
+  through `TxnOffsetCommit v0`. The consume-transform-produce path is verified
+  against Kafka 3.7.2 and 4.3.1.
 - `Producer::send` performs metadata lookup, connects to the partition leader, negotiates Produce API support with `ApiVersions`, and chooses Produce v7 for Zstd, Produce v3 RecordBatch for other RecordBatch features, or Produce v2 MessageSet.
 - `ProducerConfig::request_timeout_ms` controls the request timeout used for metadata and produce roundtrips.
 - `ProducerConfig::security_protocol` stores the Kafka security protocol for producer broker connections. `Plaintext` is the default transport; TLS requires the non-default `tls` crate feature; `tls_server_name(name)` overrides the certificate validation name when the bootstrap host differs from the broker certificate; `tls_root_certificate_der(bytes)` adds DER-encoded root certificates while keeping platform roots enabled; `sasl_plain(username, password)`, `sasl_scram_sha_256(username, password)`, and `sasl_scram_sha_512(username, password)` provide SASL credentials for `SaslPlaintext` or `SaslTls`.

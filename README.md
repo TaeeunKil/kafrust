@@ -150,9 +150,8 @@ producer
 producer.commit_transaction().await?;
 ```
 
-The commit, abort, and read-committed isolation paths are verified against
-Kafka `3.7.2` and `4.3.1`. Transactional consumed-offset integration is not
-available yet.
+Commit, abort, read-committed isolation, and transactional consumer group
+offset commits are verified against Kafka `3.7.2` and `4.3.1`.
 
 ### Buffered Producer
 
@@ -291,9 +290,10 @@ See [Compatibility](docs/compatibility.md) and
 - Idempotent single-record, batch, and buffered sends are available as an
   opt-in alpha. Transactional immediate and batch sends support explicit begin,
   commit, and abort. `IsolationLevel::ReadCommitted` hides aborted transaction
-  records for direct and group consumers. Transactional buffered sends,
-  consumed-offset integration, admin APIs, live broker failure injection, and
-  broad observability are not implemented yet.
+  records for direct and group consumers, and current group assignments can be
+  committed through `Producer::send_offsets_to_transaction`. Transactional
+  buffered sends, admin APIs, live broker failure injection, and broad
+  observability are not implemented yet.
 - `acks=0` remains unsupported because the current request loop expects a broker
   response.
 
