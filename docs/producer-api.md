@@ -98,7 +98,7 @@ Current implementation status:
 
 - `ProducerConfig`, `ProducerRecord`, `Acks`, `Compression`, and `RecordMetadata` are public API types.
 - `ProducerConfig::build` creates a producer backed by a Kafka broker connection.
-- `Producer::send` performs metadata lookup, connects to the partition leader, negotiates Produce API support with `ApiVersions`, and chooses Produce v3 RecordBatch or Produce v2 MessageSet.
+- `Producer::send` performs metadata lookup, connects to the partition leader, negotiates Produce API support with `ApiVersions`, and chooses Produce v7 for Zstd, Produce v3 RecordBatch for other RecordBatch features, or Produce v2 MessageSet.
 - `ProducerConfig::request_timeout_ms` controls the request timeout used for metadata and produce roundtrips.
 - `ProducerConfig::security_protocol` stores the Kafka security protocol for producer broker connections. `Plaintext` is the default transport; TLS requires the non-default `tls` crate feature; `tls_server_name(name)` overrides the certificate validation name when the bootstrap host differs from the broker certificate; `tls_root_certificate_der(bytes)` adds DER-encoded root certificates while keeping platform roots enabled; `sasl_plain(username, password)`, `sasl_scram_sha_256(username, password)`, and `sasl_scram_sha_512(username, password)` provide SASL credentials for `SaslPlaintext` or `SaslTls`.
 - `ProducerConfig::max_retries` controls retry attempts for stale metadata, unknown topic-partition entries in cached metadata, missing leader or broker metadata, transient leader errors classified by `BrokerErrorKind`, request timeouts, and connection I/O failures.
@@ -108,10 +108,11 @@ Current implementation status:
 - `ProducerConfig::compression` stores the configured producer record batch
   compression policy. `Compression::None` is the default.
   `Compression::Gzip`, `Compression::Snappy`, `Compression::Lz4`, and
-  `Compression::Zstd` encode compressed Produce API v3 RecordBatch payloads and
-  return `Unsupported` if the broker only supports the legacy Produce API v2
-  MessageSet path. Snappy output uses Kafka-compatible Xerial framing; LZ4 and
-  Zstd output use their standard frames as expected by RecordBatch v2.
+  `Compression::Zstd` encode compressed RecordBatch payloads. Gzip, Snappy, and
+  LZ4 require Produce API v3; Zstd requires Produce API v7. Missing broker
+  support returns `Unsupported`. Snappy output uses Kafka-compatible Xerial
+  framing; LZ4 and Zstd output use their standard frames as expected by
+  RecordBatch v2.
 - `ProducerConfig::build_buffered` creates a `BufferedProducer` with bounded enqueue, per-record `ProducerDelivery` handles, `flush`, `close`, and `is_closed`.
 - `BufferedProducer::send` queues records for the buffered path, and `flush` or `close` sends accepted records through the existing batch Produce path before completing delivery handles from per-record outcomes.
 - `BufferedProducer` automatically flushes queued records when a topic and explicit-partition buffer reaches `max_records_per_batch` or `max_batch_bytes`, or when the oldest queued record reaches `linger_ms`. `linger_ms(0)` schedules a flush without intentional delay.

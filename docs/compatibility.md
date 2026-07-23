@@ -20,7 +20,7 @@ The Kafka 3.7.2 plaintext smoke path covers:
 
 - `ApiVersions v0` and `Metadata v1` roundtrips.
 - `FindCoordinator v1` for consumer group coordinator discovery.
-- High-level producer metadata lookup, leader routing, negotiated Produce API selection, single-record send, batch send, gzip-, Snappy-, and LZ4-compressed batch send, and buffered send with `acks=1`. Against Kafka 3.7.2, the current path selects Produce v3 RecordBatch.
+- High-level producer metadata lookup, leader routing, negotiated Produce API selection, single-record send, batch send, gzip-, Snappy-, LZ4-, and Zstd-compressed batch send, and buffered send with `acks=1`. Against Kafka 3.7.2, the current path selects Produce v3 RecordBatch for Gzip, Snappy, and LZ4, and Produce v7 for Zstd.
 - Gzip Produce v3 RecordBatch encoding and Fetch v2 RecordBatch decoding are
   covered by focused tests and the plaintext live smoke profile.
 - Snappy Produce v3 RecordBatch encoding and Fetch v2 RecordBatch decoding are
@@ -29,9 +29,9 @@ The Kafka 3.7.2 plaintext smoke path covers:
 - LZ4 Produce v3 RecordBatch encoding and Fetch v2 RecordBatch decoding are
   covered by focused standard-frame and decompression-limit tests and by the
   plaintext single-node and multi-broker live smoke profiles.
-- Zstd Produce v3 RecordBatch encoding and Fetch v2 RecordBatch decoding are
+- Zstd Produce v7 RecordBatch encoding and Fetch v2 RecordBatch decoding are
   covered by focused standard-frame, declared-window, and decompression-limit
-  tests. Live broker verification is pending.
+  tests and by the plaintext single-node and multi-broker live smoke profiles.
 - Direct consumer fetch from an assigned topic partition using Fetch v2 response decoding.
 - Consumer group join, sync, heartbeat, poll, and offset commit through the alpha classic consumer group path with range assignment.
 
@@ -40,7 +40,10 @@ The Kafka 3.7.2 multi-broker plaintext smoke path covers:
 - A three-broker KRaft cluster with comma-separated bootstrap servers and a replicated smoke topic.
 - Metadata roundtrip with at least three brokers visible to kafrust.
 - The `broker_roundtrip` example against multi-broker advertised listener metadata.
-- High-level producer single-record send with explicit partition routing, buffered send, batch send with explicit partition routing, and gzip-, Snappy-, and LZ4-compressed batch send with explicit partition routing across the replicated smoke topic.
+- High-level producer single-record send with explicit partition routing,
+  buffered send, batch send with explicit partition routing, and gzip-,
+  Snappy-, LZ4-, and Zstd-compressed batch send with explicit partition routing
+  across the replicated smoke topic.
 - Long-lived producer metadata refresh after stopping the broker that leads the
   selected partition between two sends from the same producer instance.
 - Direct consumer fetch from an assigned topic partition.
@@ -86,8 +89,8 @@ The current compatibility claim does not cover:
 - SASL workflows beyond the listed SASL_PLAINTEXT and SASL_SSL smoke examples.
 - SASL/SCRAM-SHA-512 live broker profiles.
 - Secured multi-broker clusters, broader consumer-group failover beyond the listed coordinator reconnect checks, rack awareness, or partition expansion.
-- Zstd live broker verification, secured compression profiles, idempotent
-  producers, transactions, or high-throughput batching.
+- Secured compression profiles, idempotent producers, transactions, or
+  high-throughput batching.
 - A full Kafka broker version matrix.
 - Kafka APIs that are not listed in the verified paths.
 

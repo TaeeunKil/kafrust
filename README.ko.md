@@ -245,9 +245,9 @@ kafrust의 호환성 주장은 실제 broker로 검증된 동작으로 제한합
 - broker compatibility는 Kafka `3.7.2`에 대해서만 검증되었습니다.
 - multi-broker cluster, leader failover, rack awareness, partition expansion은 아직
   지원 범위로 주장하지 않습니다.
-- Gzip, Snappy, LZ4, Zstd RecordBatch 압축은 구현되어 있습니다. Gzip, Snappy,
-  LZ4는 Kafka `3.7.2` plaintext single-node 및 multi-broker 환경에서 검증되었고,
-  Zstd의 live broker 검증은 아직 진행 중입니다.
+- Gzip, Snappy, LZ4 RecordBatch 압축은 Produce v3을 사용하고, Zstd는 Produce
+  v7을 요구하고 협상합니다. 네 코덱 모두 Kafka `3.7.2` plaintext single-node
+  및 multi-broker 환경에서 검증되었습니다.
 - idempotent producer, transaction, admin API, 넓은 observability는 아직
   구현되지 않았습니다.
 - 현재 request loop는 broker response를 기대하므로 `acks=0`은 아직 지원하지

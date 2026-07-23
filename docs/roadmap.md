@@ -665,18 +665,18 @@ Evidence:
   checks against Kafka 3.7.2.
 - Zstd compression uses the pure-Rust `ruzstd` 0.8.1 backend with its optional
   checksum dependency disabled and no C toolchain dependency.
-- Produce v3 RecordBatch encoding writes standard Zstd frames, while Fetch v2
+- Produce v7 RecordBatch encoding writes standard Zstd frames, while Fetch v2
   RecordBatch decoding validates declared content and window sizes before
   decoder allocation and bounds decoded output to 64 MiB.
 - Focused tests cover the Zstd frame magic, multi-block roundtrips, malformed
   frames, declared window limits, decoded output limits, and Produce-to-Fetch
   RecordBatch roundtrips.
-- The live smoke workflow includes Zstd batch producer checks in its single-node
-  and multi-broker plaintext jobs; a passing run is not recorded yet.
+- Manual `Live Kafka Smoke` run `29987849813` passed on 2026-07-23; the
+  single-node and multi-broker plaintext jobs completed Zstd Produce v7 batch
+  checks against Kafka 3.7.2.
 
 Remaining:
 
-- recorded Zstd live broker verification
 - secured live broker compression smoke coverage
 - configurable decompression limits
 
