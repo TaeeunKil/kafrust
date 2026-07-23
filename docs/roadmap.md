@@ -711,7 +711,7 @@ Strategic role:
 
 ## M17 Idempotent Producer
 
-Status: In progress.
+Status: Complete.
 
 Goal: support Kafka idempotent producer semantics for duplicate-safe retries within a producer session.
 
@@ -754,15 +754,14 @@ Evidence:
   unknown offset and timestamp metadata. `OUT_OF_ORDER_SEQUENCE_NUMBER`,
   `INVALID_PRODUCER_EPOCH`, and `PRODUCER_FENCED` are classified as fatal and
   leave the producer instance defunct for subsequent sends.
+- A deterministic injected-broker test drops the connection after receiving
+  the first Produce request, verifies that the retry frame is byte-for-byte
+  identical, returns `DUPLICATE_SEQUENCE_NUMBER`, and verifies one sequence
+  advancement with unknown delivery metadata.
 - Manual `Live Kafka Smoke` run `29991254722` passed the idempotent
   single-record, batch, and buffered producer paths against Kafka 3.7.2 and
   Kafka 4.3.1; all six plaintext, multi-broker, TLS, SASL_PLAINTEXT, and
   SASL_SSL jobs passed.
-
-Remaining:
-
-- add failure-injection coverage that proves duplicate suppression after
-  ambiguous request failures
 
 ## M18 Transactions And Read-Committed Consumers
 

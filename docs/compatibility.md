@@ -94,7 +94,9 @@ The current compatibility claim does not cover:
 - SASL workflows beyond the listed SASL_PLAINTEXT and SASL_SSL smoke examples.
 - SASL/SCRAM-SHA-512 live broker profiles.
 - Secured multi-broker clusters, broader consumer-group failover beyond the listed coordinator reconnect checks, rack awareness, or partition expansion.
-- Transactions or idempotence failure-injection profiles.
+- Transactions or live broker idempotence failure-injection profiles. The
+  ambiguous-response duplicate path is covered by a deterministic injected
+  broker test.
 - Kafka 3.8 and 3.9 broker profiles between the verified 3.7.2 and 4.3.1 endpoints.
 - Kafka APIs that are not listed in the verified paths.
 
