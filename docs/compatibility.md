@@ -8,12 +8,12 @@ The `0.2.x` alpha line is verified against Apache Kafka 3.7.2 KRaft brokers over
 
 | Broker | Mode | Security | Verification | Status |
 | --- | --- | --- | --- | --- |
-| Apache Kafka 3.7.2 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, manual run `29991254722` on 2026-07-23 | Passing |
-| Apache Kafka 3.7.2 | three-broker KRaft | PLAINTEXT | `Live Kafka Smoke` multi-broker job, manual run `29991254722` on 2026-07-23 | Passing |
-| Apache Kafka 3.7.2 | single-node KRaft | TLS | `Live Kafka Smoke` TLS job, manual run `29991254722` on 2026-07-23 | Passing |
-| Apache Kafka 3.7.2 | single-node KRaft | SASL_PLAINTEXT with SASL/PLAIN | `Live Kafka Smoke` SASL_PLAINTEXT job, manual run `29991254722` on 2026-07-23 | Passing |
-| Apache Kafka 3.7.2 | single-node KRaft | SASL_SSL with SCRAM-SHA-256 | `Live Kafka Smoke` SASL_SSL SCRAM job, manual run `29991254722` on 2026-07-23 | Passing |
-| Apache Kafka 4.3.1 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, manual run `29991254722` on 2026-07-23 | Passing |
+| Apache Kafka 3.7.2 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, manual run `29994041530` on 2026-07-23 | Passing |
+| Apache Kafka 3.7.2 | three-broker KRaft | PLAINTEXT | `Live Kafka Smoke` multi-broker job, manual run `29994041530` on 2026-07-23 | Passing |
+| Apache Kafka 3.7.2 | single-node KRaft | TLS | `Live Kafka Smoke` TLS job, manual run `29994041530` on 2026-07-23 | Passing |
+| Apache Kafka 3.7.2 | single-node KRaft | SASL_PLAINTEXT with SASL/PLAIN | `Live Kafka Smoke` SASL_PLAINTEXT job, manual run `29994041530` on 2026-07-23 | Passing |
+| Apache Kafka 3.7.2 | single-node KRaft | SASL_SSL with SCRAM-SHA-256 | `Live Kafka Smoke` SASL_SSL SCRAM job, manual run `29994041530` on 2026-07-23 | Passing |
+| Apache Kafka 4.3.1 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, manual run `29994041530` on 2026-07-23 | Passing |
 
 ## Verified Paths
 
@@ -26,6 +26,10 @@ The Kafka 3.7.2 and 4.3.1 plaintext smoke paths cover:
   `InitProducerId v0`, `acks=all`, and partition-scoped RecordBatch producer
   identity and sequence metadata. Manual run `29991254722` passed these paths
   against Kafka 3.7.2 and Kafka 4.3.1.
+- Opt-in alpha transactional produce using transaction coordinator discovery,
+  transactional `InitProducerId v0`, `AddPartitionsToTxn v0`, Produce v3/v7,
+  and `EndTxn v0`. Manual run `29994041530` passed a committed transaction
+  followed by an aborted transaction against Kafka 3.7.2 and Kafka 4.3.1.
 - Gzip Produce v3 RecordBatch encoding and Fetch v2 RecordBatch decoding are
   covered by focused tests and the plaintext live smoke profile.
 - Snappy Produce v3 RecordBatch encoding and Fetch v2 RecordBatch decoding are
@@ -94,9 +98,11 @@ The current compatibility claim does not cover:
 - SASL workflows beyond the listed SASL_PLAINTEXT and SASL_SSL smoke examples.
 - SASL/SCRAM-SHA-512 live broker profiles.
 - Secured multi-broker clusters, broader consumer-group failover beyond the listed coordinator reconnect checks, rack awareness, or partition expansion.
-- Transactions or live broker idempotence failure-injection profiles. The
-  ambiguous-response duplicate path is covered by a deterministic injected
-  broker test.
+- Transactional consumed-offset integration, `read_committed` filtering,
+  transactional buffered production, multi-broker transaction failover, and
+  transaction failure-injection profiles.
+- Live broker idempotence failure-injection profiles. The ambiguous-response
+  duplicate path is covered by a deterministic injected broker test.
 - Kafka 3.8 and 3.9 broker profiles between the verified 3.7.2 and 4.3.1 endpoints.
 - Kafka APIs that are not listed in the verified paths.
 

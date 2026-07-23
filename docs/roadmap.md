@@ -815,14 +815,21 @@ Evidence:
   transitions; sends outside an active transaction are rejected.
 - Transactional sends register each topic partition through
   `AddPartitionsToTxn v0`, pass the transactional ID to Produce v3/v7, and
-  complete through `EndTxn v0`. The plaintext live matrix includes commit and
-  abort smoke paths for Kafka 3.7.2 and 4.3.1.
+  complete through `EndTxn v0`.
+- Transactional initialization discovers the transaction coordinator before
+  `InitProducerId`. Partition registration rediscovers and retries transient
+  coordinator errors, including `CONCURRENT_TRANSACTIONS`, using the configured
+  retry limit.
+- Manual `Live Kafka Smoke` run `29994041530` passed commit followed by abort
+  through the high-level transactional producer against Kafka 3.7.2 and Kafka
+  4.3.1. All six plaintext, multi-broker, TLS, SASL_PLAINTEXT, and SASL_SSL
+  jobs passed.
 
 Remaining:
 
-- transaction coordinator retry handling
+- coordinator retry handling for the remaining EndTxn and offset paths
+- high-level consumed-offset transaction integration
 - read-committed fetch filtering
-- live commit and abort smoke evidence
 
 ## M19 Observability, Limits, And Performance
 
