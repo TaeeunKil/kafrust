@@ -55,6 +55,8 @@ pub enum Compression {
     Gzip,
     /// Compress produced RecordBatch v2 payloads with Kafka-compatible Snappy framing.
     Snappy,
+    /// Compress produced RecordBatch v2 payloads with Kafka-compatible LZ4 framing.
+    Lz4,
 }
 
 impl Compression {
@@ -63,6 +65,7 @@ impl Compression {
             Self::None => RecordBatchCompression::None,
             Self::Gzip => RecordBatchCompression::Gzip,
             Self::Snappy => RecordBatchCompression::Snappy,
+            Self::Lz4 => RecordBatchCompression::Lz4,
         }
     }
 
@@ -1949,6 +1952,17 @@ mod tests {
     }
 
     #[test]
+    fn selects_record_batch_when_lz4_compression_is_configured() {
+        let versions = api_versions(3);
+        let record = ProducerRecord::to("orders");
+
+        assert_eq!(
+            select_produce_version(&versions, &record, Compression::Lz4).unwrap(),
+            ProduceVersion::V3
+        );
+    }
+
+    #[test]
     fn rejects_headers_when_only_produce_v2_is_available() {
         let versions = api_versions(2);
         let record = ProducerRecord::to("orders").header("source", "checkout");
@@ -2027,6 +2041,20 @@ mod tests {
     }
 
     #[test]
+    fn selects_record_batch_for_lz4_batch_when_produce_v3_is_available() {
+        let versions = api_versions(3);
+        let first = BatchRecord::new(ProducerRecord::to("orders"));
+        let second = BatchRecord::new(ProducerRecord::to("orders").key("order-2"));
+        let batch = [first, second];
+        let records = prepared_records(&batch);
+
+        assert_eq!(
+            select_produce_batch_version(&versions, &records, Compression::Lz4).unwrap(),
+            ProduceVersion::V3
+        );
+    }
+
+    #[test]
     fn rejects_batch_headers_when_only_produce_v2_is_available() {
         let versions = api_versions(2);
         let first = BatchRecord::new(ProducerRecord::to("orders"));
@@ -2067,7 +2095,7 @@ mod tests {
             .max_records_per_batch(128)
             .max_batch_bytes(64 * 1024)
             .linger_ms(5)
-            .compression(Compression::Snappy)
+            .compression(Compression::Lz4)
             .acks(Acks::All);
 
         assert_eq!(config.acks_ref(), Acks::All);
@@ -2075,7 +2103,7 @@ mod tests {
         assert_eq!(config.max_records_per_batch_ref(), 128);
         assert_eq!(config.max_batch_bytes_ref(), 64 * 1024);
         assert_eq!(config.linger(), std::time::Duration::from_millis(5));
-        assert_eq!(config.compression_ref(), Compression::Snappy);
+        assert_eq!(config.compression_ref(), Compression::Lz4);
         assert_eq!(config.client_config().client_id_ref(), Some("orders-api"));
         assert_eq!(
             config.client_config().security_protocol_ref(),

@@ -86,6 +86,12 @@ jobs:
           KAFRUST_BATCH_COUNT: "3"
         run: cargo run -p kafrust --example producer_send_batch
 
+      - name: Run lz4 producer batch example
+        env:
+          KAFRUST_COMPRESSION: lz4
+          KAFRUST_BATCH_COUNT: "3"
+        run: cargo run -p kafrust --example producer_send_batch
+
       - name: Run buffered producer example
         env:
           KAFRUST_BUFFERED_COUNT: "3"
@@ -213,6 +219,13 @@ jobs:
       - name: Run multi-broker snappy producer batch example
         env:
           KAFRUST_COMPRESSION: snappy
+          KAFRUST_BATCH_COUNT: "6"
+          KAFRUST_BATCH_PARTITIONS: "0,1,2,3,4,5"
+        run: cargo run -p kafrust --example producer_send_batch
+
+      - name: Run multi-broker lz4 producer batch example
+        env:
+          KAFRUST_COMPRESSION: lz4
           KAFRUST_BATCH_COUNT: "6"
           KAFRUST_BATCH_PARTITIONS: "0,1,2,3,4,5"
         run: cargo run -p kafrust --example producer_send_batch

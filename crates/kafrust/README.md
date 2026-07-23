@@ -120,9 +120,10 @@ async fn main() -> kafrust::Result<()> {
 }
 ```
 
-`Compression::Gzip` and `Compression::Snappy` use Produce API v3 RecordBatch
-encoding. Snappy output uses Kafka-compatible Xerial framing. Brokers that only
-support the older Produce API v2 MessageSet path return an explicit
+`Compression::Gzip`, `Compression::Snappy`, and `Compression::Lz4` use Produce
+API v3 RecordBatch encoding. Snappy output uses Kafka-compatible Xerial framing,
+and LZ4 output uses the standard LZ4 frame expected by RecordBatch v2. Brokers
+that only support the older Produce API v2 MessageSet path return an explicit
 `Unsupported` error when compression is enabled.
 
 ## Buffered Producer
