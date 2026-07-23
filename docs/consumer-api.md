@@ -3,13 +3,14 @@
 The first consumer path is direct topic/partition fetch. Consumer groups, commits, and rebalancing come later; this keeps the first milestone focused on Kafka wire compatibility and visible offsets.
 
 ```rust
-use kafrust::ConsumerConfig;
+use kafrust::{ConsumerConfig, IsolationLevel};
 
 let mut consumer = ConsumerConfig::new(["localhost:9092"])
     .client_id("orders-reader")
     .request_timeout_ms(30_000)
     .max_retries(1)
     .max_poll_records(500)
+    .isolation_level(IsolationLevel::ReadCommitted)
     .build()
     .await?;
 
@@ -42,9 +43,15 @@ Current implementation status:
 - `ConsumerConfig::security_protocol` stores the Kafka security protocol for consumer broker connections. `Plaintext` is the default transport; TLS requires the non-default `tls` crate feature; `tls_server_name(name)` overrides the certificate validation name when the bootstrap host differs from the broker certificate; `tls_root_certificate_der(bytes)` adds DER-encoded root certificates while keeping platform roots enabled; `sasl_plain(username, password)`, `sasl_scram_sha_256(username, password)`, and `sasl_scram_sha_512(username, password)` provide SASL credentials for `SaslPlaintext` or `SaslTls`.
 - `ConsumerConfig::max_retries` controls retry attempts for stale metadata, unknown topic-partition entries in cached metadata, missing leader or broker metadata, transient fetch broker errors, request timeouts, and connection I/O failures.
 - `ConsumerConfig::max_poll_records` limits how many records one `poll` call returns.
+- `ConsumerConfig::isolation_level` selects `ReadUncommitted` (the default) or
+  `ReadCommitted`. Read-committed Fetch v4 responses hide control records and
+  records belonging to aborted transaction ranges. Poll assignment offsets
+  still advance past records hidden by isolation filtering.
 - Consumer metadata is cached by topic and refreshed when a retriable fetch failure invalidates that topic cache entry.
 - Retryable metadata request I/O failures reconnect the consumer's bootstrap
   metadata client before the next metadata refresh attempt.
 - Consumer poll and fetch operations emit `tracing` events with operational metadata, but not key or value payload contents.
-- The decoder supports legacy MessageSet records, RecordBatch v2 records, and partial trailing MessageSet entries in Fetch responses.
+- The decoder supports legacy MessageSet records, RecordBatch v2 records,
+  transactional/control batch metadata, and partial trailing MessageSet entries
+  in Fetch responses.
 - Consumer groups and offset commits are available through the separate alpha `ConsumerGroupConfig` path.

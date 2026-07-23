@@ -47,6 +47,9 @@ Call `ConsumerGroupHeartbeat::try_wait` to observe early task completion without
 
 Current implementation status:
 
+- `ConsumerGroupConfig::isolation_level` forwards `ReadUncommitted` or
+  `ReadCommitted` to the group's fetch consumer. Read-committed polls hide
+  aborted transaction records and Kafka control records.
 - FindCoordinator v1 request/response protocol types exist.
 - `Client::find_group_coordinator` can ask Kafka for a group coordinator.
 - JoinGroup v2 request/response protocol types exist.

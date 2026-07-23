@@ -815,21 +815,26 @@ Evidence:
   transitions; sends outside an active transaction are rejected.
 - Transactional sends register each topic partition through
   `AddPartitionsToTxn v0`, pass the transactional ID to Produce v3/v7, and
-  complete through `EndTxn v0`.
+  complete through `EndTxn v0`. Transactional Produce requests set the
+  RecordBatch transactional attribute as well as the request transactional ID.
 - Transactional initialization discovers the transaction coordinator before
   `InitProducerId`. Partition registration rediscovers and retries transient
   coordinator errors, including `CONCURRENT_TRANSACTIONS`, using the configured
   retry limit.
-- Manual `Live Kafka Smoke` run `29994041530` passed commit followed by abort
-  through the high-level transactional producer against Kafka 3.7.2 and Kafka
-  4.3.1. All six plaintext, multi-broker, TLS, SASL_PLAINTEXT, and SASL_SSL
-  jobs passed.
+- `IsolationLevel::ReadCommitted` is available on direct and group consumer
+  configurations. Fetch v4 preserves producer and transactional/control batch
+  metadata, hides control records, and filters aborted producer ranges while
+  advancing poll offsets past hidden records.
+- Manual `Live Kafka Smoke` run `29995122439` passed commit followed by abort,
+  then verified that `ReadUncommitted` returned both records while
+  `ReadCommitted` returned only the committed record against Kafka 3.7.2 and
+  Kafka 4.3.1. All six plaintext, multi-broker, TLS, SASL_PLAINTEXT, and
+  SASL_SSL jobs passed.
 
 Remaining:
 
 - coordinator retry handling for the remaining EndTxn and offset paths
 - high-level consumed-offset transaction integration
-- read-committed fetch filtering
 
 ## M19 Observability, Limits, And Performance
 
