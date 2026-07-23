@@ -885,12 +885,16 @@ Implemented evidence:
 - Focused tests cover shared success/failure accounting, timeout
   classification, byte counters, latency, cancellation cleanup, and in-flight
   gauge cleanup.
+- Broker response frame allocation is bounded to 100 MiB by default and is
+  configurable through all four client configuration builders. Oversized frame
+  declarations return typed `Error::ResponseTooLarge { size, max }` failures
+  before response payload allocation.
 
 Remaining:
 
 - retry, record, batch, queue-depth, and high-level operation metrics
 - complete producer, consumer, and group operation spans
-- configured memory limits and typed limit errors
+- producer buffering, decompression, and protocol decode-array memory limits
 - throughput and latency benchmark baselines
 - load, soak, and failure-injection profiles
 

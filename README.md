@@ -310,6 +310,8 @@ Primary public entry points:
 - `SecurityProtocol`, `SaslMechanism`, and `SaslCredentials` for plaintext,
   TLS, and SASL connection modes.
 - `ClientMetrics` and `ClientMetricsSnapshot` for request-level observability.
+- `Error::ResponseTooLarge` and `max_response_bytes` builders for bounded
+  broker response allocation.
 - `kafrust::protocol` for the companion `kafrust-protocol` crate.
 
 Generated API documentation:

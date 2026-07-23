@@ -403,6 +403,12 @@ impl ConsumerConfig {
         self
     }
 
+    /// Sets the maximum broker response payload allocated for one consumer request.
+    pub fn max_response_bytes(mut self, max_response_bytes: usize) -> Self {
+        self.client = self.client.max_response_bytes(max_response_bytes);
+        self
+    }
+
     /// Sets the shared metrics handle used by consumer broker connections.
     pub fn metrics(mut self, metrics: ClientMetrics) -> Self {
         self.client = self.client.metrics(metrics);
@@ -638,6 +644,7 @@ fn can_retry_fetch(error: &Error) -> bool {
         Error::MissingBootstrapServer
         | Error::MissingSaslCredentials
         | Error::InvalidSaslResponse { .. }
+        | Error::ResponseTooLarge { .. }
         | Error::TlsConfig { .. }
         | Error::InvalidTlsServerName { .. }
         | Error::Unsupported(_)

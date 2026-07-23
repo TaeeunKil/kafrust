@@ -1,4 +1,4 @@
-use crate::client::Client;
+use crate::client::{Client, DEFAULT_MAX_RESPONSE_BYTES};
 use crate::error::{Error, Result};
 use crate::metrics::ClientMetrics;
 use crate::scram::{self, ScramHash};
@@ -129,6 +129,7 @@ pub struct ClientConfig {
     bootstrap_servers: Vec<String>,
     client_id: Option<String>,
     request_timeout: Duration,
+    max_response_bytes: usize,
     security_protocol: SecurityProtocol,
     tls_server_name: Option<String>,
     tls_root_certificates_der: Vec<Vec<u8>>,
@@ -143,6 +144,7 @@ impl ClientConfig {
             bootstrap_servers: bootstrap_servers.into_iter().map(Into::into).collect(),
             client_id: None,
             request_timeout: Duration::from_millis(DEFAULT_REQUEST_TIMEOUT_MS),
+            max_response_bytes: DEFAULT_MAX_RESPONSE_BYTES,
             security_protocol: SecurityProtocol::Plaintext,
             tls_server_name: None,
             tls_root_certificates_der: Vec::new(),
@@ -160,6 +162,12 @@ impl ClientConfig {
     /// Sets the request timeout applied after a broker connection is established.
     pub fn request_timeout_ms(mut self, request_timeout_ms: u64) -> Self {
         self.request_timeout = Duration::from_millis(request_timeout_ms);
+        self
+    }
+
+    /// Sets the maximum broker response payload allocated for one request.
+    pub fn max_response_bytes(mut self, max_response_bytes: usize) -> Self {
+        self.max_response_bytes = max_response_bytes;
         self
     }
 
@@ -240,6 +248,11 @@ impl ClientConfig {
         self.request_timeout
     }
 
+    /// Returns the maximum broker response payload allocated for one request.
+    pub fn max_response_bytes_ref(&self) -> usize {
+        self.max_response_bytes
+    }
+
     /// Returns the shared metrics handle used by connections from this configuration.
     pub fn metrics_ref(&self) -> ClientMetrics {
         self.metrics.clone()
@@ -289,6 +302,7 @@ impl ClientConfig {
                     server,
                     self.client_id.clone(),
                     self.request_timeout,
+                    self.max_response_bytes,
                     self.metrics.clone(),
                 )
                 .await
@@ -308,6 +322,7 @@ impl ClientConfig {
             server,
             self.client_id.clone(),
             self.request_timeout,
+            self.max_response_bytes,
             self.metrics.clone(),
         )
         .await?;
@@ -376,6 +391,7 @@ impl ClientConfig {
             Box::new(tls_stream),
             self.client_id.clone(),
             Some(self.request_timeout),
+            self.max_response_bytes,
             self.metrics.clone(),
         ))
     }
@@ -565,11 +581,13 @@ mod tests {
     fn stores_bootstrap_servers_and_client_id() {
         let config = ClientConfig::new(["localhost:9092"])
             .client_id("kafrust-test")
-            .request_timeout_ms(5_000);
+            .request_timeout_ms(5_000)
+            .max_response_bytes(8 * 1024 * 1024);
 
         assert_eq!(config.bootstrap_servers(), &["localhost:9092".to_owned()]);
         assert_eq!(config.client_id_ref(), Some("kafrust-test"));
         assert_eq!(config.request_timeout(), Duration::from_millis(5_000));
+        assert_eq!(config.max_response_bytes_ref(), 8 * 1024 * 1024);
         assert_eq!(config.security_protocol_ref(), SecurityProtocol::Plaintext);
     }
 

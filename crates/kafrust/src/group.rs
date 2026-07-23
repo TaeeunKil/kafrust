@@ -83,6 +83,12 @@ impl ConsumerGroupConfig {
         self
     }
 
+    /// Sets the maximum broker response payload allocated for one group or fetch request.
+    pub fn max_response_bytes(mut self, max_response_bytes: usize) -> Self {
+        self.client = self.client.max_response_bytes(max_response_bytes);
+        self
+    }
+
     /// Sets the shared metrics handle used by group and fetch broker connections.
     pub fn metrics(mut self, metrics: ClientMetrics) -> Self {
         self.client = self.client.metrics(metrics);

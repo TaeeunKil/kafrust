@@ -316,6 +316,18 @@ taken while requests are changing is not a transactional view. Request metrics
 and `tracing` spans contain operational metadata only; key, value, request, and
 response payload contents are not recorded.
 
+## Response Memory Limit
+
+Broker response frame allocation is limited to `100 MiB` by default. Set
+`max_response_bytes(bytes)` on `ClientConfig`, `ProducerConfig`,
+`ConsumerConfig`, or `ConsumerGroupConfig` when a workload needs a different
+limit. A broker frame length above the configured limit returns
+`Error::ResponseTooLarge { size, max }` before allocating the response payload.
+
+The limit applies independently to each broker request. It must be large enough
+for metadata, fetch, and other expected responses; setting it below a valid
+response size fails that operation instead of partially decoding it.
+
 ## Compatibility
 
 The `0.2.x` alpha line is verified against single-node Apache Kafka `3.7.2` and
