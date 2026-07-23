@@ -8,6 +8,25 @@ use crate::config::{ClientConfig, SecurityProtocol};
 use crate::error::{BrokerErrorKind, Error, Result};
 use tracing::debug;
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+/// Controls whether a consumer can return records from aborted transactions.
+pub enum IsolationLevel {
+    /// Return all records, including records from aborted transactions.
+    #[default]
+    ReadUncommitted,
+    /// Return only committed records and hide Kafka transaction control records.
+    ReadCommitted,
+}
+
+impl IsolationLevel {
+    fn as_i8(self) -> i8 {
+        match self {
+            Self::ReadUncommitted => 0,
+            Self::ReadCommitted => 1,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// Record fetched from a Kafka topic partition.
 pub struct ConsumerRecord {
@@ -111,21 +130,30 @@ impl Consumer {
             }
 
             let mut fetched = self
-                .fetch(
+                .fetch_with_progress(
                     &assignment.topic,
                     assignment.partition,
                     assignment.next_offset,
                 )
                 .await?;
-            limit_fetched_records(&mut fetched, records.len(), self.config.max_poll_records);
-            if let Some(last) = fetched.last() {
-                self.update_assignment_offset(
-                    &assignment.topic,
-                    assignment.partition,
-                    last.offset().saturating_add(1),
-                );
+            let fetched_record_count = fetched.records.len();
+            limit_fetched_records(
+                &mut fetched.records,
+                records.len(),
+                self.config.max_poll_records,
+            );
+            let next_offset = if fetched.records.len() < fetched_record_count {
+                fetched
+                    .records
+                    .last()
+                    .map(|record| record.offset().saturating_add(1))
+            } else {
+                Some(fetched.next_offset)
+            };
+            if let Some(next_offset) = next_offset {
+                self.update_assignment_offset(&assignment.topic, assignment.partition, next_offset);
             }
-            records.extend(fetched);
+            records.extend(fetched.records);
         }
 
         debug!(
@@ -143,25 +171,34 @@ impl Consumer {
         offset: i64,
     ) -> Result<Vec<ConsumerRecord>> {
         let topic = topic.into();
+        Ok(self
+            .fetch_with_progress(&topic, partition, offset)
+            .await?
+            .records)
+    }
+
+    async fn fetch_with_progress(
+        &mut self,
+        topic: &str,
+        partition: i32,
+        offset: i64,
+    ) -> Result<FetchedPartition> {
         let mut attempt = 0;
-        debug!(
-            topic = topic.as_str(),
-            partition, offset, "fetching kafka records"
-        );
+        debug!(topic, partition, offset, "fetching kafka records");
 
         loop {
-            let result = self.fetch_once(&topic, partition, offset).await;
+            let result = self.fetch_once(topic, partition, offset).await;
             match result {
                 Err(error) if attempt < self.config.max_retries && can_retry_fetch(&error) => {
-                    invalidate_metadata_cache(&mut self.metadata_cache, &topic);
+                    invalidate_metadata_cache(&mut self.metadata_cache, topic);
                     attempt += 1;
                 }
                 Ok(records) => {
                     debug!(
-                        topic = topic.as_str(),
+                        topic,
                         partition,
                         offset,
-                        record_count = records.len(),
+                        record_count = records.records.len(),
                         "fetched kafka records"
                     );
                     return Ok(records);
@@ -176,7 +213,7 @@ impl Consumer {
         topic: &str,
         partition: i32,
         offset: i64,
-    ) -> Result<Vec<ConsumerRecord>> {
+    ) -> Result<FetchedPartition> {
         let metadata = self.metadata_for_topic(topic).await?;
         let leader = leader_for(&metadata, topic, partition)?;
         let broker_addr = broker_addr_for(&metadata, leader)?;
@@ -194,7 +231,7 @@ impl Consumer {
                 max_wait_ms: self.config.max_wait_ms,
                 min_bytes: self.config.min_bytes,
                 max_bytes: self.config.max_partition_bytes,
-                isolation_level: 0,
+                isolation_level: self.config.isolation_level.as_i8(),
                 topic: topic.to_owned(),
                 partition_index: partition,
                 fetch_offset: offset,
@@ -209,12 +246,19 @@ impl Consumer {
             });
         }
 
-        Ok(partition_response
+        let next_offset = partition_response
             .records
-            .iter()
-            .cloned()
+            .last()
+            .map(|record| record.offset.saturating_add(1))
+            .unwrap_or(offset);
+        let records = visible_partition_records(partition_response, self.config.isolation_level)
+            .into_iter()
             .map(|record| ConsumerRecord::from_message_set(topic, partition, record))
-            .collect())
+            .collect();
+        Ok(FetchedPartition {
+            records,
+            next_offset,
+        })
     }
 
     fn update_assignment_offset(&mut self, topic: &str, partition: i32, next_offset: i64) {
@@ -254,6 +298,12 @@ impl Consumer {
             Err(error) => Err(error),
         }
     }
+}
+
+#[derive(Debug)]
+struct FetchedPartition {
+    records: Vec<ConsumerRecord>,
+    next_offset: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -319,6 +369,7 @@ pub struct ConsumerConfig {
     max_partition_bytes: i32,
     max_retries: u32,
     max_poll_records: usize,
+    isolation_level: IsolationLevel,
 }
 
 impl ConsumerConfig {
@@ -335,6 +386,7 @@ impl ConsumerConfig {
             max_partition_bytes: 1_048_576,
             max_retries: 1,
             max_poll_records: 500,
+            isolation_level: IsolationLevel::ReadUncommitted,
         }
     }
 
@@ -434,6 +486,17 @@ impl ConsumerConfig {
         self.max_poll_records
     }
 
+    /// Sets whether fetches expose records from aborted transactions.
+    pub fn isolation_level(mut self, isolation_level: IsolationLevel) -> Self {
+        self.isolation_level = isolation_level;
+        self
+    }
+
+    /// Returns the configured transaction isolation level.
+    pub fn isolation_level_ref(&self) -> IsolationLevel {
+        self.isolation_level
+    }
+
     /// Returns the shared client configuration.
     pub fn client_config(&self) -> &ClientConfig {
         &self.client
@@ -514,6 +577,42 @@ fn fetch_partition_response<'a>(
         })
 }
 
+fn visible_partition_records(
+    partition: &FetchPartitionResponseV4,
+    isolation_level: IsolationLevel,
+) -> Vec<MessageSetRecord> {
+    let mut aborted_transactions = partition.aborted_transactions.clone();
+    let mut records = Vec::new();
+
+    for record in &partition.records {
+        if record.control {
+            if let Some(producer_id) = record.producer_id {
+                if let Some(index) = aborted_transactions.iter().position(|transaction| {
+                    transaction.producer_id == producer_id
+                        && transaction.first_offset <= record.offset
+                }) {
+                    aborted_transactions.remove(index);
+                }
+            }
+            continue;
+        }
+
+        let aborted = isolation_level == IsolationLevel::ReadCommitted
+            && record.transactional
+            && record.producer_id.is_some_and(|producer_id| {
+                aborted_transactions.iter().any(|transaction| {
+                    transaction.producer_id == producer_id
+                        && transaction.first_offset <= record.offset
+                })
+            });
+        if !aborted {
+            records.push(record.clone());
+        }
+    }
+
+    records
+}
+
 fn can_retry_fetch(error: &Error) -> bool {
     match error {
         Error::Broker { code, .. } => matches!(
@@ -561,11 +660,13 @@ fn invalidate_metadata_cache(
 mod tests {
     use super::{
         assign_partition, can_retry_fetch, invalidate_metadata_cache, leader_for,
-        limit_fetched_records, Consumer, ConsumerAssignment, ConsumerConfig, ConsumerRecord,
-        SecurityProtocol,
+        limit_fetched_records, visible_partition_records, Consumer, ConsumerAssignment,
+        ConsumerConfig, ConsumerRecord, IsolationLevel, SecurityProtocol,
     };
     use crate::{Client, Error};
-    use kafrust_protocol::api::fetch::MessageSetRecord;
+    use kafrust_protocol::api::fetch::{
+        AbortedTransactionV4, FetchPartitionResponseV4, MessageSetRecord,
+    };
     use kafrust_protocol::api::metadata::{
         BrokerMetadata, MetadataResponseV1, PartitionMetadata, TopicMetadata,
     };
@@ -586,7 +687,8 @@ mod tests {
             .min_bytes(10)
             .max_partition_bytes(1024)
             .max_retries(3)
-            .max_poll_records(10);
+            .max_poll_records(10)
+            .isolation_level(IsolationLevel::ReadCommitted);
 
         assert_eq!(
             config.client_config().client_id_ref(),
@@ -614,6 +716,7 @@ mod tests {
         );
         assert_eq!(config.max_retries_ref(), 3);
         assert_eq!(config.max_poll_records_ref(), 10);
+        assert_eq!(config.isolation_level_ref(), IsolationLevel::ReadCommitted);
     }
 
     #[test]
@@ -626,6 +729,9 @@ mod tests {
                 timestamp_ms: 123,
                 key: Some(b"order-1".to_vec()),
                 value: Some(b"created".to_vec()),
+                producer_id: None,
+                transactional: false,
+                control: false,
             },
         );
 
@@ -713,6 +819,44 @@ mod tests {
         assert!(cache.contains_key("payments"));
     }
 
+    #[test]
+    fn read_committed_hides_aborted_records_and_control_markers() {
+        let partition = FetchPartitionResponseV4 {
+            partition_index: 0,
+            error_code: 0,
+            high_watermark: 14,
+            last_stable_offset: 14,
+            aborted_transactions: vec![AbortedTransactionV4 {
+                producer_id: 7,
+                first_offset: 10,
+            }],
+            records: vec![
+                transactional_message(10, 7, false),
+                transactional_message(11, 8, false),
+                transactional_message(12, 7, true),
+                transactional_message(13, 7, false),
+            ],
+        };
+
+        let committed = visible_partition_records(&partition, IsolationLevel::ReadCommitted);
+        let uncommitted = visible_partition_records(&partition, IsolationLevel::ReadUncommitted);
+
+        assert_eq!(
+            committed
+                .iter()
+                .map(|record| record.offset)
+                .collect::<Vec<_>>(),
+            vec![11, 13]
+        );
+        assert_eq!(
+            uncommitted
+                .iter()
+                .map(|record| record.offset)
+                .collect::<Vec<_>>(),
+            vec![10, 11, 13]
+        );
+    }
+
     #[tokio::test]
     async fn reconnects_metadata_client_after_request_io_error() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -748,6 +892,21 @@ mod tests {
             timestamp_ms: 123,
             key: None,
             value: None,
+            producer_id: None,
+            transactional: false,
+            control: false,
+        }
+    }
+
+    fn transactional_message(offset: i64, producer_id: i64, control: bool) -> MessageSetRecord {
+        MessageSetRecord {
+            offset,
+            timestamp_ms: 123,
+            key: None,
+            value: None,
+            producer_id: Some(producer_id),
+            transactional: true,
+            control,
         }
     }
 

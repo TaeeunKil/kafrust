@@ -239,6 +239,9 @@ pub struct MessageSetRecord {
     pub timestamp_ms: i64,
     pub key: Option<Vec<u8>>,
     pub value: Option<Vec<u8>>,
+    pub producer_id: Option<i64>,
+    pub transactional: bool,
+    pub control: bool,
 }
 
 fn decode_message_set(bytes: &[u8]) -> Result<Vec<MessageSetRecord>> {
@@ -297,6 +300,9 @@ fn decode_message(offset: i64, bytes: &[u8]) -> Result<MessageSetRecord> {
         timestamp_ms,
         key,
         value,
+        producer_id: None,
+        transactional: false,
+        control: false,
     })
 }
 
@@ -316,7 +322,7 @@ fn decode_record_batch(base_offset: i64, bytes: &[u8]) -> Result<Vec<MessageSetR
     let _last_offset_delta = decoder.read_i32()?;
     let base_timestamp = decoder.read_i64()?;
     let _max_timestamp = decoder.read_i64()?;
-    let _producer_id = decoder.read_i64()?;
+    let producer_id = decoder.read_i64()?;
     let _producer_epoch = decoder.read_i16()?;
     let _base_sequence = decoder.read_i32()?;
     let record_count = decoder.read_i32()?;
@@ -348,13 +354,25 @@ fn decode_record_batch(base_offset: i64, bytes: &[u8]) -> Result<Vec<MessageSetR
         let record_length =
             usize::try_from(record_length).map_err(|_| Error::LengthOverflow("record"))?;
         let record_bytes = record_decoder.read_exact(record_length)?;
-        records.push(decode_record(base_offset, base_timestamp, record_bytes)?);
+        records.push(decode_record(
+            base_offset,
+            base_timestamp,
+            producer_id,
+            attributes,
+            record_bytes,
+        )?);
     }
 
     Ok(records)
 }
 
-fn decode_record(base_offset: i64, base_timestamp: i64, bytes: &[u8]) -> Result<MessageSetRecord> {
+fn decode_record(
+    base_offset: i64,
+    base_timestamp: i64,
+    producer_id: i64,
+    batch_attributes: i16,
+    bytes: &[u8],
+) -> Result<MessageSetRecord> {
     let mut decoder = Decoder::new(bytes);
     let _attributes = decoder.read_i8()?;
     let timestamp_delta = decoder.read_varlong()?;
@@ -378,6 +396,9 @@ fn decode_record(base_offset: i64, base_timestamp: i64, bytes: &[u8]) -> Result<
         timestamp_ms: base_timestamp.saturating_add(timestamp_delta),
         key,
         value,
+        producer_id: (producer_id >= 0).then_some(producer_id),
+        transactional: batch_attributes & 0x10 != 0,
+        control: batch_attributes & 0x20 != 0,
     })
 }
 
@@ -503,6 +524,9 @@ mod tests {
             timestamp_ms: 123,
             key: Some(b"order-1".to_vec()),
             value: Some(b"created".to_vec()),
+            producer_id: None,
+            transactional: false,
+            control: false,
         };
 
         assert_eq!(response.throttle_time_ms, 0);
@@ -566,11 +590,11 @@ mod tests {
         batch.write_i32(0);
         batch.write_i8(2);
         batch.write_i32(0);
-        batch.write_i16(0);
+        batch.write_i16(0x10);
         batch.write_i32(0);
         batch.write_i64(1_000);
         batch.write_i64(1_005);
-        batch.write_i64(-1);
+        batch.write_i64(7);
         batch.write_i16(-1);
         batch.write_i32(-1);
         batch.write_i32(1);
@@ -604,6 +628,9 @@ mod tests {
             timestamp_ms: 1_005,
             key: Some(b"order-1".to_vec()),
             value: Some(b"created".to_vec()),
+            producer_id: Some(7),
+            transactional: true,
+            control: false,
         };
 
         assert_eq!(response.responses[0].partitions[0].records, vec![record]);

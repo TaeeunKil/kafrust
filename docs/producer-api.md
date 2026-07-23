@@ -83,8 +83,8 @@ producer.commit_transaction().await?;
 Transactional producers require an active transaction before `send` or
 `send_batch`. `commit_transaction` and `abort_transaction` complete the current
 transaction through the Kafka transaction coordinator. Buffered transactional
-production, consumed-offset integration, and read-committed consumption are not
-available yet.
+production and consumed-offset integration are not available yet;
+`IsolationLevel::ReadCommitted` is available on consumer configurations.
 
 The public model intentionally keeps Kafka terms visible:
 

@@ -82,7 +82,9 @@ fn encode_record_batch_request(
     encoder.write_nullable_string(transactional_id)?;
     encoder.write_i16(acks);
     encoder.write_i32(timeout_ms);
-    encoder.write_array(Some(topics), |encoder, topic| topic.encode(encoder))?;
+    encoder.write_array(Some(topics), |encoder, topic| {
+        topic.encode(encoder, transactional_id.is_some())
+    })?;
     Ok(encoder.into_bytes())
 }
 
@@ -118,10 +120,10 @@ pub struct ProduceTopicV3 {
 }
 
 impl ProduceTopicV3 {
-    fn encode(&self, encoder: &mut Encoder) -> Result<()> {
+    fn encode(&self, encoder: &mut Encoder, transactional: bool) -> Result<()> {
         encoder.write_string(&self.name)?;
         encoder.write_array(Some(self.partitions.as_slice()), |encoder, partition| {
-            partition.encode(encoder)
+            partition.encode(encoder, transactional)
         })
     }
 }
@@ -165,12 +167,13 @@ impl RecordBatchIdentity {
 }
 
 impl ProducePartitionV3 {
-    fn encode(&self, encoder: &mut Encoder) -> Result<()> {
+    fn encode(&self, encoder: &mut Encoder, transactional: bool) -> Result<()> {
         encoder.write_i32(self.partition_index);
-        let record_set = encode_record_batch_set_with_compression_and_identity(
+        let record_set = encode_record_batch_set_with_compression_identity_and_transaction(
             &self.records,
             self.compression,
             self.identity,
+            transactional,
         )?;
         encoder.write_bytes(&record_set)
     }
@@ -433,6 +436,20 @@ fn encode_record_batch_set_with_compression_and_identity(
     compression: RecordBatchCompression,
     identity: RecordBatchIdentity,
 ) -> Result<Vec<u8>> {
+    encode_record_batch_set_with_compression_identity_and_transaction(
+        records,
+        compression,
+        identity,
+        false,
+    )
+}
+
+fn encode_record_batch_set_with_compression_identity_and_transaction(
+    records: &[RecordBatchMessage],
+    compression: RecordBatchCompression,
+    identity: RecordBatchIdentity,
+    transactional: bool,
+) -> Result<Vec<u8>> {
     let base_timestamp = records
         .first()
         .map(|record| record.timestamp_ms)
@@ -462,7 +479,8 @@ fn encode_record_batch_set_with_compression_and_identity(
     let record_bytes = compress_record_batch_records(compression, &record_bytes.into_bytes())?;
 
     let mut crc_payload = Encoder::new();
-    crc_payload.write_i16(compression.attributes());
+    let attributes = compression.attributes() | if transactional { 0x10 } else { 0 };
+    crc_payload.write_i16(attributes);
     crc_payload.write_i32(last_offset_delta);
     crc_payload.write_i64(base_timestamp);
     crc_payload.write_i64(max_timestamp);
@@ -539,7 +557,8 @@ fn crc32c(bytes: &[u8]) -> u32 {
 mod tests {
     use super::{
         encode_message_set, encode_record_batch_set, encode_record_batch_set_with_compression,
-        encode_record_batch_set_with_compression_and_identity, encoded_message_set_len,
+        encode_record_batch_set_with_compression_and_identity,
+        encode_record_batch_set_with_compression_identity_and_transaction, encoded_message_set_len,
         encoded_record_batch_set_len, MessageSetMessage, ProducePartitionV2, ProducePartitionV3,
         ProduceRequestV2, ProduceRequestV3, ProduceRequestV7, ProduceResponseV2, ProduceResponseV7,
         ProduceTopicV2, ProduceTopicV3, RecordBatchIdentity, RecordBatchMessage,
@@ -596,6 +615,27 @@ mod tests {
         assert_eq!(&set[43..51], &42_i64.to_be_bytes());
         assert_eq!(&set[51..53], &3_i16.to_be_bytes());
         assert_eq!(&set[53..57], &7_i32.to_be_bytes());
+    }
+
+    #[test]
+    fn encodes_transactional_record_batch_attribute() {
+        let set = encode_record_batch_set_with_compression_identity_and_transaction(
+            &[RecordBatchMessage::new(
+                None,
+                Some(b"created".to_vec()),
+                1_000,
+            )],
+            RecordBatchCompression::None,
+            RecordBatchIdentity {
+                producer_id: 42,
+                producer_epoch: 3,
+                base_sequence: 0,
+            },
+            true,
+        )
+        .unwrap();
+
+        assert_eq!(&set[21..23], &0x10_i16.to_be_bytes());
     }
 
     #[test]

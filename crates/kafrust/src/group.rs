@@ -17,7 +17,9 @@ use kafrust_protocol::consumer_group::{
 
 use crate::client::Client;
 use crate::config::{ClientConfig, SecurityProtocol};
-use crate::consumer::{Consumer, ConsumerAssignment, ConsumerConfig, ConsumerRecord};
+use crate::consumer::{
+    Consumer, ConsumerAssignment, ConsumerConfig, ConsumerRecord, IsolationLevel,
+};
 use crate::error::{BrokerErrorKind, Error, Result};
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
@@ -42,6 +44,7 @@ pub struct ConsumerGroupConfig {
     max_partition_bytes: i32,
     max_retries: u32,
     max_poll_records: usize,
+    isolation_level: IsolationLevel,
 }
 
 impl ConsumerGroupConfig {
@@ -63,6 +66,7 @@ impl ConsumerGroupConfig {
             max_partition_bytes: 1_048_576,
             max_retries: 1,
             max_poll_records: 500,
+            isolation_level: IsolationLevel::ReadUncommitted,
         }
     }
 
@@ -182,6 +186,17 @@ impl ConsumerGroupConfig {
         self
     }
 
+    /// Sets whether group fetches expose records from aborted transactions.
+    pub fn isolation_level(mut self, isolation_level: IsolationLevel) -> Self {
+        self.isolation_level = isolation_level;
+        self
+    }
+
+    /// Returns the configured transaction isolation level.
+    pub fn isolation_level_ref(&self) -> IsolationLevel {
+        self.isolation_level
+    }
+
     /// Returns the Kafka consumer group ID.
     pub fn group_id(&self) -> &str {
         &self.group_id
@@ -199,6 +214,7 @@ impl ConsumerGroupConfig {
             .max_partition_bytes(self.max_partition_bytes)
             .max_retries(self.max_retries)
             .max_poll_records(self.max_poll_records)
+            .isolation_level(self.isolation_level)
     }
 
     /// Joins the group, syncs assignment, and builds a group consumer.
@@ -961,7 +977,7 @@ mod tests {
         committed_offset, offset_commit_response_error, offset_commit_topics, offset_fetch_topics,
         range_assignments, should_rejoin_after_background_heartbeat, should_rejoin_group,
         validate_heartbeat_interval, ConsumerGroupConfig, ConsumerGroupHeartbeat,
-        HeartbeatHandleState, SecurityProtocol,
+        HeartbeatHandleState, IsolationLevel, SecurityProtocol,
     };
     use crate::consumer::ConsumerAssignment;
     use crate::Error;
@@ -996,7 +1012,8 @@ mod tests {
             .min_bytes(10)
             .max_partition_bytes(1024)
             .max_retries(3)
-            .max_poll_records(10);
+            .max_poll_records(10)
+            .isolation_level(IsolationLevel::ReadCommitted);
 
         assert_eq!(config.group_id(), "orders-group");
         assert_eq!(config.topics(), &["orders".to_owned()]);
@@ -1013,6 +1030,7 @@ mod tests {
             config.client.sasl_credentials_ref().unwrap().username(),
             "alice"
         );
+        assert_eq!(config.isolation_level_ref(), IsolationLevel::ReadCommitted);
     }
 
     #[test]
@@ -1025,7 +1043,8 @@ mod tests {
             .tls_root_certificate_der([1, 2, 3])
             .sasl_plain("alice", "secret-password")
             .max_retries(3)
-            .max_poll_records(10);
+            .max_poll_records(10)
+            .isolation_level(IsolationLevel::ReadCommitted);
 
         let consumer_config = config.consumer_config();
         let client_config = consumer_config.client_config();
@@ -1047,6 +1066,10 @@ mod tests {
         );
         assert_eq!(consumer_config.max_retries_ref(), 3);
         assert_eq!(consumer_config.max_poll_records_ref(), 10);
+        assert_eq!(
+            consumer_config.isolation_level_ref(),
+            IsolationLevel::ReadCommitted
+        );
     }
 
     #[test]
