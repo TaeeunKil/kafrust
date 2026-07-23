@@ -42,6 +42,8 @@ pub enum BrokerErrorKind {
     InvalidProducerEpoch,
     /// Kafka fenced this producer with a newer producer instance.
     ProducerFenced,
+    /// Kafka is still completing another transaction for this transactional ID.
+    ConcurrentTransactions,
 }
 
 impl BrokerErrorKind {
@@ -64,6 +66,7 @@ impl BrokerErrorKind {
             45 => Self::OutOfOrderSequenceNumber,
             46 => Self::DuplicateSequenceNumber,
             47 => Self::InvalidProducerEpoch,
+            51 => Self::ConcurrentTransactions,
             90 => Self::ProducerFenced,
             _ => Self::Unknown,
         }
@@ -262,6 +265,10 @@ mod tests {
         assert_eq!(
             BrokerErrorKind::from_code(47),
             BrokerErrorKind::InvalidProducerEpoch
+        );
+        assert_eq!(
+            BrokerErrorKind::from_code(51),
+            BrokerErrorKind::ConcurrentTransactions
         );
         assert_eq!(
             BrokerErrorKind::from_code(90),

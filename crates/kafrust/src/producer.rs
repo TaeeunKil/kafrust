@@ -1711,47 +1711,65 @@ impl Producer {
                 "transactional producer has no producer identity",
             ))?
             .identity(topic, partition);
-        let coordinator = self
-            .client
-            .find_transaction_coordinator(transactional_id.clone())
-            .await?;
-        if coordinator.error_code != 0 {
-            return Err(Error::Broker {
-                code: coordinator.error_code,
-                context: "find transaction coordinator".to_owned(),
-            });
-        }
-        let mut client = self
-            .config
-            .client
-            .connect_broker(format!("{}:{}", coordinator.host, coordinator.port))
-            .await?;
-        let response = client
-            .add_partitions_to_txn_v0(
-                transactional_id,
-                identity.producer_id,
-                identity.producer_epoch,
-                vec![AddPartitionsToTxnTopic {
-                    name: topic.to_owned(),
-                    partitions: vec![partition],
-                }],
-            )
-            .await?;
-        let error_code = response
-            .errors
-            .iter()
-            .find(|result| result.name == topic)
-            .and_then(|result| {
-                result
-                    .partitions
-                    .iter()
-                    .find(|result| result.partition_index == partition)
-            })
-            .map(|result| result.error_code)
-            .ok_or(Error::Unsupported(
-                "missing AddPartitionsToTxn partition response",
-            ))?;
-        if error_code != 0 {
+        let mut attempt = 0;
+        loop {
+            let coordinator = self
+                .client
+                .find_transaction_coordinator(transactional_id.clone())
+                .await?;
+            if coordinator.error_code != 0 {
+                if attempt < self.config.max_retries
+                    && is_retryable_transaction_coordinator_error(coordinator.error_code)
+                {
+                    attempt += 1;
+                    time::sleep(IDEMPOTENT_INIT_RETRY_BACKOFF).await;
+                    continue;
+                }
+                return Err(Error::Broker {
+                    code: coordinator.error_code,
+                    context: "find transaction coordinator".to_owned(),
+                });
+            }
+            let mut client = self
+                .config
+                .client
+                .connect_broker(format!("{}:{}", coordinator.host, coordinator.port))
+                .await?;
+            let response = client
+                .add_partitions_to_txn_v0(
+                    transactional_id.clone(),
+                    identity.producer_id,
+                    identity.producer_epoch,
+                    vec![AddPartitionsToTxnTopic {
+                        name: topic.to_owned(),
+                        partitions: vec![partition],
+                    }],
+                )
+                .await?;
+            let error_code = response
+                .errors
+                .iter()
+                .find(|result| result.name == topic)
+                .and_then(|result| {
+                    result
+                        .partitions
+                        .iter()
+                        .find(|result| result.partition_index == partition)
+                })
+                .map(|result| result.error_code)
+                .ok_or(Error::Unsupported(
+                    "missing AddPartitionsToTxn partition response",
+                ))?;
+            if error_code == 0 {
+                break;
+            }
+            if attempt < self.config.max_retries
+                && is_retryable_transaction_coordinator_error(error_code)
+            {
+                attempt += 1;
+                time::sleep(IDEMPOTENT_INIT_RETRY_BACKOFF).await;
+                continue;
+            }
             if idempotent_produce_error_disposition(error_code)
                 == IdempotentProduceErrorDisposition::Fatal
             {
@@ -2195,6 +2213,7 @@ fn is_retryable_transaction_coordinator_error(error_code: i16) -> bool {
         BrokerErrorKind::CoordinatorLoadInProgress
             | BrokerErrorKind::CoordinatorNotAvailable
             | BrokerErrorKind::NotCoordinator
+            | BrokerErrorKind::ConcurrentTransactions
     )
 }
 
