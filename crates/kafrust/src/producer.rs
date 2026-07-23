@@ -1,9 +1,10 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use kafrust_protocol::api::add_partitions_to_txn::AddPartitionsToTxnTopic;
 use kafrust_protocol::api::api_versions::ApiVersionsResponseV0;
 use kafrust_protocol::api::metadata::{BrokerMetadata, MetadataResponseV1};
 use kafrust_protocol::api::produce::{
@@ -357,6 +358,30 @@ pub struct Producer {
     config: ProducerConfig,
     metadata_cache: BTreeMap<String, MetadataResponseV1>,
     idempotent_state: Option<IdempotentProducerState>,
+    transaction_state: Option<TransactionState>,
+}
+
+#[derive(Debug)]
+struct TransactionState {
+    transactional_id: String,
+    status: TransactionStatus,
+    registered_partitions: BTreeSet<(String, i32)>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum TransactionStatus {
+    Ready,
+    InTransaction,
+}
+
+impl TransactionState {
+    fn new(transactional_id: String) -> Self {
+        Self {
+            transactional_id,
+            status: TransactionStatus::Ready,
+            registered_partitions: BTreeSet::new(),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -1072,9 +1097,42 @@ fn delivery_error_from_request_error(error: &Error) -> Error {
 }
 
 impl Producer {
+    /// Starts a new transaction on a configured transactional producer.
+    pub fn begin_transaction(&mut self) -> Result<()> {
+        self.ensure_idempotent_producer_usable()?;
+        let state = self
+            .transaction_state
+            .as_mut()
+            .ok_or(Error::Unsupported("producer is not transactional"))?;
+        if state.status == TransactionStatus::InTransaction {
+            return Err(Error::Unsupported("transaction is already active"));
+        }
+        state.status = TransactionStatus::InTransaction;
+        state.registered_partitions.clear();
+        Ok(())
+    }
+
+    /// Commits the active transaction.
+    pub async fn commit_transaction(&mut self) -> Result<()> {
+        self.end_transaction(true).await
+    }
+
+    /// Aborts the active transaction.
+    pub async fn abort_transaction(&mut self) -> Result<()> {
+        self.end_transaction(false).await
+    }
+
+    /// Returns whether this producer currently has an active transaction.
+    pub fn in_transaction(&self) -> bool {
+        self.transaction_state
+            .as_ref()
+            .is_some_and(|state| state.status == TransactionStatus::InTransaction)
+    }
+
     /// Sends one record and returns Kafka metadata for the accepted write.
     pub async fn send(&mut self, record: ProducerRecord) -> Result<RecordMetadata> {
         self.ensure_idempotent_producer_usable()?;
+        self.ensure_transaction_active()?;
         if self.config.acks == Acks::None {
             return Err(Error::Unsupported("producer acks=0 send without response"));
         }
@@ -1156,6 +1214,7 @@ impl Producer {
         records: impl IntoIterator<Item = ProducerRecord>,
     ) -> Result<ProducerBatchReport> {
         self.ensure_idempotent_producer_usable()?;
+        self.ensure_transaction_active()?;
         if self.config.acks == Acks::None {
             return Err(Error::Unsupported("producer acks=0 send without response"));
         }
@@ -1276,6 +1335,8 @@ impl Producer {
         let mut output = Vec::with_capacity(record_indexes.len());
         for (key, records) in groups {
             self.ensure_idempotent_producer_usable()?;
+            self.register_transaction_partition(&key.topic, key.partition)
+                .await?;
             output.extend(
                 self.send_batch_group(&key, &records, sequence_tracker)
                     .await?,
@@ -1336,6 +1397,10 @@ impl Producer {
             produce_version,
             self.config.compression,
         )?;
+        let transactional_id = self
+            .transaction_state
+            .as_ref()
+            .map(|state| state.transactional_id.clone());
         let mut output = Vec::with_capacity(records.len());
         for (chunk_index, records) in chunks.iter().copied().enumerate() {
             let identity = sequence_tracker.identity_for_chunk(
@@ -1347,7 +1412,7 @@ impl Producer {
                 ProduceVersion::V7 => ProduceResponse::V7(
                     leader_client
                         .produce_v7(
-                            None,
+                            transactional_id.clone(),
                             self.config.acks.as_i16(),
                             30_000,
                             vec![ProduceTopicV3 {
@@ -1376,7 +1441,7 @@ impl Producer {
                 ProduceVersion::V3 => ProduceResponse::V2(
                     leader_client
                         .produce_v3(
-                            None,
+                            transactional_id.clone(),
                             self.config.acks.as_i16(),
                             30_000,
                             vec![ProduceTopicV3 {
@@ -1484,6 +1549,8 @@ impl Producer {
         let partition = choose_partition(record, metadata)?;
         let leader = leader_for(metadata, record.topic(), partition)?;
         let broker_addr = broker_addr_for(metadata, leader)?;
+        self.register_transaction_partition(record.topic(), partition)
+            .await?;
         debug!(
             topic = record.topic(),
             partition,
@@ -1513,6 +1580,10 @@ impl Producer {
             .as_ref()
             .map(|state| state.identity(record.topic(), partition))
             .unwrap_or(RecordBatchIdentity::NON_IDEMPOTENT);
+        let transactional_id = self
+            .transaction_state
+            .as_ref()
+            .map(|state| state.transactional_id.clone());
         debug!(
             topic = record.topic(),
             partition,
@@ -1524,7 +1595,7 @@ impl Producer {
             ProduceVersion::V7 => ProduceResponse::V7(
                 leader_client
                     .produce_v7(
-                        None,
+                        transactional_id.clone(),
                         self.config.acks.as_i16(),
                         30_000,
                         vec![ProduceTopicV3 {
@@ -1542,7 +1613,7 @@ impl Producer {
             ProduceVersion::V3 => ProduceResponse::V2(
                 leader_client
                     .produce_v3(
-                        None,
+                        transactional_id,
                         self.config.acks.as_i16(),
                         30_000,
                         vec![ProduceTopicV3 {
@@ -1614,6 +1685,170 @@ impl Producer {
             state.record_fatal_error(code);
         }
     }
+
+    fn ensure_transaction_active(&self) -> Result<()> {
+        match &self.transaction_state {
+            Some(state) if state.status != TransactionStatus::InTransaction => {
+                Err(Error::Unsupported("transaction has not been started"))
+            }
+            _ => Ok(()),
+        }
+    }
+
+    async fn register_transaction_partition(&mut self, topic: &str, partition: i32) -> Result<()> {
+        let Some(state) = &self.transaction_state else {
+            return Ok(());
+        };
+        let key = (topic.to_owned(), partition);
+        if state.registered_partitions.contains(&key) {
+            return Ok(());
+        }
+        let transactional_id = state.transactional_id.clone();
+        let identity = self
+            .idempotent_state
+            .as_ref()
+            .ok_or(Error::Unsupported(
+                "transactional producer has no producer identity",
+            ))?
+            .identity(topic, partition);
+        let mut attempt = 0;
+        loop {
+            let coordinator = self
+                .client
+                .find_transaction_coordinator(transactional_id.clone())
+                .await?;
+            if coordinator.error_code != 0 {
+                if attempt < self.config.max_retries
+                    && is_retryable_transaction_coordinator_error(coordinator.error_code)
+                {
+                    attempt += 1;
+                    time::sleep(IDEMPOTENT_INIT_RETRY_BACKOFF).await;
+                    continue;
+                }
+                return Err(Error::Broker {
+                    code: coordinator.error_code,
+                    context: "find transaction coordinator".to_owned(),
+                });
+            }
+            let mut client = self
+                .config
+                .client
+                .connect_broker(format!("{}:{}", coordinator.host, coordinator.port))
+                .await?;
+            let response = client
+                .add_partitions_to_txn_v0(
+                    transactional_id.clone(),
+                    identity.producer_id,
+                    identity.producer_epoch,
+                    vec![AddPartitionsToTxnTopic {
+                        name: topic.to_owned(),
+                        partitions: vec![partition],
+                    }],
+                )
+                .await?;
+            let error_code = response
+                .errors
+                .iter()
+                .find(|result| result.name == topic)
+                .and_then(|result| {
+                    result
+                        .partitions
+                        .iter()
+                        .find(|result| result.partition_index == partition)
+                })
+                .map(|result| result.error_code)
+                .ok_or(Error::Unsupported(
+                    "missing AddPartitionsToTxn partition response",
+                ))?;
+            if error_code == 0 {
+                break;
+            }
+            if attempt < self.config.max_retries
+                && is_retryable_transaction_coordinator_error(error_code)
+            {
+                attempt += 1;
+                time::sleep(IDEMPOTENT_INIT_RETRY_BACKOFF).await;
+                continue;
+            }
+            if idempotent_produce_error_disposition(error_code)
+                == IdempotentProduceErrorDisposition::Fatal
+            {
+                self.record_idempotent_fatal_error(error_code);
+            }
+            return Err(Error::Broker {
+                code: error_code,
+                context: format!("add partition to transaction {topic}-{partition}"),
+            });
+        }
+        self.transaction_state
+            .as_mut()
+            .ok_or(Error::Unsupported("producer is not transactional"))?
+            .registered_partitions
+            .insert(key);
+        Ok(())
+    }
+
+    async fn end_transaction(&mut self, committed: bool) -> Result<()> {
+        self.ensure_idempotent_producer_usable()?;
+        self.ensure_transaction_active()?;
+        let state = self
+            .transaction_state
+            .as_ref()
+            .ok_or(Error::Unsupported("producer is not transactional"))?;
+        let transactional_id = state.transactional_id.clone();
+        let identity = self
+            .idempotent_state
+            .as_ref()
+            .ok_or(Error::Unsupported(
+                "transactional producer has no producer identity",
+            ))?
+            .identity("", 0);
+        let coordinator = self
+            .client
+            .find_transaction_coordinator(transactional_id.clone())
+            .await?;
+        if coordinator.error_code != 0 {
+            return Err(Error::Broker {
+                code: coordinator.error_code,
+                context: "find transaction coordinator".to_owned(),
+            });
+        }
+        let mut client = self
+            .config
+            .client
+            .connect_broker(format!("{}:{}", coordinator.host, coordinator.port))
+            .await?;
+        let response = client
+            .end_txn_v0(
+                transactional_id,
+                identity.producer_id,
+                identity.producer_epoch,
+                committed,
+            )
+            .await?;
+        if response.error_code != 0 {
+            if idempotent_produce_error_disposition(response.error_code)
+                == IdempotentProduceErrorDisposition::Fatal
+            {
+                self.record_idempotent_fatal_error(response.error_code);
+            }
+            return Err(Error::Broker {
+                code: response.error_code,
+                context: if committed {
+                    "commit transaction".to_owned()
+                } else {
+                    "abort transaction".to_owned()
+                },
+            });
+        }
+        let state = self
+            .transaction_state
+            .as_mut()
+            .ok_or(Error::Unsupported("producer is not transactional"))?;
+        state.status = TransactionStatus::Ready;
+        state.registered_partitions.clear();
+        Ok(())
+    }
 }
 
 #[derive(Debug)]
@@ -1658,6 +1893,8 @@ pub struct ProducerConfig {
     linger: Duration,
     compression: Compression,
     idempotence: bool,
+    transactional_id: Option<String>,
+    transaction_timeout_ms: i32,
 }
 
 impl ProducerConfig {
@@ -1672,6 +1909,8 @@ impl ProducerConfig {
             linger: Duration::from_millis(0),
             compression: Compression::None,
             idempotence: false,
+            transactional_id: None,
+            transaction_timeout_ms: 60_000,
         }
     }
 
@@ -1792,6 +2031,18 @@ impl ProducerConfig {
         self
     }
 
+    /// Configures the transactional ID and enables idempotence.
+    pub fn transactional_id(mut self, transactional_id: impl Into<String>) -> Self {
+        self.transactional_id = Some(transactional_id.into());
+        self.enable_idempotence(true)
+    }
+
+    /// Sets the broker transaction timeout used by InitProducerId.
+    pub fn transaction_timeout_ms(mut self, transaction_timeout_ms: i32) -> Self {
+        self.transaction_timeout_ms = transaction_timeout_ms;
+        self
+    }
+
     /// Returns the configured acknowledgement policy.
     pub fn acks_ref(&self) -> Acks {
         self.acks
@@ -1827,6 +2078,16 @@ impl ProducerConfig {
         self.idempotence
     }
 
+    /// Returns the configured transactional ID.
+    pub fn transactional_id_ref(&self) -> Option<&str> {
+        self.transactional_id.as_deref()
+    }
+
+    /// Returns the configured transaction timeout in milliseconds.
+    pub fn transaction_timeout_ms_ref(&self) -> i32 {
+        self.transaction_timeout_ms
+    }
+
     /// Returns the shared client configuration.
     pub fn client_config(&self) -> &ClientConfig {
         &self.client
@@ -1839,22 +2100,46 @@ impl ProducerConfig {
                 "idempotence requires acks=all and at least one retry",
             ));
         }
+        if self.transactional_id.as_deref() == Some("") {
+            return Err(Error::Unsupported("transactional ID must not be empty"));
+        }
+        if self.transaction_timeout_ms <= 0 {
+            return Err(Error::Unsupported(
+                "transaction timeout must be greater than zero",
+            ));
+        }
         let mut client = self.client.clone().connect().await?;
         let idempotent_state = if self.idempotence {
-            Some(initialize_idempotent_producer(&mut client, self.max_retries).await?)
+            Some(
+                initialize_idempotent_producer(
+                    &mut client,
+                    &self.client,
+                    self.max_retries,
+                    self.transactional_id.clone(),
+                    self.transaction_timeout_ms,
+                )
+                .await?,
+            )
         } else {
             None
         };
+        let transaction_state = self.transactional_id.clone().map(TransactionState::new);
         Ok(Producer {
             client,
             config: self,
             metadata_cache: BTreeMap::new(),
             idempotent_state,
+            transaction_state,
         })
     }
 
     /// Connects to Kafka and builds an opt-in buffered producer skeleton.
     pub async fn build_buffered(self) -> Result<BufferedProducer> {
+        if self.transactional_id.is_some() {
+            return Err(Error::Unsupported(
+                "transactional buffered producer is not supported",
+            ));
+        }
         let producer = self.build().await?;
         let (commands, receiver) = mpsc::channel(BUFFERED_PRODUCER_CHANNEL_CAPACITY);
         let worker = tokio::spawn(run_buffered_producer(producer, receiver));
@@ -1868,23 +2153,48 @@ impl ProducerConfig {
 
 async fn initialize_idempotent_producer(
     client: &mut Client,
+    client_config: &ClientConfig,
     max_retries: u32,
+    transactional_id: Option<String>,
+    transaction_timeout_ms: i32,
 ) -> Result<IdempotentProducerState> {
     let mut attempt = 0;
     loop {
-        let response = client.init_producer_id_v0(None, 60_000).await?;
+        let response = if let Some(transactional_id) = transactional_id.as_ref() {
+            let coordinator = client
+                .find_transaction_coordinator(transactional_id.clone())
+                .await?;
+            if coordinator.error_code != 0 {
+                if attempt < max_retries
+                    && is_retryable_transaction_coordinator_error(coordinator.error_code)
+                {
+                    attempt += 1;
+                    time::sleep(IDEMPOTENT_INIT_RETRY_BACKOFF).await;
+                    continue;
+                }
+                return Err(Error::Broker {
+                    code: coordinator.error_code,
+                    context: "find transaction coordinator".to_owned(),
+                });
+            }
+            let mut coordinator_client = client_config
+                .connect_broker(format!("{}:{}", coordinator.host, coordinator.port))
+                .await?;
+            coordinator_client
+                .init_producer_id_v0(Some(transactional_id.clone()), transaction_timeout_ms)
+                .await?
+        } else {
+            client
+                .init_producer_id_v0(None, transaction_timeout_ms)
+                .await?
+        };
         if response.error_code == 0 {
             return Ok(IdempotentProducerState::new(
                 response.producer_id,
                 response.producer_epoch,
             ));
         }
-        if attempt < max_retries
-            && matches!(
-                BrokerErrorKind::from_code(response.error_code),
-                BrokerErrorKind::CoordinatorLoadInProgress
-                    | BrokerErrorKind::CoordinatorNotAvailable
-            )
+        if attempt < max_retries && is_retryable_transaction_coordinator_error(response.error_code)
         {
             attempt += 1;
             time::sleep(IDEMPOTENT_INIT_RETRY_BACKOFF).await;
@@ -1895,6 +2205,16 @@ async fn initialize_idempotent_producer(
             context: "initialize idempotent producer".to_owned(),
         });
     }
+}
+
+fn is_retryable_transaction_coordinator_error(error_code: i16) -> bool {
+    matches!(
+        BrokerErrorKind::from_code(error_code),
+        BrokerErrorKind::CoordinatorLoadInProgress
+            | BrokerErrorKind::CoordinatorNotAvailable
+            | BrokerErrorKind::NotCoordinator
+            | BrokerErrorKind::ConcurrentTransactions
+    )
 }
 
 fn choose_partition(record: &ProducerRecord, metadata: &MetadataResponseV1) -> Result<i32> {
@@ -2889,6 +3209,19 @@ mod tests {
         assert_eq!(config.max_retries_ref(), 5);
     }
 
+    #[test]
+    fn transactional_id_enables_required_producer_settings() {
+        let config = ProducerConfig::new(["localhost:9092"])
+            .transactional_id("orders-tx")
+            .transaction_timeout_ms(30_000);
+
+        assert_eq!(config.transactional_id_ref(), Some("orders-tx"));
+        assert_eq!(config.transaction_timeout_ms_ref(), 30_000);
+        assert!(config.idempotence_enabled());
+        assert_eq!(config.acks_ref(), Acks::All);
+        assert_eq!(config.max_retries_ref(), 5);
+    }
+
     #[tokio::test]
     async fn initializes_idempotent_producer_during_build() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -2919,6 +3252,77 @@ mod tests {
 
         assert_eq!(state.producer_id, 42);
         assert_eq!(state.producer_epoch, 3);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn initializes_transactional_producer_and_starts_transaction() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap_socket, _) = listener.accept().await.unwrap();
+            let find_coordinator = read_frame(&mut bootstrap_socket).await;
+            assert_eq!(&find_coordinator[0..4], &[0, 10, 0, 1]);
+            assert_eq!(find_coordinator.last(), Some(&1));
+            let host = b"127.0.0.1";
+            let mut coordinator_response = vec![
+                0,
+                0,
+                0,
+                1, // correlation id
+                0,
+                0,
+                0,
+                0, // throttle time
+                0,
+                0, // error code
+                0xff,
+                0xff, // null error message
+                0,
+                0,
+                0,
+                0, // node id
+                0,
+                host.len() as u8,
+            ];
+            coordinator_response.extend_from_slice(host);
+            coordinator_response.extend_from_slice(&(addr.port() as i32).to_be_bytes());
+            write_frame(&mut bootstrap_socket, &coordinator_response).await;
+
+            let (mut coordinator_socket, _) = listener.accept().await.unwrap();
+            let init_producer_id = read_frame(&mut coordinator_socket).await;
+            assert_eq!(&init_producer_id[0..4], &[0, 22, 0, 0]);
+            assert!(init_producer_id
+                .windows(b"orders-tx".len())
+                .any(|window| window == b"orders-tx"));
+            assert!(init_producer_id.ends_with(&30_000_i32.to_be_bytes()));
+            write_frame(
+                &mut coordinator_socket,
+                &[
+                    0, 0, 0, 1, // correlation id
+                    0, 0, 0, 0, // throttle time
+                    0, 0, // error code
+                    0, 0, 0, 0, 0, 0, 0, 42, // producer id
+                    0, 3, // producer epoch
+                ],
+            )
+            .await;
+        });
+
+        let mut producer = ProducerConfig::new([addr.to_string()])
+            .transactional_id("orders-tx")
+            .transaction_timeout_ms(30_000)
+            .build()
+            .await
+            .unwrap();
+
+        assert!(!producer.in_transaction());
+        producer.begin_transaction().unwrap();
+        assert!(producer.in_transaction());
+        assert!(matches!(
+            producer.begin_transaction().unwrap_err(),
+            Error::Unsupported("transaction is already active")
+        ));
         server.await.unwrap();
     }
 
@@ -3538,6 +3942,7 @@ mod tests {
             config,
             metadata_cache: BTreeMap::new(),
             idempotent_state: None,
+            transaction_state: None,
         };
 
         let metadata = producer.metadata_for_topic("orders").await.unwrap();
@@ -3597,6 +4002,7 @@ mod tests {
             config,
             metadata_cache,
             idempotent_state: Some(IdempotentProducerState::new(42, 3)),
+            transaction_state: None,
         };
 
         let metadata = producer

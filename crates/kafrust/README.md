@@ -127,6 +127,33 @@ their standard frames as expected by RecordBatch v2. Brokers without the
 required Produce API version return an explicit `Unsupported` error when
 compression is enabled.
 
+## Transactional Producer
+
+Use `transactional_id` to enable the alpha transactional producer:
+
+```rust,no_run
+use kafrust::{ProducerConfig, ProducerRecord};
+
+#[tokio::main(flavor = "current_thread")]
+async fn main() -> kafrust::Result<()> {
+    let mut producer = ProducerConfig::new(["localhost:9092"])
+        .transactional_id("orders-writer")
+        .build()
+        .await?;
+
+    producer.begin_transaction()?;
+    producer
+        .send(ProducerRecord::to("orders").value("committed value"))
+        .await?;
+    producer.commit_transaction().await?;
+    Ok(())
+}
+```
+
+The high-level commit and abort paths are verified against Kafka `3.7.2` and
+`4.3.1`. Transactional consumed-offset integration and read-committed
+consumption are not available yet.
+
 ## Buffered Producer
 
 `ProducerConfig::build_buffered` creates an opt-in buffered producer. Records are
@@ -286,9 +313,11 @@ Verified high-level paths include:
 - Multi-broker clusters, leader failover, rack awareness, and partition
   expansion are not yet claimed.
 - Idempotent single-record, batch, and buffered sends are available through
-  `ProducerConfig::enable_idempotence(true)`. Transactions, admin APIs,
-  idempotence failure-injection coverage, and broad observability are not
-  implemented yet.
+  `ProducerConfig::enable_idempotence(true)`. Transactional immediate and batch
+  sends support explicit begin, commit, and abort. Transactional buffered
+  sends, consumed-offset integration, read-committed filtering, admin APIs,
+  live broker failure injection, and broad observability are not implemented
+  yet.
 - `acks=0` remains unsupported because the current request loop expects a broker
   response.
 
@@ -316,6 +345,7 @@ Available examples include:
 - `producer_send`
 - `producer_send_batch`
 - `producer_buffered`
+- `producer_transactional`
 - `consumer_fetch`
 - `find_group_coordinator`
 - `consumer_group_poll`
