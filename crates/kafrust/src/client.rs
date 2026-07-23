@@ -1,3 +1,6 @@
+use kafrust_protocol::api::add_offsets_to_txn::{
+    AddOffsetsToTxnRequestV0, AddOffsetsToTxnResponseV0,
+};
 use kafrust_protocol::api::add_partitions_to_txn::{
     AddPartitionsToTxnRequestV0, AddPartitionsToTxnResponseV0, AddPartitionsToTxnTopic,
 };
@@ -255,6 +258,28 @@ impl Client {
         let mut decoder = Decoder::new(&response);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(AddPartitionsToTxnResponseV0::decode_body(&mut decoder)?)
+    }
+
+    /// Sends AddOffsetsToTxn v0 to bind a consumer group to a transaction.
+    pub async fn add_offsets_to_txn_v0(
+        &mut self,
+        transactional_id: impl Into<String>,
+        producer_id: i64,
+        producer_epoch: i16,
+        group_id: impl Into<String>,
+    ) -> Result<AddOffsetsToTxnResponseV0> {
+        let request = AddOffsetsToTxnRequestV0 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            transactional_id: transactional_id.into(),
+            producer_id,
+            producer_epoch,
+            group_id: group_id.into(),
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::new(&response);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(AddOffsetsToTxnResponseV0::decode_body(&mut decoder)?)
     }
 
     /// Sends OffsetFetch v2 for a consumer group.
@@ -867,6 +892,38 @@ mod tests {
 
         assert_eq!(response.errors[0].partitions[0].partition_index, 2);
         assert_eq!(response.errors[0].partitions[0].error_code, 47);
+        broker.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn adds_offsets_to_transaction_over_injected_broker_stream() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(1024);
+        let broker = tokio::spawn(async move {
+            let request = read_test_frame(&mut broker_stream).await;
+            assert_eq!(&request[0..4], &[0, 25, 0, 0]);
+            write_test_frame(
+                &mut broker_stream,
+                &[
+                    0, 0, 0, 1, // correlation id
+                    0, 0, 0, 4, // throttle time
+                    0, 16, // not coordinator
+                ],
+            )
+            .await;
+        });
+        let mut client = Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-stream-test".to_owned()),
+            Some(Duration::from_secs(1)),
+        );
+
+        let response = client
+            .add_offsets_to_txn_v0("orders-tx", 42, 3, "orders-group")
+            .await
+            .unwrap();
+
+        assert_eq!(response.throttle_time_ms, 4);
+        assert_eq!(response.error_code, 16);
         broker.await.unwrap();
     }
 

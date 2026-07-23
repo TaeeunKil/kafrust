@@ -803,12 +803,15 @@ Evidence:
 - `AddPartitionsToTxn v0` request/response types preserve topic-partition
   registration and partition-scoped broker errors. The low-level client
   roundtrip is covered by byte-level and injected-broker tests.
+- `AddOffsetsToTxn v0` encodes the transactional producer identity and target
+  consumer group, with low-level client and injected-broker coverage for
+  coordinator errors.
 
 Remaining:
 
 - transactional producer configuration and state transitions
 - transaction coordinator retry handling
-- AddOffsetsToTxn and TxnOffsetCommit
+- TxnOffsetCommit
 - transactional Produce requests and EndTxn commit/abort orchestration
 - read-committed fetch filtering and live commit/abort smoke coverage
 
