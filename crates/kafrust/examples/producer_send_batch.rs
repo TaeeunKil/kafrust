@@ -11,12 +11,14 @@ async fn main() -> kafrust::Result<()> {
         .and_then(|value| value.parse::<usize>().ok())
         .unwrap_or(3);
     let partitions = batch_partitions_from_env()?;
+    let idempotence = common::idempotence_from_env()?;
 
     let mut producer = common::apply_security(
         ProducerConfig::new(bootstrap_servers).client_id("kafrust-producer-batch-example"),
     )?
     .acks(Acks::Leader)
     .compression(common::compression_from_env()?)
+    .enable_idempotence(idempotence)
     .build()
     .await?;
 

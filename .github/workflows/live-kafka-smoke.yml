@@ -87,6 +87,12 @@ jobs:
       - name: Run producer batch example
         run: cargo run -p kafrust --example producer_send_batch
 
+      - name: Run idempotent producer batch example
+        env:
+          KAFRUST_ENABLE_IDEMPOTENCE: "true"
+          KAFRUST_BATCH_COUNT: "3"
+        run: cargo run -p kafrust --example producer_send_batch
+
       - name: Run gzip producer batch example
         env:
           KAFRUST_COMPRESSION: gzip
@@ -113,6 +119,12 @@ jobs:
 
       - name: Run buffered producer example
         env:
+          KAFRUST_BUFFERED_COUNT: "3"
+        run: cargo run -p kafrust --example producer_buffered
+
+      - name: Run idempotent buffered producer example
+        env:
+          KAFRUST_ENABLE_IDEMPOTENCE: "true"
           KAFRUST_BUFFERED_COUNT: "3"
         run: cargo run -p kafrust --example producer_buffered
 

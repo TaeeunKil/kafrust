@@ -11,6 +11,7 @@ async fn main() -> kafrust::Result<()> {
         .and_then(|value| value.parse::<usize>().ok())
         .unwrap_or(3)
         .max(1);
+    let idempotence = common::idempotence_from_env()?;
 
     let mut producer = common::apply_security(
         ProducerConfig::new(bootstrap_servers.clone())
@@ -18,6 +19,7 @@ async fn main() -> kafrust::Result<()> {
     )?
     .acks(Acks::Leader)
     .compression(common::compression_from_env()?)
+    .enable_idempotence(idempotence)
     .linger_ms(60_000)
     .max_records_per_batch(count)
     .max_batch_bytes(64 * 1024)
