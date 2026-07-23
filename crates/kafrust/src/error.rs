@@ -34,6 +34,14 @@ pub enum BrokerErrorKind {
     InvalidSessionTimeout,
     /// Kafka reported that a group rebalance is in progress.
     RebalanceInProgress,
+    /// Kafka received a producer sequence larger than the expected sequence.
+    OutOfOrderSequenceNumber,
+    /// Kafka recognized a retry of an already appended producer sequence.
+    DuplicateSequenceNumber,
+    /// Kafka rejected an operation from an older producer epoch.
+    InvalidProducerEpoch,
+    /// Kafka fenced this producer with a newer producer instance.
+    ProducerFenced,
 }
 
 impl BrokerErrorKind {
@@ -53,6 +61,10 @@ impl BrokerErrorKind {
             25 => Self::UnknownMemberId,
             26 => Self::InvalidSessionTimeout,
             27 => Self::RebalanceInProgress,
+            45 => Self::OutOfOrderSequenceNumber,
+            46 => Self::DuplicateSequenceNumber,
+            47 => Self::InvalidProducerEpoch,
+            90 => Self::ProducerFenced,
             _ => Self::Unknown,
         }
     }
@@ -238,6 +250,22 @@ mod tests {
         assert_eq!(
             BrokerErrorKind::from_code(27),
             BrokerErrorKind::RebalanceInProgress
+        );
+        assert_eq!(
+            BrokerErrorKind::from_code(45),
+            BrokerErrorKind::OutOfOrderSequenceNumber
+        );
+        assert_eq!(
+            BrokerErrorKind::from_code(46),
+            BrokerErrorKind::DuplicateSequenceNumber
+        );
+        assert_eq!(
+            BrokerErrorKind::from_code(47),
+            BrokerErrorKind::InvalidProducerEpoch
+        );
+        assert_eq!(
+            BrokerErrorKind::from_code(90),
+            BrokerErrorKind::ProducerFenced
         );
         assert_eq!(BrokerErrorKind::from_code(999), BrokerErrorKind::Unknown);
     }
