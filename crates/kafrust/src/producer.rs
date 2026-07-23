@@ -1781,8 +1781,8 @@ impl ProducerConfig {
     /// Enables Kafka idempotent producer identity and sequence tracking.
     ///
     /// Idempotence requires `acks=all`, at least one retry, and Produce API v3
-    /// or newer. The current alpha supports single-record [`Producer::send`];
-    /// batch and buffered idempotent sends remain under development.
+    /// or newer. The current alpha supports single-record, batch, and buffered
+    /// sends.
     pub fn enable_idempotence(mut self, enabled: bool) -> Self {
         self.idempotence = enabled;
         if enabled {
@@ -3548,6 +3548,78 @@ mod tests {
         server.await.unwrap();
     }
 
+    #[tokio::test]
+    async fn retries_ambiguous_idempotent_batch_with_the_same_sequence() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let leader_server = tokio::spawn(async move {
+            let (mut first_socket, _) = listener.accept().await.unwrap();
+            let first_versions = read_frame(&mut first_socket).await;
+            assert_eq!(&first_versions[0..4], &[0, 18, 0, 0]);
+            write_frame(&mut first_socket, &api_versions_response_frame(3)).await;
+            let first_produce = read_frame(&mut first_socket).await;
+            assert_eq!(&first_produce[0..4], &[0, 0, 0, 3]);
+            drop(first_socket);
+
+            let (mut retry_socket, _) = listener.accept().await.unwrap();
+            let retry_versions = read_frame(&mut retry_socket).await;
+            assert_eq!(&retry_versions[0..4], &[0, 18, 0, 0]);
+            write_frame(&mut retry_socket, &api_versions_response_frame(3)).await;
+            let retry_produce = read_frame(&mut retry_socket).await;
+            assert_eq!(retry_produce, first_produce);
+            write_frame(&mut retry_socket, &produce_v3_response_frame(46, -1)).await;
+        });
+
+        let (client_stream, mut metadata_stream) = tokio::io::duplex(4096);
+        let metadata_addr = addr;
+        let metadata_server = tokio::spawn(async move {
+            let request = read_frame(&mut metadata_stream).await;
+            assert_eq!(&request[0..4], &[0, 3, 0, 1]);
+            write_frame(
+                &mut metadata_stream,
+                &metadata_response_frame_for(metadata_addr),
+            )
+            .await;
+        });
+        let client = Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-idempotent-retry-test".to_owned()),
+            Some(std::time::Duration::from_millis(500)),
+        );
+        let config = ProducerConfig::new([addr.to_string()])
+            .request_timeout_ms(500)
+            .enable_idempotence(true)
+            .max_retries(1);
+        let mut metadata_cache = BTreeMap::new();
+        metadata_cache.insert("orders".to_owned(), metadata_fixture_for(addr));
+        let mut producer = Producer {
+            client,
+            config,
+            metadata_cache,
+            idempotent_state: Some(IdempotentProducerState::new(42, 3)),
+        };
+
+        let metadata = producer
+            .send_batch([ProducerRecord::to("orders").value("created")])
+            .await
+            .unwrap();
+
+        assert_eq!(metadata.len(), 1);
+        assert_eq!(metadata[0].offset(), -1);
+        assert!(metadata[0].timestamp().is_none());
+        assert_eq!(
+            producer
+                .idempotent_state
+                .as_ref()
+                .unwrap()
+                .identity("orders", 0)
+                .base_sequence,
+            1
+        );
+        leader_server.await.unwrap();
+        metadata_server.await.unwrap();
+    }
+
     fn metadata_fixture() -> MetadataResponseV1 {
         MetadataResponseV1 {
             brokers: vec![BrokerMetadata {
@@ -3579,6 +3651,13 @@ mod tests {
                 ],
             }],
         }
+    }
+
+    fn metadata_fixture_for(addr: std::net::SocketAddr) -> MetadataResponseV1 {
+        let mut metadata = metadata_fixture();
+        metadata.brokers[0].host = addr.ip().to_string();
+        metadata.brokers[0].port = i32::from(addr.port());
+        metadata
     }
 
     async fn read_frame<T>(stream: &mut T) -> Vec<u8>
@@ -3627,6 +3706,62 @@ mod tests {
             0, 0, 0, 1, // isr count
             0, 0, 0, 1, // isr node
         ]
+    }
+
+    fn metadata_response_frame_for(addr: std::net::SocketAddr) -> Vec<u8> {
+        let host = addr.ip().to_string();
+        let mut frame = vec![
+            0, 0, 0, 1, // correlation id
+            0, 0, 0, 1, // brokers count
+            0, 0, 0, 1, // node id
+        ];
+        frame.extend_from_slice(&(i16::try_from(host.len()).unwrap()).to_be_bytes());
+        frame.extend_from_slice(host.as_bytes());
+        frame.extend_from_slice(&i32::from(addr.port()).to_be_bytes());
+        frame.extend_from_slice(&[
+            0xff, 0xff, // null rack
+            0, 0, 0, 1, // controller id
+            0, 0, 0, 1, // topics count
+            0, 0, // topic error code
+            0, 6, b'o', b'r', b'd', b'e', b'r', b's', // topic name
+            0,    // is internal false
+            0, 0, 0, 1, // partition count
+            0, 0, // partition error code
+            0, 0, 0, 0, // partition index
+            0, 0, 0, 1, // leader id
+            0, 0, 0, 1, // replica count
+            0, 0, 0, 1, // replica node
+            0, 0, 0, 1, // isr count
+            0, 0, 0, 1, // isr node
+        ]);
+        frame
+    }
+
+    fn api_versions_response_frame(max_produce_version: i16) -> Vec<u8> {
+        let mut frame = vec![
+            0, 0, 0, 1, // correlation id
+            0, 0, // error code
+            0, 0, 0, 1, // api key count
+            0, 0, // Produce API key
+            0, 0, // minimum version
+        ];
+        frame.extend_from_slice(&max_produce_version.to_be_bytes());
+        frame
+    }
+
+    fn produce_v3_response_frame(error_code: i16, base_offset: i64) -> Vec<u8> {
+        let mut frame = vec![
+            0, 0, 0, 2, // correlation id
+            0, 0, 0, 1, // topic count
+            0, 6, b'o', b'r', b'd', b'e', b'r', b's', // topic name
+            0, 0, 0, 1, // partition count
+            0, 0, 0, 0, // partition index
+        ];
+        frame.extend_from_slice(&error_code.to_be_bytes());
+        frame.extend_from_slice(&base_offset.to_be_bytes());
+        frame.extend_from_slice(&(-1_i64).to_be_bytes());
+        frame.extend_from_slice(&0_i32.to_be_bytes());
+        frame
     }
 
     fn api_versions(max_produce_version: i16) -> ApiVersionsResponseV0 {

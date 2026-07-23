@@ -122,6 +122,8 @@ Current implementation status:
   return the original append metadata. `OUT_OF_ORDER_SEQUENCE_NUMBER`,
   `INVALID_PRODUCER_EPOCH`, and `PRODUCER_FENCED` make that producer instance
   defunct; the failing call and future send calls return the fatal broker code.
+  An injected-broker regression test covers an ambiguous connection loss,
+  byte-identical retry, duplicate response, and single sequence advancement.
 - `Producer::send` performs metadata lookup, connects to the partition leader, negotiates Produce API support with `ApiVersions`, and chooses Produce v7 for Zstd, Produce v3 RecordBatch for other RecordBatch features, or Produce v2 MessageSet.
 - `ProducerConfig::request_timeout_ms` controls the request timeout used for metadata and produce roundtrips.
 - `ProducerConfig::security_protocol` stores the Kafka security protocol for producer broker connections. `Plaintext` is the default transport; TLS requires the non-default `tls` crate feature; `tls_server_name(name)` overrides the certificate validation name when the bootstrap host differs from the broker certificate; `tls_root_certificate_der(bytes)` adds DER-encoded root certificates while keeping platform roots enabled; `sasl_plain(username, password)`, `sasl_scram_sha_256(username, password)`, and `sasl_scram_sha_512(username, password)` provide SASL credentials for `SaslPlaintext` or `SaslTls`.
