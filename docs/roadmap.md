@@ -809,13 +809,20 @@ Evidence:
 - `TxnOffsetCommit v0` encodes transactional topic-partition offsets and
   metadata, and preserves partition-scoped group errors through the low-level
   client roundtrip.
+- `ProducerConfig::transactional_id` initializes a transactional producer ID
+  and enforces idempotent producer settings. `Producer::begin_transaction`,
+  `commit_transaction`, and `abort_transaction` expose explicit state
+  transitions; sends outside an active transaction are rejected.
+- Transactional sends register each topic partition through
+  `AddPartitionsToTxn v0`, pass the transactional ID to Produce v3/v7, and
+  complete through `EndTxn v0`. The plaintext live matrix includes commit and
+  abort smoke paths for Kafka 3.7.2 and 4.3.1.
 
 Remaining:
 
-- transactional producer configuration and state transitions
 - transaction coordinator retry handling
-- transactional Produce requests and EndTxn commit/abort orchestration
-- read-committed fetch filtering and live commit/abort smoke coverage
+- read-committed fetch filtering
+- live commit and abort smoke evidence
 
 ## M19 Observability, Limits, And Performance
 
