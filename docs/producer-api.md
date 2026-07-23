@@ -55,6 +55,15 @@ for outcome in batch_report.records() {
 }
 ```
 
+Enable duplicate-safe retries for the current single-record producer path:
+
+```rust
+let mut producer = ProducerConfig::new(["localhost:9092"])
+    .enable_idempotence(true)
+    .build()
+    .await?;
+```
+
 The public model intentionally keeps Kafka terms visible:
 
 - topic
@@ -87,7 +96,9 @@ comma-separated list of explicit partition indexes. This is useful for
 multi-broker smoke profiles that need one batch call to route records through
 multiple partition leaders.
 The `producer_send` example accepts `KAFRUST_PARTITION` to send one record to
-an explicit partition.
+an explicit partition. Set `KAFRUST_ENABLE_IDEMPOTENCE=true` to initialize a
+producer ID and send the record with producer epoch and partition sequence
+metadata.
 The `producer_failover` example sends two records through the same producer
 instance to one explicit partition. It accepts `KAFRUST_PARTITION` and
 `KAFRUST_FAILOVER_PAUSE_MS`, so orchestrated smoke workflows can stop the
@@ -98,6 +109,12 @@ Current implementation status:
 
 - `ProducerConfig`, `ProducerRecord`, `Acks`, `Compression`, and `RecordMetadata` are public API types.
 - `ProducerConfig::build` creates a producer backed by a Kafka broker connection.
+- `ProducerConfig::enable_idempotence(true)` selects `acks=all`, requires at
+  least one retry, initializes a producer ID through `InitProducerId v0`, and
+  tracks the next sequence independently per topic partition. The current
+  alpha applies this behavior to `Producer::send`; idempotent batch and
+  buffered sends return `Unsupported` until their per-chunk retry state is
+  implemented.
 - `Producer::send` performs metadata lookup, connects to the partition leader, negotiates Produce API support with `ApiVersions`, and chooses Produce v7 for Zstd, Produce v3 RecordBatch for other RecordBatch features, or Produce v2 MessageSet.
 - `ProducerConfig::request_timeout_ms` controls the request timeout used for metadata and produce roundtrips.
 - `ProducerConfig::security_protocol` stores the Kafka security protocol for producer broker connections. `Plaintext` is the default transport; TLS requires the non-default `tls` crate feature; `tls_server_name(name)` overrides the certificate validation name when the bootstrap host differs from the broker certificate; `tls_root_certificate_der(bytes)` adds DER-encoded root certificates while keeping platform roots enabled; `sasl_plain(username, password)`, `sasl_scram_sha_256(username, password)`, and `sasl_scram_sha_512(username, password)` provide SASL credentials for `SaslPlaintext` or `SaslTls`.

@@ -285,8 +285,10 @@ Verified high-level paths include:
   remain verified against `3.7.2`.
 - Multi-broker clusters, leader failover, rack awareness, and partition
   expansion are not yet claimed.
-- Idempotent producers, transactions, admin APIs, and broad observability are
-  not implemented yet.
+- Idempotent single-record sends are available through
+  `ProducerConfig::enable_idempotence(true)`. Idempotent batch and buffered
+  sends, transactions, admin APIs, and broad observability are not implemented
+  yet.
 - `acks=0` remains unsupported because the current request loop expects a broker
   response.
 

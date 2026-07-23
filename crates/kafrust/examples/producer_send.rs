@@ -9,14 +9,14 @@ async fn main() -> kafrust::Result<()> {
     let key = std::env::var("KAFRUST_KEY").unwrap_or_else(|_| "kafrust-key".to_owned());
     let value = std::env::var("KAFRUST_VALUE").unwrap_or_else(|_| "hello from kafrust".to_owned());
     let partition = partition_from_env()?;
+    let idempotence = idempotence_from_env()?;
 
-    let mut producer = common::apply_security(
+    let config = common::apply_security(
         ProducerConfig::new(bootstrap_servers).client_id("kafrust-producer-example"),
     )?
     .acks(Acks::Leader)
-    .compression(common::compression_from_env()?)
-    .build()
-    .await?;
+    .compression(common::compression_from_env()?);
+    let mut producer = config.enable_idempotence(idempotence).build().await?;
 
     let mut record = ProducerRecord::to(topic).key(key).value(value);
     if let Some(partition) = partition {
@@ -33,6 +33,19 @@ async fn main() -> kafrust::Result<()> {
     );
 
     Ok(())
+}
+
+fn idempotence_from_env() -> kafrust::Result<bool> {
+    let Ok(value) = std::env::var("KAFRUST_ENABLE_IDEMPOTENCE") else {
+        return Ok(false);
+    };
+    match value.trim().to_ascii_lowercase().as_str() {
+        "" | "0" | "false" | "no" => Ok(false),
+        "1" | "true" | "yes" => Ok(true),
+        _ => Err(Error::Unsupported(
+            "KAFRUST_ENABLE_IDEMPOTENCE must be true or false",
+        )),
+    }
 }
 
 fn partition_from_env() -> kafrust::Result<Option<i32>> {
@@ -52,7 +65,7 @@ fn parse_partition(value: &str) -> kafrust::Result<i32> {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_partition;
+    use super::{idempotence_from_env, parse_partition};
 
     #[test]
     fn parses_partition() {
@@ -62,5 +75,11 @@ mod tests {
     #[test]
     fn rejects_invalid_partition() {
         assert!(parse_partition("not-a-partition").is_err());
+    }
+
+    #[test]
+    fn parses_idempotence_default() {
+        std::env::remove_var("KAFRUST_ENABLE_IDEMPOTENCE");
+        assert!(!idempotence_from_env().expect("default should parse"));
     }
 }

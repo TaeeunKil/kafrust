@@ -22,6 +22,10 @@ The Kafka 3.7.2 and 4.3.1 plaintext smoke paths cover:
 - `ApiVersions v0` and `Metadata v1` roundtrips.
 - `FindCoordinator v1` for consumer group coordinator discovery.
 - High-level producer metadata lookup, leader routing, negotiated Produce API selection, single-record send, batch send, gzip-, Snappy-, LZ4-, and Zstd-compressed batch send, and buffered send with `acks=1`. Against Kafka 3.7.2, the current path selects Produce v3 RecordBatch for Gzip, Snappy, and LZ4, and Produce v7 for Zstd.
+- Opt-in idempotent single-record produce using `InitProducerId v0`,
+  `acks=all`, and partition-scoped RecordBatch producer identity and sequence
+  metadata. Manual run `29990529966` passed this path against Kafka 3.7.2 and
+  Kafka 4.3.1.
 - Gzip Produce v3 RecordBatch encoding and Fetch v2 RecordBatch decoding are
   covered by focused tests and the plaintext live smoke profile.
 - Snappy Produce v3 RecordBatch encoding and Fetch v2 RecordBatch decoding are
@@ -90,8 +94,8 @@ The current compatibility claim does not cover:
 - SASL workflows beyond the listed SASL_PLAINTEXT and SASL_SSL smoke examples.
 - SASL/SCRAM-SHA-512 live broker profiles.
 - Secured multi-broker clusters, broader consumer-group failover beyond the listed coordinator reconnect checks, rack awareness, or partition expansion.
-- Secured compression profiles, idempotent producers, transactions, or
-  high-throughput batching.
+- Idempotent batch and buffered producers, transactions, or idempotence
+  failure-injection profiles.
 - Kafka 3.8 and 3.9 broker profiles between the verified 3.7.2 and 4.3.1 endpoints.
 - Kafka APIs that are not listed in the verified paths.
 

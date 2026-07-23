@@ -20,7 +20,7 @@ use kafrust_protocol::api::offset_fetch::{
 use kafrust_protocol::api::produce::{
     MessageSetMessage, ProducePartitionV2, ProducePartitionV3, ProduceRequestV2, ProduceRequestV3,
     ProduceRequestV7, ProduceResponseV2, ProduceResponseV7, ProduceTopicV2, ProduceTopicV3,
-    RecordBatchMessage,
+    RecordBatchIdentity, RecordBatchMessage,
 };
 use kafrust_protocol::api::sasl::{
     SaslAuthenticateRequestV0, SaslAuthenticateResponseV0, SaslHandshakeRequestV1,
@@ -412,6 +412,7 @@ impl Client {
                 partitions: vec![ProducePartitionV3 {
                     partition_index,
                     compression: kafrust_protocol::record_batch::RecordBatchCompression::None,
+                    identity: RecordBatchIdentity::NON_IDEMPOTENT,
                     records,
                 }],
             }],

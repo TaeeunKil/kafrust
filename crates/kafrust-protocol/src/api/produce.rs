@@ -146,12 +146,32 @@ pub struct ProducePartitionV3 {
     pub partition_index: i32,
     pub records: Vec<RecordBatchMessage>,
     pub compression: RecordBatchCompression,
+    pub identity: RecordBatchIdentity,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RecordBatchIdentity {
+    pub producer_id: i64,
+    pub producer_epoch: i16,
+    pub base_sequence: i32,
+}
+
+impl RecordBatchIdentity {
+    pub const NON_IDEMPOTENT: Self = Self {
+        producer_id: -1,
+        producer_epoch: -1,
+        base_sequence: -1,
+    };
 }
 
 impl ProducePartitionV3 {
     fn encode(&self, encoder: &mut Encoder) -> Result<()> {
         encoder.write_i32(self.partition_index);
-        let record_set = encode_record_batch_set_with_compression(&self.records, self.compression)?;
+        let record_set = encode_record_batch_set_with_compression_and_identity(
+            &self.records,
+            self.compression,
+            self.identity,
+        )?;
         encoder.write_bytes(&record_set)
     }
 }
@@ -179,7 +199,22 @@ pub fn encoded_record_batch_set_len_with_compression(
     records: &[RecordBatchMessage],
     compression: RecordBatchCompression,
 ) -> Result<usize> {
-    Ok(encode_record_batch_set_with_compression(records, compression)?.len())
+    encoded_record_batch_set_len_with_compression_and_identity(
+        records,
+        compression,
+        RecordBatchIdentity::NON_IDEMPOTENT,
+    )
+}
+
+pub fn encoded_record_batch_set_len_with_compression_and_identity(
+    records: &[RecordBatchMessage],
+    compression: RecordBatchCompression,
+    identity: RecordBatchIdentity,
+) -> Result<usize> {
+    Ok(
+        encode_record_batch_set_with_compression_and_identity(records, compression, identity)?
+            .len(),
+    )
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -386,6 +421,18 @@ fn encode_record_batch_set_with_compression(
     records: &[RecordBatchMessage],
     compression: RecordBatchCompression,
 ) -> Result<Vec<u8>> {
+    encode_record_batch_set_with_compression_and_identity(
+        records,
+        compression,
+        RecordBatchIdentity::NON_IDEMPOTENT,
+    )
+}
+
+fn encode_record_batch_set_with_compression_and_identity(
+    records: &[RecordBatchMessage],
+    compression: RecordBatchCompression,
+    identity: RecordBatchIdentity,
+) -> Result<Vec<u8>> {
     let base_timestamp = records
         .first()
         .map(|record| record.timestamp_ms)
@@ -419,9 +466,9 @@ fn encode_record_batch_set_with_compression(
     crc_payload.write_i32(last_offset_delta);
     crc_payload.write_i64(base_timestamp);
     crc_payload.write_i64(max_timestamp);
-    crc_payload.write_i64(-1);
-    crc_payload.write_i16(-1);
-    crc_payload.write_i32(-1);
+    crc_payload.write_i64(identity.producer_id);
+    crc_payload.write_i16(identity.producer_epoch);
+    crc_payload.write_i32(identity.base_sequence);
     crc_payload.write_i32(record_count);
     crc_payload.write_raw(&record_bytes);
     let crc_payload = crc_payload.into_bytes();
@@ -492,10 +539,10 @@ fn crc32c(bytes: &[u8]) -> u32 {
 mod tests {
     use super::{
         encode_message_set, encode_record_batch_set, encode_record_batch_set_with_compression,
-        encoded_message_set_len, encoded_record_batch_set_len, MessageSetMessage,
-        ProducePartitionV2, ProducePartitionV3, ProduceRequestV2, ProduceRequestV3,
-        ProduceRequestV7, ProduceResponseV2, ProduceResponseV7, ProduceTopicV2, ProduceTopicV3,
-        RecordBatchMessage,
+        encode_record_batch_set_with_compression_and_identity, encoded_message_set_len,
+        encoded_record_batch_set_len, MessageSetMessage, ProducePartitionV2, ProducePartitionV3,
+        ProduceRequestV2, ProduceRequestV3, ProduceRequestV7, ProduceResponseV2, ProduceResponseV7,
+        ProduceTopicV2, ProduceTopicV3, RecordBatchIdentity, RecordBatchMessage,
     };
     use crate::codec::Decoder;
     use crate::record_batch::RecordBatchCompression;
@@ -530,6 +577,28 @@ mod tests {
     }
 
     #[test]
+    fn encodes_idempotent_record_batch_identity() {
+        let set = encode_record_batch_set_with_compression_and_identity(
+            &[RecordBatchMessage::new(
+                Some(b"order-1".to_vec()),
+                Some(b"created".to_vec()),
+                1_000,
+            )],
+            RecordBatchCompression::None,
+            RecordBatchIdentity {
+                producer_id: 42,
+                producer_epoch: 3,
+                base_sequence: 7,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(&set[43..51], &42_i64.to_be_bytes());
+        assert_eq!(&set[51..53], &3_i16.to_be_bytes());
+        assert_eq!(&set[53..57], &7_i32.to_be_bytes());
+    }
+
+    #[test]
     fn encodes_produce_request_v3_with_record_batch() {
         let request = ProduceRequestV3 {
             correlation_id: 5,
@@ -542,6 +611,7 @@ mod tests {
                 partitions: vec![ProducePartitionV3 {
                     partition_index: 0,
                     compression: RecordBatchCompression::None,
+                    identity: RecordBatchIdentity::NON_IDEMPOTENT,
                     records: vec![RecordBatchMessage::new(
                         Some(b"order-1".to_vec()),
                         Some(b"created".to_vec()),
@@ -711,6 +781,7 @@ mod tests {
                 partitions: vec![ProducePartitionV3 {
                     partition_index: 0,
                     compression: RecordBatchCompression::Zstd,
+                    identity: RecordBatchIdentity::NON_IDEMPOTENT,
                     records: vec![RecordBatchMessage::new(
                         Some(b"order-1".to_vec()),
                         Some(b"created".to_vec()),
