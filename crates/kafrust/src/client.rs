@@ -18,7 +18,8 @@ use kafrust_protocol::api::offset_fetch::{
 };
 use kafrust_protocol::api::produce::{
     MessageSetMessage, ProducePartitionV2, ProducePartitionV3, ProduceRequestV2, ProduceRequestV3,
-    ProduceResponseV2, ProduceTopicV2, ProduceTopicV3, RecordBatchMessage,
+    ProduceRequestV7, ProduceResponseV2, ProduceResponseV7, ProduceTopicV2, ProduceTopicV3,
+    RecordBatchMessage,
 };
 use kafrust_protocol::api::sasl::{
     SaslAuthenticateRequestV0, SaslAuthenticateResponseV0, SaslHandshakeRequestV1,
@@ -393,6 +394,28 @@ impl Client {
             }],
         )
         .await
+    }
+
+    /// Sends Produce v7 for pre-built record batch topic partition payloads.
+    pub async fn produce_v7(
+        &mut self,
+        transactional_id: Option<String>,
+        acks: i16,
+        timeout_ms: i32,
+        topics: Vec<ProduceTopicV3>,
+    ) -> Result<ProduceResponseV7> {
+        let request = ProduceRequestV7 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            transactional_id,
+            acks,
+            timeout_ms,
+            topics,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::new(&response);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(ProduceResponseV7::decode_body(&mut decoder)?)
     }
 
     async fn send_request(&mut self, request: &[u8]) -> Result<Vec<u8>> {
