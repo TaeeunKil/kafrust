@@ -35,7 +35,9 @@ Exit criteria:
 Evidence:
 
 - Cargo workspace with `kafrust` and `kafrust-protocol` crates.
-- CI runs format, build, clippy, and tests on Rust 1.75.0 and stable.
+- CI runs format, build, clippy, and tests on Rust 1.81.0 and stable.
+- The MSRV moved from Rust 1.75 to 1.81 when bidirectional pure-Rust Zstd
+  support required language features stabilized in Rust 1.81.
 - Main has stayed buildable through short-lived PRs.
 
 ## M1 Protocol Core
@@ -618,7 +620,7 @@ Exit criteria:
 - consumer can decode compressed batches for supported codecs
 - unsupported or disabled codecs fail with typed, documented errors
 - decompression limits prevent unbounded allocation or decompression bomb behavior
-- live smoke or focused broker checks cover at least gzip, snappy, and lz4
+- live smoke or focused broker checks cover gzip, snappy, lz4, and zstd
 
 Strategic role:
 
@@ -661,10 +663,22 @@ Evidence:
 - Manual `Live Kafka Smoke` run `29986018854` passed on 2026-07-23; the
   single-node and multi-broker plaintext jobs completed LZ4 batch producer
   checks against Kafka 3.7.2.
+- Zstd compression uses the pure-Rust `ruzstd` 0.8.1 backend with its optional
+  checksum dependency disabled and no C toolchain dependency.
+- Produce v7 RecordBatch encoding writes standard Zstd frames, while Fetch v2
+  RecordBatch decoding validates declared content and window sizes before
+  decoder allocation and bounds decoded output to 64 MiB.
+- Focused tests cover the Zstd frame magic, multi-block roundtrips, malformed
+  frames, declared window limits, decoded output limits, and Produce-to-Fetch
+  RecordBatch roundtrips.
+- Manual `Live Kafka Smoke` run
+  [`29988390924`](https://github.com/TaeeunKil/kafrust/actions/runs/29988390924)
+  passed on 2026-07-23; the
+  single-node and multi-broker plaintext jobs completed Zstd Produce v7 batch
+  checks against Kafka 3.7.2.
 
 Remaining:
 
-- zstd support
 - secured live broker compression smoke coverage
 - configurable decompression limits
 

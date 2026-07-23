@@ -121,10 +121,11 @@ async fn main() -> kafrust::Result<()> {
 ```
 
 `Compression::Gzip`, `Compression::Snappy`, and `Compression::Lz4` use Produce
-API v3 RecordBatch encoding. Snappy output uses Kafka-compatible Xerial framing,
-and LZ4 output uses the standard LZ4 frame expected by RecordBatch v2. Brokers
-that only support the older Produce API v2 MessageSet path return an explicit
-`Unsupported` error when compression is enabled.
+API v3 RecordBatch encoding. `Compression::Zstd` requires Produce API v7.
+Snappy output uses Kafka-compatible Xerial framing; LZ4 and Zstd output use
+their standard frames as expected by RecordBatch v2. Brokers without the
+required Produce API version return an explicit `Unsupported` error when
+compression is enabled.
 
 ## Buffered Producer
 
@@ -282,8 +283,8 @@ Verified high-level paths include:
 - Broker compatibility is verified against Kafka `3.7.2` only.
 - Multi-broker clusters, leader failover, rack awareness, and partition
   expansion are not yet claimed.
-- Idempotent producers, transactions, compression, admin APIs, and broad
-  observability are not implemented yet.
+- Idempotent producers, transactions, admin APIs, and broad observability are
+  not implemented yet.
 - `acks=0` remains unsupported because the current request loop expects a broker
   response.
 

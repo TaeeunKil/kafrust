@@ -24,24 +24,66 @@ pub struct ProduceRequestV3 {
     pub topics: Vec<ProduceTopicV3>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProduceRequestV7 {
+    pub correlation_id: i32,
+    pub client_id: Option<String>,
+    pub transactional_id: Option<String>,
+    pub acks: i16,
+    pub timeout_ms: i32,
+    pub topics: Vec<ProduceTopicV3>,
+}
+
 impl ProduceRequestV3 {
     pub fn encode(&self) -> Result<Vec<u8>> {
-        let mut encoder = Encoder::new();
-        RequestHeader {
-            api_key: API_KEY,
-            api_version: 3,
-            correlation_id: self.correlation_id,
-            client_id: self.client_id.clone(),
-        }
-        .encode_v1(&mut encoder)?;
-        encoder.write_nullable_string(self.transactional_id.as_deref())?;
-        encoder.write_i16(self.acks);
-        encoder.write_i32(self.timeout_ms);
-        encoder.write_array(Some(self.topics.as_slice()), |encoder, topic| {
-            topic.encode(encoder)
-        })?;
-        Ok(encoder.into_bytes())
+        encode_record_batch_request(
+            3,
+            self.correlation_id,
+            self.client_id.clone(),
+            self.transactional_id.as_deref(),
+            self.acks,
+            self.timeout_ms,
+            &self.topics,
+        )
     }
+}
+
+impl ProduceRequestV7 {
+    pub fn encode(&self) -> Result<Vec<u8>> {
+        encode_record_batch_request(
+            7,
+            self.correlation_id,
+            self.client_id.clone(),
+            self.transactional_id.as_deref(),
+            self.acks,
+            self.timeout_ms,
+            &self.topics,
+        )
+    }
+}
+
+fn encode_record_batch_request(
+    api_version: i16,
+    correlation_id: i32,
+    client_id: Option<String>,
+    transactional_id: Option<&str>,
+    acks: i16,
+    timeout_ms: i32,
+    topics: &[ProduceTopicV3],
+) -> Result<Vec<u8>> {
+    let mut encoder = Encoder::new();
+    RequestHeader {
+        api_key: API_KEY,
+        api_version,
+        correlation_id,
+        client_id,
+    }
+    .encode_v1(&mut encoder)?;
+    encoder.write_nullable_string(transactional_id)?;
+    encoder.write_i16(acks);
+    encoder.write_i32(timeout_ms);
+    encoder.write_array(Some(topics), |encoder, topic| topic.encode(encoder))?;
+    Ok(encoder.into_bytes())
 }
 
 impl ProduceRequestV2 {
@@ -252,6 +294,64 @@ impl ProducePartitionResponseV2 {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProduceResponseV7 {
+    pub responses: Vec<ProduceTopicResponseV7>,
+    pub throttle_time_ms: i32,
+}
+
+impl ProduceResponseV7 {
+    pub fn decode_body(decoder: &mut Decoder<'_>) -> Result<Self> {
+        Ok(Self {
+            responses: decoder
+                .read_array("produce responses", ProduceTopicResponseV7::decode)?
+                .unwrap_or_default(),
+            throttle_time_ms: decoder.read_i32()?,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProduceTopicResponseV7 {
+    pub name: String,
+    pub partitions: Vec<ProducePartitionResponseV7>,
+}
+
+impl ProduceTopicResponseV7 {
+    fn decode(decoder: &mut Decoder<'_>) -> Result<Self> {
+        Ok(Self {
+            name: decoder.read_string()?,
+            partitions: decoder
+                .read_array(
+                    "produce partition responses",
+                    ProducePartitionResponseV7::decode,
+                )?
+                .unwrap_or_default(),
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProducePartitionResponseV7 {
+    pub partition_index: i32,
+    pub error_code: i16,
+    pub base_offset: i64,
+    pub log_append_time_ms: i64,
+    pub log_start_offset: i64,
+}
+
+impl ProducePartitionResponseV7 {
+    fn decode(decoder: &mut Decoder<'_>) -> Result<Self> {
+        Ok(Self {
+            partition_index: decoder.read_i32()?,
+            error_code: decoder.read_i16()?,
+            base_offset: decoder.read_i64()?,
+            log_append_time_ms: decoder.read_i64()?,
+            log_start_offset: decoder.read_i64()?,
+        })
+    }
+}
+
 fn encode_message_set(records: &[MessageSetMessage]) -> Result<Vec<u8>> {
     let mut set = Encoder::new();
     for record in records {
@@ -394,7 +494,8 @@ mod tests {
         encode_message_set, encode_record_batch_set, encode_record_batch_set_with_compression,
         encoded_message_set_len, encoded_record_batch_set_len, MessageSetMessage,
         ProducePartitionV2, ProducePartitionV3, ProduceRequestV2, ProduceRequestV3,
-        ProduceResponseV2, ProduceTopicV2, ProduceTopicV3, RecordBatchMessage,
+        ProduceRequestV7, ProduceResponseV2, ProduceResponseV7, ProduceTopicV2, ProduceTopicV3,
+        RecordBatchMessage,
     };
     use crate::codec::Decoder;
     use crate::record_batch::RecordBatchCompression;
@@ -598,6 +699,70 @@ mod tests {
     }
 
     #[test]
+    fn encodes_produce_request_v7_with_record_batch() {
+        let request = ProduceRequestV7 {
+            correlation_id: 5,
+            client_id: Some("kafrust".to_owned()),
+            transactional_id: None,
+            acks: 1,
+            timeout_ms: 30_000,
+            topics: vec![ProduceTopicV3 {
+                name: "orders".to_owned(),
+                partitions: vec![ProducePartitionV3 {
+                    partition_index: 0,
+                    compression: RecordBatchCompression::Zstd,
+                    records: vec![RecordBatchMessage::new(
+                        Some(b"order-1".to_vec()),
+                        Some(b"created".to_vec()),
+                        1_000,
+                    )],
+                }],
+            }],
+        };
+
+        let bytes = request.encode().unwrap();
+
+        assert_eq!(&bytes[0..4], &[0, 0, 0, 7]);
+        assert!(bytes.len() > 70);
+    }
+
+    #[test]
+    fn zstd_record_batch_encoding_roundtrips_through_fetch_decoder() {
+        let record_set =
+            encode_record_batch_set_with_compression(
+                &[RecordBatchMessage::new(
+                    Some(b"order-1".to_vec()),
+                    Some(b"created".to_vec()),
+                    1_000,
+                )
+                .header("source", Some(b"checkout".to_vec()))],
+                RecordBatchCompression::Zstd,
+            )
+            .unwrap();
+
+        let mut bytes = Encoder::new();
+        bytes.write_i32(0);
+        bytes.write_i32(1);
+        bytes.write_string("orders").unwrap();
+        bytes.write_i32(1);
+        bytes.write_i32(0);
+        bytes.write_i16(0);
+        bytes.write_i64(43);
+        bytes.write_bytes(&record_set).unwrap();
+        let bytes = bytes.into_bytes();
+
+        let mut decoder = Decoder::new(&bytes);
+        let response = FetchResponseV2::decode_body(&mut decoder).unwrap();
+        let record = &response.responses[0].partitions[0].records[0];
+
+        assert_eq!(record.offset, 0);
+        assert_eq!(record.timestamp_ms, 1_000);
+        assert_eq!(record.key.as_deref(), Some(&b"order-1"[..]));
+        assert_eq!(record.value.as_deref(), Some(&b"created"[..]));
+        assert!(decoder.is_empty());
+    }
+
+    #[test]
     fn reports_message_set_encoded_len() {
         let records = [MessageSetMessage::new(
             Some(b"order-1".to_vec()),
@@ -649,6 +814,29 @@ mod tests {
         assert_eq!(response.responses[0].partitions[0].partition_index, 0);
         assert_eq!(response.responses[0].partitions[0].error_code, 0);
         assert_eq!(response.responses[0].partitions[0].base_offset, 42);
+        assert!(decoder.is_empty());
+    }
+
+    #[test]
+    fn decodes_produce_response_v7() {
+        let bytes = [
+            0, 0, 0, 1, // topic response count
+            0, 6, b'o', b'r', b'd', b'e', b'r', b's', // topic
+            0, 0, 0, 1, // partition response count
+            0, 0, 0, 0, // partition
+            0, 0, // error code
+            0, 0, 0, 0, 0, 0, 0, 42, // base offset
+            0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, // log append time -1
+            0, 0, 0, 0, 0, 0, 0, 7, // log start offset
+            0, 0, 0, 0, // throttle time
+        ];
+        let mut decoder = Decoder::new(&bytes);
+        let response = ProduceResponseV7::decode_body(&mut decoder).unwrap();
+
+        assert_eq!(response.throttle_time_ms, 0);
+        assert_eq!(response.responses[0].name, "orders");
+        assert_eq!(response.responses[0].partitions[0].base_offset, 42);
+        assert_eq!(response.responses[0].partitions[0].log_start_offset, 7);
         assert!(decoder.is_empty());
     }
 }
