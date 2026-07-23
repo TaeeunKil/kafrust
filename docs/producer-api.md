@@ -112,9 +112,10 @@ Current implementation status:
 - `ProducerConfig::enable_idempotence(true)` selects `acks=all`, requires at
   least one retry, initializes a producer ID through `InitProducerId v0`, and
   tracks the next sequence independently per topic partition. The current
-  alpha applies this behavior to `Producer::send`; idempotent batch and
-  buffered sends return `Unsupported` until their per-chunk retry state is
-  implemented.
+  alpha applies this behavior to single-record, batch, and buffered sends.
+  Batch sequence reservations remain stable across request and partial-record
+  retries, and advance the acknowledged partition sequence only after a
+  successful Produce response.
 - `Producer::send` performs metadata lookup, connects to the partition leader, negotiates Produce API support with `ApiVersions`, and chooses Produce v7 for Zstd, Produce v3 RecordBatch for other RecordBatch features, or Produce v2 MessageSet.
 - `ProducerConfig::request_timeout_ms` controls the request timeout used for metadata and produce roundtrips.
 - `ProducerConfig::security_protocol` stores the Kafka security protocol for producer broker connections. `Plaintext` is the default transport; TLS requires the non-default `tls` crate feature; `tls_server_name(name)` overrides the certificate validation name when the bootstrap host differs from the broker certificate; `tls_root_certificate_der(bytes)` adds DER-encoded root certificates while keeping platform roots enabled; `sasl_plain(username, password)`, `sasl_scram_sha_256(username, password)`, and `sasl_scram_sha_512(username, password)` provide SASL credentials for `SaslPlaintext` or `SaslTls`.

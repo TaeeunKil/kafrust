@@ -744,15 +744,22 @@ Evidence:
   sequence metadata while preserving the non-idempotent sentinel values.
 - `ProducerConfig::enable_idempotence(true)` initializes a non-transactional
   producer ID, enforces `acks=all` with retries, and keeps acknowledged
-  sequences scoped per topic partition for single-record sends.
-- Manual `Live Kafka Smoke` run `29990529966` passed the idempotent
-  single-record producer path against Kafka 3.7.2 and Kafka 4.3.1; all six
-  plaintext, multi-broker, TLS, SASL_PLAINTEXT, and SASL_SSL jobs passed.
+  sequences scoped per topic partition for single-record, batch, and buffered
+  sends.
+- Batch sequence reservations are retained by input record across request and
+  partial-record retries. Acknowledged state advances only after broker
+  success, and later chunks are held back after a failed idempotent chunk to
+  preserve partition ordering.
+- Manual `Live Kafka Smoke` run `29991254722` passed the idempotent
+  single-record, batch, and buffered producer paths against Kafka 3.7.2 and
+  Kafka 4.3.1; all six plaintext, multi-broker, TLS, SASL_PLAINTEXT, and
+  SASL_SSL jobs passed.
 
 Remaining:
 
-- preserve assigned sequences across chunked batch and buffered retries
 - classify fencing, out-of-order sequence, and duplicate sequence errors
+- add failure-injection coverage that proves duplicate suppression after
+  ambiguous request failures
 
 ## M18 Transactions And Read-Committed Consumers
 
