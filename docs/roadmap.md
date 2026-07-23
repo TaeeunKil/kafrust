@@ -750,6 +750,10 @@ Evidence:
   partial-record retries. Acknowledged state advances only after broker
   success, and later chunks are held back after a failed idempotent chunk to
   preserve partition ordering.
+- `DUPLICATE_SEQUENCE_NUMBER` is accepted as an already delivered retry with
+  unknown offset and timestamp metadata. `OUT_OF_ORDER_SEQUENCE_NUMBER`,
+  `INVALID_PRODUCER_EPOCH`, and `PRODUCER_FENCED` are classified as fatal and
+  leave the producer instance defunct for subsequent sends.
 - Manual `Live Kafka Smoke` run `29991254722` passed the idempotent
   single-record, batch, and buffered producer paths against Kafka 3.7.2 and
   Kafka 4.3.1; all six plaintext, multi-broker, TLS, SASL_PLAINTEXT, and
@@ -757,7 +761,6 @@ Evidence:
 
 Remaining:
 
-- classify fencing, out-of-order sequence, and duplicate sequence errors
 - add failure-injection coverage that proves duplicate suppression after
   ambiguous request failures
 

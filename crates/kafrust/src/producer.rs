@@ -226,6 +226,9 @@ impl RecordMetadata {
     }
 
     /// Returns the base offset reported by Kafka.
+    ///
+    /// This is `-1` when an idempotent retry receives Kafka's duplicate
+    /// sequence response because the original append offset is not available.
     pub fn offset(&self) -> i64 {
         self.offset
     }
@@ -361,6 +364,7 @@ struct IdempotentProducerState {
     producer_id: i64,
     producer_epoch: i16,
     next_sequences: BTreeMap<(String, i32), i32>,
+    fatal_error_code: Option<i16>,
 }
 
 impl IdempotentProducerState {
@@ -369,6 +373,7 @@ impl IdempotentProducerState {
             producer_id,
             producer_epoch,
             next_sequences: BTreeMap::new(),
+            fatal_error_code: None,
         }
     }
 
@@ -389,6 +394,37 @@ impl IdempotentProducerState {
         let current = self.next_sequences.get(&key).copied().unwrap_or(0);
         self.next_sequences
             .insert(key, advance_producer_sequence(current, record_count));
+    }
+
+    fn ensure_usable(&self) -> Result<()> {
+        match self.fatal_error_code {
+            Some(code) => Err(Error::Broker {
+                code,
+                context: "idempotent producer is defunct after a fatal broker error".to_owned(),
+            }),
+            None => Ok(()),
+        }
+    }
+
+    fn record_fatal_error(&mut self, code: i16) {
+        self.fatal_error_code.get_or_insert(code);
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum IdempotentProduceErrorDisposition {
+    Duplicate,
+    Fatal,
+    Other,
+}
+
+fn idempotent_produce_error_disposition(error_code: i16) -> IdempotentProduceErrorDisposition {
+    match BrokerErrorKind::from_code(error_code) {
+        BrokerErrorKind::DuplicateSequenceNumber => IdempotentProduceErrorDisposition::Duplicate,
+        BrokerErrorKind::OutOfOrderSequenceNumber
+        | BrokerErrorKind::InvalidProducerEpoch
+        | BrokerErrorKind::ProducerFenced => IdempotentProduceErrorDisposition::Fatal,
+        _ => IdempotentProduceErrorDisposition::Other,
     }
 }
 
@@ -1038,6 +1074,7 @@ fn delivery_error_from_request_error(error: &Error) -> Error {
 impl Producer {
     /// Sends one record and returns Kafka metadata for the accepted write.
     pub async fn send(&mut self, record: ProducerRecord) -> Result<RecordMetadata> {
+        self.ensure_idempotent_producer_usable()?;
         if self.config.acks == Acks::None {
             return Err(Error::Unsupported("producer acks=0 send without response"));
         }
@@ -1118,6 +1155,7 @@ impl Producer {
         &mut self,
         records: impl IntoIterator<Item = ProducerRecord>,
     ) -> Result<ProducerBatchReport> {
+        self.ensure_idempotent_producer_usable()?;
         if self.config.acks == Acks::None {
             return Err(Error::Unsupported("producer acks=0 send without response"));
         }
@@ -1237,6 +1275,7 @@ impl Producer {
 
         let mut output = Vec::with_capacity(record_indexes.len());
         for (key, records) in groups {
+            self.ensure_idempotent_producer_usable()?;
             output.extend(
                 self.send_batch_group(&key, &records, sequence_tracker)
                     .await?,
@@ -1386,6 +1425,27 @@ impl Producer {
             let partition_response =
                 produce_partition_response(&response, &key.topic, key.partition)?;
             if partition_response.error_code != 0 {
+                if self.idempotent_state.is_some() {
+                    match idempotent_produce_error_disposition(partition_response.error_code) {
+                        IdempotentProduceErrorDisposition::Duplicate => {
+                            sequence_tracker.acknowledge_chunk(
+                                self.idempotent_state.as_mut(),
+                                key,
+                                records,
+                            )?;
+                            output.extend(batch_duplicate_outcomes(key, records));
+                            continue;
+                        }
+                        IdempotentProduceErrorDisposition::Fatal => {
+                            self.record_idempotent_fatal_error(partition_response.error_code);
+                            return Err(Error::Broker {
+                                code: partition_response.error_code,
+                                context: format!("produce {}-{}", key.topic, key.partition),
+                            });
+                        }
+                        IdempotentProduceErrorDisposition::Other => {}
+                    }
+                }
                 output.extend(batch_failure_outcomes(
                     key,
                     records,
@@ -1511,6 +1571,20 @@ impl Producer {
         };
         let partition_response = produce_partition_response(&response, record.topic(), partition)?;
         if partition_response.error_code != 0 {
+            if self.idempotent_state.is_some() {
+                match idempotent_produce_error_disposition(partition_response.error_code) {
+                    IdempotentProduceErrorDisposition::Duplicate => {
+                        if let Some(state) = &mut self.idempotent_state {
+                            state.acknowledge(record.topic(), partition, 1);
+                        }
+                        return Ok(RecordMetadata::new(record.topic(), partition, -1, None));
+                    }
+                    IdempotentProduceErrorDisposition::Fatal => {
+                        self.record_idempotent_fatal_error(partition_response.error_code);
+                    }
+                    IdempotentProduceErrorDisposition::Other => {}
+                }
+            }
             return Err(Error::Broker {
                 code: partition_response.error_code,
                 context: format!("produce {}-{}", record.topic(), partition),
@@ -1526,6 +1600,19 @@ impl Producer {
             partition_response.base_offset,
             Some(timestamp),
         ))
+    }
+
+    fn ensure_idempotent_producer_usable(&self) -> Result<()> {
+        match &self.idempotent_state {
+            Some(state) => state.ensure_usable(),
+            None => Ok(()),
+        }
+    }
+
+    fn record_idempotent_fatal_error(&mut self, code: i16) {
+        if let Some(state) = &mut self.idempotent_state {
+            state.record_fatal_error(code);
+        }
     }
 }
 
@@ -2063,6 +2150,26 @@ fn batch_success_outcomes(
         .collect()
 }
 
+fn batch_duplicate_outcomes(
+    key: &ProduceBatchKey,
+    records: &[PreparedBatchRecord<'_>],
+) -> Vec<(usize, ProducerBatchRecordOutcome)> {
+    records
+        .iter()
+        .map(|record| {
+            (
+                record.index,
+                ProducerBatchRecordOutcome::Success(RecordMetadata::new(
+                    key.topic.clone(),
+                    key.partition,
+                    -1,
+                    None,
+                )),
+            )
+        })
+        .collect()
+}
+
 fn batch_failure_outcomes(
     key: &ProduceBatchKey,
     records: &[PreparedBatchRecord<'_>],
@@ -2233,19 +2340,20 @@ fn invalidate_metadata_cache_for_record_indexes(
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::{
-        advance_producer_sequence, batch_failure_outcomes, batch_record_chunks,
-        batch_records_encoded_len, batch_report_from_outcomes, batch_success_outcomes,
-        buffered_delivery_canceled_error, buffered_enqueue_flush_reason, buffered_linger_deadline,
-        can_retry_send, choose_partition, complete_buffered_deliveries,
+        advance_producer_sequence, batch_duplicate_outcomes, batch_failure_outcomes,
+        batch_record_chunks, batch_records_encoded_len, batch_report_from_outcomes,
+        batch_success_outcomes, buffered_delivery_canceled_error, buffered_enqueue_flush_reason,
+        buffered_linger_deadline, can_retry_send, choose_partition, complete_buffered_deliveries,
         delivery_error_from_request_error, enqueue_buffered_record, fail_buffered_deliveries,
-        invalidate_metadata_cache, invalidate_metadata_cache_for_record_indexes, leader_for,
-        message_set_message, record_batch_attempt_outcomes, record_batch_message,
-        select_produce_batch_version, select_produce_version, Acks, BatchRecord,
-        BufferedFlushReason, BufferedProduceRequest, BufferedProducerCommand,
-        BufferedProducerState, Compression, IdempotentBatchSequenceTracker,
-        IdempotentProducerState, PreparedBatchRecord, ProduceBatchKey, ProduceVersion, Producer,
-        ProducerBatchFailure, ProducerBatchRecordOutcome, ProducerBatchReport, ProducerConfig,
-        ProducerDelivery, ProducerRecord, RecordMetadata, SecurityProtocol,
+        idempotent_produce_error_disposition, invalidate_metadata_cache,
+        invalidate_metadata_cache_for_record_indexes, leader_for, message_set_message,
+        record_batch_attempt_outcomes, record_batch_message, select_produce_batch_version,
+        select_produce_version, Acks, BatchRecord, BufferedFlushReason, BufferedProduceRequest,
+        BufferedProducerCommand, BufferedProducerState, Compression,
+        IdempotentBatchSequenceTracker, IdempotentProduceErrorDisposition, IdempotentProducerState,
+        PreparedBatchRecord, ProduceBatchKey, ProduceVersion, Producer, ProducerBatchFailure,
+        ProducerBatchRecordOutcome, ProducerBatchReport, ProducerConfig, ProducerDelivery,
+        ProducerRecord, RecordMetadata, SecurityProtocol,
     };
     use crate::{BrokerErrorKind, Client, Error};
     use kafrust_protocol::api::api_versions::{ApiKeyVersion, ApiVersionsResponseV0};
@@ -2298,6 +2406,58 @@ mod tests {
     fn wraps_idempotent_sequence_after_i32_max() {
         assert_eq!(advance_producer_sequence(i32::MAX, 1), 0);
         assert_eq!(advance_producer_sequence(i32::MAX - 1, 3), 1);
+    }
+
+    #[test]
+    fn classifies_idempotent_produce_error_dispositions() {
+        assert_eq!(
+            idempotent_produce_error_disposition(46),
+            IdempotentProduceErrorDisposition::Duplicate
+        );
+        for code in [45, 47, 90] {
+            assert_eq!(
+                idempotent_produce_error_disposition(code),
+                IdempotentProduceErrorDisposition::Fatal
+            );
+        }
+        assert_eq!(
+            idempotent_produce_error_disposition(6),
+            IdempotentProduceErrorDisposition::Other
+        );
+    }
+
+    #[test]
+    fn preserves_first_fatal_idempotent_producer_error() {
+        let mut state = IdempotentProducerState::new(42, 3);
+
+        state.record_fatal_error(45);
+        state.record_fatal_error(90);
+        let error = state.ensure_usable().unwrap_err();
+
+        assert!(matches!(error, Error::Broker { code: 45, .. }));
+    }
+
+    #[test]
+    fn duplicate_batch_outcomes_report_unknown_offsets() {
+        let batch = [
+            BatchRecord::new(ProducerRecord::to("orders")),
+            BatchRecord::new(ProducerRecord::to("orders")),
+        ];
+        let records = prepared_records(&batch);
+        let key = ProduceBatchKey {
+            broker_addr: "localhost:9092".to_owned(),
+            topic: "orders".to_owned(),
+            partition: 0,
+        };
+
+        let outcomes = batch_duplicate_outcomes(&key, &records);
+
+        assert_eq!(outcomes.len(), 2);
+        for (_, outcome) in outcomes {
+            let metadata = outcome.into_metadata().unwrap();
+            assert_eq!(metadata.offset(), -1);
+            assert!(metadata.timestamp().is_none());
+        }
     }
 
     #[test]
