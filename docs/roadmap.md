@@ -658,13 +658,13 @@ Evidence:
 - Focused tests cover the Kafka LZ4 frame magic, multi-block roundtrips,
   malformed frames, decompression limits, and Produce-to-Fetch RecordBatch
   roundtrips.
-- The live smoke workflow includes LZ4 batch producer checks in its single-node
-  and multi-broker plaintext jobs; a passing run is not recorded yet.
+- Manual `Live Kafka Smoke` run `29986018854` passed on 2026-07-23; the
+  single-node and multi-broker plaintext jobs completed LZ4 batch producer
+  checks against Kafka 3.7.2.
 
 Remaining:
 
 - zstd support
-- recorded LZ4 live broker verification
 - secured live broker compression smoke coverage
 - configurable decompression limits
 
