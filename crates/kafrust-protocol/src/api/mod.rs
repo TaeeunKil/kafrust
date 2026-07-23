@@ -1,3 +1,4 @@
+pub mod add_offsets_to_txn;
 pub mod add_partitions_to_txn;
 pub mod api_versions;
 pub mod end_txn;
