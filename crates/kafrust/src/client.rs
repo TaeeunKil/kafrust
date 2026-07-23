@@ -36,6 +36,9 @@ use kafrust_protocol::api::sasl::{
 use kafrust_protocol::api::sync_group::{
     SyncGroupAssignment, SyncGroupRequestV2, SyncGroupResponseV2,
 };
+use kafrust_protocol::api::txn_offset_commit::{
+    TxnOffsetCommitRequestV0, TxnOffsetCommitResponseV0, TxnOffsetCommitTopic,
+};
 use kafrust_protocol::codec::Decoder;
 use kafrust_protocol::frame::encode_frame;
 use kafrust_protocol::header::ResponseHeader;
@@ -280,6 +283,30 @@ impl Client {
         let mut decoder = Decoder::new(&response);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(AddOffsetsToTxnResponseV0::decode_body(&mut decoder)?)
+    }
+
+    /// Sends TxnOffsetCommit v0 for offsets included in a transaction.
+    pub async fn txn_offset_commit_v0(
+        &mut self,
+        transactional_id: impl Into<String>,
+        group_id: impl Into<String>,
+        producer_id: i64,
+        producer_epoch: i16,
+        topics: Vec<TxnOffsetCommitTopic>,
+    ) -> Result<TxnOffsetCommitResponseV0> {
+        let request = TxnOffsetCommitRequestV0 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            transactional_id: transactional_id.into(),
+            group_id: group_id.into(),
+            producer_id,
+            producer_epoch,
+            topics,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::new(&response);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(TxnOffsetCommitResponseV0::decode_body(&mut decoder)?)
     }
 
     /// Sends OffsetFetch v2 for a consumer group.
@@ -659,8 +686,9 @@ impl RequestTrace {
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
-    use super::{AddPartitionsToTxnTopic, Client, RequestTrace};
+    use super::{AddPartitionsToTxnTopic, Client, RequestTrace, TxnOffsetCommitTopic};
     use crate::Error;
+    use kafrust_protocol::api::txn_offset_commit::TxnOffsetCommitPartition;
     use std::time::Duration;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
@@ -924,6 +952,55 @@ mod tests {
 
         assert_eq!(response.throttle_time_ms, 4);
         assert_eq!(response.error_code, 16);
+        broker.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn commits_transaction_offsets_over_injected_broker_stream() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(1024);
+        let broker = tokio::spawn(async move {
+            let request = read_test_frame(&mut broker_stream).await;
+            assert_eq!(&request[0..4], &[0, 28, 0, 0]);
+            write_test_frame(
+                &mut broker_stream,
+                &[
+                    0, 0, 0, 1, // correlation id
+                    0, 0, 0, 3, // throttle time
+                    0, 0, 0, 1, // topic count
+                    0, 6, b'o', b'r', b'd', b'e', b'r', b's', 0, 0, 0, 1, // partition count
+                    0, 0, 0, 2, // partition index
+                    0, 27, // rebalance in progress
+                ],
+            )
+            .await;
+        });
+        let mut client = Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-stream-test".to_owned()),
+            Some(Duration::from_secs(1)),
+        );
+
+        let response = client
+            .txn_offset_commit_v0(
+                "orders-tx",
+                "orders-group",
+                42,
+                3,
+                vec![TxnOffsetCommitTopic {
+                    name: "orders".to_owned(),
+                    partitions: vec![TxnOffsetCommitPartition {
+                        partition_index: 2,
+                        committed_offset: 81,
+                        committed_metadata: None,
+                    }],
+                }],
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.throttle_time_ms, 3);
+        assert_eq!(response.topics[0].partitions[0].partition_index, 2);
+        assert_eq!(response.topics[0].partitions[0].error_code, 27);
         broker.await.unwrap();
     }
 

@@ -806,12 +806,14 @@ Evidence:
 - `AddOffsetsToTxn v0` encodes the transactional producer identity and target
   consumer group, with low-level client and injected-broker coverage for
   coordinator errors.
+- `TxnOffsetCommit v0` encodes transactional topic-partition offsets and
+  metadata, and preserves partition-scoped group errors through the low-level
+  client roundtrip.
 
 Remaining:
 
 - transactional producer configuration and state transitions
 - transaction coordinator retry handling
-- TxnOffsetCommit
 - transactional Produce requests and EndTxn commit/abort orchestration
 - read-committed fetch filtering and live commit/abort smoke coverage
 
