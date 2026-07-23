@@ -598,6 +598,42 @@ mod tests {
     }
 
     #[test]
+    fn zstd_record_batch_encoding_roundtrips_through_fetch_decoder() {
+        let record_set =
+            encode_record_batch_set_with_compression(
+                &[RecordBatchMessage::new(
+                    Some(b"order-1".to_vec()),
+                    Some(b"created".to_vec()),
+                    1_000,
+                )
+                .header("source", Some(b"checkout".to_vec()))],
+                RecordBatchCompression::Zstd,
+            )
+            .unwrap();
+
+        let mut bytes = Encoder::new();
+        bytes.write_i32(0);
+        bytes.write_i32(1);
+        bytes.write_string("orders").unwrap();
+        bytes.write_i32(1);
+        bytes.write_i32(0);
+        bytes.write_i16(0);
+        bytes.write_i64(43);
+        bytes.write_bytes(&record_set).unwrap();
+        let bytes = bytes.into_bytes();
+
+        let mut decoder = Decoder::new(&bytes);
+        let response = FetchResponseV2::decode_body(&mut decoder).unwrap();
+        let record = &response.responses[0].partitions[0].records[0];
+
+        assert_eq!(record.offset, 0);
+        assert_eq!(record.timestamp_ms, 1_000);
+        assert_eq!(record.key.as_deref(), Some(&b"order-1"[..]));
+        assert_eq!(record.value.as_deref(), Some(&b"created"[..]));
+        assert!(decoder.is_empty());
+    }
+
+    #[test]
     fn reports_message_set_encoded_len() {
         let records = [MessageSetMessage::new(
             Some(b"order-1".to_vec()),

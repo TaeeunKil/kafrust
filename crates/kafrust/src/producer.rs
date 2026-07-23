@@ -57,6 +57,8 @@ pub enum Compression {
     Snappy,
     /// Compress produced RecordBatch v2 payloads with Kafka-compatible LZ4 framing.
     Lz4,
+    /// Compress produced RecordBatch v2 payloads with Kafka-compatible Zstd framing.
+    Zstd,
 }
 
 impl Compression {
@@ -66,6 +68,7 @@ impl Compression {
             Self::Gzip => RecordBatchCompression::Gzip,
             Self::Snappy => RecordBatchCompression::Snappy,
             Self::Lz4 => RecordBatchCompression::Lz4,
+            Self::Zstd => RecordBatchCompression::Zstd,
         }
     }
 
@@ -1963,6 +1966,17 @@ mod tests {
     }
 
     #[test]
+    fn selects_record_batch_when_zstd_compression_is_configured() {
+        let versions = api_versions(3);
+        let record = ProducerRecord::to("orders");
+
+        assert_eq!(
+            select_produce_version(&versions, &record, Compression::Zstd).unwrap(),
+            ProduceVersion::V3
+        );
+    }
+
+    #[test]
     fn rejects_headers_when_only_produce_v2_is_available() {
         let versions = api_versions(2);
         let record = ProducerRecord::to("orders").header("source", "checkout");
@@ -2050,6 +2064,20 @@ mod tests {
 
         assert_eq!(
             select_produce_batch_version(&versions, &records, Compression::Lz4).unwrap(),
+            ProduceVersion::V3
+        );
+    }
+
+    #[test]
+    fn selects_record_batch_for_zstd_batch_when_produce_v3_is_available() {
+        let versions = api_versions(3);
+        let first = BatchRecord::new(ProducerRecord::to("orders"));
+        let second = BatchRecord::new(ProducerRecord::to("orders").key("order-2"));
+        let batch = [first, second];
+        let records = prepared_records(&batch);
+
+        assert_eq!(
+            select_produce_batch_version(&versions, &records, Compression::Zstd).unwrap(),
             ProduceVersion::V3
         );
     }

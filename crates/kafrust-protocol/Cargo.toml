@@ -17,4 +17,5 @@ workspace = true
 [dependencies]
 flate2 = { version = ">=1.0.35, <1.1", default-features = false, features = ["rust_backend"] }
 lz-fear = "=0.2.0"
+ruzstd = { version = "=0.8.1", default-features = false, features = ["std"] }
 snap = "1.1"

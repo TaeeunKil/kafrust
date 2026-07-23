@@ -77,7 +77,7 @@ cargo add kafrust@0.2
 
 ### Requirements
 
-- Rust `1.75` or newer.
+- Rust `1.81` or newer.
 - A Tokio runtime in the application.
 - A Kafka broker for runtime client calls.
 - No `librdkafka`, C client bindings, or required C toolchain.
@@ -256,11 +256,13 @@ See [Compatibility](docs/compatibility.md) and
 - Broker compatibility is verified against Kafka `3.7.2` only.
 - Multi-broker clusters, leader failover, rack awareness, and partition
   expansion are not yet claimed.
-- Gzip, Snappy, and LZ4 compression are implemented for Produce v3 RecordBatch
-  encoding and Fetch v2 RecordBatch decoding, and are verified against Kafka
-  `3.7.2` plaintext single-node and multi-broker smoke profiles. Snappy uses
-  Kafka-compatible Xerial framing and accepts raw Snappy blocks when decoding.
-  Zstd and secured compression profiles are not claimed yet.
+- Gzip, Snappy, LZ4, and Zstd compression are implemented for Produce v3
+  RecordBatch encoding and Fetch v2 RecordBatch decoding. Gzip, Snappy, and LZ4
+  are verified against Kafka `3.7.2` plaintext single-node and multi-broker
+  smoke profiles; Zstd has focused codec and Produce-to-Fetch tests, with live
+  broker verification pending. Snappy uses Kafka-compatible Xerial framing and
+  accepts raw Snappy blocks when decoding. Secured compression profiles are not
+  claimed yet.
 - Idempotent producers, transactions, admin APIs, and broad observability are
   not implemented yet.
 - `acks=0` remains unsupported because the current request loop expects a broker
