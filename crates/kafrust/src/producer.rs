@@ -1086,6 +1086,10 @@ fn delivery_error_from_request_error(error: &Error) -> Error {
         Error::RequestTimedOut { timeout_ms } => Error::RequestTimedOut {
             timeout_ms: *timeout_ms,
         },
+        Error::ResponseTooLarge { size, max } => Error::ResponseTooLarge {
+            size: *size,
+            max: *max,
+        },
         Error::TlsConfig { reason } => Error::TlsConfig {
             reason: reason.clone(),
         },
@@ -2133,6 +2137,12 @@ impl ProducerConfig {
         self
     }
 
+    /// Sets the maximum broker response payload allocated for one producer request.
+    pub fn max_response_bytes(mut self, max_response_bytes: usize) -> Self {
+        self.client = self.client.max_response_bytes(max_response_bytes);
+        self
+    }
+
     /// Sets the shared metrics handle used by producer broker connections.
     pub fn metrics(mut self, metrics: ClientMetrics) -> Self {
         self.client = self.client.metrics(metrics);
@@ -2862,6 +2872,7 @@ fn can_retry_send(error: &Error) -> bool {
         Error::MissingBootstrapServer
         | Error::MissingSaslCredentials
         | Error::InvalidSaslResponse { .. }
+        | Error::ResponseTooLarge { .. }
         | Error::TlsConfig { .. }
         | Error::InvalidTlsServerName { .. }
         | Error::Unsupported(_)

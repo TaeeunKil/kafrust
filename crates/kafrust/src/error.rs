@@ -130,6 +130,13 @@ pub enum Error {
         /// Timeout in milliseconds.
         timeout_ms: u64,
     },
+    /// A broker response frame exceeded the configured allocation limit.
+    ResponseTooLarge {
+        /// Response payload bytes declared by the broker.
+        size: usize,
+        /// Configured maximum response payload bytes.
+        max: usize,
+    },
     /// TLS configuration could not be built.
     TlsConfig {
         /// Redacted TLS configuration failure reason.
@@ -181,6 +188,12 @@ impl fmt::Display for Error {
             Self::RequestTimedOut { timeout_ms } => {
                 write!(f, "Kafka request timed out after {timeout_ms}ms")
             }
+            Self::ResponseTooLarge { size, max } => {
+                write!(
+                    f,
+                    "Kafka response frame of {size} bytes exceeds configured maximum of {max} bytes"
+                )
+            }
             Self::TlsConfig { reason } => write!(f, "TLS configuration error: {reason}"),
             Self::InvalidTlsServerName { server } => {
                 write!(f, "invalid TLS server name {server}")
@@ -207,6 +220,7 @@ impl std::error::Error for Error {
             | Self::InvalidSaslResponse { .. }
             | Self::Broker { .. }
             | Self::RequestTimedOut { .. }
+            | Self::ResponseTooLarge { .. }
             | Self::TlsConfig { .. }
             | Self::InvalidTlsServerName { .. }
             | Self::Unsupported(_) => None,

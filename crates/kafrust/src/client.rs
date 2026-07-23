@@ -51,12 +51,15 @@ use tracing::{debug, debug_span, Instrument, Span};
 use crate::error::{Error, Result};
 use crate::metrics::ClientMetrics;
 
+pub(crate) const DEFAULT_MAX_RESPONSE_BYTES: usize = 100 * 1024 * 1024;
+
 /// Low-level Kafka request client over a single broker connection.
 pub struct Client {
     stream: Box<dyn BrokerStream>,
     client_id: Option<String>,
     next_correlation_id: i32,
     request_timeout: Option<Duration>,
+    max_response_bytes: usize,
     metrics: ClientMetrics,
 }
 
@@ -91,6 +94,7 @@ impl Client {
         server: impl tokio::net::ToSocketAddrs,
         client_id: Option<String>,
         request_timeout: Duration,
+        max_response_bytes: usize,
         metrics: ClientMetrics,
     ) -> Result<Self> {
         let stream = TcpStream::connect(server).await?;
@@ -98,6 +102,7 @@ impl Client {
             Box::new(stream),
             client_id,
             Some(request_timeout),
+            max_response_bytes,
             metrics,
         ))
     }
@@ -107,13 +112,20 @@ impl Client {
         client_id: Option<String>,
         request_timeout: Option<Duration>,
     ) -> Self {
-        Self::from_stream_with_metrics(stream, client_id, request_timeout, ClientMetrics::new())
+        Self::from_stream_with_metrics(
+            stream,
+            client_id,
+            request_timeout,
+            DEFAULT_MAX_RESPONSE_BYTES,
+            ClientMetrics::new(),
+        )
     }
 
     pub(crate) fn from_stream_with_metrics(
         stream: Box<dyn BrokerStream>,
         client_id: Option<String>,
         request_timeout: Option<Duration>,
+        max_response_bytes: usize,
         metrics: ClientMetrics,
     ) -> Self {
         Self {
@@ -121,6 +133,7 @@ impl Client {
             client_id,
             next_correlation_id: 1,
             request_timeout,
+            max_response_bytes,
             metrics,
         }
     }
@@ -623,12 +636,17 @@ impl Client {
             }));
         }
 
-        let mut response = vec![
-            0;
-            usize::try_from(size).map_err(|_| {
-                Error::Protocol(kafrust_protocol::Error::LengthOverflow("response frame"))
-            })?
-        ];
+        let size = usize::try_from(size).map_err(|_| {
+            Error::Protocol(kafrust_protocol::Error::LengthOverflow("response frame"))
+        })?;
+        if size > self.max_response_bytes {
+            return Err(Error::ResponseTooLarge {
+                size,
+                max: self.max_response_bytes,
+            });
+        }
+
+        let mut response = vec![0; size];
         self.stream.read_exact(&mut response).await?;
         Ok(response)
     }
@@ -646,6 +664,7 @@ impl fmt::Debug for Client {
             .field("client_id", &self.client_id)
             .field("next_correlation_id", &self.next_correlation_id)
             .field("request_timeout", &self.request_timeout)
+            .field("max_response_bytes", &self.max_response_bytes)
             .field("metrics", &self.metrics)
             .finish_non_exhaustive()
     }
@@ -730,7 +749,10 @@ impl RequestTrace {
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
-    use super::{AddPartitionsToTxnTopic, Client, RequestTrace, TxnOffsetCommitTopic};
+    use super::{
+        AddPartitionsToTxnTopic, Client, RequestTrace, TxnOffsetCommitTopic,
+        DEFAULT_MAX_RESPONSE_BYTES,
+    };
     use crate::{ClientMetrics, Error};
     use kafrust_protocol::api::txn_offset_commit::TxnOffsetCommitPartition;
     use std::time::Duration;
@@ -752,6 +774,7 @@ mod tests {
             addr,
             Some("kafrust-timeout-test".to_owned()),
             Duration::from_millis(5),
+            DEFAULT_MAX_RESPONSE_BYTES,
             ClientMetrics::new(),
         )
         .await
@@ -768,6 +791,39 @@ mod tests {
         assert!(metrics.request_bytes > 0);
         assert!(metrics.max_latency >= Duration::from_millis(5));
         server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn rejects_response_frame_before_allocating_over_limit() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(1024);
+        let broker = tokio::spawn(async move {
+            let _request = read_test_frame(&mut broker_stream).await;
+            broker_stream
+                .write_all(&32_i32.to_be_bytes())
+                .await
+                .unwrap();
+            broker_stream.flush().await.unwrap();
+        });
+        let metrics = ClientMetrics::new();
+        let mut client = Client::from_stream_with_metrics(
+            Box::new(client_stream),
+            Some("kafrust-response-limit-test".to_owned()),
+            Some(Duration::from_secs(1)),
+            8,
+            metrics.clone(),
+        );
+
+        let error = client.api_versions().await.unwrap_err();
+
+        assert!(matches!(
+            error,
+            Error::ResponseTooLarge { size: 32, max: 8 }
+        ));
+        let snapshot = metrics.snapshot();
+        assert_eq!(snapshot.requests_failed, 1);
+        assert_eq!(snapshot.response_bytes, 0);
+        assert_eq!(snapshot.in_flight_requests, 0);
+        broker.await.unwrap();
     }
 
     #[tokio::test]
