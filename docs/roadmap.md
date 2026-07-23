@@ -845,7 +845,7 @@ Known limits:
 
 ## M19 Observability, Limits, And Performance
 
-Status: Planned.
+Status: In progress.
 
 Goal: make kafrust measurable, tunable, and safe under sustained load.
 
@@ -869,6 +869,30 @@ Exit criteria:
 Strategic role:
 
 - Without observability and limits, kafrust cannot be responsibly adopted as a production client dependency.
+
+Implemented evidence:
+
+- `ClientMetrics` provides shared lock-free counters for started, successful,
+  failed, timed-out, cancelled, and in-flight request roundtrips, request and
+  response payload bytes, and total and maximum latency.
+- `ClientConfig`, `ProducerConfig`, `ConsumerConfig`, and
+  `ConsumerGroupConfig` accept a shared metrics handle. Every bootstrap,
+  leader, coordinator, TLS, and SASL connection created from that
+  configuration retains the same handle.
+- Request start, response, and failure events now execute inside a
+  `kafka.request` tracing span with API key, API version, correlation ID, and
+  request byte count. Payload contents remain excluded.
+- Focused tests cover shared success/failure accounting, timeout
+  classification, byte counters, latency, cancellation cleanup, and in-flight
+  gauge cleanup.
+
+Remaining:
+
+- retry, record, batch, queue-depth, and high-level operation metrics
+- complete producer, consumer, and group operation spans
+- configured memory limits and typed limit errors
+- throughput and latency benchmark baselines
+- load, soak, and failure-injection profiles
 
 ## M20 Compatibility Matrix And Migration Guide
 

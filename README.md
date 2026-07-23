@@ -292,8 +292,9 @@ See [Compatibility](docs/compatibility.md) and
   commit, and abort. `IsolationLevel::ReadCommitted` hides aborted transaction
   records for direct and group consumers, and current group assignments can be
   committed through `Producer::send_offsets_to_transaction`. Transactional
-  buffered sends, admin APIs, live broker failure injection, and broad
-  observability are not implemented yet.
+  buffered sends, admin APIs, live broker failure injection, and complete
+  producer/consumer operation metrics are not implemented yet. Shared
+  request-level counters and `kafka.request` tracing spans are available.
 - `acks=0` remains unsupported because the current request loop expects a broker
   response.
 
@@ -308,6 +309,7 @@ Primary public entry points:
 - `ConsumerGroupConfig`, `ConsumerGroup`, and `ConsumerGroupHeartbeat`.
 - `SecurityProtocol`, `SaslMechanism`, and `SaslCredentials` for plaintext,
   TLS, and SASL connection modes.
+- `ClientMetrics` and `ClientMetricsSnapshot` for request-level observability.
 - `kafrust::protocol` for the companion `kafrust-protocol` crate.
 
 Generated API documentation:

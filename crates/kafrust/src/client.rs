@@ -46,9 +46,10 @@ use std::fmt;
 use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
-use tracing::debug;
+use tracing::{debug, debug_span, Instrument, Span};
 
 use crate::error::{Error, Result};
+use crate::metrics::ClientMetrics;
 
 /// Low-level Kafka request client over a single broker connection.
 pub struct Client {
@@ -56,6 +57,7 @@ pub struct Client {
     client_id: Option<String>,
     next_correlation_id: i32,
     request_timeout: Option<Duration>,
+    metrics: ClientMetrics,
 }
 
 pub(crate) trait BrokerStream: AsyncRead + AsyncWrite + Unpin + Send + Sync {}
@@ -85,16 +87,18 @@ impl Client {
         Ok(Self::from_stream(Box::new(stream), client_id, None))
     }
 
-    pub(crate) async fn connect_with_request_timeout(
+    pub(crate) async fn connect_with_request_timeout_and_metrics(
         server: impl tokio::net::ToSocketAddrs,
         client_id: Option<String>,
         request_timeout: Duration,
+        metrics: ClientMetrics,
     ) -> Result<Self> {
         let stream = TcpStream::connect(server).await?;
-        Ok(Self::from_stream(
+        Ok(Self::from_stream_with_metrics(
             Box::new(stream),
             client_id,
             Some(request_timeout),
+            metrics,
         ))
     }
 
@@ -103,12 +107,27 @@ impl Client {
         client_id: Option<String>,
         request_timeout: Option<Duration>,
     ) -> Self {
+        Self::from_stream_with_metrics(stream, client_id, request_timeout, ClientMetrics::new())
+    }
+
+    pub(crate) fn from_stream_with_metrics(
+        stream: Box<dyn BrokerStream>,
+        client_id: Option<String>,
+        request_timeout: Option<Duration>,
+        metrics: ClientMetrics,
+    ) -> Self {
         Self {
             stream,
             client_id,
             next_correlation_id: 1,
             request_timeout,
+            metrics,
         }
+    }
+
+    /// Returns a shared handle to metrics for this client connection.
+    pub fn metrics(&self) -> ClientMetrics {
+        self.metrics.clone()
     }
 
     /// Sends ApiVersions v0 and decodes the broker response.
@@ -562,20 +581,31 @@ impl Client {
 
     async fn send_request(&mut self, request: &[u8]) -> Result<Vec<u8>> {
         let trace = RequestTrace::from_request(request);
-        RequestTrace::log_start(trace);
+        let span = RequestTrace::span(trace);
+        let metrics = self.metrics.start_request(request.len());
 
-        let result = if let Some(timeout) = self.request_timeout {
-            tokio::time::timeout(timeout, self.send_request_unbounded(request))
-                .await
-                .map_err(|_| Error::RequestTimedOut {
-                    timeout_ms: duration_millis(timeout),
-                })?
-        } else {
-            self.send_request_unbounded(request).await
-        };
+        async {
+            RequestTrace::log_start(trace);
+            let result = if let Some(timeout) = self.request_timeout {
+                match tokio::time::timeout(timeout, self.send_request_unbounded(request)).await {
+                    Ok(result) => result,
+                    Err(_) => Err(Error::RequestTimedOut {
+                        timeout_ms: duration_millis(timeout),
+                    }),
+                }
+            } else {
+                self.send_request_unbounded(request).await
+            };
 
-        RequestTrace::log_finish(trace, &result);
-        result
+            RequestTrace::log_finish(trace, &result);
+            match &result {
+                Ok(response) => metrics.succeed(response.len()),
+                Err(error) => metrics.fail(matches!(error, Error::RequestTimedOut { .. })),
+            }
+            result
+        }
+        .instrument(span)
+        .await
     }
 
     async fn send_request_unbounded(&mut self, request: &[u8]) -> Result<Vec<u8>> {
@@ -616,6 +646,7 @@ impl fmt::Debug for Client {
             .field("client_id", &self.client_id)
             .field("next_correlation_id", &self.next_correlation_id)
             .field("request_timeout", &self.request_timeout)
+            .field("metrics", &self.metrics)
             .finish_non_exhaustive()
     }
 }
@@ -644,6 +675,19 @@ impl RequestTrace {
             correlation_id: i32::from_be_bytes([request[4], request[5], request[6], request[7]]),
             request_bytes: request.len(),
         })
+    }
+
+    fn span(trace: Option<Self>) -> Span {
+        match trace {
+            Some(trace) => debug_span!(
+                "kafka.request",
+                api_key = trace.api_key,
+                api_version = trace.api_version,
+                correlation_id = trace.correlation_id,
+                request_bytes = trace.request_bytes,
+            ),
+            None => Span::none(),
+        }
     }
 
     fn log_start(trace: Option<Self>) {
@@ -687,7 +731,7 @@ impl RequestTrace {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::{AddPartitionsToTxnTopic, Client, RequestTrace, TxnOffsetCommitTopic};
-    use crate::Error;
+    use crate::{ClientMetrics, Error};
     use kafrust_protocol::api::txn_offset_commit::TxnOffsetCommitPartition;
     use std::time::Duration;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -704,10 +748,11 @@ mod tests {
             tokio::time::sleep(Duration::from_millis(50)).await;
         });
 
-        let mut client = Client::connect_with_request_timeout(
+        let mut client = Client::connect_with_request_timeout_and_metrics(
             addr,
             Some("kafrust-timeout-test".to_owned()),
             Duration::from_millis(5),
+            ClientMetrics::new(),
         )
         .await
         .unwrap();
@@ -715,6 +760,13 @@ mod tests {
         let error = client.api_versions().await.unwrap_err();
 
         assert!(matches!(error, Error::RequestTimedOut { timeout_ms: 5 }));
+        let metrics = client.metrics().snapshot();
+        assert_eq!(metrics.requests_started, 1);
+        assert_eq!(metrics.requests_failed, 1);
+        assert_eq!(metrics.requests_timed_out, 1);
+        assert_eq!(metrics.in_flight_requests, 0);
+        assert!(metrics.request_bytes > 0);
+        assert!(metrics.max_latency >= Duration::from_millis(5));
         server.await.unwrap();
     }
 
@@ -756,6 +808,12 @@ mod tests {
 
         assert_eq!(response.error_code, 0);
         assert_eq!(response.highest_supported_version(18, 4), Some(4));
+        let metrics = client.metrics().snapshot();
+        assert_eq!(metrics.requests_started, 1);
+        assert_eq!(metrics.requests_succeeded, 1);
+        assert_eq!(metrics.requests_failed, 0);
+        assert_eq!(metrics.response_bytes, 16);
+        assert_eq!(metrics.in_flight_requests, 0);
         broker.await.unwrap();
     }
 

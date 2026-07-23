@@ -19,6 +19,7 @@ use crate::client::Client;
 use crate::config::{ClientConfig, SecurityProtocol};
 use crate::consumer::ConsumerAssignment;
 use crate::error::{BrokerErrorKind, Error, Result};
+use crate::metrics::ClientMetrics;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time::{self, Instant};
@@ -2129,6 +2130,12 @@ impl ProducerConfig {
     /// Sets the request timeout in milliseconds.
     pub fn request_timeout_ms(mut self, request_timeout_ms: u64) -> Self {
         self.client = self.client.request_timeout_ms(request_timeout_ms);
+        self
+    }
+
+    /// Sets the shared metrics handle used by producer broker connections.
+    pub fn metrics(mut self, metrics: ClientMetrics) -> Self {
+        self.client = self.client.metrics(metrics);
         self
     }
 

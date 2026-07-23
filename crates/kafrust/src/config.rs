@@ -1,5 +1,6 @@
 use crate::client::Client;
 use crate::error::{Error, Result};
+use crate::metrics::ClientMetrics;
 use crate::scram::{self, ScramHash};
 use core::fmt;
 use std::str;
@@ -132,6 +133,7 @@ pub struct ClientConfig {
     tls_server_name: Option<String>,
     tls_root_certificates_der: Vec<Vec<u8>>,
     sasl_credentials: Option<SaslCredentials>,
+    metrics: ClientMetrics,
 }
 
 impl ClientConfig {
@@ -145,6 +147,7 @@ impl ClientConfig {
             tls_server_name: None,
             tls_root_certificates_der: Vec::new(),
             sasl_credentials: None,
+            metrics: ClientMetrics::new(),
         }
     }
 
@@ -157,6 +160,12 @@ impl ClientConfig {
     /// Sets the request timeout applied after a broker connection is established.
     pub fn request_timeout_ms(mut self, request_timeout_ms: u64) -> Self {
         self.request_timeout = Duration::from_millis(request_timeout_ms);
+        self
+    }
+
+    /// Sets the shared metrics handle used by every connection from this configuration.
+    pub fn metrics(mut self, metrics: ClientMetrics) -> Self {
+        self.metrics = metrics;
         self
     }
 
@@ -231,6 +240,11 @@ impl ClientConfig {
         self.request_timeout
     }
 
+    /// Returns the shared metrics handle used by connections from this configuration.
+    pub fn metrics_ref(&self) -> ClientMetrics {
+        self.metrics.clone()
+    }
+
     /// Returns the configured Kafka security protocol.
     pub fn security_protocol_ref(&self) -> SecurityProtocol {
         self.security_protocol
@@ -271,10 +285,11 @@ impl ClientConfig {
     pub(crate) async fn connect_broker(&self, server: String) -> Result<Client> {
         match self.security_protocol {
             SecurityProtocol::Plaintext => {
-                Client::connect_with_request_timeout(
+                Client::connect_with_request_timeout_and_metrics(
                     server,
                     self.client_id.clone(),
                     self.request_timeout,
+                    self.metrics.clone(),
                 )
                 .await
             }
@@ -289,10 +304,11 @@ impl ClientConfig {
             .sasl_credentials
             .as_ref()
             .ok_or(Error::MissingSaslCredentials)?;
-        let mut client = Client::connect_with_request_timeout(
+        let mut client = Client::connect_with_request_timeout_and_metrics(
             server,
             self.client_id.clone(),
             self.request_timeout,
+            self.metrics.clone(),
         )
         .await?;
         authenticate_sasl(&mut client, credentials).await?;
@@ -356,10 +372,11 @@ impl ClientConfig {
             .connect(server_name, tcp_stream)
             .await?;
 
-        Ok(Client::from_stream(
+        Ok(Client::from_stream_with_metrics(
             Box::new(tls_stream),
             self.client_id.clone(),
             Some(self.request_timeout),
+            self.metrics.clone(),
         ))
     }
 
@@ -536,7 +553,7 @@ mod tests {
         SecurityProtocol,
     };
     use crate::scram::{self, ScramHash};
-    use crate::Error;
+    use crate::{ClientMetrics, Error};
     use base64::engine::general_purpose::STANDARD as BASE64;
     use base64::Engine as _;
     use std::str;
@@ -674,6 +691,25 @@ mod tests {
             .await;
 
         assert!(client.is_ok());
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn propagates_metrics_handle_to_connected_client() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let _accepted = listener.accept().await.unwrap();
+        });
+        let metrics = ClientMetrics::new();
+
+        let client = ClientConfig::new([addr.to_string()])
+            .metrics(metrics.clone())
+            .connect()
+            .await
+            .unwrap();
+
+        assert_eq!(client.metrics(), metrics);
         server.await.unwrap();
     }
 
