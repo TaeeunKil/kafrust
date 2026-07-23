@@ -798,12 +798,17 @@ Evidence:
   results using Kafka API key 26 and decode coordinator throttle/error fields.
 - `Client::end_txn_v0` provides the low-level framed roundtrip, covered by
   byte-level commit/abort tests and an injected-broker response test.
+- `FindCoordinator v1` now exposes transaction coordinator discovery using
+  coordinator type 1, with protocol and injected-broker client coverage.
+- `AddPartitionsToTxn v0` request/response types preserve topic-partition
+  registration and partition-scoped broker errors. The low-level client
+  roundtrip is covered by byte-level and injected-broker tests.
 
 Remaining:
 
 - transactional producer configuration and state transitions
-- transaction coordinator discovery and retry handling
-- AddPartitionsToTxn, AddOffsetsToTxn, and TxnOffsetCommit
+- transaction coordinator retry handling
+- AddOffsetsToTxn and TxnOffsetCommit
 - transactional Produce requests and EndTxn commit/abort orchestration
 - read-committed fetch filtering and live commit/abort smoke coverage
 

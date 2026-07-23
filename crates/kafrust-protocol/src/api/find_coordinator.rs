@@ -97,6 +97,18 @@ mod tests {
     }
 
     #[test]
+    fn encodes_find_coordinator_v1_for_transaction() {
+        let request = FindCoordinatorRequestV1 {
+            correlation_id: 12,
+            client_id: None,
+            coordinator_key: "orders-tx".to_owned(),
+            coordinator_type: CoordinatorType::Transaction,
+        };
+
+        assert_eq!(request.encode().unwrap().last(), Some(&1));
+    }
+
+    #[test]
     fn decodes_find_coordinator_v1_response() {
         let bytes = [
             0, 0, 0, 0, // throttle time

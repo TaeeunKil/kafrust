@@ -1,3 +1,6 @@
+use kafrust_protocol::api::add_partitions_to_txn::{
+    AddPartitionsToTxnRequestV0, AddPartitionsToTxnResponseV0, AddPartitionsToTxnTopic,
+};
 use kafrust_protocol::api::api_versions::{ApiVersionsRequestV0, ApiVersionsResponseV0};
 use kafrust_protocol::api::end_txn::{EndTxnRequestV0, EndTxnResponseV0};
 use kafrust_protocol::api::fetch::{
@@ -202,16 +205,56 @@ impl Client {
         &mut self,
         group_id: impl Into<String>,
     ) -> Result<FindCoordinatorResponseV1> {
+        self.find_coordinator_v1(group_id.into(), CoordinatorType::Group)
+            .await
+    }
+
+    /// Sends FindCoordinator v1 for a transactional ID.
+    pub async fn find_transaction_coordinator(
+        &mut self,
+        transactional_id: impl Into<String>,
+    ) -> Result<FindCoordinatorResponseV1> {
+        self.find_coordinator_v1(transactional_id.into(), CoordinatorType::Transaction)
+            .await
+    }
+
+    async fn find_coordinator_v1(
+        &mut self,
+        coordinator_key: String,
+        coordinator_type: CoordinatorType,
+    ) -> Result<FindCoordinatorResponseV1> {
         let request = FindCoordinatorRequestV1 {
             correlation_id: self.next_correlation_id(),
             client_id: self.client_id.clone(),
-            coordinator_key: group_id.into(),
-            coordinator_type: CoordinatorType::Group,
+            coordinator_key,
+            coordinator_type,
         };
         let response = self.send_request(&request.encode()?).await?;
         let mut decoder = Decoder::new(&response);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(FindCoordinatorResponseV1::decode_body(&mut decoder)?)
+    }
+
+    /// Sends AddPartitionsToTxn v0 for a transactional producer.
+    pub async fn add_partitions_to_txn_v0(
+        &mut self,
+        transactional_id: impl Into<String>,
+        producer_id: i64,
+        producer_epoch: i16,
+        topics: Vec<AddPartitionsToTxnTopic>,
+    ) -> Result<AddPartitionsToTxnResponseV0> {
+        let request = AddPartitionsToTxnRequestV0 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            transactional_id: transactional_id.into(),
+            producer_id,
+            producer_epoch,
+            topics,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::new(&response);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(AddPartitionsToTxnResponseV0::decode_body(&mut decoder)?)
     }
 
     /// Sends OffsetFetch v2 for a consumer group.
@@ -591,7 +634,7 @@ impl RequestTrace {
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
-    use super::{Client, RequestTrace};
+    use super::{AddPartitionsToTxnTopic, Client, RequestTrace};
     use crate::Error;
     use std::time::Duration;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -745,6 +788,104 @@ mod tests {
         assert_eq!(response.throttle_time_ms, 7);
         assert_eq!(response.error_code, 0);
         broker.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn finds_transaction_coordinator_over_injected_broker_stream() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(1024);
+        let broker = tokio::spawn(async move {
+            let request = read_test_frame(&mut broker_stream).await;
+            assert_eq!(&request[0..4], &[0, 10, 0, 1]);
+            assert_eq!(request.last(), Some(&1));
+            write_test_frame(
+                &mut broker_stream,
+                &[
+                    0, 0, 0, 1, // correlation id
+                    0, 0, 0, 0, // throttle time
+                    0, 0, // error code
+                    0xff, 0xff, // null error message
+                    0, 0, 0, 2, // node id
+                    0, 9, b'l', b'o', b'c', b'a', b'l', b'h', b'o', b's', b't', 0, 0, 35,
+                    132, // port 9092
+                ],
+            )
+            .await;
+        });
+        let mut client = Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-stream-test".to_owned()),
+            Some(Duration::from_secs(1)),
+        );
+
+        let response = client
+            .find_transaction_coordinator("orders-tx")
+            .await
+            .unwrap();
+
+        assert_eq!(response.node_id, 2);
+        assert_eq!(response.host, "localhost");
+        broker.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn adds_partitions_to_transaction_over_injected_broker_stream() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(1024);
+        let broker = tokio::spawn(async move {
+            let request = read_test_frame(&mut broker_stream).await;
+            assert_eq!(&request[0..4], &[0, 24, 0, 0]);
+            write_test_frame(
+                &mut broker_stream,
+                &[
+                    0, 0, 0, 1, // correlation id
+                    0, 0, 0, 0, // throttle time
+                    0, 0, 0, 1, // topic count
+                    0, 6, b'o', b'r', b'd', b'e', b'r', b's', 0, 0, 0, 1, // partition count
+                    0, 0, 0, 2, // partition index
+                    0, 47, // invalid producer epoch
+                ],
+            )
+            .await;
+        });
+        let mut client = Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-stream-test".to_owned()),
+            Some(Duration::from_secs(1)),
+        );
+
+        let response = client
+            .add_partitions_to_txn_v0(
+                "orders-tx",
+                42,
+                3,
+                vec![AddPartitionsToTxnTopic {
+                    name: "orders".to_owned(),
+                    partitions: vec![2],
+                }],
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.errors[0].partitions[0].partition_index, 2);
+        assert_eq!(response.errors[0].partitions[0].error_code, 47);
+        broker.await.unwrap();
+    }
+
+    async fn read_test_frame(stream: &mut tokio::io::DuplexStream) -> Vec<u8> {
+        let mut request_size = [0u8; 4];
+        stream.read_exact(&mut request_size).await.unwrap();
+        let request_size = usize::try_from(i32::from_be_bytes(request_size)).unwrap();
+        let mut request = vec![0u8; request_size];
+        stream.read_exact(&mut request).await.unwrap();
+        request
+    }
+
+    async fn write_test_frame(stream: &mut tokio::io::DuplexStream, response: &[u8]) {
+        stream
+            .write_all(&(response.len() as i32).to_be_bytes())
+            .await
+            .unwrap();
+        stream.write_all(response).await.unwrap();
+        stream.flush().await.unwrap();
     }
 
     #[test]
