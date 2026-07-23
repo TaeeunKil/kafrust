@@ -765,7 +765,7 @@ Evidence:
 
 ## M18 Transactions And Read-Committed Consumers
 
-Status: Planned.
+Status: In progress.
 
 Goal: support Kafka exactly-once workflows where applications need transactional produce and read-committed consumption.
 
@@ -791,6 +791,21 @@ Exit criteria:
 Strategic role:
 
 - This is required for broad replacement of clients used in exactly-once and stream-processing-style services.
+
+Evidence:
+
+- `EndTxn v0` request and response protocol types encode commit and abort
+  results using Kafka API key 26 and decode coordinator throttle/error fields.
+- `Client::end_txn_v0` provides the low-level framed roundtrip, covered by
+  byte-level commit/abort tests and an injected-broker response test.
+
+Remaining:
+
+- transactional producer configuration and state transitions
+- transaction coordinator discovery and retry handling
+- AddPartitionsToTxn, AddOffsetsToTxn, and TxnOffsetCommit
+- transactional Produce requests and EndTxn commit/abort orchestration
+- read-committed fetch filtering and live commit/abort smoke coverage
 
 ## M19 Observability, Limits, And Performance
 

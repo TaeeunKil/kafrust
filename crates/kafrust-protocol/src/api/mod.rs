@@ -1,4 +1,5 @@
 pub mod api_versions;
+pub mod end_txn;
 pub mod fetch;
 pub mod find_coordinator;
 pub mod heartbeat;
