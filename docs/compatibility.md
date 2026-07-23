@@ -4,19 +4,20 @@ kafrust compatibility claims are scoped to behavior that has been verified again
 
 ## Current Compatibility Claim
 
-The `0.2.x` alpha line is verified against Apache Kafka 3.7.2 KRaft brokers over plaintext TCP in both single-node and three-broker profiles. TLS, SASL/PLAIN over SASL_PLAINTEXT, and SASL/SCRAM-SHA-256 over SASL_SSL are verified for single-node broker roundtrip, producer, direct consumer, and consumer group smoke paths. SASL/SCRAM-SHA-512 client exchanges are implemented, but the live broker profile is not claimed yet.
+The `0.2.x` alpha line is verified against Apache Kafka 3.7.2 KRaft brokers over plaintext TCP in both single-node and three-broker profiles and against Kafka 4.3.1 in the single-node plaintext profile. TLS, SASL/PLAIN over SASL_PLAINTEXT, and SASL/SCRAM-SHA-256 over SASL_SSL are verified against Kafka 3.7.2 for single-node broker roundtrip, producer, direct consumer, and consumer group smoke paths. SASL/SCRAM-SHA-512 client exchanges are implemented, but the live broker profile is not claimed yet.
 
 | Broker | Mode | Security | Verification | Status |
 | --- | --- | --- | --- | --- |
-| Apache Kafka 3.7.2 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, latest manual smoke run `29986018854` on 2026-07-23 | Passing |
-| Apache Kafka 3.7.2 | three-broker KRaft | PLAINTEXT | `Live Kafka Smoke` multi-broker job, latest manual smoke run `29986018854` on 2026-07-23 | Passing |
-| Apache Kafka 3.7.2 | single-node KRaft | TLS | `Live Kafka Smoke` TLS job, latest manual smoke run `29986018854` on 2026-07-23 | Passing |
-| Apache Kafka 3.7.2 | single-node KRaft | SASL_PLAINTEXT with SASL/PLAIN | `Live Kafka Smoke` SASL_PLAINTEXT job, latest manual smoke run `29986018854` on 2026-07-23 | Passing |
-| Apache Kafka 3.7.2 | single-node KRaft | SASL_SSL with SCRAM-SHA-256 | `Live Kafka Smoke` SASL_SSL SCRAM job, latest manual smoke run `29986018854` on 2026-07-23 | Passing |
+| Apache Kafka 3.7.2 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, manual run `29989550933` on 2026-07-23 | Passing |
+| Apache Kafka 3.7.2 | three-broker KRaft | PLAINTEXT | `Live Kafka Smoke` multi-broker job, manual run `29989550933` on 2026-07-23 | Passing |
+| Apache Kafka 3.7.2 | single-node KRaft | TLS | `Live Kafka Smoke` TLS job, manual run `29989550933` on 2026-07-23 | Passing |
+| Apache Kafka 3.7.2 | single-node KRaft | SASL_PLAINTEXT with SASL/PLAIN | `Live Kafka Smoke` SASL_PLAINTEXT job, manual run `29989550933` on 2026-07-23 | Passing |
+| Apache Kafka 3.7.2 | single-node KRaft | SASL_SSL with SCRAM-SHA-256 | `Live Kafka Smoke` SASL_SSL SCRAM job, manual run `29989550933` on 2026-07-23 | Passing |
+| Apache Kafka 4.3.1 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, manual run `29989550933` on 2026-07-23 | Passing |
 
 ## Verified Paths
 
-The Kafka 3.7.2 plaintext smoke path covers:
+The Kafka 3.7.2 and 4.3.1 plaintext smoke paths cover:
 
 - `ApiVersions v0` and `Metadata v1` roundtrips.
 - `FindCoordinator v1` for consumer group coordinator discovery.
@@ -32,7 +33,7 @@ The Kafka 3.7.2 plaintext smoke path covers:
 - Zstd Produce v7 RecordBatch encoding and Fetch v2 RecordBatch decoding are
   covered by focused standard-frame, declared-window, and decompression-limit
   tests and by the plaintext single-node and multi-broker live smoke profiles.
-- Direct consumer fetch from an assigned topic partition using Fetch v2 response decoding.
+- Direct consumer fetch from an assigned topic partition using Fetch v4 response decoding. The v4 path is required because Kafka 4.x no longer accepts Fetch v2.
 - Consumer group join, sync, heartbeat, poll, and offset commit through the alpha classic consumer group path with range assignment.
 
 The Kafka 3.7.2 multi-broker plaintext smoke path covers:
@@ -91,7 +92,7 @@ The current compatibility claim does not cover:
 - Secured multi-broker clusters, broader consumer-group failover beyond the listed coordinator reconnect checks, rack awareness, or partition expansion.
 - Secured compression profiles, idempotent producers, transactions, or
   high-throughput batching.
-- A full Kafka broker version matrix.
+- Kafka 3.8 and 3.9 broker profiles between the verified 3.7.2 and 4.3.1 endpoints.
 - Kafka APIs that are not listed in the verified paths.
 
 ## Updating Compatibility

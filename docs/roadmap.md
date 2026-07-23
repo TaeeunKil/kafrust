@@ -679,7 +679,6 @@ Evidence:
 
 Remaining:
 
-- secured live broker compression smoke coverage
 - configurable decompression limits
 
 ## M16 Admin API MVP
@@ -795,7 +794,7 @@ Strategic role:
 
 ## M20 Compatibility Matrix And Migration Guide
 
-Status: Planned.
+Status: In progress.
 
 Goal: make replacement decisions concrete for teams comparing kafrust with existing Kafka clients.
 
@@ -819,6 +818,15 @@ Exit criteria:
 Strategic role:
 
 - This milestone turns kafrust from a project into an evaluable replacement candidate.
+
+Evidence:
+
+- Manual `Live Kafka Smoke` run `29989550933` passed the single-node plaintext
+  producer, all-codec compression, direct consumer, and consumer group paths
+  against Kafka 3.7.2 and current stable Kafka 4.3.1.
+- The Kafka 4.3.1 run exposed the removal of Fetch v2 support; the high-level
+  consumer path now uses Fetch v4, which is supported by both verified broker
+  versions.
 
 ## M21 Broad Kafka Client Replacement
 
