@@ -392,6 +392,151 @@ impl IdempotentProducerState {
     }
 }
 
+#[derive(Debug, Default)]
+struct IdempotentBatchSequenceTracker {
+    assignments: BTreeMap<usize, IdempotentBatchSequenceAssignment>,
+    next_sequences: BTreeMap<(String, i32), i32>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct IdempotentBatchSequenceAssignment {
+    topic: String,
+    partition: i32,
+    identity: RecordBatchIdentity,
+    acknowledged: bool,
+}
+
+impl IdempotentBatchSequenceTracker {
+    fn identity_for_chunk(
+        &mut self,
+        state: Option<&IdempotentProducerState>,
+        key: &ProduceBatchKey,
+        records: &[PreparedBatchRecord<'_>],
+    ) -> Result<RecordBatchIdentity> {
+        let Some(state) = state else {
+            return Ok(RecordBatchIdentity::NON_IDEMPOTENT);
+        };
+        let Some(first) = records.first() else {
+            return Err(Error::Unsupported("empty idempotent record batch"));
+        };
+
+        if let Some(assignment) = self.assignments.get(&first.index) {
+            if assignment.topic != key.topic || assignment.partition != key.partition {
+                return Err(Error::Unsupported(
+                    "idempotent batch retry changed topic or partition",
+                ));
+            }
+            let identity = assignment.identity;
+            for (offset, record) in records.iter().enumerate() {
+                let expected = RecordBatchIdentity {
+                    base_sequence: advance_producer_sequence(identity.base_sequence, offset),
+                    ..identity
+                };
+                let assignment = self.assignments.get(&record.index);
+                if !assignment.is_some_and(|assignment| {
+                    assignment.topic == key.topic
+                        && assignment.partition == key.partition
+                        && assignment.identity == expected
+                }) {
+                    return Err(Error::Unsupported(
+                        "inconsistent idempotent batch retry sequence",
+                    ));
+                }
+            }
+            return Ok(identity);
+        }
+
+        if records
+            .iter()
+            .any(|record| self.assignments.contains_key(&record.index))
+        {
+            return Err(Error::Unsupported(
+                "partial idempotent batch sequence assignment",
+            ));
+        }
+
+        let sequence_key = (key.topic.clone(), key.partition);
+        let base_sequence = self
+            .next_sequences
+            .get(&sequence_key)
+            .copied()
+            .unwrap_or_else(|| state.identity(&key.topic, key.partition).base_sequence);
+        let identity = RecordBatchIdentity {
+            base_sequence,
+            ..state.identity(&key.topic, key.partition)
+        };
+        self.next_sequences.insert(
+            sequence_key,
+            advance_producer_sequence(base_sequence, records.len()),
+        );
+        for (offset, record) in records.iter().enumerate() {
+            self.assignments.insert(
+                record.index,
+                IdempotentBatchSequenceAssignment {
+                    topic: key.topic.clone(),
+                    partition: key.partition,
+                    identity: RecordBatchIdentity {
+                        base_sequence: advance_producer_sequence(identity.base_sequence, offset),
+                        ..identity
+                    },
+                    acknowledged: false,
+                },
+            );
+        }
+        Ok(identity)
+    }
+
+    fn acknowledge_chunk(
+        &mut self,
+        state: Option<&mut IdempotentProducerState>,
+        key: &ProduceBatchKey,
+        records: &[PreparedBatchRecord<'_>],
+    ) -> Result<()> {
+        let Some(state) = state else {
+            return Ok(());
+        };
+        let Some(first) = records.first() else {
+            return Err(Error::Unsupported("empty idempotent record batch"));
+        };
+        let assignment = self
+            .assignments
+            .get(&first.index)
+            .ok_or(Error::Unsupported(
+                "missing idempotent batch sequence assignment",
+            ))?;
+        let acknowledged = assignment.acknowledged;
+        if records
+            .iter()
+            .any(|record| match self.assignments.get(&record.index) {
+                Some(assignment) => assignment.acknowledged != acknowledged,
+                None => true,
+            })
+        {
+            return Err(Error::Unsupported(
+                "partially acknowledged idempotent batch chunk",
+            ));
+        }
+        if acknowledged {
+            return Ok(());
+        }
+        if assignment.identity != state.identity(&key.topic, key.partition) {
+            return Err(Error::Unsupported(
+                "idempotent batch acknowledged out of sequence",
+            ));
+        }
+        state.acknowledge(&key.topic, key.partition, records.len());
+        for record in records {
+            self.assignments
+                .get_mut(&record.index)
+                .ok_or(Error::Unsupported(
+                    "missing idempotent batch sequence assignment",
+                ))?
+                .acknowledged = true;
+        }
+        Ok(())
+    }
+}
+
 fn advance_producer_sequence(current: i32, record_count: usize) -> i32 {
     const SEQUENCE_MODULUS: u64 = i32::MAX as u64 + 1;
     let increment = (record_count as u64) % SEQUENCE_MODULUS;
@@ -973,11 +1118,6 @@ impl Producer {
         &mut self,
         records: impl IntoIterator<Item = ProducerRecord>,
     ) -> Result<ProducerBatchReport> {
-        if self.idempotent_state.is_some() {
-            return Err(Error::Unsupported(
-                "idempotent batch and buffered producer sends",
-            ));
-        }
         if self.config.acks == Acks::None {
             return Err(Error::Unsupported("producer acks=0 send without response"));
         }
@@ -996,9 +1136,12 @@ impl Producer {
             .take(records.len())
             .collect::<Vec<_>>();
         let mut pending_indexes = (0..records.len()).collect::<Vec<_>>();
+        let mut sequence_tracker = IdempotentBatchSequenceTracker::default();
         let mut attempt = 0;
         loop {
-            let result = self.send_batch_once(&records, &pending_indexes).await;
+            let result = self
+                .send_batch_once(&records, &pending_indexes, &mut sequence_tracker)
+                .await;
             match result {
                 Err(error) if attempt < self.config.max_retries && can_retry_send(&error) => {
                     invalidate_metadata_cache_for_record_indexes(
@@ -1071,6 +1214,7 @@ impl Producer {
         &mut self,
         records: &[BatchRecord],
         record_indexes: &[usize],
+        sequence_tracker: &mut IdempotentBatchSequenceTracker,
     ) -> Result<Vec<(usize, ProducerBatchRecordOutcome)>> {
         let mut groups = BTreeMap::<ProduceBatchKey, Vec<PreparedBatchRecord<'_>>>::new();
         for &index in record_indexes {
@@ -1093,7 +1237,10 @@ impl Producer {
 
         let mut output = Vec::with_capacity(record_indexes.len());
         for (key, records) in groups {
-            output.extend(self.send_batch_group(&key, &records).await?);
+            output.extend(
+                self.send_batch_group(&key, &records, sequence_tracker)
+                    .await?,
+            );
         }
         if output.len() != record_indexes.len() {
             return Err(Error::Unsupported("missing batch record outcome"));
@@ -1102,9 +1249,10 @@ impl Producer {
     }
 
     async fn send_batch_group(
-        &self,
+        &mut self,
         key: &ProduceBatchKey,
         records: &[PreparedBatchRecord<'_>],
+        sequence_tracker: &mut IdempotentBatchSequenceTracker,
     ) -> Result<Vec<(usize, ProducerBatchRecordOutcome)>> {
         debug!(
             topic = key.topic.as_str(),
@@ -1129,6 +1277,11 @@ impl Producer {
 
         let produce_version =
             select_produce_batch_version(&api_versions, records, self.config.compression)?;
+        if self.idempotent_state.is_some() && produce_version == ProduceVersion::V2 {
+            return Err(Error::Unsupported(
+                "idempotent producer requires Produce API v3 or newer",
+            ));
+        }
         debug!(
             topic = key.topic.as_str(),
             partition = key.partition,
@@ -1145,7 +1298,12 @@ impl Producer {
             self.config.compression,
         )?;
         let mut output = Vec::with_capacity(records.len());
-        for records in chunks {
+        for (chunk_index, records) in chunks.iter().copied().enumerate() {
+            let identity = sequence_tracker.identity_for_chunk(
+                self.idempotent_state.as_ref(),
+                key,
+                records,
+            )?;
             let response = match produce_version {
                 ProduceVersion::V7 => ProduceResponse::V7(
                     leader_client
@@ -1161,7 +1319,7 @@ impl Producer {
                                         .config
                                         .compression
                                         .as_record_batch_compression(),
-                                    identity: RecordBatchIdentity::NON_IDEMPOTENT,
+                                    identity,
                                     records: records
                                         .iter()
                                         .map(|record| {
@@ -1190,7 +1348,7 @@ impl Producer {
                                         .config
                                         .compression
                                         .as_record_batch_compression(),
-                                    identity: RecordBatchIdentity::NON_IDEMPOTENT,
+                                    identity,
                                     records: records
                                         .iter()
                                         .map(|record| {
@@ -1233,7 +1391,18 @@ impl Producer {
                     records,
                     partition_response.error_code,
                 ));
+                if self.idempotent_state.is_some() {
+                    for remaining in chunks.iter().skip(chunk_index + 1).copied() {
+                        output.extend(batch_failure_outcomes(
+                            key,
+                            remaining,
+                            partition_response.error_code,
+                        ));
+                    }
+                    break;
+                }
             } else {
+                sequence_tracker.acknowledge_chunk(self.idempotent_state.as_mut(), key, records)?;
                 output.extend(batch_success_outcomes(
                     key,
                     records,
@@ -2073,10 +2242,10 @@ mod tests {
         message_set_message, record_batch_attempt_outcomes, record_batch_message,
         select_produce_batch_version, select_produce_version, Acks, BatchRecord,
         BufferedFlushReason, BufferedProduceRequest, BufferedProducerCommand,
-        BufferedProducerState, Compression, IdempotentProducerState, PreparedBatchRecord,
-        ProduceBatchKey, ProduceVersion, Producer, ProducerBatchFailure,
-        ProducerBatchRecordOutcome, ProducerBatchReport, ProducerConfig, ProducerDelivery,
-        ProducerRecord, RecordMetadata, SecurityProtocol,
+        BufferedProducerState, Compression, IdempotentBatchSequenceTracker,
+        IdempotentProducerState, PreparedBatchRecord, ProduceBatchKey, ProduceVersion, Producer,
+        ProducerBatchFailure, ProducerBatchRecordOutcome, ProducerBatchReport, ProducerConfig,
+        ProducerDelivery, ProducerRecord, RecordMetadata, SecurityProtocol,
     };
     use crate::{BrokerErrorKind, Client, Error};
     use kafrust_protocol::api::api_versions::{ApiKeyVersion, ApiVersionsResponseV0};
@@ -2129,6 +2298,108 @@ mod tests {
     fn wraps_idempotent_sequence_after_i32_max() {
         assert_eq!(advance_producer_sequence(i32::MAX, 1), 0);
         assert_eq!(advance_producer_sequence(i32::MAX - 1, 3), 1);
+    }
+
+    #[test]
+    fn preserves_reserved_batch_sequences_across_retries_and_chunks() {
+        let batch = [
+            BatchRecord::new(ProducerRecord::to("orders")),
+            BatchRecord::new(ProducerRecord::to("orders")),
+            BatchRecord::new(ProducerRecord::to("orders")),
+        ];
+        let records = prepared_records(&batch);
+        let key = ProduceBatchKey {
+            broker_addr: "localhost:9092".to_owned(),
+            topic: "orders".to_owned(),
+            partition: 0,
+        };
+        let mut state = IdempotentProducerState::new(42, 3);
+        let mut tracker = IdempotentBatchSequenceTracker::default();
+
+        let first = tracker
+            .identity_for_chunk(Some(&state), &key, &records[..2])
+            .unwrap();
+        let retry = tracker
+            .identity_for_chunk(Some(&state), &key, &records[..2])
+            .unwrap();
+        let second = tracker
+            .identity_for_chunk(Some(&state), &key, &records[2..])
+            .unwrap();
+
+        assert_eq!(first.base_sequence, 0);
+        assert_eq!(retry, first);
+        assert_eq!(second.base_sequence, 2);
+        assert_eq!(state.identity("orders", 0).base_sequence, 0);
+        tracker
+            .acknowledge_chunk(Some(&mut state), &key, &records[..2])
+            .unwrap();
+        tracker
+            .acknowledge_chunk(Some(&mut state), &key, &records[..2])
+            .unwrap();
+        tracker
+            .acknowledge_chunk(Some(&mut state), &key, &records[2..])
+            .unwrap();
+        assert_eq!(state.identity("orders", 0).base_sequence, 3);
+    }
+
+    #[test]
+    fn rejects_idempotent_retry_on_a_different_partition() {
+        let batch = [BatchRecord::new(ProducerRecord::to("orders"))];
+        let records = prepared_records(&batch);
+        let state = IdempotentProducerState::new(42, 3);
+        let mut tracker = IdempotentBatchSequenceTracker::default();
+        let first_key = ProduceBatchKey {
+            broker_addr: "localhost:9092".to_owned(),
+            topic: "orders".to_owned(),
+            partition: 0,
+        };
+        let second_key = ProduceBatchKey {
+            partition: 1,
+            ..first_key.clone()
+        };
+
+        tracker
+            .identity_for_chunk(Some(&state), &first_key, &records)
+            .unwrap();
+        let error = tracker
+            .identity_for_chunk(Some(&state), &second_key, &records)
+            .unwrap_err();
+
+        assert!(matches!(
+            error,
+            Error::Unsupported("idempotent batch retry changed topic or partition")
+        ));
+        assert_eq!(state.identity("orders", 0).base_sequence, 0);
+    }
+
+    #[test]
+    fn reserves_batch_sequences_independently_per_partition() {
+        let first_batch = [BatchRecord::new(ProducerRecord::to("orders"))];
+        let second_batch = [BatchRecord::new(ProducerRecord::to("orders"))];
+        let first_records = prepared_records(&first_batch);
+        let mut second_records = prepared_records(&second_batch);
+        second_records[0].index = 1;
+        let state = IdempotentProducerState::new(42, 3);
+        let mut tracker = IdempotentBatchSequenceTracker::default();
+        let first_key = ProduceBatchKey {
+            broker_addr: "localhost:9092".to_owned(),
+            topic: "orders".to_owned(),
+            partition: 0,
+        };
+        let second_key = ProduceBatchKey {
+            partition: 1,
+            ..first_key.clone()
+        };
+
+        let first = tracker
+            .identity_for_chunk(Some(&state), &first_key, &first_records)
+            .unwrap();
+        let second = tracker
+            .identity_for_chunk(Some(&state), &second_key, &second_records)
+            .unwrap();
+
+        assert_eq!(first.base_sequence, 0);
+        assert_eq!(second.base_sequence, 0);
     }
 
     #[test]

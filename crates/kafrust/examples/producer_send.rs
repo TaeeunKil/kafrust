@@ -9,7 +9,7 @@ async fn main() -> kafrust::Result<()> {
     let key = std::env::var("KAFRUST_KEY").unwrap_or_else(|_| "kafrust-key".to_owned());
     let value = std::env::var("KAFRUST_VALUE").unwrap_or_else(|_| "hello from kafrust".to_owned());
     let partition = partition_from_env()?;
-    let idempotence = idempotence_from_env()?;
+    let idempotence = common::idempotence_from_env()?;
 
     let config = common::apply_security(
         ProducerConfig::new(bootstrap_servers).client_id("kafrust-producer-example"),
@@ -35,19 +35,6 @@ async fn main() -> kafrust::Result<()> {
     Ok(())
 }
 
-fn idempotence_from_env() -> kafrust::Result<bool> {
-    let Ok(value) = std::env::var("KAFRUST_ENABLE_IDEMPOTENCE") else {
-        return Ok(false);
-    };
-    match value.trim().to_ascii_lowercase().as_str() {
-        "" | "0" | "false" | "no" => Ok(false),
-        "1" | "true" | "yes" => Ok(true),
-        _ => Err(Error::Unsupported(
-            "KAFRUST_ENABLE_IDEMPOTENCE must be true or false",
-        )),
-    }
-}
-
 fn partition_from_env() -> kafrust::Result<Option<i32>> {
     let Some(value) = std::env::var("KAFRUST_PARTITION").ok() else {
         return Ok(None);
@@ -65,7 +52,7 @@ fn parse_partition(value: &str) -> kafrust::Result<i32> {
 
 #[cfg(test)]
 mod tests {
-    use super::{idempotence_from_env, parse_partition};
+    use super::parse_partition;
 
     #[test]
     fn parses_partition() {
@@ -75,11 +62,5 @@ mod tests {
     #[test]
     fn rejects_invalid_partition() {
         assert!(parse_partition("not-a-partition").is_err());
-    }
-
-    #[test]
-    fn parses_idempotence_default() {
-        std::env::remove_var("KAFRUST_ENABLE_IDEMPOTENCE");
-        assert!(!idempotence_from_env().expect("default should parse"));
     }
 }

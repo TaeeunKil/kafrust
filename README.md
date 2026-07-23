@@ -264,9 +264,9 @@ See [Compatibility](docs/compatibility.md) and
   verified against Kafka `3.7.2` plaintext single-node and multi-broker smoke
   profiles and the single-node TLS profile. Snappy uses Kafka-compatible Xerial
   framing and accepts raw Snappy blocks when decoding.
-- Idempotent single-record sends are available as an opt-in alpha; idempotent
-  batch and buffered sends, transactions, admin APIs, and broad observability
-  are not implemented yet.
+- Idempotent single-record, batch, and buffered sends are available as an
+  opt-in alpha. Transactions, admin APIs, idempotence failure-injection
+  coverage, and broad observability are not implemented yet.
 - `acks=0` remains unsupported because the current request loop expects a broker
   response.
 

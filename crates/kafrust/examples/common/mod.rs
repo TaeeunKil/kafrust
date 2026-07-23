@@ -54,6 +54,24 @@ pub(crate) fn compression_from_env() -> kafrust::Result<Compression> {
     parse_compression(&value)
 }
 
+#[allow(dead_code)]
+pub(crate) fn idempotence_from_env() -> kafrust::Result<bool> {
+    let Ok(value) = std::env::var("KAFRUST_ENABLE_IDEMPOTENCE") else {
+        return Ok(false);
+    };
+    parse_idempotence(&value)
+}
+
+fn parse_idempotence(value: &str) -> kafrust::Result<bool> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "" | "0" | "false" | "no" => Ok(false),
+        "1" | "true" | "yes" => Ok(true),
+        _ => Err(kafrust::Error::Unsupported(
+            "KAFRUST_ENABLE_IDEMPOTENCE must be true or false",
+        )),
+    }
+}
+
 pub(crate) trait ExampleSecurityConfig: Sized {
     fn security_protocol(self, security_protocol: SecurityProtocol) -> Self;
     fn tls_server_name(self, server_name: String) -> Self;
@@ -256,5 +274,17 @@ fn parse_compression(value: &str) -> kafrust::Result<Compression> {
         _ => Err(kafrust::Error::Unsupported(
             "unsupported KAFRUST_COMPRESSION; expected none, gzip, snappy, lz4, or zstd",
         )),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_idempotence;
+
+    #[test]
+    fn parses_idempotence_values() {
+        assert!(parse_idempotence(" true ").expect("true should parse"));
+        assert!(!parse_idempotence("no").expect("no should parse"));
+        assert!(parse_idempotence("sometimes").is_err());
     }
 }
