@@ -8,6 +8,7 @@ const DEFAULT_RECORDS: usize = 20_000;
 const DEFAULT_BATCH_SIZE: usize = 200;
 const DEFAULT_PAYLOAD_BYTES: usize = 1_024;
 const DEFAULT_WARMUP_BATCHES: usize = 3;
+const DEFAULT_MAX_BATCH_BYTES: usize = 900 * 1024;
 const CONSUME_TIMEOUT: Duration = Duration::from_secs(60);
 
 #[tokio::main]
@@ -19,6 +20,8 @@ async fn main() -> kafrust::Result<()> {
     let batch_size = usize_from_env("KAFRUST_BENCH_BATCH_SIZE", DEFAULT_BATCH_SIZE)?.max(1);
     let payload_bytes = usize_from_env("KAFRUST_BENCH_PAYLOAD_BYTES", DEFAULT_PAYLOAD_BYTES)?;
     let warmup_batches = usize_from_env("KAFRUST_BENCH_WARMUP_BATCHES", DEFAULT_WARMUP_BATCHES)?;
+    let max_batch_bytes =
+        usize_from_env("KAFRUST_BENCH_MAX_BATCH_BYTES", DEFAULT_MAX_BATCH_BYTES)?.max(1);
     if record_count == 0 {
         return Err(kafrust::Error::Unsupported(
             "KAFRUST_BENCH_RECORDS must be greater than zero",
@@ -27,10 +30,6 @@ async fn main() -> kafrust::Result<()> {
 
     let compression = common::compression_from_env()?;
     let metrics = ClientMetrics::new();
-    let max_batch_bytes = payload_bytes
-        .saturating_add(256)
-        .saturating_mul(batch_size)
-        .max(1_048_576);
     let mut producer = common::apply_security(
         ProducerConfig::new(bootstrap_servers.clone())
             .client_id("kafrust-throughput-producer")
@@ -120,7 +119,7 @@ async fn main() -> kafrust::Result<()> {
     println!(
         concat!(
             "{{\"topic\":\"{}\",\"compression\":\"{}\",\"records\":{},",
-            "\"batch_size\":{},\"payload_bytes\":{},",
+            "\"batch_size\":{},\"max_batch_bytes\":{},\"payload_bytes\":{},",
             "\"produce_seconds\":{:.6},\"produce_records_per_second\":{:.2},",
             "\"produce_mib_per_second\":{:.2},\"batch_p50_ms\":{:.3},",
             "\"batch_p95_ms\":{:.3},\"batch_p99_ms\":{:.3},",
@@ -131,6 +130,7 @@ async fn main() -> kafrust::Result<()> {
         compression_name(compression),
         record_count,
         batch_size,
+        max_batch_bytes,
         payload_bytes,
         produce_elapsed.as_secs_f64(),
         rate(record_count, produce_elapsed),

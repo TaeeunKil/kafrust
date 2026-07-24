@@ -31,10 +31,13 @@ topic can be reused without counting older records.
 | `KAFRUST_BENCH_BATCH_SIZE` | `200` | records per Produce batch |
 | `KAFRUST_BENCH_PAYLOAD_BYTES` | `1024` | value bytes per record |
 | `KAFRUST_BENCH_WARMUP_BATCHES` | `3` | unmeasured warmup batches |
+| `KAFRUST_BENCH_MAX_BATCH_BYTES` | `921600` | maximum encoded Produce chunk |
 | `KAFRUST_COMPRESSION` | `none` | `none`, `gzip`, `snappy`, `lz4`, or `zstd` |
 
 The standard connection and security environment variables used by the other
-examples are also supported.
+examples are also supported. The default encoded batch limit stays below
+Kafka's default broker message-size limit; larger logical batches are split
+into multiple Produce requests.
 
 ## GitHub Baseline
 
