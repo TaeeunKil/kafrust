@@ -1,0 +1,99 @@
+name: Kafka Benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      record_count:
+        description: Records per benchmark profile
+        required: true
+        default: "20000"
+      batch_size:
+        description: Records per Produce batch
+        required: true
+        default: "200"
+
+env:
+  CARGO_TERM_COLOR: always
+  KAFRUST_BOOTSTRAP_SERVERS: localhost:9092
+  KAFRUST_TOPIC: kafrust-benchmark
+
+jobs:
+  single-broker:
+    name: Kafka 4.3.1 single broker
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+
+      - name: Start Kafka
+        run: |
+          docker run -d --name kafrust-kafka \
+            -p 9092:9092 \
+            -e KAFKA_NODE_ID=1 \
+            -e KAFKA_PROCESS_ROLES=broker,controller \
+            -e KAFKA_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 \
+            -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092 \
+            -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+            -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
+            -e KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT \
+            -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@localhost:9093 \
+            -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
+            apache/kafka:4.3.1
+
+      - name: Wait for Kafka
+        run: |
+          for attempt in {1..90}; do
+            if docker exec kafrust-kafka /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server localhost:9092 >/tmp/kafrust-benchmark-probe.log 2>&1; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/kafrust-benchmark-probe.log || true
+          docker logs kafrust-kafka
+          exit 1
+
+      - name: Create benchmark topic
+        run: |
+          docker exec kafrust-kafka /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server localhost:9092 \
+            --create \
+            --topic "$KAFRUST_TOPIC" \
+            --partitions 1 \
+            --replication-factor 1
+
+      - name: Build release benchmark
+        run: cargo build --release -p kafrust --example throughput_benchmark
+
+      - name: Run benchmark profiles
+        env:
+          KAFRUST_BENCH_RECORDS: ${{ inputs.record_count }}
+          KAFRUST_BENCH_BATCH_SIZE: ${{ inputs.batch_size }}
+        run: |
+          : > benchmark-results.jsonl
+          for payload in 100 1024 10240; do
+            KAFRUST_BENCH_PAYLOAD_BYTES="$payload" \
+              cargo run --quiet --release -p kafrust --example throughput_benchmark \
+              | tee -a benchmark-results.jsonl
+          done
+          KAFRUST_BENCH_PAYLOAD_BYTES=1024 KAFRUST_COMPRESSION=zstd \
+            cargo run --quiet --release -p kafrust --example throughput_benchmark \
+            | tee -a benchmark-results.jsonl
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: kafrust-benchmark-${{ github.run_id }}
+          path: benchmark-results.jsonl
+          retention-days: 90
+
+      - name: Dump Kafka logs
+        if: failure()
+        run: docker logs kafrust-kafka
