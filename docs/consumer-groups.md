@@ -73,7 +73,13 @@ through the public API.
 
 Use `ConsumerGroup::spawn_heartbeat_task` when application work between polls can approach the group session timeout. It starts an opt-in background heartbeat loop on a separate coordinator connection. The returned `ConsumerGroupHeartbeat` records the group ID, member ID, and generation ID it belongs to.
 
-Pass the heartbeat handle to `ConsumerGroup::poll_with_heartbeat` when a background heartbeat task is running. This checks for early task completion before polling. If the task ended with a rejoinable group error, `poll_with_heartbeat` rejoins before polling. If the group already rejoined through another path, `poll_with_heartbeat` stops the stale same-group heartbeat task before polling so the old generation does not keep sending heartbeats.
+Pass the heartbeat handle to `ConsumerGroup::poll_with_heartbeat` when a
+background heartbeat task is running. This checks for early task completion
+before polling. If the task ended with a rejoinable group error,
+`poll_with_heartbeat` rejoins and replaces the handle with a new task using the
+same interval. If the group rejoins through another path before or during the
+foreground poll, `poll_with_heartbeat` stops the stale same-group task and
+replaces it for the current member and generation.
 
 Call `ConsumerGroupHeartbeat::try_wait` to observe early task completion without polling. Call `ConsumerGroupHeartbeat::stop` to shut the task down and observe any broker error returned by the task.
 
@@ -124,7 +130,10 @@ Current implementation status:
 - Consumer group join, heartbeat, background heartbeat, rejoin, and commit operations emit `tracing` events with operational metadata.
 - Rebalance handling can rejoin during `ConsumerGroup::poll` after coordinator, generation, member, or rebalance heartbeat errors.
 - Offset commit handling rejoins on coordinator, generation, member, rebalance, coordinator I/O, or coordinator timeout commit errors and returns the original commit error so callers can decide when to poll and commit again.
-- `ConsumerGroup::poll_with_heartbeat` observes a background heartbeat task before polling, rejoins when the task ended with a rejoinable group error, and stops same-group heartbeat handles that belong to an older member ID or generation ID. It does not restart a new background heartbeat task after rejoin.
+- `ConsumerGroup::poll_with_heartbeat` observes a background heartbeat task
+  before polling, rejoins when the task ended with a rejoinable group error,
+  and replaces completed or stale same-group heartbeat handles with a new task
+  for the current member and generation using the original interval.
 
 Run the opt-in coordinator example against a local broker:
 
