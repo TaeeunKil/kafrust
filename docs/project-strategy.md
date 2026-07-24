@@ -38,7 +38,28 @@ That does not make kafrust redundant. kafrust's reason to exist is different:
 - a smaller API surface while behavior is still stabilizing
 - Kafka terminology preserved instead of abstracted away
 
-Pure Rust alternatives also exist, but the general-purpose space remains open. [`rskafka`](https://docs.rs/rskafka/latest/rskafka/) explicitly positions itself as a minimal implementation for simple distributed write-ahead-log workloads, not a general-purpose Kafka implementation. Older Rust Kafka clients can be useful references, but kafrust should not copy their API shape by default.
+Pure Rust alternatives also exist. This comparison is a source-documented
+snapshot from 2026-07-24, not an independent benchmark:
+
+- [`krafka`](https://github.com/hupe1980/krafka) is the closest broad
+  pure-Rust competitor. Its 0.13 documentation claims Kafka 3.9+ support,
+  classic and KIP-848 groups, four assignors, static membership, transactions,
+  OAUTHBEARER, AWS MSK IAM, broad Admin coverage, and a controllable fake
+  broker. It is currently ahead of kafrust in feature breadth. Its optional
+  Zstd path requires a C toolchain, while kafrust's supported codecs remain
+  pure Rust. kafrust also verifies an older Kafka 3.7-to-current broker window.
+- [`rskafka`](https://github.com/influxdata/rskafka) explicitly targets simple
+  distributed write-ahead-log workloads. Its README excludes offset tracking,
+  consumer groups, and transactions, so it is not pursuing the same broad
+  replacement target.
+- [`kafka-rust`](https://github.com/kafka-rust/kafka-rust) provides established
+  producer and consumer APIs and is being maintained again, but its documented
+  tested broker range currently ends at Kafka 3.1 and it does not claim all
+  newer Kafka features.
+
+These projects are references and competitors, not sources to copy blindly.
+Feature claims must be validated in kafrust's own protocol tests, failure
+injection, and live broker matrix.
 
 Use this decision rule:
 
