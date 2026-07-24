@@ -83,6 +83,9 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
   Heartbeat v3, and OffsetCommit v7. Manual run `30064182907` passed join,
   poll, heartbeat, and static-member-fenced offset commit on Kafka 3.7.2,
   3.8.1, 3.9.1, and 4.3.1 plaintext brokers.
+- Range and round-robin classic assignment are implemented. Manual run
+  `30064594451` passed the round-robin static-member path on Kafka 3.7.2,
+  3.8.1, 3.9.1, and 4.3.1 plaintext brokers.
 
 The Kafka 3.7.2 multi-broker plaintext smoke path covers:
 
