@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-/// Shared, lock-free metrics collected for Kafka request roundtrips.
+/// Shared, lock-free metrics collected for Kafka client operations.
 ///
 /// Clones refer to the same counters, so a handle obtained from a configuration
 /// continues to observe connections created from that configuration.
@@ -20,6 +20,8 @@ struct ClientMetricsInner {
     requests_timed_out: AtomicU64,
     requests_cancelled: AtomicU64,
     retries: AtomicU64,
+    buffered_records: AtomicU64,
+    max_buffered_records: AtomicU64,
     request_bytes: AtomicU64,
     response_bytes: AtomicU64,
     in_flight_requests: AtomicU64,
@@ -42,6 +44,10 @@ pub struct ClientMetricsSnapshot {
     pub requests_cancelled: u64,
     /// Additional high-level operation attempts after an initial attempt.
     pub retries: u64,
+    /// Buffered producer records accepted and not yet completed.
+    pub buffered_records: u64,
+    /// Highest observed number of outstanding buffered producer records.
+    pub max_buffered_records: u64,
     /// Kafka request payload bytes, excluding the four-byte frame length.
     pub request_bytes: u64,
     /// Kafka response payload bytes, excluding the four-byte frame length.
@@ -69,6 +75,8 @@ impl ClientMetrics {
             requests_timed_out: self.inner.requests_timed_out.load(Ordering::Relaxed),
             requests_cancelled: self.inner.requests_cancelled.load(Ordering::Relaxed),
             retries: self.inner.retries.load(Ordering::Relaxed),
+            buffered_records: self.inner.buffered_records.load(Ordering::Relaxed),
+            max_buffered_records: self.inner.max_buffered_records.load(Ordering::Relaxed),
             request_bytes: self.inner.request_bytes.load(Ordering::Relaxed),
             response_bytes: self.inner.response_bytes.load(Ordering::Relaxed),
             in_flight_requests: self.inner.in_flight_requests.load(Ordering::Relaxed),
@@ -96,6 +104,21 @@ impl ClientMetrics {
 
     pub(crate) fn record_retry(&self) {
         self.inner.retries.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub(crate) fn accept_buffered_record(&self) {
+        let depth = self
+            .inner
+            .buffered_records
+            .fetch_add(1, Ordering::Relaxed)
+            .saturating_add(1);
+        self.inner
+            .max_buffered_records
+            .fetch_max(depth, Ordering::Relaxed);
+    }
+
+    pub(crate) fn complete_buffered_record(&self) {
+        self.inner.buffered_records.fetch_sub(1, Ordering::Relaxed);
     }
 }
 

@@ -168,6 +168,7 @@ async fn main() -> kafrust::Result<()> {
         .acks(Acks::Leader)
         .linger_ms(10)
         .max_records_per_batch(100)
+        .buffer_capacity(1024)
         .build_buffered()
         .await?;
 
@@ -284,8 +285,8 @@ in some environments; this is not part of the default kafrust toolchain.
 
 ## Request Metrics
 
-`ClientMetrics` provides lock-free request counters shared by all broker
-connections created from a configuration:
+`ClientMetrics` provides lock-free operational counters shared by all broker
+connections and buffered producers created from a configuration:
 
 ```rust,no_run
 use kafrust::{ClientMetrics, ProducerConfig};
@@ -311,13 +312,19 @@ println!(
 
 Snapshots include request success, failure, timeout, and cancellation counts,
 high-level operation retry attempts, request and response payload bytes,
-in-flight requests, and total and maximum latency. Retry attempts cover
+in-flight requests, current and maximum outstanding buffered records, and total
+and maximum latency. Retry attempts cover
 producer sends, consumer fetches, metadata reconnects, and transactional
 coordinator operations, plus automatic consumer-group rejoins. Individual
 atomic fields are sampled independently, so a snapshot taken while requests
 are changing is not a transactional view. Request metrics and `tracing` spans
 contain operational metadata only; key, value, request, and response payload
 contents are not recorded.
+
+The buffered producer command queue defaults to 1024 records. Configure it with
+`ProducerConfig::buffer_capacity`; values below one become one. When the queue
+is full, `BufferedProducer::send` waits for capacity instead of allocating an
+unbounded queue or dropping an accepted record.
 
 ## Response Memory Limit
 

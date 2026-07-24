@@ -893,12 +893,16 @@ Implemented evidence:
   configurable through all four client configuration builders. Oversized frame
   declarations return typed `Error::ResponseTooLarge { size, max }` failures
   before response payload allocation.
+- Buffered producer command capacity is bounded to 1024 records by default and
+  configurable through `ProducerConfig::buffer_capacity`. Full queues apply
+  async backpressure, while shared metrics report current and maximum
+  outstanding accepted records through lifecycle-safe gauges.
 
 Remaining:
 
-- record, batch, queue-depth, and high-level operation metrics
+- record, batch, and high-level operation metrics
 - complete producer, consumer, and group operation spans
-- producer buffering, decompression, and protocol decode-array memory limits
+- decompression and protocol decode-array memory limits
 - throughput and latency benchmark baselines
 - load, soak, and failure-injection profiles
 
