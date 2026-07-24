@@ -609,9 +609,12 @@ impl ConsumerGroup {
     /// Checks a background heartbeat task before polling assigned partitions.
     ///
     /// If the background heartbeat task has completed with a group error that
-    /// requires a rejoin, this method rejoins the group before polling. Other
-    /// background heartbeat errors are returned to the caller. When the task is
-    /// still running, this behaves like [`ConsumerGroup::poll`].
+    /// requires a rejoin, this method rejoins the group before polling and
+    /// replaces the handle with a new task using the same interval. Other
+    /// background heartbeat errors are returned to the caller. A foreground
+    /// poll rejoin also replaces the stale task before this method returns.
+    /// When the task is still running, this behaves like
+    /// [`ConsumerGroup::poll`].
     #[tracing::instrument(
         level = "debug",
         name = "kafka.consumer_group.poll_with_heartbeat",
@@ -623,6 +626,8 @@ impl ConsumerGroup {
         &mut self,
         heartbeat: &mut ConsumerGroupHeartbeat,
     ) -> Result<Vec<ConsumerRecord>> {
+        let interval = heartbeat.interval;
+        let mut restart_heartbeat = false;
         match heartbeat.state_for(&self.group_id, &self.member_id, self.generation_id) {
             HeartbeatHandleState::Current => {
                 if should_rejoin_after_background_heartbeat(heartbeat).await? {
@@ -634,6 +639,9 @@ impl ConsumerGroup {
                     );
                     self.config.client.record_retry();
                     self.rejoin().await?;
+                    restart_heartbeat = true;
+                } else if heartbeat.is_finished() {
+                    restart_heartbeat = true;
                 }
             }
             HeartbeatHandleState::StaleGeneration => {
@@ -646,6 +654,7 @@ impl ConsumerGroup {
                     "stopping stale kafka consumer group heartbeat task"
                 );
                 heartbeat.stop_stale_generation().await?;
+                restart_heartbeat = true;
             }
             HeartbeatHandleState::DifferentGroup => {
                 return Err(Error::Unsupported(
@@ -653,7 +662,24 @@ impl ConsumerGroup {
                 ));
             }
         }
-        self.poll().await
+        if restart_heartbeat {
+            *heartbeat = self.spawn_heartbeat_task(interval).await?;
+        }
+
+        let result = self.poll().await;
+        match heartbeat.state_for(&self.group_id, &self.member_id, self.generation_id) {
+            HeartbeatHandleState::Current => {}
+            HeartbeatHandleState::StaleGeneration => {
+                heartbeat.stop_stale_generation().await?;
+                *heartbeat = self.spawn_heartbeat_task(interval).await?;
+            }
+            HeartbeatHandleState::DifferentGroup => {
+                return Err(Error::Unsupported(
+                    "background heartbeat handle belongs to a different consumer group",
+                ));
+            }
+        }
+        result
     }
 
     /// Starts a background heartbeat task for this joined group member.
@@ -722,6 +748,7 @@ impl ConsumerGroup {
             group_id: self.group_id.clone(),
             generation_id: self.generation_id,
             member_id: self.member_id.clone(),
+            interval,
             shutdown: Some(shutdown),
             handle: Some(handle),
         })
@@ -870,6 +897,7 @@ pub struct ConsumerGroupHeartbeat {
     group_id: String,
     generation_id: i32,
     member_id: String,
+    interval: Duration,
     shutdown: Option<oneshot::Sender<()>>,
     handle: Option<JoinHandle<Result<()>>>,
 }
@@ -888,6 +916,11 @@ impl ConsumerGroupHeartbeat {
     /// Returns the broker-assigned member ID this heartbeat task was created for.
     pub fn member_id(&self) -> &str {
         &self.member_id
+    }
+
+    /// Returns the interval used by this background heartbeat task.
+    pub fn interval(&self) -> Duration {
+        self.interval
     }
 
     /// Returns whether the heartbeat task has completed.
@@ -1880,6 +1913,7 @@ mod tests {
         assert_eq!(heartbeat.group_id(), "orders-group");
         assert_eq!(heartbeat.member_id(), "member-a");
         assert_eq!(heartbeat.generation_id(), 7);
+        assert_eq!(heartbeat.interval(), std::time::Duration::from_millis(100));
         assert_eq!(
             heartbeat.state_for("orders-group", "member-a", 7),
             HeartbeatHandleState::Current
@@ -1974,6 +2008,7 @@ mod tests {
             group_id: group_id.to_owned(),
             generation_id,
             member_id: member_id.to_owned(),
+            interval: std::time::Duration::from_millis(100),
             shutdown: Some(shutdown),
             handle: Some(handle),
         }
