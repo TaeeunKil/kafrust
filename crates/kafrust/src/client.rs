@@ -20,6 +20,10 @@ use kafrust_protocol::api::find_coordinator::{
     CoordinatorType, FindCoordinatorRequestV1, FindCoordinatorResponseV1,
 };
 use kafrust_protocol::api::heartbeat::{HeartbeatRequestV2, HeartbeatResponseV2};
+use kafrust_protocol::api::incremental_alter_configs::{
+    IncrementalAlterConfigsRequestV0, IncrementalAlterConfigsResourceV0,
+    IncrementalAlterConfigsResponseV0,
+};
 use kafrust_protocol::api::init_producer_id::{InitProducerIdRequestV0, InitProducerIdResponseV0};
 use kafrust_protocol::api::join_group::{
     JoinGroupProtocol, JoinGroupRequestV2, JoinGroupResponseV2,
@@ -282,6 +286,26 @@ impl Client {
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(DescribeConfigsResponseV1::decode_body(&mut decoder)?)
+    }
+
+    /// Sends IncrementalAlterConfigs v0 to this broker.
+    pub async fn incremental_alter_configs_v0(
+        &mut self,
+        resources: Vec<IncrementalAlterConfigsResourceV0>,
+        validate_only: bool,
+    ) -> Result<IncrementalAlterConfigsResponseV0> {
+        let request = IncrementalAlterConfigsRequestV0 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            resources,
+            validate_only,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(IncrementalAlterConfigsResponseV0::decode_body(
+            &mut decoder,
+        )?)
     }
 
     /// Sends InitProducerId v0 for an idempotent or transactional producer session.

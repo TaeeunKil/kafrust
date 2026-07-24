@@ -87,6 +87,49 @@ include Kafka's config synonyms. Resource failures remain in
 `ConfigSource::Other(raw_code)`. This API intentionally accepts topic resources
 only until broker-specific routing is implemented.
 
+## Incrementally Alter Topic Configurations
+
+```rust
+use kafrust::{
+    AdminClient, AlterConfigsOptions, ClientConfig, TopicConfigAlteration,
+};
+
+# async fn example() -> kafrust::Result<()> {
+let admin = AdminClient::new(ClientConfig::new(["localhost:9092"]));
+let result = admin
+    .incremental_alter_topic_configs(
+        &[
+            TopicConfigAlteration::new("orders")
+                .set("retention.ms", "60000")
+                .append("cleanup.policy", "compact"),
+            TopicConfigAlteration::new("payments")
+                .delete("retention.ms")
+                .subtract("cleanup.policy", "delete"),
+        ],
+        AlterConfigsOptions::new().validate_only(false),
+    )
+    .await?;
+
+for resource in result.resources() {
+    if !resource.is_success() {
+        eprintln!(
+            "{}: Kafka error {}: {}",
+            resource.name(),
+            resource.error_code(),
+            resource.error_message().unwrap_or("no broker message")
+        );
+    }
+}
+# Ok(())
+# }
+```
+
+IncrementalAlterConfigs v0 represents Kafka's Set, Delete, Append, and Subtract
+operations without replacing unrelated settings. Kafka applies operations
+atomically within each resource, but resources can succeed or fail
+independently. `AlterConfigsResult` therefore preserves every resource outcome.
+Use `validate_only(true)` to ask Kafka to validate without applying changes.
+
 ## Create Topics
 
 ```rust
@@ -169,4 +212,4 @@ DeleteTopics v3 also routes to the active controller and preserves independent
 topic outcomes. Version 3 responses contain topic names and error codes but no
 broker error-message field.
 
-Config alteration and consumer-group administration remain on the M16 roadmap.
+Consumer-group administration remains on the M16 roadmap.

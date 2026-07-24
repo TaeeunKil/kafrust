@@ -39,6 +39,7 @@ client paths:
 - `CreateTopics v2`
 - `DeleteTopics v3`
 - `DescribeConfigs v1`
+- `IncrementalAlterConfigs v0`
 - `FindCoordinator v1`
 - `Produce v2` MessageSet and `Produce v3` RecordBatch paths
 - `Fetch v2` and `Fetch v4` request/response decoding for MessageSet and

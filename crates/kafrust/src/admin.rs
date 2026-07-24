@@ -9,6 +9,10 @@ use kafrust_protocol::api::describe_configs::{
     DescribeConfigsEntryV1, DescribeConfigsResourceV1, DescribeConfigsResultV1,
     DescribeConfigsSynonymV1,
 };
+use kafrust_protocol::api::incremental_alter_configs::{
+    IncrementalAlterConfigsEntryV0, IncrementalAlterConfigsResourceResponseV0,
+    IncrementalAlterConfigsResourceV0,
+};
 use kafrust_protocol::api::metadata::{BrokerMetadata, TopicMetadata};
 
 use crate::client::Client;
@@ -117,6 +121,49 @@ impl AdminClient {
                 .results
                 .into_iter()
                 .map(ConfigResourceResult::from_protocol)
+                .collect(),
+        })
+    }
+
+    /// Incrementally alters Kafka topic configurations.
+    ///
+    /// Kafka applies operations atomically within one resource, while separate
+    /// resources can succeed or fail independently.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.incremental_alter_topic_configs",
+        skip_all,
+        fields(resource_count = resources.len(), validate_only = options.validate_only),
+        err
+    )]
+    pub async fn incremental_alter_topic_configs(
+        &self,
+        resources: &[TopicConfigAlteration],
+        options: AlterConfigsOptions,
+    ) -> Result<AlterConfigsResult> {
+        let mut client = self.config.clone().connect().await?;
+        let response = client
+            .incremental_alter_configs_v0(
+                resources
+                    .iter()
+                    .map(TopicConfigAlteration::as_protocol)
+                    .collect(),
+                options.validate_only,
+            )
+            .await?;
+
+        for resource in &response.responses {
+            if resource.error_code != 0 {
+                self.config.record_broker_error();
+            }
+        }
+
+        Ok(AlterConfigsResult {
+            throttle_time: Duration::from_millis(nonnegative_i32_to_u64(response.throttle_time_ms)),
+            resources: response
+                .responses
+                .into_iter()
+                .map(AlterConfigResourceResult::from_protocol)
                 .collect(),
         })
     }
@@ -643,6 +690,268 @@ impl ConfigSource {
     }
 }
 
+/// Incremental configuration changes for one Kafka topic.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TopicConfigAlteration {
+    name: String,
+    operations: Vec<ConfigAlterOperation>,
+}
+
+impl TopicConfigAlteration {
+    /// Creates an empty set of operations for a topic.
+    pub fn new(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            operations: Vec::new(),
+        }
+    }
+
+    /// Sets a configuration value.
+    pub fn set(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
+        self.operations.push(ConfigAlterOperation::set(name, value));
+        self
+    }
+
+    /// Removes a dynamic configuration value.
+    pub fn delete(mut self, name: impl Into<String>) -> Self {
+        self.operations.push(ConfigAlterOperation::delete(name));
+        self
+    }
+
+    /// Appends values to a list configuration.
+    pub fn append(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
+        self.operations
+            .push(ConfigAlterOperation::append(name, value));
+        self
+    }
+
+    /// Subtracts values from a list configuration.
+    pub fn subtract(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
+        self.operations
+            .push(ConfigAlterOperation::subtract(name, value));
+        self
+    }
+
+    /// Returns the topic name.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Returns operations in request order.
+    pub fn operations(&self) -> &[ConfigAlterOperation] {
+        &self.operations
+    }
+
+    fn as_protocol(&self) -> IncrementalAlterConfigsResourceV0 {
+        IncrementalAlterConfigsResourceV0 {
+            resource_type: 2,
+            resource_name: self.name.clone(),
+            configs: self
+                .operations
+                .iter()
+                .map(ConfigAlterOperation::as_protocol)
+                .collect(),
+        }
+    }
+}
+
+/// One operation in an incremental Kafka configuration update.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConfigAlterOperation {
+    name: String,
+    kind: ConfigAlterOperationKind,
+    value: Option<String>,
+}
+
+impl ConfigAlterOperation {
+    /// Creates a SET operation.
+    pub fn set(name: impl Into<String>, value: impl Into<String>) -> Self {
+        Self::with_value(name, ConfigAlterOperationKind::Set, value)
+    }
+
+    /// Creates a DELETE operation with Kafka's required null value.
+    pub fn delete(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            kind: ConfigAlterOperationKind::Delete,
+            value: None,
+        }
+    }
+
+    /// Creates an APPEND operation.
+    pub fn append(name: impl Into<String>, value: impl Into<String>) -> Self {
+        Self::with_value(name, ConfigAlterOperationKind::Append, value)
+    }
+
+    /// Creates a SUBTRACT operation.
+    pub fn subtract(name: impl Into<String>, value: impl Into<String>) -> Self {
+        Self::with_value(name, ConfigAlterOperationKind::Subtract, value)
+    }
+
+    /// Returns the configuration key.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Returns the Kafka operation kind.
+    pub fn kind(&self) -> ConfigAlterOperationKind {
+        self.kind
+    }
+
+    /// Returns the operation value, or `None` for DELETE.
+    pub fn value(&self) -> Option<&str> {
+        self.value.as_deref()
+    }
+
+    fn with_value(
+        name: impl Into<String>,
+        kind: ConfigAlterOperationKind,
+        value: impl Into<String>,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            kind,
+            value: Some(value.into()),
+        }
+    }
+
+    fn as_protocol(&self) -> IncrementalAlterConfigsEntryV0 {
+        IncrementalAlterConfigsEntryV0 {
+            name: self.name.clone(),
+            operation: self.kind.code(),
+            value: self.value.clone(),
+        }
+    }
+}
+
+/// Kafka IncrementalAlterConfigs operation kind.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConfigAlterOperationKind {
+    /// Sets one configuration value.
+    Set,
+    /// Deletes one dynamic configuration value.
+    Delete,
+    /// Appends values to a list configuration.
+    Append,
+    /// Subtracts values from a list configuration.
+    Subtract,
+}
+
+impl ConfigAlterOperationKind {
+    /// Returns Kafka's raw operation value.
+    pub fn code(self) -> i8 {
+        match self {
+            Self::Set => 0,
+            Self::Delete => 1,
+            Self::Append => 2,
+            Self::Subtract => 3,
+        }
+    }
+}
+
+/// Options for one IncrementalAlterConfigs operation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct AlterConfigsOptions {
+    validate_only: bool,
+}
+
+impl AlterConfigsOptions {
+    /// Creates options that apply valid changes.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Selects validation without applying changes.
+    pub fn validate_only(mut self, validate_only: bool) -> Self {
+        self.validate_only = validate_only;
+        self
+    }
+
+    /// Returns whether Kafka should only validate the changes.
+    pub fn is_validate_only(&self) -> bool {
+        self.validate_only
+    }
+}
+
+/// Complete response from one IncrementalAlterConfigs operation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AlterConfigsResult {
+    throttle_time: Duration,
+    resources: Vec<AlterConfigResourceResult>,
+}
+
+impl AlterConfigsResult {
+    /// Returns the broker throttle time.
+    pub fn throttle_time(&self) -> Duration {
+        self.throttle_time
+    }
+
+    /// Returns resource outcomes in broker response order.
+    pub fn resources(&self) -> &[AlterConfigResourceResult] {
+        &self.resources
+    }
+
+    /// Consumes this response and returns resource outcomes.
+    pub fn into_resources(self) -> Vec<AlterConfigResourceResult> {
+        self.resources
+    }
+
+    /// Returns whether at least one resource update was rejected.
+    pub fn has_errors(&self) -> bool {
+        self.resources.iter().any(|resource| !resource.is_success())
+    }
+}
+
+/// Outcome for one resource in IncrementalAlterConfigs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AlterConfigResourceResult {
+    resource_type: i8,
+    name: String,
+    error_code: i16,
+    error_message: Option<String>,
+}
+
+impl AlterConfigResourceResult {
+    /// Returns Kafka's raw resource type value.
+    pub fn resource_type(&self) -> i8 {
+        self.resource_type
+    }
+
+    /// Returns the resource name.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Returns whether Kafka applied or validated this resource.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+    }
+
+    /// Returns Kafka's raw resource error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns Kafka's optional resource error message.
+    pub fn error_message(&self) -> Option<&str> {
+        self.error_message.as_deref()
+    }
+
+    /// Returns kafrust's classification for a non-zero Kafka error code.
+    pub fn broker_error_kind(&self) -> Option<BrokerErrorKind> {
+        (self.error_code != 0).then(|| BrokerErrorKind::from_code(self.error_code))
+    }
+
+    fn from_protocol(response: IncrementalAlterConfigsResourceResponseV0) -> Self {
+        Self {
+            resource_type: response.resource_type,
+            name: response.resource_name,
+            error_code: response.error_code,
+            error_message: response.error_message,
+        }
+    }
+}
+
 /// Definition of one Kafka topic to create.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NewTopic {
@@ -970,8 +1279,9 @@ fn nonnegative_i32_to_u64(value: i32) -> u64 {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::{
-        AdminClient, ConfigSource, CreateTopicsOptions, DeleteTopicsOptions,
-        DescribeConfigsOptions, NewTopic, TopicConfigResource,
+        AdminClient, AlterConfigsOptions, ConfigAlterOperationKind, ConfigSource,
+        CreateTopicsOptions, DeleteTopicsOptions, DescribeConfigsOptions, NewTopic,
+        TopicConfigAlteration, TopicConfigResource,
     };
     use crate::{BrokerErrorKind, ClientConfig, ClientMetrics};
     use std::time::Duration;
@@ -1038,6 +1348,34 @@ mod tests {
         assert_eq!(ConfigSource::DynamicDefaultBrokerConfig.code(), 3);
         assert_eq!(ConfigSource::DynamicGroupConfig.code(), 8);
         assert_eq!(ConfigSource::from_code(99), ConfigSource::Other(99));
+    }
+
+    #[test]
+    fn builds_incremental_topic_config_alterations() {
+        let alteration = TopicConfigAlteration::new("orders")
+            .set("retention.ms", "60000")
+            .delete("segment.ms")
+            .append("cleanup.policy", "compact")
+            .subtract("cleanup.policy", "delete");
+
+        assert_eq!(alteration.name(), "orders");
+        assert_eq!(alteration.operations().len(), 4);
+        assert_eq!(
+            alteration.operations()[0].kind(),
+            ConfigAlterOperationKind::Set
+        );
+        assert_eq!(alteration.operations()[0].name(), "retention.ms");
+        assert_eq!(alteration.operations()[0].value(), Some("60000"));
+        assert_eq!(
+            alteration.operations()[1].kind(),
+            ConfigAlterOperationKind::Delete
+        );
+        assert_eq!(alteration.operations()[1].value(), None);
+        assert_eq!(alteration.operations()[2].kind().code(), 2);
+        assert_eq!(alteration.operations()[3].kind().code(), 3);
+
+        let options = AlterConfigsOptions::new().validate_only(true);
+        assert!(options.is_validate_only());
     }
 
     #[tokio::test]
@@ -1164,6 +1502,54 @@ mod tests {
         assert_eq!(
             missing.broker_error_kind(),
             Some(BrokerErrorKind::UnknownTopicOrPartition)
+        );
+        assert_eq!(metrics.snapshot().broker_errors, 1);
+        assert_eq!(result.clone().into_resources().len(), 2);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn alters_topic_configs_and_preserves_resource_errors() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut connection, _) = listener.accept().await.unwrap();
+            let request = read_frame(&mut connection).await;
+            assert_eq!(&request[0..4], &[0, 44, 0, 0]);
+            assert_eq!(request.last(), Some(&1));
+            write_frame(&mut connection, &incremental_alter_configs_response()).await;
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        );
+
+        let result = admin
+            .incremental_alter_topic_configs(
+                &[
+                    TopicConfigAlteration::new("orders").set("retention.ms", "60000"),
+                    TopicConfigAlteration::new("payments").delete("retention.ms"),
+                ],
+                AlterConfigsOptions::new().validate_only(true),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(result.throttle_time(), Duration::from_millis(6));
+        assert!(result.has_errors());
+        assert_eq!(result.resources().len(), 2);
+        assert_eq!(result.resources()[0].resource_type(), 2);
+        assert_eq!(result.resources()[0].name(), "orders");
+        assert!(result.resources()[0].is_success());
+        assert_eq!(result.resources()[0].error_message(), None);
+        assert_eq!(result.resources()[1].name(), "payments");
+        assert_eq!(result.resources()[1].error_code(), 40);
+        assert_eq!(result.resources()[1].error_message(), Some("invalid"));
+        assert_eq!(
+            result.resources()[1].broker_error_kind(),
+            Some(BrokerErrorKind::InvalidConfig)
         );
         assert_eq!(metrics.snapshot().broker_errors, 1);
         assert_eq!(result.clone().into_resources().len(), 2);
@@ -1360,6 +1746,22 @@ mod tests {
             2,    // topic resource
             0, 7, b'm', b'i', b's', b's', b'i', b'n', b'g', // resource name
             0, 0, 0, 0, // config count
+        ]
+    }
+
+    fn incremental_alter_configs_response() -> Vec<u8> {
+        vec![
+            0, 0, 0, 1, // correlation ID
+            0, 0, 0, 6, // throttle time
+            0, 0, 0, 2, // response count
+            0, 0, // success
+            0xff, 0xff, // null error message
+            2,    // topic resource
+            0, 6, b'o', b'r', b'd', b'e', b'r', b's', // resource name
+            0, 40, // invalid config
+            0, 7, b'i', b'n', b'v', b'a', b'l', b'i', b'd', // error message
+            2,    // topic resource
+            0, 8, b'p', b'a', b'y', b'm', b'e', b'n', b't', b's', // resource name
         ]
     }
 }

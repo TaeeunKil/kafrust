@@ -122,7 +122,8 @@ for topic in result.topics() {
 ```
 
 `describe_cluster` and `list_topics` provide typed Metadata v1 views, and
-`describe_topic_configs` exposes values, sources, sensitivity, and synonyms.
+topic config APIs expose values, sources, synonyms, and incremental
+Set/Delete/Append/Subtract operations.
 CreateTopics v2 and DeleteTopics v3 discover the active controller and preserve
 per-topic partial success and error responses. See [Admin API](docs/admin-api.md).
 

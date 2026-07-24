@@ -8,6 +8,7 @@ pub mod end_txn;
 pub mod fetch;
 pub mod find_coordinator;
 pub mod heartbeat;
+pub mod incremental_alter_configs;
 pub mod init_producer_id;
 pub mod join_group;
 pub mod metadata;
