@@ -90,7 +90,7 @@ jobs:
           test "$(wc -l < benchmark-results.jsonl)" -eq 4
 
       - name: Upload benchmark results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: kafrust-benchmark-${{ github.run_id }}
           path: benchmark-results.jsonl

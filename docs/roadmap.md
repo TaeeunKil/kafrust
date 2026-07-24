@@ -917,11 +917,15 @@ Implemented evidence:
   counts, and retries. The manual `Kafka Benchmark` workflow runs selected
   payload and compression profiles against Kafka 4.3.1 and uploads JSONL
   results for comparison.
+- Manual benchmark run `30057817575` published the first selected-profile
+  baseline on 2026-07-24. The 1-KiB profiles reached 47,883 records/s
+  uncompressed and 50,555 records/s with Zstd on a GitHub-hosted runner.
+  Standard-check-vector table CRC and logarithmic exact-size batch selection
+  improved those profiles by 37.6x and 29.1x over run `30057137300`.
 
 Remaining:
 
 - remaining high-level operation metrics
-- throughput and latency benchmark baselines
 - load, soak, and failure-injection profiles
 
 ## M20 Compatibility Matrix And Migration Guide
