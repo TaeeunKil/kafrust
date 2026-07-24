@@ -83,6 +83,10 @@ replaces it for the current member and generation.
 
 Call `ConsumerGroupHeartbeat::try_wait` to observe early task completion without polling. Call `ConsumerGroupHeartbeat::stop` to shut the task down and observe any broker error returned by the task.
 
+The `consumer_group_heartbeat_rejoin` example starts two members concurrently
+to force a classic-group rebalance and verifies that the first member's mutable
+heartbeat handle is replaced with its new member and generation identity.
+
 ## Leaving
 
 Call `ConsumerGroup::leave` when processing is complete. It consumes the group

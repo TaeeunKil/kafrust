@@ -148,6 +148,11 @@ jobs:
       - name: Run consumer group example
         run: cargo run -p kafrust --example consumer_group_poll
 
+      - name: Run background heartbeat rejoin example
+        env:
+          KAFRUST_GROUP_ID: kafrust-heartbeat-rejoin-${{ matrix.kafka-version }}
+        run: cargo run -p kafrust --example consumer_group_heartbeat_rejoin
+
       - name: Run static consumer group example
         env:
           KAFRUST_GROUP_ID: kafrust-static-${{ matrix.kafka-version }}
