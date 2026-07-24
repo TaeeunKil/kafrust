@@ -36,7 +36,8 @@ pub use config::{ClientConfig, SaslCredentials, SaslMechanism, SecurityProtocol}
 pub use consumer::{Consumer, ConsumerAssignment, ConsumerConfig, ConsumerRecord, IsolationLevel};
 pub use error::{BrokerErrorKind, Error, Result};
 pub use group::{
-    ConsumerGroup, ConsumerGroupConfig, ConsumerGroupHeartbeat, ConsumerGroupMetadata,
+    ConsumerGroup, ConsumerGroupAssignmentStrategy, ConsumerGroupConfig, ConsumerGroupHeartbeat,
+    ConsumerGroupMetadata,
 };
 pub use kafrust_protocol as protocol;
 pub use metrics::{ClientMetrics, ClientMetricsSnapshot};
