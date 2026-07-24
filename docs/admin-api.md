@@ -201,7 +201,9 @@ OffsetDelete v0 is routed to the consumer group's active coordinator. Its
 top-level group error and every partition outcome remain available separately.
 Kafka rejects deletion for a topic while the group is actively subscribed to
 it with error 86 (`GroupSubscribedToTopic`), so stop the group or remove that
-topic from its subscription before deleting committed offsets.
+topic from its subscription before deleting committed offsets. A member can
+remain visible until its broker-side session timeout expires after an
+unclean process exit.
 
 ## Create Topics
 

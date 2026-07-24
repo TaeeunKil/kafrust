@@ -1,6 +1,7 @@
 mod common;
 
-use kafrust::{AdminClient, ClientConfig, ConsumerGroupOffsetDelete, Error};
+use kafrust::{AdminClient, BrokerErrorKind, ClientConfig, ConsumerGroupOffsetDelete, Error};
+use std::time::Duration;
 
 #[tokio::main]
 async fn main() -> kafrust::Result<()> {
@@ -15,25 +16,43 @@ async fn main() -> kafrust::Result<()> {
         ClientConfig::new(bootstrap_servers).client_id("kafrust-admin-offset-delete-example"),
     )?;
     let admin = AdminClient::new(config);
-    let result = admin
-        .delete_consumer_group_offsets(
-            &group_id,
-            &[ConsumerGroupOffsetDelete::new(topic.clone(), [partition])],
-        )
-        .await?;
+    let request = [ConsumerGroupOffsetDelete::new(topic.clone(), [partition])];
+    let mut attempt = 0;
+    let result = loop {
+        let result = admin
+            .delete_consumer_group_offsets(&group_id, &request)
+            .await?;
+        if result.is_success() {
+            break result;
+        }
 
-    if !result.is_success() {
-        let partition_error = result
+        let partition_errors: Vec<_> = result
             .topics()
             .iter()
             .flat_map(|topic| topic.partitions())
-            .find(|partition| !partition.is_success())
-            .map(|partition| partition.error_code());
+            .filter(|partition| !partition.is_success())
+            .collect();
+        let group_still_active = result.broker_error_kind()
+            == Some(BrokerErrorKind::GroupSubscribedToTopic)
+            || (result.error_code() == 0
+                && !partition_errors.is_empty()
+                && partition_errors.iter().all(|partition| {
+                    partition.broker_error_kind() == Some(BrokerErrorKind::GroupSubscribedToTopic)
+                }));
+        attempt += 1;
+        if group_still_active && attempt < 30 {
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            continue;
+        }
+
         return Err(Error::Broker {
-            code: partition_error.unwrap_or(result.error_code()),
+            code: partition_errors
+                .first()
+                .map(|partition| partition.error_code())
+                .unwrap_or(result.error_code()),
             context: format!("delete committed offset for {group_id}/{topic}-{partition}"),
         });
-    }
+    };
 
     println!(
         "deleted committed offset for {group_id}/{topic}-{partition} throttle={:?}",
