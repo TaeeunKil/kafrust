@@ -529,25 +529,38 @@ fn encode_record(
 }
 
 fn crc32_ieee(bytes: &[u8]) -> u32 {
-    let mut crc = 0xffff_ffffu32;
-    for byte in bytes {
-        crc ^= u32::from(*byte);
-        for _ in 0..8 {
-            let mask = 0u32.wrapping_sub(crc & 1);
-            crc = (crc >> 1) ^ (0xedb8_8320 & mask);
-        }
-    }
-    !crc
+    crc32_with_table(bytes, &CRC32_IEEE_TABLE)
 }
 
 fn crc32c(bytes: &[u8]) -> u32 {
+    crc32_with_table(bytes, &CRC32C_TABLE)
+}
+
+const CRC32_IEEE_TABLE: [u32; 256] = crc32_table(0xedb8_8320);
+const CRC32C_TABLE: [u32; 256] = crc32_table(0x82f6_3b78);
+
+const fn crc32_table(polynomial: u32) -> [u32; 256] {
+    let mut table = [0; 256];
+    let mut index = 0;
+    while index < table.len() {
+        let mut value = index as u32;
+        let mut bit = 0;
+        while bit < 8 {
+            let mask = 0u32.wrapping_sub(value & 1);
+            value = (value >> 1) ^ (polynomial & mask);
+            bit += 1;
+        }
+        table[index] = value;
+        index += 1;
+    }
+    table
+}
+
+fn crc32_with_table(bytes: &[u8], table: &[u32; 256]) -> u32 {
     let mut crc = 0xffff_ffffu32;
     for byte in bytes {
-        crc ^= u32::from(*byte);
-        for _ in 0..8 {
-            let mask = 0u32.wrapping_sub(crc & 1);
-            crc = (crc >> 1) ^ (0x82f6_3b78 & mask);
-        }
+        let index = usize::from((crc as u8) ^ byte);
+        crc = (crc >> 8) ^ table[index];
     }
     !crc
 }
@@ -556,7 +569,8 @@ fn crc32c(bytes: &[u8]) -> u32 {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::{
-        encode_message_set, encode_record_batch_set, encode_record_batch_set_with_compression,
+        crc32_ieee, crc32c, encode_message_set, encode_record_batch_set,
+        encode_record_batch_set_with_compression,
         encode_record_batch_set_with_compression_and_identity,
         encode_record_batch_set_with_compression_identity_and_transaction, encoded_message_set_len,
         encoded_record_batch_set_len, MessageSetMessage, ProducePartitionV2, ProducePartitionV3,
@@ -566,6 +580,12 @@ mod tests {
     use crate::codec::{DecodeLimits, Decoder};
     use crate::record_batch::RecordBatchCompression;
     use crate::{api::fetch::FetchResponseV2, codec::Encoder};
+
+    #[test]
+    fn crc_implementations_match_standard_check_vectors() {
+        assert_eq!(crc32_ieee(b"123456789"), 0xcbf4_3926);
+        assert_eq!(crc32c(b"123456789"), 0xe306_9283);
+    }
 
     #[test]
     fn encodes_produce_request_v2() {
