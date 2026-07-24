@@ -885,6 +885,10 @@ Implemented evidence:
 - Focused tests cover shared success/failure accounting, timeout
   classification, byte counters, latency, cancellation cleanup, and in-flight
   gauge cleanup.
+- The shared metrics snapshot counts actual additional attempts for producer
+  sends, partial batch retries, consumer fetches, metadata reconnects,
+  idempotent initialization, transactional coordinator operations, and
+  automatic consumer-group rejoins.
 - Broker response frame allocation is bounded to 100 MiB by default and is
   configurable through all four client configuration builders. Oversized frame
   declarations return typed `Error::ResponseTooLarge { size, max }` failures
@@ -892,7 +896,7 @@ Implemented evidence:
 
 Remaining:
 
-- retry, record, batch, queue-depth, and high-level operation metrics
+- record, batch, queue-depth, and high-level operation metrics
 - complete producer, consumer, and group operation spans
 - producer buffering, decompression, and protocol decode-array memory limits
 - throughput and latency benchmark baselines

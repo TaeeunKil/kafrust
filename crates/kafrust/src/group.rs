@@ -381,6 +381,7 @@ impl ConsumerGroup {
                     error = %error,
                     "rejoining kafka consumer group after heartbeat"
                 );
+                self.config.client.record_retry();
                 self.rejoin().await?
             }
             Err(error) => return Err(error),
@@ -407,6 +408,7 @@ impl ConsumerGroup {
                         generation_id = self.generation_id,
                         "rejoining kafka consumer group after background heartbeat"
                     );
+                    self.config.client.record_retry();
                     self.rejoin().await?;
                 }
             }
@@ -549,6 +551,7 @@ impl ConsumerGroup {
                     error = %error,
                     "rejoining kafka consumer group after offset commit request"
                 );
+                self.config.client.record_retry();
                 self.rejoin().await?;
                 return Err(error);
             }
@@ -563,6 +566,7 @@ impl ConsumerGroup {
                     error = %error,
                     "rejoining kafka consumer group after offset commit"
                 );
+                self.config.client.record_retry();
                 self.rejoin().await?;
             }
             return Err(error);
