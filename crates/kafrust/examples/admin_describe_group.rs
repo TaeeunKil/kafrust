@@ -10,6 +10,21 @@ async fn main() -> kafrust::Result<()> {
         ClientConfig::new(bootstrap_servers).client_id("kafrust-admin-group-example"),
     )?;
     let admin = AdminClient::new(config);
+    let groups = admin.list_groups().await?;
+    let listing = groups
+        .iter()
+        .find(|listing| listing.group_id() == group_id)
+        .ok_or_else(|| Error::MissingGroupDescription {
+            group_id: group_id.clone(),
+        })?;
+    println!(
+        "listed group {} protocol={} coordinator={} throttle={:?}",
+        listing.group_id(),
+        listing.protocol_type(),
+        listing.coordinator_id(),
+        listing.throttle_time()
+    );
+
     let descriptions = admin
         .describe_consumer_groups(std::slice::from_ref(&group_id))
         .await?;

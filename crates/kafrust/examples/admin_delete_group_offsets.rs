@@ -58,5 +58,24 @@ async fn main() -> kafrust::Result<()> {
         "deleted committed offset for {group_id}/{topic}-{partition} throttle={:?}",
         result.throttle_time()
     );
+
+    let deleted = admin
+        .delete_consumer_groups(std::slice::from_ref(&group_id))
+        .await?
+        .into_iter()
+        .next()
+        .ok_or_else(|| Error::MissingDeleteGroupResult {
+            group_id: group_id.clone(),
+        })?;
+    if !deleted.is_success() {
+        return Err(Error::Broker {
+            code: deleted.error_code(),
+            context: format!("delete consumer group {group_id}"),
+        });
+    }
+    println!(
+        "deleted consumer group {group_id} throttle={:?}",
+        deleted.throttle_time()
+    );
     Ok(())
 }

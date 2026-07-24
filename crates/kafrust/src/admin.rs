@@ -4,6 +4,7 @@ use std::time::Duration;
 use kafrust_protocol::api::create_topics::{
     CreateTopicsAssignmentV2, CreateTopicsConfigV2, CreateTopicsTopicResultV2, CreateTopicsTopicV2,
 };
+use kafrust_protocol::api::delete_groups::DeleteGroupResultV1;
 use kafrust_protocol::api::delete_topics::DeleteTopicsTopicResultV3;
 use kafrust_protocol::api::describe_configs::{
     DescribeConfigsEntryV1, DescribeConfigsResourceV1, DescribeConfigsResultV1,
@@ -14,6 +15,7 @@ use kafrust_protocol::api::incremental_alter_configs::{
     IncrementalAlterConfigsEntryV0, IncrementalAlterConfigsResourceResponseV0,
     IncrementalAlterConfigsResourceV0,
 };
+use kafrust_protocol::api::list_groups::ListedGroupV1;
 use kafrust_protocol::api::metadata::{BrokerMetadata, TopicMetadata};
 use kafrust_protocol::api::offset_delete::{
     OffsetDeleteRequestPartitionV0, OffsetDeleteRequestTopicV0, OffsetDeleteResponsePartitionV0,
@@ -214,6 +216,80 @@ impl AdminClient {
         Ok(descriptions)
     }
 
+    /// Lists Kafka groups by querying every broker in the cluster.
+    ///
+    /// ListGroups is broker-scoped because each group coordinator only reports
+    /// the groups it owns. Results are sorted by group ID and deduplicated.
+    #[tracing::instrument(level = "debug", name = "kafka.admin.list_groups", skip_all, err)]
+    pub async fn list_groups(&self) -> Result<Vec<GroupListing>> {
+        let mut bootstrap = self.config.clone().connect().await?;
+        let metadata = bootstrap.metadata(Some(Vec::new())).await?;
+        let mut groups = BTreeMap::new();
+
+        for broker in metadata.brokers {
+            let mut client = self
+                .config
+                .connect_broker(format!("{}:{}", broker.host, broker.port))
+                .await?;
+            let response = client.list_groups_v1().await?;
+            if response.error_code != 0 {
+                return Err(self.config.broker_error(
+                    response.error_code,
+                    format!("list groups on broker {}", broker.node_id),
+                ));
+            }
+            let throttle_time =
+                Duration::from_millis(nonnegative_i32_to_u64(response.throttle_time_ms));
+            for group in response.groups {
+                groups.insert(
+                    group.group_id.clone(),
+                    GroupListing::from_protocol(group, broker.node_id, throttle_time),
+                );
+            }
+        }
+
+        Ok(groups.into_values().collect())
+    }
+
+    /// Deletes consumer groups through their active coordinators.
+    ///
+    /// Kafka only deletes groups without active members. Per-group broker
+    /// errors remain attached to the returned results.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.delete_consumer_groups",
+        skip_all,
+        fields(group_count = group_ids.len()),
+        err
+    )]
+    pub async fn delete_consumer_groups(
+        &self,
+        group_ids: &[String],
+    ) -> Result<Vec<DeleteConsumerGroupResult>> {
+        let mut results = Vec::with_capacity(group_ids.len());
+        for group_id in group_ids {
+            let mut coordinator = self.group_coordinator_client(group_id).await?;
+            let response = coordinator.delete_groups_v1(vec![group_id.clone()]).await?;
+            let throttle_time =
+                Duration::from_millis(nonnegative_i32_to_u64(response.throttle_time_ms));
+            let result = response
+                .results
+                .into_iter()
+                .find(|result| result.group_id == *group_id)
+                .ok_or_else(|| Error::MissingDeleteGroupResult {
+                    group_id: group_id.clone(),
+                })?;
+            if result.error_code != 0 {
+                self.config.record_broker_error();
+            }
+            results.push(DeleteConsumerGroupResult::from_protocol(
+                result,
+                throttle_time,
+            ));
+        }
+        Ok(results)
+    }
+
     /// Deletes committed offsets for selected consumer-group partitions.
     ///
     /// The request is routed to the group's active coordinator. Kafka can
@@ -373,6 +449,89 @@ impl AdminClient {
                 .map(DeleteTopicResult::from_protocol)
                 .collect(),
         })
+    }
+}
+
+/// One Kafka group returned by [`AdminClient::list_groups`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GroupListing {
+    group_id: String,
+    protocol_type: String,
+    coordinator_id: i32,
+    throttle_time: Duration,
+}
+
+impl GroupListing {
+    /// Returns the Kafka group ID.
+    pub fn group_id(&self) -> &str {
+        &self.group_id
+    }
+
+    /// Returns the group protocol type, such as `consumer` or `connect`.
+    pub fn protocol_type(&self) -> &str {
+        &self.protocol_type
+    }
+
+    /// Returns the broker ID that coordinates this group.
+    pub fn coordinator_id(&self) -> i32 {
+        self.coordinator_id
+    }
+
+    /// Returns the coordinator's throttle time for the ListGroups request.
+    pub fn throttle_time(&self) -> Duration {
+        self.throttle_time
+    }
+
+    fn from_protocol(group: ListedGroupV1, coordinator_id: i32, throttle_time: Duration) -> Self {
+        Self {
+            group_id: group.group_id,
+            protocol_type: group.protocol_type,
+            coordinator_id,
+            throttle_time,
+        }
+    }
+}
+
+/// Outcome for one group in [`AdminClient::delete_consumer_groups`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeleteConsumerGroupResult {
+    group_id: String,
+    error_code: i16,
+    throttle_time: Duration,
+}
+
+impl DeleteConsumerGroupResult {
+    /// Returns the Kafka group ID.
+    pub fn group_id(&self) -> &str {
+        &self.group_id
+    }
+
+    /// Returns whether Kafka deleted this group.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+    }
+
+    /// Returns Kafka's raw group error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns kafrust's classification for a non-zero Kafka error code.
+    pub fn broker_error_kind(&self) -> Option<BrokerErrorKind> {
+        (self.error_code != 0).then(|| BrokerErrorKind::from_code(self.error_code))
+    }
+
+    /// Returns the coordinator's throttle time.
+    pub fn throttle_time(&self) -> Duration {
+        self.throttle_time
+    }
+
+    fn from_protocol(result: DeleteGroupResultV1, throttle_time: Duration) -> Self {
+        Self {
+            group_id: result.group_id,
+            error_code: result.error_code,
+            throttle_time,
+        }
     }
 }
 
@@ -2002,6 +2161,80 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn lists_groups_from_cluster_brokers_in_group_id_order() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let metadata_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+            write_frame(&mut bootstrap, &metadata_response(addr.port())).await;
+
+            let (mut broker, _) = listener.accept().await.unwrap();
+            let list_request = read_frame(&mut broker).await;
+            assert_eq!(&list_request[0..4], &[0, 16, 0, 1]);
+            write_frame(&mut broker, &list_groups_response()).await;
+        });
+        let admin =
+            AdminClient::new(ClientConfig::new([addr.to_string()]).request_timeout_ms(1_000));
+
+        let groups = admin.list_groups().await.unwrap();
+
+        assert_eq!(groups.len(), 2);
+        assert_eq!(groups[0].group_id(), "connect-cluster");
+        assert_eq!(groups[0].protocol_type(), "connect");
+        assert_eq!(groups[1].group_id(), "orders-group");
+        assert_eq!(groups[1].protocol_type(), "consumer");
+        assert_eq!(groups[1].coordinator_id(), 1);
+        assert_eq!(groups[1].throttle_time(), Duration::from_millis(7));
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn routes_delete_group_to_coordinator_and_preserves_error() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let coordinator_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&coordinator_request[0..4], &[0, 10, 0, 1]);
+            write_frame(
+                &mut bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let (mut coordinator, _) = listener.accept().await.unwrap();
+            let delete_request = read_frame(&mut coordinator).await;
+            assert_eq!(&delete_request[0..4], &[0, 42, 0, 1]);
+            write_frame(&mut coordinator, &delete_groups_response()).await;
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        );
+
+        let results = admin
+            .delete_consumer_groups(&["orders-group".to_owned()])
+            .await
+            .unwrap();
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].group_id(), "orders-group");
+        assert!(!results[0].is_success());
+        assert_eq!(results[0].error_code(), 68);
+        assert_eq!(
+            results[0].broker_error_kind(),
+            Some(BrokerErrorKind::NonEmptyGroup)
+        );
+        assert_eq!(results[0].throttle_time(), Duration::from_millis(5));
+        assert_eq!(metrics.snapshot().broker_errors, 1);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn routes_offset_delete_to_coordinator_and_preserves_partition_errors() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -2299,6 +2532,30 @@ mod tests {
             0, 10, b'/', b'1', b'2', b'7', b'.', b'0', b'.', b'0', b'.', b'1', // client host
             0, 0, 0, 2, 1, 2, // member metadata
             0, 0, 0, 3, 3, 4, 5, // member assignment
+        ]
+    }
+
+    fn list_groups_response() -> Vec<u8> {
+        vec![
+            0, 0, 0, 1, // correlation ID
+            0, 0, 0, 7, // throttle time
+            0, 0, // success
+            0, 0, 0, 2, // group count
+            0, 12, b'o', b'r', b'd', b'e', b'r', b's', b'-', b'g', b'r', b'o', b'u', b'p', 0, 8,
+            b'c', b'o', b'n', b's', b'u', b'm', b'e', b'r', // consumer group
+            0, 15, b'c', b'o', b'n', b'n', b'e', b'c', b't', b'-', b'c', b'l', b'u', b's', b't',
+            b'e', b'r', 0, 7, b'c', b'o', b'n', b'n', b'e', b'c', b't', // connect group
+        ]
+    }
+
+    fn delete_groups_response() -> Vec<u8> {
+        vec![
+            0, 0, 0, 1, // correlation ID
+            0, 0, 0, 5, // throttle time
+            0, 0, 0, 1, // result count
+            0, 12, b'o', b'r', b'd', b'e', b'r', b's', b'-', b'g', b'r', b'o', b'u', b'p', 0,
+            68,
+            // non-empty group
         ]
     }
 

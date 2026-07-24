@@ -58,8 +58,8 @@ Cluster and topic listing use typed Metadata v1 views, and topic configuration
 inspection and alteration preserve sources, sensitivity, synonyms, operation
 kinds, validation mode, and partial resource errors. CreateTopics and
 DeleteTopics route through the active controller, while group descriptions
-route through each group coordinator. See the repository's `docs/admin-api.md`
-for details.
+and deletion route through each group coordinator. Group listing queries all
+advertised brokers. See the repository's `docs/admin-api.md` for details.
 
 ## Install
 

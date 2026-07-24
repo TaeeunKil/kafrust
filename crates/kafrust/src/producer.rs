@@ -1127,6 +1127,9 @@ fn delivery_error_from_request_error(error: &Error) -> Error {
         Error::MissingGroupDescription { group_id } => Error::MissingGroupDescription {
             group_id: group_id.clone(),
         },
+        Error::MissingDeleteGroupResult { group_id } => Error::MissingDeleteGroupResult {
+            group_id: group_id.clone(),
+        },
         Error::MissingSaslCredentials => Error::MissingSaslCredentials,
         Error::InvalidSaslResponse { mechanism, reason } => {
             Error::InvalidSaslResponse { mechanism, reason }
@@ -3197,6 +3200,7 @@ fn can_retry_send(error: &Error) -> bool {
         | Error::MissingBroker { .. } => true,
         Error::MissingBootstrapServer
         | Error::MissingGroupDescription { .. }
+        | Error::MissingDeleteGroupResult { .. }
         | Error::MissingSaslCredentials
         | Error::InvalidSaslResponse { .. }
         | Error::ResponseTooLarge { .. }

@@ -27,9 +27,10 @@ pub use admin::{
     ConfigEntry, ConfigResourceResult, ConfigSource, ConfigSynonym, ConsumerGroupDescription,
     ConsumerGroupMember, ConsumerGroupOffsetDelete, CreateTopicResult, CreateTopicsOptions,
     CreateTopicsResult, DeleteConsumerGroupOffsetsPartitionResult,
-    DeleteConsumerGroupOffsetsResult, DeleteConsumerGroupOffsetsTopicResult, DeleteTopicResult,
-    DeleteTopicsOptions, DeleteTopicsResult, DescribeConfigsOptions, DescribeConfigsResult,
-    NewTopic, TopicConfigAlteration, TopicConfigResource, TopicListing,
+    DeleteConsumerGroupOffsetsResult, DeleteConsumerGroupOffsetsTopicResult,
+    DeleteConsumerGroupResult, DeleteTopicResult, DeleteTopicsOptions, DeleteTopicsResult,
+    DescribeConfigsOptions, DescribeConfigsResult, GroupListing, NewTopic, TopicConfigAlteration,
+    TopicConfigResource, TopicListing,
 };
 pub use client::Client;
 pub use config::{ClientConfig, SaslCredentials, SaslMechanism, SecurityProtocol};

@@ -8,6 +8,7 @@ use kafrust_protocol::api::api_versions::{ApiVersionsRequestV0, ApiVersionsRespo
 use kafrust_protocol::api::create_topics::{
     CreateTopicsRequestV2, CreateTopicsResponseV2, CreateTopicsTopicV2,
 };
+use kafrust_protocol::api::delete_groups::{DeleteGroupsRequestV1, DeleteGroupsResponseV1};
 use kafrust_protocol::api::delete_topics::{DeleteTopicsRequestV3, DeleteTopicsResponseV3};
 use kafrust_protocol::api::describe_configs::{
     DescribeConfigsRequestV1, DescribeConfigsResourceV1, DescribeConfigsResponseV1,
@@ -35,6 +36,7 @@ use kafrust_protocol::api::join_group::{
 use kafrust_protocol::api::leave_group::{
     LeaveGroupMemberIdentity, LeaveGroupRequestV3, LeaveGroupResponseV3,
 };
+use kafrust_protocol::api::list_groups::{ListGroupsRequestV1, ListGroupsResponseV1};
 use kafrust_protocol::api::metadata::{MetadataRequestV1, MetadataResponseV1};
 use kafrust_protocol::api::offset_commit::{
     OffsetCommitRequestV2, OffsetCommitRequestV7, OffsetCommitResponseV2, OffsetCommitResponseV7,
@@ -314,6 +316,34 @@ impl Client {
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(DescribeGroupsResponseV1::decode_body(&mut decoder)?)
+    }
+
+    /// Sends ListGroups v1 to the broker represented by this connection.
+    pub async fn list_groups_v1(&mut self) -> Result<ListGroupsResponseV1> {
+        let request = ListGroupsRequestV1 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(ListGroupsResponseV1::decode_body(&mut decoder)?)
+    }
+
+    /// Sends DeleteGroups v1 to this group coordinator connection.
+    pub async fn delete_groups_v1(
+        &mut self,
+        group_ids: Vec<String>,
+    ) -> Result<DeleteGroupsResponseV1> {
+        let request = DeleteGroupsRequestV1 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            group_ids,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(DeleteGroupsResponseV1::decode_body(&mut decoder)?)
     }
 
     /// Sends OffsetDelete v0 to this group coordinator connection.
