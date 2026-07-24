@@ -161,6 +161,7 @@ impl Consumer {
             record_count = records.len(),
             "polled kafka consumer records"
         );
+        self.config.client.record_consumed(records.len());
         Ok(records)
     }
 
@@ -172,10 +173,12 @@ impl Consumer {
         offset: i64,
     ) -> Result<Vec<ConsumerRecord>> {
         let topic = topic.into();
-        Ok(self
+        let records = self
             .fetch_with_progress(&topic, partition, offset)
             .await?
-            .records)
+            .records;
+        self.config.client.record_consumed(records.len());
+        Ok(records)
     }
 
     async fn fetch_with_progress(
@@ -686,6 +689,7 @@ mod tests {
     use kafrust_protocol::api::metadata::{
         BrokerMetadata, MetadataResponseV1, PartitionMetadata, TopicMetadata,
     };
+    use kafrust_protocol::codec::Encoder;
     use std::collections::BTreeMap;
     use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
     use tokio::net::TcpListener;
@@ -906,6 +910,43 @@ mod tests {
         server.await.unwrap();
     }
 
+    #[tokio::test]
+    async fn records_consumed_metrics_for_fetch_results() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let request = read_frame(&mut socket).await;
+            assert_eq!(&request[0..4], &[0, 1, 0, 4]);
+            write_frame(&mut socket, &fetch_v4_response_frame()).await;
+        });
+        let (client_stream, broker_stream) = tokio::io::duplex(64);
+        let _broker_stream = broker_stream;
+        let client = Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-consumer-metrics-test".to_owned()),
+            Some(std::time::Duration::from_millis(500)),
+        );
+        let metrics = ClientMetrics::new();
+        let config = ConsumerConfig::new([addr.to_string()])
+            .request_timeout_ms(500)
+            .metrics(metrics.clone());
+        let mut consumer = Consumer::from_assignments(client, config, Vec::new());
+        let mut metadata = metadata_fixture();
+        metadata.brokers[0].host = addr.ip().to_string();
+        metadata.brokers[0].port = i32::from(addr.port());
+        consumer
+            .metadata_cache
+            .insert("orders".to_owned(), metadata);
+
+        let records = consumer.fetch("orders", 0, 42).await.unwrap();
+
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].offset(), 42);
+        assert_eq!(metrics.snapshot().consumed_records, 1);
+        server.await.unwrap();
+    }
+
     fn message(offset: i64) -> MessageSetRecord {
         MessageSetRecord {
             offset,
@@ -1000,5 +1041,36 @@ mod tests {
             0, 0, 0, 1, // isr count
             0, 0, 0, 1, // isr node
         ]
+    }
+
+    fn fetch_v4_response_frame() -> Vec<u8> {
+        let mut message = Encoder::new();
+        message.write_i32(0);
+        message.write_i8(1);
+        message.write_i8(0);
+        message.write_i64(123);
+        message.write_nullable_bytes(Some(b"order-1")).unwrap();
+        message.write_nullable_bytes(Some(b"created")).unwrap();
+        let message = message.into_bytes();
+
+        let mut records = Encoder::new();
+        records.write_i64(42);
+        records.write_i32(i32::try_from(message.len()).unwrap());
+        records.write_raw(&message);
+        let records = records.into_bytes();
+
+        let mut response = Encoder::new();
+        response.write_i32(1);
+        response.write_i32(0);
+        response.write_i32(1);
+        response.write_string("orders").unwrap();
+        response.write_i32(1);
+        response.write_i32(0);
+        response.write_i16(0);
+        response.write_i64(43);
+        response.write_i64(43);
+        response.write_i32(0);
+        response.write_bytes(&records).unwrap();
+        response.into_bytes()
     }
 }

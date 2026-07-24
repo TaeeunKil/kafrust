@@ -313,8 +313,9 @@ println!(
 Snapshots include request success, failure, timeout, and cancellation counts,
 high-level operation retry attempts, request and response payload bytes,
 in-flight requests, current and maximum outstanding buffered records, and total
-and maximum latency. Retry attempts cover
-producer sends, consumer fetches, metadata reconnects, and transactional
+and maximum latency. Successful produced records, topic-partition Produce
+chunks, and records returned by consumer APIs are also counted. Retry attempts
+cover producer sends, consumer fetches, metadata reconnects, and transactional
 coordinator operations, plus automatic consumer-group rejoins. Individual
 atomic fields are sampled independently, so a snapshot taken while requests
 are changing is not a transactional view. Request metrics and `tracing` spans

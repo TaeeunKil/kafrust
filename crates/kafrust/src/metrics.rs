@@ -22,6 +22,9 @@ struct ClientMetricsInner {
     retries: AtomicU64,
     buffered_records: AtomicU64,
     max_buffered_records: AtomicU64,
+    produced_records: AtomicU64,
+    produce_batches: AtomicU64,
+    consumed_records: AtomicU64,
     request_bytes: AtomicU64,
     response_bytes: AtomicU64,
     in_flight_requests: AtomicU64,
@@ -48,6 +51,12 @@ pub struct ClientMetricsSnapshot {
     pub buffered_records: u64,
     /// Highest observed number of outstanding buffered producer records.
     pub max_buffered_records: u64,
+    /// Records successfully acknowledged by Produce operations.
+    pub produced_records: u64,
+    /// Successful topic-partition Produce chunks.
+    pub produce_batches: u64,
+    /// Records returned to callers by consumer poll and fetch operations.
+    pub consumed_records: u64,
     /// Kafka request payload bytes, excluding the four-byte frame length.
     pub request_bytes: u64,
     /// Kafka response payload bytes, excluding the four-byte frame length.
@@ -77,6 +86,9 @@ impl ClientMetrics {
             retries: self.inner.retries.load(Ordering::Relaxed),
             buffered_records: self.inner.buffered_records.load(Ordering::Relaxed),
             max_buffered_records: self.inner.max_buffered_records.load(Ordering::Relaxed),
+            produced_records: self.inner.produced_records.load(Ordering::Relaxed),
+            produce_batches: self.inner.produce_batches.load(Ordering::Relaxed),
+            consumed_records: self.inner.consumed_records.load(Ordering::Relaxed),
             request_bytes: self.inner.request_bytes.load(Ordering::Relaxed),
             response_bytes: self.inner.response_bytes.load(Ordering::Relaxed),
             in_flight_requests: self.inner.in_flight_requests.load(Ordering::Relaxed),
@@ -119,6 +131,19 @@ impl ClientMetrics {
 
     pub(crate) fn complete_buffered_record(&self) {
         self.inner.buffered_records.fetch_sub(1, Ordering::Relaxed);
+    }
+
+    pub(crate) fn record_produce_batch(&self, records: usize) {
+        self.inner
+            .produced_records
+            .fetch_add(usize_to_u64(records), Ordering::Relaxed);
+        self.inner.produce_batches.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub(crate) fn record_consumed(&self, records: usize) {
+        self.inner
+            .consumed_records
+            .fetch_add(usize_to_u64(records), Ordering::Relaxed);
     }
 }
 
@@ -230,6 +255,8 @@ mod tests {
         metrics.start_request(12).succeed(24);
         shared.start_request(8).fail(true);
         shared.record_retry();
+        shared.record_produce_batch(3);
+        shared.record_consumed(2);
 
         let snapshot = metrics.snapshot();
         assert_eq!(snapshot.requests_started, 2);
@@ -237,6 +264,9 @@ mod tests {
         assert_eq!(snapshot.requests_failed, 1);
         assert_eq!(snapshot.requests_timed_out, 1);
         assert_eq!(snapshot.retries, 1);
+        assert_eq!(snapshot.produced_records, 3);
+        assert_eq!(snapshot.produce_batches, 1);
+        assert_eq!(snapshot.consumed_records, 2);
         assert_eq!(snapshot.request_bytes, 20);
         assert_eq!(snapshot.response_bytes, 24);
         assert_eq!(snapshot.in_flight_requests, 0);

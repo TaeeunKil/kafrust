@@ -897,10 +897,13 @@ Implemented evidence:
   configurable through `ProducerConfig::buffer_capacity`. Full queues apply
   async backpressure, while shared metrics report current and maximum
   outstanding accepted records through lifecycle-safe gauges.
+- Shared metrics count acknowledged produced records, successful
+  topic-partition Produce chunks, and records returned after consumer
+  isolation filtering and poll limits.
 
 Remaining:
 
-- record, batch, and high-level operation metrics
+- remaining high-level operation metrics
 - complete producer, consumer, and group operation spans
 - decompression and protocol decode-array memory limits
 - throughput and latency benchmark baselines
