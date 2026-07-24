@@ -1176,6 +1176,10 @@ impl Producer {
     /// The offsets are committed only if [`Producer::commit_transaction`]
     /// succeeds. Pass the assignments returned by [`crate::ConsumerGroup::assignments`]
     /// after polling the records processed by this transaction.
+    #[deprecated(
+        since = "0.2.1",
+        note = "use send_group_offsets_to_transaction with ConsumerGroup::metadata; the v0 request cannot fence stale group members"
+    )]
     #[tracing::instrument(
         level = "debug",
         name = "kafka.producer.send_offsets_to_transaction",
@@ -2145,49 +2149,80 @@ impl Producer {
         producer_epoch: i16,
         topics: Vec<TxnOffsetCommitTopicV3>,
     ) -> Result<()> {
-        let coordinator = self
-            .client
-            .find_group_coordinator(metadata.group_id().to_owned())
-            .await?;
-        if coordinator.error_code != 0 {
-            return Err(self.client.broker_error(
-                coordinator.error_code,
-                format!("find group coordinator {}", metadata.group_id()),
-            ));
-        }
-        let mut client = self
-            .config
-            .client
-            .connect_broker(format!("{}:{}", coordinator.host, coordinator.port))
-            .await?;
-        let response = client
-            .txn_offset_commit_v3(
-                transactional_id,
-                metadata.group_id(),
-                producer_id,
-                producer_epoch,
-                metadata.generation_id(),
-                metadata.member_id(),
-                metadata.group_instance_id().map(str::to_owned),
-                topics,
-            )
-            .await?;
-        for topic in response.topics {
-            for partition in topic.partitions {
-                if partition.error_code != 0 {
-                    return Err(self.client.broker_error(
-                        partition.error_code,
-                        format!(
-                            "transaction offset commit {} {}-{}",
-                            metadata.group_id(),
-                            topic.name,
-                            partition.partition_index
-                        ),
-                    ));
+        let group_id = metadata.group_id();
+        let mut attempt = 0;
+        loop {
+            let coordinator = self
+                .client
+                .find_group_coordinator(group_id.to_owned())
+                .await?;
+            if coordinator.error_code != 0 {
+                self.config.client.record_broker_error();
+                if attempt < self.config.max_retries
+                    && is_retryable_transaction_coordinator_error(coordinator.error_code)
+                {
+                    attempt += 1;
+                    time::sleep(IDEMPOTENT_INIT_RETRY_BACKOFF).await;
+                    self.config.client.record_retry();
+                    continue;
                 }
+                return Err(Error::Broker {
+                    code: coordinator.error_code,
+                    context: format!("find group coordinator {group_id}"),
+                });
             }
+            let mut client = self
+                .config
+                .client
+                .connect_broker(format!("{}:{}", coordinator.host, coordinator.port))
+                .await?;
+            let response = client
+                .txn_offset_commit_v3(
+                    transactional_id,
+                    group_id,
+                    producer_id,
+                    producer_epoch,
+                    metadata.generation_id(),
+                    metadata.member_id(),
+                    metadata.group_instance_id().map(str::to_owned),
+                    topics.clone(),
+                )
+                .await?;
+            let error = response.topics.iter().find_map(|topic| {
+                topic
+                    .partitions
+                    .iter()
+                    .find(|partition| partition.error_code != 0)
+                    .map(|partition| {
+                        (
+                            partition.error_code,
+                            topic.name.as_str(),
+                            partition.partition_index,
+                        )
+                    })
+            });
+            let Some((error_code, topic, partition)) = error else {
+                return Ok(());
+            };
+            self.config.client.record_broker_error();
+            if attempt < self.config.max_retries
+                && is_retryable_transaction_coordinator_error(error_code)
+            {
+                attempt += 1;
+                time::sleep(IDEMPOTENT_INIT_RETRY_BACKOFF).await;
+                self.config.client.record_retry();
+                continue;
+            }
+            if idempotent_produce_error_disposition(error_code)
+                == IdempotentProduceErrorDisposition::Fatal
+            {
+                self.record_idempotent_fatal_error(error_code);
+            }
+            return Err(Error::Broker {
+                code: error_code,
+                context: format!("transaction offset commit {group_id} {topic}-{partition}"),
+            });
         }
-        Ok(())
     }
 
     async fn end_transaction(&mut self, committed: bool) -> Result<()> {
@@ -3201,13 +3236,13 @@ mod tests {
         buffered_linger_deadline, can_retry_send, choose_partition, complete_buffered_deliveries,
         delivery_error_from_request_error, enqueue_buffered_record, fail_buffered_deliveries,
         idempotent_produce_error_disposition, invalidate_metadata_cache,
-        invalidate_metadata_cache_for_record_indexes, largest_fitting_prefix, leader_for,
-        message_set_message, record_batch_attempt_outcomes, record_batch_message,
-        select_produce_batch_version, select_produce_version, transaction_offset_topics, Acks,
-        BatchRecord, BufferedFlushReason, BufferedProduceRequest, BufferedProducerCommand,
-        BufferedProducerState, Compression, IdempotentBatchSequenceTracker,
-        IdempotentProduceErrorDisposition, IdempotentProducerState, PreparedBatchRecord,
-        ProduceBatchKey, ProduceVersion, Producer, ProducerBatchFailure,
+        invalidate_metadata_cache_for_record_indexes, is_retryable_transaction_coordinator_error,
+        largest_fitting_prefix, leader_for, message_set_message, record_batch_attempt_outcomes,
+        record_batch_message, select_produce_batch_version, select_produce_version,
+        transaction_offset_topics, Acks, BatchRecord, BufferedFlushReason, BufferedProduceRequest,
+        BufferedProducerCommand, BufferedProducerState, Compression,
+        IdempotentBatchSequenceTracker, IdempotentProduceErrorDisposition, IdempotentProducerState,
+        PreparedBatchRecord, ProduceBatchKey, ProduceVersion, Producer, ProducerBatchFailure,
         ProducerBatchRecordOutcome, ProducerBatchReport, ProducerConfig, ProducerDelivery,
         ProducerRecord, RecordMetadata, SecurityProtocol,
     };
@@ -3282,6 +3317,16 @@ mod tests {
             idempotent_produce_error_disposition(6),
             IdempotentProduceErrorDisposition::Other
         );
+    }
+
+    #[test]
+    fn retries_only_transient_transaction_coordinator_errors() {
+        for code in [14, 15, 16, 51] {
+            assert!(is_retryable_transaction_coordinator_error(code));
+        }
+        for code in [22, 25, 27, 47, 90] {
+            assert!(!is_retryable_transaction_coordinator_error(code));
+        }
     }
 
     #[test]
