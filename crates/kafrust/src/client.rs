@@ -8,6 +8,7 @@ use kafrust_protocol::api::api_versions::{ApiVersionsRequestV0, ApiVersionsRespo
 use kafrust_protocol::api::create_topics::{
     CreateTopicsRequestV2, CreateTopicsResponseV2, CreateTopicsTopicV2,
 };
+use kafrust_protocol::api::delete_topics::{DeleteTopicsRequestV3, DeleteTopicsResponseV3};
 use kafrust_protocol::api::end_txn::{EndTxnRequestV0, EndTxnResponseV0};
 use kafrust_protocol::api::fetch::{
     FetchPartitionV2, FetchRequestV4, FetchResponseV4, FetchTopicV2,
@@ -238,6 +239,28 @@ impl Client {
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(CreateTopicsResponseV2::decode_body(&mut decoder)?)
+    }
+
+    /// Sends DeleteTopics v3 to the broker represented by this connection.
+    ///
+    /// Kafka expects this request on the active controller. High-level callers
+    /// should prefer [`crate::AdminClient`], which discovers and routes to the
+    /// current controller.
+    pub async fn delete_topics_v3(
+        &mut self,
+        topic_names: Vec<String>,
+        timeout_ms: i32,
+    ) -> Result<DeleteTopicsResponseV3> {
+        let request = DeleteTopicsRequestV3 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            topic_names,
+            timeout_ms,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(DeleteTopicsResponseV3::decode_body(&mut decoder)?)
     }
 
     /// Sends InitProducerId v0 for an idempotent or transactional producer session.

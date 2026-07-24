@@ -721,18 +721,24 @@ Implemented evidence:
 - `NewTopic`, `CreateTopicsOptions`, `CreateTopicsResult`, and
   `CreateTopicResult` expose Kafka topic creation concepts without flattening
   partial responses into a single generic error.
+- DeleteTopics v3 request encoding and response decoding preserve topic-level
+  partial failures and broker throttle time. `AdminClient::delete_topics`
+  shares the controller routing, security configuration, tracing, and metrics
+  behavior of topic creation.
 - Focused byte-level tests and an injected two-connection test cover protocol
   encoding, decoding, controller routing, topic error preservation, and broker
   error metrics.
-- The `admin_create_topic` example creates a topic and verifies it through a
-  subsequent metadata lookup. The live Kafka workflow runs it against the
-  Kafka 3.7.2 and current stable single-node profiles and the Kafka 3.7.2
-  three-broker profile.
+- The `admin_create_topic` example creates a topic, verifies it through a
+  subsequent metadata lookup, and deletes it. The live Kafka workflow runs it
+  against the Kafka 3.7.2 and current stable single-node profiles and the
+  Kafka 3.7.2 three-broker profile.
+- Manual `Live Kafka Smoke` run `30059517473` passed CreateTopics v2 and its
+  follow-up Metadata v1 description on 2026-07-24 against Kafka 3.7.2 and
+  4.3.1 single-node brokers and the Kafka 3.7.2 three-broker cluster.
 
 Remaining:
 
 - list topics and cluster description types
-- delete topics
 - describe and alter topic configs
 - describe consumer groups and evaluate consumer-group offset deletion
 

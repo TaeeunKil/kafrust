@@ -1,6 +1,8 @@
 mod common;
 
-use kafrust::{AdminClient, ClientConfig, CreateTopicsOptions, Error, NewTopic};
+use kafrust::{
+    AdminClient, ClientConfig, CreateTopicsOptions, DeleteTopicsOptions, Error, NewTopic,
+};
 
 #[tokio::main]
 async fn main() -> kafrust::Result<()> {
@@ -63,6 +65,23 @@ async fn main() -> kafrust::Result<()> {
         created.name,
         created.partitions.len()
     );
+
+    let delete_result = admin
+        .delete_topics(&[topic.clone()], DeleteTopicsOptions::new())
+        .await?;
+    for topic_result in delete_result.topics() {
+        if !topic_result.is_success() {
+            return Err(Error::Broker {
+                code: topic_result.error_code(),
+                context: format!("delete topic {}", topic_result.name()),
+            });
+        }
+        println!(
+            "deleted topic {} (controller throttle {:?})",
+            topic_result.name(),
+            delete_result.throttle_time()
+        );
+    }
 
     Ok(())
 }

@@ -77,7 +77,7 @@ jobs:
       - name: Run broker roundtrip
         run: cargo test -p kafrust --test broker_roundtrip -- --nocapture
 
-      - name: Run admin create topic example
+      - name: Run admin topic lifecycle example
         run: cargo run -p kafrust --example admin_create_topic
 
       - name: Run producer example
@@ -239,7 +239,7 @@ jobs:
       - name: Run multi-broker roundtrip example
         run: cargo run -p kafrust --example broker_roundtrip
 
-      - name: Run multi-broker admin create topic example
+      - name: Run multi-broker admin topic lifecycle example
         env:
           KAFRUST_ADMIN_PARTITIONS: "3"
           KAFRUST_ADMIN_REPLICATION_FACTOR: "3"

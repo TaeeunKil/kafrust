@@ -4,7 +4,9 @@ use std::time::Duration;
 use kafrust_protocol::api::create_topics::{
     CreateTopicsAssignmentV2, CreateTopicsConfigV2, CreateTopicsTopicResultV2, CreateTopicsTopicV2,
 };
+use kafrust_protocol::api::delete_topics::DeleteTopicsTopicResultV3;
 
+use crate::client::Client;
 use crate::config::ClientConfig;
 use crate::error::{BrokerErrorKind, Error, Result};
 use crate::metrics::ClientMetrics;
@@ -29,6 +31,21 @@ impl AdminClient {
         self.config.metrics_ref()
     }
 
+    async fn controller_client(&self) -> Result<Client> {
+        let mut bootstrap = self.config.clone().connect().await?;
+        let metadata = bootstrap.metadata(None).await?;
+        let controller = metadata
+            .brokers
+            .iter()
+            .find(|broker| broker.node_id == metadata.controller_id)
+            .ok_or(Error::MissingBroker {
+                node_id: metadata.controller_id,
+            })?;
+        self.config
+            .connect_broker(format!("{}:{}", controller.host, controller.port))
+            .await
+    }
+
     /// Creates Kafka topics on the active controller using CreateTopics v2.
     ///
     /// Kafka can accept some topics and reject others in the same request.
@@ -47,19 +64,7 @@ impl AdminClient {
         topics: &[NewTopic],
         options: CreateTopicsOptions,
     ) -> Result<CreateTopicsResult> {
-        let mut bootstrap = self.config.clone().connect().await?;
-        let metadata = bootstrap.metadata(None).await?;
-        let controller = metadata
-            .brokers
-            .iter()
-            .find(|broker| broker.node_id == metadata.controller_id)
-            .ok_or(Error::MissingBroker {
-                node_id: metadata.controller_id,
-            })?;
-        let mut controller_client = self
-            .config
-            .connect_broker(format!("{}:{}", controller.host, controller.port))
-            .await?;
+        let mut controller_client = self.controller_client().await?;
         let response = controller_client
             .create_topics_v2(
                 topics.iter().map(NewTopic::as_protocol).collect(),
@@ -80,6 +85,43 @@ impl AdminClient {
                 .topics
                 .into_iter()
                 .map(CreateTopicResult::from_protocol)
+                .collect(),
+        })
+    }
+
+    /// Deletes Kafka topics on the active controller using DeleteTopics v3.
+    ///
+    /// Kafka can accept some topic deletions and reject others in the same
+    /// request. Per-topic broker failures are retained in [`DeleteTopicsResult`].
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.delete_topics",
+        skip_all,
+        fields(topic_count = topic_names.len()),
+        err
+    )]
+    pub async fn delete_topics(
+        &self,
+        topic_names: &[String],
+        options: DeleteTopicsOptions,
+    ) -> Result<DeleteTopicsResult> {
+        let mut controller_client = self.controller_client().await?;
+        let response = controller_client
+            .delete_topics_v3(topic_names.to_vec(), duration_millis_i32(options.timeout))
+            .await?;
+
+        for topic in &response.topics {
+            if topic.error_code != 0 {
+                self.config.record_broker_error();
+            }
+        }
+
+        Ok(DeleteTopicsResult {
+            throttle_time: Duration::from_millis(nonnegative_i32_to_u64(response.throttle_time_ms)),
+            topics: response
+                .topics
+                .into_iter()
+                .map(DeleteTopicResult::from_protocol)
                 .collect(),
         })
     }
@@ -303,6 +345,103 @@ impl CreateTopicResult {
     }
 }
 
+/// Options for one DeleteTopics operation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DeleteTopicsOptions {
+    timeout: Duration,
+}
+
+impl DeleteTopicsOptions {
+    /// Creates options with a 30-second broker timeout.
+    pub fn new() -> Self {
+        Self {
+            timeout: Duration::from_secs(30),
+        }
+    }
+
+    /// Sets how long the controller may wait for topic deletion.
+    pub fn timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = timeout;
+        self
+    }
+
+    /// Returns the configured broker-side timeout.
+    pub fn timeout_ref(&self) -> Duration {
+        self.timeout
+    }
+}
+
+impl Default for DeleteTopicsOptions {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Complete response from one DeleteTopics operation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeleteTopicsResult {
+    throttle_time: Duration,
+    topics: Vec<DeleteTopicResult>,
+}
+
+impl DeleteTopicsResult {
+    /// Returns the broker throttle time.
+    pub fn throttle_time(&self) -> Duration {
+        self.throttle_time
+    }
+
+    /// Returns per-topic outcomes in broker response order.
+    pub fn topics(&self) -> &[DeleteTopicResult] {
+        &self.topics
+    }
+
+    /// Consumes this response and returns per-topic outcomes.
+    pub fn into_topics(self) -> Vec<DeleteTopicResult> {
+        self.topics
+    }
+
+    /// Returns whether at least one topic deletion was rejected.
+    pub fn has_errors(&self) -> bool {
+        self.topics.iter().any(|topic| !topic.is_success())
+    }
+}
+
+/// Outcome for one topic in a DeleteTopics response.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeleteTopicResult {
+    name: String,
+    error_code: i16,
+}
+
+impl DeleteTopicResult {
+    /// Returns the topic name.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Returns whether Kafka accepted the topic deletion.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+    }
+
+    /// Returns Kafka's raw error code, or zero for success.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns kafrust's classification for a non-zero Kafka error code.
+    pub fn broker_error_kind(&self) -> Option<BrokerErrorKind> {
+        (self.error_code != 0).then(|| BrokerErrorKind::from_code(self.error_code))
+    }
+
+    fn from_protocol(result: DeleteTopicsTopicResultV3) -> Self {
+        Self {
+            name: result.name,
+            error_code: result.error_code,
+        }
+    }
+}
+
 fn duration_millis_i32(duration: Duration) -> i32 {
     i32::try_from(duration.as_millis()).unwrap_or(i32::MAX)
 }
@@ -314,7 +453,7 @@ fn nonnegative_i32_to_u64(value: i32) -> u64 {
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
-    use super::{AdminClient, CreateTopicsOptions, NewTopic};
+    use super::{AdminClient, CreateTopicsOptions, DeleteTopicsOptions, NewTopic};
     use crate::{BrokerErrorKind, ClientConfig, ClientMetrics};
     use std::time::Duration;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -354,6 +493,13 @@ mod tests {
         assert!(options.is_validate_only());
     }
 
+    #[test]
+    fn builds_delete_topics_options() {
+        let options = DeleteTopicsOptions::new().timeout(Duration::from_secs(9));
+
+        assert_eq!(options.timeout_ref(), Duration::from_secs(9));
+    }
+
     #[tokio::test]
     async fn routes_create_topics_to_controller_and_preserves_partial_result() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -389,6 +535,45 @@ mod tests {
         assert_eq!(
             result.topics()[0].broker_error_kind(),
             Some(BrokerErrorKind::TopicAlreadyExists)
+        );
+        assert_eq!(metrics.snapshot().broker_errors, 1);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn routes_delete_topics_to_controller_and_preserves_partial_result() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let metadata_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+            write_frame(&mut bootstrap, &metadata_response(addr.port())).await;
+
+            let (mut controller, _) = listener.accept().await.unwrap();
+            let delete_request = read_frame(&mut controller).await;
+            assert_eq!(&delete_request[0..4], &[0, 20, 0, 3]);
+            write_frame(&mut controller, &delete_topics_response()).await;
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        );
+
+        let result = admin
+            .delete_topics(&["orders".to_owned()], DeleteTopicsOptions::new())
+            .await
+            .unwrap();
+
+        assert_eq!(result.throttle_time(), Duration::from_millis(8));
+        assert!(result.has_errors());
+        assert_eq!(result.topics()[0].name(), "orders");
+        assert_eq!(result.topics()[0].error_code(), 3);
+        assert_eq!(
+            result.topics()[0].broker_error_kind(),
+            Some(BrokerErrorKind::UnknownTopicOrPartition)
         );
         assert_eq!(metrics.snapshot().broker_errors, 1);
         server.await.unwrap();
@@ -433,6 +618,16 @@ mod tests {
             0, 6, b'o', b'r', b'd', b'e', b'r', b's', // topic name
             0, 36, // topic already exists
             0, 6, b'e', b'x', b'i', b's', b't', b's', // error message
+        ]
+    }
+
+    fn delete_topics_response() -> Vec<u8> {
+        vec![
+            0, 0, 0, 1, // correlation ID
+            0, 0, 0, 8, // throttle time
+            0, 0, 0, 1, // topic count
+            0, 6, b'o', b'r', b'd', b'e', b'r', b's', // topic name
+            0, 3, // unknown topic or partition
         ]
     }
 }

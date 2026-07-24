@@ -51,9 +51,9 @@ for topic in result.topics() {
 # }
 ```
 
-CreateTopics preserves Kafka's per-topic partial results and routes through
-the active controller. See the repository's `docs/admin-api.md` for automatic
-and manual replica assignment.
+CreateTopics and DeleteTopics preserve Kafka's per-topic partial results and
+route through the active controller. See the repository's `docs/admin-api.md`
+for automatic and manual replica assignment and topic cleanup.
 
 ## Install
 
@@ -416,9 +416,10 @@ Verified high-level paths include:
   `IsolationLevel::ReadCommitted` hides aborted transaction records for direct
   and group consumers, and current group assignments can be committed through
   `Producer::send_offsets_to_transaction`. Transactional buffered sends and
-  admin APIs beyond CreateTopics are not implemented yet. Shared request,
-  retry, broker-error, producer, consumer, batch, and buffered-queue metrics
-  are available together with high-level operation and request spans.
+  admin APIs beyond topic creation and deletion are not implemented yet.
+  Shared request, retry, broker-error, producer, consumer, batch, and
+  buffered-queue metrics are available together with high-level operation and
+  request spans.
 - `acks=0` remains unsupported because the current request loop expects a broker
   response.
 

@@ -2,6 +2,7 @@ pub mod add_offsets_to_txn;
 pub mod add_partitions_to_txn;
 pub mod api_versions;
 pub mod create_topics;
+pub mod delete_topics;
 pub mod end_txn;
 pub mod fetch;
 pub mod find_coordinator;

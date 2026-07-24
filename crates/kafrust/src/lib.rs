@@ -22,7 +22,8 @@ pub mod producer;
 mod scram;
 
 pub use admin::{
-    AdminClient, CreateTopicResult, CreateTopicsOptions, CreateTopicsResult, NewTopic,
+    AdminClient, CreateTopicResult, CreateTopicsOptions, CreateTopicsResult, DeleteTopicResult,
+    DeleteTopicsOptions, DeleteTopicsResult, NewTopic,
 };
 pub use client::Client;
 pub use config::{ClientConfig, SaslCredentials, SaslMechanism, SecurityProtocol};
