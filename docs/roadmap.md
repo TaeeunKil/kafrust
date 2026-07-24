@@ -1097,3 +1097,7 @@ Implemented evidence:
   through JoinGroup v5, SyncGroup v3, Heartbeat v3, generation-fenced
   TxnOffsetCommit v3, and OffsetCommit v7. Duplicate instance fencing is
   classified separately from rejoinable group errors.
+- Manual `Live Kafka Smoke` run `30064182907` passed static join, poll,
+  heartbeat, and OffsetCommit v7 on Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1
+  plaintext brokers while every existing secured and multi-broker regression
+  job remained green.
