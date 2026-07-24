@@ -927,11 +927,14 @@ Implemented evidence:
   buffered gauges, and can require an observed error followed by recovery.
 - The weekly `Kafka Soak` workflow runs the profile against Kafka 4.3.1,
   restarts the broker during active load, and uploads the final JSON result.
+- Manual soak run `30058270907` passed on 2026-07-24: 1,038,200 records
+  completed in 60 seconds across a ten-second broker outage, 145 high-level
+  operation errors and 1,011 internal retries were observed, recovery
+  completed, and both final resource gauges were zero.
 
 Remaining:
 
 - remaining high-level operation metrics
-- load, soak, and failure-injection profiles
 
 ## M20 Compatibility Matrix And Migration Guide
 

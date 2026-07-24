@@ -89,3 +89,10 @@ Kafka 4.3.1. It stops the broker one third of the way through the run, waits ten
 seconds, restarts it, and requires the client workload to observe and recover
 from the outage. Manual runs default to two minutes and accept configurable
 duration and outage inputs.
+
+Manual run
+[`30058270907`](https://github.com/TaeeunKil/kafrust/actions/runs/30058270907)
+validated the profile on 2026-07-24. During 60 seconds it roundtripped 1,038,200
+records, observed 145 failed high-level operations and 1,011 internal retries,
+recovered after the broker restart, and finished with both in-flight request
+and buffered-record gauges at zero.
