@@ -364,6 +364,7 @@ pub struct Producer {
     client: Client,
     config: ProducerConfig,
     metadata_cache: BTreeMap<String, MetadataResponseV1>,
+    keyless_partition_indexes: BTreeMap<String, usize>,
     idempotent_state: Option<IdempotentProducerState>,
     transaction_state: Option<TransactionState>,
 }
@@ -1352,6 +1353,7 @@ impl Producer {
                     attempt += 1;
                 }
                 Ok(metadata) => {
+                    self.advance_keyless_partition(&record);
                     debug!(
                         topic = metadata.topic(),
                         partition = metadata.partition(),
@@ -1468,6 +1470,7 @@ impl Producer {
                     }
 
                     let report = batch_report_from_outcomes(outcomes)?;
+                    self.advance_keyless_partitions(&records);
                     debug!(
                         record_count = report.records().len(),
                         has_failures = report.has_failures(),
@@ -1489,6 +1492,43 @@ impl Producer {
         self.metadata_cache
             .insert(topic.to_owned(), metadata.clone());
         Ok(metadata)
+    }
+
+    fn choose_partition(
+        &self,
+        record: &ProducerRecord,
+        metadata: &MetadataResponseV1,
+    ) -> Result<i32> {
+        let keyless_index = self
+            .keyless_partition_indexes
+            .get(record.topic())
+            .copied()
+            .unwrap_or(0);
+        choose_partition(record, metadata, keyless_index)
+    }
+
+    fn advance_keyless_partition(&mut self, record: &ProducerRecord) {
+        if record.partition_ref().is_none() && record.key_ref().is_none() {
+            let index = self
+                .keyless_partition_indexes
+                .entry(record.topic().to_owned())
+                .or_default();
+            *index = index.wrapping_add(1);
+        }
+    }
+
+    fn advance_keyless_partitions(&mut self, records: &[BatchRecord]) {
+        let topics = records
+            .iter()
+            .filter(|record| {
+                record.record.partition_ref().is_none() && record.record.key_ref().is_none()
+            })
+            .map(|record| record.record.topic().to_owned())
+            .collect::<BTreeSet<_>>();
+        for topic in topics {
+            let index = self.keyless_partition_indexes.entry(topic).or_default();
+            *index = index.wrapping_add(1);
+        }
     }
 
     async fn request_metadata_for_topic(&mut self, topic: &str) -> Result<MetadataResponseV1> {
@@ -1521,7 +1561,7 @@ impl Producer {
                 .get(index)
                 .ok_or(Error::Unsupported("batch record index out of bounds"))?;
             let metadata = self.metadata_for_topic(record.record.topic()).await?;
-            let partition = choose_partition(&record.record, &metadata)?;
+            let partition = self.choose_partition(&record.record, &metadata)?;
             let leader = leader_for(&metadata, record.record.topic(), partition)?;
             let broker_addr = broker_addr_for(&metadata, leader)?;
             groups
@@ -1751,7 +1791,7 @@ impl Producer {
         timestamp: SystemTime,
         timestamp_ms: i64,
     ) -> Result<RecordMetadata> {
-        let partition = choose_partition(record, metadata)?;
+        let partition = self.choose_partition(record, metadata)?;
         let leader = leader_for(metadata, record.topic(), partition)?;
         let broker_addr = broker_addr_for(metadata, leader)?;
         self.register_transaction_partition(record.topic(), partition)
@@ -2633,6 +2673,7 @@ impl ProducerConfig {
             client,
             config: self,
             metadata_cache: BTreeMap::new(),
+            keyless_partition_indexes: BTreeMap::new(),
             idempotent_state,
             transaction_state,
         })
@@ -2765,7 +2806,11 @@ fn transaction_offset_topics_v3(assignments: &[ConsumerAssignment]) -> Vec<TxnOf
         .collect()
 }
 
-fn choose_partition(record: &ProducerRecord, metadata: &MetadataResponseV1) -> Result<i32> {
+fn choose_partition(
+    record: &ProducerRecord,
+    metadata: &MetadataResponseV1,
+    keyless_index: usize,
+) -> Result<i32> {
     if let Some(partition) = record.partition_ref() {
         return Ok(partition);
     }
@@ -2794,9 +2839,9 @@ fn choose_partition(record: &ProducerRecord, metadata: &MetadataResponseV1) -> R
         });
     }
 
-    let index = record.key_ref().map_or(0, |key| {
+    let index = record.key_ref().map_or(keyless_index, |key| {
         usize::try_from(kafka_murmur2(key) & 0x7fff_ffff).unwrap_or(0) % partitions.len()
-    });
+    }) % partitions.len();
     Ok(partitions[index])
 }
 
@@ -4572,15 +4617,17 @@ mod tests {
         let metadata = metadata_fixture();
         let record = ProducerRecord::to("orders").partition(1);
 
-        assert_eq!(choose_partition(&record, &metadata).unwrap(), 1);
+        assert_eq!(choose_partition(&record, &metadata, 0).unwrap(), 1);
     }
 
     #[test]
-    fn chooses_first_partition_when_record_has_no_partition_or_key() {
+    fn rotates_keyless_partition_by_sticky_batch_index() {
         let metadata = metadata_fixture();
         let record = ProducerRecord::to("orders");
 
-        assert_eq!(choose_partition(&record, &metadata).unwrap(), 0);
+        assert_eq!(choose_partition(&record, &metadata, 0).unwrap(), 0);
+        assert_eq!(choose_partition(&record, &metadata, 1).unwrap(), 1);
+        assert_eq!(choose_partition(&record, &metadata, 2).unwrap(), 0);
     }
 
     #[test]
@@ -4603,7 +4650,8 @@ mod tests {
         let metadata = metadata_fixture();
         let record = ProducerRecord::to("orders").key("abc");
 
-        assert_eq!(choose_partition(&record, &metadata).unwrap(), 1);
+        assert_eq!(choose_partition(&record, &metadata, 0).unwrap(), 1);
+        assert_eq!(choose_partition(&record, &metadata, 1).unwrap(), 1);
     }
 
     #[test]
@@ -4701,6 +4749,7 @@ mod tests {
             client,
             config,
             metadata_cache: BTreeMap::new(),
+            keyless_partition_indexes: BTreeMap::new(),
             idempotent_state: None,
             transaction_state: None,
         };
@@ -4764,6 +4813,7 @@ mod tests {
             client,
             config,
             metadata_cache,
+            keyless_partition_indexes: BTreeMap::new(),
             idempotent_state: Some(IdempotentProducerState::new(42, 3)),
             transaction_state: None,
         };

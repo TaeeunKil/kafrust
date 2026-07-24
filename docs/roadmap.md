@@ -1105,6 +1105,9 @@ Implemented evidence:
 
 - Producer records without an explicit partition use Kafka-compatible Murmur2
   routing when a key is present, preserving standard-client key affinity.
+- Keyless producer records use per-topic batch-sticky round-robin routing.
+  Single sends rotate after completion, records in the same batch or buffered
+  flush stay together, and retries keep the original sticky partition.
 - Manual `Live Kafka Smoke` run `30066328105` passed key-derived producer
   routing and buffered fetch-back across every selected partition on the
   three-broker Kafka 3.7.2 profile. The same run passed Kafka 3.7.2, 3.8.1,

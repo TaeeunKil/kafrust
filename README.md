@@ -167,7 +167,8 @@ async fn main() -> kafrust::Result<()> {
 ```
 
 When no partition is specified, keyed records use Kafka-compatible Murmur2
-partitioning. Keyless records currently select the first partition.
+partitioning. Keyless records stay on one partition for a complete send or
+buffered flush, then rotate to the next available partition for the topic.
 
 ### Transactional Producer
 
