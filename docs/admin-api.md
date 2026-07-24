@@ -164,6 +164,45 @@ brokers. Member IDs, clients, hosts, protocol metadata, and assignments remain
 available; metadata and assignment payloads are raw bytes because their schema
 depends on the selected group protocol.
 
+## Delete Consumer Group Offsets
+
+```rust
+use kafrust::{AdminClient, ClientConfig, ConsumerGroupOffsetDelete};
+
+# async fn example() -> kafrust::Result<()> {
+let admin = AdminClient::new(ClientConfig::new(["localhost:9092"]));
+let result = admin
+    .delete_consumer_group_offsets(
+        "orders-service",
+        &[
+            ConsumerGroupOffsetDelete::new("orders", [0, 1]),
+            ConsumerGroupOffsetDelete::new("payments", [2]),
+        ],
+    )
+    .await?;
+
+for topic in result.topics() {
+    for partition in topic.partitions() {
+        if !partition.is_success() {
+            eprintln!(
+                "{}-{}: Kafka error {}",
+                topic.topic(),
+                partition.partition_index(),
+                partition.error_code(),
+            );
+        }
+    }
+}
+# Ok(())
+# }
+```
+
+OffsetDelete v0 is routed to the consumer group's active coordinator. Its
+top-level group error and every partition outcome remain available separately.
+Kafka rejects deletion for a topic while the group is actively subscribed to
+it with error 86 (`GroupSubscribedToTopic`), so stop the group or remove that
+topic from its subscription before deleting committed offsets.
+
 ## Create Topics
 
 ```rust
@@ -245,5 +284,3 @@ for topic in result.topics() {
 DeleteTopics v3 also routes to the active controller and preserves independent
 topic outcomes. Version 3 responses contain topic names and error codes but no
 broker error-message field.
-
-Consumer-group offset deletion evaluation remains on the M16 roadmap.

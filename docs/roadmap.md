@@ -684,7 +684,7 @@ Evidence:
 
 ## M16 Admin API MVP
 
-Status: In progress.
+Status: Complete.
 
 Goal: provide the admin operations needed by common applications and test harnesses.
 
@@ -728,6 +728,9 @@ Implemented evidence:
 - DescribeGroups v1 discovers each requested group's coordinator independently
   and preserves state, protocol, member identity, raw protocol metadata and
   assignments, per-group errors, throttle time, tracing, and metrics.
+- OffsetDelete v0 routes to the group's coordinator and preserves its
+  top-level group error plus every per-partition result. Typed classifications
+  cover missing groups and active topic subscriptions.
 - The `admin_describe_group` example runs after the consumer-group smoke path
   across plaintext, multi-broker, TLS, SASL_PLAINTEXT, and SASL_SSL profiles.
 - The admin lifecycle example waits for asynchronous metadata propagation in
@@ -765,10 +768,10 @@ Implemented evidence:
   DescribeConfigs v1 readback on Kafka 3.7.2 and 4.3.1 single-node brokers and
   the Kafka 3.7.2 three-broker cluster, followed by the full existing smoke and
   failover sequence.
-
-Remaining:
-
-- evaluate consumer-group offset deletion
+- Manual run `30061497355` passed DescribeGroups v1 on Kafka 3.7.2 and 4.3.1
+  plaintext brokers plus TLS, SASL_PLAINTEXT, and SASL_SSL profiles. The
+  three-broker job passed DescribeGroups and broker-stop failover before the
+  run result was recorded.
 
 ## M17 Idempotent Producer
 
