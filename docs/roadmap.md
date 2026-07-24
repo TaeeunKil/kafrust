@@ -922,6 +922,11 @@ Implemented evidence:
   uncompressed and 50,555 records/s with Zstd on a GitHub-hosted runner.
   Standard-check-vector table CRC and logarithmic exact-size batch selection
   improved those profiles by 37.6x and 29.1x over run `30057137300`.
+- The `soak` live example continuously pairs acknowledged Produce batches with
+  offset-based Fetch reads, verifies final record counts and zero in-flight and
+  buffered gauges, and can require an observed error followed by recovery.
+- The weekly `Kafka Soak` workflow runs the profile against Kafka 4.3.1,
+  restarts the broker during active load, and uploads the final JSON result.
 
 Remaining:
 
