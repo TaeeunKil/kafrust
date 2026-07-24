@@ -5,6 +5,45 @@ TLS, SASL, request timeouts, decode limits, and shared metrics apply to admin
 operations. Controller-scoped operations discover the current controller from
 cluster metadata before opening the request connection.
 
+## Inspect Cluster and Topics
+
+```rust
+use kafrust::{AdminClient, ClientConfig};
+
+# async fn example() -> kafrust::Result<()> {
+let admin = AdminClient::new(ClientConfig::new(["localhost:9092"]));
+let cluster = admin.describe_cluster().await?;
+
+println!("controller node: {}", cluster.controller_id());
+for broker in cluster.brokers() {
+    println!(
+        "broker {} at {}:{} rack {:?}",
+        broker.id(),
+        broker.host(),
+        broker.port(),
+        broker.rack()
+    );
+}
+
+for topic in admin.list_topics().await? {
+    println!(
+        "{}: {} partitions, internal={}, error={}",
+        topic.name(),
+        topic.partition_count(),
+        topic.is_internal(),
+        topic.error_code()
+    );
+}
+# Ok(())
+# }
+```
+
+`describe_cluster` sends Metadata v1 with an empty topic list so Kafka returns
+broker and controller data without enumerating topics. `list_topics` requests
+all visible topics. Topic-level metadata errors remain available through
+`TopicListing::error_code` and `broker_error_kind` instead of aborting the
+entire listing.
+
 ## Create Topics
 
 ```rust

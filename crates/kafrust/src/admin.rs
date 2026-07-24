@@ -5,6 +5,7 @@ use kafrust_protocol::api::create_topics::{
     CreateTopicsAssignmentV2, CreateTopicsConfigV2, CreateTopicsTopicResultV2, CreateTopicsTopicV2,
 };
 use kafrust_protocol::api::delete_topics::DeleteTopicsTopicResultV3;
+use kafrust_protocol::api::metadata::{BrokerMetadata, TopicMetadata};
 
 use crate::client::Client;
 use crate::config::ClientConfig;
@@ -31,9 +32,52 @@ impl AdminClient {
         self.config.metrics_ref()
     }
 
+    /// Describes the Kafka cluster brokers and active controller.
+    #[tracing::instrument(level = "debug", name = "kafka.admin.describe_cluster", skip_all, err)]
+    pub async fn describe_cluster(&self) -> Result<ClusterDescription> {
+        let mut client = self.config.clone().connect().await?;
+        let metadata = client.metadata(Some(Vec::new())).await?;
+
+        Ok(ClusterDescription {
+            controller_id: metadata.controller_id,
+            brokers: metadata
+                .brokers
+                .into_iter()
+                .map(BrokerDescription::from_protocol)
+                .collect(),
+        })
+    }
+
+    /// Lists topics visible to the configured Kafka principal.
+    ///
+    /// Topic-level Kafka errors remain attached to their listings instead of
+    /// failing the entire operation.
+    #[tracing::instrument(level = "debug", name = "kafka.admin.list_topics", skip_all, err)]
+    pub async fn list_topics(&self) -> Result<Vec<TopicListing>> {
+        let mut client = self.config.clone().connect().await?;
+        let metadata = client.metadata(None).await?;
+
+        for topic in &metadata.topics {
+            if topic.error_code != 0 {
+                self.config.record_broker_error();
+            }
+            for partition in &topic.partitions {
+                if partition.error_code != 0 {
+                    self.config.record_broker_error();
+                }
+            }
+        }
+
+        Ok(metadata
+            .topics
+            .into_iter()
+            .map(TopicListing::from_protocol)
+            .collect())
+    }
+
     async fn controller_client(&self) -> Result<Client> {
         let mut bootstrap = self.config.clone().connect().await?;
-        let metadata = bootstrap.metadata(None).await?;
+        let metadata = bootstrap.metadata(Some(Vec::new())).await?;
         let controller = metadata
             .brokers
             .iter()
@@ -124,6 +168,122 @@ impl AdminClient {
                 .map(DeleteTopicResult::from_protocol)
                 .collect(),
         })
+    }
+}
+
+/// Broker metadata returned by [`AdminClient::describe_cluster`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BrokerDescription {
+    id: i32,
+    host: String,
+    port: i32,
+    rack: Option<String>,
+}
+
+impl BrokerDescription {
+    /// Returns the Kafka broker node ID.
+    pub fn id(&self) -> i32 {
+        self.id
+    }
+
+    /// Returns the broker's advertised host.
+    pub fn host(&self) -> &str {
+        &self.host
+    }
+
+    /// Returns the broker's advertised port.
+    pub fn port(&self) -> i32 {
+        self.port
+    }
+
+    /// Returns the broker rack identifier when Kafka advertised one.
+    pub fn rack(&self) -> Option<&str> {
+        self.rack.as_deref()
+    }
+
+    fn from_protocol(broker: BrokerMetadata) -> Self {
+        Self {
+            id: broker.node_id,
+            host: broker.host,
+            port: broker.port,
+            rack: broker.rack,
+        }
+    }
+}
+
+/// Kafka cluster metadata returned by [`AdminClient::describe_cluster`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClusterDescription {
+    controller_id: i32,
+    brokers: Vec<BrokerDescription>,
+}
+
+impl ClusterDescription {
+    /// Returns the active controller node ID, or Kafka's negative sentinel.
+    pub fn controller_id(&self) -> i32 {
+        self.controller_id
+    }
+
+    /// Returns all brokers advertised by the cluster.
+    pub fn brokers(&self) -> &[BrokerDescription] {
+        &self.brokers
+    }
+
+    /// Returns the active controller broker when it is present in metadata.
+    pub fn controller(&self) -> Option<&BrokerDescription> {
+        self.brokers
+            .iter()
+            .find(|broker| broker.id == self.controller_id)
+    }
+}
+
+/// One topic returned by [`AdminClient::list_topics`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TopicListing {
+    name: String,
+    is_internal: bool,
+    partition_count: usize,
+    error_code: i16,
+}
+
+impl TopicListing {
+    /// Returns the topic name.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Returns whether Kafka marks this as an internal topic.
+    pub fn is_internal(&self) -> bool {
+        self.is_internal
+    }
+
+    /// Returns the number of partitions included in metadata.
+    pub fn partition_count(&self) -> usize {
+        self.partition_count
+    }
+
+    /// Returns Kafka's raw topic-level metadata error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns whether Kafka reported a successful topic metadata result.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+    }
+
+    /// Returns kafrust's classification for a non-zero Kafka error code.
+    pub fn broker_error_kind(&self) -> Option<BrokerErrorKind> {
+        (self.error_code != 0).then(|| BrokerErrorKind::from_code(self.error_code))
+    }
+
+    fn from_protocol(topic: TopicMetadata) -> Self {
+        Self {
+            name: topic.name,
+            is_internal: topic.is_internal,
+            partition_count: topic.partitions.len(),
+            error_code: topic.error_code,
+        }
     }
 }
 
@@ -501,6 +661,70 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn describes_cluster_with_controller_broker() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut connection, _) = listener.accept().await.unwrap();
+            let request = read_frame(&mut connection).await;
+            assert_eq!(&request[0..4], &[0, 3, 0, 1]);
+            assert_eq!(&request[request.len() - 4..], &[0, 0, 0, 0]);
+            write_frame(&mut connection, &metadata_response(addr.port())).await;
+        });
+        let admin =
+            AdminClient::new(ClientConfig::new([addr.to_string()]).request_timeout_ms(1_000));
+
+        let cluster = admin.describe_cluster().await.unwrap();
+
+        assert_eq!(cluster.controller_id(), 1);
+        assert_eq!(cluster.brokers().len(), 1);
+        assert_eq!(cluster.brokers()[0].id(), 1);
+        assert_eq!(cluster.brokers()[0].host(), "127.0.0.1");
+        assert_eq!(cluster.brokers()[0].port(), i32::from(addr.port()));
+        assert_eq!(cluster.brokers()[0].rack(), None);
+        assert_eq!(cluster.controller(), Some(&cluster.brokers()[0]));
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn lists_topics_and_preserves_metadata_errors() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut connection, _) = listener.accept().await.unwrap();
+            let request = read_frame(&mut connection).await;
+            assert_eq!(&request[0..4], &[0, 3, 0, 1]);
+            assert_eq!(&request[request.len() - 4..], &[0xff, 0xff, 0xff, 0xff]);
+            write_frame(&mut connection, &topic_metadata_response(addr.port())).await;
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        );
+
+        let topics = admin.list_topics().await.unwrap();
+
+        assert_eq!(topics.len(), 2);
+        assert_eq!(topics[0].name(), "orders");
+        assert!(!topics[0].is_internal());
+        assert_eq!(topics[0].partition_count(), 1);
+        assert!(topics[0].is_success());
+        assert_eq!(topics[0].broker_error_kind(), None);
+        assert_eq!(topics[1].name(), "__consumer_offsets");
+        assert!(topics[1].is_internal());
+        assert_eq!(topics[1].partition_count(), 0);
+        assert_eq!(topics[1].error_code(), 3);
+        assert_eq!(
+            topics[1].broker_error_kind(),
+            Some(BrokerErrorKind::UnknownTopicOrPartition)
+        );
+        assert_eq!(metrics.snapshot().broker_errors, 1);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn routes_create_topics_to_controller_and_preserves_partial_result() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -508,6 +732,10 @@ mod tests {
             let (mut bootstrap, _) = listener.accept().await.unwrap();
             let metadata_request = read_frame(&mut bootstrap).await;
             assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+            assert_eq!(
+                &metadata_request[metadata_request.len() - 4..],
+                &[0, 0, 0, 0]
+            );
             write_frame(&mut bootstrap, &metadata_response(addr.port())).await;
 
             let (mut controller, _) = listener.accept().await.unwrap();
@@ -548,6 +776,10 @@ mod tests {
             let (mut bootstrap, _) = listener.accept().await.unwrap();
             let metadata_request = read_frame(&mut bootstrap).await;
             assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+            assert_eq!(
+                &metadata_request[metadata_request.len() - 4..],
+                &[0, 0, 0, 0]
+            );
             write_frame(&mut bootstrap, &metadata_response(addr.port())).await;
 
             let (mut controller, _) = listener.accept().await.unwrap();
@@ -606,6 +838,31 @@ mod tests {
             0xff, 0xff, // null rack
             0, 0, 0, 1, // controller ID
             0, 0, 0, 0, // topic count
+        ]);
+        response
+    }
+
+    fn topic_metadata_response(port: u16) -> Vec<u8> {
+        let mut response = metadata_response(port);
+        response.truncate(response.len() - 4);
+        response.extend_from_slice(&[
+            0, 0, 0, 2, // topic count
+            0, 0, // success
+            0, 6, b'o', b'r', b'd', b'e', b'r', b's', // topic name
+            0,    // not internal
+            0, 0, 0, 1, // partition count
+            0, 0, // success
+            0, 0, 0, 0, // partition index
+            0, 0, 0, 1, // leader
+            0, 0, 0, 1, // replica count
+            0, 0, 0, 1, // replica
+            0, 0, 0, 1, // ISR count
+            0, 0, 0, 1, // ISR
+            0, 3, // unknown topic or partition
+            0, 18, b'_', b'_', b'c', b'o', b'n', b's', b'u', b'm', b'e', b'r', b'_', b'o', b'f',
+            b'f', b's', b'e', b't', b's', // topic name
+            1,    // internal
+            0, 0, 0, 0, // partition count
         ]);
         response
     }

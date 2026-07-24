@@ -15,6 +15,18 @@ async fn main() -> kafrust::Result<()> {
         ClientConfig::new(bootstrap_servers).client_id("kafrust-admin-example"),
     )?;
     let admin = AdminClient::new(config.clone());
+    let cluster = admin.describe_cluster().await?;
+    println!(
+        "cluster has {} broker(s); controller {}",
+        cluster.brokers().len(),
+        cluster.controller_id()
+    );
+    if cluster.controller().is_none() {
+        return Err(Error::MissingBroker {
+            node_id: cluster.controller_id(),
+        });
+    }
+
     let result = admin
         .create_topics(
             &[NewTopic::new(&topic, partitions, replication_factor)
@@ -64,6 +76,20 @@ async fn main() -> kafrust::Result<()> {
         "described topic {} with {} partitions",
         created.name,
         created.partitions.len()
+    );
+
+    let listed_topics = admin.list_topics().await?;
+    let listed = listed_topics
+        .iter()
+        .find(|listed| listed.name() == topic)
+        .ok_or_else(|| Error::Broker {
+            code: -1,
+            context: format!("created topic {topic} absent from topic listing"),
+        })?;
+    println!(
+        "listed topic {} with {} partitions",
+        listed.name(),
+        listed.partition_count()
     );
 
     let delete_result = admin

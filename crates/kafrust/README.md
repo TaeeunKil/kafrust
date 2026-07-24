@@ -37,6 +37,9 @@ use kafrust::{AdminClient, ClientConfig, CreateTopicsOptions, NewTopic};
 
 # async fn example() -> kafrust::Result<()> {
 let admin = AdminClient::new(ClientConfig::new(["localhost:9092"]));
+let cluster = admin.describe_cluster().await?;
+println!("controller: {}", cluster.controller_id());
+
 let result = admin
     .create_topics(
         &[NewTopic::new("orders", 6, 3).config("cleanup.policy", "compact")],
@@ -51,9 +54,10 @@ for topic in result.topics() {
 # }
 ```
 
-CreateTopics and DeleteTopics preserve Kafka's per-topic partial results and
-route through the active controller. See the repository's `docs/admin-api.md`
-for automatic and manual replica assignment and topic cleanup.
+Cluster and topic listing use typed Metadata v1 views. CreateTopics and
+DeleteTopics preserve Kafka's per-topic partial results and route through the
+active controller. See the repository's `docs/admin-api.md` for automatic and
+manual replica assignment and topic cleanup.
 
 ## Install
 
