@@ -67,15 +67,16 @@ async fn main() -> kafrust::Result<()> {
         .ok_or_else(|| Error::MissingDeleteGroupResult {
             group_id: group_id.clone(),
         })?;
-    if !deleted.is_success() {
+    let already_removed = deleted.broker_error_kind() == Some(BrokerErrorKind::GroupIdNotFound);
+    if !deleted.is_success() && !already_removed {
         return Err(Error::Broker {
             code: deleted.error_code(),
             context: format!("delete consumer group {group_id}"),
         });
     }
     println!(
-        "deleted consumer group {group_id} throttle={:?}",
-        deleted.throttle_time()
+        "consumer group {group_id} cleanup complete already_removed={already_removed} throttle={:?}",
+        deleted.throttle_time(),
     );
     Ok(())
 }
