@@ -50,3 +50,23 @@ Compare runs only when the runner class, Kafka version, record count, batch
 size, and compression match. Shared GitHub runners are useful for detecting
 large regressions, but their results are not stable enough for small percentage
 claims.
+
+## Published Baseline
+
+Run [`30057817575`](https://github.com/TaeeunKil/kafrust/actions/runs/30057817575)
+completed on 2026-07-24 using the documented Kafka 4.3.1 single-broker profile,
+20,000 records, batches of 200, and a 900-KiB encoded chunk limit.
+
+| Payload | Compression | Produce records/s | Produce MiB/s | Batch p50 | Batch p95 | Batch p99 | Fetch records/s |
+| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 100 B | none | 55,139 | 5.26 | 3.424 ms | 5.400 ms | 6.700 ms | 704,242 |
+| 1 KiB | none | 47,883 | 46.76 | 4.070 ms | 4.957 ms | 5.848 ms | 305,362 |
+| 10 KiB | none | 2,437 | 23.79 | 70.533 ms | 112.491 ms | 115.600 ms | 88,355 |
+| 1 KiB | Zstd | 50,555 | 49.37 | 3.555 ms | 5.865 ms | 6.979 ms | 458,840 |
+
+The first complete safety-limit baseline, run
+[`30057137300`](https://github.com/TaeeunKil/kafrust/actions/runs/30057137300),
+measured 1,273 records/s for the 1-KiB uncompressed profile and 1,737 records/s
+with Zstd. Table-based CRC calculation and logarithmic batch sizing raised
+those profiles by 37.6x and 29.1x respectively. These are within-project
+before/after results, not claims of parity with another Kafka client.
