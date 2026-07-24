@@ -15,6 +15,7 @@ pub mod init_producer_id;
 pub mod join_group;
 pub mod leave_group;
 pub mod list_groups;
+pub mod list_offsets;
 pub mod metadata;
 pub mod offset_commit;
 pub mod offset_delete;
