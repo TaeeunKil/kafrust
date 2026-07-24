@@ -79,6 +79,10 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
   tests and by the plaintext single-node and multi-broker live smoke profiles.
 - Direct consumer fetch from an assigned topic partition using Fetch v4 response decoding. The v4 path is required because Kafka 4.x no longer accepts Fetch v2.
 - Consumer group join, sync, heartbeat, poll, and offset commit through the alpha classic consumer group path with range assignment.
+- Static classic-group membership through JoinGroup v5, SyncGroup v3,
+  Heartbeat v3, and OffsetCommit v7. Manual run `30064182907` passed join,
+  poll, heartbeat, and static-member-fenced offset commit on Kafka 3.7.2,
+  3.8.1, 3.9.1, and 4.3.1 plaintext brokers.
 
 The Kafka 3.7.2 multi-broker plaintext smoke path covers:
 
