@@ -148,6 +148,12 @@ jobs:
       - name: Run consumer group example
         run: cargo run -p kafrust --example consumer_group_poll
 
+      - name: Run static consumer group example
+        env:
+          KAFRUST_GROUP_ID: kafrust-static-${{ matrix.kafka-version }}
+          KAFRUST_GROUP_INSTANCE_ID: kafrust-static-member-1
+        run: cargo run -p kafrust --example consumer_group_poll
+
       - name: Run admin describe group example
         run: cargo run -p kafrust --example admin_describe_group
 

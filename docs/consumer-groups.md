@@ -25,9 +25,41 @@ heartbeat.stop().await?;
 
 Offset fetches and commits are coordinator-scoped Kafka requests. The lower-level `Client` methods remain available for protocol-focused experiments, but the alpha user path is `ConsumerGroupConfig`.
 
+## Static Membership
+
+Set `ConsumerGroupConfig::group_instance_id` to give a process a stable
+identity across restarts:
+
+```rust
+use kafrust::ConsumerGroupConfig;
+
+# async fn example() -> kafrust::Result<()> {
+let group = ConsumerGroupConfig::new(["localhost:9092"], "orders-service")
+    .group_instance_id("orders-service-1")
+    .subscribe("orders")
+    .join()
+    .await?;
+
+assert_eq!(
+    group.metadata().group_instance_id(),
+    Some("orders-service-1")
+);
+# Ok(())
+# }
+```
+
+Static members use `JoinGroup v5`, `SyncGroup v3`, `Heartbeat v3`, and
+`OffsetCommit v7`. The instance ID must be non-empty and unique among active
+members of the same group. Kafka error 82 (`FENCED_INSTANCE_ID`) is returned
+to the application instead of being treated as rejoinable; this normally means
+two processes use the same instance ID.
+
 ## Join And Assignment
 
-`ConsumerGroupConfig::join` discovers the coordinator, sends `JoinGroup v2`, computes range assignments if this member is the leader, sends `SyncGroup v2`, fetches committed offsets for assigned partitions, and builds a direct `Consumer` for fetching records.
+`ConsumerGroupConfig::join` discovers the coordinator, sends `JoinGroup v2`
+and `SyncGroup v2` for dynamic members or v5/v3 for static members, computes
+range assignments if this member is the leader, fetches committed offsets for
+assigned partitions, and builds a direct `Consumer` for fetching records.
 
 The alpha path uses the classic consumer group protocol with range assignment. Assignment state keeps Kafka group ID, member ID, generation ID, topic, partition, and next offset visible through the public API.
 
@@ -59,6 +91,8 @@ Current implementation status:
 - JoinGroup v2 request/response protocol types exist.
 - SyncGroup v2 request/response protocol types exist.
 - Heartbeat v2 request/response protocol types exist.
+- Static member JoinGroup v5, SyncGroup v3, Heartbeat v3, and OffsetCommit v7
+  protocol types and high-level routing exist.
 - `Client::join_group_v2`, `Client::sync_group_v2`, and `Client::heartbeat_v2` can send coordinator-scoped group membership requests.
 - Classic consumer protocol subscription and assignment v0 payloads can be encoded and decoded for JoinGroup/SyncGroup metadata.
 - Internal range assignment can compute SyncGroup assignment payloads from JoinGroup member subscriptions and topic metadata.
@@ -87,5 +121,8 @@ Run the opt-in group poll example:
 ```bash
 KAFRUST_BOOTSTRAP_SERVERS=localhost:9092 KAFRUST_GROUP_ID=orders-group KAFRUST_TOPIC=orders cargo run -p kafrust --example consumer_group_poll
 ```
+
+Add `KAFRUST_GROUP_INSTANCE_ID=orders-reader-1` to run the example as a static
+group member.
 
 The opt-in broker roundtrip test also covers coordinator discovery when `KAFRUST_BOOTSTRAP_SERVERS` is set.

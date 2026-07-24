@@ -680,6 +680,7 @@ fn can_retry_fetch(error: &Error) -> bool {
         | Error::ResponseTooLarge { .. }
         | Error::TlsConfig { .. }
         | Error::InvalidTlsServerName { .. }
+        | Error::InvalidGroupInstanceId
         | Error::Unsupported(_)
         | Error::TaskJoin(_)
         | Error::Protocol(_) => false,

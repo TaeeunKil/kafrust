@@ -45,11 +45,11 @@ client paths:
 - `Produce v2` MessageSet and `Produce v3` RecordBatch paths
 - `Fetch v2` and `Fetch v4` request/response decoding for MessageSet and
   RecordBatch records
-- `JoinGroup v2`
-- `SyncGroup v2`
-- `Heartbeat v2`
+- `JoinGroup v2` and `JoinGroup v5`
+- `SyncGroup v2` and `SyncGroup v3`
+- `Heartbeat v2` and `Heartbeat v3`
 - `OffsetFetch v2`
-- `OffsetCommit v2`
+- `OffsetCommit v2` and `OffsetCommit v7`
 - `SaslHandshake v1`
 - `SaslAuthenticate v0`
 - `InitProducerId v0`, `AddPartitionsToTxn v0`, `AddOffsetsToTxn v0`,

@@ -1060,7 +1060,7 @@ Evidence:
 
 ## M21 Broad Kafka Client Replacement
 
-Status: Planned.
+Status: In progress.
 
 Goal: make kafrust a credible pure Rust replacement for Kafka client dependencies in a broad set of Rust services.
 
@@ -1090,3 +1090,10 @@ Non-goal:
 Strategic role:
 
 - This is the "complete replacement" target for Kafka client dependencies in Rust applications.
+
+Implemented evidence:
+
+- Static classic-group membership carries a configured stable instance ID
+  through JoinGroup v5, SyncGroup v3, Heartbeat v3, generation-fenced
+  TxnOffsetCommit v3, and OffsetCommit v7. Duplicate instance fencing is
+  classified separately from rejoinable group errors.
