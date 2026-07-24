@@ -117,9 +117,11 @@ The public model intentionally keeps Kafka terms visible:
 When a record has no explicit partition, kafrust hashes a present key with
 Kafka's Java-compatible Murmur2 algorithm and selects from the topic's sorted
 partition IDs. This keeps the same serialized key on the same partition as the
-standard Kafka clients. A record without either an explicit partition or key
-currently selects the first partition; adaptive sticky keyless distribution
-remains future work.
+standard Kafka clients. Records without either an explicit partition or key
+use batch-sticky round-robin routing: all keyless records for one topic in a
+single batch or buffered flush use one partition, and the next completed send
+or batch rotates to the next available partition. Retries retain the selected
+partition until the operation reaches a terminal result.
 
 The first producer implementation should stay byte-first. Serialization adapters can be added later without forcing serde or another encoding choice into the core client.
 
@@ -130,6 +132,10 @@ Run the opt-in producer example against a local broker and an existing or auto-c
 ```bash
 KAFRUST_BOOTSTRAP_SERVERS=localhost:9092 KAFRUST_TOPIC=kafrust-smoke cargo run -p kafrust --example producer_send
 ```
+
+Run `producer_keyless` against a topic with multiple partitions to observe
+batch-sticky rotation. `KAFRUST_EXPECT_PARTITIONS` optionally accepts a
+comma-separated expected sequence for compatibility checks.
 
 Run the buffered producer smoke example to enqueue multiple records, await delivery handles, and fetch the produced records back:
 

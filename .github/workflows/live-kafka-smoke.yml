@@ -266,6 +266,11 @@ jobs:
           KAFRUST_EXPECT_PARTITION: "3"
         run: cargo run -p kafrust --example producer_send
 
+      - name: Run multi-broker keyless producer rotation example
+        env:
+          KAFRUST_EXPECT_PARTITIONS: "0,1,2,3,4,5,0"
+        run: cargo run -p kafrust --example producer_keyless
+
       - name: Run multi-broker producer batch example
         env:
           KAFRUST_BATCH_COUNT: "6"
