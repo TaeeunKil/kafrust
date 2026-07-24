@@ -696,6 +696,7 @@ Scope:
 - describe topic configs
 - alter basic topic configs
 - describe consumer groups
+- list and delete groups
 - delete consumer group offsets evaluation
 - admin examples and typed request errors
 
@@ -728,6 +729,10 @@ Implemented evidence:
 - DescribeGroups v1 discovers each requested group's coordinator independently
   and preserves state, protocol, member identity, raw protocol metadata and
   assignments, per-group errors, throttle time, tracing, and metrics.
+- ListGroups v1 queries every advertised broker and returns sorted,
+  deduplicated listings with protocol type, coordinator ID, and throttle time.
+- DeleteGroups v1 routes each group to its coordinator and preserves
+  per-group results, including a typed `NonEmptyGroup` classification.
 - OffsetDelete v0 routes to the group's coordinator and preserves its
   top-level group error plus every per-partition result. Typed classifications
   cover missing groups and active topic subscriptions.
@@ -1101,6 +1106,9 @@ Implemented evidence:
   `roundrobin` assignor, including mixed topic subscriptions.
 - Dynamic and static members can explicitly leave through LeaveGroup v3,
   avoiding session-timeout cleanup after graceful shutdown.
+- Manual `Live Kafka Smoke` run `30065025169` passed graceful LeaveGroup v3 on
+  Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext brokers plus TLS,
+  SASL_PLAINTEXT, SASL_SSL, and the three-broker regression profile.
 - Manual `Live Kafka Smoke` run `30064594451` passed the round-robin
   static-member path on Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext
   brokers; all secured and multi-broker regression jobs also passed.

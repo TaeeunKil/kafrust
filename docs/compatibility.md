@@ -86,6 +86,9 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
 - Range and round-robin classic assignment are implemented. Manual run
   `30064594451` passed the round-robin static-member path on Kafka 3.7.2,
   3.8.1, 3.9.1, and 4.3.1 plaintext brokers.
+- Dynamic and static members explicitly leave with LeaveGroup v3. Manual run
+  `30065025169` passed the graceful-leave group example on Kafka 3.7.2, 3.8.1,
+  3.9.1, and 4.3.1 plaintext brokers and all secured profiles.
 
 The Kafka 3.7.2 multi-broker plaintext smoke path covers:
 
@@ -111,6 +114,7 @@ The Kafka 3.7.2 multi-broker plaintext smoke path covers:
   leads the selected partition between two fetches from the same consumer
   instance.
 - Consumer group join, sync, heartbeat, poll, and offset commit through the alpha classic consumer group path.
+- Graceful LeaveGroup v3 cleanup before the subsequent group-admin checks.
 - First configured bootstrap broker stop followed by batch producer, direct consumer, and consumer group checks through the remaining brokers.
 
 The Kafka 3.7.2 TLS smoke path covers:

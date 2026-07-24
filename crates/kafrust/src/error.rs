@@ -66,6 +66,8 @@ pub enum BrokerErrorKind {
     ConcurrentTransactions,
     /// Kafka reported that the requested consumer group does not exist.
     GroupIdNotFound,
+    /// Kafka refused to delete a group that still has active members.
+    NonEmptyGroup,
     /// Kafka rejected offset deletion because the group still subscribes to the topic.
     GroupSubscribedToTopic,
     /// Kafka fenced a static consumer because another member uses the same instance ID.
@@ -103,6 +105,7 @@ impl BrokerErrorKind {
             46 => Self::DuplicateSequenceNumber,
             47 => Self::InvalidProducerEpoch,
             51 => Self::ConcurrentTransactions,
+            68 => Self::NonEmptyGroup,
             69 => Self::GroupIdNotFound,
             82 => Self::FencedInstanceId,
             86 => Self::GroupSubscribedToTopic,
@@ -150,6 +153,11 @@ pub enum Error {
     },
     /// A DescribeGroups response omitted the requested group.
     MissingGroupDescription {
+        /// Requested consumer group ID.
+        group_id: String,
+    },
+    /// A DeleteGroups response omitted the requested group.
+    MissingDeleteGroupResult {
         /// Requested consumer group ID.
         group_id: String,
     },
@@ -229,6 +237,9 @@ impl fmt::Display for Error {
             Self::MissingGroupDescription { group_id } => {
                 write!(f, "missing description for consumer group {group_id}")
             }
+            Self::MissingDeleteGroupResult { group_id } => {
+                write!(f, "missing delete result for consumer group {group_id}")
+            }
             Self::MissingSaslCredentials => f.write_str("missing Kafka SASL credentials"),
             Self::InvalidSaslResponse { mechanism, reason } => {
                 write!(f, "invalid SASL {mechanism} response: {reason}")
@@ -269,6 +280,7 @@ impl std::error::Error for Error {
             | Self::MissingLeader { .. }
             | Self::MissingBroker { .. }
             | Self::MissingGroupDescription { .. }
+            | Self::MissingDeleteGroupResult { .. }
             | Self::MissingSaslCredentials
             | Self::InvalidSaslResponse { .. }
             | Self::Broker { .. }

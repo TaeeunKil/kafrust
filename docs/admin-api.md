@@ -164,6 +164,38 @@ brokers. Member IDs, clients, hosts, protocol metadata, and assignments remain
 available; metadata and assignment payloads are raw bytes because their schema
 depends on the selected group protocol.
 
+## List and Delete Groups
+
+```rust
+use kafrust::{AdminClient, ClientConfig};
+
+# async fn example() -> kafrust::Result<()> {
+let admin = AdminClient::new(ClientConfig::new(["localhost:9092"]));
+for group in admin.list_groups().await? {
+    println!(
+        "{} protocol={} coordinator={}",
+        group.group_id(),
+        group.protocol_type(),
+        group.coordinator_id()
+    );
+}
+
+let results = admin
+    .delete_consumer_groups(&["retired-service".to_owned()])
+    .await?;
+for result in results {
+    println!("{}: Kafka error {}", result.group_id(), result.error_code());
+}
+# Ok(())
+# }
+```
+
+ListGroups v1 is broker-scoped, so `list_groups` discovers the cluster and
+queries every advertised broker before sorting and deduplicating the results.
+DeleteGroups v1 discovers each requested group's coordinator independently and
+preserves per-group errors. Kafka returns `NonEmptyGroup` when active members
+still belong to a group; members should leave or expire before deletion.
+
 ## Delete Consumer Group Offsets
 
 ```rust
