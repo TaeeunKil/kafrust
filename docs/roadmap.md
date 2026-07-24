@@ -912,6 +912,11 @@ Implemented evidence:
   and consumer-group join, poll, background/explicit heartbeat, and offset
   commit. Existing `kafka.request` spans nest under these operation spans, and
   all fields exclude record and protocol payload contents.
+- The `throughput_benchmark` live example measures end-to-end batch Produce and
+  offset-based Fetch throughput, Produce batch p50/p95/p99 latency, request
+  counts, and retries. The manual `Kafka Benchmark` workflow runs selected
+  payload and compression profiles against Kafka 4.3.1 and uploads JSONL
+  results for comparison.
 
 Remaining:
 
