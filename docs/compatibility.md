@@ -35,6 +35,10 @@ The Kafka 3.7.2 and 4.3.1 plaintext smoke paths cover:
   3.7.2 TLS, SASL_PLAINTEXT, and SASL_SSL profiles.
 - Coordinator-routed OffsetDelete v0 with separate group-level and
   partition-level outcomes is covered by byte-level and injected-broker tests.
+  Manual run `30062203069` passed offset deletion after group session expiry
+  on Kafka 3.7.2 and 4.3.1 plaintext brokers, TLS, SASL_PLAINTEXT, SASL_SSL,
+  and the three-broker profile. The three-broker job then passed its existing
+  broker-stop failover sequence.
 - High-level producer metadata lookup, leader routing, negotiated Produce API selection, single-record send, batch send, gzip-, Snappy-, LZ4-, and Zstd-compressed batch send, and buffered send with `acks=1`. Against Kafka 3.7.2, the current path selects Produce v3 RecordBatch for Gzip, Snappy, and LZ4, and Produce v7 for Zstd.
 - Opt-in idempotent single-record, batch, and buffered produce using
   `InitProducerId v0`, `acks=all`, and partition-scoped RecordBatch producer

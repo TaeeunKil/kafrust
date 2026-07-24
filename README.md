@@ -129,6 +129,8 @@ each group coordinator and preserves member protocol bytes.
 preserves top-level and per-partition Kafka errors.
 CreateTopics v2 and DeleteTopics v3 discover the active controller and preserve
 per-topic partial success and error responses. See [Admin API](docs/admin-api.md).
+Teams evaluating replacement of a librdkafka-backed application should follow
+the staged [rust-rdkafka migration guide](docs/migration-from-rust-rdkafka.md).
 
 ### Producer
 
@@ -365,6 +367,7 @@ Generated API documentation:
 - [Roadmap](docs/roadmap.md)
 - [Broker roundtrip](docs/broker-roundtrip.md)
 - [Compatibility](docs/compatibility.md)
+- [Migrating from rust-rdkafka](docs/migration-from-rust-rdkafka.md)
 - [API stability](docs/api-stability.md)
 - [Public API audit](docs/public-api-audit.md)
 - [Producer API direction](docs/producer-api.md)
