@@ -9,6 +9,7 @@ use kafrust_protocol::api::describe_configs::{
     DescribeConfigsEntryV1, DescribeConfigsResourceV1, DescribeConfigsResultV1,
     DescribeConfigsSynonymV1,
 };
+use kafrust_protocol::api::describe_groups::{DescribeGroupsGroupV1, DescribeGroupsMemberV1};
 use kafrust_protocol::api::incremental_alter_configs::{
     IncrementalAlterConfigsEntryV0, IncrementalAlterConfigsResourceResponseV0,
     IncrementalAlterConfigsResourceV0,
@@ -166,6 +167,62 @@ impl AdminClient {
                 .map(AlterConfigResourceResult::from_protocol)
                 .collect(),
         })
+    }
+
+    /// Describes consumer groups through their active coordinators.
+    ///
+    /// Each group is routed independently because group IDs can hash to
+    /// different coordinators.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.describe_consumer_groups",
+        skip_all,
+        fields(group_count = group_ids.len()),
+        err
+    )]
+    pub async fn describe_consumer_groups(
+        &self,
+        group_ids: &[String],
+    ) -> Result<Vec<ConsumerGroupDescription>> {
+        let mut descriptions = Vec::with_capacity(group_ids.len());
+        for group_id in group_ids {
+            let mut coordinator = self.group_coordinator_client(group_id).await?;
+            let response = coordinator
+                .describe_groups_v1(vec![group_id.clone()])
+                .await?;
+            let throttle_time =
+                Duration::from_millis(nonnegative_i32_to_u64(response.throttle_time_ms));
+            let group = response
+                .groups
+                .into_iter()
+                .find(|group| group.group_id == *group_id)
+                .ok_or_else(|| Error::MissingGroupDescription {
+                    group_id: group_id.clone(),
+                })?;
+            if group.error_code != 0 {
+                self.config.record_broker_error();
+            }
+            descriptions.push(ConsumerGroupDescription::from_protocol(
+                group,
+                throttle_time,
+            ));
+        }
+        Ok(descriptions)
+    }
+
+    async fn group_coordinator_client(&self, group_id: &str) -> Result<Client> {
+        let mut bootstrap = self.config.clone().connect().await?;
+        let coordinator = bootstrap.find_group_coordinator(group_id).await?;
+        if coordinator.error_code != 0 {
+            self.config.record_broker_error();
+            return Err(Error::Broker {
+                code: coordinator.error_code,
+                context: format!("find coordinator for consumer group {group_id}"),
+            });
+        }
+        self.config
+            .connect_broker(format!("{}:{}", coordinator.host, coordinator.port))
+            .await
     }
 
     async fn controller_client(&self) -> Result<Client> {
@@ -952,6 +1009,128 @@ impl AlterConfigResourceResult {
     }
 }
 
+/// Description of one Kafka consumer group.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConsumerGroupDescription {
+    group_id: String,
+    state: String,
+    protocol_type: String,
+    protocol_name: String,
+    members: Vec<ConsumerGroupMember>,
+    error_code: i16,
+    throttle_time: Duration,
+}
+
+impl ConsumerGroupDescription {
+    /// Returns the consumer group ID.
+    pub fn group_id(&self) -> &str {
+        &self.group_id
+    }
+
+    /// Returns Kafka's current group state string.
+    pub fn state(&self) -> &str {
+        &self.state
+    }
+
+    /// Returns the group protocol type, such as `consumer`.
+    pub fn protocol_type(&self) -> &str {
+        &self.protocol_type
+    }
+
+    /// Returns the selected group protocol name, such as `range`.
+    pub fn protocol_name(&self) -> &str {
+        &self.protocol_name
+    }
+
+    /// Returns current members in broker response order.
+    pub fn members(&self) -> &[ConsumerGroupMember] {
+        &self.members
+    }
+
+    /// Returns whether Kafka described this group successfully.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+    }
+
+    /// Returns Kafka's raw group error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns kafrust's classification for a non-zero Kafka error code.
+    pub fn broker_error_kind(&self) -> Option<BrokerErrorKind> {
+        (self.error_code != 0).then(|| BrokerErrorKind::from_code(self.error_code))
+    }
+
+    /// Returns the coordinator's throttle time for this request.
+    pub fn throttle_time(&self) -> Duration {
+        self.throttle_time
+    }
+
+    fn from_protocol(group: DescribeGroupsGroupV1, throttle_time: Duration) -> Self {
+        Self {
+            group_id: group.group_id,
+            state: group.state,
+            protocol_type: group.protocol_type,
+            protocol_name: group.protocol_data,
+            members: group
+                .members
+                .into_iter()
+                .map(ConsumerGroupMember::from_protocol)
+                .collect(),
+            error_code: group.error_code,
+            throttle_time,
+        }
+    }
+}
+
+/// One member in a Kafka consumer group description.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConsumerGroupMember {
+    member_id: String,
+    client_id: String,
+    client_host: String,
+    member_metadata: Vec<u8>,
+    member_assignment: Vec<u8>,
+}
+
+impl ConsumerGroupMember {
+    /// Returns the member ID assigned by Kafka.
+    pub fn member_id(&self) -> &str {
+        &self.member_id
+    }
+
+    /// Returns the member's client ID.
+    pub fn client_id(&self) -> &str {
+        &self.client_id
+    }
+
+    /// Returns the member's client host.
+    pub fn client_host(&self) -> &str {
+        &self.client_host
+    }
+
+    /// Returns raw group-protocol member metadata.
+    pub fn member_metadata(&self) -> &[u8] {
+        &self.member_metadata
+    }
+
+    /// Returns raw group-protocol member assignment.
+    pub fn member_assignment(&self) -> &[u8] {
+        &self.member_assignment
+    }
+
+    fn from_protocol(member: DescribeGroupsMemberV1) -> Self {
+        Self {
+            member_id: member.member_id,
+            client_id: member.client_id,
+            client_host: member.client_host,
+            member_metadata: member.member_metadata,
+            member_assignment: member.member_assignment,
+        }
+    }
+}
+
 /// Definition of one Kafka topic to create.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NewTopic {
@@ -1557,6 +1736,54 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn routes_describe_group_to_coordinator_and_preserves_member_bytes() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let coordinator_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&coordinator_request[0..4], &[0, 10, 0, 1]);
+            assert_eq!(coordinator_request.last(), Some(&0));
+            write_frame(
+                &mut bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let (mut coordinator, _) = listener.accept().await.unwrap();
+            let describe_request = read_frame(&mut coordinator).await;
+            assert_eq!(&describe_request[0..4], &[0, 15, 0, 1]);
+            write_frame(&mut coordinator, &describe_groups_response()).await;
+        });
+        let admin =
+            AdminClient::new(ClientConfig::new([addr.to_string()]).request_timeout_ms(1_000));
+
+        let descriptions = admin
+            .describe_consumer_groups(&["orders-group".to_owned()])
+            .await
+            .unwrap();
+
+        assert_eq!(descriptions.len(), 1);
+        let description = &descriptions[0];
+        assert_eq!(description.group_id(), "orders-group");
+        assert_eq!(description.state(), "Stable");
+        assert_eq!(description.protocol_type(), "consumer");
+        assert_eq!(description.protocol_name(), "range");
+        assert!(description.is_success());
+        assert_eq!(description.error_code(), 0);
+        assert_eq!(description.broker_error_kind(), None);
+        assert_eq!(description.throttle_time(), Duration::from_millis(4));
+        assert_eq!(description.members().len(), 1);
+        let member = &description.members()[0];
+        assert_eq!(member.member_id(), "member-1");
+        assert_eq!(member.client_id(), "client-1");
+        assert_eq!(member.client_host(), "/127.0.0.1");
+        assert_eq!(member.member_metadata(), [1, 2]);
+        assert_eq!(member.member_assignment(), [3, 4, 5]);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn routes_create_topics_to_controller_and_preserves_partial_result() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -1762,6 +1989,38 @@ mod tests {
             0, 7, b'i', b'n', b'v', b'a', b'l', b'i', b'd', // error message
             2,    // topic resource
             0, 8, b'p', b'a', b'y', b'm', b'e', b'n', b't', b's', // resource name
+        ]
+    }
+
+    fn find_group_coordinator_response(port: u16) -> Vec<u8> {
+        let mut response = vec![
+            0, 0, 0, 1, // correlation ID
+            0, 0, 0, 0, // throttle time
+            0, 0, // success
+            0xff, 0xff, // null error message
+            0, 0, 0, 1, // node ID
+            0, 9, b'1', b'2', b'7', b'.', b'0', b'.', b'0', b'.', b'1', // host
+        ];
+        response.extend_from_slice(&i32::from(port).to_be_bytes());
+        response
+    }
+
+    fn describe_groups_response() -> Vec<u8> {
+        vec![
+            0, 0, 0, 1, // correlation ID
+            0, 0, 0, 4, // throttle time
+            0, 0, 0, 1, // group count
+            0, 0, // success
+            0, 12, b'o', b'r', b'd', b'e', b'r', b's', b'-', b'g', b'r', b'o', b'u', b'p', 0, 6,
+            b'S', b't', b'a', b'b', b'l', b'e', // state
+            0, 8, b'c', b'o', b'n', b's', b'u', b'm', b'e', b'r', // protocol type
+            0, 5, b'r', b'a', b'n', b'g', b'e', // protocol
+            0, 0, 0, 1, // member count
+            0, 8, b'm', b'e', b'm', b'b', b'e', b'r', b'-', b'1', // member ID
+            0, 8, b'c', b'l', b'i', b'e', b'n', b't', b'-', b'1', // client ID
+            0, 10, b'/', b'1', b'2', b'7', b'.', b'0', b'.', b'0', b'.', b'1', // client host
+            0, 0, 0, 2, 1, 2, // member metadata
+            0, 0, 0, 3, 3, 4, 5, // member assignment
         ]
     }
 }

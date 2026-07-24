@@ -24,10 +24,10 @@ mod scram;
 pub use admin::{
     AdminClient, AlterConfigResourceResult, AlterConfigsOptions, AlterConfigsResult,
     BrokerDescription, ClusterDescription, ConfigAlterOperation, ConfigAlterOperationKind,
-    ConfigEntry, ConfigResourceResult, ConfigSource, ConfigSynonym, CreateTopicResult,
-    CreateTopicsOptions, CreateTopicsResult, DeleteTopicResult, DeleteTopicsOptions,
-    DeleteTopicsResult, DescribeConfigsOptions, DescribeConfigsResult, NewTopic,
-    TopicConfigAlteration, TopicConfigResource, TopicListing,
+    ConfigEntry, ConfigResourceResult, ConfigSource, ConfigSynonym, ConsumerGroupDescription,
+    ConsumerGroupMember, CreateTopicResult, CreateTopicsOptions, CreateTopicsResult,
+    DeleteTopicResult, DeleteTopicsOptions, DeleteTopicsResult, DescribeConfigsOptions,
+    DescribeConfigsResult, NewTopic, TopicConfigAlteration, TopicConfigResource, TopicListing,
 };
 pub use client::Client;
 pub use config::{ClientConfig, SaslCredentials, SaslMechanism, SecurityProtocol};

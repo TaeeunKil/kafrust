@@ -674,6 +674,7 @@ fn can_retry_fetch(error: &Error) -> bool {
         | Error::MissingLeader { .. }
         | Error::MissingBroker { .. } => true,
         Error::MissingBootstrapServer
+        | Error::MissingGroupDescription { .. }
         | Error::MissingSaslCredentials
         | Error::InvalidSaslResponse { .. }
         | Error::ResponseTooLarge { .. }
