@@ -600,7 +600,7 @@ Evidence:
 
 ## M15 Compression Compatibility
 
-Status: In progress.
+Status: Complete.
 
 Goal: support common compressed Kafka record batches while preserving the no-required-C-toolchain policy.
 
@@ -631,7 +631,7 @@ Evidence:
 - Gzip compression is implemented with a Rust backend and no required C
   toolchain.
 - Produce v3 RecordBatch encoding can write gzip-compressed record payloads.
-- Fetch v2 RecordBatch decoding can read gzip-compressed record payloads.
+- Fetch v4 RecordBatch decoding can read gzip-compressed record payloads.
 - `ProducerConfig::compression(Compression::Gzip)` enables gzip for immediate,
   batch, and buffered producer paths when Produce API v3 is available.
 - Manual `Live Kafka Smoke` run `28009105074` passed on 2026-06-23; the
@@ -643,7 +643,7 @@ Evidence:
   growth.
 - Snappy compression uses the pure-Rust `snap` backend with
   Kafka-compatible Xerial framing and no C toolchain dependency.
-- Produce v3 RecordBatch encoding writes chunked Snappy frames, while Fetch v2
+- Produce v3 RecordBatch encoding writes chunked Snappy frames, while Fetch v4
   RecordBatch decoding accepts both Xerial-framed and raw Snappy payloads.
 - Snappy decoding validates each block's declared output length before
   allocation and enforces the record batch decompression limit.
@@ -655,7 +655,7 @@ Evidence:
   checks against Kafka 3.7.2.
 - LZ4 compression uses the pure-Rust `lz-fear` backend with independent blocks
   and no C toolchain dependency.
-- Produce v3 RecordBatch encoding writes standard LZ4 frames, and Fetch v2
+- Produce v3 RecordBatch encoding writes standard LZ4 frames, and Fetch v4
   RecordBatch decoding reads those frames with a bounded output size.
 - Focused tests cover the Kafka LZ4 frame magic, multi-block roundtrips,
   malformed frames, decompression limits, and Produce-to-Fetch RecordBatch
@@ -665,7 +665,7 @@ Evidence:
   checks against Kafka 3.7.2.
 - Zstd compression uses the pure-Rust `ruzstd` 0.8.1 backend with its optional
   checksum dependency disabled and no C toolchain dependency.
-- Produce v7 RecordBatch encoding writes standard Zstd frames, while Fetch v2
+- Produce v7 RecordBatch encoding writes standard Zstd frames, while Fetch v4
   RecordBatch decoding validates declared content and window sizes before
   decoder allocation and bounds decoded output to 64 MiB.
 - Focused tests cover the Zstd frame magic, multi-block roundtrips, malformed
@@ -677,9 +677,10 @@ Evidence:
   single-node and multi-broker plaintext jobs completed Zstd Produce v7 batch
   checks against Kafka 3.7.2.
 
-Remaining:
-
-- configurable decompression limits
+- All four decoders enforce the configurable
+  `max_decompressed_record_bytes` limit inherited from `ClientConfig`,
+  `ProducerConfig`, `ConsumerConfig`, and `ConsumerGroupConfig`. Oversized
+  output returns a typed `protocol::Error::LimitExceeded` failure.
 
 ## M16 Admin API MVP
 

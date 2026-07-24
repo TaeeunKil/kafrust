@@ -40,15 +40,15 @@ The Kafka 3.7.2 and 4.3.1 plaintext smoke paths cover:
   `TxnOffsetCommit v0`. Manual run `29995762812` passed a read-committed group
   poll followed by atomic output production and group offset commit on Kafka
   3.7.2 and Kafka 4.3.1.
-- Gzip Produce v3 RecordBatch encoding and Fetch v2 RecordBatch decoding are
+- Gzip Produce v3 RecordBatch encoding and Fetch v4 RecordBatch decoding are
   covered by focused tests and the plaintext live smoke profile.
-- Snappy Produce v3 RecordBatch encoding and Fetch v2 RecordBatch decoding are
+- Snappy Produce v3 RecordBatch encoding and Fetch v4 RecordBatch decoding are
   covered by focused tests using Kafka-compatible Xerial framing and by the
   plaintext single-node and multi-broker live smoke profiles.
-- LZ4 Produce v3 RecordBatch encoding and Fetch v2 RecordBatch decoding are
+- LZ4 Produce v3 RecordBatch encoding and Fetch v4 RecordBatch decoding are
   covered by focused standard-frame and decompression-limit tests and by the
   plaintext single-node and multi-broker live smoke profiles.
-- Zstd Produce v7 RecordBatch encoding and Fetch v2 RecordBatch decoding are
+- Zstd Produce v7 RecordBatch encoding and Fetch v4 RecordBatch decoding are
   covered by focused standard-frame, declared-window, and decompression-limit
   tests and by the plaintext single-node and multi-broker live smoke profiles.
 - Direct consumer fetch from an assigned topic partition using Fetch v4 response decoding. The v4 path is required because Kafka 4.x no longer accepts Fetch v2.
