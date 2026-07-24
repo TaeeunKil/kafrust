@@ -68,6 +68,8 @@ pub enum BrokerErrorKind {
     GroupIdNotFound,
     /// Kafka rejected offset deletion because the group still subscribes to the topic.
     GroupSubscribedToTopic,
+    /// Kafka fenced a static consumer because another member uses the same instance ID.
+    FencedInstanceId,
 }
 
 impl BrokerErrorKind {
@@ -102,6 +104,7 @@ impl BrokerErrorKind {
             47 => Self::InvalidProducerEpoch,
             51 => Self::ConcurrentTransactions,
             69 => Self::GroupIdNotFound,
+            82 => Self::FencedInstanceId,
             86 => Self::GroupSubscribedToTopic,
             90 => Self::ProducerFenced,
             _ => Self::Unknown,
@@ -188,6 +191,8 @@ pub enum Error {
         /// Original configured or derived server name value.
         server: String,
     },
+    /// A static consumer group instance ID was configured as an empty string.
+    InvalidGroupInstanceId,
     /// The requested Kafka feature is not implemented by this alpha API yet.
     Unsupported(&'static str),
     /// I/O failure while connecting to or communicating with a broker.
@@ -242,6 +247,9 @@ impl fmt::Display for Error {
             Self::InvalidTlsServerName { server } => {
                 write!(f, "invalid TLS server name {server}")
             }
+            Self::InvalidGroupInstanceId => {
+                f.write_str("consumer group instance ID must not be empty")
+            }
             Self::Unsupported(feature) => write!(f, "unsupported feature: {feature}"),
             Self::Io(error) => write!(f, "I/O error: {error}"),
             Self::TaskJoin(error) => write!(f, "background task join error: {error}"),
@@ -268,6 +276,7 @@ impl std::error::Error for Error {
             | Self::ResponseTooLarge { .. }
             | Self::TlsConfig { .. }
             | Self::InvalidTlsServerName { .. }
+            | Self::InvalidGroupInstanceId
             | Self::Unsupported(_) => None,
         }
     }
@@ -340,6 +349,10 @@ mod tests {
         assert_eq!(
             BrokerErrorKind::from_code(69),
             BrokerErrorKind::GroupIdNotFound
+        );
+        assert_eq!(
+            BrokerErrorKind::from_code(82),
+            BrokerErrorKind::FencedInstanceId
         );
         assert_eq!(
             BrokerErrorKind::from_code(86),

@@ -5,7 +5,8 @@ use kafrust_protocol::api::find_coordinator::FindCoordinatorResponseV1;
 use kafrust_protocol::api::join_group::JoinGroupMember;
 use kafrust_protocol::api::metadata::MetadataResponseV1;
 use kafrust_protocol::api::offset_commit::{
-    OffsetCommitPartition, OffsetCommitTopic, OffsetCommitTopicResponse,
+    OffsetCommitPartition, OffsetCommitPartitionV7, OffsetCommitTopic, OffsetCommitTopicResponse,
+    OffsetCommitTopicV7,
 };
 use kafrust_protocol::api::offset_fetch::{
     OffsetFetchPartitionResponse, OffsetFetchTopic, OffsetFetchTopicResponse,
@@ -30,11 +31,20 @@ use tracing::{debug, Instrument};
 const PROTOCOL_TYPE: &str = "consumer";
 const RANGE_PROTOCOL: &str = "range";
 
+struct JoinedGroup {
+    error_code: i16,
+    generation_id: i32,
+    leader: String,
+    member_id: String,
+    members: Vec<JoinGroupMember>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// Configuration builder for the classic Kafka consumer group alpha API.
 pub struct ConsumerGroupConfig {
     client: ClientConfig,
     group_id: String,
+    group_instance_id: Option<String>,
     topics: Vec<String>,
     session_timeout_ms: i32,
     rebalance_timeout_ms: i32,
@@ -57,6 +67,7 @@ impl ConsumerGroupConfig {
         Self {
             client: ClientConfig::new(bootstrap_servers),
             group_id: group_id.into(),
+            group_instance_id: None,
             topics: Vec::new(),
             session_timeout_ms: 10_000,
             rebalance_timeout_ms: 30_000,
@@ -157,6 +168,21 @@ impl ConsumerGroupConfig {
         self
     }
 
+    /// Sets a stable identity for this consumer group member.
+    ///
+    /// Instance IDs must be unique among concurrently running members of the
+    /// same group. Kafka fences an older member when another member joins with
+    /// the same ID.
+    pub fn group_instance_id(mut self, group_instance_id: impl Into<String>) -> Self {
+        self.group_instance_id = Some(group_instance_id.into());
+        self
+    }
+
+    /// Returns the configured static group instance ID.
+    pub fn group_instance_id_ref(&self) -> Option<&str> {
+        self.group_instance_id.as_deref()
+    }
+
     /// Sets the Kafka group session timeout in milliseconds.
     pub fn session_timeout_ms(mut self, session_timeout_ms: i32) -> Self {
         self.session_timeout_ms = session_timeout_ms;
@@ -254,6 +280,9 @@ impl ConsumerGroupConfig {
         if self.topics.is_empty() {
             return Err(Error::Unsupported("consumer group without subscriptions"));
         }
+        if self.group_instance_id.as_deref() == Some("") {
+            return Err(Error::InvalidGroupInstanceId);
+        }
         debug!(
             group_id = self.group_id.as_str(),
             topic_count = self.topics.len(),
@@ -279,19 +308,55 @@ impl ConsumerGroupConfig {
             user_data: None,
         }
         .encode()?;
-        let joined = coordinator_client
-            .join_group_v2(
-                self.group_id.clone(),
-                self.session_timeout_ms,
-                self.rebalance_timeout_ms,
-                "",
-                PROTOCOL_TYPE,
-                vec![kafrust_protocol::api::join_group::JoinGroupProtocol {
-                    name: RANGE_PROTOCOL.to_owned(),
-                    metadata: subscription,
-                }],
-            )
-            .await?;
+        let protocols = vec![kafrust_protocol::api::join_group::JoinGroupProtocol {
+            name: RANGE_PROTOCOL.to_owned(),
+            metadata: subscription,
+        }];
+        let joined = if let Some(group_instance_id) = &self.group_instance_id {
+            let response = coordinator_client
+                .join_group_v5(
+                    self.group_id.clone(),
+                    self.session_timeout_ms,
+                    self.rebalance_timeout_ms,
+                    "",
+                    Some(group_instance_id.clone()),
+                    PROTOCOL_TYPE,
+                    protocols,
+                )
+                .await?;
+            JoinedGroup {
+                error_code: response.error_code,
+                generation_id: response.generation_id,
+                leader: response.leader,
+                member_id: response.member_id,
+                members: response
+                    .members
+                    .into_iter()
+                    .map(|member| JoinGroupMember {
+                        member_id: member.member_id,
+                        metadata: member.metadata,
+                    })
+                    .collect(),
+            }
+        } else {
+            let response = coordinator_client
+                .join_group_v2(
+                    self.group_id.clone(),
+                    self.session_timeout_ms,
+                    self.rebalance_timeout_ms,
+                    "",
+                    PROTOCOL_TYPE,
+                    protocols,
+                )
+                .await?;
+            JoinedGroup {
+                error_code: response.error_code,
+                generation_id: response.generation_id,
+                leader: response.leader,
+                member_id: response.member_id,
+                members: response.members,
+            }
+        };
         if joined.error_code != 0 {
             return Err(self
                 .client
@@ -304,14 +369,26 @@ impl ConsumerGroupConfig {
         } else {
             Vec::new()
         };
-        let synced = coordinator_client
-            .sync_group_v2(
-                self.group_id.clone(),
-                joined.generation_id,
-                joined.member_id.clone(),
-                assignments,
-            )
-            .await?;
+        let synced = if let Some(group_instance_id) = &self.group_instance_id {
+            coordinator_client
+                .sync_group_v3(
+                    self.group_id.clone(),
+                    joined.generation_id,
+                    joined.member_id.clone(),
+                    Some(group_instance_id.clone()),
+                    assignments,
+                )
+                .await?
+        } else {
+            coordinator_client
+                .sync_group_v2(
+                    self.group_id.clone(),
+                    joined.generation_id,
+                    joined.member_id.clone(),
+                    assignments,
+                )
+                .await?
+        };
         if synced.error_code != 0 {
             return Err(self
                 .client
@@ -421,7 +498,7 @@ impl ConsumerGroup {
             group_id: self.group_id.clone(),
             generation_id: self.generation_id,
             member_id: self.member_id.clone(),
-            group_instance_id: None,
+            group_instance_id: self.config.group_instance_id.clone(),
         }
     }
 
@@ -544,6 +621,7 @@ impl ConsumerGroup {
         let group_id = self.group_id.clone();
         let generation_id = self.generation_id;
         let member_id = self.member_id.clone();
+        let group_instance_id = self.config.group_instance_id.clone();
         let (shutdown, shutdown_rx) = oneshot::channel();
         let heartbeat_span = tracing::debug_span!(
             "kafka.consumer_group.background_heartbeat",
@@ -559,6 +637,7 @@ impl ConsumerGroup {
                     group_id,
                     generation_id,
                     member_id,
+                    group_instance_id,
                     interval,
                     shutdown_rx,
                 )
@@ -597,14 +676,24 @@ impl ConsumerGroup {
             generation_id = self.generation_id,
             "sending kafka consumer group heartbeat"
         );
-        let response = self
-            .coordinator
-            .heartbeat_v2(
-                self.group_id.clone(),
-                self.generation_id,
-                self.member_id.clone(),
-            )
-            .await?;
+        let response = if let Some(group_instance_id) = &self.config.group_instance_id {
+            self.coordinator
+                .heartbeat_v3(
+                    self.group_id.clone(),
+                    self.generation_id,
+                    self.member_id.clone(),
+                    Some(group_instance_id.clone()),
+                )
+                .await?
+        } else {
+            self.coordinator
+                .heartbeat_v2(
+                    self.group_id.clone(),
+                    self.generation_id,
+                    self.member_id.clone(),
+                )
+                .await?
+        };
         if response.error_code != 0 {
             return Err(self.config.client.broker_error(
                 response.error_code,
@@ -629,26 +718,38 @@ impl ConsumerGroup {
         err
     )]
     pub async fn commit_offsets(&mut self) -> Result<()> {
-        let topics = offset_commit_topics(self.consumer.assignments());
         debug!(
             group_id = self.group_id.as_str(),
             member_id = self.member_id.as_str(),
             generation_id = self.generation_id,
-            topic_count = topics.len(),
+            topic_count = offset_commit_topics(self.consumer.assignments()).len(),
             "committing kafka consumer group offsets"
         );
-        let response = match self
-            .coordinator
-            .offset_commit_v2(
-                self.group_id.clone(),
-                self.generation_id,
-                self.member_id.clone(),
-                self.retention_time_ms,
-                topics,
-            )
-            .await
+        let response_topics = match if let Some(group_instance_id) = &self.config.group_instance_id
         {
-            Ok(response) => response,
+            self.coordinator
+                .offset_commit_v7(
+                    self.group_id.clone(),
+                    self.generation_id,
+                    self.member_id.clone(),
+                    Some(group_instance_id.clone()),
+                    offset_commit_topics_v7(self.consumer.assignments()),
+                )
+                .await
+                .map(|response| response.topics)
+        } else {
+            self.coordinator
+                .offset_commit_v2(
+                    self.group_id.clone(),
+                    self.generation_id,
+                    self.member_id.clone(),
+                    self.retention_time_ms,
+                    offset_commit_topics(self.consumer.assignments()),
+                )
+                .await
+                .map(|response| response.topics)
+        } {
+            Ok(topics) => topics,
             Err(error) if should_rejoin_group(&error) => {
                 debug!(
                     group_id = self.group_id.as_str(),
@@ -663,7 +764,7 @@ impl ConsumerGroup {
             }
             Err(error) => return Err(error),
         };
-        if let Some(error) = offset_commit_response_error(&self.group_id, &response.topics) {
+        if let Some(error) = offset_commit_response_error(&self.group_id, &response_topics) {
             let error = match error {
                 Error::Broker { code, context } => self.config.client.broker_error(code, context),
                 error => error,
@@ -957,6 +1058,25 @@ fn offset_commit_topics(assignments: &[ConsumerAssignment]) -> Vec<OffsetCommitT
         .collect()
 }
 
+fn offset_commit_topics_v7(assignments: &[ConsumerAssignment]) -> Vec<OffsetCommitTopicV7> {
+    offset_commit_topics(assignments)
+        .into_iter()
+        .map(|topic| OffsetCommitTopicV7 {
+            name: topic.name,
+            partitions: topic
+                .partitions
+                .into_iter()
+                .map(|partition| OffsetCommitPartitionV7 {
+                    partition_index: partition.partition_index,
+                    committed_offset: partition.committed_offset,
+                    committed_leader_epoch: -1,
+                    committed_metadata: partition.committed_metadata,
+                })
+                .collect(),
+        })
+        .collect()
+}
+
 fn offset_commit_response_error(
     group_id: &str,
     topics: &[OffsetCommitTopicResponse],
@@ -1018,6 +1138,7 @@ async fn run_background_heartbeat(
     group_id: String,
     generation_id: i32,
     member_id: String,
+    group_instance_id: Option<String>,
     interval: Duration,
     mut shutdown: oneshot::Receiver<()>,
 ) -> Result<()> {
@@ -1035,9 +1156,20 @@ async fn run_background_heartbeat(
                     generation_id,
                     "sending background kafka consumer group heartbeat"
                 );
-                let response = coordinator
-                    .heartbeat_v2(group_id.clone(), generation_id, member_id.clone())
-                    .await?;
+                let response = if let Some(group_instance_id) = &group_instance_id {
+                    coordinator
+                        .heartbeat_v3(
+                            group_id.clone(),
+                            generation_id,
+                            member_id.clone(),
+                            Some(group_instance_id.clone()),
+                        )
+                        .await?
+                } else {
+                    coordinator
+                        .heartbeat_v2(group_id.clone(), generation_id, member_id.clone())
+                        .await?
+                };
                 if response.error_code != 0 {
                     return Err(coordinator.broker_error(
                         response.error_code,
@@ -1104,10 +1236,11 @@ fn range_for_topic(members: &[String], partitions: &[i32]) -> Vec<(String, Vec<i
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::{
-        committed_offset, offset_commit_response_error, offset_commit_topics, offset_fetch_topics,
-        range_assignments, should_rejoin_after_background_heartbeat, should_rejoin_group,
-        validate_heartbeat_interval, ConsumerGroupConfig, ConsumerGroupHeartbeat,
-        HeartbeatHandleState, IsolationLevel, SecurityProtocol,
+        committed_offset, offset_commit_response_error, offset_commit_topics,
+        offset_commit_topics_v7, offset_fetch_topics, range_assignments,
+        should_rejoin_after_background_heartbeat, should_rejoin_group, validate_heartbeat_interval,
+        ConsumerGroupConfig, ConsumerGroupHeartbeat, HeartbeatHandleState, IsolationLevel,
+        SecurityProtocol,
     };
     use crate::consumer::ConsumerAssignment;
     use crate::Error;
@@ -1134,6 +1267,7 @@ mod tests {
             .tls_root_certificate_der([1, 2, 3])
             .sasl_plain("alice", "secret-password")
             .subscribe("orders")
+            .group_instance_id("orders-reader-1")
             .session_timeout_ms(8_000)
             .rebalance_timeout_ms(20_000)
             .retention_time_ms(60_000)
@@ -1146,6 +1280,7 @@ mod tests {
             .isolation_level(IsolationLevel::ReadCommitted);
 
         assert_eq!(config.group_id(), "orders-group");
+        assert_eq!(config.group_instance_id_ref(), Some("orders-reader-1"));
         assert_eq!(config.topics(), &["orders".to_owned()]);
         assert_eq!(
             config.client.security_protocol_ref(),
@@ -1161,6 +1296,18 @@ mod tests {
             "alice"
         );
         assert_eq!(config.isolation_level_ref(), IsolationLevel::ReadCommitted);
+    }
+
+    #[tokio::test]
+    async fn rejects_empty_static_group_instance_id_before_connecting() {
+        let error = ConsumerGroupConfig::new(["localhost:9092"], "orders-group")
+            .group_instance_id("")
+            .subscribe("orders")
+            .join()
+            .await
+            .unwrap_err();
+
+        assert!(matches!(error, Error::InvalidGroupInstanceId));
     }
 
     #[test]
@@ -1306,6 +1453,10 @@ mod tests {
         assert_eq!(topics[0].partitions[0].partition_index, 0);
         assert_eq!(topics[0].partitions[0].committed_offset, 11);
         assert_eq!(topics[0].partitions[1].partition_index, 1);
+
+        let static_topics = offset_commit_topics_v7(&assignments);
+        assert_eq!(static_topics[0].partitions[0].committed_offset, 11);
+        assert_eq!(static_topics[0].partitions[0].committed_leader_epoch, -1);
         assert_eq!(topics[1].name, "payments");
     }
 
@@ -1366,6 +1517,10 @@ mod tests {
 
         assert!(!should_rejoin_group(&Error::Broker {
             code: 7,
+            context: "heartbeat group orders-group".to_owned(),
+        }));
+        assert!(!should_rejoin_group(&Error::Broker {
+            code: 82,
             context: "heartbeat group orders-group".to_owned(),
         }));
         assert!(should_rejoin_group(&Error::RequestTimedOut {

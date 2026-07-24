@@ -250,7 +250,8 @@ async fn main() -> kafrust::Result<()> {
 ### Consumer Group
 
 The current consumer group API is an alpha classic consumer group path with
-join, sync, heartbeat, poll, and offset commit support.
+dynamic or static membership, join, sync, heartbeat, poll, and offset commit
+support.
 
 ```rust
 use kafrust::ConsumerGroupConfig;
@@ -259,6 +260,7 @@ use kafrust::ConsumerGroupConfig;
 async fn main() -> kafrust::Result<()> {
     let mut group = ConsumerGroupConfig::new(["localhost:9092"], "example-group")
         .client_id("example-consumer-group")
+        .group_instance_id("example-consumer-1")
         .subscribe("kafrust-smoke")
         .join()
         .await?;

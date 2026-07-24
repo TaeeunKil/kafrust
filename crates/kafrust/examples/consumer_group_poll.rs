@@ -8,18 +8,20 @@ async fn main() -> kafrust::Result<()> {
     let group_id = std::env::var("KAFRUST_GROUP_ID").unwrap_or_else(|_| "kafrust-smoke".to_owned());
     let topic = std::env::var("KAFRUST_TOPIC").unwrap_or_else(|_| "kafrust-smoke".to_owned());
 
-    let mut group = common::apply_security(
+    let mut config = common::apply_security(
         ConsumerGroupConfig::new(bootstrap_servers, group_id).client_id("kafrust-consumer-group"),
-    )?
-    .subscribe(topic)
-    .join()
-    .await?;
+    )?;
+    if let Ok(group_instance_id) = std::env::var("KAFRUST_GROUP_INSTANCE_ID") {
+        config = config.group_instance_id(group_instance_id);
+    }
+    let mut group = config.subscribe(topic).join().await?;
 
     println!(
-        "joined group {} as member {} generation {} with {} assignments",
+        "joined group {} as member {} generation {} instance {:?} with {} assignments",
         group.group_id(),
         group.member_id(),
         group.generation_id(),
+        group.metadata().group_instance_id(),
         group.assignments().len()
     );
 
