@@ -845,7 +845,7 @@ Known limits:
 
 ## M19 Observability, Limits, And Performance
 
-Status: In progress.
+Status: Complete.
 
 Goal: make kafrust measurable, tunable, and safe under sustained load.
 
@@ -931,10 +931,11 @@ Implemented evidence:
   completed in 60 seconds across a ten-second broker outage, 145 high-level
   operation errors and 1,011 internal retries were observed, recovery
   completed, and both final resource gauges were zero.
-
-Remaining:
-
-- remaining high-level operation metrics
+- Shared metrics count non-zero Kafka error codes handled by authentication,
+  producer, transaction, consumer, and consumer-group operations, including
+  retry attempts and partial batch failures. This separates protocol-level
+  broker failures from transport request failures without inspecting payload
+  contents.
 
 ## M20 Compatibility Matrix And Migration Guide
 

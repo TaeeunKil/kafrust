@@ -301,9 +301,10 @@ let producer = ProducerConfig::new(["localhost:9092"])
 // Send records with `producer`, then export a point-in-time snapshot.
 let snapshot = metrics.snapshot();
 println!(
-    "requests={} failures={} max_latency={:?}",
+    "requests={} failures={} broker_errors={} max_latency={:?}",
     snapshot.requests_started,
     snapshot.requests_failed,
+    snapshot.broker_errors,
     snapshot.max_latency,
 );
 # Ok(())
@@ -311,11 +312,12 @@ println!(
 ```
 
 Snapshots include request success, failure, timeout, and cancellation counts,
-high-level operation retry attempts, request and response payload bytes,
-in-flight requests, current and maximum outstanding buffered records, and total
-and maximum latency. Successful produced records, topic-partition Produce
-chunks, and records returned by consumer APIs are also counted. Retry attempts
-cover producer sends, consumer fetches, metadata reconnects, and transactional
+non-zero Kafka error codes observed in decoded broker responses, high-level
+operation retry attempts, request and response payload bytes, in-flight
+requests, current and maximum outstanding buffered records, and total and
+maximum latency. Successful produced records, topic-partition Produce chunks,
+and records returned by consumer APIs are also counted. Retry attempts cover
+producer sends, consumer fetches, metadata reconnects, and transactional
 coordinator operations, plus automatic consumer-group rejoins. Individual
 atomic fields are sampled independently, so a snapshot taken while requests
 are changing is not a transactional view. Request metrics and `tracing` spans
@@ -389,8 +391,9 @@ Verified high-level paths include:
   `IsolationLevel::ReadCommitted` hides aborted transaction records for direct
   and group consumers, and current group assignments can be committed through
   `Producer::send_offsets_to_transaction`. Transactional buffered sends, admin
-  APIs, live broker failure injection, and producer/consumer operation metrics
-  are not implemented yet. Request-level metrics and spans are available.
+  APIs and transactional buffered sends are not implemented yet. Shared
+  request, retry, broker-error, producer, consumer, batch, and buffered-queue
+  metrics are available together with high-level operation and request spans.
 - `acks=0` remains unsupported because the current request loop expects a broker
   response.
 

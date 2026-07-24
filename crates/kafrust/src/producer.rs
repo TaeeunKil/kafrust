@@ -1509,10 +1509,10 @@ impl Producer {
             .await?;
         let api_versions = leader_client.api_versions().await?;
         if api_versions.error_code != 0 {
-            return Err(Error::Broker {
-                code: api_versions.error_code,
-                context: format!("api versions for produce {}-{}", key.topic, key.partition),
-            });
+            return Err(self.config.client.broker_error(
+                api_versions.error_code,
+                format!("api versions for produce {}-{}", key.topic, key.partition),
+            ));
         }
 
         let produce_version =
@@ -1630,6 +1630,7 @@ impl Producer {
             let partition_response =
                 produce_partition_response(&response, &key.topic, key.partition)?;
             if partition_response.error_code != 0 {
+                self.config.client.record_broker_error();
                 if self.idempotent_state.is_some() {
                     match idempotent_produce_error_disposition(partition_response.error_code) {
                         IdempotentProduceErrorDisposition::Duplicate => {
@@ -1704,10 +1705,10 @@ impl Producer {
         let mut leader_client = self.config.client.connect_broker(broker_addr).await?;
         let api_versions = leader_client.api_versions().await?;
         if api_versions.error_code != 0 {
-            return Err(Error::Broker {
-                code: api_versions.error_code,
-                context: format!("api versions for produce {}-{}", record.topic(), partition),
-            });
+            return Err(self.config.client.broker_error(
+                api_versions.error_code,
+                format!("api versions for produce {}-{}", record.topic(), partition),
+            ));
         }
 
         let produce_version =
@@ -1784,6 +1785,7 @@ impl Producer {
         };
         let partition_response = produce_partition_response(&response, record.topic(), partition)?;
         if partition_response.error_code != 0 {
+            self.config.client.record_broker_error();
             if self.idempotent_state.is_some() {
                 match idempotent_produce_error_disposition(partition_response.error_code) {
                     IdempotentProduceErrorDisposition::Duplicate => {
@@ -1862,6 +1864,7 @@ impl Producer {
                 .find_transaction_coordinator(transactional_id.clone())
                 .await?;
             if coordinator.error_code != 0 {
+                self.config.client.record_broker_error();
                 if attempt < self.config.max_retries
                     && is_retryable_transaction_coordinator_error(coordinator.error_code)
                 {
@@ -1908,6 +1911,7 @@ impl Producer {
             if error_code == 0 {
                 break;
             }
+            self.config.client.record_broker_error();
             if attempt < self.config.max_retries
                 && is_retryable_transaction_coordinator_error(error_code)
             {
@@ -1948,6 +1952,7 @@ impl Producer {
                 .find_transaction_coordinator(transactional_id.to_owned())
                 .await?;
             if coordinator.error_code != 0 {
+                self.config.client.record_broker_error();
                 if attempt < self.config.max_retries
                     && is_retryable_transaction_coordinator_error(coordinator.error_code)
                 {
@@ -1977,6 +1982,7 @@ impl Producer {
             if response.error_code == 0 {
                 return Ok(());
             }
+            self.config.client.record_broker_error();
             if attempt < self.config.max_retries
                 && is_retryable_transaction_coordinator_error(response.error_code)
             {
@@ -2012,6 +2018,7 @@ impl Producer {
                 .find_group_coordinator(group_id.to_owned())
                 .await?;
             if coordinator.error_code != 0 {
+                self.config.client.record_broker_error();
                 if attempt < self.config.max_retries
                     && is_retryable_transaction_coordinator_error(coordinator.error_code)
                 {
@@ -2055,6 +2062,7 @@ impl Producer {
             let Some((error_code, topic, partition)) = error else {
                 return Ok(());
             };
+            self.config.client.record_broker_error();
             if attempt < self.config.max_retries
                 && is_retryable_transaction_coordinator_error(error_code)
             {
@@ -2097,6 +2105,7 @@ impl Producer {
                 .find_transaction_coordinator(transactional_id.clone())
                 .await?;
             if coordinator.error_code != 0 {
+                self.config.client.record_broker_error();
                 if attempt < self.config.max_retries
                     && is_retryable_transaction_coordinator_error(coordinator.error_code)
                 {
@@ -2126,6 +2135,7 @@ impl Producer {
             if response.error_code == 0 {
                 break;
             }
+            self.config.client.record_broker_error();
             if attempt < self.config.max_retries
                 && is_retryable_transaction_coordinator_error(response.error_code)
             {
@@ -2516,6 +2526,7 @@ async fn initialize_idempotent_producer(
                 .find_transaction_coordinator(transactional_id.clone())
                 .await?;
             if coordinator.error_code != 0 {
+                client_config.record_broker_error();
                 if attempt < max_retries
                     && is_retryable_transaction_coordinator_error(coordinator.error_code)
                 {
@@ -2546,6 +2557,7 @@ async fn initialize_idempotent_producer(
                 response.producer_epoch,
             ));
         }
+        client_config.record_broker_error();
         if attempt < max_retries && is_retryable_transaction_coordinator_error(response.error_code)
         {
             attempt += 1;
@@ -4523,6 +4535,7 @@ mod tests {
             1
         );
         assert_eq!(metrics.snapshot().retries, 1);
+        assert_eq!(metrics.snapshot().broker_errors, 1);
         assert_eq!(metrics.snapshot().produced_records, 1);
         assert_eq!(metrics.snapshot().produce_batches, 1);
         leader_server.await.unwrap();

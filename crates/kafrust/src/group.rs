@@ -266,10 +266,10 @@ impl ConsumerGroupConfig {
             .find_group_coordinator(self.group_id.clone())
             .await?;
         if coordinator.error_code != 0 {
-            return Err(Error::Broker {
-                code: coordinator.error_code,
-                context: format!("find group coordinator {}", self.group_id),
-            });
+            return Err(self.client.broker_error(
+                coordinator.error_code,
+                format!("find group coordinator {}", self.group_id),
+            ));
         }
 
         let coordinator_addr = coordinator_addr(&coordinator);
@@ -293,10 +293,9 @@ impl ConsumerGroupConfig {
             )
             .await?;
         if joined.error_code != 0 {
-            return Err(Error::Broker {
-                code: joined.error_code,
-                context: format!("join group {}", self.group_id),
-            });
+            return Err(self
+                .client
+                .broker_error(joined.error_code, format!("join group {}", self.group_id)));
         }
 
         let assignments = if joined.member_id == joined.leader {
@@ -314,10 +313,9 @@ impl ConsumerGroupConfig {
             )
             .await?;
         if synced.error_code != 0 {
-            return Err(Error::Broker {
-                code: synced.error_code,
-                context: format!("sync group {}", self.group_id),
-            });
+            return Err(self
+                .client
+                .broker_error(synced.error_code, format!("sync group {}", self.group_id)));
         }
 
         let assignment = ConsumerProtocolAssignmentV0::decode(&synced.assignment)?;
@@ -488,10 +486,10 @@ impl ConsumerGroup {
             .find_group_coordinator(self.group_id.clone())
             .await?;
         if coordinator.error_code != 0 {
-            return Err(Error::Broker {
-                code: coordinator.error_code,
-                context: format!("find group coordinator {}", self.group_id),
-            });
+            return Err(self.config.client.broker_error(
+                coordinator.error_code,
+                format!("find group coordinator {}", self.group_id),
+            ));
         }
 
         let mut coordinator = self
@@ -564,10 +562,10 @@ impl ConsumerGroup {
             )
             .await?;
         if response.error_code != 0 {
-            return Err(Error::Broker {
-                code: response.error_code,
-                context: format!("heartbeat group {}", self.group_id),
-            });
+            return Err(self.config.client.broker_error(
+                response.error_code,
+                format!("heartbeat group {}", self.group_id),
+            ));
         }
         debug!(
             group_id = self.group_id.as_str(),
@@ -622,6 +620,10 @@ impl ConsumerGroup {
             Err(error) => return Err(error),
         };
         if let Some(error) = offset_commit_response_error(&self.group_id, &response.topics) {
+            let error = match error {
+                Error::Broker { code, context } => self.config.client.broker_error(code, context),
+                error => error,
+            };
             if should_rejoin_group(&error) {
                 debug!(
                     group_id = self.group_id.as_str(),
@@ -819,18 +821,21 @@ async fn assignments_from_protocol(
         .offset_fetch_v2(group_id.to_owned(), Some(offset_fetch_topics(assignment)))
         .await?;
     if offsets.error_code != 0 {
-        return Err(Error::Broker {
-            code: offsets.error_code,
-            context: format!("offset fetch group {group_id}"),
-        });
+        return Err(
+            coordinator.broker_error(offsets.error_code, format!("offset fetch group {group_id}"))
+        );
     }
 
     for topic in &assignment.assignments {
         for partition in &topic.partitions {
-            let next_offset =
-                committed_offset(group_id, &offsets.topics, &topic.topic, *partition)?
-                    .filter(|offset| *offset >= 0)
-                    .unwrap_or(start_offset);
+            let committed = committed_offset(group_id, &offsets.topics, &topic.topic, *partition)
+                .map_err(|error| match error {
+                Error::Broker { code, context } => coordinator.broker_error(code, context),
+                error => error,
+            })?;
+            let next_offset = committed
+                .filter(|offset| *offset >= 0)
+                .unwrap_or(start_offset);
             assignments.push(ConsumerAssignment::new(
                 topic.topic.clone(),
                 *partition,
@@ -990,10 +995,10 @@ async fn run_background_heartbeat(
                     .heartbeat_v2(group_id.clone(), generation_id, member_id.clone())
                     .await?;
                 if response.error_code != 0 {
-                    return Err(Error::Broker {
-                        code: response.error_code,
-                        context: format!("background heartbeat group {group_id}"),
-                    });
+                    return Err(coordinator.broker_error(
+                        response.error_code,
+                        format!("background heartbeat group {group_id}"),
+                    ));
                 }
             }
         }

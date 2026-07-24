@@ -292,9 +292,10 @@ See [Compatibility](docs/compatibility.md) and
   commit, and abort. `IsolationLevel::ReadCommitted` hides aborted transaction
   records for direct and group consumers, and current group assignments can be
   committed through `Producer::send_offsets_to_transaction`. Transactional
-  buffered sends, admin APIs, live broker failure injection, and complete
-  shared request, retry, producer, consumer, batch, and buffered-queue metrics
-  are available together with high-level operation and `kafka.request` spans.
+  buffered sends, admin APIs, and live broker failure injection remain separate
+  roadmap items. Shared request, retry, broker-error, producer, consumer,
+  batch, and buffered-queue metrics are available together with high-level
+  operation and `kafka.request` spans.
 - `acks=0` remains unsupported because the current request loop expects a broker
   response.
 
