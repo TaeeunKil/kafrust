@@ -199,8 +199,8 @@ producer
     .send(ProducerRecord::to("output").value("processed"))
     .await?;
 producer
-    .send_offsets_to_transaction(
-        group.group_id().to_owned(),
+    .send_group_offsets_to_transaction(
+        &group.metadata(),
         group.assignments(),
     )
     .await?;

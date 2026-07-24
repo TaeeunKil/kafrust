@@ -12,13 +12,17 @@ use kafrust_protocol::api::produce::{
     ProducePartitionV3, ProduceResponseV2, ProduceResponseV7, ProduceTopicV3, RecordBatchIdentity,
     RecordBatchMessage, API_KEY as PRODUCE_API_KEY,
 };
-use kafrust_protocol::api::txn_offset_commit::{TxnOffsetCommitPartition, TxnOffsetCommitTopic};
+use kafrust_protocol::api::txn_offset_commit::{
+    TxnOffsetCommitPartition, TxnOffsetCommitPartitionV3, TxnOffsetCommitTopic,
+    TxnOffsetCommitTopicV3,
+};
 use kafrust_protocol::record_batch::RecordBatchCompression;
 
 use crate::client::Client;
 use crate::config::{ClientConfig, SecurityProtocol};
 use crate::consumer::ConsumerAssignment;
 use crate::error::{BrokerErrorKind, Error, Result};
+use crate::group::ConsumerGroupMetadata;
 use crate::metrics::ClientMetrics;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
@@ -1224,6 +1228,53 @@ impl Producer {
         .await
     }
 
+    /// Adds consumer offsets to the transaction with group-generation fencing.
+    ///
+    /// Obtain `metadata` from [`crate::ConsumerGroup::metadata`] after the poll
+    /// whose records are being processed. Kafka rejects stale generations and
+    /// members instead of allowing a zombie consumer to commit offsets.
+    pub async fn send_group_offsets_to_transaction(
+        &mut self,
+        metadata: &ConsumerGroupMetadata,
+        assignments: &[ConsumerAssignment],
+    ) -> Result<()> {
+        self.ensure_idempotent_producer_usable()?;
+        self.ensure_transaction_active()?;
+        if assignments.is_empty() {
+            return Err(Error::Unsupported(
+                "transaction offset commit requires at least one assignment",
+            ));
+        }
+        let state = self
+            .transaction_state
+            .as_ref()
+            .ok_or(Error::Unsupported("producer is not transactional"))?;
+        let transactional_id = state.transactional_id.clone();
+        let identity = self
+            .idempotent_state
+            .as_ref()
+            .ok_or(Error::Unsupported(
+                "transactional producer has no producer identity",
+            ))?
+            .identity("", 0);
+
+        self.add_group_offsets_to_transaction(
+            &transactional_id,
+            metadata.group_id(),
+            identity.producer_id,
+            identity.producer_epoch,
+        )
+        .await?;
+        self.commit_group_offsets_to_transaction_v3(
+            &transactional_id,
+            metadata,
+            identity.producer_id,
+            identity.producer_epoch,
+            transaction_offset_topics_v3(assignments),
+        )
+        .await
+    }
+
     /// Commits the active transaction.
     #[tracing::instrument(
         level = "debug",
@@ -2086,6 +2137,59 @@ impl Producer {
         }
     }
 
+    async fn commit_group_offsets_to_transaction_v3(
+        &mut self,
+        transactional_id: &str,
+        metadata: &ConsumerGroupMetadata,
+        producer_id: i64,
+        producer_epoch: i16,
+        topics: Vec<TxnOffsetCommitTopicV3>,
+    ) -> Result<()> {
+        let coordinator = self
+            .client
+            .find_group_coordinator(metadata.group_id().to_owned())
+            .await?;
+        if coordinator.error_code != 0 {
+            return Err(self.client.broker_error(
+                coordinator.error_code,
+                format!("find group coordinator {}", metadata.group_id()),
+            ));
+        }
+        let mut client = self
+            .config
+            .client
+            .connect_broker(format!("{}:{}", coordinator.host, coordinator.port))
+            .await?;
+        let response = client
+            .txn_offset_commit_v3(
+                transactional_id,
+                metadata.group_id(),
+                producer_id,
+                producer_epoch,
+                metadata.generation_id(),
+                metadata.member_id(),
+                metadata.group_instance_id().map(str::to_owned),
+                topics,
+            )
+            .await?;
+        for topic in response.topics {
+            for partition in topic.partitions {
+                if partition.error_code != 0 {
+                    return Err(self.client.broker_error(
+                        partition.error_code,
+                        format!(
+                            "transaction offset commit {} {}-{}",
+                            metadata.group_id(),
+                            topic.name,
+                            partition.partition_index
+                        ),
+                    ));
+                }
+            }
+        }
+        Ok(())
+    }
+
     async fn end_transaction(&mut self, committed: bool) -> Result<()> {
         self.ensure_idempotent_producer_usable()?;
         self.ensure_transaction_active()?;
@@ -2600,6 +2704,25 @@ fn transaction_offset_topics(assignments: &[ConsumerAssignment]) -> Vec<TxnOffse
     topics
         .into_iter()
         .map(|(name, partitions)| TxnOffsetCommitTopic { name, partitions })
+        .collect()
+}
+
+fn transaction_offset_topics_v3(assignments: &[ConsumerAssignment]) -> Vec<TxnOffsetCommitTopicV3> {
+    transaction_offset_topics(assignments)
+        .into_iter()
+        .map(|topic| TxnOffsetCommitTopicV3 {
+            name: topic.name,
+            partitions: topic
+                .partitions
+                .into_iter()
+                .map(|partition| TxnOffsetCommitPartitionV3 {
+                    partition_index: partition.partition_index,
+                    committed_offset: partition.committed_offset,
+                    committed_leader_epoch: -1,
+                    committed_metadata: partition.committed_metadata,
+                })
+                .collect(),
+        })
         .collect()
 }
 

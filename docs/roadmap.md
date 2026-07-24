@@ -893,9 +893,10 @@ Evidence:
   configurations. Fetch v4 preserves producer and transactional/control batch
   metadata, hides control records, and filters aborted producer ranges while
   advancing poll offsets past hidden records.
-- `Producer::send_offsets_to_transaction` binds current
-  `ConsumerGroup::assignments` through `AddOffsetsToTxn v0` and commits the
-  partition offsets through `TxnOffsetCommit v0` before EndTxn. Transaction
+- `Producer::send_group_offsets_to_transaction` binds current
+  `ConsumerGroup::metadata` and assignments through `AddOffsetsToTxn v0` and
+  commits offsets through generation-fenced `TxnOffsetCommit v3` before
+  EndTxn. Transaction
   initialization, partition registration, offset integration, and completion
   rediscover coordinators and retry transient coordinator errors within the
   configured retry limit.
