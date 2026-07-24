@@ -179,6 +179,7 @@ Current implementation status:
 - `ProducerConfig::max_records_per_batch` limits how many records are sent in one Produce request for a topic-partition group. Values below 1 are treated as 1.
 - `ProducerConfig::max_batch_bytes` limits the encoded Kafka record-set bytes sent in one Produce request for a topic-partition group. Values below 1 are treated as 1, and an oversized single record is still sent by itself.
 - `ProducerConfig::linger_ms` stores the configured linger duration for the opt-in buffered producer path. The immediate `send` and `send_batch` APIs do not wait on linger.
+- `ProducerConfig::buffer_capacity` sets the bounded buffered-producer command capacity, defaulting to 1024. Values below 1 are treated as 1; `BufferedProducer::send` applies async backpressure while the queue is full.
 - `ProducerConfig::compression` stores the configured producer record batch
   compression policy. `Compression::None` is the default.
   `Compression::Gzip`, `Compression::Snappy`, `Compression::Lz4`, and
@@ -187,7 +188,7 @@ Current implementation status:
   support returns `Unsupported`. Snappy output uses Kafka-compatible Xerial
   framing; LZ4 and Zstd output use their standard frames as expected by
   RecordBatch v2.
-- `ProducerConfig::build_buffered` creates a `BufferedProducer` with bounded enqueue, per-record `ProducerDelivery` handles, `flush`, `close`, and `is_closed`.
+- `ProducerConfig::build_buffered` creates a `BufferedProducer` with configurable bounded enqueue, per-record `ProducerDelivery` handles, `flush`, `close`, and `is_closed`.
 - `BufferedProducer::send` queues records for the buffered path, and `flush` or `close` sends accepted records through the existing batch Produce path before completing delivery handles from per-record outcomes.
 - `BufferedProducer` automatically flushes queued records when a topic and explicit-partition buffer reaches `max_records_per_batch` or `max_batch_bytes`, or when the oldest queued record reaches `linger_ms`. `linger_ms(0)` schedules a flush without intentional delay.
 - Producer metadata is cached by topic and refreshed when a retriable send failure invalidates that topic cache entry.

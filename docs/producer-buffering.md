@@ -23,6 +23,7 @@ let mut producer = ProducerConfig::new(["localhost:9092"])
     .linger_ms(5)
     .max_records_per_batch(500)
     .max_batch_bytes(64 * 1024)
+    .buffer_capacity(1024)
     .acks(Acks::All)
     .build_buffered()
     .await?;
@@ -43,7 +44,7 @@ Names can change during implementation, but the behavioral split should remain:
 - `BufferedProducer::flush` waits until all records accepted before the flush have terminal delivery outcomes.
 - `BufferedProducer::close` flushes, stops the background task, and rejects later sends.
 
-Current implementation status: `ProducerConfig::linger_ms`, `ProducerConfig::build_buffered`, `BufferedProducer::send`, `BufferedProducer::flush`, `BufferedProducer::close`, `BufferedProducer::is_closed`, and per-record `ProducerDelivery` handles exist. `flush`, `close`, linger expiry, record-count thresholds, and byte-count thresholds send accepted records through the existing `send_batch_report` path and complete delivery handles from per-record outcomes.
+Current implementation status: `ProducerConfig::linger_ms`, `ProducerConfig::buffer_capacity`, `ProducerConfig::build_buffered`, `BufferedProducer::send`, `BufferedProducer::flush`, `BufferedProducer::close`, `BufferedProducer::is_closed`, and per-record `ProducerDelivery` handles exist. `flush`, `close`, linger expiry, record-count thresholds, and byte-count thresholds send accepted records through the existing `send_batch_report` path and complete delivery handles from per-record outcomes. The command queue defaults to 1024 records, applies async backpressure at capacity, and reports current and maximum outstanding buffered records through `ClientMetrics`.
 
 ## Flush Triggers
 

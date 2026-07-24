@@ -614,6 +614,7 @@ fn advance_producer_sequence(current: i32, record_count: usize) -> i32 {
 /// the buffered path.
 pub struct BufferedProducer {
     commands: mpsc::Sender<BufferedProducerCommand>,
+    metrics: ClientMetrics,
     worker: Option<JoinHandle<()>>,
     state: BufferedProducerState,
 }
@@ -625,7 +626,7 @@ impl BufferedProducer {
     /// terminal result for this record.
     pub async fn send(&mut self, record: ProducerRecord) -> Result<ProducerDelivery> {
         self.state.ensure_open()?;
-        enqueue_buffered_record(&self.commands, record).await
+        enqueue_buffered_record(&self.commands, &self.metrics, record).await
     }
 
     /// Flushes accepted buffered records.
@@ -755,21 +756,56 @@ enum BufferedFlushReason {
 struct BufferedProduceRequest {
     record: ProducerRecord,
     delivery_sender: oneshot::Sender<Result<RecordMetadata>>,
+    _queue_guard: BufferedQueueGuard,
+}
+
+impl BufferedProduceRequest {
+    fn new(
+        record: ProducerRecord,
+        delivery_sender: oneshot::Sender<Result<RecordMetadata>>,
+        metrics: ClientMetrics,
+    ) -> Self {
+        Self {
+            record,
+            delivery_sender,
+            _queue_guard: BufferedQueueGuard::new(metrics),
+        }
+    }
+}
+
+#[derive(Debug)]
+struct BufferedQueueGuard {
+    metrics: ClientMetrics,
+}
+
+impl BufferedQueueGuard {
+    fn new(metrics: ClientMetrics) -> Self {
+        metrics.accept_buffered_record();
+        Self { metrics }
+    }
+}
+
+impl Drop for BufferedQueueGuard {
+    fn drop(&mut self) {
+        self.metrics.complete_buffered_record();
+    }
 }
 
 async fn enqueue_buffered_record(
     commands: &mpsc::Sender<BufferedProducerCommand>,
+    metrics: &ClientMetrics,
     record: ProducerRecord,
 ) -> Result<ProducerDelivery> {
     let (delivery_sender, delivery_receiver) = oneshot::channel();
-    send_buffered_command(
-        commands,
-        BufferedProducerCommand::Send(BufferedProduceRequest {
-            record,
-            delivery_sender,
-        }),
-    )
-    .await?;
+    let permit = commands
+        .reserve()
+        .await
+        .map_err(|_| buffered_task_stopped_error())?;
+    permit.send(BufferedProducerCommand::Send(BufferedProduceRequest::new(
+        record,
+        delivery_sender,
+        metrics.clone(),
+    )));
     Ok(ProducerDelivery::new(delivery_receiver))
 }
 
@@ -2114,6 +2150,7 @@ pub struct ProducerConfig {
     max_records_per_batch: usize,
     max_batch_bytes: usize,
     linger: Duration,
+    buffer_capacity: usize,
     compression: Compression,
     idempotence: bool,
     transactional_id: Option<String>,
@@ -2130,6 +2167,7 @@ impl ProducerConfig {
             max_records_per_batch: usize::MAX,
             max_batch_bytes: usize::MAX,
             linger: Duration::from_millis(0),
+            buffer_capacity: BUFFERED_PRODUCER_CHANNEL_CAPACITY,
             compression: Compression::None,
             idempotence: false,
             transactional_id: None,
@@ -2243,6 +2281,15 @@ impl ProducerConfig {
         self
     }
 
+    /// Sets the bounded command capacity for the buffered producer.
+    ///
+    /// When the queue is full, [`BufferedProducer::send`] waits for capacity.
+    /// Values below one are treated as one.
+    pub fn buffer_capacity(mut self, buffer_capacity: usize) -> Self {
+        self.buffer_capacity = buffer_capacity.max(1);
+        self
+    }
+
     /// Sets the compression policy used for Produce API v3 record batches.
     ///
     /// Compression currently requires Produce API v3 because the legacy
@@ -2303,6 +2350,11 @@ impl ProducerConfig {
     /// Returns the configured linger duration for buffered sends.
     pub fn linger(&self) -> Duration {
         self.linger
+    }
+
+    /// Returns the buffered producer command capacity.
+    pub fn buffer_capacity_ref(&self) -> usize {
+        self.buffer_capacity
     }
 
     /// Returns the configured producer compression policy.
@@ -2378,10 +2430,12 @@ impl ProducerConfig {
             ));
         }
         let producer = self.build().await?;
-        let (commands, receiver) = mpsc::channel(BUFFERED_PRODUCER_CHANNEL_CAPACITY);
+        let metrics = producer.config.client.metrics_ref();
+        let (commands, receiver) = mpsc::channel(producer.config.buffer_capacity);
         let worker = tokio::spawn(run_buffered_producer(producer, receiver));
         Ok(BufferedProducer {
             commands,
+            metrics,
             worker: Some(worker),
             state: BufferedProducerState::Open,
         })
@@ -3423,6 +3477,7 @@ mod tests {
             .max_records_per_batch(128)
             .max_batch_bytes(64 * 1024)
             .linger_ms(5)
+            .buffer_capacity(32)
             .compression(Compression::Lz4)
             .acks(Acks::All);
 
@@ -3431,6 +3486,7 @@ mod tests {
         assert_eq!(config.max_records_per_batch_ref(), 128);
         assert_eq!(config.max_batch_bytes_ref(), 64 * 1024);
         assert_eq!(config.linger(), std::time::Duration::from_millis(5));
+        assert_eq!(config.buffer_capacity_ref(), 32);
         assert_eq!(config.compression_ref(), Compression::Lz4);
         assert!(!config.idempotence_enabled());
         assert_eq!(config.client_config().client_id_ref(), Some("orders-api"));
@@ -3667,6 +3723,13 @@ mod tests {
     }
 
     #[test]
+    fn clamps_zero_buffer_capacity_to_one() {
+        let config = ProducerConfig::new(["localhost:9092"]).buffer_capacity(0);
+
+        assert_eq!(config.buffer_capacity_ref(), 1);
+    }
+
+    #[test]
     fn leaves_buffered_records_pending_before_flush_thresholds() {
         let config = ProducerConfig::new(["localhost:9092"]).max_records_per_batch(2);
         let pending = vec![buffered_request(
@@ -3761,8 +3824,10 @@ mod tests {
     #[tokio::test]
     async fn enqueues_buffered_record_and_returns_delivery_handle() {
         let (commands, mut receiver) = mpsc::channel(1);
+        let metrics = ClientMetrics::new();
         let delivery = enqueue_buffered_record(
             &commands,
+            &metrics,
             ProducerRecord::to("orders").key("order-1").value("created"),
         )
         .await
@@ -3783,6 +3848,46 @@ mod tests {
         assert_eq!(metadata.topic(), "orders");
         assert_eq!(metadata.partition(), 0);
         assert_eq!(metadata.offset(), 42);
+        let snapshot = metrics.snapshot();
+        assert_eq!(snapshot.buffered_records, 0);
+        assert_eq!(snapshot.max_buffered_records, 1);
+    }
+
+    #[tokio::test]
+    async fn buffered_enqueue_applies_backpressure_at_channel_capacity() {
+        let (commands, mut receiver) = mpsc::channel(1);
+        let metrics = ClientMetrics::new();
+        let first = enqueue_buffered_record(
+            &commands,
+            &metrics,
+            ProducerRecord::to("orders").key("order-1"),
+        )
+        .await
+        .unwrap();
+        let next_commands = commands.clone();
+        let next_metrics = metrics.clone();
+        let second = tokio::spawn(async move {
+            enqueue_buffered_record(
+                &next_commands,
+                &next_metrics,
+                ProducerRecord::to("orders").key("order-2"),
+            )
+            .await
+        });
+
+        tokio::task::yield_now().await;
+        assert!(!second.is_finished());
+        assert_eq!(metrics.snapshot().buffered_records, 1);
+
+        drop(receiver.recv().await.unwrap());
+        let second_delivery = second.await.unwrap().unwrap();
+        assert_eq!(metrics.snapshot().buffered_records, 1);
+        drop(receiver.recv().await.unwrap());
+        drop(first);
+        drop(second_delivery);
+
+        assert_eq!(metrics.snapshot().buffered_records, 0);
+        assert_eq!(metrics.snapshot().max_buffered_records, 1);
     }
 
     #[tokio::test]
@@ -3801,14 +3906,18 @@ mod tests {
     async fn fails_pending_buffered_deliveries() {
         let (delivery_sender, delivery_receiver) = oneshot::channel();
         let delivery = ProducerDelivery::new(delivery_receiver);
-        let mut pending = vec![BufferedProduceRequest {
-            record: ProducerRecord::to("orders"),
+        let metrics = ClientMetrics::new();
+        let mut pending = vec![BufferedProduceRequest::new(
+            ProducerRecord::to("orders"),
             delivery_sender,
-        }];
+            metrics.clone(),
+        )];
+        assert_eq!(metrics.snapshot().buffered_records, 1);
 
         fail_buffered_deliveries(&mut pending, buffered_delivery_canceled_error);
 
         assert!(pending.is_empty());
+        assert_eq!(metrics.snapshot().buffered_records, 0);
         assert!(matches!(
             delivery.await.unwrap_err(),
             Error::Unsupported("buffered producer delivery canceled")
@@ -3822,14 +3931,16 @@ mod tests {
         let first_delivery = ProducerDelivery::new(first_receiver);
         let second_delivery = ProducerDelivery::new(second_receiver);
         let requests = vec![
-            BufferedProduceRequest {
-                record: ProducerRecord::to("orders").key("order-1"),
-                delivery_sender: first_sender,
-            },
-            BufferedProduceRequest {
-                record: ProducerRecord::to("orders").key("order-2"),
-                delivery_sender: second_sender,
-            },
+            BufferedProduceRequest::new(
+                ProducerRecord::to("orders").key("order-1"),
+                first_sender,
+                ClientMetrics::new(),
+            ),
+            BufferedProduceRequest::new(
+                ProducerRecord::to("orders").key("order-2"),
+                second_sender,
+                ClientMetrics::new(),
+            ),
         ];
         let outcomes = vec![
             ProducerBatchRecordOutcome::Success(RecordMetadata::new("orders", 0, 42, None)),
@@ -3857,10 +3968,11 @@ mod tests {
     async fn completes_missing_buffered_outcome_with_error() {
         let (delivery_sender, delivery_receiver) = oneshot::channel();
         let delivery = ProducerDelivery::new(delivery_receiver);
-        let requests = vec![BufferedProduceRequest {
-            record: ProducerRecord::to("orders"),
+        let requests = vec![BufferedProduceRequest::new(
+            ProducerRecord::to("orders"),
             delivery_sender,
-        }];
+            ClientMetrics::new(),
+        )];
 
         complete_buffered_deliveries(requests, Vec::new());
 
@@ -4503,9 +4615,6 @@ mod tests {
 
     fn buffered_request(record: ProducerRecord) -> BufferedProduceRequest {
         let (delivery_sender, _delivery_receiver) = oneshot::channel();
-        BufferedProduceRequest {
-            record,
-            delivery_sender,
-        }
+        BufferedProduceRequest::new(record, delivery_sender, ClientMetrics::new())
     }
 }
