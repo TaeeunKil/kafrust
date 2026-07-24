@@ -52,7 +52,8 @@ use kafrust_protocol::api::sync_group::{
     SyncGroupAssignment, SyncGroupRequestV2, SyncGroupResponseV2,
 };
 use kafrust_protocol::api::txn_offset_commit::{
-    TxnOffsetCommitRequestV0, TxnOffsetCommitResponseV0, TxnOffsetCommitTopic,
+    TxnOffsetCommitRequestV0, TxnOffsetCommitRequestV3, TxnOffsetCommitResponseV0,
+    TxnOffsetCommitResponseV3, TxnOffsetCommitTopic, TxnOffsetCommitTopicV3,
 };
 use kafrust_protocol::codec::{DecodeLimits, Decoder};
 use kafrust_protocol::frame::encode_frame;
@@ -487,6 +488,37 @@ impl Client {
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(TxnOffsetCommitResponseV0::decode_body(&mut decoder)?)
+    }
+
+    /// Sends TxnOffsetCommit v3 with consumer-group generation fencing.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn txn_offset_commit_v3(
+        &mut self,
+        transactional_id: impl Into<String>,
+        group_id: impl Into<String>,
+        producer_id: i64,
+        producer_epoch: i16,
+        generation_id: i32,
+        member_id: impl Into<String>,
+        group_instance_id: Option<String>,
+        topics: Vec<TxnOffsetCommitTopicV3>,
+    ) -> Result<TxnOffsetCommitResponseV3> {
+        let request = TxnOffsetCommitRequestV3 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            transactional_id: transactional_id.into(),
+            group_id: group_id.into(),
+            producer_id,
+            producer_epoch,
+            generation_id,
+            member_id: member_id.into(),
+            group_instance_id,
+            topics,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(TxnOffsetCommitResponseV3::decode_body(&mut decoder)?)
     }
 
     /// Sends OffsetFetch v2 for a consumer group.

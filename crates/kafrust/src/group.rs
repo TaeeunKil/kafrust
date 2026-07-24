@@ -365,6 +365,37 @@ pub struct ConsumerGroup {
     consumer: Consumer,
 }
 
+/// Consumer group identity used to fence transactional offset commits.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConsumerGroupMetadata {
+    group_id: String,
+    generation_id: i32,
+    member_id: String,
+    group_instance_id: Option<String>,
+}
+
+impl ConsumerGroupMetadata {
+    /// Returns the consumer group ID.
+    pub fn group_id(&self) -> &str {
+        &self.group_id
+    }
+
+    /// Returns the current classic group generation ID.
+    pub fn generation_id(&self) -> i32 {
+        self.generation_id
+    }
+
+    /// Returns the broker-assigned member ID.
+    pub fn member_id(&self) -> &str {
+        &self.member_id
+    }
+
+    /// Returns the static group instance ID when configured.
+    pub fn group_instance_id(&self) -> Option<&str> {
+        self.group_instance_id.as_deref()
+    }
+}
+
 impl ConsumerGroup {
     /// Returns the Kafka consumer group ID.
     pub fn group_id(&self) -> &str {
@@ -379,6 +410,19 @@ impl ConsumerGroup {
     /// Returns the current group generation ID.
     pub fn generation_id(&self) -> i32 {
         self.generation_id
+    }
+
+    /// Snapshots the current identity for a fenced transactional offset commit.
+    ///
+    /// Take a fresh snapshot after every rejoin because generation and member
+    /// identity change during rebalancing.
+    pub fn metadata(&self) -> ConsumerGroupMetadata {
+        ConsumerGroupMetadata {
+            group_id: self.group_id.clone(),
+            generation_id: self.generation_id,
+            member_id: self.member_id.clone(),
+            group_instance_id: None,
+        }
     }
 
     /// Returns the assigned topic partitions and next offsets.

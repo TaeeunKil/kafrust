@@ -86,7 +86,7 @@ transaction through the Kafka transaction coordinator. After polling a
 consumer group, pass its current assignments to the producer before committing:
 
 ```rust
-let group_id = group.group_id().to_owned();
+let group_metadata = group.metadata();
 let offsets = group.assignments().to_vec();
 
 producer.begin_transaction()?;
@@ -94,7 +94,7 @@ producer
     .send(ProducerRecord::to("output").value("processed"))
     .await?;
 producer
-    .send_offsets_to_transaction(group_id, &offsets)
+    .send_group_offsets_to_transaction(&group_metadata, &offsets)
     .await?;
 producer.commit_transaction().await?;
 ```
@@ -168,9 +168,10 @@ Current implementation status:
   `commit_transaction`, and `abort_transaction` expose the transaction
   lifecycle; transactional sends register partitions before Produce. The
   high-level commit and abort path is verified against Kafka 3.7.2 and 4.3.1.
-- `Producer::send_offsets_to_transaction` adds a consumer group to the active
-  transaction and commits the supplied `ConsumerAssignment` next offsets
-  through `TxnOffsetCommit v0`. The consume-transform-produce path is verified
+- `Producer::send_group_offsets_to_transaction` adds a consumer group to the
+  active transaction and commits the supplied `ConsumerAssignment` next
+  offsets through generation-fenced `TxnOffsetCommit v3`. The
+  consume-transform-produce path is verified
   against Kafka 3.7.2 and 4.3.1.
 - `Producer::send` performs metadata lookup, connects to the partition leader, negotiates Produce API support with `ApiVersions`, and chooses Produce v7 for Zstd, Produce v3 RecordBatch for other RecordBatch features, or Produce v2 MessageSet.
 - `ProducerConfig::request_timeout_ms` controls the request timeout used for metadata and produce roundtrips.

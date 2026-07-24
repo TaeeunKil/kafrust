@@ -60,8 +60,9 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
   Manual run `29995122439` compared `ReadUncommitted` and `ReadCommitted`
   results after real commit and abort flows on Kafka 3.7.2 and Kafka 4.3.1.
 - Transactional consumer group offset integration through
-  `Producer::send_offsets_to_transaction`, `AddOffsetsToTxn v0`, and
-  `TxnOffsetCommit v0`. Manual run `29995762812` passed a read-committed group
+  `Producer::send_group_offsets_to_transaction`, `AddOffsetsToTxn v0`, and
+  generation-fenced `TxnOffsetCommit v3`. The earlier v0 path passed manual
+  run `29995762812`; v3 live qualification is pending. That run passed a read-committed group
   poll followed by atomic output production and group offset commit on Kafka
   3.7.2 and Kafka 4.3.1.
 - Gzip Produce v3 RecordBatch encoding and Fetch v4 RecordBatch decoding are

@@ -109,6 +109,7 @@ async fn main() -> kafrust::Result<()> {
             "transaction offset group did not read the committed input",
         ));
     }
+    let group_metadata = group.metadata();
     let assignments = group.assignments().to_vec();
 
     producer.begin_transaction()?;
@@ -120,7 +121,7 @@ async fn main() -> kafrust::Result<()> {
         )
         .await?;
     producer
-        .send_offsets_to_transaction(group_id, &assignments)
+        .send_group_offsets_to_transaction(&group_metadata, &assignments)
         .await?;
     producer.commit_transaction().await?;
     println!(
