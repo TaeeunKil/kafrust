@@ -61,7 +61,11 @@ and `SyncGroup v2` for dynamic members or v5/v3 for static members, computes
 range assignments if this member is the leader, fetches committed offsets for
 assigned partitions, and builds a direct `Consumer` for fetching records.
 
-The alpha path uses the classic consumer group protocol with range assignment. Assignment state keeps Kafka group ID, member ID, generation ID, topic, partition, and next offset visible through the public API.
+The alpha path uses the classic consumer group protocol. Range assignment is
+the default; `ConsumerGroupConfig::assignment_strategy` can select
+`ConsumerGroupAssignmentStrategy::RoundRobin`. Assignment state keeps Kafka
+group ID, member ID, generation ID, topic, partition, and next offset visible
+through the public API.
 
 ## Polling And Rejoin
 
@@ -96,6 +100,8 @@ Current implementation status:
 - `Client::join_group_v2`, `Client::sync_group_v2`, and `Client::heartbeat_v2` can send coordinator-scoped group membership requests.
 - Classic consumer protocol subscription and assignment v0 payloads can be encoded and decoded for JoinGroup/SyncGroup metadata.
 - Internal range assignment can compute SyncGroup assignment payloads from JoinGroup member subscriptions and topic metadata.
+- Internal round-robin assignment follows sorted member/topic/partition order
+  and skips members that do not subscribe to the current topic.
 - OffsetFetch v2 request/response protocol types exist.
 - OffsetCommit v2 request/response protocol types exist.
 - `Client::offset_fetch_v2` and `Client::offset_commit_v2` can send coordinator-scoped offset requests.
@@ -123,6 +129,7 @@ KAFRUST_BOOTSTRAP_SERVERS=localhost:9092 KAFRUST_GROUP_ID=orders-group KAFRUST_T
 ```
 
 Add `KAFRUST_GROUP_INSTANCE_ID=orders-reader-1` to run the example as a static
-group member.
+group member. Set `KAFRUST_ASSIGNMENT_STRATEGY=roundrobin` to select the
+round-robin assignor.
 
 The opt-in broker roundtrip test also covers coordinator discovery when `KAFRUST_BOOTSTRAP_SERVERS` is set.

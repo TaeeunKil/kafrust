@@ -30,10 +30,31 @@ use tracing::{debug, Instrument};
 
 const PROTOCOL_TYPE: &str = "consumer";
 const RANGE_PROTOCOL: &str = "range";
+const ROUND_ROBIN_PROTOCOL: &str = "roundrobin";
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+/// Partition assignment strategy advertised by a classic consumer group member.
+pub enum ConsumerGroupAssignmentStrategy {
+    /// Assign contiguous partition ranges independently for each topic.
+    #[default]
+    Range,
+    /// Distribute all subscribed topic partitions cyclically across members.
+    RoundRobin,
+}
+
+impl ConsumerGroupAssignmentStrategy {
+    fn protocol_name(self) -> &'static str {
+        match self {
+            Self::Range => RANGE_PROTOCOL,
+            Self::RoundRobin => ROUND_ROBIN_PROTOCOL,
+        }
+    }
+}
 
 struct JoinedGroup {
     error_code: i16,
     generation_id: i32,
+    protocol_name: String,
     leader: String,
     member_id: String,
     members: Vec<JoinGroupMember>,
@@ -56,6 +77,7 @@ pub struct ConsumerGroupConfig {
     max_retries: u32,
     max_poll_records: usize,
     isolation_level: IsolationLevel,
+    assignment_strategy: ConsumerGroupAssignmentStrategy,
 }
 
 impl ConsumerGroupConfig {
@@ -79,6 +101,7 @@ impl ConsumerGroupConfig {
             max_retries: 1,
             max_poll_records: 500,
             isolation_level: IsolationLevel::ReadUncommitted,
+            assignment_strategy: ConsumerGroupAssignmentStrategy::Range,
         }
     }
 
@@ -243,6 +266,20 @@ impl ConsumerGroupConfig {
         self
     }
 
+    /// Sets the classic consumer group partition assignment strategy.
+    pub fn assignment_strategy(
+        mut self,
+        assignment_strategy: ConsumerGroupAssignmentStrategy,
+    ) -> Self {
+        self.assignment_strategy = assignment_strategy;
+        self
+    }
+
+    /// Returns the configured partition assignment strategy.
+    pub fn assignment_strategy_ref(&self) -> ConsumerGroupAssignmentStrategy {
+        self.assignment_strategy
+    }
+
     /// Returns the configured transaction isolation level.
     pub fn isolation_level_ref(&self) -> IsolationLevel {
         self.isolation_level
@@ -309,7 +346,7 @@ impl ConsumerGroupConfig {
         }
         .encode()?;
         let protocols = vec![kafrust_protocol::api::join_group::JoinGroupProtocol {
-            name: RANGE_PROTOCOL.to_owned(),
+            name: self.assignment_strategy.protocol_name().to_owned(),
             metadata: subscription,
         }];
         let joined = if let Some(group_instance_id) = &self.group_instance_id {
@@ -327,6 +364,7 @@ impl ConsumerGroupConfig {
             JoinedGroup {
                 error_code: response.error_code,
                 generation_id: response.generation_id,
+                protocol_name: response.protocol_name,
                 leader: response.leader,
                 member_id: response.member_id,
                 members: response
@@ -352,6 +390,7 @@ impl ConsumerGroupConfig {
             JoinedGroup {
                 error_code: response.error_code,
                 generation_id: response.generation_id,
+                protocol_name: response.protocol_name,
                 leader: response.leader,
                 member_id: response.member_id,
                 members: response.members,
@@ -365,7 +404,7 @@ impl ConsumerGroupConfig {
 
         let assignments = if joined.member_id == joined.leader {
             let metadata = bootstrap.metadata(Some(self.topics.clone())).await?;
-            range_assignments(&joined.members, &metadata)?
+            assignments_for_strategy(&joined.protocol_name, &joined.members, &metadata)?
         } else {
             Vec::new()
         };
@@ -903,6 +942,20 @@ enum HeartbeatHandleState {
     DifferentGroup,
 }
 
+fn assignments_for_strategy(
+    protocol_name: &str,
+    members: &[JoinGroupMember],
+    metadata: &MetadataResponseV1,
+) -> Result<Vec<SyncGroupAssignment>> {
+    match protocol_name {
+        RANGE_PROTOCOL => range_assignments(members, metadata),
+        ROUND_ROBIN_PROTOCOL => round_robin_assignments(members, metadata),
+        _ => Err(Error::Unsupported(
+            "consumer group selected an unsupported assignment strategy",
+        )),
+    }
+}
+
 pub(crate) fn range_assignments(
     members: &[JoinGroupMember],
     metadata: &MetadataResponseV1,
@@ -936,6 +989,60 @@ pub(crate) fn range_assignments(
         }
     }
 
+    encode_member_assignments(assigned_by_member)
+}
+
+pub(crate) fn round_robin_assignments(
+    members: &[JoinGroupMember],
+    metadata: &MetadataResponseV1,
+) -> Result<Vec<SyncGroupAssignment>> {
+    let mut subscriptions = BTreeMap::<String, BTreeSet<String>>::new();
+    let mut subscribed_topics = BTreeSet::new();
+    for member in members {
+        let subscription = ConsumerProtocolSubscriptionV0::decode(&member.metadata)?;
+        let topics = subscription.topics.into_iter().collect::<BTreeSet<_>>();
+        subscribed_topics.extend(topics.iter().cloned());
+        subscriptions.insert(member.member_id.clone(), topics);
+    }
+
+    let member_ids = subscriptions.keys().cloned().collect::<Vec<_>>();
+    let mut assigned_by_member = member_ids
+        .iter()
+        .map(|member_id| (member_id.clone(), BTreeMap::new()))
+        .collect::<BTreeMap<String, BTreeMap<String, Vec<i32>>>>();
+    if member_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut next_member = 0;
+    for topic in subscribed_topics {
+        for partition in partitions_for(metadata, &topic)? {
+            let member_index = (0..member_ids.len())
+                .map(|offset| (next_member + offset) % member_ids.len())
+                .find(|index| {
+                    subscriptions
+                        .get(&member_ids[*index])
+                        .is_some_and(|topics| topics.contains(&topic))
+                })
+                .ok_or(Error::Unsupported(
+                    "round-robin assignment found no subscribed member",
+                ))?;
+            assigned_by_member
+                .entry(member_ids[member_index].clone())
+                .or_default()
+                .entry(topic.clone())
+                .or_default()
+                .push(partition);
+            next_member = (member_index + 1) % member_ids.len();
+        }
+    }
+
+    encode_member_assignments(assigned_by_member)
+}
+
+fn encode_member_assignments(
+    assigned_by_member: BTreeMap<String, BTreeMap<String, Vec<i32>>>,
+) -> Result<Vec<SyncGroupAssignment>> {
     assigned_by_member
         .into_iter()
         .map(|(member_id, topics)| {
@@ -1236,11 +1343,11 @@ fn range_for_topic(members: &[String], partitions: &[i32]) -> Vec<(String, Vec<i
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::{
-        committed_offset, offset_commit_response_error, offset_commit_topics,
-        offset_commit_topics_v7, offset_fetch_topics, range_assignments,
-        should_rejoin_after_background_heartbeat, should_rejoin_group, validate_heartbeat_interval,
-        ConsumerGroupConfig, ConsumerGroupHeartbeat, HeartbeatHandleState, IsolationLevel,
-        SecurityProtocol,
+        assignments_for_strategy, committed_offset, offset_commit_response_error,
+        offset_commit_topics, offset_commit_topics_v7, offset_fetch_topics, range_assignments,
+        round_robin_assignments, should_rejoin_after_background_heartbeat, should_rejoin_group,
+        validate_heartbeat_interval, ConsumerGroupAssignmentStrategy, ConsumerGroupConfig,
+        ConsumerGroupHeartbeat, HeartbeatHandleState, IsolationLevel, SecurityProtocol,
     };
     use crate::consumer::ConsumerAssignment;
     use crate::Error;
@@ -1277,7 +1384,8 @@ mod tests {
             .max_partition_bytes(1024)
             .max_retries(3)
             .max_poll_records(10)
-            .isolation_level(IsolationLevel::ReadCommitted);
+            .isolation_level(IsolationLevel::ReadCommitted)
+            .assignment_strategy(ConsumerGroupAssignmentStrategy::RoundRobin);
 
         assert_eq!(config.group_id(), "orders-group");
         assert_eq!(config.group_instance_id_ref(), Some("orders-reader-1"));
@@ -1296,6 +1404,10 @@ mod tests {
             "alice"
         );
         assert_eq!(config.isolation_level_ref(), IsolationLevel::ReadCommitted);
+        assert_eq!(
+            config.assignment_strategy_ref(),
+            ConsumerGroupAssignmentStrategy::RoundRobin
+        );
     }
 
     #[tokio::test]
@@ -1386,6 +1498,56 @@ mod tests {
         assert_eq!(member_a.assignments[0].partitions, vec![0]);
         assert_eq!(member_a.assignments[1].topic, "payments");
         assert_eq!(member_a.assignments[1].partitions, vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn assigns_partitions_with_round_robin_strategy() {
+        let members = vec![
+            member("member-b", &["orders", "payments"]),
+            member("member-a", &["orders", "payments"]),
+        ];
+        let mut metadata = metadata_fixture("orders", &[0, 1, 2]);
+        metadata.topics.push(topic_metadata("payments", &[0, 1]));
+
+        let assignments = round_robin_assignments(&members, &metadata).unwrap();
+
+        let member_a = decode_assignment(&assignments[0].assignment);
+        let member_b = decode_assignment(&assignments[1].assignment);
+        assert_eq!(member_a.assignments[0].partitions, vec![0, 2]);
+        assert_eq!(member_a.assignments[1].partitions, vec![1]);
+        assert_eq!(member_b.assignments[0].partitions, vec![1]);
+        assert_eq!(member_b.assignments[1].partitions, vec![0]);
+    }
+
+    #[test]
+    fn round_robin_skips_members_not_subscribed_to_a_topic() {
+        let members = vec![
+            member("member-a", &["orders"]),
+            member("member-b", &["payments"]),
+            member("member-c", &["orders", "payments"]),
+        ];
+        let mut metadata = metadata_fixture("orders", &[0, 1]);
+        metadata.topics.push(topic_metadata("payments", &[0, 1]));
+
+        let assignments = round_robin_assignments(&members, &metadata).unwrap();
+
+        let member_a = decode_assignment(&assignments[0].assignment);
+        let member_b = decode_assignment(&assignments[1].assignment);
+        let member_c = decode_assignment(&assignments[2].assignment);
+        assert_eq!(member_a.assignments[0].partitions, vec![0]);
+        assert_eq!(member_b.assignments[0].partitions, vec![0]);
+        assert_eq!(member_c.assignments[0].partitions, vec![1]);
+        assert_eq!(member_c.assignments[1].partitions, vec![1]);
+    }
+
+    #[test]
+    fn rejects_unknown_selected_assignment_strategy() {
+        let error =
+            assignments_for_strategy("sticky", &[], &metadata_fixture("orders", &[0])).unwrap_err();
+        assert!(matches!(
+            error,
+            Error::Unsupported("consumer group selected an unsupported assignment strategy")
+        ));
     }
 
     #[test]

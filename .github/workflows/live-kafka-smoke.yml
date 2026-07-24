@@ -152,6 +152,7 @@ jobs:
         env:
           KAFRUST_GROUP_ID: kafrust-static-${{ matrix.kafka-version }}
           KAFRUST_GROUP_INSTANCE_ID: kafrust-static-member-1
+          KAFRUST_ASSIGNMENT_STRATEGY: roundrobin
         run: cargo run -p kafrust --example consumer_group_poll
 
       - name: Run admin describe group example

@@ -1,6 +1,6 @@
 mod common;
 
-use kafrust::ConsumerGroupConfig;
+use kafrust::{ConsumerGroupAssignmentStrategy, ConsumerGroupConfig, Error};
 
 #[tokio::main]
 async fn main() -> kafrust::Result<()> {
@@ -13,6 +13,17 @@ async fn main() -> kafrust::Result<()> {
     )?;
     if let Ok(group_instance_id) = std::env::var("KAFRUST_GROUP_INSTANCE_ID") {
         config = config.group_instance_id(group_instance_id);
+    }
+    if let Ok(strategy) = std::env::var("KAFRUST_ASSIGNMENT_STRATEGY") {
+        config = config.assignment_strategy(match strategy.to_ascii_lowercase().as_str() {
+            "range" => ConsumerGroupAssignmentStrategy::Range,
+            "roundrobin" | "round-robin" => ConsumerGroupAssignmentStrategy::RoundRobin,
+            _ => {
+                return Err(Error::Unsupported(
+                    "KAFRUST_ASSIGNMENT_STRATEGY must be range or roundrobin",
+                ))
+            }
+        });
     }
     let mut group = config.subscribe(topic).join().await?;
 
