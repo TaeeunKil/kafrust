@@ -25,7 +25,7 @@ use crate::metrics::ClientMetrics;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 use tokio::time::{self, MissedTickBehavior};
-use tracing::debug;
+use tracing::{debug, Instrument};
 
 const PROTOCOL_TYPE: &str = "consumer";
 const RANGE_PROTOCOL: &str = "range";
@@ -243,6 +243,13 @@ impl ConsumerGroupConfig {
     }
 
     /// Joins the group, syncs assignment, and builds a group consumer.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.consumer_group.join",
+        skip_all,
+        fields(group_id = self.group_id.as_str(), topic_count = self.topics.len()),
+        err
+    )]
     pub async fn join(self) -> Result<ConsumerGroup> {
         if self.topics.is_empty() {
             return Err(Error::Unsupported("consumer group without subscriptions"));
@@ -382,6 +389,13 @@ impl ConsumerGroup {
     }
 
     /// Sends a heartbeat, polls assigned partitions, and advances in-memory offsets.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.consumer_group.poll",
+        skip_all,
+        fields(group_id = self.group_id.as_str(), member_id = self.member_id.as_str(), generation_id = self.generation_id),
+        err
+    )]
     pub async fn poll(&mut self) -> Result<Vec<ConsumerRecord>> {
         match self.heartbeat().await {
             Ok(()) => {}
@@ -407,6 +421,13 @@ impl ConsumerGroup {
     /// requires a rejoin, this method rejoins the group before polling. Other
     /// background heartbeat errors are returned to the caller. When the task is
     /// still running, this behaves like [`ConsumerGroup::poll`].
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.consumer_group.poll_with_heartbeat",
+        skip_all,
+        fields(group_id = self.group_id.as_str(), member_id = self.member_id.as_str(), generation_id = self.generation_id),
+        err
+    )]
     pub async fn poll_with_heartbeat(
         &mut self,
         heartbeat: &mut ConsumerGroupHeartbeat,
@@ -445,6 +466,13 @@ impl ConsumerGroup {
     }
 
     /// Starts a background heartbeat task for this joined group member.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.consumer_group.spawn_heartbeat",
+        skip_all,
+        fields(group_id = self.group_id.as_str(), member_id = self.member_id.as_str(), generation_id = self.generation_id, interval_ms = duration_millis(interval)),
+        err
+    )]
     pub async fn spawn_heartbeat_task(&self, interval: Duration) -> Result<ConsumerGroupHeartbeat> {
         validate_heartbeat_interval(interval)?;
         debug!(
@@ -475,17 +503,27 @@ impl ConsumerGroup {
         let generation_id = self.generation_id;
         let member_id = self.member_id.clone();
         let (shutdown, shutdown_rx) = oneshot::channel();
-        let handle = tokio::spawn(async move {
-            run_background_heartbeat(
-                &mut coordinator,
-                group_id,
-                generation_id,
-                member_id,
-                interval,
-                shutdown_rx,
-            )
-            .await
-        });
+        let heartbeat_span = tracing::debug_span!(
+            "kafka.consumer_group.background_heartbeat",
+            group_id = group_id.as_str(),
+            member_id = member_id.as_str(),
+            generation_id,
+            interval_ms = duration_millis(interval),
+        );
+        let handle = tokio::spawn(
+            async move {
+                run_background_heartbeat(
+                    &mut coordinator,
+                    group_id,
+                    generation_id,
+                    member_id,
+                    interval,
+                    shutdown_rx,
+                )
+                .await
+            }
+            .instrument(heartbeat_span),
+        );
 
         Ok(ConsumerGroupHeartbeat {
             group_id: self.group_id.clone(),
@@ -503,6 +541,13 @@ impl ConsumerGroup {
     }
 
     /// Sends an explicit heartbeat for this group member.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.consumer_group.heartbeat",
+        skip_all,
+        fields(group_id = self.group_id.as_str(), member_id = self.member_id.as_str(), generation_id = self.generation_id),
+        err
+    )]
     pub async fn heartbeat(&mut self) -> Result<()> {
         debug!(
             group_id = self.group_id.as_str(),
@@ -534,6 +579,13 @@ impl ConsumerGroup {
     }
 
     /// Commits the current assignment offsets to the group coordinator.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.consumer_group.commit_offsets",
+        skip_all,
+        fields(group_id = self.group_id.as_str(), member_id = self.member_id.as_str(), generation_id = self.generation_id, assignment_count = self.consumer.assignments().len()),
+        err
+    )]
     pub async fn commit_offsets(&mut self) -> Result<()> {
         let topics = offset_commit_topics(self.consumer.assignments());
         debug!(
