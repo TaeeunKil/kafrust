@@ -781,6 +781,11 @@ Implemented evidence:
   session expiry on all six live profiles, including Kafka 3.7.2 and 4.3.1,
   TLS, SASL_PLAINTEXT, SASL_SSL, and three brokers. The three-broker job also
   passed its subsequent broker-stop producer, consumer, and group checks.
+- Manual run `30065771327` passed broker-wide ListGroups v1 and
+  coordinator-routed DeleteGroups v1 across Kafka 3.7.2, 3.8.1, 3.9.1, and
+  4.3.1 plaintext brokers, TLS, SASL_PLAINTEXT, SASL_SSL, and the three-broker
+  profile. The cleanup path accepted Kafka's expected `GroupIdNotFound` after
+  OffsetDelete removed the empty group's final committed offset.
 
 ## M17 Idempotent Producer
 
