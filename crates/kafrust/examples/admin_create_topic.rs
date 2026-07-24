@@ -1,8 +1,8 @@
 mod common;
 
 use kafrust::{
-    AdminClient, ClientConfig, CreateTopicsOptions, DeleteTopicsOptions, DescribeConfigsOptions,
-    Error, NewTopic, TopicConfigResource,
+    AdminClient, AlterConfigsOptions, ClientConfig, CreateTopicsOptions, DeleteTopicsOptions,
+    DescribeConfigsOptions, Error, NewTopic, TopicConfigAlteration, TopicConfigResource,
 };
 use std::time::{Duration, Instant};
 
@@ -114,6 +114,23 @@ async fn main() -> kafrust::Result<()> {
     }
     println!("described cleanup.policy={cleanup_policy} for topic {topic}");
 
+    let alter_result = admin
+        .incremental_alter_topic_configs(
+            &[TopicConfigAlteration::new(&topic).set("retention.ms", "60000")],
+            AlterConfigsOptions::new(),
+        )
+        .await?;
+    for resource in alter_result.resources() {
+        if !resource.is_success() {
+            return Err(Error::Broker {
+                code: resource.error_code(),
+                context: format!("alter configs for topic {}", resource.name()),
+            });
+        }
+    }
+    wait_for_topic_config_value(&admin, &topic, "retention.ms", "60000").await?;
+    println!("altered retention.ms=60000 for topic {topic}");
+
     let delete_result = admin
         .delete_topics(&[topic.clone()], DeleteTopicsOptions::new())
         .await?;
@@ -132,6 +149,58 @@ async fn main() -> kafrust::Result<()> {
     }
 
     Ok(())
+}
+
+async fn wait_for_topic_config_value(
+    admin: &AdminClient,
+    topic: &str,
+    key: &str,
+    expected: &str,
+) -> kafrust::Result<()> {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        let result = async {
+            let response = admin
+                .describe_topic_configs(
+                    &[TopicConfigResource::with_keys(topic, [key])],
+                    DescribeConfigsOptions::new(),
+                )
+                .await?;
+            let resource = response.resources().first().ok_or_else(|| Error::Broker {
+                code: -1,
+                context: format!("missing config response for topic {topic}"),
+            })?;
+            if !resource.is_success() {
+                return Err(Error::Broker {
+                    code: resource.error_code(),
+                    context: format!("describe configs for topic {topic}"),
+                });
+            }
+            let value = resource
+                .entries()
+                .iter()
+                .find(|entry| entry.name() == key)
+                .and_then(|entry| entry.value());
+            if value != Some(expected) {
+                return Err(Error::Broker {
+                    code: -1,
+                    context: format!(
+                        "expected {key}={expected} for topic {topic}, received {value:?}"
+                    ),
+                });
+            }
+            Ok(())
+        }
+        .await;
+
+        match result {
+            Ok(()) => return Ok(()),
+            Err(_) if Instant::now() < deadline => {
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+            Err(error) => return Err(error),
+        }
+    }
 }
 
 async fn wait_for_topic_metadata(config: &ClientConfig, topic: &str) -> kafrust::Result<usize> {

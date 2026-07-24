@@ -24,6 +24,9 @@ The Kafka 3.7.2 and 4.3.1 plaintext smoke paths cover:
 - Controller-routed CreateTopics v2 followed by Metadata v1 description.
   Manual run `30059517473` passed this path against Kafka 3.7.2 and Kafka
   4.3.1.
+- Admin cluster/topic inspection, CreateTopics v2, bounded metadata propagation,
+  DescribeConfigs v1, and DeleteTopics v3. Manual run `30060723690` passed this
+  lifecycle against Kafka 3.7.2 and Kafka 4.3.1.
 - High-level producer metadata lookup, leader routing, negotiated Produce API selection, single-record send, batch send, gzip-, Snappy-, LZ4-, and Zstd-compressed batch send, and buffered send with `acks=1`. Against Kafka 3.7.2, the current path selects Produce v3 RecordBatch for Gzip, Snappy, and LZ4, and Produce v7 for Zstd.
 - Opt-in idempotent single-record, batch, and buffered produce using
   `InitProducerId v0`, `acks=all`, and partition-scoped RecordBatch producer
@@ -64,6 +67,9 @@ The Kafka 3.7.2 multi-broker plaintext smoke path covers:
 - Controller discovery, CreateTopics v2, and follow-up Metadata v1 description
   through three externally advertised broker addresses. Manual run
   `30059517473` passed this path.
+- The complete admin lifecycle, including all-topic listing, DescribeConfigs
+  v1, bounded metadata propagation, and DeleteTopics v3. Manual run
+  `30060723690` passed before the existing broker-stop failover checks.
 - The `broker_roundtrip` example against multi-broker advertised listener metadata.
 - High-level producer single-record send with explicit partition routing,
   buffered send, batch send with explicit partition routing, and gzip-,

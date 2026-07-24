@@ -722,6 +722,9 @@ Implemented evidence:
 - DescribeConfigs v1 supports all or selected topic keys, optional synonyms,
   nullable and sensitive values, raw resource errors, typed config sources,
   broker throttle time, tracing, and shared broker-error metrics.
+- IncrementalAlterConfigs v0 exposes Set, Delete, Append, and Subtract
+  operations, validate-only mode, resource-level atomicity and partial
+  outcomes, broker throttle time, tracing, and broker-error metrics.
 - The admin lifecycle example waits for asynchronous metadata propagation in
   multi-broker clusters and verifies `cleanup.policy` through
   `describe_topic_configs` before deleting the topic.
@@ -748,10 +751,14 @@ Implemented evidence:
 - Manual `Live Kafka Smoke` run `30059517473` passed CreateTopics v2 and its
   follow-up Metadata v1 description on 2026-07-24 against Kafka 3.7.2 and
   4.3.1 single-node brokers and the Kafka 3.7.2 three-broker cluster.
+- Manual run `30060723690` passed cluster/topic inspection, bounded metadata
+  propagation, CreateTopics v2, DescribeConfigs v1, and DeleteTopics v3 on
+  Kafka 3.7.2 and 4.3.1 single-node brokers and the Kafka 3.7.2 three-broker
+  cluster. The same three-broker job passed the subsequent broker-stop
+  producer/consumer failover checks.
 
 Remaining:
 
-- alter topic configs
 - describe consumer groups and evaluate consumer-group offset deletion
 
 ## M17 Idempotent Producer
