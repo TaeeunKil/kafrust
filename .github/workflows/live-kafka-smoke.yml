@@ -262,7 +262,8 @@ jobs:
 
       - name: Run multi-broker producer example
         env:
-          KAFRUST_PARTITION: "1"
+          KAFRUST_KEY: abc
+          KAFRUST_EXPECT_PARTITION: "3"
         run: cargo run -p kafrust --example producer_send
 
       - name: Run multi-broker producer batch example

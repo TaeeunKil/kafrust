@@ -105,6 +105,9 @@ async fn main() -> kafrust::Result<()> {
 }
 ```
 
+When no partition is specified, keyed records use Kafka-compatible Murmur2
+partitioning. Keyless records currently select the first partition.
+
 ## Batch Producer
 
 `Producer::send_batch` returns metadata in input order. Use

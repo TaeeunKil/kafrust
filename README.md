@@ -166,6 +166,9 @@ async fn main() -> kafrust::Result<()> {
 }
 ```
 
+When no partition is specified, keyed records use Kafka-compatible Murmur2
+partitioning. Keyless records currently select the first partition.
+
 ### Transactional Producer
 
 Transactional production is available as an opt-in alpha:

@@ -2770,16 +2770,66 @@ fn choose_partition(record: &ProducerRecord, metadata: &MetadataResponseV1) -> R
         return Ok(partition);
     }
 
-    metadata
+    let mut partitions = metadata
         .topics
         .iter()
         .find(|topic| topic.name == record.topic())
-        .and_then(|topic| topic.partitions.first())
-        .map(|partition| partition.partition_index)
+        .map(|topic| {
+            topic
+                .partitions
+                .iter()
+                .map(|partition| partition.partition_index)
+                .collect::<Vec<_>>()
+        })
         .ok_or_else(|| Error::UnknownTopicOrPartition {
             topic: record.topic().to_owned(),
             partition: -1,
-        })
+        })?;
+    partitions.sort_unstable();
+    partitions.dedup();
+    if partitions.is_empty() {
+        return Err(Error::UnknownTopicOrPartition {
+            topic: record.topic().to_owned(),
+            partition: -1,
+        });
+    }
+
+    let index = record.key_ref().map_or(0, |key| {
+        usize::try_from(kafka_murmur2(key) & 0x7fff_ffff).unwrap_or(0) % partitions.len()
+    });
+    Ok(partitions[index])
+}
+
+fn kafka_murmur2(data: &[u8]) -> u32 {
+    const SEED: u32 = 0x9747_b28c;
+    const MIX: u32 = 0x5bd1_e995;
+
+    let mut hash = SEED ^ u32::try_from(data.len()).unwrap_or(u32::MAX);
+    let mut chunks = data.chunks_exact(4);
+    for chunk in &mut chunks {
+        let mut value = u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
+        value = value.wrapping_mul(MIX);
+        value ^= value >> 24;
+        value = value.wrapping_mul(MIX);
+        hash = hash.wrapping_mul(MIX);
+        hash ^= value;
+    }
+
+    let remainder = chunks.remainder();
+    if remainder.len() >= 3 {
+        hash ^= u32::from(remainder[2]) << 16;
+    }
+    if remainder.len() >= 2 {
+        hash ^= u32::from(remainder[1]) << 8;
+    }
+    if let Some(first) = remainder.first() {
+        hash ^= u32::from(*first);
+        hash = hash.wrapping_mul(MIX);
+    }
+
+    hash ^= hash >> 13;
+    hash = hash.wrapping_mul(MIX);
+    hash ^ (hash >> 15)
 }
 
 fn leader_for(
@@ -3243,10 +3293,10 @@ mod tests {
         delivery_error_from_request_error, enqueue_buffered_record, fail_buffered_deliveries,
         idempotent_produce_error_disposition, invalidate_metadata_cache,
         invalidate_metadata_cache_for_record_indexes, is_retryable_transaction_coordinator_error,
-        largest_fitting_prefix, leader_for, message_set_message, record_batch_attempt_outcomes,
-        record_batch_message, select_produce_batch_version, select_produce_version,
-        transaction_offset_topics, Acks, BatchRecord, BufferedFlushReason, BufferedProduceRequest,
-        BufferedProducerCommand, BufferedProducerState, Compression,
+        kafka_murmur2, largest_fitting_prefix, leader_for, message_set_message,
+        record_batch_attempt_outcomes, record_batch_message, select_produce_batch_version,
+        select_produce_version, transaction_offset_topics, Acks, BatchRecord, BufferedFlushReason,
+        BufferedProduceRequest, BufferedProducerCommand, BufferedProducerState, Compression,
         IdempotentBatchSequenceTracker, IdempotentProduceErrorDisposition, IdempotentProducerState,
         PreparedBatchRecord, ProduceBatchKey, ProduceVersion, Producer, ProducerBatchFailure,
         ProducerBatchRecordOutcome, ProducerBatchReport, ProducerConfig, ProducerDelivery,
@@ -4526,11 +4576,34 @@ mod tests {
     }
 
     #[test]
-    fn chooses_first_partition_when_record_has_no_partition() {
+    fn chooses_first_partition_when_record_has_no_partition_or_key() {
         let metadata = metadata_fixture();
         let record = ProducerRecord::to("orders");
 
         assert_eq!(choose_partition(&record, &metadata).unwrap(), 0);
+    }
+
+    #[test]
+    fn hashes_record_key_with_kafka_murmur2() {
+        assert_eq!(kafka_murmur2(b"abc"), 479_470_107);
+        assert_eq!(kafka_murmur2(b"21") as i32, -973_932_308);
+        assert_eq!(kafka_murmur2(b"foobar") as i32, -790_332_482);
+        assert_eq!(
+            kafka_murmur2(b"a-little-bit-long-string") as i32,
+            -985_981_536
+        );
+        assert_eq!(
+            kafka_murmur2(b"a-little-bit-longer-string") as i32,
+            -1_486_304_829
+        );
+    }
+
+    #[test]
+    fn chooses_kafka_compatible_partition_for_record_key() {
+        let metadata = metadata_fixture();
+        let record = ProducerRecord::to("orders").key("abc");
+
+        assert_eq!(choose_partition(&record, &metadata).unwrap(), 1);
     }
 
     #[test]
