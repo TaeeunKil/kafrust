@@ -905,6 +905,9 @@ Evidence:
   produce transaction that committed group offsets against Kafka 3.7.2 and
   Kafka 4.3.1. All six plaintext, multi-broker, TLS, SASL_PLAINTEXT, and
   SASL_SSL jobs passed.
+- Manual run `30063099869` passed the generation-fenced `TxnOffsetCommit v3`
+  path on Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext brokers plus the
+  Kafka 3.7.2 TLS, SASL_PLAINTEXT, SASL_SSL, and three-broker profiles.
 
 Known limits:
 

@@ -61,10 +61,11 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
   results after real commit and abort flows on Kafka 3.7.2 and Kafka 4.3.1.
 - Transactional consumer group offset integration through
   `Producer::send_group_offsets_to_transaction`, `AddOffsetsToTxn v0`, and
-  generation-fenced `TxnOffsetCommit v3`. The earlier v0 path passed manual
-  run `29995762812`; v3 live qualification is pending. That run passed a read-committed group
-  poll followed by atomic output production and group offset commit on Kafka
-  3.7.2 and Kafka 4.3.1.
+  generation-fenced `TxnOffsetCommit v3`. Manual run `30063099869` passed a
+  read-committed group poll followed by atomic output production and the
+  generation-fenced group offset commit on Kafka 3.7.2, 3.8.1, 3.9.1, and
+  4.3.1 plaintext brokers plus the Kafka 3.7.2 TLS, SASL_PLAINTEXT, SASL_SSL,
+  and three-broker profiles.
 - Gzip Produce v3 RecordBatch encoding and Fetch v4 RecordBatch decoding are
   covered by focused tests and the plaintext live smoke profile.
 - Snappy Produce v3 RecordBatch encoding and Fetch v4 RecordBatch decoding are

@@ -421,7 +421,8 @@ Verified high-level paths include:
   sends support explicit begin, commit, and abort.
   `IsolationLevel::ReadCommitted` hides aborted transaction records for direct
   and group consumers, and current group assignments can be committed through
-  `Producer::send_offsets_to_transaction`. Transactional buffered sends and
+  generation-fenced `Producer::send_group_offsets_to_transaction`.
+  Transactional buffered sends and
   admin APIs beyond topic inspection, configuration description and alteration,
   creation/deletion, and consumer-group description are not implemented yet.
   Shared request, retry, broker-error, producer, consumer, batch, and
