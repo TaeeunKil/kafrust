@@ -1007,7 +1007,7 @@ Implemented evidence:
 
 ## M20 Compatibility Matrix And Migration Guide
 
-Status: In progress.
+Status: Complete.
 
 Goal: make replacement decisions concrete for teams comparing kafrust with existing Kafka clients.
 
@@ -1044,6 +1044,15 @@ Evidence:
   direct consumer, classic consumer group, transactions, and admin workflows;
   it also identifies blocking feature gaps and requires staged dual-client,
   failure-injection, performance, and canary qualification.
+- Manual run `30062587935` passed the complete single-node plaintext path on
+  Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1. The same run passed the secured
+  Kafka 3.7.2 profiles and the three-broker broker-stop failover profile.
+- `docs/project-strategy.md` records a dated comparison with krafka, rskafka,
+  and kafka-rust while distinguishing self-reported feature claims from
+  kafrust's own verified evidence.
+- `docs/release.md` requires CI-equivalent checks, package dry runs,
+  docs.rs verification, a fresh published-crate compile, a GitHub release,
+  and the relevant live broker workflow.
 
 ## M21 Broad Kafka Client Replacement
 
