@@ -3,6 +3,7 @@ use crate::error::{Error, Result};
 use crate::metrics::ClientMetrics;
 use crate::scram::{self, ScramHash};
 use core::fmt;
+use kafrust_protocol::codec::DecodeLimits;
 use std::str;
 #[cfg(feature = "tls")]
 use std::sync::Arc;
@@ -130,6 +131,7 @@ pub struct ClientConfig {
     client_id: Option<String>,
     request_timeout: Duration,
     max_response_bytes: usize,
+    decode_limits: DecodeLimits,
     security_protocol: SecurityProtocol,
     tls_server_name: Option<String>,
     tls_root_certificates_der: Vec<Vec<u8>>,
@@ -145,6 +147,7 @@ impl ClientConfig {
             client_id: None,
             request_timeout: Duration::from_millis(DEFAULT_REQUEST_TIMEOUT_MS),
             max_response_bytes: DEFAULT_MAX_RESPONSE_BYTES,
+            decode_limits: DecodeLimits::default(),
             security_protocol: SecurityProtocol::Plaintext,
             tls_server_name: None,
             tls_root_certificates_der: Vec::new(),
@@ -168,6 +171,18 @@ impl ClientConfig {
     /// Sets the maximum broker response payload allocated for one request.
     pub fn max_response_bytes(mut self, max_response_bytes: usize) -> Self {
         self.max_response_bytes = max_response_bytes;
+        self
+    }
+
+    /// Sets the maximum number of elements allocated for one Kafka array.
+    pub fn max_decode_array_elements(mut self, max: usize) -> Self {
+        self.decode_limits = self.decode_limits.with_max_array_elements(max);
+        self
+    }
+
+    /// Sets the maximum uncompressed size of one fetched record batch.
+    pub fn max_decompressed_record_bytes(mut self, max: usize) -> Self {
+        self.decode_limits = self.decode_limits.with_max_decompressed_record_bytes(max);
         self
     }
 
@@ -253,6 +268,11 @@ impl ClientConfig {
         self.max_response_bytes
     }
 
+    /// Returns the resource limits applied while decoding broker responses.
+    pub fn decode_limits(&self) -> DecodeLimits {
+        self.decode_limits
+    }
+
     /// Returns the shared metrics handle used by connections from this configuration.
     pub fn metrics_ref(&self) -> ClientMetrics {
         self.metrics.clone()
@@ -315,6 +335,7 @@ impl ClientConfig {
                     self.client_id.clone(),
                     self.request_timeout,
                     self.max_response_bytes,
+                    self.decode_limits,
                     self.metrics.clone(),
                 )
                 .await
@@ -335,6 +356,7 @@ impl ClientConfig {
             self.client_id.clone(),
             self.request_timeout,
             self.max_response_bytes,
+            self.decode_limits,
             self.metrics.clone(),
         )
         .await?;
@@ -404,6 +426,7 @@ impl ClientConfig {
             self.client_id.clone(),
             Some(self.request_timeout),
             self.max_response_bytes,
+            self.decode_limits,
             self.metrics.clone(),
         ))
     }
@@ -594,12 +617,19 @@ mod tests {
         let config = ClientConfig::new(["localhost:9092"])
             .client_id("kafrust-test")
             .request_timeout_ms(5_000)
-            .max_response_bytes(8 * 1024 * 1024);
+            .max_response_bytes(8 * 1024 * 1024)
+            .max_decode_array_elements(12_345)
+            .max_decompressed_record_bytes(4 * 1024 * 1024);
 
         assert_eq!(config.bootstrap_servers(), &["localhost:9092".to_owned()]);
         assert_eq!(config.client_id_ref(), Some("kafrust-test"));
         assert_eq!(config.request_timeout(), Duration::from_millis(5_000));
         assert_eq!(config.max_response_bytes_ref(), 8 * 1024 * 1024);
+        assert_eq!(config.decode_limits().max_array_elements(), 12_345);
+        assert_eq!(
+            config.decode_limits().max_decompressed_record_bytes(),
+            4 * 1024 * 1024
+        );
         assert_eq!(config.security_protocol_ref(), SecurityProtocol::Plaintext);
     }
 

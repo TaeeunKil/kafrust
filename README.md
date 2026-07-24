@@ -312,6 +312,8 @@ Primary public entry points:
 - `ClientMetrics` and `ClientMetricsSnapshot` for request-level observability.
 - `Error::ResponseTooLarge` and `max_response_bytes` builders for bounded
   broker response allocation.
+- `max_decode_array_elements` and `max_decompressed_record_bytes` builders for
+  bounded protocol collections and compressed Fetch record batches.
 - `kafrust::protocol` for the companion `kafrust-protocol` crate.
 
 Generated API documentation:

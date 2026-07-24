@@ -563,7 +563,7 @@ mod tests {
         ProduceRequestV2, ProduceRequestV3, ProduceRequestV7, ProduceResponseV2, ProduceResponseV7,
         ProduceTopicV2, ProduceTopicV3, RecordBatchIdentity, RecordBatchMessage,
     };
-    use crate::codec::Decoder;
+    use crate::codec::{DecodeLimits, Decoder};
     use crate::record_batch::RecordBatchCompression;
     use crate::{api::fetch::FetchResponseV2, codec::Encoder};
 
@@ -871,6 +871,41 @@ mod tests {
         assert_eq!(record.key.as_deref(), Some(&b"order-1"[..]));
         assert_eq!(record.value.as_deref(), Some(&b"created"[..]));
         assert!(decoder.is_empty());
+    }
+
+    #[test]
+    fn fetch_decoder_applies_custom_decompression_limit_to_record_batch() {
+        let record_set = encode_record_batch_set_with_compression(
+            &[RecordBatchMessage::new(
+                Some(b"order-1".to_vec()),
+                Some(vec![b'x'; 1024]),
+                1_000,
+            )],
+            RecordBatchCompression::Zstd,
+        )
+        .unwrap();
+
+        let mut bytes = Encoder::new();
+        bytes.write_i32(0);
+        bytes.write_i32(1);
+        bytes.write_string("orders").unwrap();
+        bytes.write_i32(1);
+        bytes.write_i32(0);
+        bytes.write_i16(0);
+        bytes.write_i64(43);
+        bytes.write_bytes(&record_set).unwrap();
+        let bytes = bytes.into_bytes();
+        let limits = DecodeLimits::new().with_max_decompressed_record_bytes(64);
+        let mut decoder = Decoder::with_limits(&bytes, limits);
+
+        assert!(matches!(
+            FetchResponseV2::decode_body(&mut decoder),
+            Err(crate::Error::LimitExceeded {
+                kind: "decompressed record batch bytes",
+                max: 64,
+                ..
+            })
+        ));
     }
 
     #[test]

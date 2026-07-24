@@ -1,5 +1,55 @@
 use crate::error::{Error, Result};
 
+/// Resource limits applied while decoding broker responses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DecodeLimits {
+    max_array_elements: usize,
+    max_decompressed_record_bytes: usize,
+}
+
+impl DecodeLimits {
+    /// Default maximum number of elements in one decoded Kafka array.
+    pub const DEFAULT_MAX_ARRAY_ELEMENTS: usize = 1_000_000;
+    /// Default maximum uncompressed size of one Kafka record batch.
+    pub const DEFAULT_MAX_DECOMPRESSED_RECORD_BYTES: usize = 64 * 1024 * 1024;
+
+    /// Creates the default decoding limits.
+    pub const fn new() -> Self {
+        Self {
+            max_array_elements: Self::DEFAULT_MAX_ARRAY_ELEMENTS,
+            max_decompressed_record_bytes: Self::DEFAULT_MAX_DECOMPRESSED_RECORD_BYTES,
+        }
+    }
+
+    /// Sets the maximum number of elements in one decoded Kafka array.
+    pub const fn with_max_array_elements(mut self, max: usize) -> Self {
+        self.max_array_elements = max;
+        self
+    }
+
+    /// Sets the maximum uncompressed size of one Kafka record batch.
+    pub const fn with_max_decompressed_record_bytes(mut self, max: usize) -> Self {
+        self.max_decompressed_record_bytes = max;
+        self
+    }
+
+    /// Returns the maximum number of elements in one decoded Kafka array.
+    pub const fn max_array_elements(self) -> usize {
+        self.max_array_elements
+    }
+
+    /// Returns the maximum uncompressed size of one Kafka record batch.
+    pub const fn max_decompressed_record_bytes(self) -> usize {
+        self.max_decompressed_record_bytes
+    }
+}
+
+impl Default for DecodeLimits {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TaggedField {
     pub tag: u32,
@@ -10,11 +60,38 @@ pub struct TaggedField {
 pub struct Decoder<'a> {
     input: &'a [u8],
     position: usize,
+    limits: DecodeLimits,
 }
 
 impl<'a> Decoder<'a> {
     pub fn new(input: &'a [u8]) -> Self {
-        Self { input, position: 0 }
+        Self::with_limits(input, DecodeLimits::default())
+    }
+
+    /// Creates a decoder with explicit resource limits.
+    pub fn with_limits(input: &'a [u8], limits: DecodeLimits) -> Self {
+        Self {
+            input,
+            position: 0,
+            limits,
+        }
+    }
+
+    /// Returns the resource limits inherited by nested decoders.
+    pub const fn limits(&self) -> DecodeLimits {
+        self.limits
+    }
+
+    /// Rejects a collection length before allocating storage for it.
+    pub fn ensure_collection_length(&self, kind: &'static str, length: usize) -> Result<()> {
+        if length > self.limits.max_array_elements {
+            return Err(Error::LimitExceeded {
+                kind,
+                actual: length,
+                max: self.limits.max_array_elements,
+            });
+        }
+        Ok(())
     }
 
     pub fn remaining(&self) -> usize {
@@ -225,6 +302,7 @@ impl<'a> Decoder<'a> {
             return Err(Error::NegativeLength { kind, length });
         }
         let length = usize::try_from(length).map_err(|_| Error::LengthOverflow(kind))?;
+        self.ensure_collection_length(kind, length)?;
         let mut values = Vec::with_capacity(length);
         for _ in 0..length {
             values.push(read_item(self)?);
@@ -243,6 +321,7 @@ impl<'a> Decoder<'a> {
         }
         let length =
             usize::try_from(encoded_length - 1).map_err(|_| Error::LengthOverflow(kind))?;
+        self.ensure_collection_length(kind, length)?;
         let mut values = Vec::with_capacity(length);
         for _ in 0..length {
             values.push(read_item(self)?);
@@ -253,6 +332,7 @@ impl<'a> Decoder<'a> {
     pub fn read_tagged_fields(&mut self) -> Result<Vec<TaggedField>> {
         let count = self.read_unsigned_varint()?;
         let count = usize::try_from(count).map_err(|_| Error::LengthOverflow("tagged fields"))?;
+        self.ensure_collection_length("tagged fields", count)?;
         let mut fields = Vec::with_capacity(count);
         for _ in 0..count {
             let tag = self.read_unsigned_varint()?;

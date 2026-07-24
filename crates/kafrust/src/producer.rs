@@ -2197,6 +2197,18 @@ impl ProducerConfig {
         self
     }
 
+    /// Sets the maximum number of elements allocated for one Kafka response array.
+    pub fn max_decode_array_elements(mut self, max: usize) -> Self {
+        self.client = self.client.max_decode_array_elements(max);
+        self
+    }
+
+    /// Sets the maximum uncompressed size of one fetched record batch.
+    pub fn max_decompressed_record_bytes(mut self, max: usize) -> Self {
+        self.client = self.client.max_decompressed_record_bytes(max);
+        self
+    }
+
     /// Sets the shared metrics handle used by producer broker connections.
     pub fn metrics(mut self, metrics: ClientMetrics) -> Self {
         self.client = self.client.metrics(metrics);

@@ -327,13 +327,21 @@ The buffered producer command queue defaults to 1024 records. Configure it with
 is full, `BufferedProducer::send` waits for capacity instead of allocating an
 unbounded queue or dropping an accepted record.
 
-## Response Memory Limit
+## Decode Memory Limits
 
 Broker response frame allocation is limited to `100 MiB` by default. Set
 `max_response_bytes(bytes)` on `ClientConfig`, `ProducerConfig`,
 `ConsumerConfig`, or `ConsumerGroupConfig` when a workload needs a different
 limit. A broker frame length above the configured limit returns
 `Error::ResponseTooLarge { size, max }` before allocating the response payload.
+
+Kafka arrays are limited to `1,000,000` elements and an uncompressed fetched
+record batch is limited to `64 MiB` by default. Configure these limits with
+`max_decode_array_elements(elements)` and
+`max_decompressed_record_bytes(bytes)` on the same configuration builders.
+Declared arrays, record counts, and record headers are checked before reserving
+their vectors. Gzip, Snappy, LZ4, and Zstd decoders enforce the batch limit and
+return `protocol::Error::LimitExceeded { kind, actual, max }`.
 
 The limit applies independently to each broker request. It must be large enough
 for metadata, fetch, and other expected responses; setting it below a valid
