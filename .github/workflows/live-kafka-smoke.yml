@@ -8,6 +8,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   KAFRUST_BOOTSTRAP_SERVERS: localhost:9092
+  KAFRUST_ADMIN_TOPIC: kafrust-admin-smoke
   KAFRUST_GROUP_ID: kafrust-smoke
   KAFRUST_TOPIC: kafrust-smoke
 
@@ -75,6 +76,9 @@ jobs:
 
       - name: Run broker roundtrip
         run: cargo test -p kafrust --test broker_roundtrip -- --nocapture
+
+      - name: Run admin create topic example
+        run: cargo run -p kafrust --example admin_create_topic
 
       - name: Run producer example
         run: cargo run -p kafrust --example producer_send
@@ -152,6 +156,7 @@ jobs:
     timeout-minutes: 25
     env:
       KAFRUST_BOOTSTRAP_SERVERS: localhost:19092,localhost:19093,localhost:19094
+      KAFRUST_ADMIN_TOPIC: kafrust-admin-smoke-multi
       KAFRUST_EXPECTED_BROKERS: "3"
       KAFRUST_GROUP_ID: kafrust-smoke-multi
       KAFRUST_TOPIC: kafrust-smoke-multi
@@ -233,6 +238,12 @@ jobs:
 
       - name: Run multi-broker roundtrip example
         run: cargo run -p kafrust --example broker_roundtrip
+
+      - name: Run multi-broker admin create topic example
+        env:
+          KAFRUST_ADMIN_PARTITIONS: "3"
+          KAFRUST_ADMIN_REPLICATION_FACTOR: "3"
+        run: cargo run -p kafrust --example admin_create_topic
 
       - name: Run multi-broker producer example
         env:

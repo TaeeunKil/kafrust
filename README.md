@@ -27,6 +27,7 @@ features immediately, `rust-rdkafka` is still the practical Rust default.
 - [Install](#install)
   - [Requirements](#requirements)
 - [Usage](#usage)
+  - [Admin](#admin)
   - [Producer](#producer)
   - [Transactional Producer](#transactional-producer)
   - [Buffered Producer](#buffered-producer)
@@ -98,6 +99,27 @@ KAFRUST_BOOTSTRAP_SERVERS=localhost:9092 \
 KAFRUST_TOPIC=kafrust-smoke \
 cargo run -p kafrust --example producer_send
 ```
+
+### Admin
+
+```rust
+use kafrust::{AdminClient, ClientConfig, CreateTopicsOptions, NewTopic};
+
+let admin = AdminClient::new(ClientConfig::new(["localhost:9092"]));
+let result = admin
+    .create_topics(
+        &[NewTopic::new("orders", 6, 3).config("cleanup.policy", "compact")],
+        CreateTopicsOptions::new(),
+    )
+    .await?;
+
+for topic in result.topics() {
+    println!("{}: Kafka error {}", topic.name(), topic.error_code());
+}
+```
+
+CreateTopics v2 discovers the active controller and preserves per-topic partial
+success and error responses. See [Admin API](docs/admin-api.md).
 
 ### Producer
 
@@ -292,10 +314,10 @@ See [Compatibility](docs/compatibility.md) and
   commit, and abort. `IsolationLevel::ReadCommitted` hides aborted transaction
   records for direct and group consumers, and current group assignments can be
   committed through `Producer::send_offsets_to_transaction`. Transactional
-  buffered sends, admin APIs, and live broker failure injection remain separate
-  roadmap items. Shared request, retry, broker-error, producer, consumer,
-  batch, and buffered-queue metrics are available together with high-level
-  operation and `kafka.request` spans.
+  buffered sends, remaining admin APIs, and live broker failure injection
+  remain separate roadmap items. Shared request, retry, broker-error, producer,
+  consumer, batch, and buffered-queue metrics are available together with
+  high-level operation and `kafka.request` spans.
 - `acks=0` remains unsupported because the current request loop expects a broker
   response.
 
@@ -304,6 +326,7 @@ See [Compatibility](docs/compatibility.md) and
 Primary public entry points:
 
 - `Client` for low-level Kafka request roundtrips.
+- `AdminClient`, `NewTopic`, and CreateTopics option/result types.
 - `ProducerConfig`, `Producer`, `BufferedProducer`, and `ProducerRecord`.
 - `Compression` for opt-in producer RecordBatch compression.
 - `ConsumerConfig`, `Consumer`, `ConsumerAssignment`, and `ConsumerRecord`.

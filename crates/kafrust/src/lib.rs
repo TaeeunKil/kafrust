@@ -2,6 +2,8 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+/// Kafka administration API.
+pub mod admin;
 /// Low-level Kafka request client.
 pub mod client;
 /// Shared connection configuration.
@@ -19,6 +21,9 @@ pub mod producer;
 
 mod scram;
 
+pub use admin::{
+    AdminClient, CreateTopicResult, CreateTopicsOptions, CreateTopicsResult, NewTopic,
+};
 pub use client::Client;
 pub use config::{ClientConfig, SaslCredentials, SaslMechanism, SecurityProtocol};
 pub use consumer::{Consumer, ConsumerAssignment, ConsumerConfig, ConsumerRecord, IsolationLevel};

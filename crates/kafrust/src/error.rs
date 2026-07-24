@@ -18,6 +18,8 @@ pub enum BrokerErrorKind {
     RequestTimedOut,
     /// Kafka reported that a replica is unavailable.
     ReplicaNotAvailable,
+    /// Kafka rejected an invalid topic name or definition.
+    InvalidTopic,
     /// Kafka reported that the coordinator is unavailable.
     CoordinatorNotAvailable,
     /// Kafka reported that the coordinator is still loading its state.
@@ -34,6 +36,24 @@ pub enum BrokerErrorKind {
     InvalidSessionTimeout,
     /// Kafka reported that a group rebalance is in progress.
     RebalanceInProgress,
+    /// Kafka denied access to a topic.
+    TopicAuthorizationFailed,
+    /// Kafka denied access to the cluster operation.
+    ClusterAuthorizationFailed,
+    /// Kafka reported that the topic already exists.
+    TopicAlreadyExists,
+    /// Kafka rejected the requested partition count.
+    InvalidPartitions,
+    /// Kafka rejected the requested replication factor.
+    InvalidReplicationFactor,
+    /// Kafka rejected an explicit replica assignment.
+    InvalidReplicaAssignment,
+    /// Kafka rejected a topic or broker configuration.
+    InvalidConfig,
+    /// Kafka reported that this broker is not the active controller.
+    NotController,
+    /// Kafka rejected an invalid request.
+    InvalidRequest,
     /// Kafka received a producer sequence larger than the expected sequence.
     OutOfOrderSequenceNumber,
     /// Kafka recognized a retry of an already appended producer sequence.
@@ -58,11 +78,21 @@ impl BrokerErrorKind {
             14 => Self::CoordinatorLoadInProgress,
             15 => Self::CoordinatorNotAvailable,
             16 => Self::NotCoordinator,
+            17 => Self::InvalidTopic,
             22 => Self::IllegalGeneration,
             23 => Self::InconsistentGroupProtocol,
             25 => Self::UnknownMemberId,
             26 => Self::InvalidSessionTimeout,
             27 => Self::RebalanceInProgress,
+            29 => Self::TopicAuthorizationFailed,
+            31 => Self::ClusterAuthorizationFailed,
+            36 => Self::TopicAlreadyExists,
+            37 => Self::InvalidPartitions,
+            38 => Self::InvalidReplicationFactor,
+            39 => Self::InvalidReplicaAssignment,
+            40 => Self::InvalidConfig,
+            41 => Self::NotController,
+            42 => Self::InvalidRequest,
             45 => Self::OutOfOrderSequenceNumber,
             46 => Self::DuplicateSequenceNumber,
             47 => Self::InvalidProducerEpoch,
@@ -267,6 +297,14 @@ mod tests {
         assert_eq!(
             BrokerErrorKind::from_code(27),
             BrokerErrorKind::RebalanceInProgress
+        );
+        assert_eq!(
+            BrokerErrorKind::from_code(36),
+            BrokerErrorKind::TopicAlreadyExists
+        );
+        assert_eq!(
+            BrokerErrorKind::from_code(41),
+            BrokerErrorKind::NotController
         );
         assert_eq!(
             BrokerErrorKind::from_code(45),

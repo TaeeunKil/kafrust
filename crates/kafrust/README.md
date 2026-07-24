@@ -7,9 +7,9 @@
 A pure Rust Kafka client with no librdkafka or C toolchain dependency.
 
 `kafrust` is the high-level client crate in the kafrust workspace. It provides
-Tokio-based producer, direct consumer, and alpha classic consumer group APIs on
-top of the companion [`kafrust-protocol`](https://docs.rs/kafrust-protocol)
-wire-format crate.
+Tokio-based admin, producer, direct consumer, and alpha classic consumer group
+APIs on top of the companion
+[`kafrust-protocol`](https://docs.rs/kafrust-protocol) wire-format crate.
 
 Current release: `0.2.1`.
 
@@ -29,6 +29,31 @@ default today.
 The public model intentionally exposes Kafka terms such as bootstrap servers,
 client IDs, topics, partitions, offsets, acknowledgements, metadata refresh,
 consumer groups, generations, members, heartbeats, and commits.
+
+## Admin
+
+```rust,no_run
+use kafrust::{AdminClient, ClientConfig, CreateTopicsOptions, NewTopic};
+
+# async fn example() -> kafrust::Result<()> {
+let admin = AdminClient::new(ClientConfig::new(["localhost:9092"]));
+let result = admin
+    .create_topics(
+        &[NewTopic::new("orders", 6, 3).config("cleanup.policy", "compact")],
+        CreateTopicsOptions::new(),
+    )
+    .await?;
+
+for topic in result.topics() {
+    println!("{}: Kafka error {}", topic.name(), topic.error_code());
+}
+# Ok(())
+# }
+```
+
+CreateTopics preserves Kafka's per-topic partial results and routes through
+the active controller. See the repository's `docs/admin-api.md` for automatic
+and manual replica assignment.
 
 ## Install
 
@@ -390,10 +415,10 @@ Verified high-level paths include:
   sends support explicit begin, commit, and abort.
   `IsolationLevel::ReadCommitted` hides aborted transaction records for direct
   and group consumers, and current group assignments can be committed through
-  `Producer::send_offsets_to_transaction`. Transactional buffered sends, admin
-  APIs and transactional buffered sends are not implemented yet. Shared
-  request, retry, broker-error, producer, consumer, batch, and buffered-queue
-  metrics are available together with high-level operation and request spans.
+  `Producer::send_offsets_to_transaction`. Transactional buffered sends and
+  admin APIs beyond CreateTopics are not implemented yet. Shared request,
+  retry, broker-error, producer, consumer, batch, and buffered-queue metrics
+  are available together with high-level operation and request spans.
 - `acks=0` remains unsupported because the current request loop expects a broker
   response.
 

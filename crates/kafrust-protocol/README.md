@@ -36,9 +36,11 @@ client paths:
 - frame encoding and decoding
 - `ApiVersions v0`
 - `Metadata v1`
+- `CreateTopics v2`
 - `FindCoordinator v1`
 - `Produce v2` MessageSet and `Produce v3` RecordBatch paths
-- `Fetch v2` response decoding for MessageSet and RecordBatch records
+- `Fetch v2` and `Fetch v4` request/response decoding for MessageSet and
+  RecordBatch records
 - `JoinGroup v2`
 - `SyncGroup v2`
 - `Heartbeat v2`
@@ -46,6 +48,8 @@ client paths:
 - `OffsetCommit v2`
 - `SaslHandshake v1`
 - `SaslAuthenticate v0`
+- `InitProducerId v0`, `AddPartitionsToTxn v0`, `AddOffsetsToTxn v0`,
+  `TxnOffsetCommit v0`, and `EndTxn v0`
 - classic consumer protocol subscription and assignment payloads
 
 ## Encoding Example
