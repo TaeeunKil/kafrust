@@ -1108,6 +1108,10 @@ Implemented evidence:
 - Keyless producer records use per-topic batch-sticky round-robin routing.
   Single sends rotate after completion, records in the same batch or buffered
   flush stay together, and retries keep the original sticky partition.
+- Manual `Live Kafka Smoke` run `30066831820` passed the exact
+  `0,1,2,3,4,5,0` keyless rotation sequence against a six-partition,
+  three-broker Kafka 3.7.2 topic while all seven regression profiles remained
+  green.
 - Manual `Live Kafka Smoke` run `30066328105` passed key-derived producer
   routing and buffered fetch-back across every selected partition on the
   three-broker Kafka 3.7.2 profile. The same run passed Kafka 3.7.2, 3.8.1,
