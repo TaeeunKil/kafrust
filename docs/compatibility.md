@@ -8,14 +8,14 @@ The `0.2.x` alpha line is verified against Apache Kafka 3.7.2, 3.8.1, 3.9.1, and
 
 | Broker | Mode | Security | Verification | Status |
 | --- | --- | --- | --- | --- |
-| Apache Kafka 3.7.2 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, manual run `29995762812` on 2026-07-23 | Passing |
-| Apache Kafka 3.7.2 | three-broker KRaft | PLAINTEXT | `Live Kafka Smoke` multi-broker job, manual run `29995762812` on 2026-07-23 | Passing |
-| Apache Kafka 3.7.2 | single-node KRaft | TLS | `Live Kafka Smoke` TLS job, manual run `29995762812` on 2026-07-23 | Passing |
-| Apache Kafka 3.7.2 | single-node KRaft | SASL_PLAINTEXT with SASL/PLAIN | `Live Kafka Smoke` SASL_PLAINTEXT job, manual run `29995762812` on 2026-07-23 | Passing |
-| Apache Kafka 3.7.2 | single-node KRaft | SASL_SSL with SCRAM-SHA-256 | `Live Kafka Smoke` SASL_SSL SCRAM job, manual run `29995762812` on 2026-07-23 | Passing |
-| Apache Kafka 3.8.1 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, manual run `30062587935` on 2026-07-24 | Passing |
-| Apache Kafka 3.9.1 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, manual run `30062587935` on 2026-07-24 | Passing |
-| Apache Kafka 4.3.1 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, manual run `29995762812` on 2026-07-23 | Passing |
+| Apache Kafka 3.7.2 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, manual run `30066328105` on 2026-07-24 | Passing |
+| Apache Kafka 3.7.2 | three-broker KRaft | PLAINTEXT | `Live Kafka Smoke` multi-broker job, manual run `30066328105` on 2026-07-24 | Passing |
+| Apache Kafka 3.7.2 | single-node KRaft | TLS | `Live Kafka Smoke` TLS job, manual run `30066328105` on 2026-07-24 | Passing |
+| Apache Kafka 3.7.2 | single-node KRaft | SASL_PLAINTEXT with SASL/PLAIN | `Live Kafka Smoke` SASL_PLAINTEXT job, manual run `30066328105` on 2026-07-24 | Passing |
+| Apache Kafka 3.7.2 | single-node KRaft | SASL_SSL with SCRAM-SHA-256 | `Live Kafka Smoke` SASL_SSL SCRAM job, manual run `30066328105` on 2026-07-24 | Passing |
+| Apache Kafka 3.8.1 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, manual run `30066328105` on 2026-07-24 | Passing |
+| Apache Kafka 3.9.1 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, manual run `30066328105` on 2026-07-24 | Passing |
+| Apache Kafka 4.3.1 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, manual run `30066328105` on 2026-07-24 | Passing |
 
 ## Verified Paths
 
@@ -51,6 +51,10 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
   transactional production, direct and group consumption, topic/config admin,
   group description, and offset deletion.
 - High-level producer metadata lookup, leader routing, negotiated Produce API selection, single-record send, batch send, gzip-, Snappy-, LZ4-, and Zstd-compressed batch send, and buffered send with `acks=1`. Against Kafka 3.7.2, the current path selects Produce v3 RecordBatch for Gzip, Snappy, and LZ4, and Produce v7 for Zstd.
+- Kafka-compatible Murmur2 routing for keyed records without an explicit
+  partition. Manual run `30066328105` verified key-derived routing and
+  fetch-back by partition and offset across the three-broker Kafka 3.7.2
+  profile while all other broker and security profiles remained green.
 - Opt-in idempotent single-record, batch, and buffered produce using
   `InitProducerId v0`, `acks=all`, and partition-scoped RecordBatch producer
   identity and sequence metadata. Manual run `29991254722` passed these paths

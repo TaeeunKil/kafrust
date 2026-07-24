@@ -1105,6 +1105,11 @@ Implemented evidence:
 
 - Producer records without an explicit partition use Kafka-compatible Murmur2
   routing when a key is present, preserving standard-client key affinity.
+- Manual `Live Kafka Smoke` run `30066328105` passed key-derived producer
+  routing and buffered fetch-back across every selected partition on the
+  three-broker Kafka 3.7.2 profile. The same run passed Kafka 3.7.2, 3.8.1,
+  3.9.1, and 4.3.1 single-node plaintext plus TLS, SASL_PLAINTEXT, and
+  SASL_SSL/SCRAM-SHA-256 profiles.
 - Static classic-group membership carries a configured stable instance ID
   through JoinGroup v5, SyncGroup v3, Heartbeat v3, generation-fenced
   TxnOffsetCommit v3, and OffsetCommit v7. Duplicate instance fencing is
