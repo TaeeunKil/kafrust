@@ -2897,23 +2897,47 @@ fn batch_record_chunks<'records, 'batch>(
     let mut chunks = Vec::new();
     let mut start = 0;
     while start < records.len() {
-        let mut end = start;
-        while end < records.len() && end - start < max_records_per_batch {
-            let candidate_end = end + 1;
-            let candidate = &records[start..candidate_end];
-            let candidate_len = batch_records_encoded_len(candidate, produce_version, compression)?;
-            if candidate_len > max_batch_bytes && end > start {
-                break;
-            }
-            end = candidate_end;
-            if candidate_len > max_batch_bytes {
-                break;
-            }
-        }
+        let count = largest_fitting_prefix(
+            &records[start..],
+            max_records_per_batch,
+            max_batch_bytes,
+            |candidate| batch_records_encoded_len(candidate, produce_version, compression),
+        )?;
+        let end = start + count;
         chunks.push(&records[start..end]);
         start = end;
     }
     Ok(chunks)
+}
+
+fn largest_fitting_prefix<T, E>(
+    items: &[T],
+    max_items: usize,
+    max_bytes: usize,
+    mut encoded_len: impl FnMut(&[T]) -> core::result::Result<usize, E>,
+) -> core::result::Result<usize, E> {
+    let max_count = items.len().min(max_items.max(1));
+    debug_assert!(max_count > 0);
+    if encoded_len(&items[..max_count])? <= max_bytes || max_count == 1 {
+        return Ok(max_count);
+    }
+    if encoded_len(&items[..1])? > max_bytes {
+        return Ok(1);
+    }
+
+    let mut fitting = 1;
+    let mut low = 2;
+    let mut high = max_count - 1;
+    while low <= high {
+        let middle = low + (high - low) / 2;
+        if encoded_len(&items[..middle])? <= max_bytes {
+            fitting = middle;
+            low = middle + 1;
+        } else {
+            high = middle - 1;
+        }
+    }
+    Ok(fitting)
 }
 
 fn batch_records_encoded_len(
@@ -3038,12 +3062,13 @@ mod tests {
         buffered_linger_deadline, can_retry_send, choose_partition, complete_buffered_deliveries,
         delivery_error_from_request_error, enqueue_buffered_record, fail_buffered_deliveries,
         idempotent_produce_error_disposition, invalidate_metadata_cache,
-        invalidate_metadata_cache_for_record_indexes, leader_for, message_set_message,
-        record_batch_attempt_outcomes, record_batch_message, select_produce_batch_version,
-        select_produce_version, transaction_offset_topics, Acks, BatchRecord, BufferedFlushReason,
-        BufferedProduceRequest, BufferedProducerCommand, BufferedProducerState, Compression,
-        IdempotentBatchSequenceTracker, IdempotentProduceErrorDisposition, IdempotentProducerState,
-        PreparedBatchRecord, ProduceBatchKey, ProduceVersion, Producer, ProducerBatchFailure,
+        invalidate_metadata_cache_for_record_indexes, largest_fitting_prefix, leader_for,
+        message_set_message, record_batch_attempt_outcomes, record_batch_message,
+        select_produce_batch_version, select_produce_version, transaction_offset_topics, Acks,
+        BatchRecord, BufferedFlushReason, BufferedProduceRequest, BufferedProducerCommand,
+        BufferedProducerState, Compression, IdempotentBatchSequenceTracker,
+        IdempotentProduceErrorDisposition, IdempotentProducerState, PreparedBatchRecord,
+        ProduceBatchKey, ProduceVersion, Producer, ProducerBatchFailure,
         ProducerBatchRecordOutcome, ProducerBatchReport, ProducerConfig, ProducerDelivery,
         ProducerRecord, RecordMetadata, SecurityProtocol,
     };
@@ -3054,6 +3079,7 @@ mod tests {
         BrokerMetadata, MetadataResponseV1, PartitionMetadata, TopicMetadata,
     };
     use kafrust_protocol::api::produce::API_KEY as PRODUCE_API_KEY;
+    use std::cell::Cell;
     use std::collections::BTreeMap;
     use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
     use tokio::net::TcpListener;
@@ -4126,6 +4152,21 @@ mod tests {
             failure.error(),
             Error::Broker { code: 5, context } if context == "produce orders-0"
         ));
+    }
+
+    #[test]
+    fn finds_largest_prefix_with_logarithmic_size_checks() {
+        let items = [10usize; 200];
+        let checks = Cell::new(0);
+
+        let count = largest_fitting_prefix(&items, 200, 900, |candidate| {
+            checks.set(checks.get() + 1);
+            Ok::<_, ()>(candidate.iter().sum())
+        })
+        .unwrap();
+
+        assert_eq!(count, 90);
+        assert!(checks.get() <= 10);
     }
 
     #[test]
