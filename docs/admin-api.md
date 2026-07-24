@@ -195,6 +195,8 @@ queries every advertised broker before sorting and deduplicating the results.
 DeleteGroups v1 discovers each requested group's coordinator independently and
 preserves per-group errors. Kafka returns `NonEmptyGroup` when active members
 still belong to a group; members should leave or expire before deletion.
+Deleting a group's last committed offset can remove the empty group first, in
+which case a subsequent DeleteGroups request returns `GroupIdNotFound`.
 
 ## Delete Consumer Group Offsets
 
