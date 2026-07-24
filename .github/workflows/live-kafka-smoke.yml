@@ -22,6 +22,8 @@ jobs:
       matrix:
         kafka-version:
           - 3.7.2
+          - 3.8.1
+          - 3.9.1
           - 4.3.1
     env:
       KAFKA_VERSION: ${{ matrix.kafka-version }}
