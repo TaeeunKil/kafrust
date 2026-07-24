@@ -48,6 +48,7 @@ client paths:
 - `JoinGroup v2` and `JoinGroup v5`
 - `SyncGroup v2` and `SyncGroup v3`
 - `Heartbeat v2` and `Heartbeat v3`
+- `LeaveGroup v3`
 - `OffsetFetch v2`
 - `OffsetCommit v2` and `OffsetCommit v7`
 - `SaslHandshake v1`

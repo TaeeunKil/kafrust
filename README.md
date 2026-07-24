@@ -251,7 +251,7 @@ async fn main() -> kafrust::Result<()> {
 
 The current consumer group API is an alpha classic consumer group path with
 dynamic or static membership, range or round-robin assignment, join, sync,
-heartbeat, poll, and offset commit support.
+heartbeat, poll, offset commit, and explicit leave support.
 
 ```rust
 use kafrust::ConsumerGroupConfig;

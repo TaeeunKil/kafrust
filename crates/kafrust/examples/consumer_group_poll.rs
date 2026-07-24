@@ -47,6 +47,8 @@ async fn main() -> kafrust::Result<()> {
     }
     group.commit_offsets().await?;
     println!("committed offsets for {} records", records.len());
+    group.leave().await?;
+    println!("left consumer group");
 
     Ok(())
 }

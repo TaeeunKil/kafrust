@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use kafrust_protocol::api::find_coordinator::FindCoordinatorResponseV1;
 use kafrust_protocol::api::join_group::JoinGroupMember;
+use kafrust_protocol::api::leave_group::{LeaveGroupMemberIdentity, LeaveGroupResponseV3};
 use kafrust_protocol::api::metadata::MetadataResponseV1;
 use kafrust_protocol::api::offset_commit::{
     OffsetCommitPartition, OffsetCommitPartitionV7, OffsetCommitTopic, OffsetCommitTopicResponse,
@@ -544,6 +545,38 @@ impl ConsumerGroup {
     /// Returns the assigned topic partitions and next offsets.
     pub fn assignments(&self) -> &[ConsumerAssignment] {
         self.consumer.assignments()
+    }
+
+    /// Leaves the consumer group and consumes this member handle.
+    ///
+    /// Stop any separately spawned [`ConsumerGroupHeartbeat`] before leaving.
+    /// Kafka receives both the broker member ID and the configured static
+    /// instance ID, so the member does not remain active until session expiry.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.consumer_group.leave",
+        skip_all,
+        fields(group_id = self.group_id.as_str(), member_id = self.member_id.as_str(), generation_id = self.generation_id),
+        err
+    )]
+    pub async fn leave(mut self) -> Result<()> {
+        let response = self
+            .coordinator
+            .leave_group_v3(
+                self.group_id.clone(),
+                vec![LeaveGroupMemberIdentity {
+                    member_id: self.member_id.clone(),
+                    group_instance_id: self.config.group_instance_id.clone(),
+                }],
+            )
+            .await?;
+        if let Some(error) = leave_group_response_error(&self.group_id, &response) {
+            return Err(match error {
+                Error::Broker { code, context } => self.config.client.broker_error(code, context),
+                error => error,
+            });
+        }
+        Ok(())
     }
 
     /// Sends a heartbeat, polls assigned partitions, and advances in-memory offsets.
@@ -1204,6 +1237,23 @@ fn offset_commit_response_error(
     None
 }
 
+fn leave_group_response_error(group_id: &str, response: &LeaveGroupResponseV3) -> Option<Error> {
+    if response.error_code != 0 {
+        return Some(Error::Broker {
+            code: response.error_code,
+            context: format!("leave group {group_id}"),
+        });
+    }
+    response
+        .members
+        .iter()
+        .find(|member| member.error_code != 0)
+        .map(|member| Error::Broker {
+            code: member.error_code,
+            context: format!("leave group {group_id} member {}", member.member_id),
+        })
+}
+
 fn should_rejoin_group(error: &Error) -> bool {
     if matches!(error, Error::Io(_) | Error::RequestTimedOut { .. }) {
         return true;
@@ -1343,15 +1393,17 @@ fn range_for_topic(members: &[String], partitions: &[i32]) -> Vec<(String, Vec<i
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::{
-        assignments_for_strategy, committed_offset, offset_commit_response_error,
-        offset_commit_topics, offset_commit_topics_v7, offset_fetch_topics, range_assignments,
-        round_robin_assignments, should_rejoin_after_background_heartbeat, should_rejoin_group,
-        validate_heartbeat_interval, ConsumerGroupAssignmentStrategy, ConsumerGroupConfig,
-        ConsumerGroupHeartbeat, HeartbeatHandleState, IsolationLevel, SecurityProtocol,
+        assignments_for_strategy, committed_offset, leave_group_response_error,
+        offset_commit_response_error, offset_commit_topics, offset_commit_topics_v7,
+        offset_fetch_topics, range_assignments, round_robin_assignments,
+        should_rejoin_after_background_heartbeat, should_rejoin_group, validate_heartbeat_interval,
+        ConsumerGroupAssignmentStrategy, ConsumerGroupConfig, ConsumerGroupHeartbeat,
+        HeartbeatHandleState, IsolationLevel, SecurityProtocol,
     };
     use crate::consumer::ConsumerAssignment;
     use crate::Error;
     use kafrust_protocol::api::join_group::JoinGroupMember;
+    use kafrust_protocol::api::leave_group::{LeaveGroupMemberResponse, LeaveGroupResponseV3};
     use kafrust_protocol::api::metadata::{MetadataResponseV1, PartitionMetadata, TopicMetadata};
     use kafrust_protocol::api::offset_commit::{
         OffsetCommitPartitionResponse, OffsetCommitTopicResponse,
@@ -1634,6 +1686,22 @@ mod tests {
 
         let error = offset_commit_response_error("orders-group", &response).unwrap();
         assert!(matches!(error, Error::Broker { code: 25, .. }));
+    }
+
+    #[test]
+    fn surfaces_leave_group_member_error() {
+        let response = LeaveGroupResponseV3 {
+            throttle_time_ms: 0,
+            error_code: 0,
+            members: vec![LeaveGroupMemberResponse {
+                member_id: "member-a".to_owned(),
+                group_instance_id: Some("orders-reader-1".to_owned()),
+                error_code: 82,
+            }],
+        };
+
+        let error = leave_group_response_error("orders-group", &response).unwrap();
+        assert!(matches!(error, Error::Broker { code: 82, .. }));
     }
 
     #[test]
