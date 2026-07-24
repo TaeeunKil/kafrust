@@ -32,6 +32,9 @@ use kafrust_protocol::api::join_group::{
     JoinGroupProtocol, JoinGroupRequestV2, JoinGroupRequestV5, JoinGroupResponseV2,
     JoinGroupResponseV5,
 };
+use kafrust_protocol::api::leave_group::{
+    LeaveGroupMemberIdentity, LeaveGroupRequestV3, LeaveGroupResponseV3,
+};
 use kafrust_protocol::api::metadata::{MetadataRequestV1, MetadataResponseV1};
 use kafrust_protocol::api::offset_commit::{
     OffsetCommitRequestV2, OffsetCommitRequestV7, OffsetCommitResponseV2, OffsetCommitResponseV7,
@@ -684,6 +687,24 @@ impl Client {
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(HeartbeatResponseV2::decode_body(&mut decoder)?)
+    }
+
+    /// Sends LeaveGroup v3 for one or more dynamic or static group members.
+    pub async fn leave_group_v3(
+        &mut self,
+        group_id: impl Into<String>,
+        members: Vec<LeaveGroupMemberIdentity>,
+    ) -> Result<LeaveGroupResponseV3> {
+        let request = LeaveGroupRequestV3 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            group_id: group_id.into(),
+            members,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(LeaveGroupResponseV3::decode_body(&mut decoder)?)
     }
 
     /// Sends OffsetCommit v2 for a joined consumer group member.

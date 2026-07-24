@@ -77,6 +77,14 @@ Pass the heartbeat handle to `ConsumerGroup::poll_with_heartbeat` when a backgro
 
 Call `ConsumerGroupHeartbeat::try_wait` to observe early task completion without polling. Call `ConsumerGroupHeartbeat::stop` to shut the task down and observe any broker error returned by the task.
 
+## Leaving
+
+Call `ConsumerGroup::leave` when processing is complete. It consumes the group
+handle and sends LeaveGroup v3 with both the broker member ID and any configured
+static instance ID, allowing Kafka to remove the member without waiting for the
+session timeout. Stop a separately spawned background heartbeat handle before
+calling `leave`.
+
 ## Offset Commits
 
 `ConsumerGroup::commit_offsets` commits the current next offsets for assigned partitions. If Kafka reports a rejoinable generation, member, rebalance, or coordinator error, or if the coordinator request fails with I/O or timeout, `commit_offsets` rejoins the group and returns the original commit error instead of retrying the old assignment offsets under the new generation. After that, callers should poll the refreshed assignment state before deciding whether to commit again.
@@ -97,6 +105,8 @@ Current implementation status:
 - Heartbeat v2 request/response protocol types exist.
 - Static member JoinGroup v5, SyncGroup v3, Heartbeat v3, and OffsetCommit v7
   protocol types and high-level routing exist.
+- `ConsumerGroup::leave` uses LeaveGroup v3 for dynamic and static members and
+  preserves top-level and member-scoped broker errors.
 - `Client::join_group_v2`, `Client::sync_group_v2`, and `Client::heartbeat_v2` can send coordinator-scoped group membership requests.
 - Classic consumer protocol subscription and assignment v0 payloads can be encoded and decoded for JoinGroup/SyncGroup metadata.
 - Internal range assignment can compute SyncGroup assignment payloads from JoinGroup member subscriptions and topic metadata.

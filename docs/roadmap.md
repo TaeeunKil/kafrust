@@ -1099,6 +1099,8 @@ Implemented evidence:
   classified separately from rejoinable group errors.
 - Classic groups can advertise and execute either Kafka's `range` or
   `roundrobin` assignor, including mixed topic subscriptions.
+- Dynamic and static members can explicitly leave through LeaveGroup v3,
+  avoiding session-timeout cleanup after graceful shutdown.
 - Manual `Live Kafka Smoke` run `30064594451` passed the round-robin
   static-member path on Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext
   brokers; all secured and multi-broker regression jobs also passed.
