@@ -57,5 +57,35 @@ by the protocol.
 
 The current alpha path uses CreateTopics v2, which keeps the request
 non-flexible and compatible with the project's Kafka 3.7-to-current support
-window. Topic deletion, config inspection and alteration, and consumer-group
-administration remain on the M16 roadmap.
+window.
+
+## Delete Topics
+
+```rust
+use kafrust::{AdminClient, ClientConfig, DeleteTopicsOptions};
+use std::time::Duration;
+
+# async fn example() -> kafrust::Result<()> {
+let admin = AdminClient::new(ClientConfig::new(["localhost:9092"]));
+let result = admin
+    .delete_topics(
+        &["orders".to_owned(), "payments".to_owned()],
+        DeleteTopicsOptions::new().timeout(Duration::from_secs(30)),
+    )
+    .await?;
+
+for topic in result.topics() {
+    if !topic.is_success() {
+        eprintln!("{}: Kafka error {}", topic.name(), topic.error_code());
+    }
+}
+# Ok(())
+# }
+```
+
+DeleteTopics v3 also routes to the active controller and preserves independent
+topic outcomes. Version 3 responses contain topic names and error codes but no
+broker error-message field.
+
+Config inspection and alteration and consumer-group administration remain on
+the M16 roadmap.

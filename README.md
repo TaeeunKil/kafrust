@@ -118,8 +118,9 @@ for topic in result.topics() {
 }
 ```
 
-CreateTopics v2 discovers the active controller and preserves per-topic partial
-success and error responses. See [Admin API](docs/admin-api.md).
+CreateTopics v2 and DeleteTopics v3 discover the active controller and preserve
+per-topic partial success and error responses. See
+[Admin API](docs/admin-api.md).
 
 ### Producer
 
@@ -326,7 +327,7 @@ See [Compatibility](docs/compatibility.md) and
 Primary public entry points:
 
 - `Client` for low-level Kafka request roundtrips.
-- `AdminClient`, `NewTopic`, and CreateTopics option/result types.
+- `AdminClient`, `NewTopic`, and topic creation/deletion option and result types.
 - `ProducerConfig`, `Producer`, `BufferedProducer`, and `ProducerRecord`.
 - `Compression` for opt-in producer RecordBatch compression.
 - `ConsumerConfig`, `Consumer`, `ConsumerAssignment`, and `ConsumerRecord`.
