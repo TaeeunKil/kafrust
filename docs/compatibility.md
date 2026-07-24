@@ -41,6 +41,11 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
   on Kafka 3.7.2 and 4.3.1 plaintext brokers, TLS, SASL_PLAINTEXT, SASL_SSL,
   and the three-broker profile. The three-broker job then passed its existing
   broker-stop failover sequence.
+- Broker-wide ListGroups v1 and coordinator-routed DeleteGroups v1 are covered
+  by manual run `30065771327` on Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1
+  plaintext brokers plus TLS, SASL_PLAINTEXT, SASL_SSL, and the three-broker
+  profile. The cleanup path also verifies Kafka's `GroupIdNotFound` result
+  after deleting an empty group's final committed offset.
 - Manual run `30062587935` passed the complete plaintext path on Kafka 3.8.1
   and 3.9.1, including all four compression codecs, idempotent and
   transactional production, direct and group consumption, topic/config admin,
