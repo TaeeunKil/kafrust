@@ -302,6 +302,12 @@ Exit criteria:
 Evidence:
 
 - `ConsumerGroup::poll_with_heartbeat` observes background heartbeat task completion before polling and uses the existing rejoin path for rejoinable group errors.
+- `poll_with_heartbeat` replaces completed and stale same-group heartbeat
+  handles after background or foreground rejoin while preserving the configured
+  heartbeat interval.
+- Manual `Live Kafka Smoke` run `30067372344` passed a real two-member
+  rebalance, automatic rejoin, and heartbeat handle replacement on Kafka
+  3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext brokers.
 - Focused unit tests cover running tasks, rejoinable background heartbeat errors, and non-rejoinable background heartbeat errors.
 - `ConsumerGroupHeartbeat` records the group ID, member ID, and generation ID it was spawned for, and stale same-group handles are stopped before polling to avoid sending heartbeats for an older generation.
 - `ConsumerGroup::commit_offsets` rejoins after rejoinable offset commit errors and returns the original commit error instead of retrying stale assignment offsets under a new generation.

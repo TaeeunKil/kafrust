@@ -8,14 +8,14 @@ The `0.2.x` alpha line is verified against Apache Kafka 3.7.2, 3.8.1, 3.9.1, and
 
 | Broker | Mode | Security | Verification | Status |
 | --- | --- | --- | --- | --- |
-| Apache Kafka 3.7.2 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, manual run `30066831820` on 2026-07-24 | Passing |
-| Apache Kafka 3.7.2 | three-broker KRaft | PLAINTEXT | `Live Kafka Smoke` multi-broker job, manual run `30066831820` on 2026-07-24 | Passing |
-| Apache Kafka 3.7.2 | single-node KRaft | TLS | `Live Kafka Smoke` TLS job, manual run `30066831820` on 2026-07-24 | Passing |
-| Apache Kafka 3.7.2 | single-node KRaft | SASL_PLAINTEXT with SASL/PLAIN | `Live Kafka Smoke` SASL_PLAINTEXT job, manual run `30066831820` on 2026-07-24 | Passing |
-| Apache Kafka 3.7.2 | single-node KRaft | SASL_SSL with SCRAM-SHA-256 | `Live Kafka Smoke` SASL_SSL SCRAM job, manual run `30066831820` on 2026-07-24 | Passing |
-| Apache Kafka 3.8.1 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, manual run `30066831820` on 2026-07-24 | Passing |
-| Apache Kafka 3.9.1 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, manual run `30066831820` on 2026-07-24 | Passing |
-| Apache Kafka 4.3.1 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, manual run `30066831820` on 2026-07-24 | Passing |
+| Apache Kafka 3.7.2 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, manual run `30067372344` on 2026-07-24 | Passing |
+| Apache Kafka 3.7.2 | three-broker KRaft | PLAINTEXT | `Live Kafka Smoke` multi-broker job, manual run `30067372344` on 2026-07-24 | Passing |
+| Apache Kafka 3.7.2 | single-node KRaft | TLS | `Live Kafka Smoke` TLS job, manual run `30067372344` on 2026-07-24 | Passing |
+| Apache Kafka 3.7.2 | single-node KRaft | SASL_PLAINTEXT with SASL/PLAIN | `Live Kafka Smoke` SASL_PLAINTEXT job, manual run `30067372344` on 2026-07-24 | Passing |
+| Apache Kafka 3.7.2 | single-node KRaft | SASL_SSL with SCRAM-SHA-256 | `Live Kafka Smoke` SASL_SSL SCRAM job, manual run `30067372344` on 2026-07-24 | Passing |
+| Apache Kafka 3.8.1 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, manual run `30067372344` on 2026-07-24 | Passing |
+| Apache Kafka 3.9.1 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, manual run `30067372344` on 2026-07-24 | Passing |
+| Apache Kafka 4.3.1 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, manual run `30067372344` on 2026-07-24 | Passing |
 
 ## Verified Paths
 
@@ -91,6 +91,10 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
   tests and by the plaintext single-node and multi-broker live smoke profiles.
 - Direct consumer fetch from an assigned topic partition using Fetch v4 response decoding. The v4 path is required because Kafka 4.x no longer accepts Fetch v2.
 - Consumer group join, sync, heartbeat, poll, and offset commit through the alpha classic consumer group path with range assignment.
+- Background heartbeat recovery through a real two-member classic-group
+  rebalance. Manual run `30067372344` verified automatic rejoin and heartbeat
+  handle replacement on Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext
+  brokers.
 - Static classic-group membership through JoinGroup v5, SyncGroup v3,
   Heartbeat v3, and OffsetCommit v7. Manual run `30064182907` passed join,
   poll, heartbeat, and static-member-fenced offset commit on Kafka 3.7.2,
