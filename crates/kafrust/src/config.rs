@@ -262,6 +262,14 @@ impl ClientConfig {
         self.metrics.record_retry();
     }
 
+    pub(crate) fn record_produce_batch(&self, records: usize) {
+        self.metrics.record_produce_batch(records);
+    }
+
+    pub(crate) fn record_consumed(&self, records: usize) {
+        self.metrics.record_consumed(records);
+    }
+
     /// Returns the configured Kafka security protocol.
     pub fn security_protocol_ref(&self) -> SecurityProtocol {
         self.security_protocol

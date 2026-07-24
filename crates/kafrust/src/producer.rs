@@ -1594,6 +1594,7 @@ impl Producer {
                                 key,
                                 records,
                             )?;
+                            self.config.client.record_produce_batch(records.len());
                             output.extend(batch_duplicate_outcomes(key, records));
                             continue;
                         }
@@ -1624,6 +1625,7 @@ impl Producer {
                 }
             } else {
                 sequence_tracker.acknowledge_chunk(self.idempotent_state.as_mut(), key, records)?;
+                self.config.client.record_produce_batch(records.len());
                 output.extend(batch_success_outcomes(
                     key,
                     records,
@@ -1744,6 +1746,7 @@ impl Producer {
                         if let Some(state) = &mut self.idempotent_state {
                             state.acknowledge(record.topic(), partition, 1);
                         }
+                        self.config.client.record_produce_batch(1);
                         return Ok(RecordMetadata::new(record.topic(), partition, -1, None));
                     }
                     IdempotentProduceErrorDisposition::Fatal => {
@@ -1760,6 +1763,7 @@ impl Producer {
         if let Some(state) = &mut self.idempotent_state {
             state.acknowledge(record.topic(), partition, 1);
         }
+        self.config.client.record_produce_batch(1);
 
         Ok(RecordMetadata::new(
             record.topic(),
@@ -4422,6 +4426,8 @@ mod tests {
             1
         );
         assert_eq!(metrics.snapshot().retries, 1);
+        assert_eq!(metrics.snapshot().produced_records, 1);
+        assert_eq!(metrics.snapshot().produce_batches, 1);
         leader_server.await.unwrap();
         metadata_server.await.unwrap();
     }
