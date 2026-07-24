@@ -1,8 +1,10 @@
 mod common;
 
 use kafrust::{
-    AdminClient, ClientConfig, CreateTopicsOptions, DeleteTopicsOptions, Error, NewTopic,
+    AdminClient, ClientConfig, CreateTopicsOptions, DeleteTopicsOptions, DescribeConfigsOptions,
+    Error, NewTopic, TopicConfigResource,
 };
+use std::time::{Duration, Instant};
 
 #[tokio::main]
 async fn main() -> kafrust::Result<()> {
@@ -56,26 +58,10 @@ async fn main() -> kafrust::Result<()> {
         );
     }
 
-    let mut client = config.connect().await?;
-    let metadata = client.metadata(Some(vec![topic.clone()])).await?;
-    let created = metadata
-        .topics
-        .iter()
-        .find(|metadata| metadata.name == topic)
-        .ok_or(Error::UnknownTopicOrPartition {
-            topic: topic.clone(),
-            partition: -1,
-        })?;
-    if created.error_code != 0 {
-        return Err(Error::Broker {
-            code: created.error_code,
-            context: format!("describe newly created topic {topic}"),
-        });
-    }
+    let partition_count = wait_for_topic_metadata(&config, &topic).await?;
     println!(
         "described topic {} with {} partitions",
-        created.name,
-        created.partitions.len()
+        topic, partition_count
     );
 
     let listed_topics = admin.list_topics().await?;
@@ -91,6 +77,42 @@ async fn main() -> kafrust::Result<()> {
         listed.name(),
         listed.partition_count()
     );
+
+    let config_result = admin
+        .describe_topic_configs(
+            &[TopicConfigResource::with_keys(&topic, ["cleanup.policy"])],
+            DescribeConfigsOptions::new().include_synonyms(true),
+        )
+        .await?;
+    let topic_config = config_result
+        .resources()
+        .first()
+        .ok_or_else(|| Error::Broker {
+            code: -1,
+            context: format!("missing config response for topic {topic}"),
+        })?;
+    if !topic_config.is_success() {
+        return Err(Error::Broker {
+            code: topic_config.error_code(),
+            context: format!("describe configs for topic {topic}"),
+        });
+    }
+    let cleanup_policy = topic_config
+        .entries()
+        .iter()
+        .find(|entry| entry.name() == "cleanup.policy")
+        .and_then(|entry| entry.value())
+        .ok_or_else(|| Error::Broker {
+            code: -1,
+            context: format!("cleanup.policy absent for topic {topic}"),
+        })?;
+    if cleanup_policy != "delete" {
+        return Err(Error::Broker {
+            code: -1,
+            context: format!("unexpected cleanup.policy {cleanup_policy} for topic {topic}"),
+        });
+    }
+    println!("described cleanup.policy={cleanup_policy} for topic {topic}");
 
     let delete_result = admin
         .delete_topics(&[topic.clone()], DeleteTopicsOptions::new())
@@ -110,6 +132,40 @@ async fn main() -> kafrust::Result<()> {
     }
 
     Ok(())
+}
+
+async fn wait_for_topic_metadata(config: &ClientConfig, topic: &str) -> kafrust::Result<usize> {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        let result = async {
+            let mut client = config.clone().connect().await?;
+            let metadata = client.metadata(Some(vec![topic.to_owned()])).await?;
+            let created = metadata
+                .topics
+                .iter()
+                .find(|metadata| metadata.name == topic)
+                .ok_or_else(|| Error::UnknownTopicOrPartition {
+                    topic: topic.to_owned(),
+                    partition: -1,
+                })?;
+            if created.error_code != 0 {
+                return Err(Error::Broker {
+                    code: created.error_code,
+                    context: format!("describe newly created topic {topic}"),
+                });
+            }
+            Ok(created.partitions.len())
+        }
+        .await;
+
+        match result {
+            Ok(partition_count) => return Ok(partition_count),
+            Err(_) if Instant::now() < deadline => {
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+            Err(error) => return Err(error),
+        }
+    }
 }
 
 fn parse_env<T>(name: &'static str, default: T) -> kafrust::Result<T>

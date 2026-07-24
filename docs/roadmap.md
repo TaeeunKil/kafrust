@@ -719,6 +719,12 @@ Implemented evidence:
 - Injected broker tests distinguish Metadata v1's empty topic array for
   cluster-only inspection from its null array for all-topic listing and verify
   broker error metrics for partial metadata failures.
+- DescribeConfigs v1 supports all or selected topic keys, optional synonyms,
+  nullable and sensitive values, raw resource errors, typed config sources,
+  broker throttle time, tracing, and shared broker-error metrics.
+- The admin lifecycle example waits for asynchronous metadata propagation in
+  multi-broker clusters and verifies `cleanup.policy` through
+  `describe_topic_configs` before deleting the topic.
 - CreateTopics v2 request encoding and response decoding preserve automatic
   and manual replica assignment, nullable topic configs, validate-only mode,
   broker timeout, throttle time, and topic-level partial failures.
@@ -745,7 +751,7 @@ Implemented evidence:
 
 Remaining:
 
-- describe and alter topic configs
+- alter topic configs
 - describe consumer groups and evaluate consumer-group offset deletion
 
 ## M17 Idempotent Producer

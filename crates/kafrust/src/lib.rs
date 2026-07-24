@@ -22,9 +22,10 @@ pub mod producer;
 mod scram;
 
 pub use admin::{
-    AdminClient, BrokerDescription, ClusterDescription, CreateTopicResult, CreateTopicsOptions,
-    CreateTopicsResult, DeleteTopicResult, DeleteTopicsOptions, DeleteTopicsResult, NewTopic,
-    TopicListing,
+    AdminClient, BrokerDescription, ClusterDescription, ConfigEntry, ConfigResourceResult,
+    ConfigSource, ConfigSynonym, CreateTopicResult, CreateTopicsOptions, CreateTopicsResult,
+    DeleteTopicResult, DeleteTopicsOptions, DeleteTopicsResult, DescribeConfigsOptions,
+    DescribeConfigsResult, NewTopic, TopicConfigResource, TopicListing,
 };
 pub use client::Client;
 pub use config::{ClientConfig, SaslCredentials, SaslMechanism, SecurityProtocol};

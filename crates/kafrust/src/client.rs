@@ -9,6 +9,9 @@ use kafrust_protocol::api::create_topics::{
     CreateTopicsRequestV2, CreateTopicsResponseV2, CreateTopicsTopicV2,
 };
 use kafrust_protocol::api::delete_topics::{DeleteTopicsRequestV3, DeleteTopicsResponseV3};
+use kafrust_protocol::api::describe_configs::{
+    DescribeConfigsRequestV1, DescribeConfigsResourceV1, DescribeConfigsResponseV1,
+};
 use kafrust_protocol::api::end_txn::{EndTxnRequestV0, EndTxnResponseV0};
 use kafrust_protocol::api::fetch::{
     FetchPartitionV2, FetchRequestV4, FetchResponseV4, FetchTopicV2,
@@ -261,6 +264,24 @@ impl Client {
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(DeleteTopicsResponseV3::decode_body(&mut decoder)?)
+    }
+
+    /// Sends DescribeConfigs v1 to the broker represented by this connection.
+    pub async fn describe_configs_v1(
+        &mut self,
+        resources: Vec<DescribeConfigsResourceV1>,
+        include_synonyms: bool,
+    ) -> Result<DescribeConfigsResponseV1> {
+        let request = DescribeConfigsRequestV1 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            resources,
+            include_synonyms,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(DescribeConfigsResponseV1::decode_body(&mut decoder)?)
     }
 
     /// Sends InitProducerId v0 for an idempotent or transactional producer session.

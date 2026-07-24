@@ -54,10 +54,10 @@ for topic in result.topics() {
 # }
 ```
 
-Cluster and topic listing use typed Metadata v1 views. CreateTopics and
-DeleteTopics preserve Kafka's per-topic partial results and route through the
-active controller. See the repository's `docs/admin-api.md` for automatic and
-manual replica assignment and topic cleanup.
+Cluster and topic listing use typed Metadata v1 views, and topic configuration
+inspection preserves sources, sensitivity, synonyms, and partial resource
+errors. CreateTopics and DeleteTopics route through the active controller. See
+the repository's `docs/admin-api.md` for details.
 
 ## Install
 
@@ -420,7 +420,8 @@ Verified high-level paths include:
   `IsolationLevel::ReadCommitted` hides aborted transaction records for direct
   and group consumers, and current group assignments can be committed through
   `Producer::send_offsets_to_transaction`. Transactional buffered sends and
-  admin APIs beyond topic creation and deletion are not implemented yet.
+  admin APIs beyond topic inspection, configuration description, creation, and
+  deletion are not implemented yet.
   Shared request, retry, broker-error, producer, consumer, batch, and
   buffered-queue metrics are available together with high-level operation and
   request spans.

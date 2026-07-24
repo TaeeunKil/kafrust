@@ -121,7 +121,8 @@ for topic in result.topics() {
 }
 ```
 
-`describe_cluster` and `list_topics` provide typed Metadata v1 views.
+`describe_cluster` and `list_topics` provide typed Metadata v1 views, and
+`describe_topic_configs` exposes values, sources, sensitivity, and synonyms.
 CreateTopics v2 and DeleteTopics v3 discover the active controller and preserve
 per-topic partial success and error responses. See [Admin API](docs/admin-api.md).
 
@@ -330,7 +331,8 @@ See [Compatibility](docs/compatibility.md) and
 Primary public entry points:
 
 - `Client` for low-level Kafka request roundtrips.
-- `AdminClient` and typed cluster, topic listing, creation, and deletion types.
+- `AdminClient` and typed cluster, topic listing, configuration, creation, and
+  deletion types.
 - `ProducerConfig`, `Producer`, `BufferedProducer`, and `ProducerRecord`.
 - `Compression` for opt-in producer RecordBatch compression.
 - `ConsumerConfig`, `Consumer`, `ConsumerAssignment`, and `ConsumerRecord`.

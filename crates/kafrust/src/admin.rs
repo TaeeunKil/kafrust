@@ -5,6 +5,10 @@ use kafrust_protocol::api::create_topics::{
     CreateTopicsAssignmentV2, CreateTopicsConfigV2, CreateTopicsTopicResultV2, CreateTopicsTopicV2,
 };
 use kafrust_protocol::api::delete_topics::DeleteTopicsTopicResultV3;
+use kafrust_protocol::api::describe_configs::{
+    DescribeConfigsEntryV1, DescribeConfigsResourceV1, DescribeConfigsResultV1,
+    DescribeConfigsSynonymV1,
+};
 use kafrust_protocol::api::metadata::{BrokerMetadata, TopicMetadata};
 
 use crate::client::Client;
@@ -73,6 +77,48 @@ impl AdminClient {
             .into_iter()
             .map(TopicListing::from_protocol)
             .collect())
+    }
+
+    /// Describes configurations for Kafka topics using DescribeConfigs v1.
+    ///
+    /// Resource-level Kafka failures remain in [`DescribeConfigsResult`].
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.describe_topic_configs",
+        skip_all,
+        fields(resource_count = resources.len(), include_synonyms = options.include_synonyms),
+        err
+    )]
+    pub async fn describe_topic_configs(
+        &self,
+        resources: &[TopicConfigResource],
+        options: DescribeConfigsOptions,
+    ) -> Result<DescribeConfigsResult> {
+        let mut client = self.config.clone().connect().await?;
+        let response = client
+            .describe_configs_v1(
+                resources
+                    .iter()
+                    .map(TopicConfigResource::as_protocol)
+                    .collect(),
+                options.include_synonyms,
+            )
+            .await?;
+
+        for resource in &response.results {
+            if resource.error_code != 0 {
+                self.config.record_broker_error();
+            }
+        }
+
+        Ok(DescribeConfigsResult {
+            throttle_time: Duration::from_millis(nonnegative_i32_to_u64(response.throttle_time_ms)),
+            resources: response
+                .results
+                .into_iter()
+                .map(ConfigResourceResult::from_protocol)
+                .collect(),
+        })
     }
 
     async fn controller_client(&self) -> Result<Client> {
@@ -283,6 +329,316 @@ impl TopicListing {
             is_internal: topic.is_internal,
             partition_count: topic.partitions.len(),
             error_code: topic.error_code,
+        }
+    }
+}
+
+/// One Kafka topic whose configuration should be described.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TopicConfigResource {
+    name: String,
+    configuration_keys: Option<Vec<String>>,
+}
+
+impl TopicConfigResource {
+    /// Requests all configuration keys for a topic.
+    pub fn new(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            configuration_keys: None,
+        }
+    }
+
+    /// Requests selected configuration keys for a topic.
+    pub fn with_keys(
+        name: impl Into<String>,
+        configuration_keys: impl IntoIterator<Item = impl Into<String>>,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            configuration_keys: Some(configuration_keys.into_iter().map(Into::into).collect()),
+        }
+    }
+
+    /// Returns the topic name.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Returns selected keys, or `None` when all keys were requested.
+    pub fn configuration_keys(&self) -> Option<&[String]> {
+        self.configuration_keys.as_deref()
+    }
+
+    fn as_protocol(&self) -> DescribeConfigsResourceV1 {
+        DescribeConfigsResourceV1 {
+            resource_type: 2,
+            resource_name: self.name.clone(),
+            configuration_keys: self.configuration_keys.clone(),
+        }
+    }
+}
+
+/// Options for one DescribeConfigs operation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct DescribeConfigsOptions {
+    include_synonyms: bool,
+}
+
+impl DescribeConfigsOptions {
+    /// Creates options that omit configuration synonyms.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Selects whether Kafka should return configuration synonyms.
+    pub fn include_synonyms(mut self, include_synonyms: bool) -> Self {
+        self.include_synonyms = include_synonyms;
+        self
+    }
+
+    /// Returns whether configuration synonyms were requested.
+    pub fn includes_synonyms(&self) -> bool {
+        self.include_synonyms
+    }
+}
+
+/// Complete response from one DescribeConfigs operation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DescribeConfigsResult {
+    throttle_time: Duration,
+    resources: Vec<ConfigResourceResult>,
+}
+
+impl DescribeConfigsResult {
+    /// Returns the broker throttle time.
+    pub fn throttle_time(&self) -> Duration {
+        self.throttle_time
+    }
+
+    /// Returns resource results in broker response order.
+    pub fn resources(&self) -> &[ConfigResourceResult] {
+        &self.resources
+    }
+
+    /// Consumes this response and returns its resource results.
+    pub fn into_resources(self) -> Vec<ConfigResourceResult> {
+        self.resources
+    }
+
+    /// Returns whether at least one resource was rejected.
+    pub fn has_errors(&self) -> bool {
+        self.resources.iter().any(|resource| !resource.is_success())
+    }
+}
+
+/// Configuration result for one Kafka resource.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConfigResourceResult {
+    resource_type: i8,
+    name: String,
+    error_code: i16,
+    error_message: Option<String>,
+    entries: Vec<ConfigEntry>,
+}
+
+impl ConfigResourceResult {
+    /// Returns Kafka's raw resource type value.
+    pub fn resource_type(&self) -> i8 {
+        self.resource_type
+    }
+
+    /// Returns the resource name.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Returns whether Kafka described the resource successfully.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+    }
+
+    /// Returns Kafka's raw resource-level error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns Kafka's optional resource-level error message.
+    pub fn error_message(&self) -> Option<&str> {
+        self.error_message.as_deref()
+    }
+
+    /// Returns kafrust's classification for a non-zero Kafka error code.
+    pub fn broker_error_kind(&self) -> Option<BrokerErrorKind> {
+        (self.error_code != 0).then(|| BrokerErrorKind::from_code(self.error_code))
+    }
+
+    /// Returns configuration entries in broker response order.
+    pub fn entries(&self) -> &[ConfigEntry] {
+        &self.entries
+    }
+
+    fn from_protocol(result: DescribeConfigsResultV1) -> Self {
+        Self {
+            resource_type: result.resource_type,
+            name: result.resource_name,
+            error_code: result.error_code,
+            error_message: result.error_message,
+            entries: result
+                .configs
+                .into_iter()
+                .map(ConfigEntry::from_protocol)
+                .collect(),
+        }
+    }
+}
+
+/// One Kafka configuration entry.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConfigEntry {
+    name: String,
+    value: Option<String>,
+    read_only: bool,
+    source: ConfigSource,
+    is_sensitive: bool,
+    synonyms: Vec<ConfigSynonym>,
+}
+
+impl ConfigEntry {
+    /// Returns the configuration key.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Returns the value, which is absent for sensitive or null settings.
+    pub fn value(&self) -> Option<&str> {
+        self.value.as_deref()
+    }
+
+    /// Returns whether Kafka marks this entry read-only.
+    pub fn is_read_only(&self) -> bool {
+        self.read_only
+    }
+
+    /// Returns the source selected by Kafka for this value.
+    pub fn source(&self) -> ConfigSource {
+        self.source
+    }
+
+    /// Returns whether Kafka marks this entry sensitive.
+    pub fn is_sensitive(&self) -> bool {
+        self.is_sensitive
+    }
+
+    /// Returns configuration synonyms in broker response order.
+    pub fn synonyms(&self) -> &[ConfigSynonym] {
+        &self.synonyms
+    }
+
+    fn from_protocol(entry: DescribeConfigsEntryV1) -> Self {
+        Self {
+            name: entry.name,
+            value: entry.value,
+            read_only: entry.read_only,
+            source: ConfigSource::from_code(entry.config_source),
+            is_sensitive: entry.is_sensitive,
+            synonyms: entry
+                .synonyms
+                .into_iter()
+                .map(ConfigSynonym::from_protocol)
+                .collect(),
+        }
+    }
+}
+
+/// One synonym contributing to a Kafka configuration value.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConfigSynonym {
+    name: String,
+    value: Option<String>,
+    source: ConfigSource,
+}
+
+impl ConfigSynonym {
+    /// Returns the synonym configuration key.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Returns the synonym value.
+    pub fn value(&self) -> Option<&str> {
+        self.value.as_deref()
+    }
+
+    /// Returns the synonym's configuration source.
+    pub fn source(&self) -> ConfigSource {
+        self.source
+    }
+
+    fn from_protocol(synonym: DescribeConfigsSynonymV1) -> Self {
+        Self {
+            name: synonym.name,
+            value: synonym.value,
+            source: ConfigSource::from_code(synonym.source),
+        }
+    }
+}
+
+/// Kafka configuration source classification.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConfigSource {
+    /// Kafka could not determine the configuration source.
+    Unknown,
+    /// A dynamic topic-level value.
+    DynamicTopicConfig,
+    /// A dynamic broker-level value.
+    DynamicBrokerConfig,
+    /// A dynamic default applied to all brokers.
+    DynamicDefaultBrokerConfig,
+    /// A static broker-level value.
+    StaticBrokerConfig,
+    /// Kafka's default value.
+    DefaultConfig,
+    /// A dynamic broker logger value.
+    DynamicBrokerLoggerConfig,
+    /// A dynamic client metrics value.
+    DynamicClientMetricsConfig,
+    /// A dynamic consumer-group value.
+    DynamicGroupConfig,
+    /// A source code not recognized by this kafrust version.
+    Other(i8),
+}
+
+impl ConfigSource {
+    /// Classifies Kafka's raw configuration source value.
+    pub fn from_code(code: i8) -> Self {
+        match code {
+            0 => Self::Unknown,
+            1 => Self::DynamicTopicConfig,
+            2 => Self::DynamicBrokerConfig,
+            3 => Self::DynamicDefaultBrokerConfig,
+            4 => Self::StaticBrokerConfig,
+            5 => Self::DefaultConfig,
+            6 => Self::DynamicBrokerLoggerConfig,
+            7 => Self::DynamicClientMetricsConfig,
+            8 => Self::DynamicGroupConfig,
+            other => Self::Other(other),
+        }
+    }
+
+    /// Returns Kafka's raw configuration source value.
+    pub fn code(self) -> i8 {
+        match self {
+            Self::Unknown => 0,
+            Self::DynamicTopicConfig => 1,
+            Self::DynamicBrokerConfig => 2,
+            Self::DynamicDefaultBrokerConfig => 3,
+            Self::StaticBrokerConfig => 4,
+            Self::DefaultConfig => 5,
+            Self::DynamicBrokerLoggerConfig => 6,
+            Self::DynamicClientMetricsConfig => 7,
+            Self::DynamicGroupConfig => 8,
+            Self::Other(code) => code,
         }
     }
 }
@@ -613,7 +969,10 @@ fn nonnegative_i32_to_u64(value: i32) -> u64 {
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
-    use super::{AdminClient, CreateTopicsOptions, DeleteTopicsOptions, NewTopic};
+    use super::{
+        AdminClient, ConfigSource, CreateTopicsOptions, DeleteTopicsOptions,
+        DescribeConfigsOptions, NewTopic, TopicConfigResource,
+    };
     use crate::{BrokerErrorKind, ClientConfig, ClientMetrics};
     use std::time::Duration;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -658,6 +1017,27 @@ mod tests {
         let options = DeleteTopicsOptions::new().timeout(Duration::from_secs(9));
 
         assert_eq!(options.timeout_ref(), Duration::from_secs(9));
+    }
+
+    #[test]
+    fn builds_topic_config_queries_and_options() {
+        let all = TopicConfigResource::new("orders");
+        assert_eq!(all.name(), "orders");
+        assert_eq!(all.configuration_keys(), None);
+
+        let selected =
+            TopicConfigResource::with_keys("payments", ["cleanup.policy", "retention.ms"]);
+        assert_eq!(
+            selected.configuration_keys(),
+            Some(&["cleanup.policy".to_owned(), "retention.ms".to_owned()][..])
+        );
+
+        let options = DescribeConfigsOptions::new().include_synonyms(true);
+        assert!(options.includes_synonyms());
+        assert_eq!(ConfigSource::DynamicTopicConfig.code(), 1);
+        assert_eq!(ConfigSource::DynamicDefaultBrokerConfig.code(), 3);
+        assert_eq!(ConfigSource::DynamicGroupConfig.code(), 8);
+        assert_eq!(ConfigSource::from_code(99), ConfigSource::Other(99));
     }
 
     #[tokio::test]
@@ -721,6 +1101,72 @@ mod tests {
             Some(BrokerErrorKind::UnknownTopicOrPartition)
         );
         assert_eq!(metrics.snapshot().broker_errors, 1);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn describes_topic_configs_and_preserves_resource_errors() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut connection, _) = listener.accept().await.unwrap();
+            let request = read_frame(&mut connection).await;
+            assert_eq!(&request[0..4], &[0, 32, 0, 1]);
+            assert_eq!(request.last(), Some(&1));
+            write_frame(&mut connection, &describe_configs_response()).await;
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        );
+
+        let result = admin
+            .describe_topic_configs(
+                &[
+                    TopicConfigResource::with_keys("orders", ["cleanup.policy"]),
+                    TopicConfigResource::new("missing"),
+                ],
+                DescribeConfigsOptions::new().include_synonyms(true),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(result.throttle_time(), Duration::from_millis(9));
+        assert!(result.has_errors());
+        assert_eq!(result.resources().len(), 2);
+        let orders = &result.resources()[0];
+        assert_eq!(orders.resource_type(), 2);
+        assert_eq!(orders.name(), "orders");
+        assert!(orders.is_success());
+        assert_eq!(orders.error_message(), None);
+        assert_eq!(orders.entries().len(), 1);
+        assert_eq!(orders.entries()[0].name(), "cleanup.policy");
+        assert_eq!(orders.entries()[0].value(), Some("compact"));
+        assert!(!orders.entries()[0].is_read_only());
+        assert!(!orders.entries()[0].is_sensitive());
+        assert_eq!(
+            orders.entries()[0].source(),
+            ConfigSource::DynamicTopicConfig
+        );
+        assert_eq!(orders.entries()[0].synonyms().len(), 1);
+        assert_eq!(orders.entries()[0].synonyms()[0].name(), "cleanup.policy");
+        assert_eq!(orders.entries()[0].synonyms()[0].value(), Some("delete"));
+        assert_eq!(
+            orders.entries()[0].synonyms()[0].source(),
+            ConfigSource::DefaultConfig
+        );
+        let missing = &result.resources()[1];
+        assert_eq!(missing.name(), "missing");
+        assert_eq!(missing.error_code(), 3);
+        assert_eq!(missing.error_message(), Some("missing"));
+        assert_eq!(
+            missing.broker_error_kind(),
+            Some(BrokerErrorKind::UnknownTopicOrPartition)
+        );
+        assert_eq!(metrics.snapshot().broker_errors, 1);
+        assert_eq!(result.clone().into_resources().len(), 2);
         server.await.unwrap();
     }
 
@@ -885,6 +1331,35 @@ mod tests {
             0, 0, 0, 1, // topic count
             0, 6, b'o', b'r', b'd', b'e', b'r', b's', // topic name
             0, 3, // unknown topic or partition
+        ]
+    }
+
+    fn describe_configs_response() -> Vec<u8> {
+        vec![
+            0, 0, 0, 1, // correlation ID
+            0, 0, 0, 9, // throttle time
+            0, 0, 0, 2, // result count
+            0, 0, // success
+            0xff, 0xff, // null error message
+            2,    // topic resource
+            0, 6, b'o', b'r', b'd', b'e', b'r', b's', // resource name
+            0, 0, 0, 1, // config count
+            0, 14, b'c', b'l', b'e', b'a', b'n', b'u', b'p', b'.', b'p', b'o', b'l', b'i', b'c',
+            b'y', // config name
+            0, 7, b'c', b'o', b'm', b'p', b'a', b'c', b't', // value
+            0,    // read only
+            1,    // dynamic topic config
+            0,    // not sensitive
+            0, 0, 0, 1, // synonym count
+            0, 14, b'c', b'l', b'e', b'a', b'n', b'u', b'p', b'.', b'p', b'o', b'l', b'i', b'c',
+            b'y', // synonym name
+            0, 6, b'd', b'e', b'l', b'e', b't', b'e', // value
+            5,    // default config
+            0, 3, // unknown topic or partition
+            0, 7, b'm', b'i', b's', b's', b'i', b'n', b'g', // error message
+            2,    // topic resource
+            0, 7, b'm', b'i', b's', b's', b'i', b'n', b'g', // resource name
+            0, 0, 0, 0, // config count
         ]
     }
 }
