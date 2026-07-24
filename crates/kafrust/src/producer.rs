@@ -2533,7 +2533,7 @@ impl ProducerConfig {
     pub fn transactional_id(mut self, transactional_id: impl Into<String>) -> Self {
         self.transactional_id = Some(transactional_id.into());
         self = self.enable_idempotence(true);
-        self.max_retries = self.max_retries.max(10);
+        self.max_retries = self.max_retries.max(30);
         self
     }
 
@@ -3860,7 +3860,7 @@ mod tests {
         assert_eq!(config.transaction_timeout_ms_ref(), 30_000);
         assert!(config.idempotence_enabled());
         assert_eq!(config.acks_ref(), Acks::All);
-        assert_eq!(config.max_retries_ref(), 10);
+        assert_eq!(config.max_retries_ref(), 30);
     }
 
     #[test]
