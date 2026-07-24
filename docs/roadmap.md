@@ -1098,6 +1098,8 @@ Strategic role:
 
 Implemented evidence:
 
+- Producer records without an explicit partition use Kafka-compatible Murmur2
+  routing when a key is present, preserving standard-client key affinity.
 - Static classic-group membership carries a configured stable instance ID
   through JoinGroup v5, SyncGroup v3, Heartbeat v3, generation-fenced
   TxnOffsetCommit v3, and OffsetCommit v7. Duplicate instance fencing is

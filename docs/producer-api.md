@@ -114,6 +114,13 @@ The public model intentionally keeps Kafka terms visible:
 - acknowledgements
 - record metadata
 
+When a record has no explicit partition, kafrust hashes a present key with
+Kafka's Java-compatible Murmur2 algorithm and selects from the topic's sorted
+partition IDs. This keeps the same serialized key on the same partition as the
+standard Kafka clients. A record without either an explicit partition or key
+currently selects the first partition; adaptive sticky keyless distribution
+remains future work.
+
 The first producer implementation should stay byte-first. Serialization adapters can be added later without forcing serde or another encoding choice into the core client.
 
 Buffered producer and linger behavior is planned as a separate opt-in path. See [Producer Buffering And Linger Design](producer-buffering.md) for the intended implementation direction.
@@ -138,6 +145,8 @@ The `producer_send` example accepts `KAFRUST_PARTITION` to send one record to
 an explicit partition. Set `KAFRUST_ENABLE_IDEMPOTENCE=true` to initialize a
 producer ID and send the record with producer epoch and partition sequence
 metadata.
+Set `KAFRUST_EXPECT_PARTITION` to make the example fail unless explicit or
+key-derived routing produces the expected partition.
 The `producer_failover` example sends two records through the same producer
 instance to one explicit partition. It accepts `KAFRUST_PARTITION` and
 `KAFRUST_FAILOVER_PAUSE_MS`, so orchestrated smoke workflows can stop the

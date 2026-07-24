@@ -9,6 +9,7 @@ async fn main() -> kafrust::Result<()> {
     let key = std::env::var("KAFRUST_KEY").unwrap_or_else(|_| "kafrust-key".to_owned());
     let value = std::env::var("KAFRUST_VALUE").unwrap_or_else(|_| "hello from kafrust".to_owned());
     let partition = partition_from_env()?;
+    let expected_partition = optional_partition_from_env("KAFRUST_EXPECT_PARTITION")?;
     let idempotence = common::idempotence_from_env()?;
 
     let config = common::apply_security(
@@ -24,6 +25,11 @@ async fn main() -> kafrust::Result<()> {
     }
 
     let metadata = producer.send(record).await?;
+    if expected_partition.is_some_and(|expected| metadata.partition() != expected) {
+        return Err(Error::Unsupported(
+            "produced partition did not match KAFRUST_EXPECT_PARTITION",
+        ));
+    }
 
     println!(
         "produced {}-{}@{}",
@@ -36,7 +42,11 @@ async fn main() -> kafrust::Result<()> {
 }
 
 fn partition_from_env() -> kafrust::Result<Option<i32>> {
-    let Some(value) = std::env::var("KAFRUST_PARTITION").ok() else {
+    optional_partition_from_env("KAFRUST_PARTITION")
+}
+
+fn optional_partition_from_env(name: &str) -> kafrust::Result<Option<i32>> {
+    let Some(value) = std::env::var(name).ok() else {
         return Ok(None);
     };
 
