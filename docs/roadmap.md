@@ -1099,6 +1099,9 @@ Implemented evidence:
   classified separately from rejoinable group errors.
 - Classic groups can advertise and execute either Kafka's `range` or
   `roundrobin` assignor, including mixed topic subscriptions.
+- Manual `Live Kafka Smoke` run `30064594451` passed the round-robin
+  static-member path on Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext
+  brokers; all secured and multi-broker regression jobs also passed.
 - Manual `Live Kafka Smoke` run `30064182907` passed static join, poll,
   heartbeat, and OffsetCommit v7 on Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1
   plaintext brokers while every existing secured and multi-broker regression
