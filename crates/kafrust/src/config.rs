@@ -282,6 +282,15 @@ impl ClientConfig {
         self.metrics.record_retry();
     }
 
+    pub(crate) fn broker_error(&self, code: i16, context: String) -> Error {
+        self.record_broker_error();
+        Error::Broker { code, context }
+    }
+
+    pub(crate) fn record_broker_error(&self) {
+        self.metrics.record_broker_error();
+    }
+
     pub(crate) fn record_produce_batch(&self, records: usize) {
         self.metrics.record_produce_batch(records);
     }
@@ -465,10 +474,9 @@ async fn authenticate_sasl(client: &mut Client, credentials: &SaslCredentials) -
     let mechanism = credentials.mechanism().as_str();
     let handshake = client.sasl_handshake_v1(mechanism).await?;
     if handshake.error_code != 0 {
-        return Err(Error::Broker {
-            code: handshake.error_code,
-            context: format!("sasl handshake {mechanism}"),
-        });
+        return Err(
+            client.broker_error(handshake.error_code, format!("sasl handshake {mechanism}"))
+        );
     }
 
     if let Some(hash) = credentials.mechanism().scram_hash() {
@@ -487,10 +495,10 @@ async fn authenticate_sasl_plain(
         .sasl_authenticate_v0(sasl_plain_auth_bytes(credentials))
         .await?;
     if response.error_code != 0 {
-        return Err(Error::Broker {
-            code: response.error_code,
-            context: format!("sasl authenticate {mechanism}"),
-        });
+        return Err(client.broker_error(
+            response.error_code,
+            format!("sasl authenticate {mechanism}"),
+        ));
     }
 
     Ok(())
@@ -509,10 +517,10 @@ async fn authenticate_sasl_scram(
         .sasl_authenticate_v0(client_first.message.into_bytes())
         .await?;
     if server_first.error_code != 0 {
-        return Err(Error::Broker {
-            code: server_first.error_code,
-            context: format!("sasl authenticate {mechanism} client-first"),
-        });
+        return Err(client.broker_error(
+            server_first.error_code,
+            format!("sasl authenticate {mechanism} client-first"),
+        ));
     }
     let server_first_text =
         str::from_utf8(&server_first.auth_bytes).map_err(|_| Error::InvalidSaslResponse {
@@ -536,10 +544,10 @@ async fn authenticate_sasl_scram(
         .sasl_authenticate_v0(client_final.message.into_bytes())
         .await?;
     if server_final.error_code != 0 {
-        return Err(Error::Broker {
-            code: server_final.error_code,
-            context: format!("sasl authenticate {mechanism} client-final"),
-        });
+        return Err(client.broker_error(
+            server_final.error_code,
+            format!("sasl authenticate {mechanism} client-final"),
+        ));
     }
     let server_final_text =
         str::from_utf8(&server_final.auth_bytes).map_err(|_| Error::InvalidSaslResponse {
@@ -921,6 +929,7 @@ mod tests {
     async fn sasl_authenticate_error_does_not_expose_secret() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
+        let metrics = ClientMetrics::new();
         let server = tokio::spawn(async move {
             let (mut socket, _) = listener.accept().await.unwrap();
             let _handshake = read_frame(&mut socket).await;
@@ -952,6 +961,7 @@ mod tests {
             .security_protocol(SecurityProtocol::SaslPlaintext)
             .sasl_plain("alice", "secret")
             .request_timeout_ms(1_000)
+            .metrics(metrics.clone())
             .connect()
             .await
             .unwrap_err();
@@ -961,6 +971,7 @@ mod tests {
             Error::Broker { code: 58, context } if context == "sasl authenticate PLAIN"
         ));
         assert!(!error.to_string().contains("secret"));
+        assert_eq!(metrics.snapshot().broker_errors, 1);
         server.await.unwrap();
     }
 

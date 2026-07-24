@@ -149,6 +149,15 @@ impl Client {
         self.metrics.clone()
     }
 
+    pub(crate) fn broker_error(&self, code: i16, context: String) -> Error {
+        self.record_broker_error();
+        Error::Broker { code, context }
+    }
+
+    pub(crate) fn record_broker_error(&self) {
+        self.metrics.record_broker_error();
+    }
+
     /// Sends ApiVersions v0 and decodes the broker response.
     pub async fn api_versions(&mut self) -> Result<ApiVersionsResponseV0> {
         let request = ApiVersionsRequestV0 {

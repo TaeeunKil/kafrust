@@ -19,6 +19,7 @@ struct ClientMetricsInner {
     requests_failed: AtomicU64,
     requests_timed_out: AtomicU64,
     requests_cancelled: AtomicU64,
+    broker_errors: AtomicU64,
     retries: AtomicU64,
     buffered_records: AtomicU64,
     max_buffered_records: AtomicU64,
@@ -45,6 +46,8 @@ pub struct ClientMetricsSnapshot {
     pub requests_timed_out: u64,
     /// Request futures dropped before producing a result.
     pub requests_cancelled: u64,
+    /// Non-zero Kafka error codes observed in decoded broker responses.
+    pub broker_errors: u64,
     /// Additional high-level operation attempts after an initial attempt.
     pub retries: u64,
     /// Buffered producer records accepted and not yet completed.
@@ -83,6 +86,7 @@ impl ClientMetrics {
             requests_failed: self.inner.requests_failed.load(Ordering::Relaxed),
             requests_timed_out: self.inner.requests_timed_out.load(Ordering::Relaxed),
             requests_cancelled: self.inner.requests_cancelled.load(Ordering::Relaxed),
+            broker_errors: self.inner.broker_errors.load(Ordering::Relaxed),
             retries: self.inner.retries.load(Ordering::Relaxed),
             buffered_records: self.inner.buffered_records.load(Ordering::Relaxed),
             max_buffered_records: self.inner.max_buffered_records.load(Ordering::Relaxed),
@@ -116,6 +120,10 @@ impl ClientMetrics {
 
     pub(crate) fn record_retry(&self) {
         self.inner.retries.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub(crate) fn record_broker_error(&self) {
+        self.inner.broker_errors.fetch_add(1, Ordering::Relaxed);
     }
 
     pub(crate) fn accept_buffered_record(&self) {
@@ -254,6 +262,7 @@ mod tests {
 
         metrics.start_request(12).succeed(24);
         shared.start_request(8).fail(true);
+        shared.record_broker_error();
         shared.record_retry();
         shared.record_produce_batch(3);
         shared.record_consumed(2);
@@ -263,6 +272,7 @@ mod tests {
         assert_eq!(snapshot.requests_succeeded, 1);
         assert_eq!(snapshot.requests_failed, 1);
         assert_eq!(snapshot.requests_timed_out, 1);
+        assert_eq!(snapshot.broker_errors, 1);
         assert_eq!(snapshot.retries, 1);
         assert_eq!(snapshot.produced_records, 3);
         assert_eq!(snapshot.produce_batches, 1);

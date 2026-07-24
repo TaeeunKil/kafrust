@@ -260,10 +260,10 @@ impl Consumer {
             .await?;
         let partition_response = fetch_partition_response(&response, topic, partition)?;
         if partition_response.error_code != 0 {
-            return Err(Error::Broker {
-                code: partition_response.error_code,
-                context: format!("fetch {topic}-{partition}@{offset}"),
-            });
+            return Err(self.config.client.broker_error(
+                partition_response.error_code,
+                format!("fetch {topic}-{partition}@{offset}"),
+            ));
         }
 
         let next_offset = partition_response
