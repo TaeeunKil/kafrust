@@ -57,8 +57,9 @@ for topic in result.topics() {
 Cluster and topic listing use typed Metadata v1 views, and topic configuration
 inspection and alteration preserve sources, sensitivity, synonyms, operation
 kinds, validation mode, and partial resource errors. CreateTopics and
-DeleteTopics route through the active controller. See the repository's
-`docs/admin-api.md` for details.
+DeleteTopics route through the active controller, while group descriptions
+route through each group coordinator. See the repository's `docs/admin-api.md`
+for details.
 
 ## Install
 
@@ -422,7 +423,7 @@ Verified high-level paths include:
   and group consumers, and current group assignments can be committed through
   `Producer::send_offsets_to_transaction`. Transactional buffered sends and
   admin APIs beyond topic inspection, configuration description and alteration,
-  creation, and deletion are not implemented yet.
+  creation/deletion, and consumer-group description are not implemented yet.
   Shared request, retry, broker-error, producer, consumer, batch, and
   buffered-queue metrics are available together with high-level operation and
   request spans.

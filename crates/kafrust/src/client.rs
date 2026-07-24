@@ -12,6 +12,7 @@ use kafrust_protocol::api::delete_topics::{DeleteTopicsRequestV3, DeleteTopicsRe
 use kafrust_protocol::api::describe_configs::{
     DescribeConfigsRequestV1, DescribeConfigsResourceV1, DescribeConfigsResponseV1,
 };
+use kafrust_protocol::api::describe_groups::{DescribeGroupsRequestV1, DescribeGroupsResponseV1};
 use kafrust_protocol::api::end_txn::{EndTxnRequestV0, EndTxnResponseV0};
 use kafrust_protocol::api::fetch::{
     FetchPartitionV2, FetchRequestV4, FetchResponseV4, FetchTopicV2,
@@ -286,6 +287,22 @@ impl Client {
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(DescribeConfigsResponseV1::decode_body(&mut decoder)?)
+    }
+
+    /// Sends DescribeGroups v1 to this group coordinator connection.
+    pub async fn describe_groups_v1(
+        &mut self,
+        group_ids: Vec<String>,
+    ) -> Result<DescribeGroupsResponseV1> {
+        let request = DescribeGroupsRequestV1 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            group_ids,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(DescribeGroupsResponseV1::decode_body(&mut decoder)?)
     }
 
     /// Sends IncrementalAlterConfigs v0 to this broker.

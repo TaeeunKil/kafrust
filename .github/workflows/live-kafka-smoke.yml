@@ -146,6 +146,9 @@ jobs:
       - name: Run consumer group example
         run: cargo run -p kafrust --example consumer_group_poll
 
+      - name: Run admin describe group example
+        run: cargo run -p kafrust --example admin_describe_group
+
       - name: Dump Kafka logs
         if: failure()
         run: docker logs kafrust-kafka
@@ -297,6 +300,9 @@ jobs:
 
       - name: Run multi-broker consumer group example
         run: cargo run -p kafrust --example consumer_group_poll
+
+      - name: Run multi-broker admin describe group example
+        run: cargo run -p kafrust --example admin_describe_group
 
       - name: Run multi-broker producer and consumer failover through broker stop
         run: |
@@ -597,6 +603,9 @@ jobs:
       - name: Run TLS consumer group example
         run: cargo run -p kafrust --features tls --example consumer_group_poll
 
+      - name: Run TLS admin describe group example
+        run: cargo run -p kafrust --features tls --example admin_describe_group
+
       - name: Dump TLS Kafka logs
         if: failure()
         run: docker logs kafrust-kafka-tls
@@ -711,6 +720,9 @@ jobs:
 
       - name: Run SASL consumer group example
         run: cargo run -p kafrust --example consumer_group_poll
+
+      - name: Run SASL admin describe group example
+        run: cargo run -p kafrust --example admin_describe_group
 
       - name: Dump SASL Kafka logs
         if: failure()
@@ -900,6 +912,9 @@ jobs:
 
       - name: Run SASL_SSL SCRAM consumer group example
         run: cargo run -p kafrust --features tls --example consumer_group_poll
+
+      - name: Run SASL_SSL SCRAM admin describe group example
+        run: cargo run -p kafrust --features tls --example admin_describe_group
 
       - name: Dump SASL_SSL SCRAM Kafka logs
         if: failure()

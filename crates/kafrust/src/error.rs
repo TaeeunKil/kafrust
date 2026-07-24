@@ -139,6 +139,11 @@ pub enum Error {
         /// Kafka broker node ID.
         node_id: i32,
     },
+    /// A DescribeGroups response omitted the requested group.
+    MissingGroupDescription {
+        /// Requested consumer group ID.
+        group_id: String,
+    },
     /// SASL security protocol was selected without configuring credentials.
     MissingSaslCredentials,
     /// SASL authentication response could not be validated.
@@ -210,6 +215,9 @@ impl fmt::Display for Error {
             Self::MissingBroker { node_id } => {
                 write!(f, "missing broker metadata for node {node_id}")
             }
+            Self::MissingGroupDescription { group_id } => {
+                write!(f, "missing description for consumer group {group_id}")
+            }
             Self::MissingSaslCredentials => f.write_str("missing Kafka SASL credentials"),
             Self::InvalidSaslResponse { mechanism, reason } => {
                 write!(f, "invalid SASL {mechanism} response: {reason}")
@@ -246,6 +254,7 @@ impl std::error::Error for Error {
             | Self::UnknownTopicOrPartition { .. }
             | Self::MissingLeader { .. }
             | Self::MissingBroker { .. }
+            | Self::MissingGroupDescription { .. }
             | Self::MissingSaslCredentials
             | Self::InvalidSaslResponse { .. }
             | Self::Broker { .. }

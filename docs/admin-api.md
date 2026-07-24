@@ -130,6 +130,40 @@ atomically within each resource, but resources can succeed or fail
 independently. `AlterConfigsResult` therefore preserves every resource outcome.
 Use `validate_only(true)` to ask Kafka to validate without applying changes.
 
+## Describe Consumer Groups
+
+```rust
+use kafrust::{AdminClient, ClientConfig};
+
+# async fn example() -> kafrust::Result<()> {
+let admin = AdminClient::new(ClientConfig::new(["localhost:9092"]));
+let descriptions = admin
+    .describe_consumer_groups(&[
+        "orders-service".to_owned(),
+        "payments-service".to_owned(),
+    ])
+    .await?;
+
+for group in descriptions {
+    println!(
+        "{} state={} protocol={}/{} members={}",
+        group.group_id(),
+        group.state(),
+        group.protocol_type(),
+        group.protocol_name(),
+        group.members().len()
+    );
+}
+# Ok(())
+# }
+```
+
+DescribeGroups v1 discovers and connects to each group coordinator
+independently, so one call can safely contain group IDs assigned to different
+brokers. Member IDs, clients, hosts, protocol metadata, and assignments remain
+available; metadata and assignment payloads are raw bytes because their schema
+depends on the selected group protocol.
+
 ## Create Topics
 
 ```rust
@@ -212,4 +246,4 @@ DeleteTopics v3 also routes to the active controller and preserves independent
 topic outcomes. Version 3 responses contain topic names and error codes but no
 broker error-message field.
 
-Consumer-group administration remains on the M16 roadmap.
+Consumer-group offset deletion evaluation remains on the M16 roadmap.

@@ -725,6 +725,11 @@ Implemented evidence:
 - IncrementalAlterConfigs v0 exposes Set, Delete, Append, and Subtract
   operations, validate-only mode, resource-level atomicity and partial
   outcomes, broker throttle time, tracing, and broker-error metrics.
+- DescribeGroups v1 discovers each requested group's coordinator independently
+  and preserves state, protocol, member identity, raw protocol metadata and
+  assignments, per-group errors, throttle time, tracing, and metrics.
+- The `admin_describe_group` example runs after the consumer-group smoke path
+  across plaintext, multi-broker, TLS, SASL_PLAINTEXT, and SASL_SSL profiles.
 - The admin lifecycle example waits for asynchronous metadata propagation in
   multi-broker clusters and verifies `cleanup.policy` through
   `describe_topic_configs` before deleting the topic.
@@ -756,10 +761,14 @@ Implemented evidence:
   Kafka 3.7.2 and 4.3.1 single-node brokers and the Kafka 3.7.2 three-broker
   cluster. The same three-broker job passed the subsequent broker-stop
   producer/consumer failover checks.
+- Manual run `30061073263` passed IncrementalAlterConfigs v0 update and
+  DescribeConfigs v1 readback on Kafka 3.7.2 and 4.3.1 single-node brokers and
+  the Kafka 3.7.2 three-broker cluster, followed by the full existing smoke and
+  failover sequence.
 
 Remaining:
 
-- describe consumer groups and evaluate consumer-group offset deletion
+- evaluate consumer-group offset deletion
 
 ## M17 Idempotent Producer
 
