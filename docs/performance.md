@@ -70,3 +70,22 @@ measured 1,273 records/s for the 1-KiB uncompressed profile and 1,737 records/s
 with Zstd. Table-based CRC calculation and logarithmic batch sizing raised
 those profiles by 37.6x and 29.1x respectively. These are within-project
 before/after results, not claims of parity with another Kafka client.
+
+## Soak And Failure Injection
+
+The `soak` example repeatedly produces a bounded batch and fetches it back from
+the reported offset. It verifies acknowledged and consumed record counts,
+requires final request and buffered-record gauges to be zero, and can require
+an observed operation failure followed by recovery:
+
+```bash
+KAFRUST_SOAK_SECONDS=300 \
+KAFRUST_SOAK_REQUIRE_FAILURE=true \
+cargo run --release -p kafrust --example soak
+```
+
+The `Kafka Soak` workflow runs this profile weekly for five minutes against
+Kafka 4.3.1. It stops the broker one third of the way through the run, waits ten
+seconds, restarts it, and requires the client workload to observe and recover
+from the outage. Manual runs default to two minutes and accept configurable
+duration and outage inputs.

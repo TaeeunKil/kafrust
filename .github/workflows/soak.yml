@@ -1,0 +1,109 @@
+name: Kafka Soak
+
+on:
+  workflow_dispatch:
+    inputs:
+      duration_seconds:
+        description: Soak duration before final drain (minimum 60)
+        required: true
+        default: "120"
+      outage_seconds:
+        description: Kafka broker outage duration
+        required: true
+        default: "10"
+  schedule:
+    - cron: "43 4 * * 3"
+
+env:
+  CARGO_TERM_COLOR: always
+  KAFRUST_BOOTSTRAP_SERVERS: localhost:9092
+  KAFRUST_TOPIC: kafrust-soak
+  KAFRUST_SOAK_SECONDS: ${{ inputs.duration_seconds || '300' }}
+  KAFRUST_SOAK_REQUIRE_FAILURE: "true"
+  KAFRUST_OUTAGE_SECONDS: ${{ inputs.outage_seconds || '10' }}
+
+jobs:
+  broker-restart:
+    name: Kafka 4.3.1 broker restart
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+
+      - name: Start Kafka
+        run: |
+          docker run -d --name kafrust-kafka \
+            -p 9092:9092 \
+            -e KAFKA_NODE_ID=1 \
+            -e KAFKA_PROCESS_ROLES=broker,controller \
+            -e KAFKA_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 \
+            -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092 \
+            -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+            -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
+            -e KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT \
+            -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@localhost:9093 \
+            -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
+            apache/kafka:4.3.1
+
+      - name: Wait for Kafka
+        run: |
+          for attempt in {1..90}; do
+            if docker exec kafrust-kafka /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server localhost:9092 >/tmp/kafrust-soak-probe.log 2>&1; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/kafrust-soak-probe.log || true
+          docker logs kafrust-kafka
+          exit 1
+
+      - name: Create soak topic
+        run: |
+          docker exec kafrust-kafka /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server localhost:9092 \
+            --create \
+            --topic "$KAFRUST_TOPIC" \
+            --partitions 1 \
+            --replication-factor 1
+
+      - name: Build release soak profile
+        run: cargo build --release -p kafrust --example soak
+
+      - name: Run soak with broker restart
+        run: |
+          set -euo pipefail
+          if [ "$KAFRUST_SOAK_SECONDS" -lt 60 ]; then
+            echo "duration_seconds must be at least 60"
+            exit 1
+          fi
+          (
+            set -o pipefail
+            cargo run --quiet --release -p kafrust --example soak \
+              | tee soak-result.json
+          ) &
+          soak_pid=$!
+          sleep "$((KAFRUST_SOAK_SECONDS / 3))"
+          docker stop -t 1 kafrust-kafka
+          sleep "$KAFRUST_OUTAGE_SECONDS"
+          docker start kafrust-kafka
+          wait "$soak_pid"
+          test -s soak-result.json
+
+      - name: Upload soak result
+        uses: actions/upload-artifact@v6
+        with:
+          name: kafrust-soak-${{ github.run_id }}
+          path: soak-result.json
+          retention-days: 90
+
+      - name: Dump Kafka logs
+        if: failure()
+        run: docker logs kafrust-kafka
