@@ -106,6 +106,9 @@ cargo run -p kafrust --example producer_send
 use kafrust::{AdminClient, ClientConfig, CreateTopicsOptions, NewTopic};
 
 let admin = AdminClient::new(ClientConfig::new(["localhost:9092"]));
+let cluster = admin.describe_cluster().await?;
+println!("controller: {}", cluster.controller_id());
+
 let result = admin
     .create_topics(
         &[NewTopic::new("orders", 6, 3).config("cleanup.policy", "compact")],
@@ -118,9 +121,9 @@ for topic in result.topics() {
 }
 ```
 
+`describe_cluster` and `list_topics` provide typed Metadata v1 views.
 CreateTopics v2 and DeleteTopics v3 discover the active controller and preserve
-per-topic partial success and error responses. See
-[Admin API](docs/admin-api.md).
+per-topic partial success and error responses. See [Admin API](docs/admin-api.md).
 
 ### Producer
 
@@ -327,7 +330,7 @@ See [Compatibility](docs/compatibility.md) and
 Primary public entry points:
 
 - `Client` for low-level Kafka request roundtrips.
-- `AdminClient`, `NewTopic`, and topic creation/deletion option and result types.
+- `AdminClient` and typed cluster, topic listing, creation, and deletion types.
 - `ProducerConfig`, `Producer`, `BufferedProducer`, and `ProducerRecord`.
 - `Compression` for opt-in producer RecordBatch compression.
 - `ConsumerConfig`, `Consumer`, `ConsumerAssignment`, and `ConsumerRecord`.

@@ -712,6 +712,13 @@ Strategic role:
 
 Implemented evidence:
 
+- `AdminClient::describe_cluster` exposes typed broker IDs, advertised
+  endpoints, rack IDs, and the active controller. `AdminClient::list_topics`
+  exposes names, internal-topic flags, partition counts, and topic-level Kafka
+  error classifications.
+- Injected broker tests distinguish Metadata v1's empty topic array for
+  cluster-only inspection from its null array for all-topic listing and verify
+  broker error metrics for partial metadata failures.
 - CreateTopics v2 request encoding and response decoding preserve automatic
   and manual replica assignment, nullable topic configs, validate-only mode,
   broker timeout, throttle time, and topic-level partial failures.
@@ -738,7 +745,6 @@ Implemented evidence:
 
 Remaining:
 
-- list topics and cluster description types
 - describe and alter topic configs
 - describe consumer groups and evaluate consumer-group offset deletion
 
