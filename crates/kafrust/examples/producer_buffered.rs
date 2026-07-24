@@ -1,6 +1,7 @@
 mod common;
 
 use kafrust::{Acks, ConsumerConfig, Error, ProducerConfig, ProducerRecord, RecordMetadata};
+use std::collections::BTreeMap;
 
 #[tokio::main]
 async fn main() -> kafrust::Result<()> {
@@ -68,9 +69,11 @@ async fn fetch_buffered_records(
     expected: &[(String, String)],
     metadata: &[RecordMetadata],
 ) -> kafrust::Result<()> {
-    let first = metadata.first().ok_or(Error::Unsupported(
-        "buffered producer smoke missing metadata",
-    ))?;
+    if metadata.is_empty() {
+        return Err(Error::Unsupported(
+            "buffered producer smoke missing metadata",
+        ));
+    }
     let mut consumer = common::apply_security(
         ConsumerConfig::new(bootstrap_servers.to_owned())
             .client_id("kafrust-buffered-consumer-example"),
@@ -78,21 +81,21 @@ async fn fetch_buffered_records(
     .max_wait_ms(500)
     .build()
     .await?;
-    let fetched = consumer
-        .fetch(topic.to_owned(), first.partition(), first.offset())
-        .await?;
+    let mut fetched = Vec::new();
+    for (partition, offset) in minimum_partition_offsets(metadata) {
+        fetched.extend(consumer.fetch(topic.to_owned(), partition, offset).await?);
+    }
 
     for ((key, value), metadata) in expected.iter().zip(metadata) {
         let record = fetched
             .iter()
-            .find(|record| record.offset() == metadata.offset())
+            .find(|record| {
+                record.partition() == metadata.partition() && record.offset() == metadata.offset()
+            })
             .ok_or(Error::Unsupported(
                 "buffered producer smoke record not fetched",
             ))?;
-        if record.partition() != metadata.partition()
-            || record.key() != Some(key.as_bytes())
-            || record.value() != Some(value.as_bytes())
-        {
+        if record.key() != Some(key.as_bytes()) || record.value() != Some(value.as_bytes()) {
             return Err(Error::Unsupported(
                 "buffered producer smoke record mismatch",
             ));
@@ -106,4 +109,34 @@ async fn fetch_buffered_records(
     }
 
     Ok(())
+}
+
+fn minimum_partition_offsets(metadata: &[RecordMetadata]) -> BTreeMap<i32, i64> {
+    let mut partition_offsets = BTreeMap::new();
+    for record_metadata in metadata {
+        partition_offsets
+            .entry(record_metadata.partition())
+            .and_modify(|offset: &mut i64| *offset = (*offset).min(record_metadata.offset()))
+            .or_insert(record_metadata.offset());
+    }
+    partition_offsets
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn finds_earliest_delivery_offset_per_partition() {
+        let metadata = [
+            RecordMetadata::new("orders", 4, 6, None),
+            RecordMetadata::new("orders", 1, 7, None),
+            RecordMetadata::new("orders", 4, 5, None),
+        ];
+
+        assert_eq!(
+            minimum_partition_offsets(&metadata),
+            BTreeMap::from([(1, 7), (4, 5)])
+        );
+    }
 }
