@@ -684,7 +684,7 @@ Evidence:
 
 ## M16 Admin API MVP
 
-Status: Planned.
+Status: In progress.
 
 Goal: provide the admin operations needed by common applications and test harnesses.
 
@@ -709,6 +709,32 @@ Exit criteria:
 Strategic role:
 
 - Admin support reduces friction for integration tests, smoke workflows, and service bootstrap code.
+
+Implemented evidence:
+
+- CreateTopics v2 request encoding and response decoding preserve automatic
+  and manual replica assignment, nullable topic configs, validate-only mode,
+  broker timeout, throttle time, and topic-level partial failures.
+- `AdminClient::create_topics` discovers the current controller through
+  Metadata v1 and routes the request using the security, timeout, decode-limit,
+  and metrics settings from `ClientConfig`.
+- `NewTopic`, `CreateTopicsOptions`, `CreateTopicsResult`, and
+  `CreateTopicResult` expose Kafka topic creation concepts without flattening
+  partial responses into a single generic error.
+- Focused byte-level tests and an injected two-connection test cover protocol
+  encoding, decoding, controller routing, topic error preservation, and broker
+  error metrics.
+- The `admin_create_topic` example creates a topic and verifies it through a
+  subsequent metadata lookup. The live Kafka workflow runs it against the
+  Kafka 3.7.2 and current stable single-node profiles and the Kafka 3.7.2
+  three-broker profile.
+
+Remaining:
+
+- list topics and cluster description types
+- delete topics
+- describe and alter topic configs
+- describe consumer groups and evaluate consumer-group offset deletion
 
 ## M17 Idempotent Producer
 
