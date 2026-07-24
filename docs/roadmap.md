@@ -907,11 +907,15 @@ Implemented evidence:
   The configurable limit is inherited by nested Fetch decoders and enforced by
   gzip, Snappy, LZ4, and Zstd, with typed
   `protocol::Error::LimitExceeded { kind, actual, max }` failures.
+- Debug-level spans cover immediate and buffered producer operations,
+  transaction completion and offset attachment, direct-consumer poll/fetch,
+  and consumer-group join, poll, background/explicit heartbeat, and offset
+  commit. Existing `kafka.request` spans nest under these operation spans, and
+  all fields exclude record and protocol payload contents.
 
 Remaining:
 
 - remaining high-level operation metrics
-- complete producer, consumer, and group operation spans
 - throughput and latency benchmark baselines
 - load, soak, and failure-injection profiles
 

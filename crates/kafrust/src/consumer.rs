@@ -116,6 +116,13 @@ impl Consumer {
     }
 
     /// Polls assigned partitions and advances in-memory offsets for fetched records.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.consumer.poll",
+        skip_all,
+        fields(assignment_count = self.assignments.len(), max_poll_records = self.config.max_poll_records),
+        err
+    )]
     pub async fn poll(&mut self) -> Result<Vec<ConsumerRecord>> {
         let assignments = self.assignments.clone();
         let mut records = Vec::new();
@@ -166,6 +173,13 @@ impl Consumer {
     }
 
     /// Fetches records for one topic partition without changing assignment state.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.consumer.fetch",
+        skip_all,
+        fields(topic = tracing::field::Empty, partition, offset),
+        err
+    )]
     pub async fn fetch(
         &mut self,
         topic: impl Into<String>,
@@ -173,6 +187,7 @@ impl Consumer {
         offset: i64,
     ) -> Result<Vec<ConsumerRecord>> {
         let topic = topic.into();
+        tracing::Span::current().record("topic", topic.as_str());
         let records = self
             .fetch_with_progress(&topic, partition, offset)
             .await?

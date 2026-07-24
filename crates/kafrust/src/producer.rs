@@ -624,6 +624,13 @@ impl BufferedProducer {
     ///
     /// The returned delivery handle resolves when the background task reaches a
     /// terminal result for this record.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.producer.buffered_send",
+        skip_all,
+        fields(topic = record.topic(), partition = ?record.partition_ref()),
+        err
+    )]
     pub async fn send(&mut self, record: ProducerRecord) -> Result<ProducerDelivery> {
         self.state.ensure_open()?;
         enqueue_buffered_record(&self.commands, &self.metrics, record).await
@@ -633,6 +640,7 @@ impl BufferedProducer {
     ///
     /// Pending delivery handles are completed from the underlying batch
     /// Produce outcomes before this returns.
+    #[tracing::instrument(level = "debug", name = "kafka.producer.buffered_flush", skip_all, err)]
     pub async fn flush(&mut self) -> Result<()> {
         self.state.ensure_open()?;
         let (result_sender, result_receiver) = oneshot::channel();
@@ -647,6 +655,7 @@ impl BufferedProducer {
     /// Flushes and closes the buffered producer.
     ///
     /// Close is idempotent. Future enqueue APIs will reject sends after close.
+    #[tracing::instrument(level = "debug", name = "kafka.producer.buffered_close", skip_all, err)]
     pub async fn close(&mut self) -> Result<()> {
         if self.state.is_open() {
             let (result_sender, result_receiver) = oneshot::channel();
@@ -1160,6 +1169,13 @@ impl Producer {
     /// The offsets are committed only if [`Producer::commit_transaction`]
     /// succeeds. Pass the assignments returned by [`crate::ConsumerGroup::assignments`]
     /// after polling the records processed by this transaction.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.producer.send_offsets_to_transaction",
+        skip_all,
+        fields(group_id = tracing::field::Empty, assignment_count = assignments.len()),
+        err
+    )]
     pub async fn send_offsets_to_transaction(
         &mut self,
         group_id: impl Into<String>,
@@ -1174,6 +1190,7 @@ impl Producer {
         }
 
         let group_id = group_id.into();
+        tracing::Span::current().record("group_id", group_id.as_str());
         let state = self
             .transaction_state
             .as_ref()
@@ -1205,11 +1222,23 @@ impl Producer {
     }
 
     /// Commits the active transaction.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.producer.commit_transaction",
+        skip_all,
+        err
+    )]
     pub async fn commit_transaction(&mut self) -> Result<()> {
         self.end_transaction(true).await
     }
 
     /// Aborts the active transaction.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.producer.abort_transaction",
+        skip_all,
+        err
+    )]
     pub async fn abort_transaction(&mut self) -> Result<()> {
         self.end_transaction(false).await
     }
@@ -1222,6 +1251,13 @@ impl Producer {
     }
 
     /// Sends one record and returns Kafka metadata for the accepted write.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.producer.send",
+        skip_all,
+        fields(topic = record.topic(), partition = ?record.partition_ref()),
+        err
+    )]
     pub async fn send(&mut self, record: ProducerRecord) -> Result<RecordMetadata> {
         self.ensure_idempotent_producer_usable()?;
         self.ensure_transaction_active()?;
@@ -1302,6 +1338,13 @@ impl Producer {
     /// timeouts are returned as [`Error`]. Broker Produce response failures for
     /// a topic partition are returned inside the report so callers can inspect
     /// partial success and failure by input record.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.producer.send_batch",
+        skip_all,
+        fields(record_count = tracing::field::Empty),
+        err
+    )]
     pub async fn send_batch_report(
         &mut self,
         records: impl IntoIterator<Item = ProducerRecord>,
@@ -1316,6 +1359,7 @@ impl Producer {
             .into_iter()
             .map(BatchRecord::new)
             .collect::<Vec<_>>();
+        tracing::Span::current().record("record_count", records.len());
         if records.is_empty() {
             return Ok(ProducerBatchReport::new(Vec::new()));
         }

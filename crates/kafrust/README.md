@@ -322,6 +322,13 @@ are changing is not a transactional view. Request metrics and `tracing` spans
 contain operational metadata only; key, value, request, and response payload
 contents are not recorded.
 
+Debug-level operation spans cover immediate and buffered producer sends,
+flush/close, batch sends, transaction completion and offset attachment,
+direct-consumer poll/fetch, and consumer-group join, poll, heartbeat, and
+offset commit. Their names use the `kafka.producer.*`, `kafka.consumer.*`, and
+`kafka.consumer_group.*` prefixes. Broker `kafka.request` spans execute as
+children, so subscribers can attribute wire latency to one user operation.
+
 The buffered producer command queue defaults to 1024 records. Configure it with
 `ProducerConfig::buffer_capacity`; values below one become one. When the queue
 is full, `BufferedProducer::send` waits for capacity instead of allocating an
