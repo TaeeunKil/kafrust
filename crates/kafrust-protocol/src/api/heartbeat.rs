@@ -31,6 +31,34 @@ impl HeartbeatRequestV2 {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HeartbeatRequestV3 {
+    pub correlation_id: i32,
+    pub client_id: Option<String>,
+    pub group_id: String,
+    pub generation_id: i32,
+    pub member_id: String,
+    pub group_instance_id: Option<String>,
+}
+
+impl HeartbeatRequestV3 {
+    pub fn encode(&self) -> Result<Vec<u8>> {
+        let mut encoder = Encoder::new();
+        RequestHeader {
+            api_key: API_KEY,
+            api_version: 3,
+            correlation_id: self.correlation_id,
+            client_id: self.client_id.clone(),
+        }
+        .encode_v1(&mut encoder)?;
+        encoder.write_string(&self.group_id)?;
+        encoder.write_i32(self.generation_id);
+        encoder.write_string(&self.member_id)?;
+        encoder.write_nullable_string(self.group_instance_id.as_deref())?;
+        Ok(encoder.into_bytes())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HeartbeatResponseV2 {
     pub throttle_time_ms: i32,
     pub error_code: i16,
@@ -48,7 +76,7 @@ impl HeartbeatResponseV2 {
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
-    use super::{HeartbeatRequestV2, HeartbeatResponseV2};
+    use super::{HeartbeatRequestV2, HeartbeatRequestV3, HeartbeatResponseV2};
     use crate::codec::Decoder;
 
     #[test]
@@ -88,5 +116,23 @@ mod tests {
         assert_eq!(response.throttle_time_ms, 0);
         assert_eq!(response.error_code, 0);
         assert!(decoder.is_empty());
+    }
+
+    #[test]
+    fn encodes_heartbeat_v3_request_with_static_member() {
+        let request = HeartbeatRequestV3 {
+            correlation_id: 17,
+            client_id: Some("kafrust".to_owned()),
+            group_id: "orders-group".to_owned(),
+            generation_id: 7,
+            member_id: "member-a".to_owned(),
+            group_instance_id: Some("orders-reader-1".to_owned()),
+        };
+
+        let encoded = request.encode().unwrap();
+        assert_eq!(&encoded[0..4], &[0, 12, 0, 3]);
+        assert!(encoded
+            .windows(17)
+            .any(|bytes| bytes == b"\0\x0forders-reader-1"));
     }
 }

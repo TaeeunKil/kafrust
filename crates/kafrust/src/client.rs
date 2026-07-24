@@ -20,18 +20,22 @@ use kafrust_protocol::api::fetch::{
 use kafrust_protocol::api::find_coordinator::{
     CoordinatorType, FindCoordinatorRequestV1, FindCoordinatorResponseV1,
 };
-use kafrust_protocol::api::heartbeat::{HeartbeatRequestV2, HeartbeatResponseV2};
+use kafrust_protocol::api::heartbeat::{
+    HeartbeatRequestV2, HeartbeatRequestV3, HeartbeatResponseV2,
+};
 use kafrust_protocol::api::incremental_alter_configs::{
     IncrementalAlterConfigsRequestV0, IncrementalAlterConfigsResourceV0,
     IncrementalAlterConfigsResponseV0,
 };
 use kafrust_protocol::api::init_producer_id::{InitProducerIdRequestV0, InitProducerIdResponseV0};
 use kafrust_protocol::api::join_group::{
-    JoinGroupProtocol, JoinGroupRequestV2, JoinGroupResponseV2,
+    JoinGroupProtocol, JoinGroupRequestV2, JoinGroupRequestV5, JoinGroupResponseV2,
+    JoinGroupResponseV5,
 };
 use kafrust_protocol::api::metadata::{MetadataRequestV1, MetadataResponseV1};
 use kafrust_protocol::api::offset_commit::{
-    OffsetCommitRequestV2, OffsetCommitResponseV2, OffsetCommitTopic,
+    OffsetCommitRequestV2, OffsetCommitRequestV7, OffsetCommitResponseV2, OffsetCommitResponseV7,
+    OffsetCommitTopic, OffsetCommitTopicV7,
 };
 use kafrust_protocol::api::offset_delete::{
     OffsetDeleteRequestTopicV0, OffsetDeleteRequestV0, OffsetDeleteResponseV0,
@@ -49,7 +53,7 @@ use kafrust_protocol::api::sasl::{
     SaslHandshakeResponseV1,
 };
 use kafrust_protocol::api::sync_group::{
-    SyncGroupAssignment, SyncGroupRequestV2, SyncGroupResponseV2,
+    SyncGroupAssignment, SyncGroupRequestV2, SyncGroupRequestV3, SyncGroupResponseV2,
 };
 use kafrust_protocol::api::txn_offset_commit::{
     TxnOffsetCommitRequestV0, TxnOffsetCommitRequestV3, TxnOffsetCommitResponseV0,
@@ -565,6 +569,35 @@ impl Client {
         Ok(JoinGroupResponseV2::decode_body(&mut decoder)?)
     }
 
+    /// Sends JoinGroup v5 with an optional static group instance ID.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn join_group_v5(
+        &mut self,
+        group_id: impl Into<String>,
+        session_timeout_ms: i32,
+        rebalance_timeout_ms: i32,
+        member_id: impl Into<String>,
+        group_instance_id: Option<String>,
+        protocol_type: impl Into<String>,
+        protocols: Vec<JoinGroupProtocol>,
+    ) -> Result<JoinGroupResponseV5> {
+        let request = JoinGroupRequestV5 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            group_id: group_id.into(),
+            session_timeout_ms,
+            rebalance_timeout_ms,
+            member_id: member_id.into(),
+            group_instance_id,
+            protocol_type: protocol_type.into(),
+            protocols,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(JoinGroupResponseV5::decode_body(&mut decoder)?)
+    }
+
     /// Sends SyncGroup v2 using the provided member assignments.
     pub async fn sync_group_v2(
         &mut self,
@@ -587,6 +620,30 @@ impl Client {
         Ok(SyncGroupResponseV2::decode_body(&mut decoder)?)
     }
 
+    /// Sends SyncGroup v3 with an optional static group instance ID.
+    pub async fn sync_group_v3(
+        &mut self,
+        group_id: impl Into<String>,
+        generation_id: i32,
+        member_id: impl Into<String>,
+        group_instance_id: Option<String>,
+        assignments: Vec<SyncGroupAssignment>,
+    ) -> Result<SyncGroupResponseV2> {
+        let request = SyncGroupRequestV3 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            group_id: group_id.into(),
+            generation_id,
+            member_id: member_id.into(),
+            group_instance_id,
+            assignments,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(SyncGroupResponseV2::decode_body(&mut decoder)?)
+    }
+
     /// Sends Heartbeat v2 for a joined consumer group member.
     pub async fn heartbeat_v2(
         &mut self,
@@ -600,6 +657,28 @@ impl Client {
             group_id: group_id.into(),
             generation_id,
             member_id: member_id.into(),
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(HeartbeatResponseV2::decode_body(&mut decoder)?)
+    }
+
+    /// Sends Heartbeat v3 with an optional static group instance ID.
+    pub async fn heartbeat_v3(
+        &mut self,
+        group_id: impl Into<String>,
+        generation_id: i32,
+        member_id: impl Into<String>,
+        group_instance_id: Option<String>,
+    ) -> Result<HeartbeatResponseV2> {
+        let request = HeartbeatRequestV3 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            group_id: group_id.into(),
+            generation_id,
+            member_id: member_id.into(),
+            group_instance_id,
         };
         let response = self.send_request(&request.encode()?).await?;
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
@@ -629,6 +708,30 @@ impl Client {
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(OffsetCommitResponseV2::decode_body(&mut decoder)?)
+    }
+
+    /// Sends OffsetCommit v7 with static-member fencing and leader epochs.
+    pub async fn offset_commit_v7(
+        &mut self,
+        group_id: impl Into<String>,
+        generation_id_or_member_epoch: i32,
+        member_id: impl Into<String>,
+        group_instance_id: Option<String>,
+        topics: Vec<OffsetCommitTopicV7>,
+    ) -> Result<OffsetCommitResponseV7> {
+        let request = OffsetCommitRequestV7 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            group_id: group_id.into(),
+            generation_id_or_member_epoch,
+            member_id: member_id.into(),
+            group_instance_id,
+            topics,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(OffsetCommitResponseV7::decode_body(&mut decoder)?)
     }
 
     pub(crate) async fn fetch_one_v4(
