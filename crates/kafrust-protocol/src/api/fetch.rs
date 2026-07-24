@@ -1,7 +1,7 @@
-use crate::codec::{Decoder, Encoder};
+use crate::codec::{DecodeLimits, Decoder, Encoder};
 use crate::error::{Error, Result};
 use crate::header::RequestHeader;
-use crate::record_batch::{decompress_record_batch_records, RecordBatchCompression};
+use crate::record_batch::{decompress_record_batch_records_with_limit, RecordBatchCompression};
 
 pub const API_KEY: i16 = 1;
 
@@ -155,6 +155,7 @@ pub struct FetchPartitionResponseV4 {
 
 impl FetchPartitionResponseV4 {
     fn decode(decoder: &mut Decoder<'_>) -> Result<Self> {
+        let limits = decoder.limits();
         Ok(Self {
             partition_index: decoder.read_i32()?,
             error_code: decoder.read_i16()?,
@@ -163,7 +164,7 @@ impl FetchPartitionResponseV4 {
             aborted_transactions: decoder
                 .read_array("aborted transactions", AbortedTransactionV4::decode)?
                 .unwrap_or_default(),
-            records: decode_message_set(&decoder.read_bytes()?)?,
+            records: decode_message_set(&decoder.read_bytes()?, limits)?,
         })
     }
 }
@@ -224,11 +225,12 @@ pub struct FetchPartitionResponseV2 {
 
 impl FetchPartitionResponseV2 {
     fn decode(decoder: &mut Decoder<'_>) -> Result<Self> {
+        let limits = decoder.limits();
         Ok(Self {
             partition_index: decoder.read_i32()?,
             error_code: decoder.read_i16()?,
             high_watermark: decoder.read_i64()?,
-            records: decode_message_set(&decoder.read_bytes()?)?,
+            records: decode_message_set(&decoder.read_bytes()?, limits)?,
         })
     }
 }
@@ -244,8 +246,8 @@ pub struct MessageSetRecord {
     pub control: bool,
 }
 
-fn decode_message_set(bytes: &[u8]) -> Result<Vec<MessageSetRecord>> {
-    let mut decoder = Decoder::new(bytes);
+fn decode_message_set(bytes: &[u8], limits: DecodeLimits) -> Result<Vec<MessageSetRecord>> {
+    let mut decoder = Decoder::with_limits(bytes, limits);
     let mut records = Vec::new();
 
     while decoder.remaining() >= 12 {
@@ -264,21 +266,31 @@ fn decode_message_set(bytes: &[u8]) -> Result<Vec<MessageSetRecord>> {
             break;
         }
         let message = decoder.read_exact(message_size)?;
-        records.extend(decode_message_or_batch(offset, message)?);
+        let decoded = decode_message_or_batch(offset, message, limits)?;
+        let total = records
+            .len()
+            .checked_add(decoded.len())
+            .ok_or(Error::LengthOverflow("fetch records"))?;
+        decoder.ensure_collection_length("fetch records", total)?;
+        records.extend(decoded);
     }
 
     Ok(records)
 }
 
-fn decode_message_or_batch(offset: i64, bytes: &[u8]) -> Result<Vec<MessageSetRecord>> {
+fn decode_message_or_batch(
+    offset: i64,
+    bytes: &[u8],
+    limits: DecodeLimits,
+) -> Result<Vec<MessageSetRecord>> {
     match bytes.get(4).copied() {
-        Some(2) => decode_record_batch(offset, bytes),
-        _ => Ok(vec![decode_message(offset, bytes)?]),
+        Some(2) => decode_record_batch(offset, bytes, limits),
+        _ => Ok(vec![decode_message(offset, bytes, limits)?]),
     }
 }
 
-fn decode_message(offset: i64, bytes: &[u8]) -> Result<MessageSetRecord> {
-    let mut decoder = Decoder::new(bytes);
+fn decode_message(offset: i64, bytes: &[u8], limits: DecodeLimits) -> Result<MessageSetRecord> {
+    let mut decoder = Decoder::with_limits(bytes, limits);
     let _crc = decoder.read_i32()?;
     let magic = decoder.read_i8()?;
     let _attributes = decoder.read_i8()?;
@@ -306,8 +318,12 @@ fn decode_message(offset: i64, bytes: &[u8]) -> Result<MessageSetRecord> {
     })
 }
 
-fn decode_record_batch(base_offset: i64, bytes: &[u8]) -> Result<Vec<MessageSetRecord>> {
-    let mut decoder = Decoder::new(bytes);
+fn decode_record_batch(
+    base_offset: i64,
+    bytes: &[u8],
+    limits: DecodeLimits,
+) -> Result<Vec<MessageSetRecord>> {
+    let mut decoder = Decoder::with_limits(bytes, limits);
     let _partition_leader_epoch = decoder.read_i32()?;
     let magic = decoder.read_i8()?;
     if magic != 2 {
@@ -335,13 +351,25 @@ fn decode_record_batch(base_offset: i64, bytes: &[u8]) -> Result<Vec<MessageSetR
 
     let record_count =
         usize::try_from(record_count).map_err(|_| Error::LengthOverflow("record batch records"))?;
+    decoder.ensure_collection_length("record batch records", record_count)?;
     let record_bytes = if compression.is_compressed() {
         let compressed = decoder.read_exact(decoder.remaining())?;
-        decompress_record_batch_records(compression, compressed)?
+        decompress_record_batch_records_with_limit(
+            compression,
+            compressed,
+            limits.max_decompressed_record_bytes(),
+        )?
     } else {
+        if decoder.remaining() > limits.max_decompressed_record_bytes() {
+            return Err(Error::LimitExceeded {
+                kind: "decompressed record batch bytes",
+                actual: decoder.remaining(),
+                max: limits.max_decompressed_record_bytes(),
+            });
+        }
         decoder.read_exact(decoder.remaining())?.to_vec()
     };
-    let mut record_decoder = Decoder::new(&record_bytes);
+    let mut record_decoder = Decoder::with_limits(&record_bytes, limits);
     let mut records = Vec::with_capacity(record_count);
     for _ in 0..record_count {
         let record_length = record_decoder.read_varint()?;
@@ -360,6 +388,7 @@ fn decode_record_batch(base_offset: i64, bytes: &[u8]) -> Result<Vec<MessageSetR
             producer_id,
             attributes,
             record_bytes,
+            limits,
         )?);
     }
 
@@ -372,8 +401,9 @@ fn decode_record(
     producer_id: i64,
     batch_attributes: i16,
     bytes: &[u8],
+    limits: DecodeLimits,
 ) -> Result<MessageSetRecord> {
-    let mut decoder = Decoder::new(bytes);
+    let mut decoder = Decoder::with_limits(bytes, limits);
     let _attributes = decoder.read_i8()?;
     let timestamp_delta = decoder.read_varlong()?;
     let offset_delta = decoder.read_varint()?;
@@ -386,6 +416,9 @@ fn decode_record(
             length: header_count,
         });
     }
+    let header_count =
+        usize::try_from(header_count).map_err(|_| Error::LengthOverflow("record headers"))?;
+    decoder.ensure_collection_length("record headers", header_count)?;
     for _ in 0..header_count {
         let _header_key = decoder.read_varint_bytes()?;
         let _header_value = decoder.read_varint_nullable_bytes()?;

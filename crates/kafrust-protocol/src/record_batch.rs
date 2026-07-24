@@ -3,7 +3,8 @@ use std::io::{Read, Write};
 use crate::error::{Error, Result};
 
 const COMPRESSION_CODEC_MASK: i16 = 0x07;
-const MAX_DECOMPRESSED_RECORD_BYTES: u64 = 64 * 1024 * 1024;
+#[cfg(test)]
+const MAX_DECOMPRESSED_RECORD_BYTES: usize = 64 * 1024 * 1024;
 const XERIAL_SNAPPY_HEADER: [u8; 16] = [
     0x82, b'S', b'N', b'A', b'P', b'P', b'Y', 0, 0, 0, 0, 1, 0, 0, 0, 1,
 ];
@@ -73,16 +74,28 @@ pub(crate) fn compress_record_batch_records(
     }
 }
 
+#[cfg(test)]
 pub(crate) fn decompress_record_batch_records(
     compression: RecordBatchCompression,
     records: &[u8],
 ) -> Result<Vec<u8>> {
+    decompress_record_batch_records_with_limit(compression, records, MAX_DECOMPRESSED_RECORD_BYTES)
+}
+
+pub(crate) fn decompress_record_batch_records_with_limit(
+    compression: RecordBatchCompression,
+    records: &[u8],
+    max_decompressed_bytes: usize,
+) -> Result<Vec<u8>> {
     match compression {
-        RecordBatchCompression::None => Ok(records.to_vec()),
-        RecordBatchCompression::Gzip => gzip_decompress(records),
-        RecordBatchCompression::Snappy => snappy_decompress(records),
-        RecordBatchCompression::Lz4 => lz4_decompress(records),
-        RecordBatchCompression::Zstd => zstd_decompress(records),
+        RecordBatchCompression::None => {
+            ensure_decompressed_output_limit(records.len(), max_decompressed_bytes)?;
+            Ok(records.to_vec())
+        }
+        RecordBatchCompression::Gzip => gzip_decompress(records, max_decompressed_bytes),
+        RecordBatchCompression::Snappy => snappy_decompress(records, max_decompressed_bytes),
+        RecordBatchCompression::Lz4 => lz4_decompress_with_limit(records, max_decompressed_bytes),
+        RecordBatchCompression::Zstd => zstd_decompress_with_limit(records, max_decompressed_bytes),
     }
 }
 
@@ -96,16 +109,18 @@ fn gzip_compress(records: &[u8]) -> Result<Vec<u8>> {
         .map_err(|error| compression_error("gzip", error))
 }
 
-fn gzip_decompress(records: &[u8]) -> Result<Vec<u8>> {
+fn gzip_decompress(records: &[u8], max_decompressed_bytes: usize) -> Result<Vec<u8>> {
     let decoder = flate2::read::GzDecoder::new(records);
-    let mut limited = decoder.take(MAX_DECOMPRESSED_RECORD_BYTES + 1);
+    let read_limit = u64::try_from(max_decompressed_bytes)
+        .map_err(|_| Error::LengthOverflow("decompressed record batch"))?
+        .checked_add(1)
+        .ok_or(Error::LengthOverflow("decompressed record batch"))?;
+    let mut limited = decoder.take(read_limit);
     let mut output = Vec::new();
     limited
         .read_to_end(&mut output)
         .map_err(|error| compression_error("gzip", error))?;
-    if output.len() as u64 > MAX_DECOMPRESSED_RECORD_BYTES {
-        return Err(Error::LengthOverflow("decompressed record batch"));
-    }
+    ensure_decompressed_output_limit(output.len(), max_decompressed_bytes)?;
     Ok(output)
 }
 
@@ -131,18 +146,18 @@ fn snappy_compress(records: &[u8]) -> Result<Vec<u8>> {
     Ok(output)
 }
 
-fn snappy_decompress(records: &[u8]) -> Result<Vec<u8>> {
+fn snappy_decompress(records: &[u8], max_decompressed_bytes: usize) -> Result<Vec<u8>> {
     if records.starts_with(&XERIAL_SNAPPY_MAGIC) {
-        return snappy_xerial_decompress(records);
+        return snappy_xerial_decompress(records, max_decompressed_bytes);
     }
 
-    ensure_snappy_output_limit(records, 0)?;
+    ensure_snappy_output_limit(records, 0, max_decompressed_bytes)?;
     snap::raw::Decoder::new()
         .decompress_vec(records)
         .map_err(|error| snappy_error(error.to_string()))
 }
 
-fn snappy_xerial_decompress(records: &[u8]) -> Result<Vec<u8>> {
+fn snappy_xerial_decompress(records: &[u8], max_decompressed_bytes: usize) -> Result<Vec<u8>> {
     if !records.starts_with(&XERIAL_SNAPPY_HEADER) {
         return Err(snappy_error(
             "invalid or unsupported xerial framing header".to_owned(),
@@ -173,7 +188,7 @@ fn snappy_xerial_decompress(records: &[u8]) -> Result<Vec<u8>> {
         let block = records
             .get(position..block_end)
             .ok_or_else(|| snappy_error("xerial block extends past input".to_owned()))?;
-        ensure_snappy_output_limit(block, output.len())?;
+        ensure_snappy_output_limit(block, output.len(), max_decompressed_bytes)?;
         let decompressed = decoder
             .decompress_vec(block)
             .map_err(|error| snappy_error(error.to_string()))?;
@@ -183,16 +198,17 @@ fn snappy_xerial_decompress(records: &[u8]) -> Result<Vec<u8>> {
     Ok(output)
 }
 
-fn ensure_snappy_output_limit(block: &[u8], already_decompressed: usize) -> Result<()> {
+fn ensure_snappy_output_limit(
+    block: &[u8],
+    already_decompressed: usize,
+    max_decompressed_bytes: usize,
+) -> Result<()> {
     let block_len =
         snap::raw::decompress_len(block).map_err(|error| snappy_error(error.to_string()))?;
     let total_len = already_decompressed
         .checked_add(block_len)
         .ok_or(Error::LengthOverflow("decompressed record batch"))?;
-    if total_len as u64 > MAX_DECOMPRESSED_RECORD_BYTES {
-        return Err(Error::LengthOverflow("decompressed record batch"));
-    }
-    Ok(())
+    ensure_decompressed_output_limit(total_len, max_decompressed_bytes)
 }
 
 fn lz4_compress(records: &[u8]) -> Result<Vec<u8>> {
@@ -209,15 +225,12 @@ fn lz4_compress(records: &[u8]) -> Result<Vec<u8>> {
     Ok(output)
 }
 
-fn lz4_decompress(records: &[u8]) -> Result<Vec<u8>> {
-    lz4_decompress_with_limit(records, MAX_DECOMPRESSED_RECORD_BYTES)
-}
-
-fn lz4_decompress_with_limit(records: &[u8], max_decompressed_bytes: u64) -> Result<Vec<u8>> {
+fn lz4_decompress_with_limit(records: &[u8], max_decompressed_bytes: usize) -> Result<Vec<u8>> {
     let decoder = lz_fear::LZ4FrameReader::new(records)
         .map_err(|error| compression_reason("lz4", error.to_string()))?
         .into_read();
-    let read_limit = max_decompressed_bytes
+    let read_limit = u64::try_from(max_decompressed_bytes)
+        .map_err(|_| Error::LengthOverflow("decompressed record batch"))?
         .checked_add(1)
         .ok_or(Error::LengthOverflow("decompressed record batch"))?;
     let mut limited = decoder.take(read_limit);
@@ -225,9 +238,7 @@ fn lz4_decompress_with_limit(records: &[u8], max_decompressed_bytes: u64) -> Res
     limited
         .read_to_end(&mut output)
         .map_err(|error| compression_error("lz4", error))?;
-    if output.len() as u64 > max_decompressed_bytes {
-        return Err(Error::LengthOverflow("decompressed record batch"));
-    }
+    ensure_decompressed_output_limit(output.len(), max_decompressed_bytes)?;
     Ok(output)
 }
 
@@ -238,16 +249,13 @@ fn zstd_compress(records: &[u8]) -> Result<Vec<u8>> {
     .map_err(|_| compression_reason("zstd", "encoder panicked".to_owned()))
 }
 
-fn zstd_decompress(records: &[u8]) -> Result<Vec<u8>> {
-    zstd_decompress_with_limit(records, MAX_DECOMPRESSED_RECORD_BYTES)
-}
-
-fn zstd_decompress_with_limit(records: &[u8], max_decompressed_bytes: u64) -> Result<Vec<u8>> {
+fn zstd_decompress_with_limit(records: &[u8], max_decompressed_bytes: usize) -> Result<Vec<u8>> {
     ensure_zstd_frame_limits(records, max_decompressed_bytes)?;
     std::panic::catch_unwind(|| {
         let decoder = ruzstd::decoding::StreamingDecoder::new(records)
             .map_err(|error| compression_reason("zstd", error.to_string()))?;
-        let read_limit = max_decompressed_bytes
+        let read_limit = u64::try_from(max_decompressed_bytes)
+            .map_err(|_| Error::LengthOverflow("decompressed record batch"))?
             .checked_add(1)
             .ok_or(Error::LengthOverflow("decompressed record batch"))?;
         let mut limited = decoder.take(read_limit);
@@ -255,15 +263,13 @@ fn zstd_decompress_with_limit(records: &[u8], max_decompressed_bytes: u64) -> Re
         limited
             .read_to_end(&mut output)
             .map_err(|error| compression_error("zstd", error))?;
-        if output.len() as u64 > max_decompressed_bytes {
-            return Err(Error::LengthOverflow("decompressed record batch"));
-        }
+        ensure_decompressed_output_limit(output.len(), max_decompressed_bytes)?;
         Ok(output)
     })
     .map_err(|_| compression_reason("zstd", "decoder panicked".to_owned()))?
 }
 
-fn ensure_zstd_frame_limits(records: &[u8], max_decompressed_bytes: u64) -> Result<()> {
+fn ensure_zstd_frame_limits(records: &[u8], max_decompressed_bytes: usize) -> Result<()> {
     if !records.starts_with(&ZSTD_MAGIC) {
         return Err(compression_reason("zstd", "invalid frame magic".to_owned()));
     }
@@ -313,8 +319,26 @@ fn ensure_zstd_frame_limits(records: &[u8], max_decompressed_bytes: u64) -> Resu
         content_size
     };
     let required_window = window_size.unwrap_or(content_size);
-    if required_window > max_decompressed_bytes || content_size > max_decompressed_bytes {
-        return Err(Error::LengthOverflow("decompressed record batch"));
+    let actual = required_window.max(content_size);
+    let max = u64::try_from(max_decompressed_bytes)
+        .map_err(|_| Error::LengthOverflow("decompressed record batch"))?;
+    if actual > max {
+        return Err(Error::LimitExceeded {
+            kind: "decompressed record batch bytes",
+            actual: usize::try_from(actual).unwrap_or(usize::MAX),
+            max: max_decompressed_bytes,
+        });
+    }
+    Ok(())
+}
+
+fn ensure_decompressed_output_limit(actual: usize, max: usize) -> Result<()> {
+    if actual > max {
+        return Err(Error::LimitExceeded {
+            kind: "decompressed record batch bytes",
+            actual,
+            max,
+        });
     }
     Ok(())
 }
@@ -347,7 +371,8 @@ fn snappy_error(reason: String) -> Error {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::{
-        compress_record_batch_records, decompress_record_batch_records, lz4_decompress_with_limit,
+        compress_record_batch_records, decompress_record_batch_records,
+        decompress_record_batch_records_with_limit, lz4_decompress_with_limit,
         zstd_decompress_with_limit, RecordBatchCompression, MAX_DECOMPRESSED_RECORD_BYTES,
         XERIAL_SNAPPY_HEADER, ZSTD_MAGIC,
     };
@@ -390,7 +415,53 @@ mod tests {
         assert_eq!(
             decompress_record_batch_records(RecordBatchCompression::Snappy, &hostile_block)
                 .unwrap_err(),
-            Error::LengthOverflow("decompressed record batch")
+            Error::LimitExceeded {
+                kind: "decompressed record batch bytes",
+                actual: MAX_DECOMPRESSED_RECORD_BYTES + 1,
+                max: MAX_DECOMPRESSED_RECORD_BYTES,
+            }
+        );
+    }
+
+    #[test]
+    fn gzip_decoder_honors_custom_output_limit() {
+        let records = vec![b'x'; 1024];
+        let compressed =
+            compress_record_batch_records(RecordBatchCompression::Gzip, &records).unwrap();
+
+        assert_eq!(
+            decompress_record_batch_records_with_limit(
+                RecordBatchCompression::Gzip,
+                &compressed,
+                64,
+            )
+            .unwrap_err(),
+            Error::LimitExceeded {
+                kind: "decompressed record batch bytes",
+                actual: 65,
+                max: 64,
+            }
+        );
+    }
+
+    #[test]
+    fn snappy_decoder_honors_custom_output_limit() {
+        let records = vec![b'x'; 1024];
+        let compressed =
+            compress_record_batch_records(RecordBatchCompression::Snappy, &records).unwrap();
+
+        assert_eq!(
+            decompress_record_batch_records_with_limit(
+                RecordBatchCompression::Snappy,
+                &compressed,
+                64,
+            )
+            .unwrap_err(),
+            Error::LimitExceeded {
+                kind: "decompressed record batch bytes",
+                actual: 1024,
+                max: 64,
+            }
         );
     }
 
@@ -430,7 +501,11 @@ mod tests {
 
         assert_eq!(
             lz4_decompress_with_limit(&compressed, 64).unwrap_err(),
-            Error::LengthOverflow("decompressed record batch")
+            Error::LimitExceeded {
+                kind: "decompressed record batch bytes",
+                actual: 65,
+                max: 64,
+            }
         );
     }
 
@@ -461,20 +536,28 @@ mod tests {
         let compressed =
             compress_record_batch_records(RecordBatchCompression::Zstd, &records).unwrap();
 
-        assert_eq!(
-            zstd_decompress_with_limit(&compressed, 64).unwrap_err(),
-            Error::LengthOverflow("decompressed record batch")
-        );
+        assert!(matches!(
+            zstd_decompress_with_limit(&compressed, 64),
+            Err(Error::LimitExceeded {
+                kind: "decompressed record batch bytes",
+                max: 64,
+                ..
+            })
+        ));
     }
 
     #[test]
     fn zstd_decoder_rejects_declared_window_over_limit() {
         let frame = [ZSTD_MAGIC.as_slice(), &[0, 0]].concat();
 
-        assert_eq!(
-            zstd_decompress_with_limit(&frame, 64).unwrap_err(),
-            Error::LengthOverflow("decompressed record batch")
-        );
+        assert!(matches!(
+            zstd_decompress_with_limit(&frame, 64),
+            Err(Error::LimitExceeded {
+                kind: "decompressed record batch bytes",
+                max: 64,
+                ..
+            })
+        ));
     }
 
     #[test]

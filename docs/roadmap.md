@@ -900,12 +900,18 @@ Implemented evidence:
 - Shared metrics count acknowledged produced records, successful
   topic-partition Produce chunks, and records returned after consumer
   isolation filtering and poll limits.
+- Kafka response arrays, nested record counts, and record headers are checked
+  before vector allocation. The default maximum is 1,000,000 elements and is
+  configurable through all four client configuration builders.
+- Fetched record batches are bounded to 64 MiB after decompression by default.
+  The configurable limit is inherited by nested Fetch decoders and enforced by
+  gzip, Snappy, LZ4, and Zstd, with typed
+  `protocol::Error::LimitExceeded { kind, actual, max }` failures.
 
 Remaining:
 
 - remaining high-level operation metrics
 - complete producer, consumer, and group operation spans
-- decompression and protocol decode-array memory limits
 - throughput and latency benchmark baselines
 - load, soak, and failure-injection profiles
 

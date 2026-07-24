@@ -1,13 +1,13 @@
 mod decode;
 mod encode;
 
-pub use decode::{Decoder, TaggedField};
+pub use decode::{DecodeLimits, Decoder, TaggedField};
 pub use encode::Encoder;
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
-    use super::{Decoder, Encoder};
+    use super::{DecodeLimits, Decoder, Encoder};
     use crate::Error;
 
     #[test]
@@ -98,5 +98,43 @@ mod tests {
                 remaining: 1
             })
         ));
+    }
+
+    #[test]
+    fn rejects_arrays_before_allocating_above_the_configured_limit() {
+        let limits = DecodeLimits::new().with_max_array_elements(2);
+
+        let array_length = 3_i32.to_be_bytes();
+        let mut decoder = Decoder::with_limits(&array_length, limits);
+        assert_eq!(
+            decoder.read_array("test array", |_| Ok(())).unwrap_err(),
+            Error::LimitExceeded {
+                kind: "test array",
+                actual: 3,
+                max: 2,
+            }
+        );
+
+        let mut decoder = Decoder::with_limits(&[4], limits);
+        assert_eq!(
+            decoder
+                .read_compact_array("compact test array", |_| Ok(()))
+                .unwrap_err(),
+            Error::LimitExceeded {
+                kind: "compact test array",
+                actual: 3,
+                max: 2,
+            }
+        );
+
+        let mut decoder = Decoder::with_limits(&[3], limits);
+        assert_eq!(
+            decoder.read_tagged_fields().unwrap_err(),
+            Error::LimitExceeded {
+                kind: "tagged fields",
+                actual: 3,
+                max: 2,
+            }
+        );
     }
 }

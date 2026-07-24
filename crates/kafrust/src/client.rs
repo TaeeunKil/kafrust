@@ -39,7 +39,7 @@ use kafrust_protocol::api::sync_group::{
 use kafrust_protocol::api::txn_offset_commit::{
     TxnOffsetCommitRequestV0, TxnOffsetCommitResponseV0, TxnOffsetCommitTopic,
 };
-use kafrust_protocol::codec::Decoder;
+use kafrust_protocol::codec::{DecodeLimits, Decoder};
 use kafrust_protocol::frame::encode_frame;
 use kafrust_protocol::header::ResponseHeader;
 use std::fmt;
@@ -60,6 +60,7 @@ pub struct Client {
     next_correlation_id: i32,
     request_timeout: Option<Duration>,
     max_response_bytes: usize,
+    decode_limits: DecodeLimits,
     metrics: ClientMetrics,
 }
 
@@ -95,6 +96,7 @@ impl Client {
         client_id: Option<String>,
         request_timeout: Duration,
         max_response_bytes: usize,
+        decode_limits: DecodeLimits,
         metrics: ClientMetrics,
     ) -> Result<Self> {
         let stream = TcpStream::connect(server).await?;
@@ -103,6 +105,7 @@ impl Client {
             client_id,
             Some(request_timeout),
             max_response_bytes,
+            decode_limits,
             metrics,
         ))
     }
@@ -117,6 +120,7 @@ impl Client {
             client_id,
             request_timeout,
             DEFAULT_MAX_RESPONSE_BYTES,
+            DecodeLimits::default(),
             ClientMetrics::new(),
         )
     }
@@ -126,6 +130,7 @@ impl Client {
         client_id: Option<String>,
         request_timeout: Option<Duration>,
         max_response_bytes: usize,
+        decode_limits: DecodeLimits,
         metrics: ClientMetrics,
     ) -> Self {
         Self {
@@ -134,6 +139,7 @@ impl Client {
             next_correlation_id: 1,
             request_timeout,
             max_response_bytes,
+            decode_limits,
             metrics,
         }
     }
@@ -150,7 +156,7 @@ impl Client {
             client_id: self.client_id.clone(),
         };
         let response = self.send_request(&request.encode()?).await?;
-        let mut decoder = Decoder::new(&response);
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(ApiVersionsResponseV0::decode_body(&mut decoder)?)
     }
@@ -165,7 +171,7 @@ impl Client {
             mechanism: mechanism.into(),
         };
         let response = self.send_request(&request.encode()?).await?;
-        let mut decoder = Decoder::new(&response);
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(SaslHandshakeResponseV1::decode_body(&mut decoder)?)
     }
@@ -180,7 +186,7 @@ impl Client {
             auth_bytes,
         };
         let response = self.send_request(&request.encode()?).await?;
-        let mut decoder = Decoder::new(&response);
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(SaslAuthenticateResponseV0::decode_body(&mut decoder)?)
     }
@@ -193,7 +199,7 @@ impl Client {
             topics,
         };
         let response = self.send_request(&request.encode()?).await?;
-        let mut decoder = Decoder::new(&response);
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(MetadataResponseV1::decode_body(&mut decoder)?)
     }
@@ -211,7 +217,7 @@ impl Client {
             transaction_timeout_ms,
         };
         let response = self.send_request(&request.encode()?).await?;
-        let mut decoder = Decoder::new(&response);
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(InitProducerIdResponseV0::decode_body(&mut decoder)?)
     }
@@ -233,7 +239,7 @@ impl Client {
             committed,
         };
         let response = self.send_request(&request.encode()?).await?;
-        let mut decoder = Decoder::new(&response);
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(EndTxnResponseV0::decode_body(&mut decoder)?)
     }
@@ -268,7 +274,7 @@ impl Client {
             coordinator_type,
         };
         let response = self.send_request(&request.encode()?).await?;
-        let mut decoder = Decoder::new(&response);
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(FindCoordinatorResponseV1::decode_body(&mut decoder)?)
     }
@@ -290,7 +296,7 @@ impl Client {
             topics,
         };
         let response = self.send_request(&request.encode()?).await?;
-        let mut decoder = Decoder::new(&response);
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(AddPartitionsToTxnResponseV0::decode_body(&mut decoder)?)
     }
@@ -312,7 +318,7 @@ impl Client {
             group_id: group_id.into(),
         };
         let response = self.send_request(&request.encode()?).await?;
-        let mut decoder = Decoder::new(&response);
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(AddOffsetsToTxnResponseV0::decode_body(&mut decoder)?)
     }
@@ -336,7 +342,7 @@ impl Client {
             topics,
         };
         let response = self.send_request(&request.encode()?).await?;
-        let mut decoder = Decoder::new(&response);
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(TxnOffsetCommitResponseV0::decode_body(&mut decoder)?)
     }
@@ -354,7 +360,7 @@ impl Client {
             topics,
         };
         let response = self.send_request(&request.encode()?).await?;
-        let mut decoder = Decoder::new(&response);
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(OffsetFetchResponseV2::decode_body(&mut decoder)?)
     }
@@ -380,7 +386,7 @@ impl Client {
             protocols,
         };
         let response = self.send_request(&request.encode()?).await?;
-        let mut decoder = Decoder::new(&response);
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(JoinGroupResponseV2::decode_body(&mut decoder)?)
     }
@@ -402,7 +408,7 @@ impl Client {
             assignments,
         };
         let response = self.send_request(&request.encode()?).await?;
-        let mut decoder = Decoder::new(&response);
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(SyncGroupResponseV2::decode_body(&mut decoder)?)
     }
@@ -422,7 +428,7 @@ impl Client {
             member_id: member_id.into(),
         };
         let response = self.send_request(&request.encode()?).await?;
-        let mut decoder = Decoder::new(&response);
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(HeartbeatResponseV2::decode_body(&mut decoder)?)
     }
@@ -446,7 +452,7 @@ impl Client {
             topics,
         };
         let response = self.send_request(&request.encode()?).await?;
-        let mut decoder = Decoder::new(&response);
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(OffsetCommitResponseV2::decode_body(&mut decoder)?)
     }
@@ -473,7 +479,7 @@ impl Client {
             }],
         };
         let response = self.send_request(&request.encode()?).await?;
-        let mut decoder = Decoder::new(&response);
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(FetchResponseV4::decode_body(&mut decoder)?)
     }
@@ -493,7 +499,7 @@ impl Client {
             topics,
         };
         let response = self.send_request(&request.encode()?).await?;
-        let mut decoder = Decoder::new(&response);
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(ProduceResponseV2::decode_body(&mut decoder)?)
     }
@@ -538,7 +544,7 @@ impl Client {
             topics,
         };
         let response = self.send_request(&request.encode()?).await?;
-        let mut decoder = Decoder::new(&response);
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(ProduceResponseV2::decode_body(&mut decoder)?)
     }
@@ -587,7 +593,7 @@ impl Client {
             topics,
         };
         let response = self.send_request(&request.encode()?).await?;
-        let mut decoder = Decoder::new(&response);
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(ProduceResponseV7::decode_body(&mut decoder)?)
     }
@@ -665,6 +671,7 @@ impl fmt::Debug for Client {
             .field("next_correlation_id", &self.next_correlation_id)
             .field("request_timeout", &self.request_timeout)
             .field("max_response_bytes", &self.max_response_bytes)
+            .field("decode_limits", &self.decode_limits)
             .field("metrics", &self.metrics)
             .finish_non_exhaustive()
     }
@@ -755,6 +762,7 @@ mod tests {
     };
     use crate::{ClientMetrics, Error};
     use kafrust_protocol::api::txn_offset_commit::TxnOffsetCommitPartition;
+    use kafrust_protocol::codec::DecodeLimits;
     use std::time::Duration;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
@@ -775,6 +783,7 @@ mod tests {
             Some("kafrust-timeout-test".to_owned()),
             Duration::from_millis(5),
             DEFAULT_MAX_RESPONSE_BYTES,
+            DecodeLimits::default(),
             ClientMetrics::new(),
         )
         .await
@@ -810,6 +819,7 @@ mod tests {
             Some("kafrust-response-limit-test".to_owned()),
             Some(Duration::from_secs(1)),
             8,
+            DecodeLimits::default(),
             metrics.clone(),
         );
 
@@ -823,6 +833,45 @@ mod tests {
         assert_eq!(snapshot.requests_failed, 1);
         assert_eq!(snapshot.response_bytes, 0);
         assert_eq!(snapshot.in_flight_requests, 0);
+        broker.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn rejects_response_array_before_allocating_over_limit() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(1024);
+        let broker = tokio::spawn(async move {
+            let _request = read_test_frame(&mut broker_stream).await;
+            let response = [
+                0, 0, 0, 1, // correlation id
+                0, 0, // error code
+                0, 0, 0, 2, // api key count
+            ];
+            broker_stream
+                .write_all(&(response.len() as i32).to_be_bytes())
+                .await
+                .unwrap();
+            broker_stream.write_all(&response).await.unwrap();
+            broker_stream.flush().await.unwrap();
+        });
+        let mut client = Client::from_stream_with_metrics(
+            Box::new(client_stream),
+            Some("kafrust-array-limit-test".to_owned()),
+            Some(Duration::from_secs(1)),
+            DEFAULT_MAX_RESPONSE_BYTES,
+            DecodeLimits::new().with_max_array_elements(1),
+            ClientMetrics::new(),
+        );
+
+        let error = client.api_versions().await.unwrap_err();
+
+        assert!(matches!(
+            error,
+            Error::Protocol(kafrust_protocol::Error::LimitExceeded {
+                kind: "api versions",
+                actual: 2,
+                max: 1,
+            })
+        ));
         broker.await.unwrap();
     }
 
