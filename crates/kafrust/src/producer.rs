@@ -1214,6 +1214,7 @@ impl Producer {
             match result {
                 Err(error) if attempt < self.config.max_retries && can_retry_send(&error) => {
                     invalidate_metadata_cache(&mut self.metadata_cache, &topic);
+                    self.config.client.record_retry();
                     attempt += 1;
                 }
                 Ok(metadata) => {
@@ -1302,6 +1303,7 @@ impl Producer {
                         &records,
                         &pending_indexes,
                     );
+                    self.config.client.record_retry();
                     attempt += 1;
                 }
                 Ok(attempt_outcomes) => {
@@ -1318,6 +1320,7 @@ impl Producer {
                             &retry_indexes,
                         );
                         pending_indexes = retry_indexes;
+                        self.config.client.record_retry();
                         attempt += 1;
                         continue;
                     }
@@ -1351,6 +1354,7 @@ impl Producer {
         match self.client.metadata(topics.clone()).await {
             Ok(metadata) => Ok(metadata),
             Err(error) if can_retry_send(&error) => {
+                self.config.client.record_retry();
                 debug!(
                     topic,
                     error = %error,
@@ -1779,6 +1783,7 @@ impl Producer {
                 {
                     attempt += 1;
                     time::sleep(IDEMPOTENT_INIT_RETRY_BACKOFF).await;
+                    self.config.client.record_retry();
                     continue;
                 }
                 return Err(Error::Broker {
@@ -1824,6 +1829,7 @@ impl Producer {
             {
                 attempt += 1;
                 time::sleep(IDEMPOTENT_INIT_RETRY_BACKOFF).await;
+                self.config.client.record_retry();
                 continue;
             }
             if idempotent_produce_error_disposition(error_code)
@@ -1863,6 +1869,7 @@ impl Producer {
                 {
                     attempt += 1;
                     time::sleep(IDEMPOTENT_INIT_RETRY_BACKOFF).await;
+                    self.config.client.record_retry();
                     continue;
                 }
                 return Err(Error::Broker {
@@ -1891,6 +1898,7 @@ impl Producer {
             {
                 attempt += 1;
                 time::sleep(IDEMPOTENT_INIT_RETRY_BACKOFF).await;
+                self.config.client.record_retry();
                 continue;
             }
             if idempotent_produce_error_disposition(response.error_code)
@@ -1925,6 +1933,7 @@ impl Producer {
                 {
                     attempt += 1;
                     time::sleep(IDEMPOTENT_INIT_RETRY_BACKOFF).await;
+                    self.config.client.record_retry();
                     continue;
                 }
                 return Err(Error::Broker {
@@ -1967,6 +1976,7 @@ impl Producer {
             {
                 attempt += 1;
                 time::sleep(IDEMPOTENT_INIT_RETRY_BACKOFF).await;
+                self.config.client.record_retry();
                 continue;
             }
             if idempotent_produce_error_disposition(error_code)
@@ -2008,6 +2018,7 @@ impl Producer {
                 {
                     attempt += 1;
                     time::sleep(IDEMPOTENT_INIT_RETRY_BACKOFF).await;
+                    self.config.client.record_retry();
                     continue;
                 }
                 return Err(Error::Broker {
@@ -2036,6 +2047,7 @@ impl Producer {
             {
                 attempt += 1;
                 time::sleep(IDEMPOTENT_INIT_RETRY_BACKOFF).await;
+                self.config.client.record_retry();
                 continue;
             }
             if idempotent_produce_error_disposition(response.error_code)
@@ -2395,6 +2407,7 @@ async fn initialize_idempotent_producer(
                 {
                     attempt += 1;
                     time::sleep(IDEMPOTENT_INIT_RETRY_BACKOFF).await;
+                    client_config.record_retry();
                     continue;
                 }
                 return Err(Error::Broker {
@@ -2423,6 +2436,7 @@ async fn initialize_idempotent_producer(
         {
             attempt += 1;
             time::sleep(IDEMPOTENT_INIT_RETRY_BACKOFF).await;
+            client_config.record_retry();
             continue;
         }
         return Err(Error::Broker {
@@ -2920,7 +2934,7 @@ mod tests {
         ProducerRecord, RecordMetadata, SecurityProtocol,
     };
     use crate::consumer::ConsumerAssignment;
-    use crate::{BrokerErrorKind, Client, Error};
+    use crate::{BrokerErrorKind, Client, ClientMetrics, Error};
     use kafrust_protocol::api::api_versions::{ApiKeyVersion, ApiVersionsResponseV0};
     use kafrust_protocol::api::metadata::{
         BrokerMetadata, MetadataResponseV1, PartitionMetadata, TopicMetadata,
@@ -3625,13 +3639,16 @@ mod tests {
             .await;
         });
 
+        let metrics = ClientMetrics::new();
         let producer = ProducerConfig::new([addr.to_string()])
+            .metrics(metrics.clone())
             .enable_idempotence(true)
             .build()
             .await
             .unwrap();
 
         assert_eq!(producer.idempotent_state.unwrap().producer_id, 42);
+        assert_eq!(metrics.snapshot().retries, 1);
         server.await.unwrap();
     }
 
@@ -4200,7 +4217,10 @@ mod tests {
             Some("kafrust-producer-test".to_owned()),
             Some(std::time::Duration::from_millis(50)),
         );
-        let config = ProducerConfig::new([addr.to_string()]).request_timeout_ms(500);
+        let metrics = ClientMetrics::new();
+        let config = ProducerConfig::new([addr.to_string()])
+            .request_timeout_ms(500)
+            .metrics(metrics.clone());
         let mut producer = Producer {
             client,
             config,
@@ -4214,6 +4234,7 @@ mod tests {
         assert_eq!(metadata.brokers[0].node_id, 1);
         assert_eq!(metadata.topics[0].name, "orders");
         assert!(producer.metadata_cache.contains_key("orders"));
+        assert_eq!(metrics.snapshot().retries, 1);
         server.await.unwrap();
     }
 
@@ -4255,8 +4276,10 @@ mod tests {
             Some("kafrust-idempotent-retry-test".to_owned()),
             Some(std::time::Duration::from_millis(500)),
         );
+        let metrics = ClientMetrics::new();
         let config = ProducerConfig::new([addr.to_string()])
             .request_timeout_ms(500)
+            .metrics(metrics.clone())
             .enable_idempotence(true)
             .max_retries(1);
         let mut metadata_cache = BTreeMap::new();
@@ -4286,6 +4309,7 @@ mod tests {
                 .base_sequence,
             1
         );
+        assert_eq!(metrics.snapshot().retries, 1);
         leader_server.await.unwrap();
         metadata_server.await.unwrap();
     }

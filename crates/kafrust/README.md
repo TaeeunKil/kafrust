@@ -310,11 +310,14 @@ println!(
 ```
 
 Snapshots include request success, failure, timeout, and cancellation counts,
-request and response payload bytes, in-flight requests, and total and maximum
-latency. Individual atomic fields are sampled independently, so a snapshot
-taken while requests are changing is not a transactional view. Request metrics
-and `tracing` spans contain operational metadata only; key, value, request, and
-response payload contents are not recorded.
+high-level operation retry attempts, request and response payload bytes,
+in-flight requests, and total and maximum latency. Retry attempts cover
+producer sends, consumer fetches, metadata reconnects, and transactional
+coordinator operations, plus automatic consumer-group rejoins. Individual
+atomic fields are sampled independently, so a snapshot taken while requests
+are changing is not a transactional view. Request metrics and `tracing` spans
+contain operational metadata only; key, value, request, and response payload
+contents are not recorded.
 
 ## Response Memory Limit
 

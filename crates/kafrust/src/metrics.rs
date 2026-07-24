@@ -19,6 +19,7 @@ struct ClientMetricsInner {
     requests_failed: AtomicU64,
     requests_timed_out: AtomicU64,
     requests_cancelled: AtomicU64,
+    retries: AtomicU64,
     request_bytes: AtomicU64,
     response_bytes: AtomicU64,
     in_flight_requests: AtomicU64,
@@ -39,6 +40,8 @@ pub struct ClientMetricsSnapshot {
     pub requests_timed_out: u64,
     /// Request futures dropped before producing a result.
     pub requests_cancelled: u64,
+    /// Additional high-level operation attempts after an initial attempt.
+    pub retries: u64,
     /// Kafka request payload bytes, excluding the four-byte frame length.
     pub request_bytes: u64,
     /// Kafka response payload bytes, excluding the four-byte frame length.
@@ -65,6 +68,7 @@ impl ClientMetrics {
             requests_failed: self.inner.requests_failed.load(Ordering::Relaxed),
             requests_timed_out: self.inner.requests_timed_out.load(Ordering::Relaxed),
             requests_cancelled: self.inner.requests_cancelled.load(Ordering::Relaxed),
+            retries: self.inner.retries.load(Ordering::Relaxed),
             request_bytes: self.inner.request_bytes.load(Ordering::Relaxed),
             response_bytes: self.inner.response_bytes.load(Ordering::Relaxed),
             in_flight_requests: self.inner.in_flight_requests.load(Ordering::Relaxed),
@@ -88,6 +92,10 @@ impl ClientMetrics {
             started_at: Instant::now(),
             completed: false,
         }
+    }
+
+    pub(crate) fn record_retry(&self) {
+        self.inner.retries.fetch_add(1, Ordering::Relaxed);
     }
 }
 
@@ -198,12 +206,14 @@ mod tests {
 
         metrics.start_request(12).succeed(24);
         shared.start_request(8).fail(true);
+        shared.record_retry();
 
         let snapshot = metrics.snapshot();
         assert_eq!(snapshot.requests_started, 2);
         assert_eq!(snapshot.requests_succeeded, 1);
         assert_eq!(snapshot.requests_failed, 1);
         assert_eq!(snapshot.requests_timed_out, 1);
+        assert_eq!(snapshot.retries, 1);
         assert_eq!(snapshot.request_bytes, 20);
         assert_eq!(snapshot.response_bytes, 24);
         assert_eq!(snapshot.in_flight_requests, 0);

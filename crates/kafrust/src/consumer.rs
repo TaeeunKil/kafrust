@@ -192,6 +192,7 @@ impl Consumer {
             match result {
                 Err(error) if attempt < self.config.max_retries && can_retry_fetch(&error) => {
                     invalidate_metadata_cache(&mut self.metadata_cache, topic);
+                    self.config.client.record_retry();
                     attempt += 1;
                 }
                 Ok(records) => {
@@ -288,6 +289,7 @@ impl Consumer {
         match self.client.metadata(topics.clone()).await {
             Ok(metadata) => Ok(metadata),
             Err(error) if can_retry_fetch(&error) => {
+                self.config.client.record_retry();
                 debug!(
                     topic,
                     error = %error,
@@ -677,7 +679,7 @@ mod tests {
         limit_fetched_records, visible_partition_records, Consumer, ConsumerAssignment,
         ConsumerConfig, ConsumerRecord, IsolationLevel, SecurityProtocol,
     };
-    use crate::{Client, Error};
+    use crate::{Client, ClientMetrics, Error};
     use kafrust_protocol::api::fetch::{
         AbortedTransactionV4, FetchPartitionResponseV4, MessageSetRecord,
     };
@@ -889,7 +891,10 @@ mod tests {
             Some("kafrust-consumer-test".to_owned()),
             Some(std::time::Duration::from_millis(50)),
         );
-        let config = ConsumerConfig::new([addr.to_string()]).request_timeout_ms(500);
+        let metrics = ClientMetrics::new();
+        let config = ConsumerConfig::new([addr.to_string()])
+            .request_timeout_ms(500)
+            .metrics(metrics.clone());
         let mut consumer = Consumer::from_assignments(client, config, Vec::new());
 
         let metadata = consumer.metadata_for_topic("orders").await.unwrap();
@@ -897,6 +902,7 @@ mod tests {
         assert_eq!(metadata.brokers[0].node_id, 1);
         assert_eq!(metadata.topics[0].name, "orders");
         assert!(consumer.metadata_cache.contains_key("orders"));
+        assert_eq!(metrics.snapshot().retries, 1);
         server.await.unwrap();
     }
 

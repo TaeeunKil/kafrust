@@ -258,6 +258,10 @@ impl ClientConfig {
         self.metrics.clone()
     }
 
+    pub(crate) fn record_retry(&self) {
+        self.metrics.record_retry();
+    }
+
     /// Returns the configured Kafka security protocol.
     pub fn security_protocol_ref(&self) -> SecurityProtocol {
         self.security_protocol
