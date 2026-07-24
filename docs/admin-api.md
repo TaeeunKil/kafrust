@@ -44,6 +44,49 @@ all visible topics. Topic-level metadata errors remain available through
 `TopicListing::error_code` and `broker_error_kind` instead of aborting the
 entire listing.
 
+## Describe Topic Configurations
+
+```rust
+use kafrust::{
+    AdminClient, ClientConfig, DescribeConfigsOptions, TopicConfigResource,
+};
+
+# async fn example() -> kafrust::Result<()> {
+let admin = AdminClient::new(ClientConfig::new(["localhost:9092"]));
+let result = admin
+    .describe_topic_configs(
+        &[
+            TopicConfigResource::with_keys(
+                "orders",
+                ["cleanup.policy", "retention.ms"],
+            ),
+            TopicConfigResource::new("payments"),
+        ],
+        DescribeConfigsOptions::new().include_synonyms(true),
+    )
+    .await?;
+
+for resource in result.resources() {
+    for entry in resource.entries() {
+        println!(
+            "{}={} source={:?} sensitive={}",
+            entry.name(),
+            entry.value().unwrap_or("<redacted or null>"),
+            entry.source(),
+            entry.is_sensitive()
+        );
+    }
+}
+# Ok(())
+# }
+```
+
+DescribeConfigs v1 can request all keys or a selected key set and optionally
+include Kafka's config synonyms. Resource failures remain in
+`ConfigResourceResult`; unknown future config-source values are preserved as
+`ConfigSource::Other(raw_code)`. This API intentionally accepts topic resources
+only until broker-specific routing is implemented.
+
 ## Create Topics
 
 ```rust
@@ -126,5 +169,4 @@ DeleteTopics v3 also routes to the active controller and preserves independent
 topic outcomes. Version 3 responses contain topic names and error codes but no
 broker error-message field.
 
-Config inspection and alteration and consumer-group administration remain on
-the M16 roadmap.
+Config alteration and consumer-group administration remain on the M16 roadmap.
