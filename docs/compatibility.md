@@ -30,6 +30,11 @@ The Kafka 3.7.2 and 4.3.1 plaintext smoke paths cover:
 - IncrementalAlterConfigs v0 followed by DescribeConfigs v1 verification.
   Manual run `30061073263` passed this update-and-readback path against Kafka
   3.7.2 and Kafka 4.3.1.
+- Coordinator-routed DescribeGroups v1. Manual run `30061497355` passed this
+  path against Kafka 3.7.2 and Kafka 4.3.1 plaintext brokers plus the Kafka
+  3.7.2 TLS, SASL_PLAINTEXT, and SASL_SSL profiles.
+- Coordinator-routed OffsetDelete v0 with separate group-level and
+  partition-level outcomes is covered by byte-level and injected-broker tests.
 - High-level producer metadata lookup, leader routing, negotiated Produce API selection, single-record send, batch send, gzip-, Snappy-, LZ4-, and Zstd-compressed batch send, and buffered send with `acks=1`. Against Kafka 3.7.2, the current path selects Produce v3 RecordBatch for Gzip, Snappy, and LZ4, and Produce v7 for Zstd.
 - Opt-in idempotent single-record, batch, and buffered produce using
   `InitProducerId v0`, `acks=all`, and partition-scoped RecordBatch producer

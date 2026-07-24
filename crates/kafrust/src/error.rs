@@ -64,6 +64,10 @@ pub enum BrokerErrorKind {
     ProducerFenced,
     /// Kafka is still completing another transaction for this transactional ID.
     ConcurrentTransactions,
+    /// Kafka reported that the requested consumer group does not exist.
+    GroupIdNotFound,
+    /// Kafka rejected offset deletion because the group still subscribes to the topic.
+    GroupSubscribedToTopic,
 }
 
 impl BrokerErrorKind {
@@ -97,6 +101,8 @@ impl BrokerErrorKind {
             46 => Self::DuplicateSequenceNumber,
             47 => Self::InvalidProducerEpoch,
             51 => Self::ConcurrentTransactions,
+            69 => Self::GroupIdNotFound,
+            86 => Self::GroupSubscribedToTopic,
             90 => Self::ProducerFenced,
             _ => Self::Unknown,
         }
@@ -330,6 +336,14 @@ mod tests {
         assert_eq!(
             BrokerErrorKind::from_code(51),
             BrokerErrorKind::ConcurrentTransactions
+        );
+        assert_eq!(
+            BrokerErrorKind::from_code(69),
+            BrokerErrorKind::GroupIdNotFound
+        );
+        assert_eq!(
+            BrokerErrorKind::from_code(86),
+            BrokerErrorKind::GroupSubscribedToTopic
         );
         assert_eq!(
             BrokerErrorKind::from_code(90),

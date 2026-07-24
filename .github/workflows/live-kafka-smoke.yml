@@ -149,6 +149,9 @@ jobs:
       - name: Run admin describe group example
         run: cargo run -p kafrust --example admin_describe_group
 
+      - name: Run admin delete group offsets example
+        run: cargo run -p kafrust --example admin_delete_group_offsets
+
       - name: Dump Kafka logs
         if: failure()
         run: docker logs kafrust-kafka
@@ -303,6 +306,9 @@ jobs:
 
       - name: Run multi-broker admin describe group example
         run: cargo run -p kafrust --example admin_describe_group
+
+      - name: Run multi-broker admin delete group offsets example
+        run: cargo run -p kafrust --example admin_delete_group_offsets
 
       - name: Run multi-broker producer and consumer failover through broker stop
         run: |
@@ -606,6 +612,9 @@ jobs:
       - name: Run TLS admin describe group example
         run: cargo run -p kafrust --features tls --example admin_describe_group
 
+      - name: Run TLS admin delete group offsets example
+        run: cargo run -p kafrust --features tls --example admin_delete_group_offsets
+
       - name: Dump TLS Kafka logs
         if: failure()
         run: docker logs kafrust-kafka-tls
@@ -723,6 +732,9 @@ jobs:
 
       - name: Run SASL admin describe group example
         run: cargo run -p kafrust --example admin_describe_group
+
+      - name: Run SASL admin delete group offsets example
+        run: cargo run -p kafrust --example admin_delete_group_offsets
 
       - name: Dump SASL Kafka logs
         if: failure()
@@ -915,6 +927,9 @@ jobs:
 
       - name: Run SASL_SSL SCRAM admin describe group example
         run: cargo run -p kafrust --features tls --example admin_describe_group
+
+      - name: Run SASL_SSL SCRAM admin delete group offsets example
+        run: cargo run -p kafrust --features tls --example admin_delete_group_offsets
 
       - name: Dump SASL_SSL SCRAM Kafka logs
         if: failure()

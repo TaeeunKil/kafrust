@@ -15,6 +15,10 @@ use kafrust_protocol::api::incremental_alter_configs::{
     IncrementalAlterConfigsResourceV0,
 };
 use kafrust_protocol::api::metadata::{BrokerMetadata, TopicMetadata};
+use kafrust_protocol::api::offset_delete::{
+    OffsetDeleteRequestPartitionV0, OffsetDeleteRequestTopicV0, OffsetDeleteResponsePartitionV0,
+    OffsetDeleteResponseTopicV0,
+};
 
 use crate::client::Client;
 use crate::config::ClientConfig;
@@ -208,6 +212,57 @@ impl AdminClient {
             ));
         }
         Ok(descriptions)
+    }
+
+    /// Deletes committed offsets for selected consumer-group partitions.
+    ///
+    /// The request is routed to the group's active coordinator. Kafka can
+    /// reject the whole request or individual partitions, so both levels are
+    /// preserved in [`DeleteConsumerGroupOffsetsResult`].
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.delete_consumer_group_offsets",
+        skip_all,
+        fields(group_id, topic_count = topics.len()),
+        err
+    )]
+    pub async fn delete_consumer_group_offsets(
+        &self,
+        group_id: &str,
+        topics: &[ConsumerGroupOffsetDelete],
+    ) -> Result<DeleteConsumerGroupOffsetsResult> {
+        let mut coordinator = self.group_coordinator_client(group_id).await?;
+        let response = coordinator
+            .offset_delete_v0(
+                group_id,
+                topics
+                    .iter()
+                    .map(ConsumerGroupOffsetDelete::as_protocol)
+                    .collect(),
+            )
+            .await?;
+
+        if response.error_code != 0 {
+            self.config.record_broker_error();
+        }
+        for topic in &response.topics {
+            for partition in &topic.partitions {
+                if partition.error_code != 0 {
+                    self.config.record_broker_error();
+                }
+            }
+        }
+
+        Ok(DeleteConsumerGroupOffsetsResult {
+            group_id: group_id.to_owned(),
+            error_code: response.error_code,
+            throttle_time: Duration::from_millis(nonnegative_i32_to_u64(response.throttle_time_ms)),
+            topics: response
+                .topics
+                .into_iter()
+                .map(DeleteConsumerGroupOffsetsTopicResult::from_protocol)
+                .collect(),
+        })
     }
 
     async fn group_coordinator_client(&self, group_id: &str) -> Result<Client> {
@@ -1131,6 +1186,169 @@ impl ConsumerGroupMember {
     }
 }
 
+/// Topic partitions whose committed offsets should be deleted for a group.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConsumerGroupOffsetDelete {
+    topic: String,
+    partitions: Vec<i32>,
+}
+
+impl ConsumerGroupOffsetDelete {
+    /// Creates an offset-deletion request for one topic.
+    pub fn new(topic: impl Into<String>, partitions: impl IntoIterator<Item = i32>) -> Self {
+        Self {
+            topic: topic.into(),
+            partitions: partitions.into_iter().collect(),
+        }
+    }
+
+    /// Returns the topic name.
+    pub fn topic(&self) -> &str {
+        &self.topic
+    }
+
+    /// Returns partition indexes in request order.
+    pub fn partitions(&self) -> &[i32] {
+        &self.partitions
+    }
+
+    fn as_protocol(&self) -> OffsetDeleteRequestTopicV0 {
+        OffsetDeleteRequestTopicV0 {
+            name: self.topic.clone(),
+            partitions: self
+                .partitions
+                .iter()
+                .map(|partition_index| OffsetDeleteRequestPartitionV0 {
+                    partition_index: *partition_index,
+                })
+                .collect(),
+        }
+    }
+}
+
+/// Complete response from one OffsetDelete operation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeleteConsumerGroupOffsetsResult {
+    group_id: String,
+    error_code: i16,
+    throttle_time: Duration,
+    topics: Vec<DeleteConsumerGroupOffsetsTopicResult>,
+}
+
+impl DeleteConsumerGroupOffsetsResult {
+    /// Returns the consumer group ID.
+    pub fn group_id(&self) -> &str {
+        &self.group_id
+    }
+
+    /// Returns whether Kafka accepted the request and every partition.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+            && self
+                .topics
+                .iter()
+                .all(DeleteConsumerGroupOffsetsTopicResult::is_success)
+    }
+
+    /// Returns Kafka's top-level group error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns kafrust's classification for a top-level group error.
+    pub fn broker_error_kind(&self) -> Option<BrokerErrorKind> {
+        (self.error_code != 0).then(|| BrokerErrorKind::from_code(self.error_code))
+    }
+
+    /// Returns the coordinator's throttle time.
+    pub fn throttle_time(&self) -> Duration {
+        self.throttle_time
+    }
+
+    /// Returns topic outcomes in broker response order.
+    pub fn topics(&self) -> &[DeleteConsumerGroupOffsetsTopicResult] {
+        &self.topics
+    }
+
+    /// Consumes the response and returns topic outcomes.
+    pub fn into_topics(self) -> Vec<DeleteConsumerGroupOffsetsTopicResult> {
+        self.topics
+    }
+}
+
+/// Offset-deletion outcomes for one topic.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeleteConsumerGroupOffsetsTopicResult {
+    topic: String,
+    partitions: Vec<DeleteConsumerGroupOffsetsPartitionResult>,
+}
+
+impl DeleteConsumerGroupOffsetsTopicResult {
+    /// Returns the topic name.
+    pub fn topic(&self) -> &str {
+        &self.topic
+    }
+
+    /// Returns whether every partition offset was deleted.
+    pub fn is_success(&self) -> bool {
+        self.partitions
+            .iter()
+            .all(DeleteConsumerGroupOffsetsPartitionResult::is_success)
+    }
+
+    /// Returns partition outcomes in broker response order.
+    pub fn partitions(&self) -> &[DeleteConsumerGroupOffsetsPartitionResult] {
+        &self.partitions
+    }
+
+    fn from_protocol(topic: OffsetDeleteResponseTopicV0) -> Self {
+        Self {
+            topic: topic.name,
+            partitions: topic
+                .partitions
+                .into_iter()
+                .map(DeleteConsumerGroupOffsetsPartitionResult::from_protocol)
+                .collect(),
+        }
+    }
+}
+
+/// Offset-deletion outcome for one topic partition.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DeleteConsumerGroupOffsetsPartitionResult {
+    partition_index: i32,
+    error_code: i16,
+}
+
+impl DeleteConsumerGroupOffsetsPartitionResult {
+    /// Returns the partition index.
+    pub fn partition_index(&self) -> i32 {
+        self.partition_index
+    }
+
+    /// Returns whether Kafka deleted this partition's committed offset.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+    }
+
+    /// Returns Kafka's raw partition error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns kafrust's classification for a partition error.
+    pub fn broker_error_kind(&self) -> Option<BrokerErrorKind> {
+        (self.error_code != 0).then(|| BrokerErrorKind::from_code(self.error_code))
+    }
+
+    fn from_protocol(partition: OffsetDeleteResponsePartitionV0) -> Self {
+        Self {
+            partition_index: partition.partition_index,
+            error_code: partition.error_code,
+        }
+    }
+}
+
 /// Definition of one Kafka topic to create.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NewTopic {
@@ -1459,8 +1677,8 @@ fn nonnegative_i32_to_u64(value: i32) -> u64 {
 mod tests {
     use super::{
         AdminClient, AlterConfigsOptions, ConfigAlterOperationKind, ConfigSource,
-        CreateTopicsOptions, DeleteTopicsOptions, DescribeConfigsOptions, NewTopic,
-        TopicConfigAlteration, TopicConfigResource,
+        ConsumerGroupOffsetDelete, CreateTopicsOptions, DeleteTopicsOptions,
+        DescribeConfigsOptions, NewTopic, TopicConfigAlteration, TopicConfigResource,
     };
     use crate::{BrokerErrorKind, ClientConfig, ClientMetrics};
     use std::time::Duration;
@@ -1784,6 +2002,66 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn routes_offset_delete_to_coordinator_and_preserves_partition_errors() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let coordinator_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&coordinator_request[0..4], &[0, 10, 0, 1]);
+            write_frame(
+                &mut bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let (mut coordinator, _) = listener.accept().await.unwrap();
+            let delete_request = read_frame(&mut coordinator).await;
+            assert_eq!(&delete_request[0..4], &[0, 47, 0, 0]);
+            assert_eq!(
+                &delete_request[delete_request.len() - 8..],
+                &[0, 0, 0, 0, 0, 0, 0, 2]
+            );
+            write_frame(&mut coordinator, &offset_delete_response()).await;
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        );
+
+        let result = admin
+            .delete_consumer_group_offsets(
+                "orders-group",
+                &[ConsumerGroupOffsetDelete::new("orders", [0, 2])],
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(result.group_id(), "orders-group");
+        assert_eq!(result.error_code(), 0);
+        assert_eq!(result.broker_error_kind(), None);
+        assert_eq!(result.throttle_time(), Duration::from_millis(5));
+        assert!(!result.is_success());
+        assert_eq!(result.topics().len(), 1);
+        assert_eq!(result.topics()[0].topic(), "orders");
+        assert!(!result.topics()[0].is_success());
+        assert_eq!(result.topics()[0].partitions().len(), 2);
+        assert!(result.topics()[0].partitions()[0].is_success());
+        let rejected = result.topics()[0].partitions()[1];
+        assert_eq!(rejected.partition_index(), 2);
+        assert_eq!(rejected.error_code(), 86);
+        assert_eq!(
+            rejected.broker_error_kind(),
+            Some(BrokerErrorKind::GroupSubscribedToTopic)
+        );
+        assert_eq!(result.clone().into_topics().len(), 1);
+        assert_eq!(metrics.snapshot().broker_errors, 1);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn routes_create_topics_to_controller_and_preserves_partial_result() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -2021,6 +2299,21 @@ mod tests {
             0, 10, b'/', b'1', b'2', b'7', b'.', b'0', b'.', b'0', b'.', b'1', // client host
             0, 0, 0, 2, 1, 2, // member metadata
             0, 0, 0, 3, 3, 4, 5, // member assignment
+        ]
+    }
+
+    fn offset_delete_response() -> Vec<u8> {
+        vec![
+            0, 0, 0, 1, // correlation ID
+            0, 0, // top-level success
+            0, 0, 0, 5, // throttle time
+            0, 0, 0, 1, // topic count
+            0, 6, b'o', b'r', b'd', b'e', b'r', b's', // topic name
+            0, 0, 0, 2, // partition count
+            0, 0, 0, 0, // partition 0
+            0, 0, // success
+            0, 0, 0, 2, // partition 2
+            0, 86, // group subscribed to topic
         ]
     }
 }

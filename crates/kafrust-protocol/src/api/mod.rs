@@ -14,6 +14,7 @@ pub mod init_producer_id;
 pub mod join_group;
 pub mod metadata;
 pub mod offset_commit;
+pub mod offset_delete;
 pub mod offset_fetch;
 pub mod produce;
 pub mod sasl;

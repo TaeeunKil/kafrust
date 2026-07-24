@@ -125,6 +125,8 @@ for topic in result.topics() {
 topic config APIs expose values, sources, synonyms, and incremental
 Set/Delete/Append/Subtract operations. `describe_consumer_groups` discovers
 each group coordinator and preserves member protocol bytes.
+`delete_consumer_group_offsets` routes OffsetDelete v0 to the coordinator and
+preserves top-level and per-partition Kafka errors.
 CreateTopics v2 and DeleteTopics v3 discover the active controller and preserve
 per-topic partial success and error responses. See [Admin API](docs/admin-api.md).
 

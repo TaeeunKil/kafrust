@@ -33,6 +33,9 @@ use kafrust_protocol::api::metadata::{MetadataRequestV1, MetadataResponseV1};
 use kafrust_protocol::api::offset_commit::{
     OffsetCommitRequestV2, OffsetCommitResponseV2, OffsetCommitTopic,
 };
+use kafrust_protocol::api::offset_delete::{
+    OffsetDeleteRequestTopicV0, OffsetDeleteRequestV0, OffsetDeleteResponseV0,
+};
 use kafrust_protocol::api::offset_fetch::{
     OffsetFetchRequestV2, OffsetFetchResponseV2, OffsetFetchTopic,
 };
@@ -303,6 +306,24 @@ impl Client {
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(DescribeGroupsResponseV1::decode_body(&mut decoder)?)
+    }
+
+    /// Sends OffsetDelete v0 to this group coordinator connection.
+    pub async fn offset_delete_v0(
+        &mut self,
+        group_id: impl Into<String>,
+        topics: Vec<OffsetDeleteRequestTopicV0>,
+    ) -> Result<OffsetDeleteResponseV0> {
+        let request = OffsetDeleteRequestV0 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            group_id: group_id.into(),
+            topics,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(OffsetDeleteResponseV0::decode_body(&mut decoder)?)
     }
 
     /// Sends IncrementalAlterConfigs v0 to this broker.
