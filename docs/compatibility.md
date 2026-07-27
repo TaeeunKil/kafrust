@@ -28,6 +28,9 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
 - Controller-routed CreateTopics v2 followed by Metadata v1 description.
   Manual run `30059517473` passed this path against Kafka 3.7.2 and Kafka
   4.3.1.
+- Controller-routed CreatePartitions v0 followed by exact Metadata v1
+  partition-count verification. Manual run `30230301762` expanded topics on
+  Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1.
 - Admin cluster/topic inspection, CreateTopics v2, bounded metadata propagation,
   DescribeConfigs v1, and DeleteTopics v3. Manual run `30060723690` passed this
   lifecycle against Kafka 3.7.2 and Kafka 4.3.1.
@@ -119,6 +122,9 @@ The Kafka 3.7.2 multi-broker plaintext smoke path covers:
 - Controller discovery, CreateTopics v2, and follow-up Metadata v1 description
   through three externally advertised broker addresses. Manual run
   `30059517473` passed this path.
+- CreatePartitions v0 expansion with automatic replica placement followed by
+  exact Metadata v1 count verification. Manual run `30230301762` passed this
+  path on the three-broker Kafka 3.7.2 profile.
 - The complete admin lifecycle, including all-topic listing, DescribeConfigs
   v1, bounded metadata propagation, and DeleteTopics v3. Manual run
   `30060723690` passed before the existing broker-stop failover checks.
@@ -174,7 +180,7 @@ The current compatibility claim does not cover:
 - TLS workflows beyond the listed TLS smoke examples.
 - SASL workflows beyond the listed SASL_PLAINTEXT and SASL_SSL smoke examples.
 - SASL/SCRAM-SHA-512 live broker profiles.
-- Secured multi-broker clusters, broader consumer-group failover beyond the listed coordinator reconnect checks, rack awareness, or partition expansion.
+- Secured multi-broker clusters, broader consumer-group failover beyond the listed coordinator reconnect checks, or rack-aware client routing.
 - Transactional buffered production, multi-broker transaction failover, and
   transaction failure-injection profiles.
 - Live broker idempotence failure-injection profiles. The ambiguous-response
