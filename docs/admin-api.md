@@ -293,6 +293,43 @@ The current alpha path uses CreateTopics v2, which keeps the request
 non-flexible and compatible with the project's Kafka 3.7-to-current support
 window.
 
+## Expand Topic Partitions
+
+```rust
+use kafrust::{
+    AdminClient, ClientConfig, CreatePartitionsOptions, NewPartitions,
+};
+
+# async fn example() -> kafrust::Result<()> {
+let admin = AdminClient::new(ClientConfig::new(["localhost:9092"]));
+let result = admin
+    .create_partitions(
+        &[
+            NewPartitions::new("orders", 12),
+            NewPartitions::with_assignments(
+                "payments",
+                4,
+                [vec![1, 2, 3], vec![2, 3, 1]],
+            ),
+        ],
+        CreatePartitionsOptions::new(),
+    )
+    .await?;
+
+for topic in result.topics() {
+    println!("{}: error={}", topic.name(), topic.error_code());
+}
+# Ok(())
+# }
+```
+
+The count is the new total partition count and must be greater than the
+topic's current count. `NewPartitions::new` delegates replica placement to
+Kafka. `with_assignments` supplies one broker list for each newly added
+partition in ascending partition order. CreatePartitions v0 is
+controller-scoped, supports validation-only requests, and preserves per-topic
+errors in `CreatePartitionsResult`.
+
 ## Delete Topics
 
 ```rust

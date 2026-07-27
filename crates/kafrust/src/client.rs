@@ -5,6 +5,9 @@ use kafrust_protocol::api::add_partitions_to_txn::{
     AddPartitionsToTxnRequestV0, AddPartitionsToTxnResponseV0, AddPartitionsToTxnTopic,
 };
 use kafrust_protocol::api::api_versions::{ApiVersionsRequestV0, ApiVersionsResponseV0};
+use kafrust_protocol::api::create_partitions::{
+    CreatePartitionsRequestV0, CreatePartitionsResponseV0, CreatePartitionsTopicV0,
+};
 use kafrust_protocol::api::create_topics::{
     CreateTopicsRequestV2, CreateTopicsResponseV2, CreateTopicsTopicV2,
 };
@@ -263,6 +266,30 @@ impl Client {
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(CreateTopicsResponseV2::decode_body(&mut decoder)?)
+    }
+
+    /// Sends CreatePartitions v0 to the broker represented by this connection.
+    ///
+    /// Kafka expects this request on the active controller. High-level callers
+    /// should prefer [`crate::AdminClient`], which discovers and routes to the
+    /// current controller.
+    pub async fn create_partitions_v0(
+        &mut self,
+        topics: Vec<CreatePartitionsTopicV0>,
+        timeout_ms: i32,
+        validate_only: bool,
+    ) -> Result<CreatePartitionsResponseV0> {
+        let request = CreatePartitionsRequestV0 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            topics,
+            timeout_ms,
+            validate_only,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(CreatePartitionsResponseV0::decode_body(&mut decoder)?)
     }
 
     /// Sends DeleteTopics v3 to the broker represented by this connection.

@@ -224,6 +224,7 @@ kafrust currently provides:
 - topic config description and incremental alteration
 - consumer group description
 - selected consumer group offset deletion
+- topic partition expansion with automatic or explicit replica assignment
 
 Migration blockers include rust-rdkafka admin operations with no current
 kafrust equivalent, including partition creation, group deletion, ACLs,
