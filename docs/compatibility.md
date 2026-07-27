@@ -23,6 +23,8 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
 
 - `ApiVersions v0` and `Metadata v1` roundtrips.
 - `FindCoordinator v1` for consumer group coordinator discovery.
+- `ListOffsets v1` for earliest/latest consumer group offset reset, routed to
+  each assigned partition leader.
 - Controller-routed CreateTopics v2 followed by Metadata v1 description.
   Manual run `30059517473` passed this path against Kafka 3.7.2 and Kafka
   4.3.1.
@@ -91,6 +93,10 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
   tests and by the plaintext single-node and multi-broker live smoke profiles.
 - Direct consumer fetch from an assigned topic partition using Fetch v4 response decoding. The v4 path is required because Kafka 4.x no longer accepts Fetch v2.
 - Consumer group join, sync, heartbeat, poll, and offset commit through the alpha classic consumer group path with range assignment.
+- Consumer group assignments without committed offsets resolve
+  `OffsetResetPolicy::Earliest` or `Latest` from the partition leader. Manual
+  `Live Kafka Smoke` run `30229718813` passed both policies on Kafka 3.7.2,
+  3.8.1, 3.9.1, and 4.3.1.
 - Background heartbeat recovery through a real two-member classic-group
   rebalance. Manual run `30067372344` verified automatic rejoin and heartbeat
   handle replacement on Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext
