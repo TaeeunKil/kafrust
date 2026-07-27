@@ -45,6 +45,8 @@ the currently supported settings through typed builders.
 | `enable.idempotence` | `.enable_idempotence(true)` | Initializes producer identity and partition sequences. |
 | `transactional.id` | `.transactional_id(...)` | Enables the alpha transactional path. |
 | `group.id` | `ConsumerGroupConfig::new(brokers, group_id)` | Group ID is a required typed argument. |
+| `auto.offset.reset=earliest` | `.offset_reset_policy(OffsetResetPolicy::Earliest)` | Used only when an assigned partition has no committed offset. |
+| `auto.offset.reset=latest` | `.offset_reset_policy(OffsetResetPolicy::Latest)` | Resolves the current log end from the partition leader during group join. |
 | `isolation.level` | `.isolation_level(IsolationLevel::ReadCommitted)` | Supported by direct and group consumers. |
 | `max.poll.records` | `.max_poll_records(...)` | Bounds records returned by one poll. |
 | `security.protocol` | `.security_protocol(SecurityProtocol::...)` | Prefer the SASL convenience methods for credentials. |
@@ -132,13 +134,14 @@ consumer.commit_message(&message, CommitMode::Async)?;
 kafrust:
 
 ```rust,ignore
-use kafrust::ConsumerGroupConfig;
+use kafrust::{ConsumerGroupConfig, OffsetResetPolicy};
 
 let mut group = ConsumerGroupConfig::new(
     ["localhost:9092"],
     "orders-service",
 )
 .client_id("orders-reader")
+.offset_reset_policy(OffsetResetPolicy::Earliest)
 .subscribe("orders")
 .join()
 .await?;
@@ -153,8 +156,8 @@ group.commit_offsets().await?;
 The semantic difference matters: kafrust currently returns a bounded batch and
 commits the current next offsets for its assignments. It does not expose
 rust-rdkafka's asynchronous per-message commit queue, rebalance callbacks,
-partition queue splitting, regex subscription, or assignor selection. The
-current group implementation uses the classic protocol and range assignment.
+partition queue splitting, or regex subscription. The current group
+implementation uses the classic protocol with range or round-robin assignment.
 
 For processing that can approach the session timeout, use
 `spawn_heartbeat_task` with `poll_with_heartbeat`. The task is explicit and

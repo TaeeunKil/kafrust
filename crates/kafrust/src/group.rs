@@ -4,6 +4,10 @@ use std::time::Duration;
 use kafrust_protocol::api::find_coordinator::FindCoordinatorResponseV1;
 use kafrust_protocol::api::join_group::JoinGroupMember;
 use kafrust_protocol::api::leave_group::{LeaveGroupMemberIdentity, LeaveGroupResponseV3};
+use kafrust_protocol::api::list_offsets::{
+    ListOffsetsPartitionV1, ListOffsetsResponseV1, ListOffsetsTopicV1, EARLIEST_TIMESTAMP,
+    LATEST_TIMESTAMP,
+};
 use kafrust_protocol::api::metadata::MetadataResponseV1;
 use kafrust_protocol::api::offset_commit::{
     OffsetCommitPartition, OffsetCommitPartitionV7, OffsetCommitTopic, OffsetCommitTopicResponse,
@@ -52,6 +56,33 @@ impl ConsumerGroupAssignmentStrategy {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Starting position used when an assigned partition has no committed offset.
+pub enum OffsetResetPolicy {
+    /// Start at the partition's earliest available offset.
+    Earliest,
+    /// Start after the partition's current log end.
+    Latest,
+    /// Start at an explicit absolute offset.
+    Offset(i64),
+}
+
+impl Default for OffsetResetPolicy {
+    fn default() -> Self {
+        Self::Offset(0)
+    }
+}
+
+impl OffsetResetPolicy {
+    fn timestamp(self) -> Option<i64> {
+        match self {
+            Self::Earliest => Some(EARLIEST_TIMESTAMP),
+            Self::Latest => Some(LATEST_TIMESTAMP),
+            Self::Offset(_) => None,
+        }
+    }
+}
+
 struct JoinedGroup {
     error_code: i16,
     generation_id: i32,
@@ -71,7 +102,7 @@ pub struct ConsumerGroupConfig {
     session_timeout_ms: i32,
     rebalance_timeout_ms: i32,
     retention_time_ms: i64,
-    start_offset: i64,
+    offset_reset_policy: OffsetResetPolicy,
     max_wait_ms: i32,
     min_bytes: i32,
     max_partition_bytes: i32,
@@ -95,7 +126,7 @@ impl ConsumerGroupConfig {
             session_timeout_ms: 10_000,
             rebalance_timeout_ms: 30_000,
             retention_time_ms: 86_400_000,
-            start_offset: 0,
+            offset_reset_policy: OffsetResetPolicy::Offset(0),
             max_wait_ms: 500,
             min_bytes: 1,
             max_partition_bytes: 1_048_576,
@@ -227,7 +258,13 @@ impl ConsumerGroupConfig {
 
     /// Sets the fallback start offset when no committed offset exists.
     pub fn start_offset(mut self, start_offset: i64) -> Self {
-        self.start_offset = start_offset;
+        self.offset_reset_policy = OffsetResetPolicy::Offset(start_offset);
+        self
+    }
+
+    /// Sets how partitions without committed offsets choose their starting position.
+    pub fn offset_reset_policy(mut self, offset_reset_policy: OffsetResetPolicy) -> Self {
+        self.offset_reset_policy = offset_reset_policy;
         self
     }
 
@@ -279,6 +316,11 @@ impl ConsumerGroupConfig {
     /// Returns the configured partition assignment strategy.
     pub fn assignment_strategy_ref(&self) -> ConsumerGroupAssignmentStrategy {
         self.assignment_strategy
+    }
+
+    /// Returns the policy used for partitions without committed offsets.
+    pub fn offset_reset_policy_ref(&self) -> OffsetResetPolicy {
+        self.offset_reset_policy
     }
 
     /// Returns the configured transaction isolation level.
@@ -438,8 +480,10 @@ impl ConsumerGroupConfig {
         let assignment = ConsumerProtocolAssignmentV0::decode(&synced.assignment)?;
         let consumer_assignments = assignments_from_protocol(
             &mut coordinator_client,
+            &mut bootstrap,
+            &self.client,
             &self.group_id,
-            self.start_offset,
+            self.offset_reset_policy,
             &assignment,
         )
         .await?;
@@ -1130,11 +1174,14 @@ fn encode_member_assignments(
 
 async fn assignments_from_protocol(
     coordinator: &mut Client,
+    bootstrap: &mut Client,
+    client_config: &ClientConfig,
     group_id: &str,
-    start_offset: i64,
+    offset_reset_policy: OffsetResetPolicy,
     assignment: &ConsumerProtocolAssignmentV0,
 ) -> Result<Vec<ConsumerAssignment>> {
     let mut assignments = Vec::new();
+    let mut reset_partitions = Vec::new();
     let offsets = coordinator
         .offset_fetch_v2(group_id.to_owned(), Some(offset_fetch_topics(assignment)))
         .await?;
@@ -1151,17 +1198,199 @@ async fn assignments_from_protocol(
                 Error::Broker { code, context } => coordinator.broker_error(code, context),
                 error => error,
             })?;
-            let next_offset = committed
-                .filter(|offset| *offset >= 0)
-                .unwrap_or(start_offset);
-            assignments.push(ConsumerAssignment::new(
-                topic.topic.clone(),
-                *partition,
-                next_offset,
-            ));
+            match committed.filter(|offset| *offset >= 0) {
+                Some(next_offset) => assignments.push(ConsumerAssignment::new(
+                    topic.topic.clone(),
+                    *partition,
+                    next_offset,
+                )),
+                None => match offset_reset_policy {
+                    OffsetResetPolicy::Offset(next_offset) => {
+                        assignments.push(ConsumerAssignment::new(
+                            topic.topic.clone(),
+                            *partition,
+                            next_offset,
+                        ));
+                    }
+                    OffsetResetPolicy::Earliest | OffsetResetPolicy::Latest => {
+                        reset_partitions.push((topic.topic.clone(), *partition));
+                    }
+                },
+            }
         }
     }
+
+    if let Some(timestamp) = offset_reset_policy.timestamp() {
+        assignments.extend(
+            resolve_reset_offsets(bootstrap, client_config, &reset_partitions, timestamp).await?,
+        );
+    }
+    assignments.sort_by(|left, right| {
+        left.topic()
+            .cmp(right.topic())
+            .then_with(|| left.partition().cmp(&right.partition()))
+    });
     Ok(assignments)
+}
+
+async fn resolve_reset_offsets(
+    bootstrap: &mut Client,
+    client_config: &ClientConfig,
+    partitions: &[(String, i32)],
+    timestamp: i64,
+) -> Result<Vec<ConsumerAssignment>> {
+    if partitions.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let topic_names = partitions
+        .iter()
+        .map(|(topic, _)| topic.clone())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect();
+    let metadata = bootstrap.metadata(Some(topic_names)).await?;
+    let mut requests_by_broker = BTreeMap::<i32, BTreeMap<String, Vec<i32>>>::new();
+    for (topic, partition) in partitions {
+        let leader_id =
+            offset_leader_for(&metadata, topic, *partition).map_err(|error| match error {
+                Error::Broker { code, context } => client_config.broker_error(code, context),
+                error => error,
+            })?;
+        requests_by_broker
+            .entry(leader_id)
+            .or_default()
+            .entry(topic.clone())
+            .or_default()
+            .push(*partition);
+    }
+
+    let mut resolved = BTreeMap::new();
+    for (leader_id, topics) in requests_by_broker {
+        let broker_addr = offset_broker_addr_for(&metadata, leader_id)?;
+        let mut leader = client_config.connect_broker(broker_addr).await?;
+        let response = leader
+            .list_offsets_v1(list_offsets_topics(topics, timestamp))
+            .await?;
+        for (topic, partition) in partitions {
+            let partition_leader =
+                offset_leader_for(&metadata, topic, *partition).map_err(|error| match error {
+                    Error::Broker { code, context } => client_config.broker_error(code, context),
+                    error => error,
+                })?;
+            if partition_leader != leader_id {
+                continue;
+            }
+            let offset =
+                list_offset(&response, topic, *partition).map_err(|error| match error {
+                    Error::Broker { code, context } => client_config.broker_error(code, context),
+                    error => error,
+                })?;
+            resolved.insert((topic.clone(), *partition), offset);
+        }
+    }
+
+    Ok(resolved
+        .into_iter()
+        .map(|((topic, partition), offset)| ConsumerAssignment::new(topic, partition, offset))
+        .collect())
+}
+
+fn offset_leader_for(
+    metadata: &MetadataResponseV1,
+    topic_name: &str,
+    partition_index: i32,
+) -> Result<i32> {
+    let topic = metadata
+        .topics
+        .iter()
+        .find(|topic| topic.name == topic_name)
+        .ok_or_else(|| Error::UnknownTopicOrPartition {
+            topic: topic_name.to_owned(),
+            partition: partition_index,
+        })?;
+    if topic.error_code != 0 {
+        return Err(Error::Broker {
+            code: topic.error_code,
+            context: format!("metadata topic {topic_name}"),
+        });
+    }
+    let partition = topic
+        .partitions
+        .iter()
+        .find(|partition| partition.partition_index == partition_index)
+        .ok_or_else(|| Error::UnknownTopicOrPartition {
+            topic: topic_name.to_owned(),
+            partition: partition_index,
+        })?;
+    if partition.error_code != 0 {
+        return Err(Error::Broker {
+            code: partition.error_code,
+            context: format!("metadata {topic_name}-{partition_index}"),
+        });
+    }
+    (partition.leader_id >= 0)
+        .then_some(partition.leader_id)
+        .ok_or_else(|| Error::MissingLeader {
+            topic: topic_name.to_owned(),
+            partition: partition_index,
+        })
+}
+
+fn offset_broker_addr_for(metadata: &MetadataResponseV1, node_id: i32) -> Result<String> {
+    metadata
+        .brokers
+        .iter()
+        .find(|broker| broker.node_id == node_id)
+        .map(|broker| format!("{}:{}", broker.host, broker.port))
+        .ok_or(Error::MissingBroker { node_id })
+}
+
+fn list_offsets_topics(
+    topics: BTreeMap<String, Vec<i32>>,
+    timestamp: i64,
+) -> Vec<ListOffsetsTopicV1> {
+    topics
+        .into_iter()
+        .map(|(name, partitions)| ListOffsetsTopicV1 {
+            name,
+            partitions: partitions
+                .into_iter()
+                .map(|partition_index| ListOffsetsPartitionV1 {
+                    partition_index,
+                    timestamp,
+                })
+                .collect(),
+        })
+        .collect()
+}
+
+fn list_offset(
+    response: &ListOffsetsResponseV1,
+    topic_name: &str,
+    partition_index: i32,
+) -> Result<i64> {
+    let partition = response
+        .topics
+        .iter()
+        .find(|topic| topic.name == topic_name)
+        .and_then(|topic| {
+            topic
+                .partitions
+                .iter()
+                .find(|partition| partition.partition_index == partition_index)
+        })
+        .ok_or_else(|| Error::UnknownTopicOrPartition {
+            topic: topic_name.to_owned(),
+            partition: partition_index,
+        })?;
+    if partition.error_code != 0 {
+        return Err(Error::Broker {
+            code: partition.error_code,
+            context: format!("list offsets {topic_name}-{partition_index}"),
+        });
+    }
+    Ok(partition.offset)
 }
 
 fn offset_fetch_topics(assignment: &ConsumerProtocolAssignmentV0) -> Vec<OffsetFetchTopic> {
@@ -1425,18 +1654,24 @@ fn range_for_topic(members: &[String], partitions: &[i32]) -> Vec<(String, Vec<i
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
+    use std::collections::BTreeMap;
+
     use super::{
-        assignments_for_strategy, committed_offset, leave_group_response_error,
-        offset_commit_response_error, offset_commit_topics, offset_commit_topics_v7,
-        offset_fetch_topics, range_assignments, round_robin_assignments,
+        assignments_for_strategy, committed_offset, leave_group_response_error, list_offset,
+        list_offsets_topics, offset_commit_response_error, offset_commit_topics,
+        offset_commit_topics_v7, offset_fetch_topics, range_assignments, round_robin_assignments,
         should_rejoin_after_background_heartbeat, should_rejoin_group, validate_heartbeat_interval,
         ConsumerGroupAssignmentStrategy, ConsumerGroupConfig, ConsumerGroupHeartbeat,
-        HeartbeatHandleState, IsolationLevel, SecurityProtocol,
+        HeartbeatHandleState, IsolationLevel, OffsetResetPolicy, SecurityProtocol,
     };
     use crate::consumer::ConsumerAssignment;
     use crate::Error;
     use kafrust_protocol::api::join_group::JoinGroupMember;
     use kafrust_protocol::api::leave_group::{LeaveGroupMemberResponse, LeaveGroupResponseV3};
+    use kafrust_protocol::api::list_offsets::{
+        ListOffsetsPartitionResponseV1, ListOffsetsResponseV1, ListOffsetsTopicResponseV1,
+        EARLIEST_TIMESTAMP,
+    };
     use kafrust_protocol::api::metadata::{MetadataResponseV1, PartitionMetadata, TopicMetadata};
     use kafrust_protocol::api::offset_commit::{
         OffsetCommitPartitionResponse, OffsetCommitTopicResponse,
@@ -1493,6 +1728,24 @@ mod tests {
             config.assignment_strategy_ref(),
             ConsumerGroupAssignmentStrategy::RoundRobin
         );
+        assert_eq!(
+            config.offset_reset_policy_ref(),
+            OffsetResetPolicy::Offset(5)
+        );
+    }
+
+    #[test]
+    fn configures_offset_reset_policy_and_preserves_offset_zero_default() {
+        let default = ConsumerGroupConfig::new(["localhost:9092"], "orders-group");
+        assert_eq!(
+            default.offset_reset_policy_ref(),
+            OffsetResetPolicy::Offset(0)
+        );
+
+        let latest = default
+            .start_offset(12)
+            .offset_reset_policy(OffsetResetPolicy::Latest);
+        assert_eq!(latest.offset_reset_policy_ref(), OffsetResetPolicy::Latest);
     }
 
     #[tokio::test]
@@ -1683,6 +1936,62 @@ mod tests {
         assert!(matches!(
             committed_offset("orders-group", &topics, "orders", 1).unwrap_err(),
             Error::Broker { code: 25, .. }
+        ));
+    }
+
+    #[test]
+    fn builds_list_offsets_topics_and_reads_partition_offset() {
+        let topics = BTreeMap::from([
+            ("orders".to_owned(), vec![0, 2]),
+            ("payments".to_owned(), vec![1]),
+        ]);
+
+        let request = list_offsets_topics(topics, EARLIEST_TIMESTAMP);
+        assert_eq!(request[0].name, "orders");
+        assert_eq!(request[0].partitions[0].partition_index, 0);
+        assert_eq!(request[0].partitions[0].timestamp, EARLIEST_TIMESTAMP);
+        assert_eq!(request[1].name, "payments");
+
+        let response = ListOffsetsResponseV1 {
+            throttle_time_ms: 0,
+            topics: vec![ListOffsetsTopicResponseV1 {
+                name: "orders".to_owned(),
+                partitions: vec![ListOffsetsPartitionResponseV1 {
+                    partition_index: 2,
+                    error_code: 0,
+                    timestamp: -1,
+                    offset: 41,
+                }],
+            }],
+        };
+        assert_eq!(list_offset(&response, "orders", 2).unwrap(), 41);
+        assert!(matches!(
+            list_offset(&response, "orders", 0).unwrap_err(),
+            Error::UnknownTopicOrPartition { .. }
+        ));
+    }
+
+    #[test]
+    fn surfaces_list_offsets_partition_error() {
+        let response = ListOffsetsResponseV1 {
+            throttle_time_ms: 0,
+            topics: vec![ListOffsetsTopicResponseV1 {
+                name: "orders".to_owned(),
+                partitions: vec![ListOffsetsPartitionResponseV1 {
+                    partition_index: 0,
+                    error_code: 3,
+                    timestamp: -1,
+                    offset: -1,
+                }],
+            }],
+        };
+
+        assert!(matches!(
+            list_offset(&response, "orders", 0).unwrap_err(),
+            Error::Broker {
+                code: 3,
+                context
+            } if context == "list offsets orders-0"
         ));
     }
 

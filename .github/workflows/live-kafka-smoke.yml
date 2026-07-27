@@ -148,6 +148,11 @@ jobs:
       - name: Run consumer group example
         run: cargo run -p kafrust --example consumer_group_poll
 
+      - name: Run consumer group offset reset example
+        env:
+          KAFRUST_GROUP_ID: kafrust-offset-reset-${{ matrix.kafka-version }}
+        run: cargo run -p kafrust --example consumer_group_offset_reset
+
       - name: Run background heartbeat rejoin example
         env:
           KAFRUST_GROUP_ID: kafrust-heartbeat-rejoin-${{ matrix.kafka-version }}
