@@ -37,6 +37,9 @@ use kafrust_protocol::api::leave_group::{
     LeaveGroupMemberIdentity, LeaveGroupRequestV3, LeaveGroupResponseV3,
 };
 use kafrust_protocol::api::list_groups::{ListGroupsRequestV1, ListGroupsResponseV1};
+use kafrust_protocol::api::list_offsets::{
+    ListOffsetsRequestV1, ListOffsetsResponseV1, ListOffsetsTopicV1,
+};
 use kafrust_protocol::api::metadata::{MetadataRequestV1, MetadataResponseV1};
 use kafrust_protocol::api::offset_commit::{
     OffsetCommitRequestV2, OffsetCommitRequestV7, OffsetCommitResponseV2, OffsetCommitResponseV7,
@@ -574,6 +577,23 @@ impl Client {
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(OffsetFetchResponseV2::decode_body(&mut decoder)?)
+    }
+
+    /// Sends ListOffsets v1 to resolve timestamp-based partition offsets.
+    pub async fn list_offsets_v1(
+        &mut self,
+        topics: Vec<ListOffsetsTopicV1>,
+    ) -> Result<ListOffsetsResponseV1> {
+        let request = ListOffsetsRequestV1 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            replica_id: -1,
+            topics,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(ListOffsetsResponseV1::decode_body(&mut decoder)?)
     }
 
     /// Sends JoinGroup v2 using the provided group protocol metadata.
