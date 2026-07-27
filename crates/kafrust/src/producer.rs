@@ -1120,6 +1120,10 @@ fn delivery_error_from_request_error(error: &Error) -> Error {
             topic: topic.clone(),
             partition: *partition,
         },
+        Error::UnassignedTopicPartition { topic, partition } => Error::UnassignedTopicPartition {
+            topic: topic.clone(),
+            partition: *partition,
+        },
         Error::MissingLeader { topic, partition } => Error::MissingLeader {
             topic: topic.clone(),
             partition: *partition,
@@ -3294,6 +3298,7 @@ fn can_retry_send(error: &Error) -> bool {
         | Error::MissingLeader { .. }
         | Error::MissingBroker { .. } => true,
         Error::MissingBootstrapServer
+        | Error::UnassignedTopicPartition { .. }
         | Error::MissingGroupDescription { .. }
         | Error::MissingDeleteGroupResult { .. }
         | Error::MissingSaslCredentials

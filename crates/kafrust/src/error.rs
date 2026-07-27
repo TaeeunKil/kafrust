@@ -139,6 +139,13 @@ pub enum Error {
         /// Kafka partition index.
         partition: i32,
     },
+    /// A position operation targeted a topic partition that is not assigned.
+    UnassignedTopicPartition {
+        /// Kafka topic name.
+        topic: String,
+        /// Kafka partition index.
+        partition: i32,
+    },
     /// Metadata did not contain a usable leader for a topic partition.
     MissingLeader {
         /// Kafka topic name.
@@ -228,6 +235,9 @@ impl fmt::Display for Error {
             Self::UnknownTopicOrPartition { topic, partition } => {
                 write!(f, "unknown topic or partition {topic}-{partition}")
             }
+            Self::UnassignedTopicPartition { topic, partition } => {
+                write!(f, "unassigned topic partition {topic}-{partition}")
+            }
             Self::MissingLeader { topic, partition } => {
                 write!(f, "missing leader for topic partition {topic}-{partition}")
             }
@@ -277,6 +287,7 @@ impl std::error::Error for Error {
             Self::Protocol(error) => Some(error),
             Self::MissingBootstrapServer
             | Self::UnknownTopicOrPartition { .. }
+            | Self::UnassignedTopicPartition { .. }
             | Self::MissingLeader { .. }
             | Self::MissingBroker { .. }
             | Self::MissingGroupDescription { .. }

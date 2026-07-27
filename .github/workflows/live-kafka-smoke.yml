@@ -153,6 +153,11 @@ jobs:
           KAFRUST_GROUP_ID: kafrust-offset-reset-${{ matrix.kafka-version }}
         run: cargo run -p kafrust --example consumer_group_offset_reset
 
+      - name: Run consumer position control example
+        env:
+          KAFRUST_GROUP_ID: kafrust-position-control-${{ matrix.kafka-version }}
+        run: cargo run -p kafrust --example consumer_position_control
+
       - name: Run background heartbeat rejoin example
         env:
           KAFRUST_GROUP_ID: kafrust-heartbeat-rejoin-${{ matrix.kafka-version }}
