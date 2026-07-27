@@ -1953,7 +1953,6 @@ mod tests {
         assert_eq!(request[1].name, "payments");
 
         let response = ListOffsetsResponseV1 {
-            throttle_time_ms: 0,
             topics: vec![ListOffsetsTopicResponseV1 {
                 name: "orders".to_owned(),
                 partitions: vec![ListOffsetsPartitionResponseV1 {
@@ -1974,7 +1973,6 @@ mod tests {
     #[test]
     fn surfaces_list_offsets_partition_error() {
         let response = ListOffsetsResponseV1 {
-            throttle_time_ms: 0,
             topics: vec![ListOffsetsTopicResponseV1 {
                 name: "orders".to_owned(),
                 partitions: vec![ListOffsetsPartitionResponseV1 {

@@ -55,14 +55,12 @@ pub struct ListOffsetsPartitionV1 {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ListOffsetsResponseV1 {
-    pub throttle_time_ms: i32,
     pub topics: Vec<ListOffsetsTopicResponseV1>,
 }
 
 impl ListOffsetsResponseV1 {
     pub fn decode_body(decoder: &mut Decoder<'_>) -> Result<Self> {
         Ok(Self {
-            throttle_time_ms: decoder.read_i32()?,
             topics: decoder
                 .read_array("list offsets topic responses", |decoder| {
                     Ok(ListOffsetsTopicResponseV1 {
@@ -130,7 +128,6 @@ mod tests {
     #[test]
     fn decodes_list_offsets_v1_response() {
         let mut encoder = Encoder::new();
-        encoder.write_i32(3);
         encoder.write_i32(1);
         encoder.write_string("x").unwrap();
         encoder.write_i32(1);
@@ -141,7 +138,6 @@ mod tests {
         let bytes = encoder.into_bytes();
 
         let response = ListOffsetsResponseV1::decode_body(&mut Decoder::new(&bytes)).unwrap();
-        assert_eq!(response.throttle_time_ms, 3);
         assert_eq!(response.topics[0].partitions[0].offset, 42);
     }
 }
