@@ -182,9 +182,10 @@ for record in consumer.poll().await? {
 }
 ```
 
-There is no current equivalent for every rust-rdkafka seek, pause, resume, or
-watermark-query workflow. Treat those calls as migration blockers until an
-explicit kafrust API and compatibility test exist.
+kafrust exposes `position`, `seek`, `pause`, and `resume` on both direct and
+group consumers. These calls operate on current in-memory assignments; seek
+does not commit an offset. Watermark queries still have no high-level
+equivalent and remain a migration blocker.
 
 ## Transactions
 

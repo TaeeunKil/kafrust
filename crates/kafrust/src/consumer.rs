@@ -115,6 +115,30 @@ impl Consumer {
         &self.assignments
     }
 
+    /// Returns the next offset for an assigned topic partition.
+    pub fn position(&self, topic: &str, partition: i32) -> Option<i64> {
+        self.assignment(topic, partition)
+            .map(ConsumerAssignment::next_offset)
+    }
+
+    /// Changes the next offset for an assigned topic partition.
+    pub fn seek(&mut self, topic: &str, partition: i32, offset: i64) -> Result<()> {
+        self.assignment_mut(topic, partition)?.next_offset = offset;
+        Ok(())
+    }
+
+    /// Pauses fetching from an assigned topic partition.
+    pub fn pause(&mut self, topic: &str, partition: i32) -> Result<()> {
+        self.assignment_mut(topic, partition)?.paused = true;
+        Ok(())
+    }
+
+    /// Resumes fetching from an assigned topic partition.
+    pub fn resume(&mut self, topic: &str, partition: i32) -> Result<()> {
+        self.assignment_mut(topic, partition)?.paused = false;
+        Ok(())
+    }
+
     /// Polls assigned partitions and advances in-memory offsets for fetched records.
     #[tracing::instrument(
         level = "debug",
@@ -135,6 +159,9 @@ impl Consumer {
         for assignment in assignments {
             if records.len() >= self.config.max_poll_records {
                 break;
+            }
+            if assignment.paused {
+                continue;
             }
 
             let mut fetched = self
@@ -291,6 +318,22 @@ impl Consumer {
         }
     }
 
+    fn assignment(&self, topic: &str, partition: i32) -> Option<&ConsumerAssignment> {
+        self.assignments
+            .iter()
+            .find(|assignment| assignment.topic == topic && assignment.partition == partition)
+    }
+
+    fn assignment_mut(&mut self, topic: &str, partition: i32) -> Result<&mut ConsumerAssignment> {
+        self.assignments
+            .iter_mut()
+            .find(|assignment| assignment.topic == topic && assignment.partition == partition)
+            .ok_or_else(|| Error::UnassignedTopicPartition {
+                topic: topic.to_owned(),
+                partition,
+            })
+    }
+
     async fn metadata_for_topic(&mut self, topic: &str) -> Result<MetadataResponseV1> {
         if let Some(metadata) = self.metadata_cache.get(topic) {
             return Ok(metadata.clone());
@@ -333,6 +376,7 @@ pub struct ConsumerAssignment {
     topic: String,
     partition: i32,
     next_offset: i64,
+    paused: bool,
 }
 
 impl ConsumerAssignment {
@@ -341,6 +385,7 @@ impl ConsumerAssignment {
             topic,
             partition,
             next_offset,
+            paused: false,
         }
     }
 
@@ -357,6 +402,11 @@ impl ConsumerAssignment {
     /// Returns the next offset that will be fetched or committed.
     pub fn next_offset(&self) -> i64 {
         self.next_offset
+    }
+
+    /// Returns whether fetching is paused for this assignment.
+    pub fn is_paused(&self) -> bool {
+        self.paused
     }
 }
 
@@ -378,6 +428,7 @@ fn assign_partition(
         topic,
         partition,
         next_offset: offset,
+        paused: false,
     });
 }
 
@@ -674,6 +725,7 @@ fn can_retry_fetch(error: &Error) -> bool {
         | Error::MissingLeader { .. }
         | Error::MissingBroker { .. } => true,
         Error::MissingBootstrapServer
+        | Error::UnassignedTopicPartition { .. }
         | Error::MissingGroupDescription { .. }
         | Error::MissingDeleteGroupResult { .. }
         | Error::MissingSaslCredentials
@@ -804,6 +856,39 @@ mod tests {
         assert_eq!(assignments[0].topic(), "orders");
         assert_eq!(assignments[0].partition(), 0);
         assert_eq!(assignments[0].next_offset(), 20);
+        assert!(!assignments[0].is_paused());
+    }
+
+    #[tokio::test]
+    async fn controls_assignment_position_and_pause_state() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let _connection = listener.accept().await.unwrap();
+        });
+        let mut consumer = ConsumerConfig::new([addr.to_string()])
+            .build()
+            .await
+            .unwrap();
+        consumer.assign("orders", 0, 10);
+
+        assert_eq!(consumer.position("orders", 0), Some(10));
+        consumer.seek("orders", 0, 20).unwrap();
+        consumer.pause("orders", 0).unwrap();
+        assert_eq!(consumer.position("orders", 0), Some(20));
+        assert!(consumer.assignments()[0].is_paused());
+        assert!(consumer.poll().await.unwrap().is_empty());
+
+        consumer.resume("orders", 0).unwrap();
+        assert!(!consumer.assignments()[0].is_paused());
+        assert!(matches!(
+            consumer.seek("orders", 1, 0).unwrap_err(),
+            Error::UnassignedTopicPartition {
+                topic,
+                partition: 1
+            } if topic == "orders"
+        ));
+        server.await.unwrap();
     }
 
     #[test]

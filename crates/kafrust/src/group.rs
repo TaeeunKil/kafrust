@@ -591,6 +591,32 @@ impl ConsumerGroup {
         self.consumer.assignments()
     }
 
+    /// Returns the next offset for a currently assigned topic partition.
+    pub fn position(&self, topic: &str, partition: i32) -> Option<i64> {
+        self.consumer.position(topic, partition)
+    }
+
+    /// Changes the next offset for a currently assigned topic partition.
+    ///
+    /// A later group rejoin restores broker-committed or configured reset
+    /// offsets for the new assignment.
+    pub fn seek(&mut self, topic: &str, partition: i32, offset: i64) -> Result<()> {
+        self.consumer.seek(topic, partition, offset)
+    }
+
+    /// Pauses fetching from a currently assigned topic partition.
+    ///
+    /// Pause state is retained across a rejoin when this member keeps the
+    /// topic partition.
+    pub fn pause(&mut self, topic: &str, partition: i32) -> Result<()> {
+        self.consumer.pause(topic, partition)
+    }
+
+    /// Resumes fetching from a currently assigned topic partition.
+    pub fn resume(&mut self, topic: &str, partition: i32) -> Result<()> {
+        self.consumer.resume(topic, partition)
+    }
+
     /// Leaves the consumer group and consumes this member handle.
     ///
     /// Stop any separately spawned [`ConsumerGroupHeartbeat`] before leaving.
@@ -799,7 +825,19 @@ impl ConsumerGroup {
     }
 
     async fn rejoin(&mut self) -> Result<()> {
-        let joined = self.config.clone().join().await?;
+        let paused = self
+            .consumer
+            .assignments()
+            .iter()
+            .filter(|assignment| assignment.is_paused())
+            .map(|assignment| (assignment.topic().to_owned(), assignment.partition()))
+            .collect::<Vec<_>>();
+        let mut joined = self.config.clone().join().await?;
+        for (topic, partition) in paused {
+            if joined.consumer.position(&topic, partition).is_some() {
+                joined.consumer.pause(&topic, partition)?;
+            }
+        }
         *self = joined;
         Ok(())
     }

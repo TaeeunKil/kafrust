@@ -92,6 +92,27 @@ offset. The default remains `Offset(0)` for compatibility with the pre-policy
 API, and the existing `start_offset(n)` builder is equivalent to
 `offset_reset_policy(OffsetResetPolicy::Offset(n))`.
 
+## Position Control
+
+`ConsumerGroup` exposes `position`, `seek`, `pause`, and `resume` for its
+current assignment. These operations change local fetch state and do not send
+offset commits. Pause state survives a group rejoin when this member keeps the
+same topic partition; a seek position is replaced by the broker-committed or
+configured reset position after a rejoin.
+
+```rust
+let assignment = group.assignments().first().unwrap();
+let topic = assignment.topic().to_owned();
+let partition = assignment.partition();
+
+group.pause(&topic, partition)?;
+group.seek(&topic, partition, 0)?;
+group.resume(&topic, partition)?;
+```
+
+Assignment changes remain Kafka-visible: operations against a partition this
+member does not currently own return `Error::UnassignedTopicPartition`.
+
 ## Polling And Rejoin
 
 `ConsumerGroup::poll` sends a foreground heartbeat before fetching assigned partitions. If that heartbeat reports a rebalance, stale generation, stale member ID, stale coordinator, coordinator connection I/O error, or coordinator request timeout, `poll` rejoins the group before fetching records.
@@ -153,6 +174,7 @@ Current implementation status:
 - OffsetCommit v2 request/response protocol types exist.
 - `Client::offset_fetch_v2` and `Client::offset_commit_v2` can send coordinator-scoped offset requests.
 - `ConsumerGroupConfig`, `ConsumerGroup`, and `ConsumerGroupHeartbeat` provide a minimal join, sync, heartbeat, background heartbeat, poll, rejoin, and commit path.
+- Group assignments expose local position, seek, pause, and resume controls.
 - `ConsumerGroupConfig::request_timeout_ms` controls coordinator, metadata, fetch, heartbeat, and commit request timeouts.
 - `ConsumerGroupConfig::security_protocol` stores the Kafka security protocol for coordinator and fetch connections. `Plaintext` is the default transport; TLS requires the non-default `tls` crate feature; `tls_server_name(name)` overrides the certificate validation name when the bootstrap host differs from the broker certificate; `tls_root_certificate_der(bytes)` adds DER-encoded root certificates while keeping platform roots enabled; `sasl_plain(username, password)`, `sasl_scram_sha_256(username, password)`, and `sasl_scram_sha_512(username, password)` provide SASL credentials for `SaslPlaintext` or `SaslTls`.
 - `ConsumerGroupConfig::max_retries` is passed through to the direct fetch path after group assignment.
