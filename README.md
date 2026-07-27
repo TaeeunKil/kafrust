@@ -257,16 +257,18 @@ async fn main() -> kafrust::Result<()> {
 
 The current consumer group API is an alpha classic consumer group path with
 dynamic or static membership, range or round-robin assignment, join, sync,
-heartbeat, poll, offset commit, and explicit leave support.
+heartbeat, poll, offset commit, explicit leave, and earliest/latest reset for
+partitions that have no committed offset.
 
 ```rust
-use kafrust::ConsumerGroupConfig;
+use kafrust::{ConsumerGroupConfig, OffsetResetPolicy};
 
 #[tokio::main]
 async fn main() -> kafrust::Result<()> {
     let mut group = ConsumerGroupConfig::new(["localhost:9092"], "example-group")
         .client_id("example-consumer-group")
         .group_instance_id("example-consumer-1")
+        .offset_reset_policy(OffsetResetPolicy::Earliest)
         .subscribe("kafrust-smoke")
         .join()
         .await?;

@@ -67,6 +67,31 @@ the default; `ConsumerGroupConfig::assignment_strategy` can select
 group ID, member ID, generation ID, topic, partition, and next offset visible
 through the public API.
 
+## Offset Reset
+
+Committed offsets always take precedence. For a newly assigned partition with
+no committed offset, select a reset policy explicitly:
+
+```rust
+use kafrust::{ConsumerGroupConfig, OffsetResetPolicy};
+
+# async fn example() -> kafrust::Result<()> {
+let group = ConsumerGroupConfig::new(["localhost:9092"], "orders-service")
+    .offset_reset_policy(OffsetResetPolicy::Earliest)
+    .subscribe("orders")
+    .join()
+    .await?;
+# Ok(())
+# }
+```
+
+`Earliest` and `Latest` fetch fresh topic metadata, route `ListOffsets v1` to
+each assigned partition leader, and surface topic- or partition-scoped broker
+errors. `Offset(n)` starts uncommitted partitions at an explicit absolute
+offset. The default remains `Offset(0)` for compatibility with the pre-policy
+API, and the existing `start_offset(n)` builder is equivalent to
+`offset_reset_policy(OffsetResetPolicy::Offset(n))`.
+
 ## Polling And Rejoin
 
 `ConsumerGroup::poll` sends a foreground heartbeat before fetching assigned partitions. If that heartbeat reports a rebalance, stale generation, stale member ID, stale coordinator, coordinator connection I/O error, or coordinator request timeout, `poll` rejoins the group before fetching records.
@@ -123,6 +148,8 @@ Current implementation status:
 - Internal round-robin assignment follows sorted member/topic/partition order
   and skips members that do not subscribe to the current topic.
 - OffsetFetch v2 request/response protocol types exist.
+- ListOffsets v1 request/response protocol types exist and the group join path
+  uses them for leader-routed earliest/latest offset reset.
 - OffsetCommit v2 request/response protocol types exist.
 - `Client::offset_fetch_v2` and `Client::offset_commit_v2` can send coordinator-scoped offset requests.
 - `ConsumerGroupConfig`, `ConsumerGroup`, and `ConsumerGroupHeartbeat` provide a minimal join, sync, heartbeat, background heartbeat, poll, rejoin, and commit path.
@@ -154,5 +181,11 @@ KAFRUST_BOOTSTRAP_SERVERS=localhost:9092 KAFRUST_GROUP_ID=orders-group KAFRUST_T
 Add `KAFRUST_GROUP_INSTANCE_ID=orders-reader-1` to run the example as a static
 group member. Set `KAFRUST_ASSIGNMENT_STRATEGY=roundrobin` to select the
 round-robin assignor.
+
+Run the earliest/latest reset verification example:
+
+```bash
+KAFRUST_BOOTSTRAP_SERVERS=localhost:9092 KAFRUST_GROUP_ID=orders-reset KAFRUST_TOPIC=orders cargo run -p kafrust --example consumer_group_offset_reset
+```
 
 The opt-in broker roundtrip test also covers coordinator discovery when `KAFRUST_BOOTSTRAP_SERVERS` is set.
