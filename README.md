@@ -325,7 +325,8 @@ See [Compatibility](docs/compatibility.md) and
 - Single-node plaintext compatibility is verified against Kafka `3.7.2` and
   `4.3.1`. Secured and multi-broker profiles remain verified against `3.7.2`.
 - Three-broker leader failover is verified for the documented producer and
-  direct consumer paths. Rack awareness and partition expansion are not yet
+  direct consumer paths. Topic partition expansion is verified through
+  CreatePartitions v0 and Metadata v1; rack-aware client routing is not yet
   claimed.
 - Gzip, Snappy, and LZ4 compression use Produce v3 RecordBatch encoding; Zstd
   requires and negotiates Produce v7. Fetch v4 decodes all four codecs. They are

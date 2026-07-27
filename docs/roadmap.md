@@ -1145,6 +1145,12 @@ Implemented evidence:
   example passed Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 in manual `Live Kafka
   Smoke` run `30229718813`; all multi-broker, TLS, SASL_PLAINTEXT, and
   SASL_SSL regression profiles also passed.
+- `AdminClient::create_partitions` routes CreatePartitions v0 to the active
+  controller, supports automatic or explicit replica assignment, and preserves
+  per-topic errors. Manual `Live Kafka Smoke` run `30230301762` expanded a
+  topic and verified its exact Metadata v1 partition count on Kafka 3.7.2,
+  3.8.1, 3.9.1, and 4.3.1 plus the three-broker Kafka 3.7.2 profile; every
+  secured regression profile also passed.
 - Manual `Live Kafka Smoke` run `30064594451` passed the round-robin
   static-member path on Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext
   brokers; all secured and multi-broker regression jobs also passed.
