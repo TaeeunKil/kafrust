@@ -25,12 +25,13 @@ pub use admin::{
     AdminClient, AlterConfigResourceResult, AlterConfigsOptions, AlterConfigsResult,
     BrokerDescription, ClusterDescription, ConfigAlterOperation, ConfigAlterOperationKind,
     ConfigEntry, ConfigResourceResult, ConfigSource, ConfigSynonym, ConsumerGroupDescription,
-    ConsumerGroupMember, ConsumerGroupOffsetDelete, CreateTopicResult, CreateTopicsOptions,
+    ConsumerGroupMember, ConsumerGroupOffsetDelete, CreatePartitionsOptions,
+    CreatePartitionsResult, CreatePartitionsTopicResult, CreateTopicResult, CreateTopicsOptions,
     CreateTopicsResult, DeleteConsumerGroupOffsetsPartitionResult,
     DeleteConsumerGroupOffsetsResult, DeleteConsumerGroupOffsetsTopicResult,
     DeleteConsumerGroupResult, DeleteTopicResult, DeleteTopicsOptions, DeleteTopicsResult,
-    DescribeConfigsOptions, DescribeConfigsResult, GroupListing, NewTopic, TopicConfigAlteration,
-    TopicConfigResource, TopicListing,
+    DescribeConfigsOptions, DescribeConfigsResult, GroupListing, NewPartitions, NewTopic,
+    TopicConfigAlteration, TopicConfigResource, TopicListing,
 };
 pub use client::Client;
 pub use config::{ClientConfig, SaslCredentials, SaslMechanism, SecurityProtocol};

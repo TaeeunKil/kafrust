@@ -1,6 +1,9 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
+use kafrust_protocol::api::create_partitions::{
+    CreatePartitionsAssignmentV0, CreatePartitionsTopicResultV0, CreatePartitionsTopicV0,
+};
 use kafrust_protocol::api::create_topics::{
     CreateTopicsAssignmentV2, CreateTopicsConfigV2, CreateTopicsTopicResultV2, CreateTopicsTopicV2,
 };
@@ -410,6 +413,48 @@ impl AdminClient {
                 .topics
                 .into_iter()
                 .map(CreateTopicResult::from_protocol)
+                .collect(),
+        })
+    }
+
+    /// Increases partition counts on the active controller using CreatePartitions v0.
+    ///
+    /// The requested count is the new total partition count, not the number of
+    /// partitions to add. Per-topic broker failures remain in
+    /// [`CreatePartitionsResult`].
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.create_partitions",
+        skip_all,
+        fields(topic_count = topics.len(), validate_only = options.validate_only),
+        err
+    )]
+    pub async fn create_partitions(
+        &self,
+        topics: &[NewPartitions],
+        options: CreatePartitionsOptions,
+    ) -> Result<CreatePartitionsResult> {
+        let mut controller_client = self.controller_client().await?;
+        let response = controller_client
+            .create_partitions_v0(
+                topics.iter().map(NewPartitions::as_protocol).collect(),
+                duration_millis_i32(options.timeout),
+                options.validate_only,
+            )
+            .await?;
+
+        for topic in &response.results {
+            if topic.error_code != 0 {
+                self.config.record_broker_error();
+            }
+        }
+
+        Ok(CreatePartitionsResult {
+            throttle_time: Duration::from_millis(nonnegative_i32_to_u64(response.throttle_time_ms)),
+            topics: response
+                .results
+                .into_iter()
+                .map(CreatePartitionsTopicResult::from_protocol)
                 .collect(),
         })
     }
@@ -1726,6 +1771,187 @@ impl CreateTopicResult {
     }
 }
 
+/// New total partition count for an existing Kafka topic.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NewPartitions {
+    name: String,
+    count: i32,
+    assignments: Option<Vec<Vec<i32>>>,
+}
+
+impl NewPartitions {
+    /// Uses Kafka's automatic replica assignment for newly added partitions.
+    pub fn new(name: impl Into<String>, count: i32) -> Self {
+        Self {
+            name: name.into(),
+            count,
+            assignments: None,
+        }
+    }
+
+    /// Uses explicit broker assignments for each newly added partition.
+    ///
+    /// Assignment order corresponds to ascending new partition indexes.
+    pub fn with_assignments(
+        name: impl Into<String>,
+        count: i32,
+        assignments: impl IntoIterator<Item = Vec<i32>>,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            count,
+            assignments: Some(assignments.into_iter().collect()),
+        }
+    }
+
+    /// Returns the existing topic name.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Returns the requested new total partition count.
+    pub fn count(&self) -> i32 {
+        self.count
+    }
+
+    /// Returns explicit assignments, or `None` for automatic assignment.
+    pub fn assignments(&self) -> Option<&[Vec<i32>]> {
+        self.assignments.as_deref()
+    }
+
+    fn as_protocol(&self) -> CreatePartitionsTopicV0 {
+        CreatePartitionsTopicV0 {
+            name: self.name.clone(),
+            count: self.count,
+            assignments: self.assignments.as_ref().map(|assignments| {
+                assignments
+                    .iter()
+                    .map(|broker_ids| CreatePartitionsAssignmentV0 {
+                        broker_ids: broker_ids.clone(),
+                    })
+                    .collect()
+            }),
+        }
+    }
+}
+
+/// Options for one CreatePartitions operation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CreatePartitionsOptions {
+    timeout: Duration,
+    validate_only: bool,
+}
+
+impl CreatePartitionsOptions {
+    /// Creates options with a 30-second broker timeout and mutation enabled.
+    pub fn new() -> Self {
+        Self {
+            timeout: Duration::from_secs(30),
+            validate_only: false,
+        }
+    }
+
+    /// Sets how long the controller may wait for partition creation.
+    pub fn timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = timeout;
+        self
+    }
+
+    /// Sets whether Kafka should validate without adding partitions.
+    pub fn validate_only(mut self, validate_only: bool) -> Self {
+        self.validate_only = validate_only;
+        self
+    }
+
+    /// Returns the configured broker-side timeout.
+    pub fn timeout_ref(&self) -> Duration {
+        self.timeout
+    }
+
+    /// Returns whether this operation only validates the request.
+    pub fn is_validate_only(&self) -> bool {
+        self.validate_only
+    }
+}
+
+impl Default for CreatePartitionsOptions {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Complete response from one CreatePartitions operation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CreatePartitionsResult {
+    throttle_time: Duration,
+    topics: Vec<CreatePartitionsTopicResult>,
+}
+
+impl CreatePartitionsResult {
+    /// Returns the broker throttle time.
+    pub fn throttle_time(&self) -> Duration {
+        self.throttle_time
+    }
+
+    /// Returns per-topic outcomes in broker response order.
+    pub fn topics(&self) -> &[CreatePartitionsTopicResult] {
+        &self.topics
+    }
+
+    /// Consumes this response and returns per-topic outcomes.
+    pub fn into_topics(self) -> Vec<CreatePartitionsTopicResult> {
+        self.topics
+    }
+
+    /// Returns whether at least one topic was rejected.
+    pub fn has_errors(&self) -> bool {
+        self.topics.iter().any(|topic| !topic.is_success())
+    }
+}
+
+/// Outcome for one topic in a CreatePartitions response.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CreatePartitionsTopicResult {
+    name: String,
+    error_code: i16,
+    error_message: Option<String>,
+}
+
+impl CreatePartitionsTopicResult {
+    /// Returns the topic name.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Returns whether Kafka added or successfully validated the partitions.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+    }
+
+    /// Returns Kafka's raw error code, or zero for success.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns Kafka's optional topic error message.
+    pub fn error_message(&self) -> Option<&str> {
+        self.error_message.as_deref()
+    }
+
+    /// Returns kafrust's classification for a non-zero Kafka error code.
+    pub fn broker_error_kind(&self) -> Option<BrokerErrorKind> {
+        (self.error_code != 0).then(|| BrokerErrorKind::from_code(self.error_code))
+    }
+
+    fn from_protocol(result: CreatePartitionsTopicResultV0) -> Self {
+        Self {
+            name: result.name,
+            error_code: result.error_code,
+            error_message: result.error_message,
+        }
+    }
+}
+
 /// Options for one DeleteTopics operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DeleteTopicsOptions {
@@ -1836,8 +2062,9 @@ fn nonnegative_i32_to_u64(value: i32) -> u64 {
 mod tests {
     use super::{
         AdminClient, AlterConfigsOptions, ConfigAlterOperationKind, ConfigSource,
-        ConsumerGroupOffsetDelete, CreateTopicsOptions, DeleteTopicsOptions,
-        DescribeConfigsOptions, NewTopic, TopicConfigAlteration, TopicConfigResource,
+        ConsumerGroupOffsetDelete, CreatePartitionsOptions, CreateTopicsOptions,
+        DeleteTopicsOptions, DescribeConfigsOptions, NewPartitions, NewTopic,
+        TopicConfigAlteration, TopicConfigResource,
     };
     use crate::{BrokerErrorKind, ClientConfig, ClientMetrics};
     use std::time::Duration;
@@ -1874,6 +2101,24 @@ mod tests {
             .timeout(Duration::from_secs(5))
             .validate_only(true);
 
+        assert_eq!(options.timeout_ref(), Duration::from_secs(5));
+        assert!(options.is_validate_only());
+    }
+
+    #[test]
+    fn builds_partition_expansion_definitions_and_options() {
+        let automatic = NewPartitions::new("orders", 6);
+        assert_eq!(automatic.name(), "orders");
+        assert_eq!(automatic.count(), 6);
+        assert_eq!(automatic.assignments(), None);
+
+        let manual = NewPartitions::with_assignments("payments", 4, [vec![1, 2], vec![2, 1]]);
+        assert_eq!(manual.count(), 4);
+        assert_eq!(manual.assignments(), Some(&[vec![1, 2], vec![2, 1]][..]));
+
+        let options = CreatePartitionsOptions::new()
+            .timeout(Duration::from_secs(5))
+            .validate_only(true);
         assert_eq!(options.timeout_ref(), Duration::from_secs(5));
         assert!(options.is_validate_only());
     }
@@ -2339,6 +2584,50 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn routes_create_partitions_to_controller_and_preserves_partial_result() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let metadata_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+            write_frame(&mut bootstrap, &metadata_response(addr.port())).await;
+
+            let (mut controller, _) = listener.accept().await.unwrap();
+            let create_request = read_frame(&mut controller).await;
+            assert_eq!(&create_request[0..4], &[0, 37, 0, 0]);
+            write_frame(&mut controller, &create_partitions_response()).await;
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        );
+
+        let result = admin
+            .create_partitions(
+                &[NewPartitions::new("orders", 3)],
+                CreatePartitionsOptions::new(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(result.throttle_time(), Duration::from_millis(6));
+        assert!(result.has_errors());
+        assert_eq!(result.topics()[0].name(), "orders");
+        assert_eq!(result.topics()[0].error_code(), 37);
+        assert_eq!(result.topics()[0].error_message(), Some("invalid"));
+        assert_eq!(
+            result.topics()[0].broker_error_kind(),
+            Some(BrokerErrorKind::InvalidPartitions)
+        );
+        assert_eq!(result.clone().into_topics().len(), 1);
+        assert_eq!(metrics.snapshot().broker_errors, 1);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn routes_delete_topics_to_controller_and_preserves_partial_result() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -2445,6 +2734,17 @@ mod tests {
             0, 6, b'o', b'r', b'd', b'e', b'r', b's', // topic name
             0, 36, // topic already exists
             0, 6, b'e', b'x', b'i', b's', b't', b's', // error message
+        ]
+    }
+
+    fn create_partitions_response() -> Vec<u8> {
+        vec![
+            0, 0, 0, 1, // correlation ID
+            0, 0, 0, 6, // throttle time
+            0, 0, 0, 1, // result count
+            0, 6, b'o', b'r', b'd', b'e', b'r', b's', // topic name
+            0, 37, // invalid partitions
+            0, 7, b'i', b'n', b'v', b'a', b'l', b'i', b'd', // error message
         ]
     }
 

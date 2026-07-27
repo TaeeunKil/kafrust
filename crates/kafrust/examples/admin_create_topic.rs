@@ -1,8 +1,9 @@
 mod common;
 
 use kafrust::{
-    AdminClient, AlterConfigsOptions, ClientConfig, CreateTopicsOptions, DeleteTopicsOptions,
-    DescribeConfigsOptions, Error, NewTopic, TopicConfigAlteration, TopicConfigResource,
+    AdminClient, AlterConfigsOptions, ClientConfig, CreatePartitionsOptions, CreateTopicsOptions,
+    DeleteTopicsOptions, DescribeConfigsOptions, Error, NewPartitions, NewTopic,
+    TopicConfigAlteration, TopicConfigResource,
 };
 use std::time::{Duration, Instant};
 
@@ -58,10 +59,40 @@ async fn main() -> kafrust::Result<()> {
         );
     }
 
-    let partition_count = wait_for_topic_metadata(&config, &topic).await?;
+    let partition_count = wait_for_topic_metadata(&config, &topic, partitions).await?;
     println!(
         "described topic {} with {} partitions",
         topic, partition_count
+    );
+
+    let expanded_partition_count = partitions
+        .checked_add(2)
+        .ok_or(Error::Unsupported("admin partition count overflow"))?;
+    let expansion = admin
+        .create_partitions(
+            &[NewPartitions::new(&topic, expanded_partition_count)],
+            CreatePartitionsOptions::new(),
+        )
+        .await?;
+    for topic_result in expansion.topics() {
+        if !topic_result.is_success() {
+            return Err(Error::Broker {
+                code: topic_result.error_code(),
+                context: format!(
+                    "create partitions for {}{}",
+                    topic_result.name(),
+                    topic_result
+                        .error_message()
+                        .map(|message| format!(": {message}"))
+                        .unwrap_or_default()
+                ),
+            });
+        }
+    }
+    wait_for_topic_metadata(&config, &topic, expanded_partition_count).await?;
+    println!(
+        "expanded topic {} from {} to {} partitions",
+        topic, partitions, expanded_partition_count
     );
 
     let listed_topics = admin.list_topics().await?;
@@ -203,7 +234,11 @@ async fn wait_for_topic_config_value(
     }
 }
 
-async fn wait_for_topic_metadata(config: &ClientConfig, topic: &str) -> kafrust::Result<usize> {
+async fn wait_for_topic_metadata(
+    config: &ClientConfig,
+    topic: &str,
+    expected_partition_count: i32,
+) -> kafrust::Result<usize> {
     let deadline = Instant::now() + Duration::from_secs(10);
     loop {
         let result = async {
@@ -223,7 +258,16 @@ async fn wait_for_topic_metadata(config: &ClientConfig, topic: &str) -> kafrust:
                     context: format!("describe newly created topic {topic}"),
                 });
             }
-            Ok(created.partitions.len())
+            let partition_count = created.partitions.len();
+            if partition_count != usize::try_from(expected_partition_count).unwrap_or(usize::MAX) {
+                return Err(Error::Broker {
+                    code: -1,
+                    context: format!(
+                        "expected {expected_partition_count} partitions for topic {topic}, received {partition_count}"
+                    ),
+                });
+            }
+            Ok(partition_count)
         }
         .await;
 
