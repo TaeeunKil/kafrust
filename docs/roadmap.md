@@ -938,11 +938,20 @@ Evidence:
   Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext brokers. The Kafka 3.7.2
   three-broker, TLS, SASL_PLAINTEXT, and SASL_SSL regression profiles also
   passed.
+- Transaction coordinator discovery, connection, and request transport
+  failures reconnect through the configured bootstrap set before retrying
+  transactional initialization, partition registration, group offset
+  attachment, offset commit, or transaction completion.
+- Manual run `30335739033` stopped the active transaction coordinator in the
+  Kafka 3.7.2 three-broker profile after a transactional Produce, then passed
+  `EndTxn` commit and read-committed fetch-back through the remaining brokers.
+  The stopped broker was restored before the existing broker-stop failover
+  sequence, and all eight jobs passed.
 
 Known limits:
 
-- Multi-broker transaction coordinator failover and live transaction
-  failure-injection profiles are not yet claimed.
+- Broader live transaction failure-injection beyond the verified coordinator
+  broker-stop commit path is not yet claimed.
 
 ## M19 Observability, Limits, And Performance
 
@@ -1170,6 +1179,11 @@ Implemented evidence:
   topic and verified its exact Metadata v1 partition count on Kafka 3.7.2,
   3.8.1, 3.9.1, and 4.3.1 plus the three-broker Kafka 3.7.2 profile; every
   secured regression profile also passed.
+- Transaction coordinator transport recovery reconnects through the bootstrap
+  set and rediscovers coordinators for all implemented transaction requests.
+  Manual run `30335739033` stopped the active transaction coordinator after
+  Produce and passed commit plus read-committed fetch-back on the Kafka 3.7.2
+  three-broker profile; all seven other profiles remained green.
 - Manual `Live Kafka Smoke` run `30064594451` passed the round-robin
   static-member path on Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext
   brokers; all secured and multi-broker regression jobs also passed.
