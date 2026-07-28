@@ -25,6 +25,7 @@ use crate::client::Client;
 use crate::config::{ClientConfig, SecurityProtocol};
 use crate::consumer::{
     Consumer, ConsumerAssignment, ConsumerConfig, ConsumerRecord, IsolationLevel,
+    PartitionWatermarks,
 };
 use crate::error::{BrokerErrorKind, Error, Result};
 use crate::metrics::ClientMetrics;
@@ -615,6 +616,17 @@ impl ConsumerGroup {
     /// Resumes fetching from a currently assigned topic partition.
     pub fn resume(&mut self, topic: &str, partition: i32) -> Result<()> {
         self.consumer.resume(topic, partition)
+    }
+
+    /// Fetches the earliest and latest available offsets for a topic partition.
+    ///
+    /// The partition does not need to be assigned to this group member.
+    pub async fn fetch_watermarks(
+        &mut self,
+        topic: impl Into<String>,
+        partition: i32,
+    ) -> Result<PartitionWatermarks> {
+        self.consumer.fetch_watermarks(topic, partition).await
     }
 
     /// Leaves the consumer group and consumes this member handle.

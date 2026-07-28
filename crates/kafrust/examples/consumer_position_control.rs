@@ -14,6 +14,12 @@ async fn main() -> kafrust::Result<()> {
     )?
     .build()
     .await?;
+    let direct_watermarks = consumer.fetch_watermarks(&topic, 0).await?;
+    if direct_watermarks.high() < direct_watermarks.low() {
+        return Err(Error::Unsupported(
+            "direct consumer returned invalid watermarks",
+        ));
+    }
     consumer.assign(&topic, 0, 0);
     consumer.pause(&topic, 0)?;
     if !consumer.poll().await?.is_empty() {
@@ -42,6 +48,12 @@ async fn main() -> kafrust::Result<()> {
     .subscribe(&topic)
     .join()
     .await?;
+    let group_watermarks = group.fetch_watermarks(&topic, 0).await?;
+    if group_watermarks.high() < group_watermarks.low() {
+        return Err(Error::Unsupported(
+            "consumer group returned invalid watermarks",
+        ));
+    }
     let assigned = group
         .assignments()
         .iter()
@@ -72,6 +84,6 @@ async fn main() -> kafrust::Result<()> {
     }
     group.leave().await?;
 
-    println!("verified direct and group consumer seek, pause, resume, and position");
+    println!("verified direct and group consumer watermarks, seek, pause, resume, and position");
     Ok(())
 }

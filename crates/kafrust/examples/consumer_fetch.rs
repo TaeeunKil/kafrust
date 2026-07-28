@@ -1,6 +1,6 @@
 mod common;
 
-use kafrust::ConsumerConfig;
+use kafrust::{ConsumerConfig, Error};
 
 #[tokio::main]
 async fn main() -> kafrust::Result<()> {
@@ -20,6 +20,20 @@ async fn main() -> kafrust::Result<()> {
     )?
     .build()
     .await?;
+
+    let watermarks = consumer.fetch_watermarks(&topic, partition).await?;
+    if watermarks.high() < watermarks.low() {
+        return Err(Error::Unsupported(
+            "partition high watermark is below its low watermark",
+        ));
+    }
+    println!(
+        "watermarks {}-{} low={} high={}",
+        topic,
+        partition,
+        watermarks.low(),
+        watermarks.high()
+    );
 
     consumer.assign(topic, partition, offset);
     let records = consumer.poll().await?;

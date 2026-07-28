@@ -1,6 +1,10 @@
 use std::collections::BTreeMap;
 
 use kafrust_protocol::api::fetch::{FetchPartitionResponseV4, FetchResponseV4, MessageSetRecord};
+use kafrust_protocol::api::list_offsets::{
+    ListOffsetsPartitionResponseV1, ListOffsetsPartitionV1, ListOffsetsTopicResponseV1,
+    ListOffsetsTopicV1, EARLIEST_TIMESTAMP, LATEST_TIMESTAMP,
+};
 use kafrust_protocol::api::metadata::{BrokerMetadata, MetadataResponseV1};
 
 use crate::client::{Client, FetchOneRequestV4};
@@ -82,6 +86,25 @@ impl ConsumerRecord {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Earliest and latest available offsets for one Kafka topic partition.
+pub struct PartitionWatermarks {
+    low: i64,
+    high: i64,
+}
+
+impl PartitionWatermarks {
+    /// Returns the earliest available offset.
+    pub fn low(&self) -> i64 {
+        self.low
+    }
+
+    /// Returns the latest offset, which is the next offset after the log end.
+    pub fn high(&self) -> i64 {
+        self.high
+    }
+}
+
 #[derive(Debug)]
 /// Direct Kafka consumer for manually assigned topic partitions.
 pub struct Consumer {
@@ -137,6 +160,83 @@ impl Consumer {
     pub fn resume(&mut self, topic: &str, partition: i32) -> Result<()> {
         self.assignment_mut(topic, partition)?.paused = false;
         Ok(())
+    }
+
+    /// Fetches the earliest and latest available offsets for a topic partition.
+    ///
+    /// The partition does not need to be assigned to this consumer. Kafka's
+    /// latest offset is the next offset after the current log end.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.consumer.fetch_watermarks",
+        skip_all,
+        fields(topic = tracing::field::Empty, partition),
+        err
+    )]
+    pub async fn fetch_watermarks(
+        &mut self,
+        topic: impl Into<String>,
+        partition: i32,
+    ) -> Result<PartitionWatermarks> {
+        let topic = topic.into();
+        tracing::Span::current().record("topic", topic.as_str());
+        let mut attempt = 0;
+
+        loop {
+            match self.fetch_watermarks_once(&topic, partition).await {
+                Err(error) if attempt < self.config.max_retries && can_retry_fetch(&error) => {
+                    invalidate_metadata_cache(&mut self.metadata_cache, &topic);
+                    self.config.client.record_retry();
+                    attempt += 1;
+                }
+                result => return result,
+            }
+        }
+    }
+
+    async fn fetch_watermarks_once(
+        &mut self,
+        topic: &str,
+        partition: i32,
+    ) -> Result<PartitionWatermarks> {
+        let metadata = self.metadata_for_topic(topic).await?;
+        let leader = leader_for(&metadata, topic, partition)?;
+        let broker_addr = broker_addr_for(&metadata, leader)?;
+        let mut leader_client = self.config.client.connect_broker(broker_addr).await?;
+        let low = self
+            .request_partition_offset(&mut leader_client, topic, partition, EARLIEST_TIMESTAMP)
+            .await?;
+        let high = self
+            .request_partition_offset(&mut leader_client, topic, partition, LATEST_TIMESTAMP)
+            .await?;
+        Ok(PartitionWatermarks { low, high })
+    }
+
+    async fn request_partition_offset(
+        &self,
+        client: &mut Client,
+        topic: &str,
+        partition: i32,
+        timestamp: i64,
+    ) -> Result<i64> {
+        let response = client
+            .list_offsets_v1(vec![ListOffsetsTopicV1 {
+                name: topic.to_owned(),
+                partitions: vec![ListOffsetsPartitionV1 {
+                    partition_index: partition,
+                    timestamp,
+                }],
+            }])
+            .await?;
+        let partition_response =
+            list_offset_partition_response(&response.topics, topic, partition)?;
+        if partition_response.error_code != 0 {
+            return Err(self.config.client.broker_error(
+                partition_response.error_code,
+                format!("list offsets {topic}-{partition}"),
+            ));
+        }
+        Ok(partition_response.offset)
     }
 
     /// Polls assigned partitions and advances in-memory offsets for fetched records.
@@ -673,6 +773,26 @@ fn fetch_partition_response<'a>(
         })
 }
 
+fn list_offset_partition_response<'a>(
+    topics: &'a [ListOffsetsTopicResponseV1],
+    topic_name: &str,
+    partition_index: i32,
+) -> Result<&'a ListOffsetsPartitionResponseV1> {
+    topics
+        .iter()
+        .find(|topic| topic.name == topic_name)
+        .and_then(|topic| {
+            topic
+                .partitions
+                .iter()
+                .find(|partition| partition.partition_index == partition_index)
+        })
+        .ok_or_else(|| Error::UnknownTopicOrPartition {
+            topic: topic_name.to_owned(),
+            partition: partition_index,
+        })
+}
+
 fn visible_partition_records(
     partition: &FetchPartitionResponseV4,
     isolation_level: IsolationLevel,
@@ -762,7 +882,7 @@ mod tests {
     use super::{
         assign_partition, can_retry_fetch, invalidate_metadata_cache, leader_for,
         limit_fetched_records, visible_partition_records, Consumer, ConsumerAssignment,
-        ConsumerConfig, ConsumerRecord, IsolationLevel, SecurityProtocol,
+        ConsumerConfig, ConsumerRecord, IsolationLevel, PartitionWatermarks, SecurityProtocol,
     };
     use crate::{Client, ClientMetrics, Error};
     use kafrust_protocol::api::fetch::{
@@ -888,6 +1008,50 @@ mod tests {
                 partition: 1
             } if topic == "orders"
         ));
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn fetches_partition_watermarks_from_partition_leader() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            for (correlation_id, timestamp, offset) in [(1, -2_i64, 4_i64), (2, -1_i64, 9_i64)] {
+                let request = read_frame(&mut socket).await;
+                assert_eq!(&request[0..4], &[0, 2, 0, 1]);
+                assert_eq!(
+                    i64::from_be_bytes(request[request.len() - 8..].try_into().unwrap()),
+                    timestamp
+                );
+                write_frame(
+                    &mut socket,
+                    &list_offsets_response_frame(correlation_id, offset),
+                )
+                .await;
+            }
+        });
+        let (client_stream, broker_stream) = tokio::io::duplex(64);
+        let _broker_stream = broker_stream;
+        let client = Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-watermarks-test".to_owned()),
+            Some(std::time::Duration::from_millis(500)),
+        );
+        let config = ConsumerConfig::new([addr.to_string()]).request_timeout_ms(500);
+        let mut consumer = Consumer::from_assignments(client, config, Vec::new());
+        let mut metadata = metadata_fixture();
+        metadata.brokers[0].host = addr.ip().to_string();
+        metadata.brokers[0].port = i32::from(addr.port());
+        consumer
+            .metadata_cache
+            .insert("orders".to_owned(), metadata);
+
+        let watermarks = consumer.fetch_watermarks("orders", 0).await.unwrap();
+
+        assert_eq!(watermarks, PartitionWatermarks { low: 4, high: 9 });
+        assert_eq!(watermarks.low(), 4);
+        assert_eq!(watermarks.high(), 9);
         server.await.unwrap();
     }
 
@@ -1186,6 +1350,19 @@ mod tests {
         response.write_i64(43);
         response.write_i32(0);
         response.write_bytes(&records).unwrap();
+        response.into_bytes()
+    }
+
+    fn list_offsets_response_frame(correlation_id: i32, offset: i64) -> Vec<u8> {
+        let mut response = Encoder::new();
+        response.write_i32(correlation_id);
+        response.write_i32(1);
+        response.write_string("orders").unwrap();
+        response.write_i32(1);
+        response.write_i32(0);
+        response.write_i16(0);
+        response.write_i64(-1);
+        response.write_i64(offset);
         response.into_bytes()
     }
 }

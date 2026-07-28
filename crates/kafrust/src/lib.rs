@@ -35,7 +35,10 @@ pub use admin::{
 };
 pub use client::Client;
 pub use config::{ClientConfig, SaslCredentials, SaslMechanism, SecurityProtocol};
-pub use consumer::{Consumer, ConsumerAssignment, ConsumerConfig, ConsumerRecord, IsolationLevel};
+pub use consumer::{
+    Consumer, ConsumerAssignment, ConsumerConfig, ConsumerRecord, IsolationLevel,
+    PartitionWatermarks,
+};
 pub use error::{BrokerErrorKind, Error, Result};
 pub use group::{
     ConsumerGroup, ConsumerGroupAssignmentStrategy, ConsumerGroupConfig, ConsumerGroupHeartbeat,
