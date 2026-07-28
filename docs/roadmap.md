@@ -1150,6 +1150,12 @@ Implemented evidence:
   verified paused polls, explicit seek and resume, and subsequent position
   advancement on Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1; all multi-broker and
   secured regression profiles also passed.
+- Direct and group consumers expose `PartitionWatermarks` through
+  leader-routed Metadata v1 and ListOffsets v1 requests without requiring an
+  assignment. Manual `Live Kafka Smoke` run `30333202216` passed the direct
+  path on Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plus every multi-broker and
+  secured profile, and passed the group delegate on all four plaintext broker
+  versions.
 - `AdminClient::create_partitions` routes CreatePartitions v0 to the active
   controller, supports automatic or explicit replica assignment, and preserves
   per-topic errors. Manual `Live Kafka Smoke` run `30230301762` expanded a

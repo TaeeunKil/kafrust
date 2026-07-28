@@ -106,6 +106,11 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
   consumers read again from an explicit seek position, and their positions
   advance on Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1. The same run kept the
   three-broker, TLS, SASL_PLAINTEXT, and SASL_SSL regression profiles green.
+- Leader-routed direct consumer `fetch_watermarks` queries passed Kafka 3.7.2,
+  3.8.1, 3.9.1, and 4.3.1 plus the Kafka 3.7.2 three-broker, TLS,
+  SASL_PLAINTEXT, and SASL_SSL profiles in manual `Live Kafka Smoke` run
+  `30333202216`. The assignment-independent consumer group delegate passed the
+  four single-node plaintext broker versions in the same run.
 - Background heartbeat recovery through a real two-member classic-group
   rebalance. Manual run `30067372344` verified automatic rejoin and heartbeat
   handle replacement on Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext
