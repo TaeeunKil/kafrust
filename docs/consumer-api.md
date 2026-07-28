@@ -53,6 +53,23 @@ visible and retain their position, but `poll` skips their fetch requests.
 Seeking, pausing, or resuming a partition that is not assigned returns
 `Error::UnassignedTopicPartition`.
 
+## Partition Watermarks
+
+```rust
+let watermarks = consumer.fetch_watermarks("orders", 0).await?;
+println!(
+    "retained offsets: {}..{}",
+    watermarks.low(),
+    watermarks.high()
+);
+```
+
+`fetch_watermarks` uses Metadata v1 to route two ListOffsets v1 requests to
+the partition leader. `low` is the earliest retained offset and `high` is the
+next offset after the current log end. The partition does not need to be
+assigned. Retriable metadata, leader, connection, timeout, and broker errors
+use the same bounded retry policy as fetch operations.
+
 Current implementation status:
 
 - `ConsumerConfig`, `Consumer`, and `ConsumerRecord` are public API types.
@@ -60,6 +77,8 @@ Current implementation status:
 - `Consumer::assign` and `Consumer::poll` provide a stream-like path that advances assigned partition offsets after records are returned.
 - `Consumer::position`, `seek`, `pause`, and `resume` provide explicit local
   assignment control.
+- `Consumer::fetch_watermarks` exposes leader-routed earliest and latest
+  partition offsets.
 - Fetch uses metadata lookup and partition leader routing.
 - `ConsumerConfig::request_timeout_ms` controls the request timeout used for metadata and fetch roundtrips.
 - `ConsumerConfig::security_protocol` stores the Kafka security protocol for consumer broker connections. `Plaintext` is the default transport; TLS requires the non-default `tls` crate feature; `tls_server_name(name)` overrides the certificate validation name when the bootstrap host differs from the broker certificate; `tls_root_certificate_der(bytes)` adds DER-encoded root certificates while keeping platform roots enabled; `sasl_plain(username, password)`, `sasl_scram_sha_256(username, password)`, and `sasl_scram_sha_512(username, password)` provide SASL credentials for `SaslPlaintext` or `SaslTls`.

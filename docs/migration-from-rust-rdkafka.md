@@ -184,8 +184,10 @@ for record in consumer.poll().await? {
 
 kafrust exposes `position`, `seek`, `pause`, and `resume` on both direct and
 group consumers. These calls operate on current in-memory assignments; seek
-does not commit an offset. Watermark queries still have no high-level
-equivalent and remain a migration blocker.
+does not commit an offset. Map rust-rdkafka's `fetch_watermarks` to kafrust's
+async `fetch_watermarks`; kafrust uses the configured request timeout instead
+of accepting a timeout argument on each call and returns
+values through `PartitionWatermarks::low()` and `PartitionWatermarks::high()`.
 
 ## Transactions
 
