@@ -221,7 +221,9 @@ Current implementation status:
   failures reconnect through the configured bootstrap set before retrying
   `InitProducerId`, `AddPartitionsToTxn`, `AddOffsetsToTxn`,
   `TxnOffsetCommit`, or `EndTxn`. Retry exhaustion preserves the final
-  transport error.
+  transport error. Manual `Live Kafka Smoke` run `30335739033` stopped the
+  active coordinator after Produce and passed commit plus read-committed
+  fetch-back on a three-broker Kafka 3.7.2 cluster.
 - `Producer::send` performs metadata lookup, connects to the partition leader, negotiates Produce API support with `ApiVersions`, and chooses Produce v7 for Zstd, Produce v3 RecordBatch for other RecordBatch features, or Produce v2 MessageSet.
 - `ProducerConfig::request_timeout_ms` controls the request timeout used for metadata and produce roundtrips.
 - `ProducerConfig::security_protocol` stores the Kafka security protocol for producer broker connections. `Plaintext` is the default transport; TLS requires the non-default `tls` crate feature; `tls_server_name(name)` overrides the certificate validation name when the bootstrap host differs from the broker certificate; `tls_root_certificate_der(bytes)` adds DER-encoded root certificates while keeping platform roots enabled; `sasl_plain(username, password)`, `sasl_scram_sha_256(username, password)`, and `sasl_scram_sha_512(username, password)` provide SASL credentials for `SaslPlaintext` or `SaslTls`.

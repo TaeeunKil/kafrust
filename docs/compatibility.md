@@ -90,6 +90,12 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
   3.8.1, 3.9.1, and 4.3.1 plaintext brokers. The Kafka 3.7.2 three-broker,
   TLS, SASL_PLAINTEXT, and SASL_SSL profiles remained green as regression
   coverage.
+- Transaction coordinator transport failures reconnect through the bootstrap
+  set and rediscover the coordinator before retrying. Manual run
+  `30335739033` stopped the active transaction coordinator in the Kafka 3.7.2
+  three-broker profile, then passed `EndTxn` commit and read-committed
+  fetch-back before restoring the broker. The existing broker-stop failover
+  sequence and all seven other broker/security profiles also passed.
 - Gzip Produce v3 RecordBatch encoding and Fetch v4 RecordBatch decoding are
   covered by focused tests and the plaintext live smoke profile.
 - Snappy Produce v3 RecordBatch encoding and Fetch v4 RecordBatch decoding are
@@ -199,8 +205,8 @@ The current compatibility claim does not cover:
 - SASL workflows beyond the listed SASL_PLAINTEXT and SASL_SSL smoke examples.
 - SASL/SCRAM-SHA-512 live broker profiles.
 - Secured multi-broker clusters, broader consumer-group failover beyond the listed coordinator reconnect checks, or rack-aware client routing.
-- Multi-broker transaction coordinator failover and transaction
-  failure-injection profiles.
+- Broader transaction failure-injection profiles beyond the verified
+  coordinator broker-stop commit path.
 - Live broker idempotence failure-injection profiles. The ambiguous-response
   duplicate path is covered by a deterministic injected broker test.
 - Kafka APIs that are not listed in the verified paths.
