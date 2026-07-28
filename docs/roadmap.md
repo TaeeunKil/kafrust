@@ -929,10 +929,18 @@ Evidence:
 - Manual run `30063099869` passed the generation-fenced `TxnOffsetCommit v3`
   path on Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext brokers plus the
   Kafka 3.7.2 TLS, SASL_PLAINTEXT, SASL_SSL, and three-broker profiles.
+- `BufferedProducer` exposes serialized begin, group-offset attachment,
+  commit, and abort commands. Commit drains accepted deliveries before
+  `EndTxn`, blocks on delivery failure, and leaves the transaction active for
+  an explicit abort. Active transactions cannot be closed accidentally.
+- Manual run `30334327631` passed buffered commit and abort visibility,
+  read-committed filtering, and generation-fenced group offset attachment on
+  Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext brokers. The Kafka 3.7.2
+  three-broker, TLS, SASL_PLAINTEXT, and SASL_SSL regression profiles also
+  passed.
 
 Known limits:
 
-- Transactional buffered production is not implemented.
 - Multi-broker transaction coordinator failover and live transaction
   failure-injection profiles are not yet claimed.
 

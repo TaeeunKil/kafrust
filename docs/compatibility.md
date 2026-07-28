@@ -83,6 +83,13 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
   generation-fenced group offset commit on Kafka 3.7.2, 3.8.1, 3.9.1, and
   4.3.1 plaintext brokers plus the Kafka 3.7.2 TLS, SASL_PLAINTEXT, SASL_SSL,
   and three-broker profiles.
+- Transactional buffered production serializes begin, queued deliveries,
+  group-offset attachment, commit, and abort through one worker. Manual run
+  `30334327631` passed buffered commit and abort visibility, read-committed
+  filtering, and generation-fenced group offset attachment on Kafka 3.7.2,
+  3.8.1, 3.9.1, and 4.3.1 plaintext brokers. The Kafka 3.7.2 three-broker,
+  TLS, SASL_PLAINTEXT, and SASL_SSL profiles remained green as regression
+  coverage.
 - Gzip Produce v3 RecordBatch encoding and Fetch v4 RecordBatch decoding are
   covered by focused tests and the plaintext live smoke profile.
 - Snappy Produce v3 RecordBatch encoding and Fetch v4 RecordBatch decoding are
@@ -192,8 +199,8 @@ The current compatibility claim does not cover:
 - SASL workflows beyond the listed SASL_PLAINTEXT and SASL_SSL smoke examples.
 - SASL/SCRAM-SHA-512 live broker profiles.
 - Secured multi-broker clusters, broader consumer-group failover beyond the listed coordinator reconnect checks, or rack-aware client routing.
-- Transactional buffered production, multi-broker transaction failover, and
-  transaction failure-injection profiles.
+- Multi-broker transaction coordinator failover and transaction
+  failure-injection profiles.
 - Live broker idempotence failure-injection profiles. The ambiguous-response
   duplicate path is covered by a deterministic injected broker test.
 - Kafka APIs that are not listed in the verified paths.
