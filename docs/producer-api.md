@@ -204,16 +204,19 @@ Current implementation status:
   producer through the Kafka transaction coordinator. `begin_transaction`,
   `commit_transaction`, and `abort_transaction` expose the transaction
   lifecycle; transactional sends register partitions before Produce. The
-  high-level commit and abort path is verified against Kafka 3.7.2 and 4.3.1.
+  high-level commit and abort path is verified against Kafka 3.7.2, 3.8.1,
+  3.9.1, and 4.3.1.
 - `BufferedProducer` supports async `begin_transaction`, `commit_transaction`,
   `abort_transaction`, and generation-fenced
   `send_group_offsets_to_transaction`. Transaction boundaries are serialized
-  with queued sends by the background worker.
+  with queued sends by the background worker. Manual `Live Kafka Smoke` run
+  `30334327631` verified buffered commit, abort, read-committed filtering, and
+  group offset attachment against Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1.
 - `Producer::send_group_offsets_to_transaction` adds a consumer group to the
   active transaction and commits the supplied `ConsumerAssignment` next
   offsets through generation-fenced `TxnOffsetCommit v3`. The
   consume-transform-produce path is verified
-  against Kafka 3.7.2 and 4.3.1.
+  against Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1.
 - `Producer::send` performs metadata lookup, connects to the partition leader, negotiates Produce API support with `ApiVersions`, and chooses Produce v7 for Zstd, Produce v3 RecordBatch for other RecordBatch features, or Produce v2 MessageSet.
 - `ProducerConfig::request_timeout_ms` controls the request timeout used for metadata and produce roundtrips.
 - `ProducerConfig::security_protocol` stores the Kafka security protocol for producer broker connections. `Plaintext` is the default transport; TLS requires the non-default `tls` crate feature; `tls_server_name(name)` overrides the certificate validation name when the bootstrap host differs from the broker certificate; `tls_root_certificate_der(bytes)` adds DER-encoded root certificates while keeping platform roots enabled; `sasl_plain(username, password)`, `sasl_scram_sha_256(username, password)`, and `sasl_scram_sha_512(username, password)` provide SASL credentials for `SaslPlaintext` or `SaslTls`.
