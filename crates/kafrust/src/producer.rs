@@ -32,6 +32,21 @@ use tracing::debug;
 const BUFFERED_PRODUCER_CHANNEL_CAPACITY: usize = 1024;
 const IDEMPOTENT_INIT_RETRY_BACKOFF: Duration = Duration::from_millis(100);
 
+macro_rules! transaction_transport_or_retry {
+    ($bootstrap_client:expr, $client_config:expr, $attempt:expr, $max_retries:expr, $request:expr) => {
+        match $request.await {
+            Ok(value) => value,
+            Err(error) => {
+                retry_transaction_transport_error($client_config, $attempt, $max_retries, error)
+                    .await?;
+                $bootstrap_client =
+                    reconnect_transaction_client($client_config, $attempt, $max_retries).await?;
+                continue;
+            }
+        }
+    };
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Kafka produce acknowledgement policy.
 pub enum Acks {
@@ -2189,10 +2204,14 @@ impl Producer {
             .identity(topic, partition);
         let mut attempt = 0;
         loop {
-            let coordinator = self
-                .client
-                .find_transaction_coordinator(transactional_id.clone())
-                .await?;
+            let coordinator = transaction_transport_or_retry!(
+                self.client,
+                &self.config.client,
+                &mut attempt,
+                self.config.max_retries,
+                self.client
+                    .find_transaction_coordinator(transactional_id.clone())
+            );
             if coordinator.error_code != 0 {
                 self.config.client.record_broker_error();
                 if attempt < self.config.max_retries
@@ -2208,13 +2227,21 @@ impl Producer {
                     context: "find transaction coordinator".to_owned(),
                 });
             }
-            let mut client = self
-                .config
-                .client
-                .connect_broker(format!("{}:{}", coordinator.host, coordinator.port))
-                .await?;
-            let response = client
-                .add_partitions_to_txn_v0(
+            let mut client = transaction_transport_or_retry!(
+                self.client,
+                &self.config.client,
+                &mut attempt,
+                self.config.max_retries,
+                self.config
+                    .client
+                    .connect_broker(format!("{}:{}", coordinator.host, coordinator.port))
+            );
+            let response = transaction_transport_or_retry!(
+                self.client,
+                &self.config.client,
+                &mut attempt,
+                self.config.max_retries,
+                client.add_partitions_to_txn_v0(
                     transactional_id.clone(),
                     identity.producer_id,
                     identity.producer_epoch,
@@ -2223,7 +2250,7 @@ impl Producer {
                         partitions: vec![partition],
                     }],
                 )
-                .await?;
+            );
             let error_code = response
                 .errors
                 .iter()
@@ -2277,10 +2304,14 @@ impl Producer {
     ) -> Result<()> {
         let mut attempt = 0;
         loop {
-            let coordinator = self
-                .client
-                .find_transaction_coordinator(transactional_id.to_owned())
-                .await?;
+            let coordinator = transaction_transport_or_retry!(
+                self.client,
+                &self.config.client,
+                &mut attempt,
+                self.config.max_retries,
+                self.client
+                    .find_transaction_coordinator(transactional_id.to_owned())
+            );
             if coordinator.error_code != 0 {
                 self.config.client.record_broker_error();
                 if attempt < self.config.max_retries
@@ -2296,19 +2327,27 @@ impl Producer {
                     context: "find transaction coordinator".to_owned(),
                 });
             }
-            let mut client = self
-                .config
-                .client
-                .connect_broker(format!("{}:{}", coordinator.host, coordinator.port))
-                .await?;
-            let response = client
-                .add_offsets_to_txn_v0(
+            let mut client = transaction_transport_or_retry!(
+                self.client,
+                &self.config.client,
+                &mut attempt,
+                self.config.max_retries,
+                self.config
+                    .client
+                    .connect_broker(format!("{}:{}", coordinator.host, coordinator.port))
+            );
+            let response = transaction_transport_or_retry!(
+                self.client,
+                &self.config.client,
+                &mut attempt,
+                self.config.max_retries,
+                client.add_offsets_to_txn_v0(
                     transactional_id.to_owned(),
                     producer_id,
                     producer_epoch,
                     group_id.to_owned(),
                 )
-                .await?;
+            );
             if response.error_code == 0 {
                 return Ok(());
             }
@@ -2343,10 +2382,13 @@ impl Producer {
     ) -> Result<()> {
         let mut attempt = 0;
         loop {
-            let coordinator = self
-                .client
-                .find_group_coordinator(group_id.to_owned())
-                .await?;
+            let coordinator = transaction_transport_or_retry!(
+                self.client,
+                &self.config.client,
+                &mut attempt,
+                self.config.max_retries,
+                self.client.find_group_coordinator(group_id.to_owned())
+            );
             if coordinator.error_code != 0 {
                 self.config.client.record_broker_error();
                 if attempt < self.config.max_retries
@@ -2362,20 +2404,28 @@ impl Producer {
                     context: format!("find group coordinator {group_id}"),
                 });
             }
-            let mut client = self
-                .config
-                .client
-                .connect_broker(format!("{}:{}", coordinator.host, coordinator.port))
-                .await?;
-            let response = client
-                .txn_offset_commit_v0(
+            let mut client = transaction_transport_or_retry!(
+                self.client,
+                &self.config.client,
+                &mut attempt,
+                self.config.max_retries,
+                self.config
+                    .client
+                    .connect_broker(format!("{}:{}", coordinator.host, coordinator.port))
+            );
+            let response = transaction_transport_or_retry!(
+                self.client,
+                &self.config.client,
+                &mut attempt,
+                self.config.max_retries,
+                client.txn_offset_commit_v0(
                     transactional_id.to_owned(),
                     group_id.to_owned(),
                     producer_id,
                     producer_epoch,
                     topics.clone(),
                 )
-                .await?;
+            );
             let error = response.topics.iter().find_map(|topic| {
                 topic
                     .partitions
@@ -2424,10 +2474,13 @@ impl Producer {
         let group_id = metadata.group_id();
         let mut attempt = 0;
         loop {
-            let coordinator = self
-                .client
-                .find_group_coordinator(group_id.to_owned())
-                .await?;
+            let coordinator = transaction_transport_or_retry!(
+                self.client,
+                &self.config.client,
+                &mut attempt,
+                self.config.max_retries,
+                self.client.find_group_coordinator(group_id.to_owned())
+            );
             if coordinator.error_code != 0 {
                 self.config.client.record_broker_error();
                 if attempt < self.config.max_retries
@@ -2443,13 +2496,21 @@ impl Producer {
                     context: format!("find group coordinator {group_id}"),
                 });
             }
-            let mut client = self
-                .config
-                .client
-                .connect_broker(format!("{}:{}", coordinator.host, coordinator.port))
-                .await?;
-            let response = client
-                .txn_offset_commit_v3(
+            let mut client = transaction_transport_or_retry!(
+                self.client,
+                &self.config.client,
+                &mut attempt,
+                self.config.max_retries,
+                self.config
+                    .client
+                    .connect_broker(format!("{}:{}", coordinator.host, coordinator.port))
+            );
+            let response = transaction_transport_or_retry!(
+                self.client,
+                &self.config.client,
+                &mut attempt,
+                self.config.max_retries,
+                client.txn_offset_commit_v3(
                     transactional_id,
                     group_id,
                     producer_id,
@@ -2459,7 +2520,7 @@ impl Producer {
                     metadata.group_instance_id().map(str::to_owned),
                     topics.clone(),
                 )
-                .await?;
+            );
             let error = response.topics.iter().find_map(|topic| {
                 topic
                     .partitions
@@ -2514,10 +2575,14 @@ impl Producer {
             .identity("", 0);
         let mut attempt = 0;
         loop {
-            let coordinator = self
-                .client
-                .find_transaction_coordinator(transactional_id.clone())
-                .await?;
+            let coordinator = transaction_transport_or_retry!(
+                self.client,
+                &self.config.client,
+                &mut attempt,
+                self.config.max_retries,
+                self.client
+                    .find_transaction_coordinator(transactional_id.clone())
+            );
             if coordinator.error_code != 0 {
                 self.config.client.record_broker_error();
                 if attempt < self.config.max_retries
@@ -2533,19 +2598,27 @@ impl Producer {
                     context: "find transaction coordinator".to_owned(),
                 });
             }
-            let mut client = self
-                .config
-                .client
-                .connect_broker(format!("{}:{}", coordinator.host, coordinator.port))
-                .await?;
-            let response = client
-                .end_txn_v0(
+            let mut client = transaction_transport_or_retry!(
+                self.client,
+                &self.config.client,
+                &mut attempt,
+                self.config.max_retries,
+                self.config
+                    .client
+                    .connect_broker(format!("{}:{}", coordinator.host, coordinator.port))
+            );
+            let response = transaction_transport_or_retry!(
+                self.client,
+                &self.config.client,
+                &mut attempt,
+                self.config.max_retries,
+                client.end_txn_v0(
                     transactional_id.clone(),
                     identity.producer_id,
                     identity.producer_epoch,
                     committed,
                 )
-                .await?;
+            );
             if response.error_code == 0 {
                 break;
             }
@@ -2935,9 +3008,13 @@ async fn initialize_idempotent_producer(
     let mut attempt = 0;
     loop {
         let response = if let Some(transactional_id) = transactional_id.as_ref() {
-            let coordinator = client
-                .find_transaction_coordinator(transactional_id.clone())
-                .await?;
+            let coordinator = transaction_transport_or_retry!(
+                *client,
+                client_config,
+                &mut attempt,
+                max_retries,
+                client.find_transaction_coordinator(transactional_id.clone())
+            );
             if coordinator.error_code != 0 {
                 client_config.record_broker_error();
                 if attempt < max_retries
@@ -2953,12 +3030,21 @@ async fn initialize_idempotent_producer(
                     context: "find transaction coordinator".to_owned(),
                 });
             }
-            let mut coordinator_client = client_config
-                .connect_broker(format!("{}:{}", coordinator.host, coordinator.port))
-                .await?;
-            coordinator_client
-                .init_producer_id_v0(Some(transactional_id.clone()), transaction_timeout_ms)
-                .await?
+            let mut coordinator_client = transaction_transport_or_retry!(
+                *client,
+                client_config,
+                &mut attempt,
+                max_retries,
+                client_config.connect_broker(format!("{}:{}", coordinator.host, coordinator.port))
+            );
+            transaction_transport_or_retry!(
+                *client,
+                client_config,
+                &mut attempt,
+                max_retries,
+                coordinator_client
+                    .init_producer_id_v0(Some(transactional_id.clone()), transaction_timeout_ms)
+            )
         } else {
             client
                 .init_producer_id_v0(None, transaction_timeout_ms)
@@ -2983,6 +3069,44 @@ async fn initialize_idempotent_producer(
             context: "initialize idempotent producer".to_owned(),
         });
     }
+}
+
+async fn retry_transaction_transport_error(
+    client_config: &ClientConfig,
+    attempt: &mut u32,
+    max_retries: u32,
+    error: Error,
+) -> Result<()> {
+    if *attempt >= max_retries || !is_retryable_transaction_transport_error(&error) {
+        return Err(error);
+    }
+    *attempt += 1;
+    client_config.record_retry();
+    time::sleep(IDEMPOTENT_INIT_RETRY_BACKOFF).await;
+    Ok(())
+}
+
+async fn reconnect_transaction_client(
+    client_config: &ClientConfig,
+    attempt: &mut u32,
+    max_retries: u32,
+) -> Result<Client> {
+    loop {
+        match client_config.clone().connect().await {
+            Ok(client) => return Ok(client),
+            Err(error) => {
+                retry_transaction_transport_error(client_config, attempt, max_retries, error)
+                    .await?;
+            }
+        }
+    }
+}
+
+fn is_retryable_transaction_transport_error(error: &Error) -> bool {
+    matches!(
+        error,
+        Error::Io(_) | Error::RequestTimedOut { .. } | Error::MissingBroker { .. }
+    )
 }
 
 fn is_retryable_transaction_coordinator_error(error_code: i16) -> bool {
@@ -3566,14 +3690,15 @@ mod tests {
         ensure_buffered_transaction_deliveries_succeeded, fail_buffered_deliveries,
         idempotent_produce_error_disposition, invalidate_metadata_cache,
         invalidate_metadata_cache_for_record_indexes, is_retryable_transaction_coordinator_error,
-        kafka_murmur2, largest_fitting_prefix, leader_for, message_set_message,
-        record_batch_attempt_outcomes, record_batch_message, select_produce_batch_version,
-        select_produce_version, transaction_offset_topics, Acks, BatchRecord, BufferedFlushReason,
-        BufferedProduceRequest, BufferedProducer, BufferedProducerCommand, BufferedProducerState,
-        Compression, IdempotentBatchSequenceTracker, IdempotentProduceErrorDisposition,
-        IdempotentProducerState, PreparedBatchRecord, ProduceBatchKey, ProduceVersion, Producer,
-        ProducerBatchFailure, ProducerBatchRecordOutcome, ProducerBatchReport, ProducerConfig,
-        ProducerDelivery, ProducerRecord, RecordMetadata, SecurityProtocol,
+        is_retryable_transaction_transport_error, kafka_murmur2, largest_fitting_prefix,
+        leader_for, message_set_message, record_batch_attempt_outcomes, record_batch_message,
+        select_produce_batch_version, select_produce_version, transaction_offset_topics, Acks,
+        BatchRecord, BufferedFlushReason, BufferedProduceRequest, BufferedProducer,
+        BufferedProducerCommand, BufferedProducerState, Compression,
+        IdempotentBatchSequenceTracker, IdempotentProduceErrorDisposition, IdempotentProducerState,
+        PreparedBatchRecord, ProduceBatchKey, ProduceVersion, Producer, ProducerBatchFailure,
+        ProducerBatchRecordOutcome, ProducerBatchReport, ProducerConfig, ProducerDelivery,
+        ProducerRecord, RecordMetadata, SecurityProtocol, TransactionState, TransactionStatus,
     };
     use crate::consumer::ConsumerAssignment;
     use crate::{BrokerErrorKind, Client, ClientMetrics, Error};
@@ -3656,6 +3781,25 @@ mod tests {
         for code in [22, 25, 27, 47, 90] {
             assert!(!is_retryable_transaction_coordinator_error(code));
         }
+    }
+
+    #[test]
+    fn retries_only_transient_transaction_transport_errors() {
+        assert!(is_retryable_transaction_transport_error(&Error::Io(
+            std::io::Error::new(
+                std::io::ErrorKind::ConnectionRefused,
+                "coordinator unavailable"
+            )
+        )));
+        assert!(is_retryable_transaction_transport_error(
+            &Error::RequestTimedOut { timeout_ms: 1_000 }
+        ));
+        assert!(is_retryable_transaction_transport_error(
+            &Error::MissingBroker { node_id: 2 }
+        ));
+        assert!(!is_retryable_transaction_transport_error(
+            &Error::Unsupported("invalid transaction")
+        ));
     }
 
     #[test]
@@ -4256,6 +4400,71 @@ mod tests {
             producer.begin_transaction().unwrap_err(),
             Error::Unsupported("transaction is already active")
         ));
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn rediscovers_transaction_coordinator_after_connect_failure() {
+        let bootstrap_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let bootstrap_addr = bootstrap_listener.local_addr().unwrap();
+        let unavailable_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let unavailable_addr = unavailable_listener.local_addr().unwrap();
+        let coordinator_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let coordinator_addr = coordinator_listener.local_addr().unwrap();
+        drop(unavailable_listener);
+
+        let server = tokio::spawn(async move {
+            for (node_id, coordinator) in [(1, unavailable_addr), (2, coordinator_addr)] {
+                let (mut bootstrap_socket, _) = bootstrap_listener.accept().await.unwrap();
+                let request = read_frame(&mut bootstrap_socket).await;
+                assert_eq!(&request[0..4], &[0, 10, 0, 1]);
+                assert_eq!(request.last(), Some(&1));
+                write_frame(
+                    &mut bootstrap_socket,
+                    &find_coordinator_response_frame(&request, node_id, coordinator),
+                )
+                .await;
+            }
+
+            let (mut coordinator_socket, _) = coordinator_listener.accept().await.unwrap();
+            let end_txn = read_frame(&mut coordinator_socket).await;
+            assert_eq!(&end_txn[0..4], &[0, 26, 0, 0]);
+            assert!(end_txn
+                .windows(b"orders-tx".len())
+                .any(|window| window == b"orders-tx"));
+            assert_eq!(end_txn.last(), Some(&1));
+            write_frame(
+                &mut coordinator_socket,
+                &[
+                    0, 0, 0, 1, // correlation id
+                    0, 0, 0, 0, // throttle time
+                    0, 0, // error code
+                ],
+            )
+            .await;
+        });
+
+        let metrics = ClientMetrics::new();
+        let config = ProducerConfig::new([bootstrap_addr.to_string()])
+            .metrics(metrics.clone())
+            .transactional_id("orders-tx")
+            .max_retries(2);
+        let client = config.client.clone().connect().await.unwrap();
+        let mut transaction_state = TransactionState::new("orders-tx".to_owned());
+        transaction_state.status = TransactionStatus::InTransaction;
+        let mut producer = Producer {
+            client,
+            config,
+            metadata_cache: BTreeMap::new(),
+            keyless_partition_indexes: BTreeMap::new(),
+            idempotent_state: Some(IdempotentProducerState::new(42, 3)),
+            transaction_state: Some(transaction_state),
+        };
+
+        producer.commit_transaction().await.unwrap();
+
+        assert!(!producer.in_transaction());
+        assert_eq!(metrics.snapshot().retries, 1);
         server.await.unwrap();
     }
 
@@ -5211,6 +5420,25 @@ mod tests {
             .unwrap();
         stream.write_all(frame).await.unwrap();
         stream.flush().await.unwrap();
+    }
+
+    fn find_coordinator_response_frame(
+        request: &[u8],
+        node_id: i32,
+        coordinator: std::net::SocketAddr,
+    ) -> Vec<u8> {
+        let host = coordinator.ip().to_string();
+        let mut frame = request[4..8].to_vec();
+        frame.extend_from_slice(&[
+            0, 0, 0, 0, // throttle time
+            0, 0, // error code
+            0xff, 0xff, // null error message
+        ]);
+        frame.extend_from_slice(&node_id.to_be_bytes());
+        frame.extend_from_slice(&(i16::try_from(host.len()).unwrap()).to_be_bytes());
+        frame.extend_from_slice(host.as_bytes());
+        frame.extend_from_slice(&i32::from(coordinator.port()).to_be_bytes());
+        frame
     }
 
     fn metadata_response_frame() -> Vec<u8> {
