@@ -1145,6 +1145,11 @@ Implemented evidence:
   example passed Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 in manual `Live Kafka
   Smoke` run `30229718813`; all multi-broker, TLS, SASL_PLAINTEXT, and
   SASL_SSL regression profiles also passed.
+- Direct and group consumers expose assignment-scoped `position`, `seek`,
+  `pause`, and `resume` controls. Manual `Live Kafka Smoke` run `30230885629`
+  verified paused polls, explicit seek and resume, and subsequent position
+  advancement on Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1; all multi-broker and
+  secured regression profiles also passed.
 - `AdminClient::create_partitions` routes CreatePartitions v0 to the active
   controller, supports automatic or explicit replica assignment, and preserves
   per-topic errors. Manual `Live Kafka Smoke` run `30230301762` expanded a
