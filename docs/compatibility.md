@@ -100,6 +100,12 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
   `OffsetResetPolicy::Earliest` or `Latest` from the partition leader. Manual
   `Live Kafka Smoke` run `30229718813` passed both policies on Kafka 3.7.2,
   3.8.1, 3.9.1, and 4.3.1.
+- Direct and group consumers expose in-memory `position`, `seek`, `pause`, and
+  `resume` controls for assigned topic partitions. Manual `Live Kafka Smoke`
+  run `30230885629` verified that paused consumers return no records, resumed
+  consumers read again from an explicit seek position, and their positions
+  advance on Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1. The same run kept the
+  three-broker, TLS, SASL_PLAINTEXT, and SASL_SSL regression profiles green.
 - Background heartbeat recovery through a real two-member classic-group
   rebalance. Manual run `30067372344` verified automatic rejoin and heartbeat
   handle replacement on Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext
