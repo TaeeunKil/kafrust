@@ -213,9 +213,10 @@ producer
 producer.commit_transaction().await?;
 ```
 
-The current transaction path is live verified for commit, abort, and atomic
-group-offset commit. Transactional buffered production and multi-broker
-transaction failure injection are not yet qualified.
+The current transaction path supports immediate and buffered commit, abort, and
+atomic group-offset commit. A buffered commit flushes accepted records before
+EndTxn and refuses to commit after a delivery failure. Multi-broker transaction
+failure injection is not yet qualified.
 
 ## Admin
 
@@ -226,12 +227,13 @@ kafrust currently provides:
 - topic creation and deletion
 - topic config description and incremental alteration
 - consumer group description
+- consumer group listing and deletion
 - selected consumer group offset deletion
 - topic partition expansion with automatic or explicit replica assignment
 
 Migration blockers include rust-rdkafka admin operations with no current
-kafrust equivalent, including partition creation, group deletion, ACLs,
-quotas, replica reassignment, and SCRAM credential administration.
+kafrust equivalent, including ACLs, quotas, replica reassignment, and SCRAM
+credential administration.
 
 See [Admin API](admin-api.md) for typed request and response examples.
 

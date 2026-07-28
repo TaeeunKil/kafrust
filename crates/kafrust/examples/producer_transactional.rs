@@ -14,7 +14,7 @@ async fn main() -> kafrust::Result<()> {
     let mut producer = common::apply_security(
         ProducerConfig::new(bootstrap_servers.clone())
             .client_id("kafrust-transactional-producer-example")
-            .transactional_id(transactional_id),
+            .transactional_id(transactional_id.clone()),
     )?
     .build()
     .await?;
@@ -51,6 +51,45 @@ async fn main() -> kafrust::Result<()> {
         aborted.offset()
     );
 
+    let mut buffered_producer = common::apply_security(
+        ProducerConfig::new(bootstrap_servers.clone())
+            .client_id("kafrust-buffered-transactional-producer-example")
+            .transactional_id(format!("{transactional_id}-buffered"))
+            .linger_ms(60_000),
+    )?
+    .build_buffered()
+    .await?;
+    buffered_producer.begin_transaction().await?;
+    let buffered_committed_delivery = buffered_producer
+        .send(
+            ProducerRecord::to(topic.clone())
+                .partition(committed.partition())
+                .key("kafrust-buffered-transaction-commit")
+                .value("buffered committed by kafrust"),
+        )
+        .await?;
+    buffered_producer.commit_transaction().await?;
+    let buffered_committed = buffered_committed_delivery.await?;
+
+    buffered_producer.begin_transaction().await?;
+    let buffered_aborted_delivery = buffered_producer
+        .send(
+            ProducerRecord::to(topic.clone())
+                .partition(committed.partition())
+                .key("kafrust-buffered-transaction-abort")
+                .value("buffered aborted by kafrust"),
+        )
+        .await?;
+    buffered_producer.abort_transaction().await?;
+    let buffered_aborted = buffered_aborted_delivery.await?;
+    println!(
+        "buffered committed {}-{}@{} and aborted @{}",
+        buffered_committed.topic(),
+        buffered_committed.partition(),
+        buffered_committed.offset(),
+        buffered_aborted.offset()
+    );
+
     let mut uncommitted_consumer = common::apply_security(
         ConsumerConfig::new(bootstrap_servers.clone())
             .client_id("kafrust-read-uncommitted-example")
@@ -63,6 +102,8 @@ async fn main() -> kafrust::Result<()> {
         .await?;
     if !contains_value(&uncommitted_records, b"committed by kafrust")
         || !contains_value(&uncommitted_records, b"aborted by kafrust")
+        || !contains_value(&uncommitted_records, b"buffered committed by kafrust")
+        || !contains_value(&uncommitted_records, b"buffered aborted by kafrust")
     {
         return Err(Error::Unsupported(
             "read_uncommitted did not return committed and aborted records",
@@ -81,6 +122,8 @@ async fn main() -> kafrust::Result<()> {
         .await?;
     if !contains_value(&committed_records, b"committed by kafrust")
         || contains_value(&committed_records, b"aborted by kafrust")
+        || !contains_value(&committed_records, b"buffered committed by kafrust")
+        || contains_value(&committed_records, b"buffered aborted by kafrust")
     {
         return Err(Error::Unsupported(
             "read_committed did not isolate aborted records",
@@ -112,20 +155,22 @@ async fn main() -> kafrust::Result<()> {
     let group_metadata = group.metadata();
     let assignments = group.assignments().to_vec();
 
-    producer.begin_transaction()?;
-    producer
+    buffered_producer.begin_transaction().await?;
+    let offset_output = buffered_producer
         .send(
             ProducerRecord::to(topic)
                 .key("kafrust-transaction-offset-output")
-                .value("offsets committed by kafrust"),
+                .value("buffered offsets committed by kafrust"),
         )
         .await?;
-    producer
+    buffered_producer
         .send_group_offsets_to_transaction(&group_metadata, &assignments)
         .await?;
-    producer.commit_transaction().await?;
+    buffered_producer.commit_transaction().await?;
+    offset_output.await?;
+    buffered_producer.close().await?;
     println!(
-        "committed {} consumed offsets in transaction",
+        "committed {} consumed offsets in buffered transaction",
         assignments.len()
     );
 

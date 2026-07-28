@@ -334,12 +334,13 @@ See [Compatibility](docs/compatibility.md) and
   profiles and the single-node TLS profile. Snappy uses Kafka-compatible Xerial
   framing and accepts raw Snappy blocks when decoding.
 - Idempotent single-record, batch, and buffered sends are available as an
-  opt-in alpha. Transactional immediate and batch sends support explicit begin,
-  commit, and abort. `IsolationLevel::ReadCommitted` hides aborted transaction
-  records for direct and group consumers, and current group assignments can be
-  committed through `Producer::send_group_offsets_to_transaction`. Transactional
-  buffered sends, remaining admin APIs, and live broker failure injection
-  remain separate roadmap items. Shared request, retry, broker-error, producer,
+  opt-in alpha. Transactional immediate, batch, and buffered sends support
+  explicit begin, commit, and abort. `IsolationLevel::ReadCommitted` hides
+  aborted transaction records for direct and group consumers, and current
+  group assignments can be committed through immediate or buffered
+  `send_group_offsets_to_transaction`. Remaining admin APIs and live broker
+  failure injection remain separate roadmap items. Shared request, retry,
+  broker-error, producer,
   consumer, batch, and buffered-queue metrics are available together with
   high-level operation and `kafka.request` spans.
 - `acks=0` remains unsupported because the current request loop expects a broker

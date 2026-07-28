@@ -46,6 +46,11 @@ Names can change during implementation, but the behavioral split should remain:
 
 Current implementation status: `ProducerConfig::linger_ms`, `ProducerConfig::buffer_capacity`, `ProducerConfig::build_buffered`, `BufferedProducer::send`, `BufferedProducer::flush`, `BufferedProducer::close`, `BufferedProducer::is_closed`, and per-record `ProducerDelivery` handles exist. `flush`, `close`, linger expiry, record-count thresholds, and byte-count thresholds send accepted records through the existing `send_batch_report` path and complete delivery handles from per-record outcomes. The command queue defaults to 1024 records, applies async backpressure at capacity, and reports current and maximum outstanding buffered records through `ClientMetrics`.
 
+Transactional configurations use the same worker and queue. Begin, group-offset
+attachment, commit, and abort are serialized with sends. Commit requires a
+successful flush of all accepted records; partial delivery failures leave the
+transaction active for abort. Close rejects an active transaction.
+
 ## Flush Triggers
 
 The background batching task flushes pending records when any of these happens:

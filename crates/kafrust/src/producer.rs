@@ -622,6 +622,8 @@ pub struct BufferedProducer {
     metrics: ClientMetrics,
     worker: Option<JoinHandle<()>>,
     state: BufferedProducerState,
+    transactional: bool,
+    in_transaction: bool,
 }
 
 impl BufferedProducer {
@@ -638,7 +640,117 @@ impl BufferedProducer {
     )]
     pub async fn send(&mut self, record: ProducerRecord) -> Result<ProducerDelivery> {
         self.state.ensure_open()?;
+        if self.transactional && !self.in_transaction {
+            return Err(Error::Unsupported("transaction has not been started"));
+        }
         enqueue_buffered_record(&self.commands, &self.metrics, record).await
+    }
+
+    /// Starts a transaction on a buffered producer configured with a transactional ID.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.producer.buffered_begin_transaction",
+        skip_all,
+        err
+    )]
+    pub async fn begin_transaction(&mut self) -> Result<()> {
+        self.state.ensure_open()?;
+        if !self.transactional {
+            return Err(Error::Unsupported("producer is not transactional"));
+        }
+        if self.in_transaction {
+            return Err(Error::Unsupported("transaction is already active"));
+        }
+        let (result_sender, result_receiver) = oneshot::channel();
+        send_buffered_command(
+            &self.commands,
+            BufferedProducerCommand::BeginTransaction { result_sender },
+        )
+        .await?;
+        receive_buffered_result(result_receiver).await?;
+        self.in_transaction = true;
+        Ok(())
+    }
+
+    /// Adds consumer group offsets to the active buffered transaction.
+    ///
+    /// The command is ordered after all records accepted before this call.
+    /// The records are guaranteed to be flushed before a later commit.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.producer.buffered_send_group_offsets_to_transaction",
+        skip_all,
+        fields(group_id = metadata.group_id(), assignment_count = assignments.len()),
+        err
+    )]
+    pub async fn send_group_offsets_to_transaction(
+        &mut self,
+        metadata: &ConsumerGroupMetadata,
+        assignments: &[ConsumerAssignment],
+    ) -> Result<()> {
+        self.state.ensure_open()?;
+        self.ensure_transaction_active()?;
+        let (result_sender, result_receiver) = oneshot::channel();
+        send_buffered_command(
+            &self.commands,
+            BufferedProducerCommand::SendGroupOffsetsToTransaction {
+                metadata: metadata.clone(),
+                assignments: assignments.to_vec(),
+                result_sender,
+            },
+        )
+        .await?;
+        receive_buffered_result(result_receiver).await
+    }
+
+    /// Flushes all accepted records and commits the active transaction.
+    ///
+    /// A per-record Produce failure prevents EndTxn commit and leaves the
+    /// transaction active so the caller can abort it.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.producer.buffered_commit_transaction",
+        skip_all,
+        err
+    )]
+    pub async fn commit_transaction(&mut self) -> Result<()> {
+        self.state.ensure_open()?;
+        self.ensure_transaction_active()?;
+        let (result_sender, result_receiver) = oneshot::channel();
+        send_buffered_command(
+            &self.commands,
+            BufferedProducerCommand::CommitTransaction { result_sender },
+        )
+        .await?;
+        receive_buffered_result(result_receiver).await?;
+        self.in_transaction = false;
+        Ok(())
+    }
+
+    /// Flushes accepted records and aborts the active transaction.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.producer.buffered_abort_transaction",
+        skip_all,
+        err
+    )]
+    pub async fn abort_transaction(&mut self) -> Result<()> {
+        self.state.ensure_open()?;
+        self.ensure_transaction_active()?;
+        let (result_sender, result_receiver) = oneshot::channel();
+        send_buffered_command(
+            &self.commands,
+            BufferedProducerCommand::AbortTransaction { result_sender },
+        )
+        .await?;
+        receive_buffered_result(result_receiver).await?;
+        self.in_transaction = false;
+        Ok(())
+    }
+
+    /// Returns whether this buffered producer currently has an active transaction.
+    pub fn in_transaction(&self) -> bool {
+        self.in_transaction
     }
 
     /// Flushes accepted buffered records.
@@ -663,6 +775,11 @@ impl BufferedProducer {
     #[tracing::instrument(level = "debug", name = "kafka.producer.buffered_close", skip_all, err)]
     pub async fn close(&mut self) -> Result<()> {
         if self.state.is_open() {
+            if self.in_transaction {
+                return Err(Error::Unsupported(
+                    "active transaction must be committed or aborted before close",
+                ));
+            }
             let (result_sender, result_receiver) = oneshot::channel();
             send_buffered_command(
                 &self.commands,
@@ -682,6 +799,16 @@ impl BufferedProducer {
     /// Returns whether the buffered producer has been closed.
     pub fn is_closed(&self) -> bool {
         self.state.is_closed()
+    }
+
+    fn ensure_transaction_active(&self) -> Result<()> {
+        if !self.transactional {
+            return Err(Error::Unsupported("producer is not transactional"));
+        }
+        if !self.in_transaction {
+            return Err(Error::Unsupported("transaction has not been started"));
+        }
+        Ok(())
     }
 }
 
@@ -743,6 +870,20 @@ impl BufferedProducerState {
 #[derive(Debug)]
 enum BufferedProducerCommand {
     Send(BufferedProduceRequest),
+    BeginTransaction {
+        result_sender: oneshot::Sender<Result<()>>,
+    },
+    SendGroupOffsetsToTransaction {
+        metadata: ConsumerGroupMetadata,
+        assignments: Vec<ConsumerAssignment>,
+        result_sender: oneshot::Sender<Result<()>>,
+    },
+    CommitTransaction {
+        result_sender: oneshot::Sender<Result<()>>,
+    },
+    AbortTransaction {
+        result_sender: oneshot::Sender<Result<()>>,
+    },
     Flush {
         result_sender: oneshot::Sender<Result<()>>,
     },
@@ -859,6 +1000,37 @@ async fn run_buffered_producer(
                         request,
                     )
                     .await;
+                }
+                BufferedProducerCommand::BeginTransaction { result_sender } => {
+                    let _ = result_sender.send(producer.begin_transaction());
+                }
+                BufferedProducerCommand::SendGroupOffsetsToTransaction {
+                    metadata,
+                    assignments,
+                    result_sender,
+                } => {
+                    let result = producer
+                        .send_group_offsets_to_transaction(&metadata, &assignments)
+                        .await;
+                    let _ = result_sender.send(result);
+                }
+                BufferedProducerCommand::CommitTransaction { result_sender } => {
+                    let result = commit_buffered_transaction(
+                        &mut producer,
+                        &mut pending,
+                        &mut first_enqueued_at,
+                    )
+                    .await;
+                    let _ = result_sender.send(result);
+                }
+                BufferedProducerCommand::AbortTransaction { result_sender } => {
+                    let result = abort_buffered_transaction(
+                        &mut producer,
+                        &mut pending,
+                        &mut first_enqueued_at,
+                    )
+                    .await;
+                    let _ = result_sender.send(result);
                 }
                 BufferedProducerCommand::Flush { result_sender } => {
                     let result = flush_buffered_deliveries_for_reason(
@@ -1044,8 +1216,17 @@ async fn flush_buffered_deliveries(
     producer: &mut Producer,
     pending: &mut Vec<BufferedProduceRequest>,
 ) -> Result<()> {
+    flush_buffered_delivery_report(producer, pending)
+        .await
+        .map(|_| ())
+}
+
+async fn flush_buffered_delivery_report(
+    producer: &mut Producer,
+    pending: &mut Vec<BufferedProduceRequest>,
+) -> Result<bool> {
     if pending.is_empty() {
-        return Ok(());
+        return Ok(false);
     }
 
     let requests = std::mem::take(pending);
@@ -1056,14 +1237,57 @@ async fn flush_buffered_deliveries(
 
     match producer.send_batch_report(records).await {
         Ok(report) => {
+            let has_failures = report.has_failures();
             complete_buffered_deliveries(requests, report.into_records());
-            Ok(())
+            Ok(has_failures)
         }
         Err(error) => {
             fail_buffered_delivery_requests(requests, &error);
             Err(error)
         }
     }
+}
+
+async fn commit_buffered_transaction(
+    producer: &mut Producer,
+    pending: &mut Vec<BufferedProduceRequest>,
+    first_enqueued_at: &mut Option<Instant>,
+) -> Result<()> {
+    let has_delivery_failures = flush_buffered_delivery_report(producer, pending).await?;
+    if pending.is_empty() {
+        *first_enqueued_at = None;
+    }
+    ensure_buffered_transaction_deliveries_succeeded(has_delivery_failures)?;
+    producer.commit_transaction().await
+}
+
+fn ensure_buffered_transaction_deliveries_succeeded(has_failures: bool) -> Result<()> {
+    if has_failures {
+        Err(Error::Unsupported(
+            "buffered transaction has failed deliveries; abort is required",
+        ))
+    } else {
+        Ok(())
+    }
+}
+
+async fn abort_buffered_transaction(
+    producer: &mut Producer,
+    pending: &mut Vec<BufferedProduceRequest>,
+    first_enqueued_at: &mut Option<Instant>,
+) -> Result<()> {
+    let flush_result = flush_buffered_deliveries(producer, pending).await;
+    if pending.is_empty() {
+        *first_enqueued_at = None;
+    }
+    let abort_result = producer.abort_transaction().await;
+    if let Err(error) = flush_result {
+        debug!(
+            error = %error,
+            "buffered transaction flush failed before abort"
+        );
+    }
+    abort_result
 }
 
 fn complete_buffered_deliveries(
@@ -2685,11 +2909,7 @@ impl ProducerConfig {
 
     /// Connects to Kafka and builds an opt-in buffered producer skeleton.
     pub async fn build_buffered(self) -> Result<BufferedProducer> {
-        if self.transactional_id.is_some() {
-            return Err(Error::Unsupported(
-                "transactional buffered producer is not supported",
-            ));
-        }
+        let transactional = self.transactional_id.is_some();
         let producer = self.build().await?;
         let metrics = producer.config.client.metrics_ref();
         let (commands, receiver) = mpsc::channel(producer.config.buffer_capacity);
@@ -2699,6 +2919,8 @@ impl ProducerConfig {
             metrics,
             worker: Some(worker),
             state: BufferedProducerState::Open,
+            transactional,
+            in_transaction: false,
         })
     }
 }
@@ -3340,17 +3562,18 @@ mod tests {
         batch_record_chunks, batch_records_encoded_len, batch_report_from_outcomes,
         batch_success_outcomes, buffered_delivery_canceled_error, buffered_enqueue_flush_reason,
         buffered_linger_deadline, can_retry_send, choose_partition, complete_buffered_deliveries,
-        delivery_error_from_request_error, enqueue_buffered_record, fail_buffered_deliveries,
+        delivery_error_from_request_error, enqueue_buffered_record,
+        ensure_buffered_transaction_deliveries_succeeded, fail_buffered_deliveries,
         idempotent_produce_error_disposition, invalidate_metadata_cache,
         invalidate_metadata_cache_for_record_indexes, is_retryable_transaction_coordinator_error,
         kafka_murmur2, largest_fitting_prefix, leader_for, message_set_message,
         record_batch_attempt_outcomes, record_batch_message, select_produce_batch_version,
         select_produce_version, transaction_offset_topics, Acks, BatchRecord, BufferedFlushReason,
-        BufferedProduceRequest, BufferedProducerCommand, BufferedProducerState, Compression,
-        IdempotentBatchSequenceTracker, IdempotentProduceErrorDisposition, IdempotentProducerState,
-        PreparedBatchRecord, ProduceBatchKey, ProduceVersion, Producer, ProducerBatchFailure,
-        ProducerBatchRecordOutcome, ProducerBatchReport, ProducerConfig, ProducerDelivery,
-        ProducerRecord, RecordMetadata, SecurityProtocol,
+        BufferedProduceRequest, BufferedProducer, BufferedProducerCommand, BufferedProducerState,
+        Compression, IdempotentBatchSequenceTracker, IdempotentProduceErrorDisposition,
+        IdempotentProducerState, PreparedBatchRecord, ProduceBatchKey, ProduceVersion, Producer,
+        ProducerBatchFailure, ProducerBatchRecordOutcome, ProducerBatchReport, ProducerConfig,
+        ProducerDelivery, ProducerRecord, RecordMetadata, SecurityProtocol,
     };
     use crate::consumer::ConsumerAssignment;
     use crate::{BrokerErrorKind, Client, ClientMetrics, Error};
@@ -4195,6 +4418,84 @@ mod tests {
         state.close();
 
         assert!(state.is_closed());
+    }
+
+    #[test]
+    fn rejects_buffered_transaction_commit_after_delivery_failure() {
+        assert!(ensure_buffered_transaction_deliveries_succeeded(false).is_ok());
+        assert!(matches!(
+            ensure_buffered_transaction_deliveries_succeeded(true).unwrap_err(),
+            Error::Unsupported("buffered transaction has failed deliveries; abort is required")
+        ));
+    }
+
+    #[tokio::test]
+    async fn tracks_buffered_transaction_commands_and_rejects_send_before_begin() {
+        let (commands, mut receiver) = mpsc::channel(4);
+        let command_worker = tokio::spawn(async move {
+            if let BufferedProducerCommand::BeginTransaction { result_sender } =
+                receiver.recv().await.unwrap()
+            {
+                result_sender.send(Ok(())).unwrap();
+            } else {
+                return;
+            }
+            if let BufferedProducerCommand::CommitTransaction { result_sender } =
+                receiver.recv().await.unwrap()
+            {
+                result_sender.send(Ok(())).unwrap();
+            }
+        });
+        let mut producer = BufferedProducer {
+            commands,
+            metrics: ClientMetrics::new(),
+            worker: Some(command_worker),
+            state: BufferedProducerState::Open,
+            transactional: true,
+            in_transaction: false,
+        };
+
+        assert!(matches!(
+            producer.send(ProducerRecord::to("orders")).await,
+            Err(Error::Unsupported("transaction has not been started"))
+        ));
+        producer.begin_transaction().await.unwrap();
+        assert!(producer.in_transaction());
+        assert!(matches!(
+            producer.begin_transaction().await.unwrap_err(),
+            Error::Unsupported("transaction is already active")
+        ));
+        assert!(matches!(
+            producer.close().await.unwrap_err(),
+            Error::Unsupported("active transaction must be committed or aborted before close")
+        ));
+        assert!(!producer.is_closed());
+        assert!(producer.in_transaction());
+        producer.commit_transaction().await.unwrap();
+        assert!(!producer.in_transaction());
+        producer.worker.take().unwrap().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn rejects_transaction_commands_for_non_transactional_buffered_producer() {
+        let (commands, _receiver) = mpsc::channel(1);
+        let mut producer = BufferedProducer {
+            commands,
+            metrics: ClientMetrics::new(),
+            worker: None,
+            state: BufferedProducerState::Open,
+            transactional: false,
+            in_transaction: false,
+        };
+
+        assert!(matches!(
+            producer.begin_transaction().await.unwrap_err(),
+            Error::Unsupported("producer is not transactional")
+        ));
+        assert!(matches!(
+            producer.commit_transaction().await.unwrap_err(),
+            Error::Unsupported("producer is not transactional")
+        ));
     }
 
     #[tokio::test]
