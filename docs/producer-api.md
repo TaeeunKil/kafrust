@@ -99,9 +99,31 @@ producer
 producer.commit_transaction().await?;
 ```
 
-The group offsets become visible only with the transaction commit. Buffered
-transactional production is not available yet; `IsolationLevel::ReadCommitted`
-is available on consumer configurations.
+The group offsets become visible only with the transaction commit.
+`IsolationLevel::ReadCommitted` is available on consumer configurations.
+
+The buffered path exposes the same transaction boundary as asynchronous worker
+commands:
+
+```rust
+let mut producer = ProducerConfig::new(["localhost:9092"])
+    .transactional_id("orders-buffered-writer")
+    .linger_ms(10)
+    .build_buffered()
+    .await?;
+
+producer.begin_transaction().await?;
+let delivery = producer
+    .send(ProducerRecord::to("orders").value("created"))
+    .await?;
+producer.commit_transaction().await?;
+let metadata = delivery.await?;
+```
+
+Buffered commit flushes every accepted record before EndTxn. A delivery failure
+prevents commit and leaves the transaction active for an explicit abort.
+Buffered abort also completes pending delivery handles before EndTxn. Closing
+an active buffered transaction is rejected until it is committed or aborted.
 
 The public model intentionally keeps Kafka terms visible:
 
@@ -183,6 +205,10 @@ Current implementation status:
   `commit_transaction`, and `abort_transaction` expose the transaction
   lifecycle; transactional sends register partitions before Produce. The
   high-level commit and abort path is verified against Kafka 3.7.2 and 4.3.1.
+- `BufferedProducer` supports async `begin_transaction`, `commit_transaction`,
+  `abort_transaction`, and generation-fenced
+  `send_group_offsets_to_transaction`. Transaction boundaries are serialized
+  with queued sends by the background worker.
 - `Producer::send_group_offsets_to_transaction` adds a consumer group to the
   active transaction and commits the supplied `ConsumerAssignment` next
   offsets through generation-fenced `TxnOffsetCommit v3`. The

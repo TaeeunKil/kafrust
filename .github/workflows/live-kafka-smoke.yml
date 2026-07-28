@@ -134,7 +134,7 @@ jobs:
           KAFRUST_BUFFERED_COUNT: "3"
         run: cargo run -p kafrust --example producer_buffered
 
-      - name: Run transactional producer commit and abort example
+      - name: Run immediate and buffered transactional producer example
         env:
           KAFRUST_TRANSACTIONAL_ID: kafrust-transactional-smoke-${{ matrix.kafka-version }}
         run: cargo run -p kafrust --example producer_transactional
