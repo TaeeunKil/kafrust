@@ -134,7 +134,8 @@ Evidence:
 Known limits:
 
 - Current high-level producer path negotiates Produce API support, uses v3 RecordBatch for headers, and falls back to v2 MessageSet only for records without headers.
-- `acks=0` is rejected because the current request loop expects a broker response.
+- `acks=0` sends write and flush Produce requests without waiting for a broker
+  response; returned offsets are `-1` and broker acceptance is not confirmed.
 - Live produce validation runs through the scheduled/manual `Live Kafka Smoke` workflow.
 
 ## M4 Consumer MVP
@@ -343,7 +344,9 @@ Exit criteria:
 
 Known limits:
 
-- `acks=0` remains unsupported because the request loop expects a broker response.
+- `acks=0` immediate and batch sends use the no-response Produce path and return
+  unknown-offset metadata. Live workload-loss and broker-error semantics remain
+  an operational qualification item.
 
 Evidence:
 
@@ -1173,6 +1176,11 @@ Implemented evidence:
   three-broker Kafka 3.7.2 profile. The same run passed Kafka 3.7.2, 3.8.1,
   3.9.1, and 4.3.1 single-node plaintext plus TLS, SASL_PLAINTEXT, and
   SASL_SSL/SCRAM-SHA-256 profiles.
+- Immediate and batch `acks=0` sends write and flush Produce requests without
+  waiting for responses and return offset `-1`. Manual `Live Kafka Smoke` run
+  `31464933145` passed these paths against Kafka 3.7.2, 3.8.1, 3.9.1, and
+  4.3.1 single-node plaintext brokers; durable-delivery and broker-error
+  semantics remain explicitly outside the no-ack guarantee.
 - Static classic-group membership carries a configured stable instance ID
   through JoinGroup v5, SyncGroup v3, Heartbeat v3, generation-fenced
   TxnOffsetCommit v3, and OffsetCommit v7. Duplicate instance fencing is

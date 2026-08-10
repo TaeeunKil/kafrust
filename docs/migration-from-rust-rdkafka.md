@@ -40,7 +40,7 @@ the currently supported settings through typed builders.
 | `request.timeout.ms` | `.request_timeout_ms(...)` | Applies to kafrust request roundtrips. |
 | `acks=1` | `.acks(Acks::Leader)` | Default producer behavior. |
 | `acks=all` | `.acks(Acks::All)` | Required automatically by idempotence. |
-| `acks=0` | No equivalent | kafrust requires a broker response. |
+| `acks=0` | `.acks(Acks::None)` | Writes and flushes without waiting for a response; returned offsets are `-1` and broker acceptance is not confirmed. |
 | `compression.type` | `.compression(Compression::{Gzip, Snappy, Lz4, Zstd})` | Codec support is feature-complete for the verified producer path. |
 | `enable.idempotence` | `.enable_idempotence(true)` | Initializes producer identity and partition sequences. |
 | `transactional.id` | `.transactional_id(...)` | Enables the alpha transactional path. |
@@ -260,7 +260,7 @@ See [Admin API](admin-api.md) for typed request and response examples.
 | Classic range-assigned consumer group | Candidate with rebalance testing |
 | TLS, SASL/PLAIN, or SASL/SCRAM-SHA-256 | Candidate on documented profiles |
 | Transactions and read-committed consumption | Alpha candidate |
-| `acks=0` fire-and-forget | Blocked |
+| `acks=0` fire-and-forget | Verified on Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 single-node plaintext smoke; qualify workload loss/error semantics |
 | Non-Tokio runtime or synchronous client | Blocked |
 | Custom partitioner or rebalance callback | Blocked |
 | `cooperative-sticky` assignor and consumer group protocol selection | Candidate for protocol and initial staged assignment; live multi-member transfer and failure qualification pending |
