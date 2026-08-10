@@ -334,6 +334,12 @@ jobs:
       - name: Run multi-broker consumer group example
         run: cargo run -p kafrust --example consumer_group_poll
 
+      - name: Run multi-broker cooperative consumer group example
+        env:
+          KAFRUST_ASSIGNMENT_STRATEGY: cooperative-sticky
+          KAFRUST_GROUP_ID: kafrust-smoke-cooperative
+        run: cargo run -p kafrust --example consumer_group_poll
+
       - name: Run multi-broker admin describe group example
         run: cargo run -p kafrust --example admin_describe_group
 

@@ -15,15 +15,17 @@ async fn main() -> kafrust::Result<()> {
         config = config.group_instance_id(group_instance_id);
     }
     if let Ok(strategy) = std::env::var("KAFRUST_ASSIGNMENT_STRATEGY") {
-        config = config.assignment_strategy(match strategy.to_ascii_lowercase().as_str() {
-            "range" => ConsumerGroupAssignmentStrategy::Range,
-            "roundrobin" | "round-robin" => ConsumerGroupAssignmentStrategy::RoundRobin,
-            _ => {
-                return Err(Error::Unsupported(
-                    "KAFRUST_ASSIGNMENT_STRATEGY must be range or roundrobin",
-                ))
-            }
-        });
+        config =
+            config.assignment_strategy(match strategy.to_ascii_lowercase().as_str() {
+                "range" => ConsumerGroupAssignmentStrategy::Range,
+                "roundrobin" | "round-robin" => ConsumerGroupAssignmentStrategy::RoundRobin,
+                "cooperative-sticky" | "cooperative_sticky" => {
+                    ConsumerGroupAssignmentStrategy::CooperativeSticky
+                }
+                _ => return Err(Error::Unsupported(
+                    "KAFRUST_ASSIGNMENT_STRATEGY must be range, roundrobin, or cooperative-sticky",
+                )),
+            });
     }
     let mut group = config.subscribe(topic).join().await?;
 

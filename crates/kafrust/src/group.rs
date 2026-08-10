@@ -18,7 +18,8 @@ use kafrust_protocol::api::offset_fetch::{
 };
 use kafrust_protocol::api::sync_group::SyncGroupAssignment;
 use kafrust_protocol::consumer_group::{
-    ConsumerProtocolAssignmentV0, ConsumerProtocolSubscriptionV0, ConsumerProtocolTopicAssignment,
+    ConsumerProtocolAssignmentV0, ConsumerProtocolSubscriptionV0, ConsumerProtocolSubscriptionV1,
+    ConsumerProtocolTopicAssignment,
 };
 
 use crate::client::Client;
@@ -37,6 +38,7 @@ use tracing::{debug, Instrument};
 const PROTOCOL_TYPE: &str = "consumer";
 const RANGE_PROTOCOL: &str = "range";
 const ROUND_ROBIN_PROTOCOL: &str = "roundrobin";
+const COOPERATIVE_STICKY_PROTOCOL: &str = "cooperative-sticky";
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 /// Partition assignment strategy advertised by a classic consumer group member.
@@ -46,6 +48,8 @@ pub enum ConsumerGroupAssignmentStrategy {
     Range,
     /// Distribute all subscribed topic partitions cyclically across members.
     RoundRobin,
+    /// Preserve existing ownership where possible and transfer partitions cooperatively.
+    CooperativeSticky,
 }
 
 impl ConsumerGroupAssignmentStrategy {
@@ -53,6 +57,7 @@ impl ConsumerGroupAssignmentStrategy {
         match self {
             Self::Range => RANGE_PROTOCOL,
             Self::RoundRobin => ROUND_ROBIN_PROTOCOL,
+            Self::CooperativeSticky => COOPERATIVE_STICKY_PROTOCOL,
         }
     }
 }
@@ -358,6 +363,13 @@ impl ConsumerGroupConfig {
         err
     )]
     pub async fn join(self) -> Result<ConsumerGroup> {
+        self.join_with_owned_partitions(Vec::new()).await
+    }
+
+    async fn join_with_owned_partitions(
+        self,
+        owned_partitions: Vec<ConsumerProtocolTopicAssignment>,
+    ) -> Result<ConsumerGroup> {
         if self.topics.is_empty() {
             return Err(Error::Unsupported("consumer group without subscriptions"));
         }
@@ -384,11 +396,20 @@ impl ConsumerGroupConfig {
 
         let coordinator_addr = coordinator_addr(&coordinator);
         let mut coordinator_client = self.client.connect_broker(coordinator_addr).await?;
-        let subscription = ConsumerProtocolSubscriptionV0 {
-            topics: self.topics.clone(),
-            user_data: None,
-        }
-        .encode()?;
+        let subscription = match self.assignment_strategy {
+            ConsumerGroupAssignmentStrategy::CooperativeSticky => ConsumerProtocolSubscriptionV1 {
+                topics: self.topics.clone(),
+                user_data: None,
+                owned_partitions: owned_partitions.clone(),
+            }
+            .encode()?,
+            ConsumerGroupAssignmentStrategy::Range
+            | ConsumerGroupAssignmentStrategy::RoundRobin => ConsumerProtocolSubscriptionV0 {
+                topics: self.topics.clone(),
+                user_data: None,
+            }
+            .encode()?,
+        };
         let protocols = vec![kafrust_protocol::api::join_group::JoinGroupProtocol {
             name: self.assignment_strategy.protocol_name().to_owned(),
             metadata: subscription,
@@ -479,6 +500,9 @@ impl ConsumerGroupConfig {
         }
 
         let assignment = ConsumerProtocolAssignmentV0::decode(&synced.assignment)?;
+        let cooperative_rejoin_required = self.assignment_strategy
+            == ConsumerGroupAssignmentStrategy::CooperativeSticky
+            && owned_partitions_require_rejoin(&owned_partitions, &assignment);
         let consumer_assignments = assignments_from_protocol(
             &mut coordinator_client,
             &mut bootstrap,
@@ -506,6 +530,7 @@ impl ConsumerGroupConfig {
             member_id: joined.member_id,
             retention_time_ms: self.retention_time_ms,
             coordinator: coordinator_client,
+            cooperative_rejoin_required,
             consumer: Consumer::from_assignments(
                 consumer_client,
                 consumer_config,
@@ -524,6 +549,7 @@ pub struct ConsumerGroup {
     member_id: String,
     retention_time_ms: i64,
     coordinator: Client,
+    cooperative_rejoin_required: bool,
     consumer: Consumer,
 }
 
@@ -670,6 +696,15 @@ impl ConsumerGroup {
         err
     )]
     pub async fn poll(&mut self) -> Result<Vec<ConsumerRecord>> {
+        if self.cooperative_rejoin_required {
+            debug!(
+                group_id = self.group_id.as_str(),
+                member_id = self.member_id.as_str(),
+                generation_id = self.generation_id,
+                "completing cooperative consumer group ownership transfer"
+            );
+            self.rejoin().await?;
+        }
         match self.heartbeat().await {
             Ok(()) => {}
             Err(error) if should_rejoin_group(&error) => {
@@ -844,7 +879,12 @@ impl ConsumerGroup {
             .filter(|assignment| assignment.is_paused())
             .map(|assignment| (assignment.topic().to_owned(), assignment.partition()))
             .collect::<Vec<_>>();
-        let mut joined = self.config.clone().join().await?;
+        let owned_partitions = owned_partitions_from_assignments(self.consumer.assignments());
+        let mut joined = self
+            .config
+            .clone()
+            .join_with_owned_partitions(owned_partitions)
+            .await?;
         for (topic, partition) in paused {
             if joined.consumer.position(&topic, partition).is_some() {
                 joined.consumer.pause(&topic, partition)?;
@@ -1110,6 +1150,7 @@ fn assignments_for_strategy(
     match protocol_name {
         RANGE_PROTOCOL => range_assignments(members, metadata),
         ROUND_ROBIN_PROTOCOL => round_robin_assignments(members, metadata),
+        COOPERATIVE_STICKY_PROTOCOL => cooperative_sticky_assignments(members, metadata),
         _ => Err(Error::Unsupported(
             "consumer group selected an unsupported assignment strategy",
         )),
@@ -1200,6 +1241,246 @@ pub(crate) fn round_robin_assignments(
     encode_member_assignments(assigned_by_member)
 }
 
+/// Builds a deterministic cooperative assignment that keeps valid owned
+/// partitions and stages only ownership transfers between active members.
+pub(crate) fn cooperative_sticky_assignments(
+    members: &[JoinGroupMember],
+    metadata: &MetadataResponseV1,
+) -> Result<Vec<SyncGroupAssignment>> {
+    let mut subscriptions = BTreeMap::<String, BTreeSet<String>>::new();
+    let mut owned_by_member = BTreeMap::<String, BTreeSet<(String, i32)>>::new();
+    for member in members {
+        let subscription = ConsumerProtocolSubscriptionV1::decode(&member.metadata)?;
+        subscriptions.insert(
+            member.member_id.clone(),
+            subscription.topics.into_iter().collect(),
+        );
+        owned_by_member.insert(
+            member.member_id.clone(),
+            subscription
+                .owned_partitions
+                .into_iter()
+                .flat_map(|assignment| {
+                    assignment
+                        .partitions
+                        .into_iter()
+                        .map(move |partition| (assignment.topic.clone(), partition))
+                })
+                .collect(),
+        );
+    }
+
+    let mut assigned_by_member = subscriptions
+        .keys()
+        .map(|member_id| (member_id.clone(), BTreeMap::<String, Vec<i32>>::new()))
+        .collect::<BTreeMap<_, _>>();
+    let mut owner_by_partition = BTreeMap::<(String, i32), String>::new();
+    let mut available = BTreeSet::<(String, i32)>::new();
+
+    for topics in subscriptions.values() {
+        for topic in topics {
+            for partition in partitions_for(metadata, topic)? {
+                available.insert((topic.clone(), partition));
+            }
+        }
+    }
+
+    for (member_id, owned) in &owned_by_member {
+        for partition in owned {
+            if !available.contains(partition) {
+                continue;
+            }
+            if owner_by_partition.contains_key(partition) {
+                continue;
+            }
+            owner_by_partition.insert(partition.clone(), member_id.clone());
+            add_assignment(&mut assigned_by_member, member_id, partition);
+        }
+    }
+
+    for partition in available {
+        if owner_by_partition.contains_key(&partition) {
+            continue;
+        }
+        let topic = &partition.0;
+        let member_id = subscriptions
+            .iter()
+            .filter(|(_, topics)| topics.contains(topic))
+            .min_by_key(|(member_id, _)| {
+                (assignment_count(&assigned_by_member, member_id), *member_id)
+            })
+            .map(|(member_id, _)| member_id.clone())
+            .ok_or(Error::Unsupported(
+                "cooperative assignor found no subscribed member",
+            ))?;
+        owner_by_partition.insert(partition.clone(), member_id.clone());
+        add_assignment(&mut assigned_by_member, &member_id, &partition);
+    }
+
+    balance_owned_assignments(
+        &mut assigned_by_member,
+        &mut owner_by_partition,
+        &subscriptions,
+    );
+
+    let mut transfers = BTreeSet::<(String, i32)>::new();
+    for (partition, new_owner) in &owner_by_partition {
+        if let Some(old_owner) = owned_by_member
+            .iter()
+            .find_map(|(member_id, owned)| owned.contains(partition).then_some(member_id))
+        {
+            if old_owner != new_owner && subscriptions.contains_key(old_owner) {
+                transfers.insert(partition.clone());
+            }
+        }
+    }
+    for partition in transfers {
+        if let Some(new_owner) = owner_by_partition.get(&partition) {
+            remove_assignment(&mut assigned_by_member, new_owner, &partition);
+        }
+    }
+
+    encode_member_assignments(assigned_by_member)
+}
+
+fn balance_owned_assignments(
+    assigned_by_member: &mut BTreeMap<String, BTreeMap<String, Vec<i32>>>,
+    owner_by_partition: &mut BTreeMap<(String, i32), String>,
+    subscriptions: &BTreeMap<String, BTreeSet<String>>,
+) {
+    let member_ids = subscriptions.keys().cloned().collect::<Vec<_>>();
+    loop {
+        let Some(source) = member_ids
+            .iter()
+            .max_by_key(|member_id| assignment_count(assigned_by_member, member_id))
+        else {
+            return;
+        };
+        let source_count = assignment_count(assigned_by_member, source);
+        let source_partitions = assigned_by_member
+            .get(source)
+            .into_iter()
+            .flat_map(|topics| {
+                topics.iter().flat_map(|(topic, partitions)| {
+                    partitions
+                        .iter()
+                        .map(|partition| (topic.clone(), *partition))
+                })
+            })
+            .collect::<Vec<_>>();
+
+        let mut candidate = None;
+        for partition in source_partitions {
+            for target in &member_ids {
+                if target == source
+                    || !subscriptions
+                        .get(target)
+                        .is_some_and(|topics| topics.contains(&partition.0))
+                {
+                    continue;
+                }
+                let target_count = assignment_count(assigned_by_member, target);
+                if target_count + 1 >= source_count {
+                    continue;
+                }
+                let should_replace = candidate.as_ref().map_or(true, |(_, _, _, current_count)| {
+                    target_count < *current_count
+                });
+                if should_replace {
+                    candidate = Some((
+                        partition.0.clone(),
+                        partition.1,
+                        target.clone(),
+                        target_count,
+                    ));
+                }
+            }
+        }
+
+        let Some((topic, partition, target, _)) = candidate else {
+            return;
+        };
+        let partition = (topic, partition);
+        remove_assignment(assigned_by_member, source, &partition);
+        add_assignment(assigned_by_member, &target, &partition);
+        owner_by_partition.insert(partition, target);
+    }
+}
+
+fn add_assignment(
+    assigned_by_member: &mut BTreeMap<String, BTreeMap<String, Vec<i32>>>,
+    member_id: &str,
+    partition: &(String, i32),
+) {
+    assigned_by_member
+        .entry(member_id.to_owned())
+        .or_default()
+        .entry(partition.0.clone())
+        .or_default()
+        .push(partition.1);
+}
+
+fn remove_assignment(
+    assigned_by_member: &mut BTreeMap<String, BTreeMap<String, Vec<i32>>>,
+    member_id: &str,
+    partition: &(String, i32),
+) {
+    let Some(topics) = assigned_by_member.get_mut(member_id) else {
+        return;
+    };
+    let Some(partitions) = topics.get_mut(&partition.0) else {
+        return;
+    };
+    partitions.retain(|candidate| *candidate != partition.1);
+    if partitions.is_empty() {
+        topics.remove(&partition.0);
+    }
+}
+
+fn assignment_count(
+    assigned_by_member: &BTreeMap<String, BTreeMap<String, Vec<i32>>>,
+    member_id: &str,
+) -> usize {
+    assigned_by_member
+        .get(member_id)
+        .into_iter()
+        .flat_map(|topics| topics.values())
+        .map(Vec::len)
+        .sum()
+}
+
+fn owned_partitions_from_assignments(
+    assignments: &[ConsumerAssignment],
+) -> Vec<ConsumerProtocolTopicAssignment> {
+    let mut owned = BTreeMap::<String, Vec<i32>>::new();
+    for assignment in assignments {
+        owned
+            .entry(assignment.topic().to_owned())
+            .or_default()
+            .push(assignment.partition());
+    }
+    owned
+        .into_iter()
+        .map(|(topic, mut partitions)| {
+            partitions.sort_unstable();
+            ConsumerProtocolTopicAssignment { topic, partitions }
+        })
+        .collect()
+}
+
+fn owned_partitions_require_rejoin(
+    owned_partitions: &[ConsumerProtocolTopicAssignment],
+    assignment: &ConsumerProtocolAssignmentV0,
+) -> bool {
+    owned_partitions.iter().any(|owned| {
+        owned.partitions.iter().any(|partition| {
+            !assignment.assignments.iter().any(|assigned| {
+                assigned.topic == owned.topic && assigned.partitions.contains(partition)
+            })
+        })
+    })
+}
+
 fn encode_member_assignments(
     assigned_by_member: BTreeMap<String, BTreeMap<String, Vec<i32>>>,
 ) -> Result<Vec<SyncGroupAssignment>> {
@@ -1208,7 +1489,10 @@ fn encode_member_assignments(
         .map(|(member_id, topics)| {
             let assignments = topics
                 .into_iter()
-                .map(|(topic, partitions)| ConsumerProtocolTopicAssignment { topic, partitions })
+                .map(|(topic, mut partitions)| {
+                    partitions.sort_unstable();
+                    ConsumerProtocolTopicAssignment { topic, partitions }
+                })
                 .collect();
             Ok(SyncGroupAssignment {
                 member_id,
@@ -1707,12 +1991,13 @@ mod tests {
     use std::collections::BTreeMap;
 
     use super::{
-        assignments_for_strategy, committed_offset, leave_group_response_error, list_offset,
-        list_offsets_topics, offset_commit_response_error, offset_commit_topics,
-        offset_commit_topics_v7, offset_fetch_topics, range_assignments, round_robin_assignments,
-        should_rejoin_after_background_heartbeat, should_rejoin_group, validate_heartbeat_interval,
-        ConsumerGroupAssignmentStrategy, ConsumerGroupConfig, ConsumerGroupHeartbeat,
-        HeartbeatHandleState, IsolationLevel, OffsetResetPolicy, SecurityProtocol,
+        assignments_for_strategy, committed_offset, cooperative_sticky_assignments,
+        leave_group_response_error, list_offset, list_offsets_topics, offset_commit_response_error,
+        offset_commit_topics, offset_commit_topics_v7, offset_fetch_topics, range_assignments,
+        round_robin_assignments, should_rejoin_after_background_heartbeat, should_rejoin_group,
+        validate_heartbeat_interval, ConsumerGroupAssignmentStrategy, ConsumerGroupConfig,
+        ConsumerGroupHeartbeat, HeartbeatHandleState, IsolationLevel, OffsetResetPolicy,
+        SecurityProtocol,
     };
     use crate::consumer::ConsumerAssignment;
     use crate::Error;
@@ -1731,7 +2016,7 @@ mod tests {
     };
     use kafrust_protocol::consumer_group::{
         ConsumerProtocolAssignmentV0, ConsumerProtocolSubscriptionV0,
-        ConsumerProtocolTopicAssignment,
+        ConsumerProtocolSubscriptionV1, ConsumerProtocolTopicAssignment,
     };
 
     #[test]
@@ -1905,6 +2190,56 @@ mod tests {
         assert_eq!(member_a.assignments[1].partitions, vec![1]);
         assert_eq!(member_b.assignments[0].partitions, vec![1]);
         assert_eq!(member_b.assignments[1].partitions, vec![0]);
+    }
+
+    #[test]
+    fn assigns_cooperatively_and_preserves_existing_ownership() {
+        let members = vec![
+            cooperative_member(
+                "member-a",
+                &["orders"],
+                vec![ConsumerProtocolTopicAssignment {
+                    topic: "orders".to_owned(),
+                    partitions: vec![0, 1],
+                }],
+            ),
+            cooperative_member(
+                "member-b",
+                &["orders"],
+                vec![ConsumerProtocolTopicAssignment {
+                    topic: "orders".to_owned(),
+                    partitions: vec![2],
+                }],
+            ),
+            cooperative_member("member-c", &["orders"], Vec::new()),
+        ];
+        let metadata = metadata_fixture("orders", &[0, 1, 2]);
+
+        let assignments = cooperative_sticky_assignments(&members, &metadata).unwrap();
+
+        let member_a = decode_assignment(&assignments[0].assignment);
+        let member_b = decode_assignment(&assignments[1].assignment);
+        let member_c = decode_assignment(&assignments[2].assignment);
+        assert_eq!(assignments[0].member_id, "member-a");
+        assert_eq!(member_a.assignments[0].partitions, vec![1]);
+        assert_eq!(member_b.assignments[0].partitions, vec![2]);
+        assert!(member_c.assignments.is_empty());
+    }
+
+    #[test]
+    fn assigns_cooperative_new_members_without_immediate_partition_transfer() {
+        let members = vec![
+            cooperative_member("member-a", &["orders"], Vec::new()),
+            cooperative_member("member-b", &["orders"], Vec::new()),
+        ];
+        let metadata = metadata_fixture("orders", &[0, 1, 2, 3]);
+
+        let assignments = cooperative_sticky_assignments(&members, &metadata).unwrap();
+
+        let member_a = decode_assignment(&assignments[0].assignment);
+        let member_b = decode_assignment(&assignments[1].assignment);
+        assert_eq!(member_a.assignments[0].partitions, vec![0, 2]);
+        assert_eq!(member_b.assignments[0].partitions, vec![1, 3]);
     }
 
     #[test]
@@ -2348,6 +2683,23 @@ mod tests {
             metadata: ConsumerProtocolSubscriptionV0 {
                 topics: topics.iter().map(|topic| (*topic).to_owned()).collect(),
                 user_data: None,
+            }
+            .encode()
+            .unwrap(),
+        }
+    }
+
+    fn cooperative_member(
+        member_id: &str,
+        topics: &[&str],
+        owned_partitions: Vec<ConsumerProtocolTopicAssignment>,
+    ) -> JoinGroupMember {
+        JoinGroupMember {
+            member_id: member_id.to_owned(),
+            metadata: ConsumerProtocolSubscriptionV1 {
+                topics: topics.iter().map(|topic| (*topic).to_owned()).collect(),
+                user_data: None,
+                owned_partitions,
             }
             .encode()
             .unwrap(),

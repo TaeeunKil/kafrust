@@ -7,6 +7,53 @@ pub struct ConsumerProtocolSubscriptionV0 {
     pub user_data: Option<Vec<u8>>,
 }
 
+/// Consumer protocol subscription version 1 with previously owned partitions.
+///
+/// Kafka added `OwnedPartitions` in version 1 so cooperative assignors can
+/// stage ownership transfers across rebalances.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConsumerProtocolSubscriptionV1 {
+    pub topics: Vec<String>,
+    pub user_data: Option<Vec<u8>>,
+    pub owned_partitions: Vec<ConsumerProtocolTopicAssignment>,
+}
+
+impl ConsumerProtocolSubscriptionV1 {
+    pub fn encode(&self) -> Result<Vec<u8>> {
+        let mut encoder = Encoder::new();
+        encoder.write_i16(1);
+        encoder.write_array(Some(self.topics.as_slice()), |encoder, topic| {
+            encoder.write_string(topic)
+        })?;
+        encoder.write_nullable_bytes(self.user_data.as_deref())?;
+        encoder.write_array(
+            Some(self.owned_partitions.as_slice()),
+            |encoder, assignment| assignment.encode(encoder),
+        )?;
+        Ok(encoder.into_bytes())
+    }
+
+    pub fn decode(bytes: &[u8]) -> Result<Self> {
+        let mut decoder = Decoder::new(bytes);
+        expect_version("consumer protocol subscription", decoder.read_i16()?, 1)?;
+        Ok(Self {
+            topics: decoder
+                .read_array(
+                    "consumer protocol subscription topics",
+                    Decoder::read_string,
+                )?
+                .unwrap_or_default(),
+            user_data: decoder.read_nullable_bytes()?,
+            owned_partitions: decoder
+                .read_array(
+                    "consumer protocol subscription owned partitions",
+                    ConsumerProtocolTopicAssignment::decode,
+                )?
+                .unwrap_or_default(),
+        })
+    }
+}
+
 impl ConsumerProtocolSubscriptionV0 {
     pub fn encode(&self) -> Result<Vec<u8>> {
         let mut encoder = Encoder::new();
@@ -68,7 +115,11 @@ impl ConsumerProtocolAssignmentV0 {
 }
 
 fn expect_version_v0(kind: &'static str, version: i16) -> Result<()> {
-    if version == 0 {
+    expect_version(kind, version, 0)
+}
+
+fn expect_version(kind: &'static str, version: i16, expected: i16) -> Result<()> {
+    if version == expected {
         return Ok(());
     }
 
@@ -107,7 +158,7 @@ impl ConsumerProtocolTopicAssignment {
 mod tests {
     use super::{
         ConsumerProtocolAssignmentV0, ConsumerProtocolSubscriptionV0,
-        ConsumerProtocolTopicAssignment,
+        ConsumerProtocolSubscriptionV1, ConsumerProtocolTopicAssignment,
     };
 
     #[test]
@@ -160,6 +211,23 @@ mod tests {
                 version: 1,
             }
         );
+    }
+
+    #[test]
+    fn encodes_and_decodes_consumer_protocol_subscription_v1_with_owned_partitions() {
+        let subscription = ConsumerProtocolSubscriptionV1 {
+            topics: vec!["orders".to_owned()],
+            user_data: Some(vec![9]),
+            owned_partitions: vec![ConsumerProtocolTopicAssignment {
+                topic: "orders".to_owned(),
+                partitions: vec![1, 3],
+            }],
+        };
+
+        let encoded = subscription.encode().unwrap();
+        let decoded = ConsumerProtocolSubscriptionV1::decode(&encoded).unwrap();
+
+        assert_eq!(decoded, subscription);
     }
 
     #[test]
