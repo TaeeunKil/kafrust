@@ -42,13 +42,17 @@ async fn main() -> kafrust::Result<()> {
         ClientQuotaMatchType::Exact,
         Some(user.clone()),
     ));
-    let described = admin.describe_client_quotas(&filter).await?;
-    let value = described
-        .entries()
-        .iter()
-        .flat_map(|entry| entry.values())
-        .find(|value| value.key() == quota_key)
-        .map(|value| value.value());
+    let mut described = admin.describe_client_quotas(&filter).await?;
+    let mut value = quota_value_from_result(&described, quota_key);
+    // KRaft applies controller metadata asynchronously to the broker serving describe.
+    for attempt in 0..50 {
+        if !described.is_success() || value == Some(quota_value) || attempt == 49 {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        described = admin.describe_client_quotas(&filter).await?;
+        value = quota_value_from_result(&described, quota_key);
+    }
     if !described.is_success() || value != Some(quota_value) {
         let all_quotas = admin
             .describe_client_quotas(&ClientQuotaFilter::any())
@@ -83,4 +87,16 @@ async fn main() -> kafrust::Result<()> {
     println!("removed {quota_key} for user {user}");
 
     Ok(())
+}
+
+fn quota_value_from_result(
+    result: &kafrust::DescribeClientQuotasResult,
+    quota_key: &str,
+) -> Option<f64> {
+    result
+        .entries()
+        .iter()
+        .flat_map(|entry| entry.values())
+        .find(|value| value.key() == quota_key)
+        .map(|value| value.value())
 }
