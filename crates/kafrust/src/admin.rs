@@ -1,14 +1,19 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
+use kafrust_protocol::api::create_acls::CreateAclsCreationV1;
 use kafrust_protocol::api::create_partitions::{
     CreatePartitionsAssignmentV0, CreatePartitionsTopicResultV0, CreatePartitionsTopicV0,
 };
 use kafrust_protocol::api::create_topics::{
     CreateTopicsAssignmentV2, CreateTopicsConfigV2, CreateTopicsTopicResultV2, CreateTopicsTopicV2,
 };
+use kafrust_protocol::api::delete_acls::{
+    DeleteAclsFilterResultV1, DeleteAclsFilterV1, DeleteAclsMatchingAclV1,
+};
 use kafrust_protocol::api::delete_groups::DeleteGroupResultV1;
 use kafrust_protocol::api::delete_topics::DeleteTopicsTopicResultV3;
+use kafrust_protocol::api::describe_acls::{DescribeAclsEntryV1, DescribeAclsResponseV1};
 use kafrust_protocol::api::describe_configs::{
     DescribeConfigsEntryV1, DescribeConfigsResourceV1, DescribeConfigsResultV1,
     DescribeConfigsSynonymV1,
@@ -91,6 +96,101 @@ impl AdminClient {
             .into_iter()
             .map(TopicListing::from_protocol)
             .collect())
+    }
+
+    /// Lists ACL bindings matching a Kafka ACL filter using DescribeAcls v1.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.describe_acls",
+        skip_all,
+        fields(resource_type = ?filter.resource_type, pattern_type = ?filter.pattern_type),
+        err
+    )]
+    pub async fn describe_acls(&self, filter: &AclFilter) -> Result<DescribeAclsResult> {
+        let mut client = self.config.clone().connect().await?;
+        let response = client
+            .describe_acls_v1(
+                filter.resource_type.code(),
+                filter.resource_name.clone(),
+                filter.pattern_type.code(),
+                filter.principal.clone(),
+                filter.host.clone(),
+                filter.operation.code(),
+                filter.permission_type.code(),
+            )
+            .await?;
+        if response.error_code != 0 {
+            self.config.record_broker_error();
+        }
+
+        Ok(DescribeAclsResult::from_protocol(response))
+    }
+
+    /// Creates ACL bindings using CreateAcls v1.
+    ///
+    /// Kafka applies each creation independently. The returned results retain
+    /// the input binding alongside its per-entry broker outcome.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.create_acls",
+        skip_all,
+        fields(acl_count = bindings.len()),
+        err
+    )]
+    pub async fn create_acls(&self, bindings: &[AclBinding]) -> Result<CreateAclsResult> {
+        let mut client = self.config.clone().connect().await?;
+        let response = client
+            .create_acls_v1(bindings.iter().map(AclBinding::as_protocol).collect())
+            .await?;
+        for result in &response.results {
+            if result.error_code != 0 {
+                self.config.record_broker_error();
+            }
+        }
+
+        if response.results.len() != bindings.len() {
+            return Err(Error::ResponseCountMismatch {
+                operation: "CreateAcls",
+                expected: bindings.len(),
+                actual: response.results.len(),
+            });
+        }
+
+        Ok(CreateAclsResult::from_protocol(response, bindings))
+    }
+
+    /// Deletes ACL bindings matching each filter using DeleteAcls v1.
+    ///
+    /// Each filter has an independent result and includes the bindings Kafka
+    /// matched and removed. A filter is not transactional with other filters.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.delete_acls",
+        skip_all,
+        fields(filter_count = filters.len()),
+        err
+    )]
+    pub async fn delete_acls(&self, filters: &[AclFilter]) -> Result<DeleteAclsResult> {
+        let mut client = self.config.clone().connect().await?;
+        let response = client
+            .delete_acls_v1(filters.iter().map(AclFilter::as_protocol).collect())
+            .await?;
+        for result in &response.filter_results {
+            if result.error_code != 0 || result.matching_acls.iter().any(|acl| acl.error_code != 0)
+            {
+                self.config.record_broker_error();
+            }
+        }
+
+        if response.filter_results.len() != filters.len() {
+            return Err(Error::ResponseCountMismatch {
+                operation: "DeleteAcls",
+                expected: filters.len(),
+                actual: response.filter_results.len(),
+            });
+        }
+
+        Ok(DeleteAclsResult::from_protocol(response, filters))
     }
 
     /// Describes configurations for Kafka topics using DescribeConfigs v1.
@@ -494,6 +594,702 @@ impl AdminClient {
                 .map(DeleteTopicResult::from_protocol)
                 .collect(),
         })
+    }
+}
+
+/// Kafka ACL resource type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AclResourceType {
+    /// Unknown resource type.
+    Unknown,
+    /// Match any resource type in a filter.
+    Any,
+    /// Topic resource.
+    Topic,
+    /// Consumer group resource.
+    Group,
+    /// Cluster resource.
+    Cluster,
+    /// Transactional ID resource.
+    TransactionalId,
+    /// Delegation token resource.
+    DelegationToken,
+    /// User resource.
+    User,
+    /// Resource type code introduced by a newer broker.
+    Other(i8),
+}
+
+impl AclResourceType {
+    fn code(self) -> i8 {
+        match self {
+            Self::Unknown => 0,
+            Self::Any => 1,
+            Self::Topic => 2,
+            Self::Group => 3,
+            Self::Cluster => 4,
+            Self::TransactionalId => 5,
+            Self::DelegationToken => 6,
+            Self::User => 7,
+            Self::Other(code) => code,
+        }
+    }
+
+    fn from_code(code: i8) -> Self {
+        match code {
+            0 => Self::Unknown,
+            1 => Self::Any,
+            2 => Self::Topic,
+            3 => Self::Group,
+            4 => Self::Cluster,
+            5 => Self::TransactionalId,
+            6 => Self::DelegationToken,
+            7 => Self::User,
+            code => Self::Other(code),
+        }
+    }
+}
+
+/// Kafka ACL resource pattern type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AclPatternType {
+    /// Unknown pattern type.
+    Unknown,
+    /// Match any pattern type in a filter.
+    Any,
+    /// Match literal resource names.
+    Literal,
+    /// Match resource-name prefixes.
+    Prefixed,
+    /// Match literal or prefixed patterns in a filter.
+    Match,
+    /// Pattern type code introduced by a newer broker.
+    Other(i8),
+}
+
+impl AclPatternType {
+    fn code(self) -> i8 {
+        match self {
+            Self::Unknown => 0,
+            Self::Any => 1,
+            Self::Match => 2,
+            Self::Literal => 3,
+            Self::Prefixed => 4,
+            Self::Other(code) => code,
+        }
+    }
+
+    fn from_code(code: i8) -> Self {
+        match code {
+            0 => Self::Unknown,
+            1 => Self::Any,
+            2 => Self::Match,
+            3 => Self::Literal,
+            4 => Self::Prefixed,
+            code => Self::Other(code),
+        }
+    }
+}
+
+/// Kafka ACL operation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AclOperation {
+    /// Unknown operation.
+    Unknown,
+    /// Match any operation in a filter.
+    Any,
+    /// All operations.
+    All,
+    /// Read operation.
+    Read,
+    /// Write operation.
+    Write,
+    /// Create operation.
+    Create,
+    /// Delete operation.
+    Delete,
+    /// Alter operation.
+    Alter,
+    /// Describe operation.
+    Describe,
+    /// Cluster action operation.
+    ClusterAction,
+    /// Describe-configs operation.
+    DescribeConfigs,
+    /// Alter-configs operation.
+    AlterConfigs,
+    /// Idempotent-write operation.
+    IdempotentWrite,
+    /// Operation code introduced by a newer broker.
+    Other(i8),
+}
+
+impl AclOperation {
+    fn code(self) -> i8 {
+        match self {
+            Self::Unknown => 0,
+            Self::Any => 1,
+            Self::All => 2,
+            Self::Read => 3,
+            Self::Write => 4,
+            Self::Create => 5,
+            Self::Delete => 6,
+            Self::Alter => 7,
+            Self::Describe => 8,
+            Self::ClusterAction => 9,
+            Self::DescribeConfigs => 10,
+            Self::AlterConfigs => 11,
+            Self::IdempotentWrite => 12,
+            Self::Other(code) => code,
+        }
+    }
+
+    fn from_code(code: i8) -> Self {
+        match code {
+            0 => Self::Unknown,
+            1 => Self::Any,
+            2 => Self::All,
+            3 => Self::Read,
+            4 => Self::Write,
+            5 => Self::Create,
+            6 => Self::Delete,
+            7 => Self::Alter,
+            8 => Self::Describe,
+            9 => Self::ClusterAction,
+            10 => Self::DescribeConfigs,
+            11 => Self::AlterConfigs,
+            12 => Self::IdempotentWrite,
+            code => Self::Other(code),
+        }
+    }
+}
+
+/// Kafka ACL permission type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AclPermissionType {
+    /// Unknown permission type.
+    Unknown,
+    /// Match any permission type in a filter.
+    Any,
+    /// Deny the operation.
+    Deny,
+    /// Allow the operation.
+    Allow,
+    /// Permission code introduced by a newer broker.
+    Other(i8),
+}
+
+impl AclPermissionType {
+    fn code(self) -> i8 {
+        match self {
+            Self::Unknown => 0,
+            Self::Any => 1,
+            Self::Deny => 2,
+            Self::Allow => 3,
+            Self::Other(code) => code,
+        }
+    }
+
+    fn from_code(code: i8) -> Self {
+        match code {
+            0 => Self::Unknown,
+            1 => Self::Any,
+            2 => Self::Deny,
+            3 => Self::Allow,
+            code => Self::Other(code),
+        }
+    }
+}
+
+/// One concrete Kafka ACL binding.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AclBinding {
+    resource_type: AclResourceType,
+    resource_name: String,
+    pattern_type: AclPatternType,
+    principal: String,
+    host: String,
+    operation: AclOperation,
+    permission_type: AclPermissionType,
+}
+
+impl AclBinding {
+    /// Creates an ACL binding for one Kafka resource and principal.
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        resource_type: AclResourceType,
+        resource_name: impl Into<String>,
+        pattern_type: AclPatternType,
+        principal: impl Into<String>,
+        host: impl Into<String>,
+        operation: AclOperation,
+        permission_type: AclPermissionType,
+    ) -> Self {
+        Self {
+            resource_type,
+            resource_name: resource_name.into(),
+            pattern_type,
+            principal: principal.into(),
+            host: host.into(),
+            operation,
+            permission_type,
+        }
+    }
+
+    /// Returns the ACL resource type.
+    pub fn resource_type(&self) -> AclResourceType {
+        self.resource_type
+    }
+
+    /// Returns the resource name.
+    pub fn resource_name(&self) -> &str {
+        &self.resource_name
+    }
+
+    /// Returns the resource pattern type.
+    pub fn pattern_type(&self) -> AclPatternType {
+        self.pattern_type
+    }
+
+    /// Returns the principal expression.
+    pub fn principal(&self) -> &str {
+        &self.principal
+    }
+
+    /// Returns the host expression.
+    pub fn host(&self) -> &str {
+        &self.host
+    }
+
+    /// Returns the allowed or denied operation.
+    pub fn operation(&self) -> AclOperation {
+        self.operation
+    }
+
+    /// Returns whether this binding allows or denies the operation.
+    pub fn permission_type(&self) -> AclPermissionType {
+        self.permission_type
+    }
+
+    fn as_protocol(&self) -> CreateAclsCreationV1 {
+        CreateAclsCreationV1 {
+            resource_type: self.resource_type.code(),
+            resource_name: self.resource_name.clone(),
+            resource_pattern_type: self.pattern_type.code(),
+            principal: self.principal.clone(),
+            host: self.host.clone(),
+            operation: self.operation.code(),
+            permission_type: self.permission_type.code(),
+        }
+    }
+
+    fn from_protocol(
+        resource_type: i8,
+        resource_name: String,
+        pattern_type: i8,
+        acl: DescribeAclsEntryV1,
+    ) -> Self {
+        Self::new(
+            AclResourceType::from_code(resource_type),
+            resource_name,
+            AclPatternType::from_code(pattern_type),
+            acl.principal,
+            acl.host,
+            AclOperation::from_code(acl.operation),
+            AclPermissionType::from_code(acl.permission_type),
+        )
+    }
+}
+
+/// Filter used by Kafka ACL describe and delete operations.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AclFilter {
+    resource_type: AclResourceType,
+    resource_name: Option<String>,
+    pattern_type: AclPatternType,
+    principal: Option<String>,
+    host: Option<String>,
+    operation: AclOperation,
+    permission_type: AclPermissionType,
+}
+
+impl Default for AclFilter {
+    fn default() -> Self {
+        Self {
+            resource_type: AclResourceType::Any,
+            resource_name: None,
+            pattern_type: AclPatternType::Any,
+            principal: None,
+            host: None,
+            operation: AclOperation::Any,
+            permission_type: AclPermissionType::Any,
+        }
+    }
+}
+
+impl AclFilter {
+    /// Creates a filter that matches every ACL.
+    pub fn any() -> Self {
+        Self::default()
+    }
+
+    /// Sets the resource type to match.
+    pub fn resource_type(mut self, resource_type: AclResourceType) -> Self {
+        self.resource_type = resource_type;
+        self
+    }
+
+    /// Sets an optional exact resource name to match.
+    pub fn resource_name(mut self, resource_name: impl Into<String>) -> Self {
+        self.resource_name = Some(resource_name.into());
+        self
+    }
+
+    /// Sets the resource pattern type to match.
+    pub fn pattern_type(mut self, pattern_type: AclPatternType) -> Self {
+        self.pattern_type = pattern_type;
+        self
+    }
+
+    /// Sets an optional principal to match.
+    pub fn principal(mut self, principal: impl Into<String>) -> Self {
+        self.principal = Some(principal.into());
+        self
+    }
+
+    /// Sets an optional host to match.
+    pub fn host(mut self, host: impl Into<String>) -> Self {
+        self.host = Some(host.into());
+        self
+    }
+
+    /// Sets the operation to match.
+    pub fn operation(mut self, operation: AclOperation) -> Self {
+        self.operation = operation;
+        self
+    }
+
+    /// Sets the permission type to match.
+    pub fn permission_type(mut self, permission_type: AclPermissionType) -> Self {
+        self.permission_type = permission_type;
+        self
+    }
+
+    fn as_protocol(&self) -> DeleteAclsFilterV1 {
+        DeleteAclsFilterV1 {
+            resource_type_filter: self.resource_type.code(),
+            resource_name_filter: self.resource_name.clone(),
+            pattern_type_filter: self.pattern_type.code(),
+            principal_filter: self.principal.clone(),
+            host_filter: self.host.clone(),
+            operation: self.operation.code(),
+            permission_type: self.permission_type.code(),
+        }
+    }
+}
+
+/// Result returned by [`AdminClient::describe_acls`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DescribeAclsResult {
+    throttle_time: Duration,
+    error_code: i16,
+    error_message: Option<String>,
+    bindings: Vec<AclBinding>,
+}
+
+impl DescribeAclsResult {
+    /// Returns the broker throttle duration.
+    pub fn throttle_time(&self) -> Duration {
+        self.throttle_time
+    }
+
+    /// Returns the top-level Kafka error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns the top-level Kafka error message, when present.
+    pub fn error_message(&self) -> Option<&str> {
+        self.error_message.as_deref()
+    }
+
+    /// Returns the broker error classification when the request failed.
+    pub fn broker_error_kind(&self) -> Option<BrokerErrorKind> {
+        (self.error_code != 0).then(|| BrokerErrorKind::from_code(self.error_code))
+    }
+
+    /// Returns whether the broker accepted the request.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+    }
+
+    /// Returns the ACL bindings returned by Kafka.
+    pub fn bindings(&self) -> &[AclBinding] {
+        &self.bindings
+    }
+}
+
+impl DescribeAclsResult {
+    fn from_protocol(response: DescribeAclsResponseV1) -> Self {
+        let bindings = response
+            .resources
+            .into_iter()
+            .flat_map(|resource| {
+                resource.acls.into_iter().map(move |acl| {
+                    AclBinding::from_protocol(
+                        resource.resource_type,
+                        resource.resource_name.clone(),
+                        resource.pattern_type,
+                        acl,
+                    )
+                })
+            })
+            .collect();
+        Self {
+            throttle_time: Duration::from_millis(nonnegative_i32_to_u64(response.throttle_time_ms)),
+            error_code: response.error_code,
+            error_message: response.error_message,
+            bindings,
+        }
+    }
+}
+
+/// Per-binding result returned by [`AdminClient::create_acls`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CreateAclsEntryResult {
+    binding: AclBinding,
+    error_code: i16,
+    error_message: Option<String>,
+}
+
+impl CreateAclsEntryResult {
+    /// Returns the ACL binding submitted for this result.
+    pub fn binding(&self) -> &AclBinding {
+        &self.binding
+    }
+
+    /// Returns the Kafka result error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns the Kafka result error message, when present.
+    pub fn error_message(&self) -> Option<&str> {
+        self.error_message.as_deref()
+    }
+
+    /// Returns whether Kafka created this ACL successfully.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+    }
+
+    /// Returns the broker error classification when this creation failed.
+    pub fn broker_error_kind(&self) -> Option<BrokerErrorKind> {
+        (self.error_code != 0).then(|| BrokerErrorKind::from_code(self.error_code))
+    }
+}
+
+/// Result returned by [`AdminClient::create_acls`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CreateAclsResult {
+    throttle_time: Duration,
+    results: Vec<CreateAclsEntryResult>,
+}
+
+impl CreateAclsResult {
+    /// Returns the broker throttle duration.
+    pub fn throttle_time(&self) -> Duration {
+        self.throttle_time
+    }
+
+    /// Returns the per-binding creation results.
+    pub fn results(&self) -> &[CreateAclsEntryResult] {
+        &self.results
+    }
+
+    /// Returns whether every ACL creation succeeded.
+    pub fn is_success(&self) -> bool {
+        self.results.iter().all(CreateAclsEntryResult::is_success)
+    }
+
+    /// Returns whether any ACL creation failed.
+    pub fn has_errors(&self) -> bool {
+        !self.is_success()
+    }
+}
+
+impl CreateAclsResult {
+    fn from_protocol(
+        response: kafrust_protocol::api::create_acls::CreateAclsResponseV1,
+        bindings: &[AclBinding],
+    ) -> Self {
+        Self {
+            throttle_time: Duration::from_millis(nonnegative_i32_to_u64(response.throttle_time_ms)),
+            results: response
+                .results
+                .into_iter()
+                .zip(bindings.iter().cloned())
+                .map(|(result, binding)| CreateAclsEntryResult {
+                    binding,
+                    error_code: result.error_code,
+                    error_message: result.error_message,
+                })
+                .collect(),
+        }
+    }
+}
+
+/// Per-filter result returned by [`AdminClient::delete_acls`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeleteAclsFilterResult {
+    filter: AclFilter,
+    error_code: i16,
+    error_message: Option<String>,
+    matching_acls: Vec<DeletedAclResult>,
+}
+
+impl DeleteAclsFilterResult {
+    /// Returns the filter submitted for this result.
+    pub fn filter(&self) -> &AclFilter {
+        &self.filter
+    }
+
+    /// Returns the Kafka filter error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns the Kafka filter error message, when present.
+    pub fn error_message(&self) -> Option<&str> {
+        self.error_message.as_deref()
+    }
+
+    /// Returns the ACLs matched by this filter.
+    pub fn matching_acls(&self) -> &[DeletedAclResult] {
+        &self.matching_acls
+    }
+
+    /// Returns whether the filter or one of its matching ACL deletions failed.
+    pub fn has_errors(&self) -> bool {
+        self.error_code != 0 || self.matching_acls.iter().any(|acl| !acl.is_success())
+    }
+}
+
+/// Per-ACL deletion result nested under a delete filter result.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeletedAclResult {
+    binding: AclBinding,
+    error_code: i16,
+    error_message: Option<String>,
+}
+
+impl DeletedAclResult {
+    /// Returns the ACL Kafka matched.
+    pub fn binding(&self) -> &AclBinding {
+        &self.binding
+    }
+
+    /// Returns the Kafka deletion error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns the Kafka deletion error message, when present.
+    pub fn error_message(&self) -> Option<&str> {
+        self.error_message.as_deref()
+    }
+
+    /// Returns whether Kafka deleted this ACL successfully.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+    }
+}
+
+/// Result returned by [`AdminClient::delete_acls`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeleteAclsResult {
+    throttle_time: Duration,
+    filter_results: Vec<DeleteAclsFilterResult>,
+}
+
+impl DeleteAclsResult {
+    /// Returns the broker throttle duration.
+    pub fn throttle_time(&self) -> Duration {
+        self.throttle_time
+    }
+
+    /// Returns the per-filter deletion results.
+    pub fn filter_results(&self) -> &[DeleteAclsFilterResult] {
+        &self.filter_results
+    }
+
+    /// Returns whether every filter and matching ACL deletion succeeded.
+    pub fn is_success(&self) -> bool {
+        self.filter_results
+            .iter()
+            .all(|result| !result.has_errors())
+    }
+
+    /// Returns whether any filter or matching ACL deletion failed.
+    pub fn has_errors(&self) -> bool {
+        !self.is_success()
+    }
+}
+
+impl DeleteAclsResult {
+    fn from_protocol(
+        response: kafrust_protocol::api::delete_acls::DeleteAclsResponseV1,
+        filters: &[AclFilter],
+    ) -> Self {
+        Self {
+            throttle_time: Duration::from_millis(nonnegative_i32_to_u64(response.throttle_time_ms)),
+            filter_results: response
+                .filter_results
+                .into_iter()
+                .zip(filters.iter().cloned())
+                .map(|(result, filter)| DeleteAclsFilterResult::from_protocol(result, filter))
+                .collect(),
+        }
+    }
+}
+
+impl DeleteAclsFilterResult {
+    fn from_protocol(result: DeleteAclsFilterResultV1, filter: AclFilter) -> Self {
+        Self {
+            filter,
+            error_code: result.error_code,
+            error_message: result.error_message,
+            matching_acls: result
+                .matching_acls
+                .into_iter()
+                .map(|acl| {
+                    let DeleteAclsMatchingAclV1 {
+                        error_code,
+                        error_message,
+                        resource_type,
+                        resource_name,
+                        pattern_type,
+                        principal,
+                        host,
+                        operation,
+                        permission_type,
+                    } = acl;
+                    DeletedAclResult {
+                        binding: AclBinding::new(
+                            AclResourceType::from_code(resource_type),
+                            resource_name,
+                            AclPatternType::from_code(pattern_type),
+                            principal,
+                            host,
+                            AclOperation::from_code(operation),
+                            AclPermissionType::from_code(permission_type),
+                        ),
+                        error_code,
+                        error_message,
+                    }
+                })
+                .collect(),
+        }
     }
 }
 
@@ -2061,10 +2857,10 @@ fn nonnegative_i32_to_u64(value: i32) -> u64 {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::{
-        AdminClient, AlterConfigsOptions, ConfigAlterOperationKind, ConfigSource,
-        ConsumerGroupOffsetDelete, CreatePartitionsOptions, CreateTopicsOptions,
-        DeleteTopicsOptions, DescribeConfigsOptions, NewPartitions, NewTopic,
-        TopicConfigAlteration, TopicConfigResource,
+        AclFilter, AclOperation, AclPatternType, AclPermissionType, AclResourceType, AdminClient,
+        AlterConfigsOptions, ConfigAlterOperationKind, ConfigSource, ConsumerGroupOffsetDelete,
+        CreatePartitionsOptions, CreateTopicsOptions, DeleteTopicsOptions, DescribeConfigsOptions,
+        NewPartitions, NewTopic, TopicConfigAlteration, TopicConfigResource,
     };
     use crate::{BrokerErrorKind, ClientConfig, ClientMetrics};
     use std::time::Duration;
@@ -2240,6 +3036,104 @@ mod tests {
             Some(BrokerErrorKind::UnknownTopicOrPartition)
         );
         assert_eq!(metrics.snapshot().broker_errors, 1);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn describes_acls_and_maps_typed_bindings() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut connection, _) = listener.accept().await.unwrap();
+            let request = read_frame(&mut connection).await;
+            assert_eq!(&request[0..4], &[0, 29, 0, 1]);
+            write_frame(&mut connection, &describe_acls_response()).await;
+        });
+        let admin = AdminClient::new(ClientConfig::new([addr.to_string()]));
+
+        let result = admin
+            .describe_acls(
+                &AclFilter::any()
+                    .resource_type(AclResourceType::Topic)
+                    .resource_name("orders")
+                    .pattern_type(AclPatternType::Literal)
+                    .principal("User:alice")
+                    .host("*")
+                    .operation(AclOperation::Read)
+                    .permission_type(AclPermissionType::Allow),
+            )
+            .await
+            .unwrap();
+
+        assert!(result.is_success());
+        assert_eq!(result.bindings().len(), 1);
+        let binding = &result.bindings()[0];
+        assert_eq!(binding.resource_type(), AclResourceType::Topic);
+        assert_eq!(binding.resource_name(), "orders");
+        assert_eq!(binding.pattern_type(), AclPatternType::Literal);
+        assert_eq!(binding.principal(), "User:alice");
+        assert_eq!(binding.operation(), AclOperation::Read);
+        assert_eq!(binding.permission_type(), AclPermissionType::Allow);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn creates_and_deletes_acls_with_partial_results() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut create_connection, _) = listener.accept().await.unwrap();
+            let create_request = read_frame(&mut create_connection).await;
+            assert_eq!(&create_request[0..4], &[0, 30, 0, 1]);
+            write_frame(&mut create_connection, &create_acls_response()).await;
+
+            let (mut delete_connection, _) = listener.accept().await.unwrap();
+            let delete_request = read_frame(&mut delete_connection).await;
+            assert_eq!(&delete_request[0..4], &[0, 31, 0, 1]);
+            write_frame(&mut delete_connection, &delete_acls_response()).await;
+        });
+        let admin = AdminClient::new(ClientConfig::new([addr.to_string()]));
+        let bindings = vec![
+            super::AclBinding::new(
+                AclResourceType::Topic,
+                "orders",
+                AclPatternType::Literal,
+                "User:alice",
+                "*",
+                AclOperation::Read,
+                AclPermissionType::Allow,
+            ),
+            super::AclBinding::new(
+                AclResourceType::Topic,
+                "payments",
+                AclPatternType::Literal,
+                "User:bob",
+                "10.0.0.1",
+                AclOperation::Write,
+                AclPermissionType::Deny,
+            ),
+        ];
+
+        let created = admin.create_acls(&bindings).await.unwrap();
+        assert!(created.has_errors());
+        assert_eq!(created.results().len(), 2);
+        assert!(created.results()[0].is_success());
+        assert_eq!(created.results()[1].error_code(), 29);
+        assert_eq!(created.results()[1].binding().resource_name(), "payments");
+
+        let deleted = admin
+            .delete_acls(&[AclFilter::any().resource_type(AclResourceType::Topic)])
+            .await
+            .unwrap();
+        assert!(deleted.is_success());
+        assert_eq!(deleted.filter_results().len(), 1);
+        assert_eq!(deleted.filter_results()[0].matching_acls().len(), 1);
+        assert_eq!(
+            deleted.filter_results()[0].matching_acls()[0]
+                .binding()
+                .principal(),
+            "User:alice"
+        );
         server.await.unwrap();
     }
 
@@ -2784,6 +3678,56 @@ mod tests {
             2,    // topic resource
             0, 7, b'm', b'i', b's', b's', b'i', b'n', b'g', // resource name
             0, 0, 0, 0, // config count
+        ]
+    }
+
+    fn describe_acls_response() -> Vec<u8> {
+        vec![
+            0, 0, 0, 1, // correlation ID
+            0, 0, 0, 4, // throttle time
+            0, 0, // success
+            0xff, 0xff, // null error message
+            0, 0, 0, 1, // resource count
+            2, // topic resource
+            0, 6, b'o', b'r', b'd', b'e', b'r', b's', // resource name
+            3,    // literal pattern
+            0, 0, 0, 1, // ACL count
+            0, 10, b'U', b's', b'e', b'r', b':', b'a', b'l', b'i', b'c', b'e', // principal
+            0, 1, b'*', // host
+            3,    // read operation
+            3,    // allow permission
+        ]
+    }
+
+    fn create_acls_response() -> Vec<u8> {
+        vec![
+            0, 0, 0, 2, // correlation ID
+            0, 0, 0, 5, // throttle time
+            0, 0, 0, 2, // result count
+            0, 0, // success
+            0xff, 0xff, // null error message
+            0, 29, // cluster authorization failed
+            0, 7, b'd', b'e', b'n', b'i', b'e', b'd', b'!', // error message
+        ]
+    }
+
+    fn delete_acls_response() -> Vec<u8> {
+        vec![
+            0, 0, 0, 3, // correlation ID
+            0, 0, 0, 6, // throttle time
+            0, 0, 0, 1, // filter result count
+            0, 0, // filter success
+            0xff, 0xff, // null filter error message
+            0, 0, 0, 1, // matching ACL count
+            0, 0, // ACL deletion success
+            0xff, 0xff, // null ACL error message
+            2,    // topic resource
+            0, 6, b'o', b'r', b'd', b'e', b'r', b's', // resource name
+            3,    // literal pattern
+            0, 10, b'U', b's', b'e', b'r', b':', b'a', b'l', b'i', b'c', b'e', // principal
+            0, 1, b'*', // host
+            3,    // read operation
+            3,    // allow permission
         ]
     }
 

@@ -231,8 +231,12 @@ kafrust currently provides:
 - selected consumer group offset deletion
 - topic partition expansion with automatic or explicit replica assignment
 
-Migration blockers include rust-rdkafka admin operations with no current
-kafrust equivalent, including ACLs, quotas, replica reassignment, and SCRAM
+ACL describe, create, and delete operations now have typed kafrust equivalents
+through `AdminClient`. Their wire and mock-broker paths are verified, but a
+production migration still needs an authorizer-enabled broker qualification
+with the service principal's actual permissions.
+
+Remaining admin blockers include quotas, replica reassignment, and SCRAM
 credential administration.
 
 See [Admin API](admin-api.md) for typed request and response examples.
@@ -253,7 +257,8 @@ See [Admin API](admin-api.md) for typed request and response examples.
 | Custom partitioner or rebalance callback | Blocked |
 | Cooperative assignor or consumer group protocol selection | Blocked |
 | Full librdkafka config passthrough | Blocked by design |
-| Broad admin, ACL, quota, or credential management | Blocked |
+| ACL describe/create/delete with an authorizer-enabled broker | Candidate; qualify permissions and broker policy |
+| Quota, replica-reassignment, or SCRAM credential administration | Blocked |
 
 "Candidate" means the API exists and relevant project tests pass. It does not
 replace workload-specific qualification against the target brokers, security

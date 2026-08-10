@@ -5,14 +5,17 @@ use kafrust_protocol::api::add_partitions_to_txn::{
     AddPartitionsToTxnRequestV0, AddPartitionsToTxnResponseV0, AddPartitionsToTxnTopic,
 };
 use kafrust_protocol::api::api_versions::{ApiVersionsRequestV0, ApiVersionsResponseV0};
+use kafrust_protocol::api::create_acls::{CreateAclsRequestV1, CreateAclsResponseV1};
 use kafrust_protocol::api::create_partitions::{
     CreatePartitionsRequestV0, CreatePartitionsResponseV0, CreatePartitionsTopicV0,
 };
 use kafrust_protocol::api::create_topics::{
     CreateTopicsRequestV2, CreateTopicsResponseV2, CreateTopicsTopicV2,
 };
+use kafrust_protocol::api::delete_acls::{DeleteAclsRequestV1, DeleteAclsResponseV1};
 use kafrust_protocol::api::delete_groups::{DeleteGroupsRequestV1, DeleteGroupsResponseV1};
 use kafrust_protocol::api::delete_topics::{DeleteTopicsRequestV3, DeleteTopicsResponseV3};
+use kafrust_protocol::api::describe_acls::{DescribeAclsRequestV1, DescribeAclsResponseV1};
 use kafrust_protocol::api::describe_configs::{
     DescribeConfigsRequestV1, DescribeConfigsResourceV1, DescribeConfigsResponseV1,
 };
@@ -330,6 +333,69 @@ impl Client {
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(DescribeConfigsResponseV1::decode_body(&mut decoder)?)
+    }
+
+    /// Sends DescribeAcls v1 to the broker represented by this connection.
+    // Kafka defines seven independent ACL filter fields; keeping them explicit
+    // makes the low-level wire boundary auditable and mirrors the protocol.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn describe_acls_v1(
+        &mut self,
+        resource_type_filter: i8,
+        resource_name_filter: Option<String>,
+        pattern_type_filter: i8,
+        principal_filter: Option<String>,
+        host_filter: Option<String>,
+        operation: i8,
+        permission_type: i8,
+    ) -> Result<DescribeAclsResponseV1> {
+        let request = DescribeAclsRequestV1 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            resource_type_filter,
+            resource_name_filter,
+            pattern_type_filter,
+            principal_filter,
+            host_filter,
+            operation,
+            permission_type,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(DescribeAclsResponseV1::decode_body(&mut decoder)?)
+    }
+
+    /// Sends CreateAcls v1 to the broker represented by this connection.
+    pub async fn create_acls_v1(
+        &mut self,
+        creations: Vec<kafrust_protocol::api::create_acls::CreateAclsCreationV1>,
+    ) -> Result<CreateAclsResponseV1> {
+        let request = CreateAclsRequestV1 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            creations,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(CreateAclsResponseV1::decode_body(&mut decoder)?)
+    }
+
+    /// Sends DeleteAcls v1 to the broker represented by this connection.
+    pub async fn delete_acls_v1(
+        &mut self,
+        filters: Vec<kafrust_protocol::api::delete_acls::DeleteAclsFilterV1>,
+    ) -> Result<DeleteAclsResponseV1> {
+        let request = DeleteAclsRequestV1 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            filters,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(DeleteAclsResponseV1::decode_body(&mut decoder)?)
     }
 
     /// Sends DescribeGroups v1 to this group coordinator connection.
