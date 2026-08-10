@@ -50,9 +50,14 @@ async fn main() -> kafrust::Result<()> {
         .find(|value| value.key() == quota_key)
         .map(|value| value.value());
     if !described.is_success() || value != Some(quota_value) {
+        let all_quotas = admin
+            .describe_client_quotas(&ClientQuotaFilter::any())
+            .await?;
         return Err(Error::Broker {
             code: described.error_code(),
-            context: format!("verify {quota_key} for user {user}, got {value:?}"),
+            context: format!(
+                "verify {quota_key} for user {user}, got {value:?}; exact={described:?}; all={all_quotas:?}"
+            ),
         });
     }
     println!("set and described {quota_key}={quota_value} for user {user}");
