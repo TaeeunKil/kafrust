@@ -52,7 +52,7 @@ the currently supported settings through typed builders.
 | `security.protocol` | `.security_protocol(SecurityProtocol::...)` | Prefer the SASL convenience methods for credentials. |
 | `sasl.mechanism=PLAIN` | `.sasl_plain(username, password)` | Use with SASL_PLAINTEXT or SASL_TLS. |
 | `sasl.mechanism=SCRAM-SHA-256` | `.sasl_scram_sha_256(username, password)` | Live verified over SASL_SSL. |
-| `sasl.mechanism=SCRAM-SHA-512` | `.sasl_scram_sha_512(username, password)` | Implemented, not yet live-profile qualified. |
+| `sasl.mechanism=SCRAM-SHA-512` | `.sasl_scram_sha_512(username, password)` | Live verified over SASL_SSL against Kafka 3.7.2. |
 | statistics callback | `ClientMetrics::snapshot()` | kafrust exposes counters/gauges and tracing, not librdkafka statistics JSON. |
 
 Do not silently discard an old configuration map. Classify every key as
