@@ -267,9 +267,11 @@ async fn main() -> kafrust::Result<()> {
 ### Consumer Group
 
 The current consumer group API is an alpha classic consumer group path with
-dynamic or static membership, range or round-robin assignment, join, sync,
-heartbeat, poll, offset commit, explicit leave, and earliest/latest reset for
-partitions that have no committed offset.
+dynamic or static membership, range, round-robin, or opt-in cooperative-sticky
+assignment, join, sync, heartbeat, poll, offset commit, explicit leave, and
+earliest/latest reset for partitions that have no committed offset. The
+cooperative-sticky path has protocol and initial staged-assignment coverage;
+multi-member transfer and failure qualification remain pending.
 
 ```rust
 use kafrust::{ConsumerGroupConfig, OffsetResetPolicy};

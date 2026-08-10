@@ -1179,6 +1179,11 @@ Implemented evidence:
   classified separately from rejoinable group errors.
 - Classic groups can advertise and execute either Kafka's `range` or
   `roundrobin` assignor, including mixed topic subscriptions.
+- Cooperative-sticky group membership encodes Subscription v1 owned
+  partitions and performs staged ownership transfers with focused local tests.
+  Manual `Live Kafka Smoke` run `31464021305` passed the Kafka 3.7.2
+  three-broker cooperative group example; multi-member transfer, member-loss,
+  and rollback qualification remain open.
 - Dynamic and static members can explicitly leave through LeaveGroup v3,
   avoiding session-timeout cleanup after graceful shutdown.
 - Manual `Live Kafka Smoke` run `30065025169` passed graceful LeaveGroup v3 on

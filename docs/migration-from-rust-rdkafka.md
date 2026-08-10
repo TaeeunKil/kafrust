@@ -263,7 +263,7 @@ See [Admin API](admin-api.md) for typed request and response examples.
 | `acks=0` fire-and-forget | Blocked |
 | Non-Tokio runtime or synchronous client | Blocked |
 | Custom partitioner or rebalance callback | Blocked |
-| Cooperative assignor or consumer group protocol selection | Blocked |
+| `cooperative-sticky` assignor and consumer group protocol selection | Candidate for protocol and initial staged assignment; live multi-member transfer and failure qualification pending |
 | Full librdkafka config passthrough | Blocked by design |
 | ACL describe/create/delete with an authorizer-enabled broker | Verified on Kafka 3.7.2; qualify target permissions and policy |
 | Client quota describe/alter | Verified on Kafka 3.7.2 StandardAuthorizer; qualify target permissions and quota policy |
