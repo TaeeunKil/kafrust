@@ -408,6 +408,8 @@ authorization failures are not collapsed into a single transport error.
 The broker must grant the caller the corresponding authorizer permissions;
 these methods do not bypass Kafka authorization.
 
-The wire encoders, decoders, and mock-broker AdminClient paths are tested. A
-live ACL compatibility claim still requires a broker profile with an enabled
-authorizer and an explicitly provisioned test principal.
+The wire encoders, decoders, and mock-broker AdminClient paths are tested. The
+focused `Live Kafka Smoke` ACL authorizer job passed against Kafka 3.7.2
+StandardAuthorizer in manual run `31457478358` on 2026-08-11 using an
+explicitly provisioned `User:ANONYMOUS` superuser. Production migrations must
+still qualify the target broker's authorizer policy and service principal.

@@ -751,8 +751,11 @@ Implemented evidence:
 - DescribeAcls v1, CreateAcls v1, and DeleteAcls v1 expose typed ACL bindings
   and filters through `AdminClient`, preserving top-level, per-entry,
   per-filter, and matching-ACL outcomes. Wire and mock-broker tests cover the
-  protocol schemas and partial authorization failures; live authorizer
-  qualification remains a separate compatibility gate.
+  protocol schemas and partial authorization failures. Manual `Live Kafka Smoke`
+  run `31457478358` passed the focused ACL authorizer job against Kafka 3.7.2
+  StandardAuthorizer using an explicitly configured `User:ANONYMOUS`
+  superuser; target broker policy qualification remains required for production
+  migrations.
 - The `admin_describe_group` example runs after the consumer-group smoke path
   across plaintext, multi-broker, TLS, SASL_PLAINTEXT, and SASL_SSL profiles.
 - The admin lifecycle example waits for asynchronous metadata propagation in
