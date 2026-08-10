@@ -453,3 +453,59 @@ mode, throttle time, and per-entity error outcomes remain typed. Use
 `ClientQuotaAlteration::remove` to restore a broker default. The wire value is
 `FLOAT64`, but Kafka validates individual quota keys; for example,
 `producer_byte_rate` must be a whole number of bytes per second.
+
+## Manage SCRAM Credentials
+
+```rust
+use kafrust::{
+    AdminClient, ClientConfig, ScramCredentialDeletion, ScramCredentialMechanism,
+    ScramCredentialUpsertion,
+};
+
+# async fn example() -> kafrust::Result<()> {
+let admin = AdminClient::new(ClientConfig::new(["localhost:9092"]));
+let username = "orders-service";
+let mechanism = ScramCredentialMechanism::Sha256;
+
+let upsertion = ScramCredentialUpsertion::new(
+    username,
+    mechanism,
+    4096,
+    b"secret-from-a-secret-manager",
+)?;
+let altered = admin
+    .alter_user_scram_credentials(&[], &[upsertion])
+    .await?;
+assert!(altered.is_success());
+
+let users = [username.to_owned()];
+let described = admin
+    .describe_user_scram_credentials(Some(&users))
+    .await?;
+for user in described.users() {
+    for credential in user.credentials() {
+        println!(
+            "{} {:?} iterations={}",
+            user.username(),
+            credential.mechanism(),
+            credential.iterations()
+        );
+    }
+}
+
+let deletion = ScramCredentialDeletion::new(username, mechanism)?;
+let removed = admin
+    .alter_user_scram_credentials(&[deletion], &[])
+    .await?;
+assert!(removed.is_success());
+# Ok(())
+# }
+```
+
+These methods use DescribeUserScramCredentials v0 and AlterUserScramCredentials
+v0. Describe accepts `None` to request every user or an explicit user slice;
+alter returns one typed outcome per affected user and routes through the active
+controller. `ScramCredentialUpsertion` derives Kafka's salted password with
+PBKDF2 and retains no plaintext password. Its debug output reports only lengths,
+never salts or derived credential bytes. Kafka authorization still applies, and
+the caller must have the broker permissions required for credential changes.

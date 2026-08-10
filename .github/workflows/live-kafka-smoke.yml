@@ -1049,6 +1049,9 @@ jobs:
       - name: Run SASL_SSL SCRAM admin delete group offsets example
         run: cargo run -p kafrust --features tls --example admin_delete_group_offsets
 
+      - name: Run SASL_SSL SCRAM credential admin example
+        run: cargo run -p kafrust --features tls --example admin_scram_credentials
+
       - name: Run SASL_SSL SCRAM-SHA-512 smoke paths
         env:
           KAFRUST_SASL_MECHANISM: scram-sha-512

@@ -1,8 +1,12 @@
 use std::collections::BTreeMap;
+use std::fmt;
 use std::time::Duration;
 
 use kafrust_protocol::api::alter_client_quotas::{
     AlterClientQuotasEntityV0, AlterClientQuotasEntryV0, AlterClientQuotasOperationV0,
+};
+use kafrust_protocol::api::alter_user_scram_credentials::{
+    AlterUserScramCredentialsDeletionV0, AlterUserScramCredentialsUpsertionV0,
 };
 use kafrust_protocol::api::create_acls::CreateAclsCreationV1;
 use kafrust_protocol::api::create_partitions::{
@@ -26,6 +30,9 @@ use kafrust_protocol::api::describe_configs::{
     DescribeConfigsSynonymV1,
 };
 use kafrust_protocol::api::describe_groups::{DescribeGroupsGroupV1, DescribeGroupsMemberV1};
+use kafrust_protocol::api::describe_user_scram_credentials::{
+    DescribeUserScramCredentialsResponseV0, ScramCredentialInfoV0,
+};
 use kafrust_protocol::api::incremental_alter_configs::{
     IncrementalAlterConfigsEntryV0, IncrementalAlterConfigsResourceResponseV0,
     IncrementalAlterConfigsResourceV0,
@@ -41,6 +48,8 @@ use crate::client::Client;
 use crate::config::ClientConfig;
 use crate::error::{BrokerErrorKind, Error, Result};
 use crate::metrics::ClientMetrics;
+use crate::scram::{derive_salted_password, ScramHash};
+use rand::RngCore;
 
 /// Kafka administration client.
 ///
@@ -268,6 +277,74 @@ impl AdminClient {
             response,
             alterations,
         ))
+    }
+
+    /// Describes SCRAM credentials through DescribeUserScramCredentials v0.
+    ///
+    /// `None` asks Kafka to return every user. A user name filter is sent as
+    /// an explicit nullable array, matching Kafka's distinction between all
+    /// users and a selected user list.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.describe_user_scram_credentials",
+        skip_all,
+        fields(user_count = users.map_or(0, <[String]>::len)),
+        err
+    )]
+    pub async fn describe_user_scram_credentials(
+        &self,
+        users: Option<&[String]>,
+    ) -> Result<DescribeUserScramCredentialsResult> {
+        let mut client = self.config.clone().connect().await?;
+        let response = client
+            .describe_user_scram_credentials_v0(users.map(ToOwned::to_owned))
+            .await?;
+        if response.error_code != 0 {
+            self.config.record_broker_error();
+        }
+        for result in &response.results {
+            if result.error_code != 0 {
+                self.config.record_broker_error();
+            }
+        }
+        Ok(DescribeUserScramCredentialsResult::from_protocol(response))
+    }
+
+    /// Creates, replaces, or deletes SCRAM credentials through AlterUserScramCredentials v0.
+    ///
+    /// Kafka applies all changes for one user as a unit and returns one result
+    /// per affected user. The request is sent to the active controller.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.alter_user_scram_credentials",
+        skip_all,
+        fields(deletion_count = deletions.len(), upsertion_count = upsertions.len()),
+        err
+    )]
+    pub async fn alter_user_scram_credentials(
+        &self,
+        deletions: &[ScramCredentialDeletion],
+        upsertions: &[ScramCredentialUpsertion],
+    ) -> Result<AlterUserScramCredentialsResult> {
+        let mut client = self.controller_client().await?;
+        let response = client
+            .alter_user_scram_credentials_v0(
+                deletions
+                    .iter()
+                    .map(ScramCredentialDeletion::as_protocol)
+                    .collect(),
+                upsertions
+                    .iter()
+                    .map(ScramCredentialUpsertion::as_protocol)
+                    .collect(),
+            )
+            .await?;
+        for result in &response.results {
+            if result.error_code != 0 {
+                self.config.record_broker_error();
+            }
+        }
+        Ok(AlterUserScramCredentialsResult::from_protocol(response))
     }
 
     /// Describes configurations for Kafka topics using DescribeConfigs v1.
@@ -1855,6 +1932,413 @@ impl AlterClientQuotasResult {
     }
 }
 
+/// SCRAM mechanism identifiers accepted by Kafka's credential administration APIs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScramCredentialMechanism {
+    /// SCRAM with SHA-256 and a 32-byte salted password.
+    Sha256,
+    /// SCRAM with SHA-512 and a 64-byte salted password.
+    Sha512,
+    /// Preserve a mechanism code returned by a newer broker.
+    Other(i8),
+}
+
+impl ScramCredentialMechanism {
+    fn code(self) -> i8 {
+        match self {
+            Self::Sha256 => 1,
+            Self::Sha512 => 2,
+            Self::Other(code) => code,
+        }
+    }
+
+    fn hash(self) -> Option<ScramHash> {
+        match self {
+            Self::Sha256 => Some(ScramHash::Sha256),
+            Self::Sha512 => Some(ScramHash::Sha512),
+            Self::Other(_) => None,
+        }
+    }
+
+    /// Converts Kafka's mechanism code into a typed value.
+    pub fn from_code(code: i8) -> Self {
+        match code {
+            1 => Self::Sha256,
+            2 => Self::Sha512,
+            code => Self::Other(code),
+        }
+    }
+
+    /// Returns Kafka's wire-level mechanism code.
+    pub fn code_value(self) -> i8 {
+        self.code()
+    }
+}
+
+/// A SCRAM credential deletion request.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScramCredentialDeletion {
+    username: String,
+    mechanism: ScramCredentialMechanism,
+}
+
+impl ScramCredentialDeletion {
+    /// Creates a deletion for one user's SCRAM mechanism.
+    pub fn new(username: impl Into<String>, mechanism: ScramCredentialMechanism) -> Result<Self> {
+        let username = username.into();
+        if username.is_empty() {
+            return Err(Error::InvalidScramCredential {
+                reason: "username must not be empty",
+            });
+        }
+        Ok(Self {
+            username,
+            mechanism,
+        })
+    }
+
+    /// Returns the affected Kafka user.
+    pub fn username(&self) -> &str {
+        &self.username
+    }
+
+    /// Returns the affected SCRAM mechanism.
+    pub fn mechanism(&self) -> ScramCredentialMechanism {
+        self.mechanism
+    }
+
+    fn as_protocol(&self) -> AlterUserScramCredentialsDeletionV0 {
+        AlterUserScramCredentialsDeletionV0 {
+            name: self.username.clone(),
+            mechanism: self.mechanism.code(),
+        }
+    }
+}
+
+/// A SCRAM credential upsertion request.
+///
+/// The caller supplies a password only while constructing this value. The
+/// value retains the generated salt and PBKDF2 salted password required by
+/// Kafka, never the original password.
+#[derive(Clone, PartialEq, Eq)]
+pub struct ScramCredentialUpsertion {
+    username: String,
+    mechanism: ScramCredentialMechanism,
+    iterations: u32,
+    salt: Vec<u8>,
+    salted_password: Vec<u8>,
+}
+
+impl fmt::Debug for ScramCredentialUpsertion {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ScramCredentialUpsertion")
+            .field("username", &self.username)
+            .field("mechanism", &self.mechanism)
+            .field("iterations", &self.iterations)
+            .field("salt_len", &self.salt.len())
+            .field("salted_password_len", &self.salted_password.len())
+            .finish()
+    }
+}
+
+impl ScramCredentialUpsertion {
+    /// Creates a credential using a cryptographically random 32-byte salt.
+    pub fn new(
+        username: impl Into<String>,
+        mechanism: ScramCredentialMechanism,
+        iterations: u32,
+        password: impl AsRef<[u8]>,
+    ) -> Result<Self> {
+        let mut salt = vec![0; 32];
+        rand::thread_rng().fill_bytes(&mut salt);
+        Self::with_salt(username, mechanism, iterations, password, salt)
+    }
+
+    /// Creates a credential with a caller-provided salt for deterministic tests or migration.
+    pub fn with_salt(
+        username: impl Into<String>,
+        mechanism: ScramCredentialMechanism,
+        iterations: u32,
+        password: impl AsRef<[u8]>,
+        salt: impl Into<Vec<u8>>,
+    ) -> Result<Self> {
+        let username = username.into();
+        if username.is_empty() {
+            return Err(Error::InvalidScramCredential {
+                reason: "username must not be empty",
+            });
+        }
+        if iterations == 0 {
+            return Err(Error::InvalidScramCredential {
+                reason: "iteration count must be greater than zero",
+            });
+        }
+        let iterations_i32 =
+            i32::try_from(iterations).map_err(|_| Error::InvalidScramCredential {
+                reason: "iteration count exceeds Kafka's signed 32-bit field",
+            })?;
+        let salt = salt.into();
+        if salt.is_empty() {
+            return Err(Error::InvalidScramCredential {
+                reason: "salt must not be empty",
+            });
+        }
+        let hash = mechanism.hash().ok_or(Error::InvalidScramCredential {
+            reason: "only SCRAM-SHA-256 and SCRAM-SHA-512 can be derived locally",
+        })?;
+        let salted_password = derive_salted_password(hash, password.as_ref(), &salt, iterations);
+        debug_assert!(iterations_i32 > 0);
+        Ok(Self {
+            username,
+            mechanism,
+            iterations,
+            salt,
+            salted_password,
+        })
+    }
+
+    /// Returns the affected Kafka user.
+    pub fn username(&self) -> &str {
+        &self.username
+    }
+
+    /// Returns the SCRAM mechanism.
+    pub fn mechanism(&self) -> ScramCredentialMechanism {
+        self.mechanism
+    }
+
+    /// Returns the PBKDF2 iteration count sent to Kafka.
+    pub fn iterations(&self) -> u32 {
+        self.iterations
+    }
+
+    fn as_protocol(&self) -> AlterUserScramCredentialsUpsertionV0 {
+        AlterUserScramCredentialsUpsertionV0 {
+            name: self.username.clone(),
+            mechanism: self.mechanism.code(),
+            iterations: self.iterations as i32,
+            salt: self.salt.clone(),
+            salted_password: self.salted_password.clone(),
+        }
+    }
+}
+
+/// One SCRAM mechanism and iteration count returned for a Kafka user.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScramCredentialInfo {
+    mechanism: ScramCredentialMechanism,
+    iterations: i32,
+}
+
+impl ScramCredentialInfo {
+    /// Returns the mechanism stored by Kafka.
+    pub fn mechanism(&self) -> ScramCredentialMechanism {
+        self.mechanism
+    }
+
+    /// Returns Kafka's reported PBKDF2 iteration count.
+    pub fn iterations(&self) -> i32 {
+        self.iterations
+    }
+}
+
+/// Credentials and per-user outcome returned by DescribeUserScramCredentials.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScramUserCredentials {
+    username: String,
+    error_code: i16,
+    error_message: Option<String>,
+    credentials: Vec<ScramCredentialInfo>,
+}
+
+impl ScramUserCredentials {
+    /// Returns the Kafka user name.
+    pub fn username(&self) -> &str {
+        &self.username
+    }
+
+    /// Returns the per-user Kafka error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns the per-user Kafka error message.
+    pub fn error_message(&self) -> Option<&str> {
+        self.error_message.as_deref()
+    }
+
+    /// Returns the typed credentials reported for this user.
+    pub fn credentials(&self) -> &[ScramCredentialInfo] {
+        &self.credentials
+    }
+
+    /// Returns whether Kafka accepted this user's describe result.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+    }
+
+    /// Returns the classified per-user broker error, when present.
+    pub fn broker_error_kind(&self) -> Option<BrokerErrorKind> {
+        (self.error_code != 0).then(|| BrokerErrorKind::from_code(self.error_code))
+    }
+}
+
+/// Result returned by [`AdminClient::describe_user_scram_credentials`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DescribeUserScramCredentialsResult {
+    throttle_time: Duration,
+    error_code: i16,
+    error_message: Option<String>,
+    users: Vec<ScramUserCredentials>,
+}
+
+impl DescribeUserScramCredentialsResult {
+    /// Returns the broker throttle duration.
+    pub fn throttle_time(&self) -> Duration {
+        self.throttle_time
+    }
+
+    /// Returns the top-level Kafka error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns the top-level Kafka error message.
+    pub fn error_message(&self) -> Option<&str> {
+        self.error_message.as_deref()
+    }
+
+    /// Returns the top-level broker error classification, when present.
+    pub fn broker_error_kind(&self) -> Option<BrokerErrorKind> {
+        (self.error_code != 0).then(|| BrokerErrorKind::from_code(self.error_code))
+    }
+
+    /// Returns whether the top-level request succeeded.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+    }
+
+    /// Returns user-level credential descriptions.
+    pub fn users(&self) -> &[ScramUserCredentials] {
+        &self.users
+    }
+
+    /// Returns whether the request or any user-level result failed.
+    pub fn has_errors(&self) -> bool {
+        !self.is_success() || self.users.iter().any(|user| !user.is_success())
+    }
+
+    fn from_protocol(response: DescribeUserScramCredentialsResponseV0) -> Self {
+        Self {
+            throttle_time: Duration::from_millis(nonnegative_i32_to_u64(response.throttle_time_ms)),
+            error_code: response.error_code,
+            error_message: response.error_message,
+            users: response
+                .results
+                .into_iter()
+                .map(|result| ScramUserCredentials {
+                    username: result.user,
+                    error_code: result.error_code,
+                    error_message: result.error_message,
+                    credentials: result
+                        .credential_infos
+                        .into_iter()
+                        .map(|info: ScramCredentialInfoV0| ScramCredentialInfo {
+                            mechanism: ScramCredentialMechanism::from_code(info.mechanism),
+                            iterations: info.iterations,
+                        })
+                        .collect(),
+                })
+                .collect(),
+        }
+    }
+}
+
+/// Per-user outcome returned by AlterUserScramCredentials.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AlterScramCredentialResult {
+    username: String,
+    error_code: i16,
+    error_message: Option<String>,
+}
+
+impl AlterScramCredentialResult {
+    /// Returns the affected Kafka user.
+    pub fn username(&self) -> &str {
+        &self.username
+    }
+
+    /// Returns the broker error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns the broker error message.
+    pub fn error_message(&self) -> Option<&str> {
+        self.error_message.as_deref()
+    }
+
+    /// Returns whether Kafka accepted this user's changes.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+    }
+
+    /// Returns the classified broker error, when present.
+    pub fn broker_error_kind(&self) -> Option<BrokerErrorKind> {
+        (self.error_code != 0).then(|| BrokerErrorKind::from_code(self.error_code))
+    }
+}
+
+/// Result returned by [`AdminClient::alter_user_scram_credentials`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AlterUserScramCredentialsResult {
+    throttle_time: Duration,
+    results: Vec<AlterScramCredentialResult>,
+}
+
+impl AlterUserScramCredentialsResult {
+    /// Returns the broker throttle duration.
+    pub fn throttle_time(&self) -> Duration {
+        self.throttle_time
+    }
+
+    /// Returns one result per affected Kafka user.
+    pub fn results(&self) -> &[AlterScramCredentialResult] {
+        &self.results
+    }
+
+    /// Returns whether every user-level change succeeded.
+    pub fn is_success(&self) -> bool {
+        self.results
+            .iter()
+            .all(AlterScramCredentialResult::is_success)
+    }
+
+    /// Returns whether any user-level change failed.
+    pub fn has_errors(&self) -> bool {
+        !self.is_success()
+    }
+
+    fn from_protocol(
+        response: kafrust_protocol::api::alter_user_scram_credentials::
+            AlterUserScramCredentialsResponseV0,
+    ) -> Self {
+        Self {
+            throttle_time: Duration::from_millis(nonnegative_i32_to_u64(response.throttle_time_ms)),
+            results: response
+                .results
+                .into_iter()
+                .map(|result| AlterScramCredentialResult {
+                    username: result.user,
+                    error_code: result.error_code,
+                    error_message: result.error_message,
+                })
+                .collect(),
+        }
+    }
+}
+
 /// One Kafka group returned by [`AdminClient::list_groups`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GroupListing {
@@ -3424,6 +3908,7 @@ mod tests {
         ClientQuotaFilterComponent, ClientQuotaMatchType, ConfigAlterOperationKind, ConfigSource,
         ConsumerGroupOffsetDelete, CreatePartitionsOptions, CreateTopicsOptions,
         DeleteTopicsOptions, DescribeConfigsOptions, NewPartitions, NewTopic,
+        ScramCredentialDeletion, ScramCredentialMechanism, ScramCredentialUpsertion,
         TopicConfigAlteration, TopicConfigResource,
     };
     use crate::{BrokerErrorKind, ClientConfig, ClientMetrics};
@@ -3751,6 +4236,69 @@ mod tests {
             altered.entries()[0].entity().components()[0].entity_name(),
             Some("alice")
         );
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn describes_and_alters_scram_credentials_with_controller_routing() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut describe_connection, _) = listener.accept().await.unwrap();
+            let describe_request = read_frame(&mut describe_connection).await;
+            assert_eq!(&describe_request[0..4], &[0, 50, 0, 0]);
+            write_frame(
+                &mut describe_connection,
+                &describe_user_scram_credentials_response(),
+            )
+            .await;
+
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let metadata_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+            write_frame(&mut bootstrap, &metadata_response(addr.port())).await;
+
+            let (mut controller, _) = listener.accept().await.unwrap();
+            let alter_request = read_frame(&mut controller).await;
+            assert_eq!(&alter_request[0..4], &[0, 51, 0, 0]);
+            write_frame(&mut controller, &alter_user_scram_credentials_response()).await;
+        });
+        let admin = AdminClient::new(ClientConfig::new([addr.to_string()]));
+        let users = ["alice".to_owned()];
+
+        let described = admin
+            .describe_user_scram_credentials(Some(&users))
+            .await
+            .unwrap();
+        assert!(described.is_success());
+        assert_eq!(described.users().len(), 1);
+        assert_eq!(described.users()[0].username(), "alice");
+        assert_eq!(described.users()[0].credentials().len(), 2);
+        assert_eq!(
+            described.users()[0].credentials()[0].mechanism(),
+            ScramCredentialMechanism::Sha256
+        );
+        assert_eq!(described.users()[0].credentials()[1].iterations(), 8192);
+
+        let upsertion = ScramCredentialUpsertion::with_salt(
+            "alice",
+            ScramCredentialMechanism::Sha256,
+            4096,
+            b"secret",
+            [1, 2, 3],
+        )
+        .unwrap();
+        let deletion =
+            ScramCredentialDeletion::new("alice", ScramCredentialMechanism::Sha512).unwrap();
+        let debug = format!("{upsertion:?}");
+        assert!(!debug.contains("secret"));
+        let altered = admin
+            .alter_user_scram_credentials(&[deletion], &[upsertion])
+            .await
+            .unwrap();
+        assert!(altered.is_success());
+        assert_eq!(altered.results().len(), 1);
+        assert_eq!(altered.results()[0].username(), "alice");
         server.await.unwrap();
     }
 
@@ -4374,6 +4922,35 @@ mod tests {
         encoder.write_i32(1); // entity count
         encoder.write_string("user").unwrap();
         encoder.write_nullable_string(Some("alice")).unwrap();
+        encoder.into_bytes()
+    }
+
+    fn describe_user_scram_credentials_response() -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_i32(3); // throttle time
+        encoder.write_i16(0); // success
+        encoder.write_nullable_string(None).unwrap();
+        encoder.write_i32(1); // user count
+        encoder.write_string("alice").unwrap();
+        encoder.write_i16(0); // success
+        encoder.write_nullable_string(None).unwrap();
+        encoder.write_i32(2); // credential count
+        encoder.write_i8(1); // SCRAM-SHA-256
+        encoder.write_i32(4096);
+        encoder.write_i8(2); // SCRAM-SHA-512
+        encoder.write_i32(8192);
+        encoder.into_bytes()
+    }
+
+    fn alter_user_scram_credentials_response() -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_i32(4); // throttle time
+        encoder.write_i32(1); // result count
+        encoder.write_string("alice").unwrap();
+        encoder.write_i16(0); // success
+        encoder.write_nullable_string(None).unwrap();
         encoder.into_bytes()
     }
 

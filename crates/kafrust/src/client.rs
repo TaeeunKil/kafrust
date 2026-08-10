@@ -7,6 +7,9 @@ use kafrust_protocol::api::add_partitions_to_txn::{
 use kafrust_protocol::api::alter_client_quotas::{
     AlterClientQuotasRequestV0, AlterClientQuotasResponseV0,
 };
+use kafrust_protocol::api::alter_user_scram_credentials::{
+    AlterUserScramCredentialsRequestV0, AlterUserScramCredentialsResponseV0,
+};
 use kafrust_protocol::api::api_versions::{ApiVersionsRequestV0, ApiVersionsResponseV0};
 use kafrust_protocol::api::create_acls::{CreateAclsRequestV1, CreateAclsResponseV1};
 use kafrust_protocol::api::create_partitions::{
@@ -26,6 +29,9 @@ use kafrust_protocol::api::describe_configs::{
     DescribeConfigsRequestV1, DescribeConfigsResourceV1, DescribeConfigsResponseV1,
 };
 use kafrust_protocol::api::describe_groups::{DescribeGroupsRequestV1, DescribeGroupsResponseV1};
+use kafrust_protocol::api::describe_user_scram_credentials::{
+    DescribeUserScramCredentialsRequestV0, DescribeUserScramCredentialsResponseV0,
+};
 use kafrust_protocol::api::end_txn::{EndTxnRequestV0, EndTxnResponseV0};
 use kafrust_protocol::api::fetch::{
     FetchPartitionV2, FetchRequestV4, FetchResponseV4, FetchTopicV2,
@@ -408,6 +414,46 @@ impl Client {
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(AlterClientQuotasResponseV0::decode_body(&mut decoder)?)
+    }
+
+    /// Sends DescribeUserScramCredentials v0 to the broker represented by this connection.
+    pub async fn describe_user_scram_credentials_v0(
+        &mut self,
+        users: Option<Vec<String>>,
+    ) -> Result<DescribeUserScramCredentialsResponseV0> {
+        let request = DescribeUserScramCredentialsRequestV0 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            users,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(DescribeUserScramCredentialsResponseV0::decode_body(
+            &mut decoder,
+        )?)
+    }
+
+    /// Sends AlterUserScramCredentials v0 to the broker represented by this connection.
+    pub async fn alter_user_scram_credentials_v0(
+        &mut self,
+        deletions: Vec<kafrust_protocol::api::alter_user_scram_credentials::
+            AlterUserScramCredentialsDeletionV0>,
+        upsertions: Vec<kafrust_protocol::api::alter_user_scram_credentials::
+            AlterUserScramCredentialsUpsertionV0>,
+    ) -> Result<AlterUserScramCredentialsResponseV0> {
+        let request = AlterUserScramCredentialsRequestV0 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            deletions,
+            upsertions,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(AlterUserScramCredentialsResponseV0::decode_body(
+            &mut decoder,
+        )?)
     }
 
     /// Sends CreateAcls v1 to the broker represented by this connection.
