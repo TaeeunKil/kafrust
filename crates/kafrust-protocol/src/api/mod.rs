@@ -1,6 +1,7 @@
 pub mod add_offsets_to_txn;
 pub mod add_partitions_to_txn;
 pub mod alter_client_quotas;
+pub mod alter_partition_reassignments;
 pub mod alter_user_scram_credentials;
 pub mod api_versions;
 pub mod create_acls;
@@ -24,6 +25,7 @@ pub mod join_group;
 pub mod leave_group;
 pub mod list_groups;
 pub mod list_offsets;
+pub mod list_partition_reassignments;
 pub mod metadata;
 pub mod offset_commit;
 pub mod offset_delete;

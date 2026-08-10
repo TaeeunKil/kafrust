@@ -5,6 +5,9 @@ use std::time::Duration;
 use kafrust_protocol::api::alter_client_quotas::{
     AlterClientQuotasEntityV0, AlterClientQuotasEntryV0, AlterClientQuotasOperationV0,
 };
+use kafrust_protocol::api::alter_partition_reassignments::{
+    AlterPartitionReassignmentsPartitionV0, AlterPartitionReassignmentsTopicV0,
+};
 use kafrust_protocol::api::alter_user_scram_credentials::{
     AlterUserScramCredentialsDeletionV0, AlterUserScramCredentialsUpsertionV0,
 };
@@ -38,6 +41,7 @@ use kafrust_protocol::api::incremental_alter_configs::{
     IncrementalAlterConfigsResourceV0,
 };
 use kafrust_protocol::api::list_groups::ListedGroupV1;
+use kafrust_protocol::api::list_partition_reassignments::ListPartitionReassignmentsTopicV0;
 use kafrust_protocol::api::metadata::{BrokerMetadata, TopicMetadata};
 use kafrust_protocol::api::offset_delete::{
     OffsetDeleteRequestPartitionV0, OffsetDeleteRequestTopicV0, OffsetDeleteResponsePartitionV0,
@@ -345,6 +349,84 @@ impl AdminClient {
             }
         }
         Ok(AlterUserScramCredentialsResult::from_protocol(response))
+    }
+
+    /// Starts or cancels partition reassignments on the active controller.
+    ///
+    /// A partition with `Some` replicas is reassigned to that broker order. A
+    /// partition with `None` replicas cancels its pending reassignment. Kafka
+    /// returns independent outcomes for each submitted partition.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.alter_partition_reassignments",
+        skip_all,
+        fields(topic_count = reassignments.len()),
+        err
+    )]
+    pub async fn alter_partition_reassignments(
+        &self,
+        reassignments: &[PartitionReassignment],
+        options: PartitionReassignmentOptions,
+    ) -> Result<AlterPartitionReassignmentsResult> {
+        let mut controller_client = self.controller_client().await?;
+        let response = controller_client
+            .alter_partition_reassignments_v0(
+                duration_millis_i32(options.timeout),
+                reassignments
+                    .iter()
+                    .map(PartitionReassignment::as_protocol)
+                    .collect(),
+            )
+            .await?;
+
+        if response.error_code != 0 {
+            self.config.record_broker_error();
+        }
+        for topic in &response.responses {
+            for partition in &topic.partitions {
+                if partition.error_code != 0 {
+                    self.config.record_broker_error();
+                }
+            }
+        }
+
+        Ok(AlterPartitionReassignmentsResult::from_protocol(response))
+    }
+
+    /// Lists partition reassignments still in progress on the active controller.
+    ///
+    /// Pass `None` to ask Kafka for every ongoing reassignment, or pass topic
+    /// and partition filters to limit the response.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.list_partition_reassignments",
+        skip_all,
+        fields(topic_filter_count = topics.map_or(0, <[PartitionReassignmentQuery]>::len)),
+        err
+    )]
+    pub async fn list_partition_reassignments(
+        &self,
+        topics: Option<&[PartitionReassignmentQuery]>,
+        options: PartitionReassignmentOptions,
+    ) -> Result<ListPartitionReassignmentsResult> {
+        let mut controller_client = self.controller_client().await?;
+        let response = controller_client
+            .list_partition_reassignments_v0(
+                duration_millis_i32(options.timeout),
+                topics.map(|topics| {
+                    topics
+                        .iter()
+                        .map(PartitionReassignmentQuery::as_protocol)
+                        .collect()
+                }),
+            )
+            .await?;
+
+        if response.error_code != 0 {
+            self.config.record_broker_error();
+        }
+
+        Ok(ListPartitionReassignmentsResult::from_protocol(response))
     }
 
     /// Describes configurations for Kafka topics using DescribeConfigs v1.
@@ -2339,6 +2421,422 @@ impl AlterUserScramCredentialsResult {
     }
 }
 
+/// A topic and partition set submitted to AlterPartitionReassignments.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PartitionReassignment {
+    topic: String,
+    partitions: Vec<PartitionReassignmentPartition>,
+}
+
+impl PartitionReassignment {
+    /// Creates an empty reassignment request for one topic.
+    pub fn new(topic: impl Into<String>) -> Self {
+        Self {
+            topic: topic.into(),
+            partitions: Vec::new(),
+        }
+    }
+
+    /// Adds a partition target. Replica order is the preferred replica order.
+    pub fn partition(
+        mut self,
+        partition_index: i32,
+        replicas: impl IntoIterator<Item = i32>,
+    ) -> Self {
+        self.partitions.push(PartitionReassignmentPartition {
+            partition_index,
+            replicas: Some(replicas.into_iter().collect()),
+        });
+        self
+    }
+
+    /// Adds a partition cancellation request.
+    pub fn cancel(mut self, partition_index: i32) -> Self {
+        self.partitions.push(PartitionReassignmentPartition {
+            partition_index,
+            replicas: None,
+        });
+        self
+    }
+
+    /// Returns the topic name.
+    pub fn topic(&self) -> &str {
+        &self.topic
+    }
+
+    /// Returns partition targets in request order.
+    pub fn partitions(&self) -> &[PartitionReassignmentPartition] {
+        &self.partitions
+    }
+
+    fn as_protocol(&self) -> AlterPartitionReassignmentsTopicV0 {
+        AlterPartitionReassignmentsTopicV0 {
+            name: self.topic.clone(),
+            partitions: self
+                .partitions
+                .iter()
+                .map(PartitionReassignmentPartition::as_protocol)
+                .collect(),
+        }
+    }
+}
+
+/// One partition target in a [`PartitionReassignment`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PartitionReassignmentPartition {
+    partition_index: i32,
+    replicas: Option<Vec<i32>>,
+}
+
+impl PartitionReassignmentPartition {
+    /// Returns the Kafka partition index.
+    pub fn partition_index(&self) -> i32 {
+        self.partition_index
+    }
+
+    /// Returns the target replica order, or `None` for cancellation.
+    pub fn replicas(&self) -> Option<&[i32]> {
+        self.replicas.as_deref()
+    }
+
+    fn as_protocol(&self) -> AlterPartitionReassignmentsPartitionV0 {
+        AlterPartitionReassignmentsPartitionV0 {
+            partition_index: self.partition_index,
+            replicas: self.replicas.clone(),
+        }
+    }
+}
+
+/// Options shared by partition reassignment start and status requests.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PartitionReassignmentOptions {
+    timeout: Duration,
+}
+
+impl PartitionReassignmentOptions {
+    /// Creates options with a 30-second broker request timeout.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Sets the broker-side reassignment request timeout.
+    pub fn timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = timeout;
+        self
+    }
+
+    /// Returns the configured broker request timeout.
+    pub fn request_timeout(&self) -> Duration {
+        self.timeout
+    }
+}
+
+impl Default for PartitionReassignmentOptions {
+    fn default() -> Self {
+        Self {
+            timeout: Duration::from_secs(30),
+        }
+    }
+}
+
+/// A topic and optional partition filter for ListPartitionReassignments.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PartitionReassignmentQuery {
+    topic: String,
+    partition_indexes: Vec<i32>,
+}
+
+impl PartitionReassignmentQuery {
+    /// Creates a query for one topic. An empty partition list asks for all
+    /// ongoing partitions of that topic.
+    pub fn new(topic: impl Into<String>) -> Self {
+        Self {
+            topic: topic.into(),
+            partition_indexes: Vec::new(),
+        }
+    }
+
+    /// Adds a partition index to this query.
+    pub fn partition(mut self, partition_index: i32) -> Self {
+        self.partition_indexes.push(partition_index);
+        self
+    }
+
+    /// Returns the topic name.
+    pub fn topic(&self) -> &str {
+        &self.topic
+    }
+
+    /// Returns the selected partition indexes. Empty means all partitions.
+    pub fn partition_indexes(&self) -> &[i32] {
+        &self.partition_indexes
+    }
+
+    fn as_protocol(&self) -> ListPartitionReassignmentsTopicV0 {
+        ListPartitionReassignmentsTopicV0 {
+            name: self.topic.clone(),
+            partition_indexes: self.partition_indexes.clone(),
+        }
+    }
+}
+
+/// Per-partition outcome returned by AlterPartitionReassignments.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AlterPartitionReassignmentResult {
+    partition_index: i32,
+    error_code: i16,
+    error_message: Option<String>,
+}
+
+impl AlterPartitionReassignmentResult {
+    /// Returns the affected partition index.
+    pub fn partition_index(&self) -> i32 {
+        self.partition_index
+    }
+
+    /// Returns Kafka's raw error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns Kafka's error message, when present.
+    pub fn error_message(&self) -> Option<&str> {
+        self.error_message.as_deref()
+    }
+
+    /// Returns whether Kafka accepted this partition request.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+    }
+
+    /// Returns kafrust's broker error classification, when present.
+    pub fn broker_error_kind(&self) -> Option<BrokerErrorKind> {
+        (self.error_code != 0).then(|| BrokerErrorKind::from_code(self.error_code))
+    }
+}
+
+/// Per-topic outcomes returned by AlterPartitionReassignments.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AlterPartitionReassignmentTopicResult {
+    name: String,
+    partitions: Vec<AlterPartitionReassignmentResult>,
+}
+
+impl AlterPartitionReassignmentTopicResult {
+    /// Returns the topic name.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Returns partition outcomes in broker response order.
+    pub fn partitions(&self) -> &[AlterPartitionReassignmentResult] {
+        &self.partitions
+    }
+
+    /// Returns whether every returned partition succeeded.
+    pub fn is_success(&self) -> bool {
+        self.partitions
+            .iter()
+            .all(AlterPartitionReassignmentResult::is_success)
+    }
+}
+
+/// Result returned by [`AdminClient::alter_partition_reassignments`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AlterPartitionReassignmentsResult {
+    throttle_time: Duration,
+    error_code: i16,
+    error_message: Option<String>,
+    topics: Vec<AlterPartitionReassignmentTopicResult>,
+}
+
+impl AlterPartitionReassignmentsResult {
+    /// Returns the broker throttle duration.
+    pub fn throttle_time(&self) -> Duration {
+        self.throttle_time
+    }
+
+    /// Returns Kafka's top-level error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns Kafka's top-level error message.
+    pub fn error_message(&self) -> Option<&str> {
+        self.error_message.as_deref()
+    }
+
+    /// Returns kafrust's top-level broker error classification, when present.
+    pub fn broker_error_kind(&self) -> Option<BrokerErrorKind> {
+        (self.error_code != 0).then(|| BrokerErrorKind::from_code(self.error_code))
+    }
+
+    /// Returns topic-level partition outcomes.
+    pub fn topics(&self) -> &[AlterPartitionReassignmentTopicResult] {
+        &self.topics
+    }
+
+    /// Returns whether the request and all returned partition requests succeeded.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+            && self
+                .topics
+                .iter()
+                .all(AlterPartitionReassignmentTopicResult::is_success)
+    }
+
+    /// Returns whether any top-level or partition-level error was reported.
+    pub fn has_errors(&self) -> bool {
+        !self.is_success()
+    }
+
+    fn from_protocol(
+        response: kafrust_protocol::api::alter_partition_reassignments::
+            AlterPartitionReassignmentsResponseV0,
+    ) -> Self {
+        Self {
+            throttle_time: Duration::from_millis(nonnegative_i32_to_u64(response.throttle_time_ms)),
+            error_code: response.error_code,
+            error_message: response.error_message,
+            topics: response
+                .responses
+                .into_iter()
+                .map(|topic| AlterPartitionReassignmentTopicResult {
+                    name: topic.name,
+                    partitions: topic
+                        .partitions
+                        .into_iter()
+                        .map(|partition| AlterPartitionReassignmentResult {
+                            partition_index: partition.partition_index,
+                            error_code: partition.error_code,
+                            error_message: partition.error_message,
+                        })
+                        .collect(),
+                })
+                .collect(),
+        }
+    }
+}
+
+/// An ongoing reassignment returned by ListPartitionReassignments.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OngoingPartitionReassignment {
+    partition_index: i32,
+    replicas: Vec<i32>,
+    adding_replicas: Vec<i32>,
+    removing_replicas: Vec<i32>,
+}
+
+impl OngoingPartitionReassignment {
+    /// Returns the partition index.
+    pub fn partition_index(&self) -> i32 {
+        self.partition_index
+    }
+
+    /// Returns the full target replica set.
+    pub fn replicas(&self) -> &[i32] {
+        &self.replicas
+    }
+
+    /// Returns replicas still being added.
+    pub fn adding_replicas(&self) -> &[i32] {
+        &self.adding_replicas
+    }
+
+    /// Returns replicas still being removed.
+    pub fn removing_replicas(&self) -> &[i32] {
+        &self.removing_replicas
+    }
+}
+
+/// Ongoing reassignments for one topic.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OngoingPartitionReassignmentTopic {
+    name: String,
+    partitions: Vec<OngoingPartitionReassignment>,
+}
+
+impl OngoingPartitionReassignmentTopic {
+    /// Returns the topic name.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Returns ongoing partition details.
+    pub fn partitions(&self) -> &[OngoingPartitionReassignment] {
+        &self.partitions
+    }
+}
+
+/// Result returned by [`AdminClient::list_partition_reassignments`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ListPartitionReassignmentsResult {
+    throttle_time: Duration,
+    error_code: i16,
+    error_message: Option<String>,
+    topics: Vec<OngoingPartitionReassignmentTopic>,
+}
+
+impl ListPartitionReassignmentsResult {
+    /// Returns the broker throttle duration.
+    pub fn throttle_time(&self) -> Duration {
+        self.throttle_time
+    }
+
+    /// Returns Kafka's top-level error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns Kafka's top-level error message.
+    pub fn error_message(&self) -> Option<&str> {
+        self.error_message.as_deref()
+    }
+
+    /// Returns kafrust's top-level broker error classification, when present.
+    pub fn broker_error_kind(&self) -> Option<BrokerErrorKind> {
+        (self.error_code != 0).then(|| BrokerErrorKind::from_code(self.error_code))
+    }
+
+    /// Returns topics with ongoing reassignments.
+    pub fn topics(&self) -> &[OngoingPartitionReassignmentTopic] {
+        &self.topics
+    }
+
+    /// Returns whether Kafka accepted the status request.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+    }
+
+    fn from_protocol(
+        response: kafrust_protocol::api::list_partition_reassignments::
+            ListPartitionReassignmentsResponseV0,
+    ) -> Self {
+        Self {
+            throttle_time: Duration::from_millis(nonnegative_i32_to_u64(response.throttle_time_ms)),
+            error_code: response.error_code,
+            error_message: response.error_message,
+            topics: response
+                .topics
+                .into_iter()
+                .map(|topic| OngoingPartitionReassignmentTopic {
+                    name: topic.name,
+                    partitions: topic
+                        .partitions
+                        .into_iter()
+                        .map(|partition| OngoingPartitionReassignment {
+                            partition_index: partition.partition_index,
+                            replicas: partition.replicas,
+                            adding_replicas: partition.adding_replicas,
+                            removing_replicas: partition.removing_replicas,
+                        })
+                        .collect(),
+                })
+                .collect(),
+        }
+    }
+}
+
 /// One Kafka group returned by [`AdminClient::list_groups`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GroupListing {
@@ -3908,6 +4406,7 @@ mod tests {
         ClientQuotaFilterComponent, ClientQuotaMatchType, ConfigAlterOperationKind, ConfigSource,
         ConsumerGroupOffsetDelete, CreatePartitionsOptions, CreateTopicsOptions,
         DeleteTopicsOptions, DescribeConfigsOptions, NewPartitions, NewTopic,
+        PartitionReassignment, PartitionReassignmentOptions, PartitionReassignmentQuery,
         ScramCredentialDeletion, ScramCredentialMechanism, ScramCredentialUpsertion,
         TopicConfigAlteration, TopicConfigResource,
     };
@@ -4299,6 +4798,66 @@ mod tests {
         assert!(altered.is_success());
         assert_eq!(altered.results().len(), 1);
         assert_eq!(altered.results()[0].username(), "alice");
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn alters_and_lists_partition_reassignments_with_controller_routing() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut alter_bootstrap, _) = listener.accept().await.unwrap();
+            let alter_metadata_request = read_frame(&mut alter_bootstrap).await;
+            assert_eq!(&alter_metadata_request[0..4], &[0, 3, 0, 1]);
+            write_frame(&mut alter_bootstrap, &metadata_response(addr.port())).await;
+
+            let (mut alter_controller, _) = listener.accept().await.unwrap();
+            let alter_request = read_frame(&mut alter_controller).await;
+            assert_eq!(&alter_request[0..4], &[0, 45, 0, 0]);
+            write_frame(
+                &mut alter_controller,
+                &alter_partition_reassignments_response(),
+            )
+            .await;
+
+            let (mut list_bootstrap, _) = listener.accept().await.unwrap();
+            let list_metadata_request = read_frame(&mut list_bootstrap).await;
+            assert_eq!(&list_metadata_request[0..4], &[0, 3, 0, 1]);
+            write_frame(&mut list_bootstrap, &metadata_response(addr.port())).await;
+
+            let (mut list_controller, _) = listener.accept().await.unwrap();
+            let list_request = read_frame(&mut list_controller).await;
+            assert_eq!(&list_request[0..4], &[0, 46, 0, 0]);
+            write_frame(
+                &mut list_controller,
+                &list_partition_reassignments_response(),
+            )
+            .await;
+        });
+        let admin = AdminClient::new(ClientConfig::new([addr.to_string()]));
+
+        let request = [PartitionReassignment::new("orders").partition(0, [3, 1, 2])];
+        let altered = admin
+            .alter_partition_reassignments(&request, PartitionReassignmentOptions::new())
+            .await
+            .unwrap();
+        assert!(altered.is_success());
+        assert_eq!(altered.topics()[0].name(), "orders");
+        assert_eq!(altered.topics()[0].partitions()[0].partition_index(), 0);
+
+        let query = [PartitionReassignmentQuery::new("orders").partition(0)];
+        let ongoing = admin
+            .list_partition_reassignments(
+                Some(&query),
+                PartitionReassignmentOptions::new().timeout(Duration::from_secs(5)),
+            )
+            .await
+            .unwrap();
+        assert!(ongoing.is_success());
+        assert_eq!(ongoing.topics()[0].name(), "orders");
+        assert_eq!(ongoing.topics()[0].partitions()[0].replicas(), [1, 2, 3]);
+        assert_eq!(ongoing.topics()[0].partitions()[0].adding_replicas(), [3]);
+        assert_eq!(ongoing.topics()[0].partitions()[0].removing_replicas(), [1]);
         server.await.unwrap();
     }
 
@@ -4959,6 +5518,60 @@ mod tests {
         encoder.write_compact_nullable_string(None).unwrap();
         encoder.write_empty_tagged_fields();
         encoder.write_empty_tagged_fields();
+        encoder.into_bytes()
+    }
+
+    fn alter_partition_reassignments_response() -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_empty_tagged_fields(); // response header tags
+        encoder.write_i32(4); // throttle time
+        encoder.write_i16(0); // top-level success
+        encoder.write_compact_nullable_string(None).unwrap();
+        encoder.write_unsigned_varint(2); // one topic
+        encoder.write_compact_string("orders").unwrap();
+        encoder.write_unsigned_varint(2); // one partition
+        encoder.write_i32(0); // partition index
+        encoder.write_i16(0); // success
+        encoder.write_compact_nullable_string(None).unwrap();
+        encoder.write_empty_tagged_fields(); // partition tags
+        encoder.write_empty_tagged_fields(); // topic tags
+        encoder.write_empty_tagged_fields(); // response tags
+        encoder.into_bytes()
+    }
+
+    fn list_partition_reassignments_response() -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_empty_tagged_fields(); // response header tags
+        encoder.write_i32(5); // throttle time
+        encoder.write_i16(0); // success
+        encoder.write_compact_nullable_string(None).unwrap();
+        encoder.write_unsigned_varint(2); // one topic
+        encoder.write_compact_string("orders").unwrap();
+        encoder.write_unsigned_varint(2); // one partition
+        encoder.write_i32(0); // partition index
+        encoder
+            .write_array(Some(&[1, 2, 3]), |encoder, replica| {
+                encoder.write_i32(*replica);
+                Ok(())
+            })
+            .unwrap();
+        encoder
+            .write_array(Some(&[3]), |encoder, replica| {
+                encoder.write_i32(*replica);
+                Ok(())
+            })
+            .unwrap();
+        encoder
+            .write_array(Some(&[1]), |encoder, replica| {
+                encoder.write_i32(*replica);
+                Ok(())
+            })
+            .unwrap();
+        encoder.write_empty_tagged_fields(); // partition tags
+        encoder.write_empty_tagged_fields(); // topic tags
+        encoder.write_empty_tagged_fields(); // response tags
         encoder.into_bytes()
     }
 

@@ -7,6 +7,9 @@ use kafrust_protocol::api::add_partitions_to_txn::{
 use kafrust_protocol::api::alter_client_quotas::{
     AlterClientQuotasRequestV0, AlterClientQuotasResponseV0,
 };
+use kafrust_protocol::api::alter_partition_reassignments::{
+    AlterPartitionReassignmentsRequestV0, AlterPartitionReassignmentsResponseV0,
+};
 use kafrust_protocol::api::alter_user_scram_credentials::{
     AlterUserScramCredentialsRequestV0, AlterUserScramCredentialsResponseV0,
 };
@@ -57,6 +60,9 @@ use kafrust_protocol::api::leave_group::{
 use kafrust_protocol::api::list_groups::{ListGroupsRequestV1, ListGroupsResponseV1};
 use kafrust_protocol::api::list_offsets::{
     ListOffsetsRequestV1, ListOffsetsResponseV1, ListOffsetsTopicV1,
+};
+use kafrust_protocol::api::list_partition_reassignments::{
+    ListPartitionReassignmentsRequestV0, ListPartitionReassignmentsResponseV0,
 };
 use kafrust_protocol::api::metadata::{MetadataRequestV1, MetadataResponseV1};
 use kafrust_protocol::api::offset_commit::{
@@ -452,6 +458,48 @@ impl Client {
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v1(&mut decoder)?;
         Ok(AlterUserScramCredentialsResponseV0::decode_body(
+            &mut decoder,
+        )?)
+    }
+
+    /// Sends AlterPartitionReassignments v0 to the broker represented by this connection.
+    pub async fn alter_partition_reassignments_v0(
+        &mut self,
+        timeout_ms: i32,
+        topics: Vec<kafrust_protocol::api::alter_partition_reassignments::
+            AlterPartitionReassignmentsTopicV0>,
+    ) -> Result<AlterPartitionReassignmentsResponseV0> {
+        let request = AlterPartitionReassignmentsRequestV0 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            timeout_ms,
+            topics,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(AlterPartitionReassignmentsResponseV0::decode_body(
+            &mut decoder,
+        )?)
+    }
+
+    /// Sends ListPartitionReassignments v0 to the broker represented by this connection.
+    pub async fn list_partition_reassignments_v0(
+        &mut self,
+        timeout_ms: i32,
+        topics: Option<Vec<kafrust_protocol::api::list_partition_reassignments::
+            ListPartitionReassignmentsTopicV0>>,
+    ) -> Result<ListPartitionReassignmentsResponseV0> {
+        let request = ListPartitionReassignmentsRequestV0 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            timeout_ms,
+            topics,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(ListPartitionReassignmentsResponseV0::decode_body(
             &mut decoder,
         )?)
     }
