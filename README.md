@@ -343,7 +343,8 @@ See [Compatibility](docs/compatibility.md) and
   aborted transaction records for direct and group consumers, and current
   group assignments can be committed through immediate or buffered
   `send_group_offsets_to_transaction`. Remaining admin APIs and live broker
-  failure injection remain separate roadmap items. Shared request, retry,
+  failure injection remain separate roadmap items; client quota
+  describe/alter is now available through `AdminClient`. Shared request, retry,
   broker-error, producer,
   consumer, batch, and buffered-queue metrics are available together with
   high-level operation and `kafka.request` spans.
@@ -355,8 +356,8 @@ See [Compatibility](docs/compatibility.md) and
 Primary public entry points:
 
 - `Client` for low-level Kafka request roundtrips.
-- `AdminClient` and typed cluster, topic, configuration, consumer-group, and
-  ACL administration types.
+- `AdminClient` and typed cluster, topic, configuration, consumer-group, ACL,
+  and client-quota administration types.
 - `ProducerConfig`, `Producer`, `BufferedProducer`, and `ProducerRecord`.
 - `Compression` for opt-in producer RecordBatch compression.
 - `ConsumerConfig`, `Consumer`, `ConsumerAssignment`, and `ConsumerRecord`.

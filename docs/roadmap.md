@@ -756,6 +756,11 @@ Implemented evidence:
   StandardAuthorizer using an explicitly configured `User:ANONYMOUS`
   superuser; target broker policy qualification remains required for production
   migrations.
+- DescribeClientQuotas v0 and AlterClientQuotas v0 expose typed entity
+  components, exact/default/any filter matching, floating-point values,
+  validate-only mode, and per-entity outcomes. Wire and mock-broker coverage
+  is complete; the ACL authorizer live profile now exercises the matching
+  example and will provide the dated quota compatibility evidence.
 - The `admin_describe_group` example runs after the consumer-group smoke path
   across plaintext, multi-broker, TLS, SASL_PLAINTEXT, and SASL_SSL profiles.
 - The admin lifecycle example waits for asynchronous metadata propagation in

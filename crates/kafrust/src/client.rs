@@ -4,6 +4,9 @@ use kafrust_protocol::api::add_offsets_to_txn::{
 use kafrust_protocol::api::add_partitions_to_txn::{
     AddPartitionsToTxnRequestV0, AddPartitionsToTxnResponseV0, AddPartitionsToTxnTopic,
 };
+use kafrust_protocol::api::alter_client_quotas::{
+    AlterClientQuotasRequestV0, AlterClientQuotasResponseV0,
+};
 use kafrust_protocol::api::api_versions::{ApiVersionsRequestV0, ApiVersionsResponseV0};
 use kafrust_protocol::api::create_acls::{CreateAclsRequestV1, CreateAclsResponseV1};
 use kafrust_protocol::api::create_partitions::{
@@ -16,6 +19,9 @@ use kafrust_protocol::api::delete_acls::{DeleteAclsRequestV1, DeleteAclsResponse
 use kafrust_protocol::api::delete_groups::{DeleteGroupsRequestV1, DeleteGroupsResponseV1};
 use kafrust_protocol::api::delete_topics::{DeleteTopicsRequestV3, DeleteTopicsResponseV3};
 use kafrust_protocol::api::describe_acls::{DescribeAclsRequestV1, DescribeAclsResponseV1};
+use kafrust_protocol::api::describe_client_quotas::{
+    DescribeClientQuotasRequestV0, DescribeClientQuotasResponseV0,
+};
 use kafrust_protocol::api::describe_configs::{
     DescribeConfigsRequestV1, DescribeConfigsResourceV1, DescribeConfigsResponseV1,
 };
@@ -364,6 +370,44 @@ impl Client {
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(DescribeAclsResponseV1::decode_body(&mut decoder)?)
+    }
+
+    /// Sends DescribeClientQuotas v0 to the broker represented by this connection.
+    pub async fn describe_client_quotas_v0(
+        &mut self,
+        components: Vec<
+            kafrust_protocol::api::describe_client_quotas::DescribeClientQuotasComponentV0,
+        >,
+        strict: bool,
+    ) -> Result<DescribeClientQuotasResponseV0> {
+        let request = DescribeClientQuotasRequestV0 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            components,
+            strict,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(DescribeClientQuotasResponseV0::decode_body(&mut decoder)?)
+    }
+
+    /// Sends AlterClientQuotas v0 to the broker represented by this connection.
+    pub async fn alter_client_quotas_v0(
+        &mut self,
+        entries: Vec<kafrust_protocol::api::alter_client_quotas::AlterClientQuotasEntryV0>,
+        validate_only: bool,
+    ) -> Result<AlterClientQuotasResponseV0> {
+        let request = AlterClientQuotasRequestV0 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            entries,
+            validate_only,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(AlterClientQuotasResponseV0::decode_body(&mut decoder)?)
     }
 
     /// Sends CreateAcls v1 to the broker represented by this connection.
