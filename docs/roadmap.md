@@ -233,10 +233,13 @@ Scope:
 
 Evidence:
 
-- `kafrust-protocol v0.1.0`, `kafrust v0.1.0`, `kafrust-protocol v0.2.0`, `kafrust v0.2.0`, `kafrust-protocol v0.2.1`, and `kafrust v0.2.1` are published on crates.io.
+- `kafrust-protocol v0.1.0`, `kafrust v0.1.0`, `kafrust-protocol v0.2.0`,
+  `kafrust v0.2.0`, `kafrust-protocol v0.2.1`, `kafrust v0.2.1`,
+  `kafrust-protocol v0.2.2`, and `kafrust v0.2.2` are published on crates.io.
 - GitHub releases `v0.1.0`, `v0.2.0`, and `v0.2.1` are tagged and published.
-- A fresh external project can add `kafrust = "0.2.1"` and compile.
-- docs.rs pages for both crates build successfully.
+- A fresh external project can add `kafrust = "0.2.2"` and compile from crates.io.
+- docs.rs pages for both `0.2.2` crates build successfully; their latest build
+  records report `All builds succeeded`.
 - The `Live Kafka Smoke` workflow runs the broker roundtrip, producer, direct consumer, and consumer group examples against Kafka 3.7.2.
 
 Known limits:
@@ -269,10 +272,12 @@ Evidence:
 
 - `Live Kafka Smoke` exists and has passed manually against Kafka 3.7.2.
 - `docs/broker-roundtrip.md` records the latest manual live smoke and the scheduled workflow.
-- v0.1.0, v0.2.0, and v0.2.1 were verified from fresh external projects.
+- v0.1.0, v0.2.0, v0.2.1, and v0.2.2 were verified from fresh external projects.
 - `docs/release.md` includes post-publish crates.io, docs.rs, release tag, and live smoke verification.
 - `docs/compatibility.md` documents the current Kafka 3.7.2 compatibility claim and known non-claims.
 - GitHub issue forms route reports into protocol bugs, client runtime bugs, or API design questions.
+- The published `0.2.2` crates were re-verified from a fresh temporary project,
+  and both docs.rs builds completed successfully.
 
 Known limits:
 
@@ -543,7 +548,7 @@ Strategic role:
 
 ## M14 Multi-Broker And Failover Compatibility
 
-Status: In progress.
+Status: Complete.
 
 Goal: handle normal multi-broker cluster behavior instead of only single-node broker checks.
 
@@ -612,6 +617,12 @@ Evidence:
   background-heartbeat observation, stale-heartbeat shutdown, and offset commit
   paths can rediscover the coordinator instead of treating only broker error
   codes as rejoin signals.
+- Manual `Live Kafka Smoke` run `31465216280` passed all nine jobs on
+  2026-08-11, including the three-broker failover profile, Kafka 3.7.2,
+  3.8.1, 3.9.1, and 4.3.1 plaintext profiles, and the TLS,
+  SASL_PLAINTEXT, SASL_SSL/SCRAM, and ACL-authorizer profiles. The
+  three-broker job completed producer, direct-consumer, consumer-group,
+  admin, reassignment, and broker-stop recovery paths.
 
 ## M15 Compression Compatibility
 
