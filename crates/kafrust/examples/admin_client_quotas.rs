@@ -24,13 +24,15 @@ async fn main() -> kafrust::Result<()> {
         )
         .await?;
     if !altered.is_success() {
+        let entry = altered.entries().first();
         return Err(Error::Broker {
-            code: altered
-                .entries()
-                .first()
-                .map(|entry| entry.error_code())
-                .unwrap_or(-1),
-            context: format!("set {quota_key} for user {user}"),
+            code: entry.map(|entry| entry.error_code()).unwrap_or(-1),
+            context: format!(
+                "set {quota_key} for user {user}: {}",
+                entry
+                    .and_then(|entry| entry.error_message())
+                    .unwrap_or("broker returned no error message")
+            ),
         });
     }
 
@@ -61,13 +63,15 @@ async fn main() -> kafrust::Result<()> {
         )
         .await?;
     if !removed.is_success() {
+        let entry = removed.entries().first();
         return Err(Error::Broker {
-            code: removed
-                .entries()
-                .first()
-                .map(|entry| entry.error_code())
-                .unwrap_or(-1),
-            context: format!("remove {quota_key} for user {user}"),
+            code: entry.map(|entry| entry.error_code()).unwrap_or(-1),
+            context: format!(
+                "remove {quota_key} for user {user}: {}",
+                entry
+                    .and_then(|entry| entry.error_message())
+                    .unwrap_or("broker returned no error message")
+            ),
         });
     }
     println!("removed {quota_key} for user {user}");
