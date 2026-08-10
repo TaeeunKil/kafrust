@@ -230,6 +230,7 @@ kafrust currently provides:
 - consumer group listing and deletion
 - selected consumer group offset deletion
 - topic partition expansion with automatic or explicit replica assignment
+- controller-routed partition reassignment and bounded in-progress status polling
 
 ACL describe, create, and delete operations now have typed kafrust equivalents
 through `AdminClient`. Their wire, mock-broker, and Kafka 3.7.2
@@ -237,7 +238,9 @@ StandardAuthorizer live paths are verified in `Live Kafka Smoke` run
 `31457478358`, but a production migration still needs qualification against
 the service principal's actual broker permissions.
 
-Replica reassignment remains the only listed admin blocker. SCRAM credential
+Partition reassignment is implemented through typed `AdminClient` APIs and its
+submission plus completion polling are live-verified on the Kafka 3.7.2
+three-broker profile in `Live Kafka Smoke` run `31462962605`. SCRAM credential
 administration is implemented and live-verified over Kafka 3.7.2 SASL_SSL in
 `Live Kafka Smoke` run `31461980967`. Client quota describe/alter is implemented and live-verified
 against Kafka 3.7.2 StandardAuthorizer in `Live Kafka Smoke` run
@@ -265,7 +268,7 @@ See [Admin API](admin-api.md) for typed request and response examples.
 | ACL describe/create/delete with an authorizer-enabled broker | Verified on Kafka 3.7.2; qualify target permissions and policy |
 | Client quota describe/alter | Verified on Kafka 3.7.2 StandardAuthorizer; qualify target permissions and quota policy |
 | SCRAM credential administration | Verified on Kafka 3.7.2 SASL_SSL; qualify target permissions and credential policy |
-| Replica reassignment | Blocked |
+| Replica reassignment | Verified on Kafka 3.7.2 three-broker smoke; qualify target broker permissions and failure behavior |
 
 "Candidate" means the API exists and relevant project tests pass. It does not
 replace workload-specific qualification against the target brokers, security

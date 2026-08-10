@@ -435,8 +435,10 @@ Verified high-level paths include:
   and group consumers, and current group assignments can be committed through
   generation-fenced `Producer::send_group_offsets_to_transaction`.
   Transactional buffered sends and replica reassignment remain separate
-  roadmap items. SCRAM credential administration is available through the
-  typed `AdminClient` API and has a Kafka 3.7.2 SASL_SSL live smoke path.
+  roadmap item. SCRAM credential administration and controller-routed
+  partition reassignment are available through typed `AdminClient` APIs; both
+  have Kafka 3.7.2 live smoke paths, including three-broker reassignment
+  completion polling.
   Shared request, retry, broker-error, producer, consumer, batch, and
   buffered-queue metrics are available together with high-level operation and
   request spans.
@@ -471,6 +473,7 @@ Available examples include:
 - `consumer_fetch`
 - `find_group_coordinator`
 - `consumer_group_poll`
+- `admin_reassign_partitions`
 
 ## Project Docs
 
