@@ -1,5 +1,5 @@
 use kafrust::{
-    ClientConfig, Compression, ConsumerConfig, ConsumerGroupConfig, ProducerConfig,
+    Acks, ClientConfig, Compression, ConsumerConfig, ConsumerGroupConfig, ProducerConfig,
     SecurityProtocol,
 };
 
@@ -52,6 +52,22 @@ pub(crate) fn compression_from_env() -> kafrust::Result<Compression> {
     };
 
     parse_compression(&value)
+}
+
+#[allow(dead_code)]
+pub(crate) fn acks_from_env() -> kafrust::Result<Acks> {
+    let Ok(value) = std::env::var("KAFRUST_ACKS") else {
+        return Ok(Acks::Leader);
+    };
+
+    match value.trim().to_ascii_lowercase().as_str() {
+        "0" | "none" => Ok(Acks::None),
+        "1" | "leader" => Ok(Acks::Leader),
+        "-1" | "all" => Ok(Acks::All),
+        _ => Err(kafrust::Error::Unsupported(
+            "KAFRUST_ACKS must be none, leader, or all",
+        )),
+    }
 }
 
 #[allow(dead_code)]

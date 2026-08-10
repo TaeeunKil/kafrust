@@ -1,6 +1,6 @@
 mod common;
 
-use kafrust::{Acks, ConsumerConfig, Error, ProducerConfig, ProducerRecord, RecordMetadata};
+use kafrust::{ConsumerConfig, Error, ProducerConfig, ProducerRecord, RecordMetadata};
 use std::collections::BTreeMap;
 
 #[tokio::main]
@@ -18,7 +18,7 @@ async fn main() -> kafrust::Result<()> {
         ProducerConfig::new(bootstrap_servers.clone())
             .client_id("kafrust-buffered-producer-example"),
     )?
-    .acks(Acks::Leader)
+    .acks(common::acks_from_env()?)
     .compression(common::compression_from_env()?)
     .enable_idempotence(idempotence)
     .linger_ms(60_000)

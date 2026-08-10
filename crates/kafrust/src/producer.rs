@@ -9,8 +9,8 @@ use kafrust_protocol::api::api_versions::ApiVersionsResponseV0;
 use kafrust_protocol::api::metadata::{BrokerMetadata, MetadataResponseV1};
 use kafrust_protocol::api::produce::{
     encoded_message_set_len, encoded_record_batch_set_len_with_compression, MessageSetMessage,
-    ProducePartitionV3, ProduceResponseV2, ProduceResponseV7, ProduceTopicV3, RecordBatchIdentity,
-    RecordBatchMessage, API_KEY as PRODUCE_API_KEY,
+    ProducePartitionV2, ProducePartitionV3, ProduceResponseV2, ProduceResponseV7, ProduceTopicV2,
+    ProduceTopicV3, RecordBatchIdentity, RecordBatchMessage, API_KEY as PRODUCE_API_KEY,
 };
 use kafrust_protocol::api::txn_offset_commit::{
     TxnOffsetCommitPartition, TxnOffsetCommitPartitionV3, TxnOffsetCommitTopic,
@@ -50,7 +50,7 @@ macro_rules! transaction_transport_or_retry {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Kafka produce acknowledgement policy.
 pub enum Acks {
-    /// Do not wait for a broker response.
+    /// Send without waiting for a broker response.
     None,
     /// Wait for the partition leader to acknowledge the write.
     Leader,
@@ -214,7 +214,11 @@ impl ProducerRecord {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-/// Metadata returned after a successful produce request.
+/// Metadata returned after a produce operation.
+///
+/// With [`Acks::None`], the request was written and flushed but Kafka does not
+/// send a response, so [`Self::offset`] is `-1` and broker acceptance cannot be
+/// confirmed by the client.
 pub struct RecordMetadata {
     topic: String,
     partition: i32,
@@ -238,7 +242,7 @@ impl RecordMetadata {
         }
     }
 
-    /// Returns the Kafka topic that accepted the record.
+    /// Returns the Kafka topic targeted by the record.
     pub fn topic(&self) -> &str {
         &self.topic
     }
@@ -251,7 +255,8 @@ impl RecordMetadata {
     /// Returns the base offset reported by Kafka.
     ///
     /// This is `-1` when an idempotent retry receives Kafka's duplicate
-    /// sequence response because the original append offset is not available.
+    /// sequence response because the original append offset is not available,
+    /// or when the producer uses [`Acks::None`] and Kafka sends no response.
     pub fn offset(&self) -> i64 {
         self.offset
     }
@@ -310,7 +315,10 @@ impl ProducerBatchFailure {
 /// Per-record outcome returned by a batch produce report.
 #[derive(Debug)]
 pub enum ProducerBatchRecordOutcome {
-    /// Kafka accepted the record and returned produce metadata.
+    /// The record was produced or dispatched, with metadata.
+    ///
+    /// The metadata offset is `-1` when the producer uses [`Acks::None`] or an
+    /// idempotent retry received Kafka's duplicate sequence response.
     Success(RecordMetadata),
     /// Kafka rejected the record's topic partition in the Produce response.
     Failure(ProducerBatchFailure),
@@ -367,7 +375,7 @@ impl ProducerBatchReport {
         self.records
     }
 
-    /// Returns whether at least one record failed in the Produce response.
+    /// Returns whether at least one record returned a broker failure.
     pub fn has_failures(&self) -> bool {
         self.records.iter().any(|record| !record.is_success())
     }
@@ -1566,7 +1574,11 @@ impl Producer {
             .is_some_and(|state| state.status == TransactionStatus::InTransaction)
     }
 
-    /// Sends one record and returns Kafka metadata for the accepted write.
+    /// Sends one record and returns Kafka delivery metadata.
+    ///
+    /// With [`Acks::None`], this returns after the request is written and
+    /// flushed. Kafka acceptance is not confirmed and the returned offset is
+    /// `-1`.
     #[tracing::instrument(
         level = "debug",
         name = "kafka.producer.send",
@@ -1577,9 +1589,6 @@ impl Producer {
     pub async fn send(&mut self, record: ProducerRecord) -> Result<RecordMetadata> {
         self.ensure_idempotent_producer_usable()?;
         self.ensure_transaction_active()?;
-        if self.config.acks == Acks::None {
-            return Err(Error::Unsupported("producer acks=0 send without response"));
-        }
         debug!(
             topic = record.topic(),
             partition = ?record.partition_ref(),
@@ -1634,6 +1643,9 @@ impl Producer {
 
     /// Sends multiple records and returns one metadata entry per input record.
     ///
+    /// With [`Acks::None`], each returned offset is `-1` because Kafka does not
+    /// send a Produce response.
+    ///
     /// Records are grouped by topic, partition, and partition leader. Records in
     /// the same group are sent in one Produce request. Returned metadata keeps
     /// the same order as the input records.
@@ -1668,9 +1680,6 @@ impl Producer {
     ) -> Result<ProducerBatchReport> {
         self.ensure_idempotent_producer_usable()?;
         self.ensure_transaction_active()?;
-        if self.config.acks == Acks::None {
-            return Err(Error::Unsupported("producer acks=0 send without response"));
-        }
 
         let records = records
             .into_iter()
@@ -1903,6 +1912,94 @@ impl Producer {
                 key,
                 records,
             )?;
+            if self.config.acks == Acks::None {
+                match produce_version {
+                    ProduceVersion::V7 => {
+                        leader_client
+                            .produce_v7_no_response(
+                                transactional_id.clone(),
+                                self.config.acks.as_i16(),
+                                30_000,
+                                vec![ProduceTopicV3 {
+                                    name: key.topic.clone(),
+                                    partitions: vec![ProducePartitionV3 {
+                                        partition_index: key.partition,
+                                        compression: self
+                                            .config
+                                            .compression
+                                            .as_record_batch_compression(),
+                                        identity,
+                                        records: records
+                                            .iter()
+                                            .map(|record| {
+                                                record_batch_message(
+                                                    &record.record.record,
+                                                    record.record.timestamp_ms,
+                                                )
+                                            })
+                                            .collect(),
+                                    }],
+                                }],
+                            )
+                            .await?;
+                    }
+                    ProduceVersion::V3 => {
+                        leader_client
+                            .produce_v3_no_response(
+                                transactional_id.clone(),
+                                self.config.acks.as_i16(),
+                                30_000,
+                                vec![ProduceTopicV3 {
+                                    name: key.topic.clone(),
+                                    partitions: vec![ProducePartitionV3 {
+                                        partition_index: key.partition,
+                                        compression: self
+                                            .config
+                                            .compression
+                                            .as_record_batch_compression(),
+                                        identity,
+                                        records: records
+                                            .iter()
+                                            .map(|record| {
+                                                record_batch_message(
+                                                    &record.record.record,
+                                                    record.record.timestamp_ms,
+                                                )
+                                            })
+                                            .collect(),
+                                    }],
+                                }],
+                            )
+                            .await?;
+                    }
+                    ProduceVersion::V2 => {
+                        leader_client
+                            .produce_v2_no_response(
+                                self.config.acks.as_i16(),
+                                30_000,
+                                vec![ProduceTopicV2 {
+                                    name: key.topic.clone(),
+                                    partitions: vec![ProducePartitionV2 {
+                                        partition_index: key.partition,
+                                        records: records
+                                            .iter()
+                                            .map(|record| {
+                                                message_set_message(
+                                                    &record.record.record,
+                                                    record.record.timestamp_ms,
+                                                )
+                                            })
+                                            .collect(),
+                                    }],
+                                }],
+                            )
+                            .await?;
+                    }
+                }
+                self.config.client.record_produce_batch(records.len());
+                output.extend(batch_no_ack_outcomes(key, records));
+                continue;
+            }
             let response = match produce_version {
                 ProduceVersion::V7 => ProduceResponse::V7(
                     leader_client
@@ -2088,6 +2185,75 @@ impl Producer {
             produce_version = ?produce_version,
             "selected produce api version"
         );
+
+        if self.config.acks == Acks::None {
+            match produce_version {
+                ProduceVersion::V7 => {
+                    leader_client
+                        .produce_v7_no_response(
+                            transactional_id.clone(),
+                            self.config.acks.as_i16(),
+                            30_000,
+                            vec![ProduceTopicV3 {
+                                name: record.topic().to_owned(),
+                                partitions: vec![ProducePartitionV3 {
+                                    partition_index: partition,
+                                    compression: self
+                                        .config
+                                        .compression
+                                        .as_record_batch_compression(),
+                                    identity,
+                                    records: vec![record_batch_message(record, timestamp_ms)],
+                                }],
+                            }],
+                        )
+                        .await?;
+                }
+                ProduceVersion::V3 => {
+                    leader_client
+                        .produce_v3_no_response(
+                            transactional_id.clone(),
+                            self.config.acks.as_i16(),
+                            30_000,
+                            vec![ProduceTopicV3 {
+                                name: record.topic().to_owned(),
+                                partitions: vec![ProducePartitionV3 {
+                                    partition_index: partition,
+                                    compression: self
+                                        .config
+                                        .compression
+                                        .as_record_batch_compression(),
+                                    identity,
+                                    records: vec![record_batch_message(record, timestamp_ms)],
+                                }],
+                            }],
+                        )
+                        .await?;
+                }
+                ProduceVersion::V2 => {
+                    leader_client
+                        .produce_v2_no_response(
+                            self.config.acks.as_i16(),
+                            30_000,
+                            vec![ProduceTopicV2 {
+                                name: record.topic().to_owned(),
+                                partitions: vec![ProducePartitionV2 {
+                                    partition_index: partition,
+                                    records: vec![message_set_message(record, timestamp_ms)],
+                                }],
+                            }],
+                        )
+                        .await?;
+                }
+            }
+            self.config.client.record_produce_batch(1);
+            return Ok(RecordMetadata::new(
+                record.topic(),
+                partition,
+                -1,
+                Some(timestamp),
+            ));
+        }
 
         let response = match produce_version {
             ProduceVersion::V7 => ProduceResponse::V7(
@@ -3487,6 +3653,26 @@ fn batch_duplicate_outcomes(
                     key.partition,
                     -1,
                     None,
+                )),
+            )
+        })
+        .collect()
+}
+
+fn batch_no_ack_outcomes(
+    key: &ProduceBatchKey,
+    records: &[PreparedBatchRecord<'_>],
+) -> Vec<(usize, ProducerBatchRecordOutcome)> {
+    records
+        .iter()
+        .map(|record| {
+            (
+                record.index,
+                ProducerBatchRecordOutcome::Success(RecordMetadata::new(
+                    key.topic.clone(),
+                    key.partition,
+                    -1,
+                    Some(record.record.timestamp),
                 )),
             )
         })

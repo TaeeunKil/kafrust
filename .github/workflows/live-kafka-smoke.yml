@@ -85,12 +85,23 @@ jobs:
       - name: Run producer example
         run: cargo run -p kafrust --example producer_send
 
+      - name: Run acks=0 producer example
+        env:
+          KAFRUST_ACKS: none
+        run: cargo run -p kafrust --example producer_send
+
       - name: Run idempotent producer example
         env:
           KAFRUST_ENABLE_IDEMPOTENCE: "true"
         run: cargo run -p kafrust --example producer_send
 
       - name: Run producer batch example
+        run: cargo run -p kafrust --example producer_send_batch
+
+      - name: Run acks=0 producer batch example
+        env:
+          KAFRUST_ACKS: none
+          KAFRUST_BATCH_COUNT: "3"
         run: cargo run -p kafrust --example producer_send_batch
 
       - name: Run idempotent producer batch example
