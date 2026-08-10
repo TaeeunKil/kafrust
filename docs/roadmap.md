@@ -759,8 +759,10 @@ Implemented evidence:
 - DescribeClientQuotas v0 and AlterClientQuotas v0 expose typed entity
   components, exact/default/any filter matching, floating-point values,
   validate-only mode, and per-entity outcomes. Wire and mock-broker coverage
-  is complete; the ACL authorizer live profile now exercises the matching
-  example and will provide the dated quota compatibility evidence.
+  is complete. The ACL authorizer live profile passed set -> exact-filter
+  describe -> remove against Kafka 3.7.2 StandardAuthorizer in run
+  `31459874329` on 2026-08-11; the example uses bounded polling for KRaft
+  metadata visibility.
 - The `admin_describe_group` example runs after the consumer-group smoke path
   across plaintext, multi-broker, TLS, SASL_PLAINTEXT, and SASL_SSL profiles.
 - The admin lifecycle example waits for asynchronous metadata propagation in

@@ -4,7 +4,7 @@ kafrust compatibility claims are scoped to behavior that has been verified again
 
 ## Current Compatibility Claim
 
-The `0.2.x` alpha line is verified against Apache Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 KRaft brokers over plaintext TCP in the single-node profile. Kafka 3.7.2 is also verified in a three-broker plaintext profile. TLS, SASL/PLAIN over SASL_PLAINTEXT, and SASL/SCRAM-SHA-256 and SCRAM-SHA-512 over SASL_SSL are verified against Kafka 3.7.2 for the documented single-node smoke paths. The SHA-512 profile covers broker roundtrip, producer, batch producer, buffered producer, direct consumer, and consumer group poll paths. ACL create, describe, and delete are live-verified against a Kafka 3.7.2 KRaft broker with StandardAuthorizer enabled.
+The `0.2.x` alpha line is verified against Apache Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 KRaft brokers over plaintext TCP in the single-node profile. Kafka 3.7.2 is also verified in a three-broker plaintext profile. TLS, SASL/PLAIN over SASL_PLAINTEXT, and SASL/SCRAM-SHA-256 and SCRAM-SHA-512 over SASL_SSL are verified against Kafka 3.7.2 for the documented single-node smoke paths. The SHA-512 profile covers broker roundtrip, producer, batch producer, buffered producer, direct consumer, and consumer group poll paths. ACL create, describe, and delete plus client quota set, describe, and remove are live-verified against a Kafka 3.7.2 KRaft broker with StandardAuthorizer enabled.
 
 | Broker | Mode | Security | Verification | Status |
 | --- | --- | --- | --- | --- |
@@ -17,7 +17,7 @@ The `0.2.x` alpha line is verified against Apache Kafka 3.7.2, 3.8.1, 3.9.1, and
 | Apache Kafka 3.8.1 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, manual run `30067372344` on 2026-07-24 | Passing |
 | Apache Kafka 3.9.1 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, manual run `30067372344` on 2026-07-24 | Passing |
 | Apache Kafka 4.3.1 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, manual run `30067372344` on 2026-07-24 | Passing |
-| Apache Kafka 3.7.2 | single-node KRaft with StandardAuthorizer | PLAINTEXT ACL admin | `Live Kafka Smoke` ACL authorizer job, manual run `31457478358` on 2026-08-11 | Passing |
+| Apache Kafka 3.7.2 | single-node KRaft with StandardAuthorizer | PLAINTEXT ACL and client-quota admin | `Live Kafka Smoke` ACL authorizer job, manual run `31459874329` on 2026-08-11 | Passing |
 
 ## Verified Paths
 
@@ -41,6 +41,11 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
   `31457478358` passed create -> describe -> delete against Kafka 3.7.2
   StandardAuthorizer using the explicitly configured `User:ANONYMOUS`
   superuser.
+- Client quota set, exact-filter describe, and remove through `AdminClient`
+  with typed entities, `FLOAT64` values, and per-entity outcomes. The focused
+  ACL authorizer job in manual run `31459874329` passed the roundtrip against
+  Kafka 3.7.2 StandardAuthorizer using `User:ANONYMOUS`; the example uses
+  bounded polling because KRaft quota metadata becomes visible asynchronously.
 - IncrementalAlterConfigs v0 followed by DescribeConfigs v1 verification.
   Manual run `30061073263` passed this update-and-readback path against Kafka
   3.7.2 and Kafka 4.3.1.
