@@ -912,6 +912,14 @@ jobs:
           ssl.truststore.password=kafrust
           ssl.truststore.type=PKCS12
           EOF
+          cat > sasl-ssl/client-sha512.properties <<'EOF'
+          security.protocol=SASL_SSL
+          sasl.mechanism=SCRAM-SHA-512
+          sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required username="kafrust" password="kafrust-secret";
+          ssl.truststore.location=/etc/kafka/secrets/kafka.client.truststore.p12
+          ssl.truststore.password=kafrust
+          ssl.truststore.type=PKCS12
+          EOF
           chmod 644 sasl-ssl/*
 
       - name: Start SASL_SSL SCRAM Kafka
@@ -932,7 +940,7 @@ jobs:
             -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1 \
             -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1 \
             -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 \
-            -e KAFKA_SASL_ENABLED_MECHANISMS=SCRAM-SHA-256 \
+            -e KAFKA_SASL_ENABLED_MECHANISMS=SCRAM-SHA-256,SCRAM-SHA-512 \
             -e KAFKA_SSL_KEYSTORE_FILENAME=kafka.server.keystore.p12 \
             -e KAFKA_SSL_KEYSTORE_CREDENTIALS=keystore-password \
             -e KAFKA_SSL_KEY_CREDENTIALS=key-password \
@@ -959,7 +967,7 @@ jobs:
           docker exec kafrust-kafka-sasl-ssl /opt/kafka/bin/kafka-configs.sh \
             --bootstrap-server localhost:9092 \
             --alter \
-            --add-config 'SCRAM-SHA-256=[iterations=4096,password=kafrust-secret]' \
+            --add-config 'SCRAM-SHA-256=[iterations=4096,password=kafrust-secret],SCRAM-SHA-512=[iterations=4096,password=kafrust-secret]' \
             --entity-type users \
             --entity-name kafrust
 
@@ -975,6 +983,21 @@ jobs:
             sleep 1
           done
           cat /tmp/kafrust-sasl-ssl-probe.log || true
+          docker logs kafrust-kafka-sasl-ssl
+          exit 1
+
+      - name: Verify SCRAM-SHA-512 listener
+        run: |
+          for attempt in {1..90}; do
+            if docker exec kafrust-kafka-sasl-ssl /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server localhost:9095 \
+              --command-config /etc/kafka/secrets/client-sha512.properties \
+              >/tmp/kafrust-sasl-ssl-sha512-probe.log 2>&1; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/kafrust-sasl-ssl-sha512-probe.log || true
           docker logs kafrust-kafka-sasl-ssl
           exit 1
 
@@ -1019,6 +1042,20 @@ jobs:
 
       - name: Run SASL_SSL SCRAM admin delete group offsets example
         run: cargo run -p kafrust --features tls --example admin_delete_group_offsets
+
+      - name: Run SASL_SSL SCRAM-SHA-512 smoke paths
+        env:
+          KAFRUST_SASL_MECHANISM: scram-sha-512
+          KAFRUST_GROUP_ID: kafrust-smoke-sha512-${{ github.run_id }}
+        run: |
+          cargo test -p kafrust --features tls --test broker_roundtrip -- --nocapture
+          cargo run -p kafrust --features tls --example broker_roundtrip
+          cargo run -p kafrust --features tls --example producer_send
+          cargo run -p kafrust --features tls --example producer_send_batch
+          KAFRUST_BUFFERED_COUNT=3 cargo run -p kafrust --features tls --example producer_buffered
+          KAFRUST_PARTITION=0 KAFRUST_OFFSET=0 \
+            cargo run -p kafrust --features tls --example consumer_fetch
+          cargo run -p kafrust --features tls --example consumer_group_poll
 
       - name: Dump SASL_SSL SCRAM Kafka logs
         if: failure()
