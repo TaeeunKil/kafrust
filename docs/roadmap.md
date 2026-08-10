@@ -236,7 +236,7 @@ Evidence:
 - `kafrust-protocol v0.1.0`, `kafrust v0.1.0`, `kafrust-protocol v0.2.0`,
   `kafrust v0.2.0`, `kafrust-protocol v0.2.1`, `kafrust v0.2.1`,
   `kafrust-protocol v0.2.2`, and `kafrust v0.2.2` are published on crates.io.
-- GitHub releases `v0.1.0`, `v0.2.0`, and `v0.2.1` are tagged and published.
+- GitHub releases `v0.1.0`, `v0.2.0`, `v0.2.1`, and `v0.2.2` are tagged and published.
 - A fresh external project can add `kafrust = "0.2.2"` and compile from crates.io.
 - docs.rs pages for both `0.2.2` crates build successfully; their latest build
   records report `All builds succeeded`.
