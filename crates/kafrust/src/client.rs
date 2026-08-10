@@ -428,7 +428,7 @@ impl Client {
         };
         let response = self.send_request(&request.encode()?).await?;
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
-        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
         Ok(DescribeUserScramCredentialsResponseV0::decode_body(
             &mut decoder,
         )?)
@@ -450,7 +450,7 @@ impl Client {
         };
         let response = self.send_request(&request.encode()?).await?;
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
-        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
         Ok(AlterUserScramCredentialsResponseV0::decode_body(
             &mut decoder,
         )?)

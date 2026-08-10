@@ -4928,29 +4928,37 @@ mod tests {
     fn describe_user_scram_credentials_response() -> Vec<u8> {
         let mut encoder = Encoder::new();
         encoder.write_i32(1); // correlation ID
+        encoder.write_empty_tagged_fields(); // response header tags
         encoder.write_i32(3); // throttle time
         encoder.write_i16(0); // success
-        encoder.write_nullable_string(None).unwrap();
-        encoder.write_i32(1); // user count
-        encoder.write_string("alice").unwrap();
+        encoder.write_compact_nullable_string(None).unwrap();
+        encoder.write_unsigned_varint(2); // one user
+        encoder.write_compact_string("alice").unwrap();
         encoder.write_i16(0); // success
-        encoder.write_nullable_string(None).unwrap();
-        encoder.write_i32(2); // credential count
+        encoder.write_compact_nullable_string(None).unwrap();
+        encoder.write_unsigned_varint(3); // two credentials
         encoder.write_i8(1); // SCRAM-SHA-256
         encoder.write_i32(4096);
+        encoder.write_empty_tagged_fields();
         encoder.write_i8(2); // SCRAM-SHA-512
         encoder.write_i32(8192);
+        encoder.write_empty_tagged_fields();
+        encoder.write_empty_tagged_fields();
+        encoder.write_empty_tagged_fields();
         encoder.into_bytes()
     }
 
     fn alter_user_scram_credentials_response() -> Vec<u8> {
         let mut encoder = Encoder::new();
         encoder.write_i32(1); // correlation ID
+        encoder.write_empty_tagged_fields(); // response header tags
         encoder.write_i32(4); // throttle time
-        encoder.write_i32(1); // result count
-        encoder.write_string("alice").unwrap();
+        encoder.write_unsigned_varint(2); // one result
+        encoder.write_compact_string("alice").unwrap();
         encoder.write_i16(0); // success
-        encoder.write_nullable_string(None).unwrap();
+        encoder.write_compact_nullable_string(None).unwrap();
+        encoder.write_empty_tagged_fields();
+        encoder.write_empty_tagged_fields();
         encoder.into_bytes()
     }
 

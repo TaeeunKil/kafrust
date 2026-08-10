@@ -20,10 +20,13 @@ impl DescribeUserScramCredentialsRequestV0 {
             correlation_id: self.correlation_id,
             client_id: self.client_id.clone(),
         }
-        .encode_v1(&mut encoder)?;
-        encoder.write_array(self.users.as_deref(), |encoder, user| {
-            encoder.write_string(user)
+        .encode_v2(&mut encoder)?;
+        encoder.write_compact_array(self.users.as_deref(), |encoder, user| {
+            encoder.write_compact_string(user)?;
+            encoder.write_empty_tagged_fields();
+            Ok(())
         })?;
+        encoder.write_empty_tagged_fields();
         Ok(encoder.into_bytes())
     }
 }
@@ -38,16 +41,21 @@ pub struct DescribeUserScramCredentialsResponseV0 {
 
 impl DescribeUserScramCredentialsResponseV0 {
     pub fn decode_body(decoder: &mut Decoder<'_>) -> Result<Self> {
+        let throttle_time_ms = decoder.read_i32()?;
+        let error_code = decoder.read_i16()?;
+        let error_message = decoder.read_compact_nullable_string()?;
+        let results = decoder
+            .read_compact_array(
+                "describe user SCRAM credential results",
+                DescribeUserScramCredentialsResultV0::decode,
+            )?
+            .unwrap_or_default();
+        decoder.read_tagged_fields()?;
         Ok(Self {
-            throttle_time_ms: decoder.read_i32()?,
-            error_code: decoder.read_i16()?,
-            error_message: decoder.read_nullable_string()?,
-            results: decoder
-                .read_array(
-                    "describe user SCRAM credential results",
-                    DescribeUserScramCredentialsResultV0::decode,
-                )?
-                .unwrap_or_default(),
+            throttle_time_ms,
+            error_code,
+            error_message,
+            results,
         })
     }
 }
@@ -62,16 +70,21 @@ pub struct DescribeUserScramCredentialsResultV0 {
 
 impl DescribeUserScramCredentialsResultV0 {
     fn decode(decoder: &mut Decoder<'_>) -> Result<Self> {
+        let user = decoder.read_compact_string()?;
+        let error_code = decoder.read_i16()?;
+        let error_message = decoder.read_compact_nullable_string()?;
+        let credential_infos = decoder
+            .read_compact_array(
+                "described SCRAM credential infos",
+                ScramCredentialInfoV0::decode,
+            )?
+            .unwrap_or_default();
+        decoder.read_tagged_fields()?;
         Ok(Self {
-            user: decoder.read_string()?,
-            error_code: decoder.read_i16()?,
-            error_message: decoder.read_nullable_string()?,
-            credential_infos: decoder
-                .read_array(
-                    "described SCRAM credential infos",
-                    ScramCredentialInfoV0::decode,
-                )?
-                .unwrap_or_default(),
+            user,
+            error_code,
+            error_message,
+            credential_infos,
         })
     }
 }
@@ -84,9 +97,12 @@ pub struct ScramCredentialInfoV0 {
 
 impl ScramCredentialInfoV0 {
     fn decode(decoder: &mut Decoder<'_>) -> Result<Self> {
+        let mechanism = decoder.read_i8()?;
+        let iterations = decoder.read_i32()?;
+        decoder.read_tagged_fields()?;
         Ok(Self {
-            mechanism: decoder.read_i8()?,
-            iterations: decoder.read_i32()?,
+            mechanism,
+            iterations,
         })
     }
 }
@@ -110,7 +126,7 @@ mod tests {
         let bytes = request.encode().unwrap();
         assert_eq!(&bytes[0..4], &[0, API_KEY as u8, 0, 0]);
         assert_eq!(&bytes[4..8], &[0, 0, 0, 23]);
-        assert_eq!(&bytes[bytes.len() - 4..], &[0xff, 0xff, 0xff, 0xff]);
+        assert_eq!(&bytes[bytes.len() - 2..], &[0, 0]);
     }
 
     #[test]
@@ -118,16 +134,20 @@ mod tests {
         let mut bytes = Encoder::new();
         bytes.write_i32(9);
         bytes.write_i16(0);
-        bytes.write_nullable_string(None).unwrap();
-        bytes.write_i32(1);
-        bytes.write_string("alice").unwrap();
+        bytes.write_compact_nullable_string(None).unwrap();
+        bytes.write_unsigned_varint(2); // one result
+        bytes.write_compact_string("alice").unwrap();
         bytes.write_i16(0);
-        bytes.write_nullable_string(None).unwrap();
-        bytes.write_i32(2);
+        bytes.write_compact_nullable_string(None).unwrap();
+        bytes.write_unsigned_varint(3); // two credential infos
         bytes.write_i8(1);
         bytes.write_i32(4096);
+        bytes.write_empty_tagged_fields();
         bytes.write_i8(2);
         bytes.write_i32(8192);
+        bytes.write_empty_tagged_fields();
+        bytes.write_empty_tagged_fields();
+        bytes.write_empty_tagged_fields();
         let bytes = bytes.into_bytes();
         let mut decoder = Decoder::new(&bytes);
 
