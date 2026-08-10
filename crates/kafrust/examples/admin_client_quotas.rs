@@ -15,7 +15,8 @@ async fn main() -> kafrust::Result<()> {
     let admin = AdminClient::new(config);
     let entity = ClientQuotaEntity::user(&user);
     let quota_key = "producer_byte_rate";
-    let quota_value = 1024.5;
+    // Kafka validates byte-rate quotas as whole bytes per second.
+    let quota_value = 1024.0;
 
     let altered = admin
         .alter_client_quotas(

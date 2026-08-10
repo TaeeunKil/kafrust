@@ -450,4 +450,6 @@ for entry in result.entries() {
 Client quota operations use DescribeClientQuotas v0 and AlterClientQuotas v0.
 Entity components, filter match modes, floating-point quota values, validation
 mode, throttle time, and per-entity error outcomes remain typed. Use
-`ClientQuotaAlteration::remove` to restore a broker default.
+`ClientQuotaAlteration::remove` to restore a broker default. The wire value is
+`FLOAT64`, but Kafka validates individual quota keys; for example,
+`producer_byte_rate` must be a whole number of bytes per second.
