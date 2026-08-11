@@ -88,6 +88,16 @@ fn client_config_from_env(
             TestSaslMechanism::ScramSha512 => {
                 config.sasl_scram_sha_512(credentials.username, credentials.password)
             }
+            TestSaslMechanism::OAuthBearer => {
+                if credentials.username.is_empty() {
+                    config.sasl_oauthbearer(credentials.token.unwrap_or_default())
+                } else {
+                    config.sasl_oauthbearer_with_username(
+                        credentials.username,
+                        credentials.token.unwrap_or_default(),
+                    )
+                }
+            }
         };
     }
     if let Some(server_name) = tls_server_name_from_env() {
@@ -103,15 +113,30 @@ struct TestSaslCredentials {
     mechanism: TestSaslMechanism,
     username: String,
     password: String,
+    token: Option<String>,
 }
 
 enum TestSaslMechanism {
     Plain,
     ScramSha256,
     ScramSha512,
+    OAuthBearer,
 }
 
 fn sasl_credentials_from_env() -> kafrust::Result<Option<TestSaslCredentials>> {
+    let mechanism = sasl_mechanism_from_env()?;
+    if matches!(mechanism, TestSaslMechanism::OAuthBearer) {
+        let token = std::env::var("KAFRUST_SASL_TOKEN").map_err(|_| {
+            kafrust::Error::Unsupported("KAFRUST_SASL_TOKEN is required for SASL/OAUTHBEARER")
+        })?;
+        return Ok(Some(TestSaslCredentials {
+            mechanism,
+            username: std::env::var("KAFRUST_SASL_USERNAME").unwrap_or_default(),
+            password: String::new(),
+            token: Some(token),
+        }));
+    }
+
     let Some(username) = std::env::var("KAFRUST_SASL_USERNAME").ok() else {
         return Ok(None);
     };
@@ -121,9 +146,10 @@ fn sasl_credentials_from_env() -> kafrust::Result<Option<TestSaslCredentials>> {
         )
     })?;
     Ok(Some(TestSaslCredentials {
-        mechanism: sasl_mechanism_from_env()?,
+        mechanism,
         username,
         password,
+        token: None,
     }))
 }
 
@@ -141,8 +167,9 @@ fn parse_sasl_mechanism(value: &str) -> kafrust::Result<TestSaslMechanism> {
         "" | "plain" => Ok(TestSaslMechanism::Plain),
         "scram-sha-256" => Ok(TestSaslMechanism::ScramSha256),
         "scram-sha-512" => Ok(TestSaslMechanism::ScramSha512),
+        "oauthbearer" | "oauth-bearer" => Ok(TestSaslMechanism::OAuthBearer),
         _ => Err(kafrust::Error::Unsupported(
-            "unsupported KAFRUST_SASL_MECHANISM; expected plain, scram-sha-256, or scram-sha-512",
+            "unsupported KAFRUST_SASL_MECHANISM; expected plain, scram-sha-256, scram-sha-512, or oauthbearer",
         )),
     }
 }
@@ -208,6 +235,10 @@ fn parses_sasl_mechanism_from_environment_value() {
     assert!(matches!(
         parse_sasl_mechanism("scram_sha_512").expect("SCRAM mechanism should parse"),
         TestSaslMechanism::ScramSha512
+    ));
+    assert!(matches!(
+        parse_sasl_mechanism("oauthbearer").expect("OAuth mechanism should parse"),
+        TestSaslMechanism::OAuthBearer
     ));
 }
 
