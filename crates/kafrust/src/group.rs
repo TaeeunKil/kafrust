@@ -507,15 +507,13 @@ impl ConsumerGroupConfig {
             let config = self.clone();
 
             let mut bootstrap = self.client.clone().connect().await?;
-            let coordinator = bootstrap
-                .find_group_coordinator(self.group_id.clone())
-                .await?;
-            if coordinator.error_code != 0 {
-                return Err(self.client.broker_error(
-                    coordinator.error_code,
-                    format!("find group coordinator {}", self.group_id),
-                ));
-            }
+            let coordinator = find_group_coordinator_with_retry(
+                &mut bootstrap,
+                &self.client,
+                &self.group_id,
+                self.max_retries,
+            )
+            .await?;
 
             let coordinator_addr = coordinator_addr(&coordinator);
             let mut coordinator_client = self.client.connect_broker(coordinator_addr).await?;
@@ -707,15 +705,13 @@ impl ConsumerGroupConfig {
 
         let config = self.clone();
         let mut bootstrap = self.client.clone().connect().await?;
-        let coordinator = bootstrap
-            .find_group_coordinator(self.group_id.clone())
-            .await?;
-        if coordinator.error_code != 0 {
-            return Err(self.client.broker_error(
-                coordinator.error_code,
-                format!("find group coordinator {}", self.group_id),
-            ));
-        }
+        let coordinator = find_group_coordinator_with_retry(
+            &mut bootstrap,
+            &self.client,
+            &self.group_id,
+            self.max_retries,
+        )
+        .await?;
 
         let metadata = bootstrap
             .metadata_v12(Some(
@@ -1236,15 +1232,13 @@ impl ConsumerGroup {
         );
 
         let mut bootstrap = self.config.client.clone().connect().await?;
-        let coordinator = bootstrap
-            .find_group_coordinator(self.group_id.clone())
-            .await?;
-        if coordinator.error_code != 0 {
-            return Err(self.config.client.broker_error(
-                coordinator.error_code,
-                format!("find group coordinator {}", self.group_id),
-            ));
-        }
+        let coordinator = find_group_coordinator_with_retry(
+            &mut bootstrap,
+            &self.config.client,
+            &self.group_id,
+            self.config.max_retries,
+        )
+        .await?;
 
         let mut coordinator = self
             .config
@@ -2649,6 +2643,48 @@ async fn record_consumer_heartbeat_response(
 
 fn coordinator_addr(coordinator: &FindCoordinatorResponseV1) -> String {
     format!("{}:{}", coordinator.host, coordinator.port)
+}
+
+async fn find_group_coordinator_with_retry(
+    bootstrap: &mut Client,
+    client: &ClientConfig,
+    group_id: &str,
+    max_retries: u32,
+) -> Result<FindCoordinatorResponseV1> {
+    let mut retry_attempt = 0;
+    loop {
+        let response = match bootstrap.find_group_coordinator(group_id.to_owned()).await {
+            Ok(response) => response,
+            Err(error) if retry_attempt < max_retries && should_rejoin_group(&error) => {
+                retry_attempt += 1;
+                client.record_retry();
+                time::sleep(GROUP_JOIN_RETRY_BACKOFF).await;
+                continue;
+            }
+            Err(error) => return Err(error),
+        };
+        if response.error_code == 0 {
+            return Ok(response);
+        }
+
+        let error = client.broker_error(
+            response.error_code,
+            format!("find group coordinator {group_id}"),
+        );
+        if retry_attempt < max_retries && should_rejoin_group(&error) {
+            retry_attempt += 1;
+            client.record_retry();
+            debug!(
+                group_id,
+                retry_attempt,
+                error = %error,
+                "retrying kafka consumer group coordinator lookup"
+            );
+            time::sleep(GROUP_JOIN_RETRY_BACKOFF).await;
+            continue;
+        }
+        return Err(error);
+    }
 }
 
 fn topic_ids_for_names(
