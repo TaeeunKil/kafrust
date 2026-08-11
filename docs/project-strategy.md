@@ -92,6 +92,7 @@ Required evidence:
 Known limits:
 
 - plaintext remains the default networking path; TLS, SASL/PLAIN, and SASL_SSL/SCRAM-SHA-256 are live-verified for broker roundtrip, producer, direct consumer, and consumer group smoke paths on single-node Kafka 3.7.2 profiles
+- the default build has no C toolchain dependency, but the optional TLS feature currently uses the rustls ring provider and may require native build tooling
 - narrow broker compatibility matrix
 - incomplete protocol coverage
 - pre-1.0 public API

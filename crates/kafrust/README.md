@@ -4,7 +4,7 @@
 [![Docs.rs](https://docs.rs/kafrust/badge.svg)](https://docs.rs/kafrust)
 [![CI](https://github.com/TaeeunKil/kafrust/actions/workflows/ci.yml/badge.svg)](https://github.com/TaeeunKil/kafrust/actions/workflows/ci.yml)
 
-A pure Rust Kafka client with no librdkafka or C toolchain dependency.
+A pure Rust Kafka client with no librdkafka or C client binding dependency.
 
 `kafrust` is the high-level client crate in the kafrust workspace. It provides
 Tokio-based admin, producer, direct consumer, and alpha classic/KIP-848
@@ -21,8 +21,9 @@ default today.
 ## Design Goals
 
 - Keep Kafka concepts visible in public APIs.
-- Stay pure Rust with no `librdkafka`, C client binding, or required C
-  toolchain.
+- Stay pure Rust with no `librdkafka` or C client binding. The default build
+  requires no C toolchain; the optional TLS feature may require native build
+  tooling for its `rustls` ring crypto provider.
 - Make protocol and runtime behavior auditable through small, tested slices.
 - Claim compatibility only when a real broker profile has been verified.
 

@@ -47,8 +47,10 @@ kafrust is a Kafka client, not a Kafka broker or Kafka-compatible server.
 
 The strategic goal is to become a practical Rust-native client for applications
 that value a pure Rust implementation, auditable protocol code, and no required
-C toolchain. The project deliberately does not wrap `librdkafka`, and it does
-not try to hide Kafka's operational model behind a generic queue abstraction.
+C toolchain in the default build. The project deliberately does not wrap
+`librdkafka`, and it does not try to hide Kafka's operational model behind a
+generic queue abstraction. The optional `tls` feature currently uses the
+`rustls` ring provider and may require native build tooling in some environments.
 
 The near-term roadmap focuses on:
 
@@ -82,7 +84,9 @@ cargo add kafrust@0.2
 - Rust `1.81` or newer.
 - A Tokio runtime in the application.
 - A Kafka broker for runtime client calls.
-- No `librdkafka`, C client bindings, or required C toolchain.
+- No `librdkafka` or C client bindings; the default build requires no C
+  toolchain. The optional `tls` feature may require native build tooling for
+  its ring crypto provider.
 
 ## Usage
 
@@ -341,7 +345,8 @@ See [Compatibility](docs/compatibility.md) and
   consumer, and consumer group smoke paths. TLS certificate server name
   validation defaults to the bootstrap host and can be overridden with
   `tls_server_name(name)`. DER-encoded extra root certificates can be added with
-  `tls_root_certificate_der(bytes)`.
+  `tls_root_certificate_der(bytes)`. The current ring crypto provider can
+  require native build tooling for this optional feature.
 - SASL/PLAIN authentication is verified against Kafka `3.7.2` over
   `SaslPlaintext` for broker roundtrip, producer, direct consumer, and consumer
   group smoke paths. SASL/SCRAM-SHA-256 and SCRAM-SHA-512 are verified over
