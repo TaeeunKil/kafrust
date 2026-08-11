@@ -81,7 +81,8 @@ use kafrust_protocol::api::offset_delete::{
     OffsetDeleteRequestTopicV0, OffsetDeleteRequestV0, OffsetDeleteResponseV0,
 };
 use kafrust_protocol::api::offset_fetch::{
-    OffsetFetchRequestV2, OffsetFetchResponseV2, OffsetFetchTopic,
+    OffsetFetchRequestV2, OffsetFetchRequestV9, OffsetFetchResponseV2, OffsetFetchResponseV9,
+    OffsetFetchTopic, OffsetFetchTopicV9,
 };
 use kafrust_protocol::api::produce::{
     MessageSetMessage, ProducePartitionV2, ProducePartitionV3, ProduceRequestV2, ProduceRequestV3,
@@ -834,6 +835,29 @@ impl Client {
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(OffsetFetchResponseV2::decode_body(&mut decoder)?)
+    }
+
+    /// Sends OffsetFetch v9 for Kafka's KIP-848 consumer group protocol.
+    pub async fn offset_fetch_v9(
+        &mut self,
+        group_id: impl Into<String>,
+        member_id: Option<String>,
+        member_epoch: i32,
+        topics: Option<Vec<OffsetFetchTopicV9>>,
+    ) -> Result<OffsetFetchResponseV9> {
+        let request = OffsetFetchRequestV9 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            group_id: group_id.into(),
+            member_id,
+            member_epoch,
+            topics,
+            require_stable: false,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(OffsetFetchResponseV9::decode_body(&mut decoder)?)
     }
 
     /// Sends ListOffsets v1 to resolve timestamp-based partition offsets.

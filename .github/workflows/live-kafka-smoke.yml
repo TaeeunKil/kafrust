@@ -285,6 +285,9 @@ jobs:
       - name: Run KIP-848 foreground path
         run: cargo run -p kafrust --example consumer_group_poll
 
+      - name: Run KIP-848 committed offset fetch path
+        run: cargo run -p kafrust --example consumer_group_poll
+
       - name: Run KIP-848 background heartbeat rejoin path
         run: cargo run -p kafrust --example consumer_group_heartbeat_rejoin
 

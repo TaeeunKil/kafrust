@@ -20,7 +20,7 @@ use kafrust_protocol::api::offset_commit::{
     OffsetCommitTopicResponse, OffsetCommitTopicV7, OffsetCommitTopicV9,
 };
 use kafrust_protocol::api::offset_fetch::{
-    OffsetFetchPartitionResponse, OffsetFetchTopic, OffsetFetchTopicResponse,
+    OffsetFetchPartitionResponse, OffsetFetchTopic, OffsetFetchTopicResponse, OffsetFetchTopicV9,
 };
 use kafrust_protocol::api::sync_group::SyncGroupAssignment;
 use kafrust_protocol::consumer_group::{
@@ -655,6 +655,7 @@ impl ConsumerGroupConfig {
                 &self.group_id,
                 self.offset_reset_policy,
                 &assignment,
+                None,
             )
             .await?;
             let consumer_config = self.consumer_config();
@@ -793,6 +794,7 @@ impl ConsumerGroupConfig {
             &self.group_id,
             self.offset_reset_policy,
             &protocol_assignment,
+            Some((member_id.as_str(), response.member_epoch)),
         )
         .await?;
         let consumer_config = self.consumer_config();
@@ -1227,6 +1229,7 @@ impl ConsumerGroup {
                 &self.group_id,
                 self.config.offset_reset_policy,
                 &protocol_assignment,
+                Some((state.member_id.as_str(), state.member_epoch)),
             )
             .await?;
             self.consumer.replace_assignments(assignments);
@@ -1507,6 +1510,7 @@ impl ConsumerGroup {
                 &self.group_id,
                 self.config.offset_reset_policy,
                 &protocol_assignment,
+                Some((self.member_id.as_str(), self.generation_id)),
             )
             .await?;
             self.consumer.replace_assignments(assignments);
@@ -2205,25 +2209,47 @@ async fn assignments_from_protocol(
     group_id: &str,
     offset_reset_policy: OffsetResetPolicy,
     assignment: &ConsumerProtocolAssignmentV0,
+    consumer_member: Option<(&str, i32)>,
 ) -> Result<Vec<ConsumerAssignment>> {
     let mut assignments = Vec::new();
     let mut reset_partitions = Vec::new();
-    let offsets = coordinator
-        .offset_fetch_v2(group_id.to_owned(), Some(offset_fetch_topics(assignment)))
-        .await?;
-    if offsets.error_code != 0 {
+    let (offset_topics, offset_error_code) =
+        if let Some((member_id, member_epoch)) = consumer_member {
+            let offsets = coordinator
+                .offset_fetch_v9(
+                    group_id.to_owned(),
+                    Some(member_id.to_owned()),
+                    member_epoch,
+                    Some(offset_fetch_topics_v9(assignment)),
+                )
+                .await?;
+            let group = offsets
+                .groups
+                .into_iter()
+                .find(|group| group.group_id == group_id)
+                .ok_or(Error::Unsupported(
+                    "offset fetch response omitted requested group",
+                ))?;
+            (group.topics, group.error_code)
+        } else {
+            let offsets = coordinator
+                .offset_fetch_v2(group_id.to_owned(), Some(offset_fetch_topics(assignment)))
+                .await?;
+            (offsets.topics, offsets.error_code)
+        };
+    if offset_error_code != 0 {
         return Err(
-            coordinator.broker_error(offsets.error_code, format!("offset fetch group {group_id}"))
+            coordinator.broker_error(offset_error_code, format!("offset fetch group {group_id}"))
         );
     }
 
     for topic in &assignment.assignments {
         for partition in &topic.partitions {
-            let committed = committed_offset(group_id, &offsets.topics, &topic.topic, *partition)
+            let committed = committed_offset(group_id, &offset_topics, &topic.topic, *partition)
                 .map_err(|error| match error {
-                Error::Broker { code, context } => coordinator.broker_error(code, context),
-                error => error,
-            })?;
+                    Error::Broker { code, context } => coordinator.broker_error(code, context),
+                    error => error,
+                })?;
             match committed.filter(|offset| *offset >= 0) {
                 Some(next_offset) => assignments.push(ConsumerAssignment::new(
                     topic.topic.clone(),
@@ -2426,6 +2452,16 @@ fn offset_fetch_topics(assignment: &ConsumerProtocolAssignmentV0) -> Vec<OffsetF
         .map(|topic| OffsetFetchTopic {
             name: topic.topic.clone(),
             partition_indexes: topic.partitions.clone(),
+        })
+        .collect()
+}
+
+fn offset_fetch_topics_v9(assignment: &ConsumerProtocolAssignmentV0) -> Vec<OffsetFetchTopicV9> {
+    offset_fetch_topics(assignment)
+        .into_iter()
+        .map(|topic| OffsetFetchTopicV9 {
+            name: topic.name,
+            partition_indexes: topic.partition_indexes,
         })
         .collect()
 }
