@@ -1201,8 +1201,14 @@ Implemented evidence:
 - Cooperative-sticky group membership encodes Subscription v1 owned
   partitions and performs staged ownership transfers with focused local tests.
   Manual `Live Kafka Smoke` run `31464021305` passed the Kafka 3.7.2
-  three-broker cooperative group example; multi-member transfer, member-loss,
-  and rollback qualification remain open.
+  three-broker cooperative group example. Live Kafka Smoke run
+  [`31473920781`](https://github.com/TaeeunKil/kafrust/actions/runs/31473920781)
+  additionally passed multi-member ownership transfer, transient-member
+  rollback, and member-loss recovery in the three-broker profile.
+- Consumer-group rejoin preserves the broker-assigned dynamic member ID in
+  JoinGroup requests, preventing a rejoining member from being treated as a
+  new member during cooperative or classic rebalances. Focused tests cover
+  staged non-leader rejoin decisions and member-loss assignment recovery.
 - Dynamic and static members can explicitly leave through LeaveGroup v3,
   avoiding session-timeout cleanup after graceful shutdown.
 - Manual `Live Kafka Smoke` run `30065025169` passed graceful LeaveGroup v3 on
