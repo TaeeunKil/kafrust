@@ -46,7 +46,10 @@ pub use admin::{
     TopicConfigAlteration, TopicConfigResource, TopicListing,
 };
 pub use client::Client;
-pub use config::{ClientConfig, SaslCredentials, SaslMechanism, SecurityProtocol};
+pub use config::{
+    ClientConfig, OAuthBearerTokenFuture, OAuthBearerTokenProvider, SaslCredentials, SaslMechanism,
+    SecurityProtocol,
+};
 pub use consumer::{
     Consumer, ConsumerAssignment, ConsumerConfig, ConsumerRecord, IsolationLevel,
     PartitionWatermarks,

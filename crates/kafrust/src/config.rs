@@ -4,8 +4,9 @@ use crate::metrics::ClientMetrics;
 use crate::scram::{self, ScramHash};
 use core::fmt;
 use kafrust_protocol::codec::DecodeLimits;
+use std::future::Future;
+use std::pin::Pin;
 use std::str;
-#[cfg(feature = "tls")]
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -62,7 +63,30 @@ impl SaslMechanism {
     }
 }
 
-#[derive(Clone, PartialEq, Eq)]
+/// Future returned by an [`OAuthBearerTokenProvider`].
+pub type OAuthBearerTokenFuture = Pin<Box<dyn Future<Output = Result<String>> + Send>>;
+
+/// Supplies a fresh SASL/OAUTHBEARER token for a broker connection.
+///
+/// The provider is called whenever kafrust authenticates a new broker
+/// connection. Implementations can therefore refresh an expiring token before
+/// a bootstrap, metadata, coordinator, or failover connection is used.
+pub trait OAuthBearerTokenProvider: Send + Sync {
+    /// Fetches a token without exposing it to tracing or debug output.
+    fn fetch_token(&self) -> OAuthBearerTokenFuture;
+}
+
+impl<F, Fut> OAuthBearerTokenProvider for F
+where
+    F: Fn() -> Fut + Send + Sync,
+    Fut: Future<Output = Result<String>> + Send + 'static,
+{
+    fn fetch_token(&self) -> OAuthBearerTokenFuture {
+        Box::pin(self())
+    }
+}
+
+#[derive(Clone)]
 /// SASL authentication material.
 ///
 /// `Debug` output redacts the password so config diagnostics do not expose raw
@@ -73,6 +97,7 @@ pub struct SaslCredentials {
     username: String,
     password: String,
     oauthbearer_token: Option<String>,
+    oauthbearer_token_provider: Option<Arc<dyn OAuthBearerTokenProvider>>,
 }
 
 impl SaslCredentials {
@@ -83,6 +108,7 @@ impl SaslCredentials {
             username: username.into(),
             password: password.into(),
             oauthbearer_token: None,
+            oauthbearer_token_provider: None,
         }
     }
 
@@ -93,6 +119,7 @@ impl SaslCredentials {
             username: username.into(),
             password: password.into(),
             oauthbearer_token: None,
+            oauthbearer_token_provider: None,
         }
     }
 
@@ -103,6 +130,7 @@ impl SaslCredentials {
             username: username.into(),
             password: password.into(),
             oauthbearer_token: None,
+            oauthbearer_token_provider: None,
         }
     }
 
@@ -125,6 +153,33 @@ impl SaslCredentials {
             username: username.into(),
             password: String::new(),
             oauthbearer_token: Some(token.into()),
+            oauthbearer_token_provider: None,
+        }
+    }
+
+    /// Creates SASL/OAUTHBEARER credentials from an async token provider.
+    pub fn oauthbearer_with_provider<P>(provider: P) -> Self
+    where
+        P: OAuthBearerTokenProvider + 'static,
+    {
+        Self::oauthbearer_with_username_and_provider("", provider)
+    }
+
+    /// Creates SASL/OAUTHBEARER credentials with an authorization identity and
+    /// an async token provider.
+    pub fn oauthbearer_with_username_and_provider<P>(
+        username: impl Into<String>,
+        provider: P,
+    ) -> Self
+    where
+        P: OAuthBearerTokenProvider + 'static,
+    {
+        Self {
+            mechanism: SaslMechanism::OAuthBearer,
+            username: username.into(),
+            password: String::new(),
+            oauthbearer_token: None,
+            oauthbearer_token_provider: Some(Arc::new(provider)),
         }
     }
 
@@ -147,7 +202,37 @@ impl SaslCredentials {
     pub fn oauthbearer_token(&self) -> Option<&str> {
         self.oauthbearer_token.as_deref()
     }
+
+    async fn oauthbearer_token_for_auth(&self) -> Result<String> {
+        if let Some(token) = &self.oauthbearer_token {
+            return Ok(token.clone());
+        }
+        self.oauthbearer_token_provider
+            .as_ref()
+            .ok_or(Error::Unsupported("SASL/OAUTHBEARER token is missing"))?
+            .fetch_token()
+            .await
+    }
 }
+
+impl PartialEq for SaslCredentials {
+    fn eq(&self, other: &Self) -> bool {
+        self.mechanism == other.mechanism
+            && self.username == other.username
+            && self.password == other.password
+            && self.oauthbearer_token == other.oauthbearer_token
+            && match (
+                &self.oauthbearer_token_provider,
+                &other.oauthbearer_token_provider,
+            ) {
+                (None, None) => true,
+                (Some(left), Some(right)) => Arc::ptr_eq(left, right),
+                _ => false,
+            }
+    }
+}
+
+impl Eq for SaslCredentials {}
 
 impl fmt::Debug for SaslCredentials {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -158,6 +243,13 @@ impl fmt::Debug for SaslCredentials {
             .field(
                 "oauthbearer_token",
                 &self.oauthbearer_token.as_ref().map(|_| "<redacted>"),
+            )
+            .field(
+                "oauthbearer_token_provider",
+                &self
+                    .oauthbearer_token_provider
+                    .as_ref()
+                    .map(|_| "<configured>"),
             )
             .finish()
     }
@@ -300,6 +392,31 @@ impl ClientConfig {
         token: impl Into<String>,
     ) -> Self {
         self.sasl_credentials = Some(SaslCredentials::oauthbearer_with_username(username, token));
+        self
+    }
+
+    /// Sets SASL/OAUTHBEARER credentials from an async token provider.
+    pub fn sasl_oauthbearer_provider<P>(mut self, provider: P) -> Self
+    where
+        P: OAuthBearerTokenProvider + 'static,
+    {
+        self.sasl_credentials = Some(SaslCredentials::oauthbearer_with_provider(provider));
+        self
+    }
+
+    /// Sets SASL/OAUTHBEARER credentials with an authorization identity and
+    /// an async token provider.
+    pub fn sasl_oauthbearer_with_username_and_provider<P>(
+        mut self,
+        username: impl Into<String>,
+        provider: P,
+    ) -> Self
+    where
+        P: OAuthBearerTokenProvider + 'static,
+    {
+        self.sasl_credentials = Some(SaslCredentials::oauthbearer_with_username_and_provider(
+            username, provider,
+        ));
         self
     }
 
@@ -549,8 +666,9 @@ async fn authenticate_sasl_oauthbearer(
     credentials: &SaslCredentials,
     mechanism: &'static str,
 ) -> Result<()> {
+    let token = credentials.oauthbearer_token_for_auth().await?;
     let response = client
-        .sasl_authenticate_v0(sasl_oauthbearer_auth_bytes(credentials)?)
+        .sasl_authenticate_v0(sasl_oauthbearer_auth_bytes_with_token(credentials, &token)?)
         .await?;
     if response.error_code != 0 {
         return Err(client.broker_error(
@@ -649,10 +767,18 @@ fn sasl_plain_auth_bytes(credentials: &SaslCredentials) -> Vec<u8> {
     bytes
 }
 
+#[cfg(test)]
 fn sasl_oauthbearer_auth_bytes(credentials: &SaslCredentials) -> Result<Vec<u8>> {
     let token = credentials
         .oauthbearer_token()
         .ok_or(Error::Unsupported("SASL/OAUTHBEARER token is missing"))?;
+    sasl_oauthbearer_auth_bytes_with_token(credentials, token)
+}
+
+fn sasl_oauthbearer_auth_bytes_with_token(
+    credentials: &SaslCredentials,
+    token: &str,
+) -> Result<Vec<u8>> {
     if token.is_empty() {
         return Err(Error::Unsupported(
             "SASL/OAUTHBEARER token must not be empty",
@@ -853,6 +979,48 @@ mod tests {
         assert_eq!(credentials.oauthbearer_token(), Some("jwt-token"));
     }
 
+    #[tokio::test]
+    async fn fetches_sasl_oauthbearer_token_from_provider() {
+        let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let provider_calls = calls.clone();
+        let credentials =
+            SaslCredentials::oauthbearer_with_username_and_provider("alice", move || {
+                let provider_calls = provider_calls.clone();
+                async move {
+                    provider_calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    Ok("fresh-jwt-token".to_owned())
+                }
+            });
+
+        assert_eq!(credentials.oauthbearer_token(), None);
+        assert_eq!(
+            credentials.oauthbearer_token_for_auth().await.unwrap(),
+            "fresh-jwt-token"
+        );
+        assert_eq!(
+            credentials.oauthbearer_token_for_auth().await.unwrap(),
+            "fresh-jwt-token"
+        );
+        assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 2);
+        assert!(format!("{credentials:?}").contains("<configured>"));
+        assert!(!format!("{credentials:?}").contains("fresh-jwt-token"));
+    }
+
+    #[tokio::test]
+    async fn propagates_oauthbearer_provider_error_without_logging_token() {
+        let credentials = SaslCredentials::oauthbearer_with_provider(|| async {
+            Err(Error::Unsupported("oauth token provider failed"))
+        });
+
+        let error = credentials.oauthbearer_token_for_auth().await.unwrap_err();
+
+        assert!(matches!(
+            error,
+            Error::Unsupported("oauth token provider failed")
+        ));
+        assert!(!format!("{error}").contains("Bearer"));
+    }
+
     #[test]
     fn redacts_sasl_password_in_debug_output() {
         let credentials = SaslCredentials::plain("alice", "secret-password");
@@ -1051,7 +1219,9 @@ mod tests {
 
         let client = ClientConfig::new([addr.to_string()])
             .security_protocol(SecurityProtocol::SaslPlaintext)
-            .sasl_oauthbearer_with_username("alice", "jwt-token")
+            .sasl_oauthbearer_with_username_and_provider("alice", || async {
+                Ok("jwt-token".to_owned())
+            })
             .request_timeout_ms(1_000)
             .connect()
             .await;

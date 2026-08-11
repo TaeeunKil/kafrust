@@ -19,7 +19,7 @@ use kafrust_protocol::api::txn_offset_commit::{
 use kafrust_protocol::record_batch::RecordBatchCompression;
 
 use crate::client::Client;
-use crate::config::{ClientConfig, SecurityProtocol};
+use crate::config::{ClientConfig, OAuthBearerTokenProvider, SecurityProtocol};
 use crate::consumer::ConsumerAssignment;
 use crate::error::{BrokerErrorKind, Error, Result};
 use crate::group::ConsumerGroupMetadata;
@@ -2989,6 +2989,31 @@ impl ProducerConfig {
         token: impl Into<String>,
     ) -> Self {
         self.client = self.client.sasl_oauthbearer_with_username(username, token);
+        self
+    }
+
+    /// Sets SASL/OAUTHBEARER credentials from an async token provider.
+    pub fn sasl_oauthbearer_provider<P>(mut self, provider: P) -> Self
+    where
+        P: OAuthBearerTokenProvider + 'static,
+    {
+        self.client = self.client.sasl_oauthbearer_provider(provider);
+        self
+    }
+
+    /// Sets SASL/OAUTHBEARER credentials with an authorization identity and
+    /// an async token provider.
+    pub fn sasl_oauthbearer_with_username_and_provider<P>(
+        mut self,
+        username: impl Into<String>,
+        provider: P,
+    ) -> Self
+    where
+        P: OAuthBearerTokenProvider + 'static,
+    {
+        self.client = self
+            .client
+            .sasl_oauthbearer_with_username_and_provider(username, provider);
         self
     }
 
