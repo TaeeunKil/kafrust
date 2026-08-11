@@ -217,6 +217,11 @@ pub enum Error {
     },
     /// A static consumer group instance ID was configured as an empty string.
     InvalidGroupInstanceId,
+    /// A SCRAM credential request failed local validation before reaching Kafka.
+    InvalidScramCredential {
+        /// Redacted validation failure reason.
+        reason: &'static str,
+    },
     /// The requested Kafka feature is not implemented by this alpha API yet.
     Unsupported(&'static str),
     /// I/O failure while connecting to or communicating with a broker.
@@ -288,6 +293,9 @@ impl fmt::Display for Error {
             Self::InvalidGroupInstanceId => {
                 f.write_str("consumer group instance ID must not be empty")
             }
+            Self::InvalidScramCredential { reason } => {
+                write!(f, "invalid SCRAM credential: {reason}")
+            }
             Self::Unsupported(feature) => write!(f, "unsupported feature: {feature}"),
             Self::Io(error) => write!(f, "I/O error: {error}"),
             Self::TaskJoin(error) => write!(f, "background task join error: {error}"),
@@ -318,6 +326,7 @@ impl std::error::Error for Error {
             | Self::TlsConfig { .. }
             | Self::InvalidTlsServerName { .. }
             | Self::InvalidGroupInstanceId
+            | Self::InvalidScramCredential { .. }
             | Self::Unsupported(_) => None,
         }
     }

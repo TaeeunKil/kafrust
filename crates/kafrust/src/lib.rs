@@ -24,8 +24,9 @@ mod scram;
 pub use admin::{
     AclBinding, AclFilter, AclOperation, AclPatternType, AclPermissionType, AclResourceType,
     AdminClient, AlterClientQuotaEntryResult, AlterClientQuotasResult, AlterConfigResourceResult,
-    AlterConfigsOptions, AlterConfigsResult, BrokerDescription, ClientQuotaAlteration,
-    ClientQuotaEntity, ClientQuotaEntityComponent, ClientQuotaFilter, ClientQuotaFilterComponent,
+    AlterConfigsOptions, AlterConfigsResult, AlterScramCredentialResult,
+    AlterUserScramCredentialsResult, BrokerDescription, ClientQuotaAlteration, ClientQuotaEntity,
+    ClientQuotaEntityComponent, ClientQuotaFilter, ClientQuotaFilterComponent,
     ClientQuotaMatchType, ClientQuotaOperation, ClientQuotaValue, ClusterDescription,
     ConfigAlterOperation, ConfigAlterOperationKind, ConfigEntry, ConfigResourceResult,
     ConfigSource, ConfigSynonym, ConsumerGroupDescription, ConsumerGroupMember,
@@ -35,8 +36,11 @@ pub use admin::{
     DeleteConsumerGroupOffsetsPartitionResult, DeleteConsumerGroupOffsetsResult,
     DeleteConsumerGroupOffsetsTopicResult, DeleteConsumerGroupResult, DeleteTopicResult,
     DeleteTopicsOptions, DeleteTopicsResult, DeletedAclResult, DescribeAclsResult,
-    DescribeClientQuotasResult, DescribeConfigsOptions, DescribeConfigsResult, GroupListing,
-    NewPartitions, NewTopic, TopicConfigAlteration, TopicConfigResource, TopicListing,
+    DescribeClientQuotasResult, DescribeConfigsOptions, DescribeConfigsResult,
+    DescribeUserScramCredentialsResult, GroupListing, NewPartitions, NewTopic,
+    ScramCredentialDeletion, ScramCredentialInfo, ScramCredentialMechanism,
+    ScramCredentialUpsertion, ScramUserCredentials, TopicConfigAlteration, TopicConfigResource,
+    TopicListing,
 };
 pub use client::Client;
 pub use config::{ClientConfig, SaslCredentials, SaslMechanism, SecurityProtocol};

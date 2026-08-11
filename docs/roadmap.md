@@ -763,6 +763,13 @@ Implemented evidence:
   describe -> remove against Kafka 3.7.2 StandardAuthorizer in run
   `31459874329` on 2026-08-11; the example uses bounded polling for KRaft
   metadata visibility.
+- DescribeUserScramCredentials v0 and AlterUserScramCredentials v0 expose
+  typed user, mechanism, iteration, and per-user outcome APIs. Flexible v0
+  compact-field and tagged-field encoding is covered by wire and mock-broker
+  tests. The SASL_SSL SCRAM live profile passed credential upsert -> describe
+  -> delete against Kafka 3.7.2 in run `31461980967` on 2026-08-11. Upsertion
+  derives the salted password locally and does not retain plaintext passwords
+  or expose credential bytes in `Debug` output.
 - The `admin_describe_group` example runs after the consumer-group smoke path
   across plaintext, multi-broker, TLS, SASL_PLAINTEXT, and SASL_SSL profiles.
 - The admin lifecycle example waits for asynchronous metadata propagation in

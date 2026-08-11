@@ -185,26 +185,30 @@ fn salted_password(
     password: &[u8],
     server_first: &ServerFirst,
 ) -> Result<Vec<u8>, ScramError> {
+    Ok(derive_salted_password(
+        hash,
+        password,
+        &server_first.salt,
+        server_first.iterations,
+    ))
+}
+
+pub(crate) fn derive_salted_password(
+    hash: ScramHash,
+    password: &[u8],
+    salt: &[u8],
+    iterations: u32,
+) -> Vec<u8> {
     match hash {
         ScramHash::Sha256 => {
             let mut output = [0u8; 32];
-            pbkdf2_hmac::<Sha256>(
-                password,
-                &server_first.salt,
-                server_first.iterations,
-                &mut output,
-            );
-            Ok(output.to_vec())
+            pbkdf2_hmac::<Sha256>(password, salt, iterations, &mut output);
+            output.to_vec()
         }
         ScramHash::Sha512 => {
             let mut output = [0u8; 64];
-            pbkdf2_hmac::<Sha512>(
-                password,
-                &server_first.salt,
-                server_first.iterations,
-                &mut output,
-            );
-            Ok(output.to_vec())
+            pbkdf2_hmac::<Sha512>(password, salt, iterations, &mut output);
+            output.to_vec()
         }
     }
 }

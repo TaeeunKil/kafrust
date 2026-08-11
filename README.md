@@ -136,6 +136,9 @@ per-topic partial success and error responses. See [Admin API](docs/admin-api.md
 `describe_acls`, `create_acls`, and `delete_acls` expose typed ACL bindings,
 filters, and per-entry authorization outcomes; qualify them against an
 authorizer-enabled broker before production rollout.
+`describe_user_scram_credentials` and `alter_user_scram_credentials` expose
+typed SCRAM credential administration, including controller routing and
+per-user outcomes; the Kafka 3.7.2 SASL_SSL roundtrip is live-verified.
 Teams evaluating replacement of a librdkafka-backed application should follow
 the staged [rust-rdkafka migration guide](docs/migration-from-rust-rdkafka.md).
 
@@ -342,9 +345,9 @@ See [Compatibility](docs/compatibility.md) and
   explicit begin, commit, and abort. `IsolationLevel::ReadCommitted` hides
   aborted transaction records for direct and group consumers, and current
   group assignments can be committed through immediate or buffered
-  `send_group_offsets_to_transaction`. Remaining admin APIs and live broker
-  failure injection remain separate roadmap items; client quota
-  describe/alter is now available through `AdminClient`. Shared request, retry,
+  `send_group_offsets_to_transaction`. Replica reassignment and live broker
+  failure injection remain separate roadmap items; client quota and SCRAM
+  credential administration are now available through `AdminClient`. Shared request, retry,
   broker-error, producer,
   consumer, batch, and buffered-queue metrics are available together with
   high-level operation and `kafka.request` spans.

@@ -237,8 +237,9 @@ StandardAuthorizer live paths are verified in `Live Kafka Smoke` run
 `31457478358`, but a production migration still needs qualification against
 the service principal's actual broker permissions.
 
-Remaining admin blockers include replica reassignment and SCRAM credential
-administration. Client quota describe/alter is implemented and live-verified
+Replica reassignment remains the only listed admin blocker. SCRAM credential
+administration is implemented and live-verified over Kafka 3.7.2 SASL_SSL in
+`Live Kafka Smoke` run `31461980967`. Client quota describe/alter is implemented and live-verified
 against Kafka 3.7.2 StandardAuthorizer in `Live Kafka Smoke` run
 `31459874329`; production migration still requires the target principal's
 actual broker permissions and quota policy.
@@ -263,7 +264,8 @@ See [Admin API](admin-api.md) for typed request and response examples.
 | Full librdkafka config passthrough | Blocked by design |
 | ACL describe/create/delete with an authorizer-enabled broker | Verified on Kafka 3.7.2; qualify target permissions and policy |
 | Client quota describe/alter | Verified on Kafka 3.7.2 StandardAuthorizer; qualify target permissions and quota policy |
-| Replica-reassignment or SCRAM credential administration | Blocked |
+| SCRAM credential administration | Verified on Kafka 3.7.2 SASL_SSL; qualify target permissions and credential policy |
+| Replica reassignment | Blocked |
 
 "Candidate" means the API exists and relevant project tests pass. It does not
 replace workload-specific qualification against the target brokers, security
