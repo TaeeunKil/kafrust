@@ -710,7 +710,7 @@ impl ConsumerGroupConfig {
             None if member_epoch == 0 => Some(Vec::new()),
             None => None,
         };
-        let coordinator = find_group_coordinator_with_retry(
+        let mut coordinator = find_group_coordinator_with_retry(
             &mut bootstrap,
             &self.client,
             &self.group_id,
@@ -734,31 +734,51 @@ impl ConsumerGroupConfig {
                 Error::Broker { code, context } => self.client.broker_error(code, context),
                 error => error,
             })?;
-        let mut coordinator_client = self
-            .client
-            .connect_broker(coordinator_addr(&coordinator))
-            .await?;
         let requested_member_id = member_id.clone().unwrap_or_default();
-        let response = coordinator_client
-            .consumer_group_heartbeat_v0(
-                self.group_id.clone(),
-                requested_member_id,
-                member_epoch,
-                self.group_instance_id.clone(),
-                None,
-                self.rebalance_timeout_ms,
-                Some(self.topics.clone()),
-                self.server_assignor.clone(),
-                topic_partitions,
-            )
-            .await?;
-        if response.error_code != 0 {
-            return Err(consumer_group_heartbeat_error(
+        let mut heartbeat_retry_attempt = 0;
+        let (mut coordinator_client, response) = loop {
+            let mut coordinator_client = self
+                .client
+                .connect_broker(coordinator_addr(&coordinator))
+                .await?;
+            let response = coordinator_client
+                .consumer_group_heartbeat_v0(
+                    self.group_id.clone(),
+                    requested_member_id.clone(),
+                    member_epoch,
+                    self.group_instance_id.clone(),
+                    None,
+                    self.rebalance_timeout_ms,
+                    Some(self.topics.clone()),
+                    self.server_assignor.clone(),
+                    topic_partitions.clone(),
+                )
+                .await?;
+            if response.error_code == 0 {
+                break (coordinator_client, response);
+            }
+
+            let error = consumer_group_heartbeat_error(&self.client, &self.group_id, &response);
+            if heartbeat_retry_attempt >= self.max_retries || !should_rejoin_group(&error) {
+                return Err(error);
+            }
+            heartbeat_retry_attempt += 1;
+            self.client.record_retry();
+            debug!(
+                group_id = self.group_id.as_str(),
+                retry_attempt = heartbeat_retry_attempt,
+                error = %error,
+                "retrying kafka KIP-848 consumer group heartbeat"
+            );
+            time::sleep(GROUP_JOIN_RETRY_BACKOFF).await;
+            coordinator = find_group_coordinator_with_retry(
+                &mut bootstrap,
                 &self.client,
                 &self.group_id,
-                &response,
-            ));
-        }
+                self.max_retries,
+            )
+            .await?;
+        };
 
         let member_id = response.member_id.or(member_id).ok_or(Error::Unsupported(
             "consumer group heartbeat omitted member ID",
