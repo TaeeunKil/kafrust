@@ -39,6 +39,7 @@ const PROTOCOL_TYPE: &str = "consumer";
 const RANGE_PROTOCOL: &str = "range";
 const ROUND_ROBIN_PROTOCOL: &str = "roundrobin";
 const COOPERATIVE_STICKY_PROTOCOL: &str = "cooperative-sticky";
+const GROUP_JOIN_RETRY_BACKOFF: Duration = Duration::from_millis(50);
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 /// Partition assignment strategy advertised by a classic consumer group member.
@@ -308,7 +309,8 @@ impl ConsumerGroupConfig {
         self
     }
 
-    /// Sets the maximum number of retry attempts for transient fetch failures.
+    /// Sets the maximum number of retry attempts for transient group-join and
+    /// fetch failures.
     pub fn max_retries(mut self, max_retries: u32) -> Self {
         self.max_retries = max_retries;
         self
@@ -400,174 +402,196 @@ impl ConsumerGroupConfig {
         if self.group_instance_id.as_deref() == Some("") {
             return Err(Error::InvalidGroupInstanceId);
         }
-        debug!(
-            group_id = self.group_id.as_str(),
-            topic_count = self.topics.len(),
-            "joining kafka consumer group"
-        );
-        let config = self.clone();
+        let mut member_id = member_id;
+        let mut retry_attempt = 0;
 
-        let mut bootstrap = self.client.clone().connect().await?;
-        let coordinator = bootstrap
-            .find_group_coordinator(self.group_id.clone())
-            .await?;
-        if coordinator.error_code != 0 {
-            return Err(self.client.broker_error(
-                coordinator.error_code,
-                format!("find group coordinator {}", self.group_id),
-            ));
-        }
+        loop {
+            debug!(
+                group_id = self.group_id.as_str(),
+                topic_count = self.topics.len(),
+                retry_attempt,
+                "joining kafka consumer group"
+            );
+            let config = self.clone();
 
-        let coordinator_addr = coordinator_addr(&coordinator);
-        let mut coordinator_client = self.client.connect_broker(coordinator_addr).await?;
-        let subscription = match self.assignment_strategy {
-            ConsumerGroupAssignmentStrategy::CooperativeSticky => ConsumerProtocolSubscriptionV1 {
-                topics: self.topics.clone(),
-                user_data: None,
-                owned_partitions: owned_partitions.clone(),
-            }
-            .encode()?,
-            ConsumerGroupAssignmentStrategy::Range
-            | ConsumerGroupAssignmentStrategy::RoundRobin => ConsumerProtocolSubscriptionV0 {
-                topics: self.topics.clone(),
-                user_data: None,
-            }
-            .encode()?,
-        };
-        let protocols = vec![kafrust_protocol::api::join_group::JoinGroupProtocol {
-            name: self.assignment_strategy.protocol_name().to_owned(),
-            metadata: subscription,
-        }];
-        let is_rejoin = member_id.is_some();
-        let member_id = member_id.unwrap_or_default();
-        let joined = if let Some(group_instance_id) = &self.group_instance_id {
-            let response = coordinator_client
-                .join_group_v5(
-                    self.group_id.clone(),
-                    self.session_timeout_ms,
-                    self.rebalance_timeout_ms,
-                    member_id,
-                    Some(group_instance_id.clone()),
-                    PROTOCOL_TYPE,
-                    protocols,
-                )
+            let mut bootstrap = self.client.clone().connect().await?;
+            let coordinator = bootstrap
+                .find_group_coordinator(self.group_id.clone())
                 .await?;
-            JoinedGroup {
-                error_code: response.error_code,
-                generation_id: response.generation_id,
-                protocol_name: response.protocol_name,
-                leader: response.leader,
-                member_id: response.member_id,
-                members: response
-                    .members
-                    .into_iter()
-                    .map(|member| JoinGroupMember {
-                        member_id: member.member_id,
-                        metadata: member.metadata,
-                    })
-                    .collect(),
+            if coordinator.error_code != 0 {
+                return Err(self.client.broker_error(
+                    coordinator.error_code,
+                    format!("find group coordinator {}", self.group_id),
+                ));
             }
-        } else {
-            let response = coordinator_client
-                .join_group_v2(
-                    self.group_id.clone(),
-                    self.session_timeout_ms,
-                    self.rebalance_timeout_ms,
-                    member_id,
-                    PROTOCOL_TYPE,
-                    protocols,
-                )
-                .await?;
-            JoinedGroup {
-                error_code: response.error_code,
-                generation_id: response.generation_id,
-                protocol_name: response.protocol_name,
-                leader: response.leader,
-                member_id: response.member_id,
-                members: response.members,
+
+            let coordinator_addr = coordinator_addr(&coordinator);
+            let mut coordinator_client = self.client.connect_broker(coordinator_addr).await?;
+            let subscription = match self.assignment_strategy {
+                ConsumerGroupAssignmentStrategy::CooperativeSticky => {
+                    ConsumerProtocolSubscriptionV1 {
+                        topics: self.topics.clone(),
+                        user_data: None,
+                        owned_partitions: owned_partitions.clone(),
+                    }
+                    .encode()?
+                }
+                ConsumerGroupAssignmentStrategy::Range
+                | ConsumerGroupAssignmentStrategy::RoundRobin => ConsumerProtocolSubscriptionV0 {
+                    topics: self.topics.clone(),
+                    user_data: None,
+                }
+                .encode()?,
+            };
+            let protocols = vec![kafrust_protocol::api::join_group::JoinGroupProtocol {
+                name: self.assignment_strategy.protocol_name().to_owned(),
+                metadata: subscription,
+            }];
+            let is_rejoin = member_id.is_some();
+            let requested_member_id = member_id.take().unwrap_or_default();
+            let joined = if let Some(group_instance_id) = &self.group_instance_id {
+                let response = coordinator_client
+                    .join_group_v5(
+                        self.group_id.clone(),
+                        self.session_timeout_ms,
+                        self.rebalance_timeout_ms,
+                        requested_member_id,
+                        Some(group_instance_id.clone()),
+                        PROTOCOL_TYPE,
+                        protocols,
+                    )
+                    .await?;
+                JoinedGroup {
+                    error_code: response.error_code,
+                    generation_id: response.generation_id,
+                    protocol_name: response.protocol_name,
+                    leader: response.leader,
+                    member_id: response.member_id,
+                    members: response
+                        .members
+                        .into_iter()
+                        .map(|member| JoinGroupMember {
+                            member_id: member.member_id,
+                            metadata: member.metadata,
+                        })
+                        .collect(),
+                }
+            } else {
+                let response = coordinator_client
+                    .join_group_v2(
+                        self.group_id.clone(),
+                        self.session_timeout_ms,
+                        self.rebalance_timeout_ms,
+                        requested_member_id,
+                        PROTOCOL_TYPE,
+                        protocols,
+                    )
+                    .await?;
+                JoinedGroup {
+                    error_code: response.error_code,
+                    generation_id: response.generation_id,
+                    protocol_name: response.protocol_name,
+                    leader: response.leader,
+                    member_id: response.member_id,
+                    members: response.members,
+                }
+            };
+            if joined.error_code != 0 {
+                return Err(self
+                    .client
+                    .broker_error(joined.error_code, format!("join group {}", self.group_id)));
             }
-        };
-        if joined.error_code != 0 {
-            return Err(self
-                .client
-                .broker_error(joined.error_code, format!("join group {}", self.group_id)));
-        }
 
-        let assignments = if joined.member_id == joined.leader {
-            let metadata = bootstrap.metadata(Some(self.topics.clone())).await?;
-            assignments_for_strategy(&joined.protocol_name, &joined.members, &metadata)?
-        } else {
-            Vec::new()
-        };
-        let synced = if let Some(group_instance_id) = &self.group_instance_id {
-            coordinator_client
-                .sync_group_v3(
-                    self.group_id.clone(),
-                    joined.generation_id,
-                    joined.member_id.clone(),
-                    Some(group_instance_id.clone()),
-                    assignments,
-                )
-                .await?
-        } else {
-            coordinator_client
-                .sync_group_v2(
-                    self.group_id.clone(),
-                    joined.generation_id,
-                    joined.member_id.clone(),
-                    assignments,
-                )
-                .await?
-        };
-        if synced.error_code != 0 {
-            return Err(self
-                .client
-                .broker_error(synced.error_code, format!("sync group {}", self.group_id)));
-        }
+            let assignments = if joined.member_id == joined.leader {
+                let metadata = bootstrap.metadata(Some(self.topics.clone())).await?;
+                assignments_for_strategy(&joined.protocol_name, &joined.members, &metadata)?
+            } else {
+                Vec::new()
+            };
+            let synced = if let Some(group_instance_id) = &self.group_instance_id {
+                coordinator_client
+                    .sync_group_v3(
+                        self.group_id.clone(),
+                        joined.generation_id,
+                        joined.member_id.clone(),
+                        Some(group_instance_id.clone()),
+                        assignments,
+                    )
+                    .await?
+            } else {
+                coordinator_client
+                    .sync_group_v2(
+                        self.group_id.clone(),
+                        joined.generation_id,
+                        joined.member_id.clone(),
+                        assignments,
+                    )
+                    .await?
+            };
+            if synced.error_code != 0 {
+                let error = self
+                    .client
+                    .broker_error(synced.error_code, format!("sync group {}", self.group_id));
+                if retry_attempt < self.max_retries && should_rejoin_group(&error) {
+                    retry_attempt += 1;
+                    self.client.record_retry();
+                    member_id = Some(joined.member_id.clone());
+                    debug!(
+                        group_id = self.group_id.as_str(),
+                        retry_attempt,
+                        error = %error,
+                        "retrying kafka consumer group join after transient sync error"
+                    );
+                    time::sleep(GROUP_JOIN_RETRY_BACKOFF).await;
+                    continue;
+                }
+                return Err(error);
+            }
 
-        let assignment = ConsumerProtocolAssignmentV0::decode(&synced.assignment)?;
-        let cooperative_rejoin_required = self.assignment_strategy
-            == ConsumerGroupAssignmentStrategy::CooperativeSticky
-            && cooperative_rejoin_required_for_assignment(
-                &joined.members,
-                &owned_partitions,
+            let assignment = ConsumerProtocolAssignmentV0::decode(&synced.assignment)?;
+            let cooperative_rejoin_required = self.assignment_strategy
+                == ConsumerGroupAssignmentStrategy::CooperativeSticky
+                && cooperative_rejoin_required_for_assignment(
+                    &joined.members,
+                    &owned_partitions,
+                    &assignment,
+                    is_rejoin,
+                )?;
+            let consumer_assignments = assignments_from_protocol(
+                &mut coordinator_client,
+                &mut bootstrap,
+                &self.client,
+                &self.group_id,
+                self.offset_reset_policy,
                 &assignment,
-                is_rejoin,
-            )?;
-        let consumer_assignments = assignments_from_protocol(
-            &mut coordinator_client,
-            &mut bootstrap,
-            &self.client,
-            &self.group_id,
-            self.offset_reset_policy,
-            &assignment,
-        )
-        .await?;
-        let consumer_config = self.consumer_config();
-        let consumer_client = self.client.clone().connect().await?;
+            )
+            .await?;
+            let consumer_config = self.consumer_config();
+            let consumer_client = self.client.clone().connect().await?;
 
-        debug!(
-            group_id = self.group_id.as_str(),
-            member_id = joined.member_id.as_str(),
-            generation_id = joined.generation_id,
-            assignment_count = consumer_assignments.len(),
-            "joined kafka consumer group"
-        );
+            debug!(
+                group_id = self.group_id.as_str(),
+                member_id = joined.member_id.as_str(),
+                generation_id = joined.generation_id,
+                assignment_count = consumer_assignments.len(),
+                "joined kafka consumer group"
+            );
 
-        Ok(ConsumerGroup {
-            config,
-            group_id: self.group_id,
-            generation_id: joined.generation_id,
-            member_id: joined.member_id,
-            retention_time_ms: self.retention_time_ms,
-            coordinator: coordinator_client,
-            cooperative_rejoin_required,
-            consumer: Consumer::from_assignments(
-                consumer_client,
-                consumer_config,
-                consumer_assignments,
-            ),
-        })
+            return Ok(ConsumerGroup {
+                config,
+                group_id: self.group_id,
+                generation_id: joined.generation_id,
+                member_id: joined.member_id,
+                retention_time_ms: self.retention_time_ms,
+                coordinator: coordinator_client,
+                cooperative_rejoin_required,
+                consumer: Consumer::from_assignments(
+                    consumer_client,
+                    consumer_config,
+                    consumer_assignments,
+                ),
+            });
+        }
     }
 }
 
