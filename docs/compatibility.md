@@ -7,7 +7,7 @@ mapping, and high-level foreground group path are implemented and covered by
 focused tests. The classic and KIP-848 paths are separate selections through
 `ConsumerGroupProtocol`. The dedicated Kafka 4.3.1 KIP-848 live profile also
 passes join, assignment, foreground/background heartbeat, v9 offset commit,
-rejoin, and graceful leave behavior.
+v9 offset fetch, rejoin, and graceful leave behavior.
 
 ## Current Compatibility Claim
 
@@ -158,7 +158,9 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
 - Consumer group join, sync, heartbeat, poll, and offset commit through the alpha classic consumer group path with range assignment.
 - KIP-848 consumer groups through `ConsumerGroupHeartbeat v0`, Metadata v12
   topic UUID assignment, member-epoch foreground/background heartbeats,
-  OffsetCommit v9, rejoin after concurrent membership, and explicit leave.
+  OffsetFetch v9, OffsetCommit v9, rejoin after concurrent membership, and
+  explicit leave. The same group is run twice to exercise committed-offset
+  recovery.
   The dedicated Kafka 4.3.1 profile passed this path in
   [`Live Kafka Smoke` run `31492612082`](https://github.com/TaeeunKil/kafrust/actions/runs/31492612082).
 - Consumer group assignments without committed offsets resolve

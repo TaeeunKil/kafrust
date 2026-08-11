@@ -195,7 +195,9 @@ calling `leave`.
 
 KIP-848 groups use OffsetCommit v9, including flexible request/response
 encoding and the member epoch in `GenerationIdOrMemberEpoch`. Classic groups
-retain the existing v2/v7 routing.
+retain the existing v2/v7 routing. KIP-848 assignment initialization uses
+OffsetFetch v9 with the member ID and member epoch; classic assignment
+initialization continues to use OffsetFetch v2.
 
 Current implementation status:
 
