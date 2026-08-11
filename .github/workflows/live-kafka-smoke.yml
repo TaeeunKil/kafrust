@@ -1126,6 +1126,9 @@ jobs:
       - name: Run ACL admin example
         run: cargo run -p kafrust --example admin_acls
 
+      - name: Run client quota admin example
+        run: cargo run -p kafrust --example admin_client_quotas
+
       - name: Dump ACL authorizer Kafka logs
         if: failure()
         run: docker logs kafrust-kafka-acls

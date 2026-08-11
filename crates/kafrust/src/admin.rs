@@ -1,6 +1,9 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
+use kafrust_protocol::api::alter_client_quotas::{
+    AlterClientQuotasEntityV0, AlterClientQuotasEntryV0, AlterClientQuotasOperationV0,
+};
 use kafrust_protocol::api::create_acls::CreateAclsCreationV1;
 use kafrust_protocol::api::create_partitions::{
     CreatePartitionsAssignmentV0, CreatePartitionsTopicResultV0, CreatePartitionsTopicV0,
@@ -14,6 +17,10 @@ use kafrust_protocol::api::delete_acls::{
 use kafrust_protocol::api::delete_groups::DeleteGroupResultV1;
 use kafrust_protocol::api::delete_topics::DeleteTopicsTopicResultV3;
 use kafrust_protocol::api::describe_acls::{DescribeAclsEntryV1, DescribeAclsResponseV1};
+use kafrust_protocol::api::describe_client_quotas::{
+    DescribeClientQuotasComponentV0, DescribeClientQuotasEntityV0, DescribeClientQuotasEntryV0,
+    DescribeClientQuotasResponseV0, DescribeClientQuotasValueV0,
+};
 use kafrust_protocol::api::describe_configs::{
     DescribeConfigsEntryV1, DescribeConfigsResourceV1, DescribeConfigsResultV1,
     DescribeConfigsSynonymV1,
@@ -191,6 +198,76 @@ impl AdminClient {
         }
 
         Ok(DeleteAclsResult::from_protocol(response, filters))
+    }
+
+    /// Describes client quotas matching a typed Kafka quota filter.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.describe_client_quotas",
+        skip_all,
+        fields(strict = filter.strict, component_count = filter.components.len()),
+        err
+    )]
+    pub async fn describe_client_quotas(
+        &self,
+        filter: &ClientQuotaFilter,
+    ) -> Result<DescribeClientQuotasResult> {
+        let mut client = self.config.clone().connect().await?;
+        let response = client
+            .describe_client_quotas_v0(
+                filter
+                    .components
+                    .iter()
+                    .map(ClientQuotaFilterComponent::as_protocol)
+                    .collect(),
+                filter.strict,
+            )
+            .await?;
+        if response.error_code != 0 {
+            self.config.record_broker_error();
+        }
+        Ok(DescribeClientQuotasResult::from_protocol(response))
+    }
+
+    /// Alters client quotas and preserves each entity-level broker outcome.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.alter_client_quotas",
+        skip_all,
+        fields(alteration_count = alterations.len(), validate_only),
+        err
+    )]
+    pub async fn alter_client_quotas(
+        &self,
+        alterations: &[ClientQuotaAlteration],
+        validate_only: bool,
+    ) -> Result<AlterClientQuotasResult> {
+        let mut client = self.config.clone().connect().await?;
+        let response = client
+            .alter_client_quotas_v0(
+                alterations
+                    .iter()
+                    .map(ClientQuotaAlteration::as_protocol)
+                    .collect(),
+                validate_only,
+            )
+            .await?;
+        for result in &response.entries {
+            if result.error_code != 0 {
+                self.config.record_broker_error();
+            }
+        }
+        if response.entries.len() != alterations.len() {
+            return Err(Error::ResponseCountMismatch {
+                operation: "AlterClientQuotas",
+                expected: alterations.len(),
+                actual: response.entries.len(),
+            });
+        }
+        Ok(AlterClientQuotasResult::from_protocol(
+            response,
+            alterations,
+        ))
     }
 
     /// Describes configurations for Kafka topics using DescribeConfigs v1.
@@ -1287,6 +1364,491 @@ impl DeleteAclsFilterResult {
                         error_code,
                         error_message,
                     }
+                })
+                .collect(),
+        }
+    }
+}
+
+/// How a client quota filter matches an entity name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClientQuotaMatchType {
+    /// Match one exact entity name.
+    Exact,
+    /// Match the broker's default entity.
+    Default,
+    /// Match any explicitly named entity.
+    Any,
+    /// Preserve a future Kafka match type.
+    Other(i8),
+}
+
+impl ClientQuotaMatchType {
+    fn code(self) -> i8 {
+        match self {
+            Self::Exact => 0,
+            Self::Default => 1,
+            Self::Any => 2,
+            Self::Other(code) => code,
+        }
+    }
+}
+
+/// One typed entity component in a client quota entity.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClientQuotaEntityComponent {
+    entity_type: String,
+    entity_name: Option<String>,
+}
+
+impl ClientQuotaEntityComponent {
+    /// Creates an entity component, using `None` for Kafka's default entity.
+    pub fn new(entity_type: impl Into<String>, entity_name: Option<impl Into<String>>) -> Self {
+        Self {
+            entity_type: entity_type.into(),
+            entity_name: entity_name.map(Into::into),
+        }
+    }
+
+    /// Returns the Kafka entity type, such as `user` or `client-id`.
+    pub fn entity_type(&self) -> &str {
+        &self.entity_type
+    }
+
+    /// Returns the optional entity name.
+    pub fn entity_name(&self) -> Option<&str> {
+        self.entity_name.as_deref()
+    }
+}
+
+/// A compound Kafka client quota entity.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClientQuotaEntity {
+    components: Vec<ClientQuotaEntityComponent>,
+}
+
+impl ClientQuotaEntity {
+    /// Creates a quota entity from its components.
+    pub fn new(components: impl IntoIterator<Item = ClientQuotaEntityComponent>) -> Self {
+        Self {
+            components: components.into_iter().collect(),
+        }
+    }
+
+    /// Creates a quota entity for one Kafka user.
+    pub fn user(name: impl Into<String>) -> Self {
+        Self::new([ClientQuotaEntityComponent::new("user", Some(name))])
+    }
+
+    /// Creates a quota entity for one Kafka client ID.
+    pub fn client_id(name: impl Into<String>) -> Self {
+        Self::new([ClientQuotaEntityComponent::new("client-id", Some(name))])
+    }
+
+    /// Returns the entity components.
+    pub fn components(&self) -> &[ClientQuotaEntityComponent] {
+        &self.components
+    }
+
+    fn as_protocol(&self) -> Vec<AlterClientQuotasEntityV0> {
+        self.components
+            .iter()
+            .map(|component| AlterClientQuotasEntityV0 {
+                entity_type: component.entity_type.clone(),
+                entity_name: component.entity_name.clone(),
+            })
+            .collect()
+    }
+
+    fn from_protocol(components: Vec<DescribeClientQuotasEntityV0>) -> Self {
+        Self::new(components.into_iter().map(|component| {
+            ClientQuotaEntityComponent::new(component.entity_type, component.entity_name)
+        }))
+    }
+
+    fn from_alter_protocol(components: Vec<AlterClientQuotasEntityV0>) -> Self {
+        Self::new(components.into_iter().map(|component| {
+            ClientQuotaEntityComponent::new(component.entity_type, component.entity_name)
+        }))
+    }
+}
+
+/// One component in a client quota describe filter.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClientQuotaFilterComponent {
+    entity_type: String,
+    match_type: ClientQuotaMatchType,
+    match_value: Option<String>,
+}
+
+impl ClientQuotaFilterComponent {
+    /// Creates a quota filter component.
+    pub fn new(
+        entity_type: impl Into<String>,
+        match_type: ClientQuotaMatchType,
+        match_value: Option<impl Into<String>>,
+    ) -> Self {
+        Self {
+            entity_type: entity_type.into(),
+            match_type,
+            match_value: match_value.map(Into::into),
+        }
+    }
+
+    /// Returns the Kafka entity type.
+    pub fn entity_type(&self) -> &str {
+        &self.entity_type
+    }
+
+    /// Returns the matching mode.
+    pub fn match_type(&self) -> ClientQuotaMatchType {
+        self.match_type
+    }
+
+    /// Returns the optional exact or named match value.
+    pub fn match_value(&self) -> Option<&str> {
+        self.match_value.as_deref()
+    }
+
+    fn as_protocol(&self) -> DescribeClientQuotasComponentV0 {
+        DescribeClientQuotasComponentV0 {
+            entity_type: self.entity_type.clone(),
+            match_type: self.match_type.code(),
+            match_value: self.match_value.clone(),
+        }
+    }
+}
+
+/// Filter used by `AdminClient::describe_client_quotas`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClientQuotaFilter {
+    components: Vec<ClientQuotaFilterComponent>,
+    strict: bool,
+}
+
+impl ClientQuotaFilter {
+    /// Creates an empty, non-strict filter that describes all quota entities.
+    pub fn any() -> Self {
+        Self {
+            components: Vec::new(),
+            strict: false,
+        }
+    }
+
+    /// Adds one entity component to the filter.
+    pub fn component(mut self, component: ClientQuotaFilterComponent) -> Self {
+        self.components.push(component);
+        self
+    }
+
+    /// Sets whether entities with unspecified types are excluded.
+    pub fn strict(mut self, strict: bool) -> Self {
+        self.strict = strict;
+        self
+    }
+
+    /// Returns filter components.
+    pub fn components(&self) -> &[ClientQuotaFilterComponent] {
+        &self.components
+    }
+
+    /// Returns whether the filter is strict.
+    pub fn is_strict(&self) -> bool {
+        self.strict
+    }
+}
+
+/// One client quota value alteration.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ClientQuotaOperation {
+    key: String,
+    value: f64,
+    remove: bool,
+}
+
+impl ClientQuotaOperation {
+    /// Creates a quota value operation.
+    pub fn new(key: impl Into<String>, value: f64, remove: bool) -> Self {
+        Self {
+            key: key.into(),
+            value,
+            remove,
+        }
+    }
+
+    /// Creates an operation that sets a quota value.
+    pub fn set(key: impl Into<String>, value: f64) -> Self {
+        Self::new(key, value, false)
+    }
+
+    /// Creates an operation that removes a quota value.
+    pub fn remove(key: impl Into<String>) -> Self {
+        Self::new(key, 0.0, true)
+    }
+
+    /// Returns the quota key.
+    pub fn key(&self) -> &str {
+        &self.key
+    }
+
+    /// Returns the value sent to Kafka.
+    pub fn value(&self) -> f64 {
+        self.value
+    }
+
+    /// Returns whether this operation removes the value.
+    pub fn is_remove(&self) -> bool {
+        self.remove
+    }
+
+    fn as_protocol(&self) -> AlterClientQuotasOperationV0 {
+        AlterClientQuotasOperationV0 {
+            key: self.key.clone(),
+            value: self.value,
+            remove: self.remove,
+        }
+    }
+}
+
+/// One compound client quota alteration.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ClientQuotaAlteration {
+    entity: ClientQuotaEntity,
+    operations: Vec<ClientQuotaOperation>,
+}
+
+impl ClientQuotaAlteration {
+    /// Creates an alteration for one quota entity.
+    pub fn new(entity: ClientQuotaEntity) -> Self {
+        Self {
+            entity,
+            operations: Vec::new(),
+        }
+    }
+
+    /// Adds a set operation.
+    pub fn set(mut self, key: impl Into<String>, value: f64) -> Self {
+        self.operations.push(ClientQuotaOperation::set(key, value));
+        self
+    }
+
+    /// Adds a remove operation.
+    pub fn remove(mut self, key: impl Into<String>) -> Self {
+        self.operations.push(ClientQuotaOperation::remove(key));
+        self
+    }
+
+    /// Returns the target entity.
+    pub fn entity(&self) -> &ClientQuotaEntity {
+        &self.entity
+    }
+
+    /// Returns operations in request order.
+    pub fn operations(&self) -> &[ClientQuotaOperation] {
+        &self.operations
+    }
+
+    fn as_protocol(&self) -> AlterClientQuotasEntryV0 {
+        AlterClientQuotasEntryV0 {
+            entities: self.entity.as_protocol(),
+            operations: self
+                .operations
+                .iter()
+                .map(ClientQuotaOperation::as_protocol)
+                .collect(),
+        }
+    }
+}
+
+/// One quota key/value returned by Kafka.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ClientQuotaValue {
+    key: String,
+    value: f64,
+}
+
+impl ClientQuotaValue {
+    /// Returns the quota key.
+    pub fn key(&self) -> &str {
+        &self.key
+    }
+
+    /// Returns the quota value.
+    pub fn value(&self) -> f64 {
+        self.value
+    }
+}
+
+/// One entity and its quota values.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ClientQuotaEntry {
+    entity: ClientQuotaEntity,
+    values: Vec<ClientQuotaValue>,
+}
+
+impl ClientQuotaEntry {
+    /// Returns the quota entity.
+    pub fn entity(&self) -> &ClientQuotaEntity {
+        &self.entity
+    }
+
+    /// Returns quota values.
+    pub fn values(&self) -> &[ClientQuotaValue] {
+        &self.values
+    }
+}
+
+/// Result returned by [`AdminClient::describe_client_quotas`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct DescribeClientQuotasResult {
+    throttle_time: Duration,
+    error_code: i16,
+    error_message: Option<String>,
+    entries: Vec<ClientQuotaEntry>,
+}
+
+impl DescribeClientQuotasResult {
+    /// Returns the broker throttle duration.
+    pub fn throttle_time(&self) -> Duration {
+        self.throttle_time
+    }
+
+    /// Returns the top-level Kafka error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns the top-level Kafka error message.
+    pub fn error_message(&self) -> Option<&str> {
+        self.error_message.as_deref()
+    }
+
+    /// Returns the broker error classification, when the request failed.
+    pub fn broker_error_kind(&self) -> Option<BrokerErrorKind> {
+        (self.error_code != 0).then(|| BrokerErrorKind::from_code(self.error_code))
+    }
+
+    /// Returns whether the top-level quota request succeeded.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+    }
+
+    /// Returns quota entries.
+    pub fn entries(&self) -> &[ClientQuotaEntry] {
+        &self.entries
+    }
+
+    fn from_protocol(response: DescribeClientQuotasResponseV0) -> Self {
+        Self {
+            throttle_time: Duration::from_millis(nonnegative_i32_to_u64(response.throttle_time_ms)),
+            error_code: response.error_code,
+            error_message: response.error_message,
+            entries: response
+                .entries
+                .into_iter()
+                .map(ClientQuotaEntry::from_protocol)
+                .collect(),
+        }
+    }
+}
+
+impl ClientQuotaEntry {
+    fn from_protocol(entry: DescribeClientQuotasEntryV0) -> Self {
+        Self {
+            entity: ClientQuotaEntity::from_protocol(entry.entities),
+            values: entry
+                .values
+                .into_iter()
+                .map(|value: DescribeClientQuotasValueV0| ClientQuotaValue {
+                    key: value.key,
+                    value: value.value,
+                })
+                .collect(),
+        }
+    }
+}
+
+/// Per-entity result returned by [`AdminClient::alter_client_quotas`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterClientQuotaEntryResult {
+    alteration: ClientQuotaAlteration,
+    error_code: i16,
+    error_message: Option<String>,
+    entity: ClientQuotaEntity,
+}
+
+impl AlterClientQuotaEntryResult {
+    /// Returns the submitted alteration.
+    pub fn alteration(&self) -> &ClientQuotaAlteration {
+        &self.alteration
+    }
+
+    /// Returns the broker error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns the broker error message.
+    pub fn error_message(&self) -> Option<&str> {
+        self.error_message.as_deref()
+    }
+
+    /// Returns the entity echoed by Kafka.
+    pub fn entity(&self) -> &ClientQuotaEntity {
+        &self.entity
+    }
+
+    /// Returns whether this alteration succeeded.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+    }
+}
+
+/// Result returned by [`AdminClient::alter_client_quotas`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterClientQuotasResult {
+    throttle_time: Duration,
+    entries: Vec<AlterClientQuotaEntryResult>,
+}
+
+impl AlterClientQuotasResult {
+    /// Returns the broker throttle duration.
+    pub fn throttle_time(&self) -> Duration {
+        self.throttle_time
+    }
+
+    /// Returns per-entity alteration outcomes.
+    pub fn entries(&self) -> &[AlterClientQuotaEntryResult] {
+        &self.entries
+    }
+
+    /// Returns whether every alteration succeeded.
+    pub fn is_success(&self) -> bool {
+        self.entries
+            .iter()
+            .all(AlterClientQuotaEntryResult::is_success)
+    }
+
+    /// Returns whether any alteration failed.
+    pub fn has_errors(&self) -> bool {
+        !self.is_success()
+    }
+
+    fn from_protocol(
+        response: kafrust_protocol::api::alter_client_quotas::AlterClientQuotasResponseV0,
+        alterations: &[ClientQuotaAlteration],
+    ) -> Self {
+        Self {
+            throttle_time: Duration::from_millis(nonnegative_i32_to_u64(response.throttle_time_ms)),
+            entries: response
+                .entries
+                .into_iter()
+                .zip(alterations.iter().cloned())
+                .map(|(result, alteration)| AlterClientQuotaEntryResult {
+                    entity: ClientQuotaEntity::from_alter_protocol(result.entities),
+                    error_code: result.error_code,
+                    error_message: result.error_message,
+                    alteration,
                 })
                 .collect(),
         }
@@ -2858,11 +3420,14 @@ fn nonnegative_i32_to_u64(value: i32) -> u64 {
 mod tests {
     use super::{
         AclFilter, AclOperation, AclPatternType, AclPermissionType, AclResourceType, AdminClient,
-        AlterConfigsOptions, ConfigAlterOperationKind, ConfigSource, ConsumerGroupOffsetDelete,
-        CreatePartitionsOptions, CreateTopicsOptions, DeleteTopicsOptions, DescribeConfigsOptions,
-        NewPartitions, NewTopic, TopicConfigAlteration, TopicConfigResource,
+        AlterConfigsOptions, ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter,
+        ClientQuotaFilterComponent, ClientQuotaMatchType, ConfigAlterOperationKind, ConfigSource,
+        ConsumerGroupOffsetDelete, CreatePartitionsOptions, CreateTopicsOptions,
+        DeleteTopicsOptions, DescribeConfigsOptions, NewPartitions, NewTopic,
+        TopicConfigAlteration, TopicConfigResource,
     };
     use crate::{BrokerErrorKind, ClientConfig, ClientMetrics};
+    use kafrust_protocol::codec::Encoder;
     use std::time::Duration;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
@@ -3133,6 +3698,58 @@ mod tests {
                 .binding()
                 .principal(),
             "User:alice"
+        );
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn describes_and_alters_client_quotas_with_typed_results() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut describe_connection, _) = listener.accept().await.unwrap();
+            let describe_request = read_frame(&mut describe_connection).await;
+            assert_eq!(&describe_request[0..4], &[0, 48, 0, 0]);
+            write_frame(&mut describe_connection, &describe_client_quotas_response()).await;
+
+            let (mut alter_connection, _) = listener.accept().await.unwrap();
+            let alter_request = read_frame(&mut alter_connection).await;
+            assert_eq!(&alter_request[0..4], &[0, 49, 0, 0]);
+            write_frame(&mut alter_connection, &alter_client_quotas_response()).await;
+        });
+        let admin = AdminClient::new(ClientConfig::new([addr.to_string()]));
+        let filter = ClientQuotaFilter::any().component(ClientQuotaFilterComponent::new(
+            "user",
+            ClientQuotaMatchType::Exact,
+            Some("alice"),
+        ));
+
+        let described = admin.describe_client_quotas(&filter).await.unwrap();
+        assert!(described.is_success());
+        assert_eq!(described.entries().len(), 1);
+        assert_eq!(
+            described.entries()[0].entity().components()[0].entity_type(),
+            "user"
+        );
+        assert_eq!(
+            described.entries()[0].values()[0].key(),
+            "producer_byte_rate"
+        );
+        assert_eq!(described.entries()[0].values()[0].value(), 1024.5);
+
+        let altered = admin
+            .alter_client_quotas(
+                &[ClientQuotaAlteration::new(ClientQuotaEntity::user("alice"))
+                    .set("producer_byte_rate", 1024.5)],
+                false,
+            )
+            .await
+            .unwrap();
+        assert!(altered.is_success());
+        assert_eq!(altered.entries().len(), 1);
+        assert_eq!(
+            altered.entries()[0].entity().components()[0].entity_name(),
+            Some("alice")
         );
         server.await.unwrap();
     }
@@ -3729,6 +4346,35 @@ mod tests {
             3,    // read operation
             3,    // allow permission
         ]
+    }
+
+    fn describe_client_quotas_response() -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_i32(7); // throttle time
+        encoder.write_i16(0); // success
+        encoder.write_nullable_string(None).unwrap();
+        encoder.write_i32(1); // entry count
+        encoder.write_i32(1); // entity count
+        encoder.write_string("user").unwrap();
+        encoder.write_nullable_string(Some("alice")).unwrap();
+        encoder.write_i32(1); // value count
+        encoder.write_string("producer_byte_rate").unwrap();
+        encoder.write_f64(1024.5);
+        encoder.into_bytes()
+    }
+
+    fn alter_client_quotas_response() -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(2); // correlation ID
+        encoder.write_i32(5); // throttle time
+        encoder.write_i32(1); // result count
+        encoder.write_i16(0); // success
+        encoder.write_nullable_string(None).unwrap();
+        encoder.write_i32(1); // entity count
+        encoder.write_string("user").unwrap();
+        encoder.write_nullable_string(Some("alice")).unwrap();
+        encoder.into_bytes()
     }
 
     fn incremental_alter_configs_response() -> Vec<u8> {

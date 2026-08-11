@@ -17,13 +17,14 @@ mod tests {
         encoder.write_i16(0x1234);
         encoder.write_i32(0x1234_5678);
         encoder.write_i64(0x0102_0304_0506_0708);
+        encoder.write_f64(123.5);
 
         let bytes = encoder.into_bytes();
         assert_eq!(
             bytes,
             [
                 1, 0x12, 0x34, 0x12, 0x34, 0x56, 0x78, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
-                0x08,
+                0x08, 0x40, 0x5e, 0xe0, 0x00, 0x00, 0x00, 0x00, 0x00,
             ]
         );
 
@@ -32,6 +33,7 @@ mod tests {
         assert_eq!(decoder.read_i16().unwrap(), 0x1234);
         assert_eq!(decoder.read_i32().unwrap(), 0x1234_5678);
         assert_eq!(decoder.read_i64().unwrap(), 0x0102_0304_0506_0708);
+        assert_eq!(decoder.read_f64().unwrap(), 123.5);
         assert!(decoder.is_empty());
     }
 

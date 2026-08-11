@@ -61,8 +61,11 @@ DeleteTopics route through the active controller, while group descriptions
 and deletion route through each group coordinator. Group listing queries all
 advertised brokers. ACL describe/create/delete operations preserve typed
 bindings and partial authorization results; qualify them against an
-authorizer-enabled broker before production rollout. See the repository's
-`docs/admin-api.md` for details.
+authorizer-enabled broker before production rollout. Client quota
+describe/alter operations preserve typed entities, floating-point values, and
+per-entity results; both paths are live-verified in the documented Kafka
+3.7.2 StandardAuthorizer profile. See the repository's `docs/admin-api.md`
+for details.
 
 ## Install
 
@@ -431,9 +434,8 @@ Verified high-level paths include:
   `IsolationLevel::ReadCommitted` hides aborted transaction records for direct
   and group consumers, and current group assignments can be committed through
   generation-fenced `Producer::send_group_offsets_to_transaction`.
-  Transactional buffered sends and
-  admin APIs beyond topic inspection, configuration description and alteration,
-  creation/deletion, and consumer-group description are not implemented yet.
+  Transactional buffered sends and remaining admin APIs such as replica
+  reassignment and SCRAM credential administration are not implemented yet.
   Shared request, retry, broker-error, producer, consumer, batch, and
   buffered-queue metrics are available together with high-level operation and
   request spans.

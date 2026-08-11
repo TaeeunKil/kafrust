@@ -23,17 +23,20 @@ mod scram;
 
 pub use admin::{
     AclBinding, AclFilter, AclOperation, AclPatternType, AclPermissionType, AclResourceType,
-    AdminClient, AlterConfigResourceResult, AlterConfigsOptions, AlterConfigsResult,
-    BrokerDescription, ClusterDescription, ConfigAlterOperation, ConfigAlterOperationKind,
-    ConfigEntry, ConfigResourceResult, ConfigSource, ConfigSynonym, ConsumerGroupDescription,
-    ConsumerGroupMember, ConsumerGroupOffsetDelete, CreateAclsEntryResult, CreateAclsResult,
-    CreatePartitionsOptions, CreatePartitionsResult, CreatePartitionsTopicResult,
-    CreateTopicResult, CreateTopicsOptions, CreateTopicsResult, DeleteAclsFilterResult,
-    DeleteAclsResult, DeleteConsumerGroupOffsetsPartitionResult, DeleteConsumerGroupOffsetsResult,
+    AdminClient, AlterClientQuotaEntryResult, AlterClientQuotasResult, AlterConfigResourceResult,
+    AlterConfigsOptions, AlterConfigsResult, BrokerDescription, ClientQuotaAlteration,
+    ClientQuotaEntity, ClientQuotaEntityComponent, ClientQuotaFilter, ClientQuotaFilterComponent,
+    ClientQuotaMatchType, ClientQuotaOperation, ClientQuotaValue, ClusterDescription,
+    ConfigAlterOperation, ConfigAlterOperationKind, ConfigEntry, ConfigResourceResult,
+    ConfigSource, ConfigSynonym, ConsumerGroupDescription, ConsumerGroupMember,
+    ConsumerGroupOffsetDelete, CreateAclsEntryResult, CreateAclsResult, CreatePartitionsOptions,
+    CreatePartitionsResult, CreatePartitionsTopicResult, CreateTopicResult, CreateTopicsOptions,
+    CreateTopicsResult, DeleteAclsFilterResult, DeleteAclsResult,
+    DeleteConsumerGroupOffsetsPartitionResult, DeleteConsumerGroupOffsetsResult,
     DeleteConsumerGroupOffsetsTopicResult, DeleteConsumerGroupResult, DeleteTopicResult,
     DeleteTopicsOptions, DeleteTopicsResult, DeletedAclResult, DescribeAclsResult,
-    DescribeConfigsOptions, DescribeConfigsResult, GroupListing, NewPartitions, NewTopic,
-    TopicConfigAlteration, TopicConfigResource, TopicListing,
+    DescribeClientQuotasResult, DescribeConfigsOptions, DescribeConfigsResult, GroupListing,
+    NewPartitions, NewTopic, TopicConfigAlteration, TopicConfigResource, TopicListing,
 };
 pub use client::Client;
 pub use config::{ClientConfig, SaslCredentials, SaslMechanism, SecurityProtocol};

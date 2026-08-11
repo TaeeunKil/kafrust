@@ -34,6 +34,11 @@ impl Encoder {
         self.output.extend_from_slice(&value.to_be_bytes());
     }
 
+    pub fn write_f64(&mut self, value: f64) {
+        self.output
+            .extend_from_slice(&value.to_bits().to_be_bytes());
+    }
+
     pub fn write_string(&mut self, value: &str) -> Result<()> {
         let length = i16::try_from(value.len()).map_err(|_| Error::LengthOverflow("string"))?;
         self.write_i16(length);

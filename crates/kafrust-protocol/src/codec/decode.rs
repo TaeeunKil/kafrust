@@ -135,6 +135,13 @@ impl<'a> Decoder<'a> {
         ]))
     }
 
+    pub fn read_f64(&mut self) -> Result<f64> {
+        let bytes = self.read_exact(8)?;
+        Ok(f64::from_bits(u64::from_be_bytes([
+            bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
+        ])))
+    }
+
     pub fn read_string(&mut self) -> Result<String> {
         let length = self.read_i16()?;
         if length < 0 {

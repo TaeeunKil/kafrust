@@ -413,3 +413,43 @@ focused `Live Kafka Smoke` ACL authorizer job passed against Kafka 3.7.2
 StandardAuthorizer in manual run `31457478358` on 2026-08-11 using an
 explicitly provisioned `User:ANONYMOUS` superuser. Production migrations must
 still qualify the target broker's authorizer policy and service principal.
+
+## Describe and Alter Client Quotas
+
+```rust
+use kafrust::{
+    AdminClient, ClientConfig, ClientQuotaAlteration, ClientQuotaEntity,
+    ClientQuotaFilter, ClientQuotaFilterComponent, ClientQuotaMatchType,
+};
+
+# async fn example() -> kafrust::Result<()> {
+let admin = AdminClient::new(ClientConfig::new(["localhost:9092"]));
+let entity = ClientQuotaEntity::user("alice");
+admin
+    .alter_client_quotas(
+        &[ClientQuotaAlteration::new(entity).set("producer_byte_rate", 1_048_576.0)],
+        false,
+    )
+    .await?;
+
+let filter = ClientQuotaFilter::any().component(ClientQuotaFilterComponent::new(
+    "user",
+    ClientQuotaMatchType::Exact,
+    Some("alice"),
+));
+let result = admin.describe_client_quotas(&filter).await?;
+for entry in result.entries() {
+    for value in entry.values() {
+        println!("{}={}", value.key(), value.value());
+    }
+}
+# Ok(())
+# }
+```
+
+Client quota operations use DescribeClientQuotas v0 and AlterClientQuotas v0.
+Entity components, filter match modes, floating-point quota values, validation
+mode, throttle time, and per-entity error outcomes remain typed. Use
+`ClientQuotaAlteration::remove` to restore a broker default. The wire value is
+`FLOAT64`, but Kafka validates individual quota keys; for example,
+`producer_byte_rate` must be a whole number of bytes per second.
