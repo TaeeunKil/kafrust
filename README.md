@@ -321,7 +321,8 @@ brokers.
 
 Verified paths currently include:
 
-- `ApiVersions v0` and `Metadata v1` roundtrips.
+- `ApiVersions v0` and flexible `ApiVersions v3` capability roundtrips, plus
+  `Metadata v1` roundtrips.
 - High-level producer single-record, batch, and buffered sends.
 - Direct topic-partition fetch with Fetch v4 response decoding.
 - Classic consumer group join, sync, heartbeat, poll, and offset commit.

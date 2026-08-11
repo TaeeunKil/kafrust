@@ -425,7 +425,8 @@ three-broker profiles are verified against Kafka `3.7.2`.
 
 Verified high-level paths include:
 
-- `ApiVersions v0` and `Metadata v1` roundtrips.
+- `ApiVersions v0` and flexible `ApiVersions v3` capability roundtrips, plus
+  `Metadata v1` roundtrips.
 - Producer single-record, batch, and buffered sends.
 - Direct topic-partition fetch using Fetch v4 response decoding.
 - Classic consumer group join, sync, heartbeat, poll, and offset commit.

@@ -5,7 +5,7 @@ use std::task::{Context, Poll};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use kafrust_protocol::api::add_partitions_to_txn::AddPartitionsToTxnTopic;
-use kafrust_protocol::api::api_versions::ApiVersionsResponseV0;
+use kafrust_protocol::api::api_versions::ApiVersionsLookup;
 use kafrust_protocol::api::metadata::{BrokerMetadata, MetadataResponseV1};
 use kafrust_protocol::api::produce::{
     encoded_message_set_len, encoded_record_batch_set_len_with_compression, MessageSetMessage,
@@ -1871,7 +1871,9 @@ impl Producer {
             .client
             .connect_broker(key.broker_addr.clone())
             .await?;
-        let api_versions = leader_client.api_versions().await?;
+        let api_versions = leader_client
+            .api_versions_v3("kafrust", env!("CARGO_PKG_VERSION"))
+            .await?;
         if api_versions.error_code != 0 {
             return Err(self.config.client.broker_error(
                 api_versions.error_code,
@@ -2155,7 +2157,9 @@ impl Producer {
         );
 
         let mut leader_client = self.config.client.connect_broker(broker_addr).await?;
-        let api_versions = leader_client.api_versions().await?;
+        let api_versions = leader_client
+            .api_versions_v3("kafrust", env!("CARGO_PKG_VERSION"))
+            .await?;
         if api_versions.error_code != 0 {
             return Err(self.config.client.broker_error(
                 api_versions.error_code,
@@ -3524,7 +3528,7 @@ enum ProduceVersion {
 }
 
 fn select_produce_version(
-    api_versions: &ApiVersionsResponseV0,
+    api_versions: &impl ApiVersionsLookup,
     record: &ProducerRecord,
     compression: Compression,
 ) -> Result<ProduceVersion> {
@@ -3564,7 +3568,7 @@ fn select_produce_version(
 }
 
 fn select_produce_batch_version(
-    api_versions: &ApiVersionsResponseV0,
+    api_versions: &impl ApiVersionsLookup,
     records: &[PreparedBatchRecord<'_>],
     compression: Compression,
 ) -> Result<ProduceVersion> {
@@ -5524,7 +5528,7 @@ mod tests {
         let leader_server = tokio::spawn(async move {
             let (mut first_socket, _) = listener.accept().await.unwrap();
             let first_versions = read_frame(&mut first_socket).await;
-            assert_eq!(&first_versions[0..4], &[0, 18, 0, 0]);
+            assert_eq!(&first_versions[0..4], &[0, 18, 0, 3]);
             write_frame(&mut first_socket, &api_versions_response_frame(3)).await;
             let first_produce = read_frame(&mut first_socket).await;
             assert_eq!(&first_produce[0..4], &[0, 0, 0, 3]);
@@ -5532,7 +5536,7 @@ mod tests {
 
             let (mut retry_socket, _) = listener.accept().await.unwrap();
             let retry_versions = read_frame(&mut retry_socket).await;
-            assert_eq!(&retry_versions[0..4], &[0, 18, 0, 0]);
+            assert_eq!(&retry_versions[0..4], &[0, 18, 0, 3]);
             write_frame(&mut retry_socket, &api_versions_response_frame(3)).await;
             let retry_produce = read_frame(&mut retry_socket).await;
             assert_eq!(retry_produce, first_produce);
@@ -5737,11 +5741,14 @@ mod tests {
         let mut frame = vec![
             0, 0, 0, 1, // correlation id
             0, 0, // error code
-            0, 0, 0, 1, // api key count
+            2, // compact api key count: one entry
             0, 0, // Produce API key
             0, 0, // minimum version
         ];
         frame.extend_from_slice(&max_produce_version.to_be_bytes());
+        frame.push(0); // ApiVersions entry tagged fields
+        frame.extend_from_slice(&[0, 0, 0, 0]); // throttle time
+        frame.push(0); // response tagged fields
         frame
     }
 

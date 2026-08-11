@@ -13,7 +13,9 @@ use kafrust_protocol::api::alter_partition_reassignments::{
 use kafrust_protocol::api::alter_user_scram_credentials::{
     AlterUserScramCredentialsRequestV0, AlterUserScramCredentialsResponseV0,
 };
-use kafrust_protocol::api::api_versions::{ApiVersionsRequestV0, ApiVersionsResponseV0};
+use kafrust_protocol::api::api_versions::{
+    ApiVersionsRequestV0, ApiVersionsRequestV3, ApiVersionsResponseV0, ApiVersionsResponseV3,
+};
 use kafrust_protocol::api::consumer_group_heartbeat::{
     ConsumerGroupHeartbeatRequestV0, ConsumerGroupHeartbeatResponseV0,
     ConsumerGroupHeartbeatTopicPartitions,
@@ -229,6 +231,29 @@ impl Client {
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(ApiVersionsResponseV0::decode_body(&mut decoder)?)
+    }
+
+    /// Sends flexible ApiVersions v3 and decodes the broker capability ranges.
+    ///
+    /// The legacy [`Self::api_versions`] method remains available for callers
+    /// that need the fixed v0 response shape. This method reports KIP-511
+    /// client software fields and preserves unknown response tags so newer
+    /// brokers can add capability metadata without breaking decoding.
+    pub async fn api_versions_v3(
+        &mut self,
+        client_software_name: impl Into<String>,
+        client_software_version: impl Into<String>,
+    ) -> Result<ApiVersionsResponseV3> {
+        let request = ApiVersionsRequestV3 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            client_software_name: client_software_name.into(),
+            client_software_version: client_software_version.into(),
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(ApiVersionsResponseV3::decode_body(&mut decoder)?)
     }
 
     pub(crate) async fn sasl_handshake_v1(
@@ -1754,6 +1779,62 @@ mod tests {
         assert_eq!(metrics.requests_failed, 0);
         assert_eq!(metrics.response_bytes, 16);
         assert_eq!(metrics.in_flight_requests, 0);
+        broker.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn sends_flexible_api_versions_v3_over_injected_broker_stream() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(1024);
+        let broker = tokio::spawn(async move {
+            let mut request_size = [0u8; 4];
+            broker_stream.read_exact(&mut request_size).await.unwrap();
+            let request_size = usize::try_from(i32::from_be_bytes(request_size)).unwrap();
+            let mut request = vec![0u8; request_size];
+            broker_stream.read_exact(&mut request).await.unwrap();
+
+            assert_eq!(
+                request,
+                [
+                    0, 18, // api key
+                    0, 3, // api version
+                    0, 0, 0, 1, // correlation id
+                    0xff, 0xff, // nullable client id
+                    0,    // request header tagged fields
+                    8, b'k', b'a', b'f', b'r', b'u', b's', b't', // software name
+                    6, b'0', b'.', b'3', b'.', b'0', // software version
+                    0,    // request body tagged fields
+                ]
+            );
+
+            let response = [
+                0, 0, 0, 1, // correlation id
+                0, 0, // error code
+                2, // compact api key count: one entry
+                0, 18, 0, 0, 0, 4, 0, // ApiVersions min/max + entry tags
+                0, 0, 0, 0, // throttle time
+                0, // response tagged fields
+            ];
+            broker_stream
+                .write_all(&(response.len() as i32).to_be_bytes())
+                .await
+                .unwrap();
+            broker_stream.write_all(&response).await.unwrap();
+            broker_stream.flush().await.unwrap();
+        });
+
+        let mut client =
+            Client::from_stream(Box::new(client_stream), None, Some(Duration::from_secs(1)));
+
+        let response = client.api_versions_v3("kafrust", "0.3.0").await.unwrap();
+
+        assert_eq!(response.error_code, 0);
+        assert_eq!(response.throttle_time_ms, 0);
+        assert_eq!(response.highest_supported_version(18, 4), Some(4));
+        assert!(response.tagged_fields.is_empty());
+        let metrics = client.metrics().snapshot();
+        assert_eq!(metrics.requests_started, 1);
+        assert_eq!(metrics.requests_succeeded, 1);
+        assert_eq!(metrics.response_bytes, 19);
         broker.await.unwrap();
     }
 
