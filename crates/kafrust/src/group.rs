@@ -1206,7 +1206,7 @@ impl ConsumerGroup {
 
     async fn apply_consumer_heartbeat_state(
         &mut self,
-        heartbeat: &ConsumerGroupHeartbeat,
+        heartbeat: &mut ConsumerGroupHeartbeat,
     ) -> Result<()> {
         let Some(state) = heartbeat.consumer_state_snapshot().await else {
             return Ok(());
@@ -1234,8 +1234,10 @@ impl ConsumerGroup {
             self.consumer_heartbeat_assignment_version = state.assignment_version;
         }
 
-        self.member_id = state.member_id;
+        self.member_id = state.member_id.clone();
         self.generation_id = state.member_epoch;
+        heartbeat.member_id = state.member_id;
+        heartbeat.generation_id = state.member_epoch;
         Ok(())
     }
 

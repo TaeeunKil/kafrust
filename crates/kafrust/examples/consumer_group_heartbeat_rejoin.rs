@@ -50,12 +50,16 @@ async fn run_rejoin_scenario() -> kafrust::Result<()> {
     }
     let second = second_join.await??;
 
-    first.poll_with_heartbeat(&mut heartbeat).await?;
-    if first.generation_id() == initial_generation {
-        return Err(Error::Unsupported(
-            "consumer group generation did not change during rebalance",
-        ));
-    }
+    tokio::time::timeout(Duration::from_secs(10), async {
+        while first.generation_id() == initial_generation {
+            first.poll_with_heartbeat(&mut heartbeat).await?;
+        }
+        Ok::<(), kafrust::Error>(())
+    })
+    .await
+    .map_err(|_| {
+        Error::Unsupported("consumer group generation did not change during rebalance")
+    })??;
     if heartbeat.group_id() != first.group_id()
         || heartbeat.member_id() != first.member_id()
         || heartbeat.generation_id() != first.generation_id()
