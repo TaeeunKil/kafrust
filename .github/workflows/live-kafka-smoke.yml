@@ -967,7 +967,13 @@ jobs:
           docker exec kafrust-kafka-sasl-ssl /opt/kafka/bin/kafka-configs.sh \
             --bootstrap-server localhost:9092 \
             --alter \
-            --add-config 'SCRAM-SHA-256=[iterations=4096,password=kafrust-secret],SCRAM-SHA-512=[iterations=4096,password=kafrust-secret]' \
+            --add-config 'SCRAM-SHA-256=[iterations=4096,password=kafrust-secret]' \
+            --entity-type users \
+            --entity-name kafrust
+          docker exec kafrust-kafka-sasl-ssl /opt/kafka/bin/kafka-configs.sh \
+            --bootstrap-server localhost:9092 \
+            --alter \
+            --add-config 'SCRAM-SHA-512=[iterations=4096,password=kafrust-secret]' \
             --entity-type users \
             --entity-name kafrust
 
