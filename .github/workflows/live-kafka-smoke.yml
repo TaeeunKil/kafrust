@@ -172,6 +172,13 @@ jobs:
           KAFRUST_GROUP_PROTOCOL: consumer
         run: cargo run -p kafrust --example consumer_group_poll
 
+      - name: Run KIP-848 background heartbeat rejoin example
+        if: matrix.kafka-version == '4.3.1'
+        env:
+          KAFRUST_GROUP_ID: kafrust-consumer-heartbeat-${{ matrix.kafka-version }}-${{ github.run_id }}
+          KAFRUST_GROUP_PROTOCOL: consumer
+        run: cargo run -p kafrust --example consumer_group_heartbeat_rejoin
+
       - name: Run consumer group offset reset example
         env:
           KAFRUST_GROUP_ID: kafrust-offset-reset-${{ matrix.kafka-version }}
