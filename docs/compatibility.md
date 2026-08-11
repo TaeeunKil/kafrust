@@ -4,7 +4,7 @@ kafrust compatibility claims are scoped to behavior that has been verified again
 
 ## Current Compatibility Claim
 
-The `0.2.x` alpha line is verified against Apache Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 KRaft brokers over plaintext TCP in the single-node profile. Kafka 3.7.2 is also verified in a three-broker plaintext profile. TLS, SASL/PLAIN over SASL_PLAINTEXT, and SASL/SCRAM-SHA-256 and SCRAM-SHA-512 over SASL_SSL are verified against Kafka 3.7.2 for the documented single-node smoke paths. The SHA-512 profile covers broker roundtrip, producer, batch producer, buffered producer, direct consumer, and consumer group poll paths. ACL create, describe, and delete plus client quota set, describe, and remove are live-verified against a Kafka 3.7.2 KRaft broker with StandardAuthorizer enabled. SCRAM credential upsert, describe, and delete are live-verified over the SASL_SSL profile. Controller-routed partition reassignment submission and completion polling are live-verified in the Kafka 3.7.2 three-broker profile. The cooperative-sticky consumer protocol path is also live-verified in that three-broker profile; multi-member ownership transfer and failure qualification remain open.
+The `0.2.x` alpha line is verified against Apache Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 KRaft brokers over plaintext TCP in the single-node profile. Kafka 3.7.2 is also verified in a three-broker plaintext profile. TLS, SASL/PLAIN over SASL_PLAINTEXT, and SASL/SCRAM-SHA-256 and SCRAM-SHA-512 over SASL_SSL are verified against Kafka 3.7.2 for the documented single-node smoke paths. The SHA-512 profile covers broker roundtrip, producer, batch producer, buffered producer, direct consumer, and consumer group poll paths. ACL create, describe, and delete plus client quota set, describe, and remove are live-verified against a Kafka 3.7.2 KRaft broker with StandardAuthorizer enabled. SCRAM credential upsert, describe, and delete are live-verified over the SASL_SSL profile. Controller-routed partition reassignment submission and completion polling are live-verified in the Kafka 3.7.2 three-broker profile. The cooperative-sticky consumer protocol path is also live-verified in that three-broker profile; multi-member ownership transfer and failure qualification remain open. Acks=0 immediate and batch Produce dispatch is live-verified against Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 single-node plaintext profiles; this verifies request completion, not broker acceptance.
 
 | Broker | Mode | Security | Verification | Status |
 | --- | --- | --- | --- | --- |
@@ -21,6 +21,7 @@ The `0.2.x` alpha line is verified against Apache Kafka 3.7.2, 3.8.1, 3.9.1, and
 | Apache Kafka 3.7.2 | single-node KRaft | SASL_SSL SCRAM credential administration | `Live Kafka Smoke` SASL_SSL SCRAM job, manual run `31461980967` on 2026-08-11 | Passing |
 | Apache Kafka 3.7.2 | three-broker KRaft | controller-routed partition reassignment | `Live Kafka Smoke` multi-broker job, manual run `31462962605` on 2026-08-11 | Passing |
 | Apache Kafka 3.7.2 | three-broker KRaft | cooperative-sticky consumer protocol and initial staged assignment | `Live Kafka Smoke` multi-broker job, manual run `31464021305` on 2026-08-11 | Passing; multi-member transfer qualification pending |
+| Apache Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1 | single-node KRaft | Produce `acks=0` immediate and batch dispatch | `Live Kafka Smoke`, manual run `31464933145` on 2026-08-11 | Passing; broker acceptance is intentionally unconfirmed |
 
 ## Verified Paths
 
@@ -64,6 +65,11 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
   three-broker profile passed the cooperative group example in manual run
   `31464021305`; live multi-member transfer, member loss, and rollback
   qualification are still required before this is a broad replacement claim.
+- Produce `acks=0` encodes the requested Produce API version, writes and flushes
+  the request, and returns unknown-offset metadata without attempting to read a
+  response. Immediate and batch examples passed against Kafka 3.7.2, 3.8.1,
+  3.9.1, and 4.3.1 in manual run `31464933145`. This mode intentionally cannot
+  report broker or partition-level failures after the write.
 - IncrementalAlterConfigs v0 followed by DescribeConfigs v1 verification.
   Manual run `30061073263` passed this update-and-readback path against Kafka
   3.7.2 and Kafka 4.3.1.

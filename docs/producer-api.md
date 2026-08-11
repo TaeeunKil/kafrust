@@ -253,7 +253,12 @@ Current implementation status:
 - Record headers are encoded with Kafka RecordBatch magic v2 through Produce API v3.
 - When a broker only supports Produce API v2, records without headers fall back to the legacy MessageSet path.
 - Records with headers return `Unsupported` if the target broker does not support Produce API v3.
-- `acks=0` is rejected for now because the current client request loop expects a broker response.
+- `acks=0` sends write and flush the Produce request without waiting for a
+  broker response. Immediate, batch, and buffered producer paths return
+  metadata with offset `-1`; broker acceptance, partition errors, and broker
+  assigned offsets cannot be confirmed. Idempotence and transactions continue
+  to require acknowledged Produce responses and therefore cannot be combined
+  with `Acks::None`.
 - Stale metadata style produce errors are retried once after refreshing metadata.
 - Batch sends retry request-level retriable failures according to `ProducerConfig::max_retries`.
 - Retryable broker Produce response failures retry only the failed input records; records that already succeeded are not sent again by that batch call.

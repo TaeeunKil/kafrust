@@ -356,8 +356,12 @@ See [Compatibility](docs/compatibility.md) and
   broker-error, producer,
   consumer, batch, and buffered-queue metrics are available together with
   high-level operation and `kafka.request` spans.
-- `acks=0` remains unsupported because the current request loop expects a broker
-  response.
+- `acks=0` fire-and-forget sends are supported for immediate and batch
+  producer paths. The request is written and flushed without waiting for a
+  broker response, so returned offsets are `-1` and broker acceptance or
+  partition-level errors cannot be confirmed. This path is live-verified
+  against Kafka `3.7.2`, `3.8.1`, `3.9.1`, and `4.3.1` single-node plaintext
+  profiles.
 
 ## API
 

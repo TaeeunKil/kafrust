@@ -1083,6 +1083,23 @@ impl Client {
         Ok(ProduceResponseV2::decode_body(&mut decoder)?)
     }
 
+    /// Sends Produce v2 without waiting for a broker response.
+    pub async fn produce_v2_no_response(
+        &mut self,
+        acks: i16,
+        timeout_ms: i32,
+        topics: Vec<ProduceTopicV2>,
+    ) -> Result<()> {
+        let request = ProduceRequestV2 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            acks,
+            timeout_ms,
+            topics,
+        };
+        self.send_request_no_response(&request.encode()?).await
+    }
+
     /// Sends Produce v2 for one topic partition.
     pub async fn produce_one_v2(
         &mut self,
@@ -1126,6 +1143,25 @@ impl Client {
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(ProduceResponseV2::decode_body(&mut decoder)?)
+    }
+
+    /// Sends Produce v3 without waiting for a broker response.
+    pub async fn produce_v3_no_response(
+        &mut self,
+        transactional_id: Option<String>,
+        acks: i16,
+        timeout_ms: i32,
+        topics: Vec<ProduceTopicV3>,
+    ) -> Result<()> {
+        let request = ProduceRequestV3 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            transactional_id,
+            acks,
+            timeout_ms,
+            topics,
+        };
+        self.send_request_no_response(&request.encode()?).await
     }
 
     /// Sends Produce v3 for one topic partition using RecordBatch records.
@@ -1177,6 +1213,59 @@ impl Client {
         Ok(ProduceResponseV7::decode_body(&mut decoder)?)
     }
 
+    /// Sends Produce v7 without waiting for a broker response.
+    pub async fn produce_v7_no_response(
+        &mut self,
+        transactional_id: Option<String>,
+        acks: i16,
+        timeout_ms: i32,
+        topics: Vec<ProduceTopicV3>,
+    ) -> Result<()> {
+        let request = ProduceRequestV7 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            transactional_id,
+            acks,
+            timeout_ms,
+            topics,
+        };
+        self.send_request_no_response(&request.encode()?).await
+    }
+
+    async fn send_request_no_response(&mut self, request: &[u8]) -> Result<()> {
+        let trace = RequestTrace::from_request(request);
+        let span = RequestTrace::span(trace);
+        let metrics = self.metrics.start_request(request.len());
+
+        async {
+            RequestTrace::log_start(trace);
+            let result = if let Some(timeout) = self.request_timeout {
+                match tokio::time::timeout(
+                    timeout,
+                    self.send_request_no_response_unbounded(request),
+                )
+                .await
+                {
+                    Ok(result) => result,
+                    Err(_) => Err(Error::RequestTimedOut {
+                        timeout_ms: duration_millis(timeout),
+                    }),
+                }
+            } else {
+                self.send_request_no_response_unbounded(request).await
+            };
+
+            RequestTrace::log_finish_no_response(trace, &result);
+            match &result {
+                Ok(()) => metrics.succeed(0),
+                Err(error) => metrics.fail(matches!(error, Error::RequestTimedOut { .. })),
+            }
+            result
+        }
+        .instrument(span)
+        .await
+    }
+
     async fn send_request(&mut self, request: &[u8]) -> Result<Vec<u8>> {
         let trace = RequestTrace::from_request(request);
         let span = RequestTrace::span(trace);
@@ -1204,6 +1293,13 @@ impl Client {
         }
         .instrument(span)
         .await
+    }
+
+    async fn send_request_no_response_unbounded(&mut self, request: &[u8]) -> Result<()> {
+        let frame = encode_frame(request)?;
+        self.stream.write_all(&frame).await?;
+        self.stream.flush().await?;
+        Ok(())
     }
 
     async fn send_request_unbounded(&mut self, request: &[u8]) -> Result<Vec<u8>> {
@@ -1330,6 +1426,29 @@ impl RequestTrace {
             (None, _) => {}
         }
     }
+
+    fn log_finish_no_response(trace: Option<Self>, result: &Result<()>) {
+        match (trace, result) {
+            (Some(trace), Ok(())) => {
+                debug!(
+                    api_key = trace.api_key,
+                    api_version = trace.api_version,
+                    correlation_id = trace.correlation_id,
+                    "kafka request sent without response"
+                );
+            }
+            (Some(trace), Err(error)) => {
+                debug!(
+                    api_key = trace.api_key,
+                    api_version = trace.api_version,
+                    correlation_id = trace.correlation_id,
+                    error = %error,
+                    "kafka request failed"
+                );
+            }
+            (None, _) => {}
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1410,6 +1529,36 @@ mod tests {
         ));
         let snapshot = metrics.snapshot();
         assert_eq!(snapshot.requests_failed, 1);
+        assert_eq!(snapshot.response_bytes, 0);
+        assert_eq!(snapshot.in_flight_requests, 0);
+        broker.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn sends_request_without_waiting_for_response() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(1024);
+        let broker = tokio::spawn(async move {
+            let request = read_test_frame(&mut broker_stream).await;
+            assert_eq!(&request[0..8], &[0, 18, 0, 0, 0, 0, 0, 1]);
+        });
+        let metrics = ClientMetrics::new();
+        let mut client = Client::from_stream_with_metrics(
+            Box::new(client_stream),
+            Some("kafrust-no-response-test".to_owned()),
+            Some(Duration::from_secs(1)),
+            DEFAULT_MAX_RESPONSE_BYTES,
+            DecodeLimits::default(),
+            metrics.clone(),
+        );
+
+        client
+            .send_request_no_response(&[0, 18, 0, 0, 0, 0, 0, 1])
+            .await
+            .unwrap();
+
+        let snapshot = metrics.snapshot();
+        assert_eq!(snapshot.requests_started, 1);
+        assert_eq!(snapshot.requests_succeeded, 1);
         assert_eq!(snapshot.response_bytes, 0);
         assert_eq!(snapshot.in_flight_requests, 0);
         broker.await.unwrap();

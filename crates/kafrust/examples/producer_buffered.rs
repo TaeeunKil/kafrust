@@ -13,12 +13,13 @@ async fn main() -> kafrust::Result<()> {
         .unwrap_or(3)
         .max(1);
     let idempotence = common::idempotence_from_env()?;
+    let acks = common::acks_from_env()?;
 
     let mut producer = common::apply_security(
         ProducerConfig::new(bootstrap_servers.clone())
             .client_id("kafrust-buffered-producer-example"),
     )?
-    .acks(Acks::Leader)
+    .acks(acks)
     .compression(common::compression_from_env()?)
     .enable_idempotence(idempotence)
     .linger_ms(60_000)
@@ -58,7 +59,9 @@ async fn main() -> kafrust::Result<()> {
         );
     }
 
-    fetch_buffered_records(&bootstrap_servers, &topic, &expected, &metadata).await?;
+    if acks != Acks::None {
+        fetch_buffered_records(&bootstrap_servers, &topic, &expected, &metadata).await?;
+    }
 
     Ok(())
 }
