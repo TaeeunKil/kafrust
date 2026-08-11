@@ -103,7 +103,8 @@ real broker. kafrust compatibility claims are made from the high-level client
 crate and repository docs, not from the presence of protocol structs alone.
 
 The current `0.2.x` client compatibility claim is Apache Kafka `3.7.2`,
-single-node KRaft, over `PLAINTEXT`.
+`3.8.1`, `3.9.1`, and `4.3.1` single-node KRaft over `PLAINTEXT`, with the
+secured and three-broker client profiles verified against Kafka `3.7.2`.
 
 ## Current Limits
 
@@ -111,8 +112,11 @@ single-node KRaft, over `PLAINTEXT`.
 - This crate does not perform network I/O.
 - Protocol coverage is intentionally incomplete.
 - SASL protocol structs do not perform authentication by themselves.
-- Compression, transactions, idempotent producer protocol paths, and admin APIs
-  are not complete yet.
+- This crate provides wire-format primitives, not the high-level routing,
+  retry, coordinator, or lifecycle behavior documented by `kafrust`.
+- Compression codecs, transaction and idempotent-producer protocol paths, and
+  implemented admin API schemas still require high-level client verification
+  before they support a new compatibility claim.
 - Public APIs are pre-`1.0` and can change between minor versions.
 
 ## Project Docs

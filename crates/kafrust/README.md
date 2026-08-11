@@ -262,8 +262,10 @@ async fn main() -> kafrust::Result<()> {
 The consumer group API is an alpha classic consumer group path with dynamic or
 static membership, range, round-robin, or opt-in cooperative-sticky assignment,
 join, sync, heartbeat, poll, offset commit, and explicit leave support. The
-cooperative-sticky path has protocol and initial staged-assignment coverage;
-multi-member transfer and failure qualification remain pending.
+cooperative-sticky path includes protocol, staged assignment, multi-member
+ownership transfer, transient-member rollback, and member-loss recovery. These
+cooperative failure paths are live-verified in the Kafka `3.7.2` three-broker
+profile; the group API itself remains pre-`1.0`.
 
 ```rust,no_run
 use kafrust::ConsumerGroupConfig;
@@ -403,8 +405,9 @@ response size fails that operation instead of partially decoding it.
 
 ## Compatibility
 
-The `0.2.x` alpha line is verified against single-node Apache Kafka `3.7.2` and
-`4.3.1` KRaft brokers over `PLAINTEXT`.
+The `0.2.x` alpha line is verified against single-node Apache Kafka `3.7.2`,
+`3.8.1`, `3.9.1`, and `4.3.1` KRaft brokers over `PLAINTEXT`. Secured and
+three-broker profiles are verified against Kafka `3.7.2`.
 
 Verified high-level paths include:
 
@@ -412,6 +415,8 @@ Verified high-level paths include:
 - Producer single-record, batch, and buffered sends.
 - Direct topic-partition fetch using Fetch v4 response decoding.
 - Classic consumer group join, sync, heartbeat, poll, and offset commit.
+- Cooperative-sticky multi-member transfer, transient-member rollback, and
+  member-loss recovery in the Kafka `3.7.2` three-broker profile.
 
 ## Current Limits
 
@@ -425,22 +430,22 @@ Verified high-level paths include:
   documented broker roundtrip, producer, direct consumer, and consumer group
   smoke paths; the SHA-512 profile also covers batch and buffered producer
   paths.
-- Broker compatibility is verified against Kafka `3.7.2` and `4.3.1` for the
-  single-node plaintext profile. Secured and multi-broker profiles currently
-  remain verified against `3.7.2`.
-- Multi-broker clusters, leader failover, rack awareness, and partition
-  expansion are not yet claimed.
+- Broker compatibility is verified against Kafka `3.7.2`, `3.8.1`, `3.9.1`,
+  and `4.3.1` for the single-node plaintext profile. Secured and multi-broker
+  profiles are verified against `3.7.2`.
+- Multi-broker clusters, coordinator and leader failover, and partition
+  expansion are verified in the documented `3.7.2` profiles. Rack-aware client
+  routing is not yet claimed.
 - Idempotent single-record, batch, and buffered sends are available through
   `ProducerConfig::enable_idempotence(true)`. Transactional immediate and batch
   sends support explicit begin, commit, and abort.
   `IsolationLevel::ReadCommitted` hides aborted transaction records for direct
   and group consumers, and current group assignments can be committed through
   generation-fenced `Producer::send_group_offsets_to_transaction`.
-  Transactional buffered sends and replica reassignment remain separate
-  roadmap item. SCRAM credential administration and controller-routed
-  partition reassignment are available through typed `AdminClient` APIs; both
-  have Kafka 3.7.2 live smoke paths, including three-broker reassignment
-  completion polling.
+  Transactional buffered sends and controller-routed partition reassignment are
+  available. SCRAM credential administration and partition reassignment are
+  available through typed `AdminClient` APIs; both have Kafka 3.7.2 live smoke
+  paths, including three-broker reassignment completion polling.
   Shared request, retry, broker-error, producer, consumer, batch, and
   buffered-queue metrics are available together with high-level operation and
   request spans.

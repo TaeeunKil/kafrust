@@ -270,8 +270,10 @@ The current consumer group API is an alpha classic consumer group path with
 dynamic or static membership, range, round-robin, or opt-in cooperative-sticky
 assignment, join, sync, heartbeat, poll, offset commit, explicit leave, and
 earliest/latest reset for partitions that have no committed offset. The
-cooperative-sticky path has protocol and initial staged-assignment coverage;
-multi-member transfer and failure qualification remain pending.
+cooperative-sticky path includes protocol, staged assignment, multi-member
+ownership transfer, transient-member rollback, and member-loss recovery. These
+cooperative failure paths are live-verified in the Kafka `3.7.2` three-broker
+profile; the group API itself remains pre-`1.0`.
 
 ```rust
 use kafrust::{ConsumerGroupConfig, OffsetResetPolicy};
@@ -308,6 +310,8 @@ brokers.
 | `0.2.x` | Apache Kafka `3.7.2` | single-node KRaft | `SASL_PLAINTEXT` with SASL/PLAIN | Passing live smoke |
 | `0.2.x` | Apache Kafka `3.7.2` | single-node KRaft | `SASL_SSL` with SCRAM-SHA-256 | Passing live smoke |
 | `0.2.x` | Apache Kafka `3.7.2` | single-node KRaft | `SASL_SSL` with SCRAM-SHA-512 | Passing live smoke |
+| `0.2.x` | Apache Kafka `3.8.1` | single-node KRaft | `PLAINTEXT` | Passing live smoke |
+| `0.2.x` | Apache Kafka `3.9.1` | single-node KRaft | `PLAINTEXT` | Passing live smoke |
 
 Verified paths currently include:
 
@@ -334,12 +338,13 @@ See [Compatibility](docs/compatibility.md) and
   group smoke paths. SASL/SCRAM-SHA-256 and SCRAM-SHA-512 are verified over
   `SaslTls`; the SHA-512 profile covers broker roundtrip, producer, batch,
   buffered producer, direct consumer, and consumer group poll paths.
-- Single-node plaintext compatibility is verified against Kafka `3.7.2` and
-  `4.3.1`. Secured and multi-broker profiles remain verified against `3.7.2`.
-- Three-broker leader failover is verified for the documented producer and
-  direct consumer paths. Topic partition expansion is verified through
-  CreatePartitions v0 and Metadata v1; rack-aware client routing is not yet
-  claimed.
+- Single-node plaintext compatibility is verified against Kafka `3.7.2`,
+  `3.8.1`, `3.9.1`, and `4.3.1`. Secured and multi-broker profiles remain
+  verified against `3.7.2`.
+- Three-broker coordinator and leader failover is verified for the documented
+  producer, direct consumer, consumer group, and transaction paths. Topic
+  partition expansion is verified through CreatePartitions v0 and Metadata v1;
+  rack-aware client routing is not yet claimed.
 - Gzip, Snappy, and LZ4 compression use Produce v3 RecordBatch encoding; Zstd
   requires and negotiates Produce v7. Fetch v4 decodes all four codecs. They are
   verified against Kafka `3.7.2` plaintext single-node and multi-broker smoke
@@ -350,9 +355,10 @@ See [Compatibility](docs/compatibility.md) and
   explicit begin, commit, and abort. `IsolationLevel::ReadCommitted` hides
   aborted transaction records for direct and group consumers, and current
   group assignments can be committed through immediate or buffered
-  `send_group_offsets_to_transaction`. Live broker failure injection remains
-  a separate roadmap item; client quota, SCRAM credential administration, and
-  partition reassignment are now available through `AdminClient`. Shared request, retry,
+  `send_group_offsets_to_transaction`. Transaction coordinator and
+  producer/direct-consumer/group recovery after a broker stop are live-verified
+  in the three-broker profile. Client quota, SCRAM credential administration,
+  and partition reassignment are available through `AdminClient`. Shared request, retry,
   broker-error, producer,
   consumer, batch, and buffered-queue metrics are available together with
   high-level operation and `kafka.request` spans.
