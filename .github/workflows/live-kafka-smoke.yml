@@ -1166,6 +1166,7 @@ jobs:
           cat > sasl-ssl-oauth/kafka_server_jaas.conf <<'EOF'
           KafkaServer {
             org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required
+            unsecuredLoginStringClaim_sub="kafrust"
             unsecuredValidatorPrincipalClaimName="sub";
           };
           EOF
