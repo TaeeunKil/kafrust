@@ -776,6 +776,9 @@ jobs:
           fi
           echo "KAFRUST_FAILOVER_PARTITION=${failover_partition}" >> "$GITHUB_ENV"
 
+      - name: Build SASL failover examples
+        run: cargo build -p kafrust --example producer_failover --example consumer_failover
+
       - name: Run SASL producer and consumer failover
         run: |
           KAFRUST_PARTITION="$KAFRUST_FAILOVER_PARTITION" \
