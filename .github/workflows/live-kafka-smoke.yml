@@ -269,6 +269,19 @@ jobs:
             --partitions 1 \
             --replication-factor 1
 
+      - name: Wait for group coordinator
+        run: |
+          for attempt in {1..90}; do
+            if docker exec kafrust-kafka-kip848 /opt/kafka/bin/kafka-consumer-groups.sh \
+              --bootstrap-server localhost:9092 \
+              --list >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs kafrust-kafka-kip848
+          exit 1
+
       - name: Run KIP-848 foreground path
         run: cargo run -p kafrust --example consumer_group_poll
 
