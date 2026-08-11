@@ -1441,31 +1441,60 @@ impl ConsumerGroup {
 
     async fn heartbeat_consumer(&mut self) -> Result<()> {
         let owned_partitions = self.consumer_owned_partitions.clone();
-        let response = self
-            .coordinator
-            .consumer_group_heartbeat_v0(
-                self.group_id.clone(),
-                self.member_id.clone(),
-                self.generation_id,
-                self.config.group_instance_id.clone(),
-                None,
-                self.config.rebalance_timeout_ms,
-                Some(self.config.topics.clone()),
-                self.config.server_assignor.clone(),
-                owned_partitions,
+        let mut retry_attempt = 0;
+        let response = loop {
+            let response = self
+                .coordinator
+                .consumer_group_heartbeat_v0(
+                    self.group_id.clone(),
+                    self.member_id.clone(),
+                    self.generation_id,
+                    self.config.group_instance_id.clone(),
+                    None,
+                    self.config.rebalance_timeout_ms,
+                    Some(self.config.topics.clone()),
+                    self.config.server_assignor.clone(),
+                    owned_partitions.clone(),
+                )
+                .await?;
+            if response.error_code == 0 {
+                break response;
+            }
+
+            let error =
+                consumer_group_heartbeat_error(&self.config.client, &self.group_id, &response);
+            if retry_attempt >= self.config.max_retries || !should_rejoin_group(&error) {
+                return Err(error);
+            }
+            retry_attempt += 1;
+            self.config.client.record_retry();
+            debug!(
+                group_id = self.group_id.as_str(),
+                member_id = self.member_id.as_str(),
+                member_epoch = self.generation_id,
+                retry_attempt,
+                error = %error,
+                "retrying kafka KIP-848 consumer group heartbeat"
+            );
+            time::sleep(GROUP_JOIN_RETRY_BACKOFF).await;
+            let mut bootstrap = self.config.client.clone().connect().await?;
+            let coordinator = find_group_coordinator_with_retry(
+                &mut bootstrap,
+                &self.config.client,
+                &self.group_id,
+                self.config.max_retries,
             )
             .await?;
+            self.coordinator = self
+                .config
+                .client
+                .connect_broker(coordinator_addr(&coordinator))
+                .await?;
+        };
         if let Some(member_id) = response.member_id.clone() {
             self.member_id = member_id;
         }
         self.generation_id = response.member_epoch;
-        if response.error_code != 0 {
-            return Err(consumer_group_heartbeat_error(
-                &self.config.client,
-                &self.group_id,
-                &response,
-            ));
-        }
 
         if let Some(assignment) = response.assignment {
             let protocol_assignment =
