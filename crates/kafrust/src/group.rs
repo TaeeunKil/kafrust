@@ -46,6 +46,7 @@ const RANGE_PROTOCOL: &str = "range";
 const ROUND_ROBIN_PROTOCOL: &str = "roundrobin";
 const COOPERATIVE_STICKY_PROTOCOL: &str = "cooperative-sticky";
 const GROUP_JOIN_RETRY_BACKOFF: Duration = Duration::from_millis(50);
+const DEFAULT_GROUP_MAX_RETRIES: u32 = 5;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 /// Consumer group membership protocol used by a group member.
@@ -172,7 +173,7 @@ impl ConsumerGroupConfig {
             max_wait_ms: 500,
             min_bytes: 1,
             max_partition_bytes: 1_048_576,
-            max_retries: 1,
+            max_retries: DEFAULT_GROUP_MAX_RETRIES,
             max_poll_records: 500,
             isolation_level: IsolationLevel::ReadUncommitted,
             assignment_strategy: ConsumerGroupAssignmentStrategy::Range,
@@ -2844,7 +2845,7 @@ mod tests {
         ConsumerGroupAssignmentStrategy, ConsumerGroupConfig, ConsumerGroupHeartbeat,
         ConsumerGroupHeartbeatTopicPartitions, ConsumerGroupProtocol,
         ConsumerProtocolHeartbeatState as ConsumerGroupHeartbeatState, HeartbeatHandleState,
-        IsolationLevel, OffsetResetPolicy, SecurityProtocol,
+        IsolationLevel, OffsetResetPolicy, SecurityProtocol, DEFAULT_GROUP_MAX_RETRIES,
     };
     use crate::consumer::ConsumerAssignment;
     use crate::Error;
@@ -2935,6 +2936,7 @@ mod tests {
             default.offset_reset_policy_ref(),
             OffsetResetPolicy::Offset(0)
         );
+        assert_eq!(default.max_retries, DEFAULT_GROUP_MAX_RETRIES);
 
         let latest = default
             .start_offset(12)
