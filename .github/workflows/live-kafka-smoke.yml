@@ -211,6 +211,74 @@ jobs:
         if: failure()
         run: docker logs kafrust-kafka
 
+  kafka-kip848:
+    name: Kafka 4.3.1 KIP-848
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      KAFRUST_BOOTSTRAP_SERVERS: localhost:9092
+      KAFRUST_GROUP_PROTOCOL: consumer
+      KAFRUST_GROUP_ID: kafrust-kip848-${{ github.run_id }}
+      KAFRUST_TOPIC: kafrust-kip848
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.81.0"
+
+      - name: Start Kafka 4.3.1
+        run: |
+          docker run -d --name kafrust-kafka-kip848 \
+            -p 9092:9092 \
+            -e KAFKA_NODE_ID=1 \
+            -e KAFKA_PROCESS_ROLES=broker,controller \
+            -e KAFKA_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 \
+            -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092 \
+            -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+            -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
+            -e KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT \
+            -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@localhost:9093 \
+            -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
+            -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1 \
+            -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1 \
+            -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 \
+            apache/kafka:4.3.1
+
+      - name: Wait for Kafka
+        run: |
+          for attempt in {1..90}; do
+            if (echo > /dev/tcp/127.0.0.1/9092) >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs kafrust-kafka-kip848
+          exit 1
+
+      - name: Create KIP-848 smoke topic
+        run: |
+          docker exec kafrust-kafka-kip848 /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server localhost:9092 \
+            --create \
+            --if-not-exists \
+            --topic "$KAFRUST_TOPIC" \
+            --partitions 1 \
+            --replication-factor 1
+
+      - name: Run KIP-848 foreground path
+        run: cargo run -p kafrust --example consumer_group_poll
+
+      - name: Run KIP-848 background heartbeat rejoin path
+        run: cargo run -p kafrust --example consumer_group_heartbeat_rejoin
+
+      - name: Dump Kafka logs
+        if: failure()
+        run: docker logs kafrust-kafka-kip848
+
   kafka-multi-broker:
     name: Kafka 3.7.2 multi-broker
     runs-on: ubuntu-latest
