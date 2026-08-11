@@ -232,9 +232,10 @@ kafrust currently provides:
 - topic partition expansion with automatic or explicit replica assignment
 
 ACL describe, create, and delete operations now have typed kafrust equivalents
-through `AdminClient`. Their wire and mock-broker paths are verified, but a
-production migration still needs an authorizer-enabled broker qualification
-with the service principal's actual permissions.
+through `AdminClient`. Their wire, mock-broker, and Kafka 3.7.2
+StandardAuthorizer live paths are verified in `Live Kafka Smoke` run
+`31457478358`, but a production migration still needs qualification against
+the service principal's actual broker permissions.
 
 Remaining admin blockers include quotas, replica reassignment, and SCRAM
 credential administration.
@@ -257,7 +258,7 @@ See [Admin API](admin-api.md) for typed request and response examples.
 | Custom partitioner or rebalance callback | Blocked |
 | Cooperative assignor or consumer group protocol selection | Blocked |
 | Full librdkafka config passthrough | Blocked by design |
-| ACL describe/create/delete with an authorizer-enabled broker | Candidate; qualify permissions and broker policy |
+| ACL describe/create/delete with an authorizer-enabled broker | Verified on Kafka 3.7.2; qualify target permissions and policy |
 | Quota, replica-reassignment, or SCRAM credential administration | Blocked |
 
 "Candidate" means the API exists and relevant project tests pass. It does not
