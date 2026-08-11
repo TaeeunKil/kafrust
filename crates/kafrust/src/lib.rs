@@ -22,14 +22,16 @@ pub mod producer;
 mod scram;
 
 pub use admin::{
+    AclBinding, AclFilter, AclOperation, AclPatternType, AclPermissionType, AclResourceType,
     AdminClient, AlterConfigResourceResult, AlterConfigsOptions, AlterConfigsResult,
     BrokerDescription, ClusterDescription, ConfigAlterOperation, ConfigAlterOperationKind,
     ConfigEntry, ConfigResourceResult, ConfigSource, ConfigSynonym, ConsumerGroupDescription,
-    ConsumerGroupMember, ConsumerGroupOffsetDelete, CreatePartitionsOptions,
-    CreatePartitionsResult, CreatePartitionsTopicResult, CreateTopicResult, CreateTopicsOptions,
-    CreateTopicsResult, DeleteConsumerGroupOffsetsPartitionResult,
-    DeleteConsumerGroupOffsetsResult, DeleteConsumerGroupOffsetsTopicResult,
-    DeleteConsumerGroupResult, DeleteTopicResult, DeleteTopicsOptions, DeleteTopicsResult,
+    ConsumerGroupMember, ConsumerGroupOffsetDelete, CreateAclsEntryResult, CreateAclsResult,
+    CreatePartitionsOptions, CreatePartitionsResult, CreatePartitionsTopicResult,
+    CreateTopicResult, CreateTopicsOptions, CreateTopicsResult, DeleteAclsFilterResult,
+    DeleteAclsResult, DeleteConsumerGroupOffsetsPartitionResult, DeleteConsumerGroupOffsetsResult,
+    DeleteConsumerGroupOffsetsTopicResult, DeleteConsumerGroupResult, DeleteTopicResult,
+    DeleteTopicsOptions, DeleteTopicsResult, DeletedAclResult, DescribeAclsResult,
     DescribeConfigsOptions, DescribeConfigsResult, GroupListing, NewPartitions, NewTopic,
     TopicConfigAlteration, TopicConfigResource, TopicListing,
 };

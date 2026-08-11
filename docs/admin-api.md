@@ -357,3 +357,57 @@ for topic in result.topics() {
 DeleteTopics v3 also routes to the active controller and preserves independent
 topic outcomes. Version 3 responses contain topic names and error codes but no
 broker error-message field.
+
+## Describe, Create, and Delete ACLs
+
+```rust
+use kafrust::{
+    AclBinding, AclFilter, AclOperation, AclPatternType, AclPermissionType,
+    AclResourceType, AdminClient, ClientConfig,
+};
+
+# async fn example() -> kafrust::Result<()> {
+let admin = AdminClient::new(ClientConfig::new(["localhost:9092"]));
+let binding = AclBinding::new(
+    AclResourceType::Topic,
+    "orders",
+    AclPatternType::Literal,
+    "User:orders-service",
+    "*",
+    AclOperation::Read,
+    AclPermissionType::Allow,
+);
+
+let created = admin.create_acls(&[binding.clone()]).await?;
+for result in created.results() {
+    println!(
+        "{}: Kafka error {}",
+        result.binding().resource_name(),
+        result.error_code(),
+    );
+}
+
+let filter = AclFilter::any()
+    .resource_type(AclResourceType::Topic)
+    .resource_name("orders")
+    .operation(AclOperation::Read);
+let described = admin.describe_acls(&filter).await?;
+println!("{} ACLs matched", described.bindings().len());
+
+let deleted = admin.delete_acls(&[filter]).await?;
+for result in deleted.filter_results() {
+    println!("deleted {} matching ACLs", result.matching_acls().len());
+}
+# Ok(())
+# }
+```
+
+The ACL methods use Kafka DescribeAcls v1, CreateAcls v1, and DeleteAcls v1.
+They preserve top-level, per-binding, per-filter, and matching-ACL outcomes so
+authorization failures are not collapsed into a single transport error.
+The broker must grant the caller the corresponding authorizer permissions;
+these methods do not bypass Kafka authorization.
+
+The wire encoders, decoders, and mock-broker AdminClient paths are tested. A
+live ACL compatibility claim still requires a broker profile with an enabled
+authorizer and an explicitly provisioned test principal.

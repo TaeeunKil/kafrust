@@ -748,6 +748,11 @@ Implemented evidence:
 - OffsetDelete v0 routes to the group's coordinator and preserves its
   top-level group error plus every per-partition result. Typed classifications
   cover missing groups and active topic subscriptions.
+- DescribeAcls v1, CreateAcls v1, and DeleteAcls v1 expose typed ACL bindings
+  and filters through `AdminClient`, preserving top-level, per-entry,
+  per-filter, and matching-ACL outcomes. Wire and mock-broker tests cover the
+  protocol schemas and partial authorization failures; live authorizer
+  qualification remains a separate compatibility gate.
 - The `admin_describe_group` example runs after the consumer-group smoke path
   across plaintext, multi-broker, TLS, SASL_PLAINTEXT, and SASL_SSL profiles.
 - The admin lifecycle example waits for asynchronous metadata propagation in

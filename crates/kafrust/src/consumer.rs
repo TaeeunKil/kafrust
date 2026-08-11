@@ -848,6 +848,7 @@ fn can_retry_fetch(error: &Error) -> bool {
         | Error::UnassignedTopicPartition { .. }
         | Error::MissingGroupDescription { .. }
         | Error::MissingDeleteGroupResult { .. }
+        | Error::ResponseCountMismatch { .. }
         | Error::MissingSaslCredentials
         | Error::InvalidSaslResponse { .. }
         | Error::ResponseTooLarge { .. }

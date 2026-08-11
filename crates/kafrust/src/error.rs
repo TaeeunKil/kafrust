@@ -168,6 +168,15 @@ pub enum Error {
         /// Requested consumer group ID.
         group_id: String,
     },
+    /// A broker returned a per-entry response with a different count than its request.
+    ResponseCountMismatch {
+        /// Kafka request family that returned the inconsistent response.
+        operation: &'static str,
+        /// Number of entries sent by the client.
+        expected: usize,
+        /// Number of entries returned by the broker.
+        actual: usize,
+    },
     /// SASL security protocol was selected without configuring credentials.
     MissingSaslCredentials,
     /// SASL authentication response could not be validated.
@@ -250,6 +259,14 @@ impl fmt::Display for Error {
             Self::MissingDeleteGroupResult { group_id } => {
                 write!(f, "missing delete result for consumer group {group_id}")
             }
+            Self::ResponseCountMismatch {
+                operation,
+                expected,
+                actual,
+            } => write!(
+                f,
+                "{operation} response count mismatch: expected {expected}, got {actual}"
+            ),
             Self::MissingSaslCredentials => f.write_str("missing Kafka SASL credentials"),
             Self::InvalidSaslResponse { mechanism, reason } => {
                 write!(f, "invalid SASL {mechanism} response: {reason}")
@@ -292,6 +309,7 @@ impl std::error::Error for Error {
             | Self::MissingBroker { .. }
             | Self::MissingGroupDescription { .. }
             | Self::MissingDeleteGroupResult { .. }
+            | Self::ResponseCountMismatch { .. }
             | Self::MissingSaslCredentials
             | Self::InvalidSaslResponse { .. }
             | Self::Broker { .. }

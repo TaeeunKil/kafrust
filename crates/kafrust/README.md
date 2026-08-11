@@ -59,7 +59,10 @@ inspection and alteration preserve sources, sensitivity, synonyms, operation
 kinds, validation mode, and partial resource errors. CreateTopics and
 DeleteTopics route through the active controller, while group descriptions
 and deletion route through each group coordinator. Group listing queries all
-advertised brokers. See the repository's `docs/admin-api.md` for details.
+advertised brokers. ACL describe/create/delete operations preserve typed
+bindings and partial authorization results; qualify them against an
+authorizer-enabled broker before production rollout. See the repository's
+`docs/admin-api.md` for details.
 
 ## Install
 

@@ -1,10 +1,13 @@
 pub mod add_offsets_to_txn;
 pub mod add_partitions_to_txn;
 pub mod api_versions;
+pub mod create_acls;
 pub mod create_partitions;
 pub mod create_topics;
+pub mod delete_acls;
 pub mod delete_groups;
 pub mod delete_topics;
+pub mod describe_acls;
 pub mod describe_configs;
 pub mod describe_groups;
 pub mod end_txn;

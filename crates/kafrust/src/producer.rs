@@ -1374,6 +1374,15 @@ fn delivery_error_from_request_error(error: &Error) -> Error {
         Error::MissingDeleteGroupResult { group_id } => Error::MissingDeleteGroupResult {
             group_id: group_id.clone(),
         },
+        Error::ResponseCountMismatch {
+            operation,
+            expected,
+            actual,
+        } => Error::ResponseCountMismatch {
+            operation,
+            expected: *expected,
+            actual: *actual,
+        },
         Error::MissingSaslCredentials => Error::MissingSaslCredentials,
         Error::InvalidSaslResponse { mechanism, reason } => {
             Error::InvalidSaslResponse { mechanism, reason }
@@ -3647,6 +3656,7 @@ fn can_retry_send(error: &Error) -> bool {
         | Error::UnassignedTopicPartition { .. }
         | Error::MissingGroupDescription { .. }
         | Error::MissingDeleteGroupResult { .. }
+        | Error::ResponseCountMismatch { .. }
         | Error::MissingSaslCredentials
         | Error::InvalidSaslResponse { .. }
         | Error::ResponseTooLarge { .. }
