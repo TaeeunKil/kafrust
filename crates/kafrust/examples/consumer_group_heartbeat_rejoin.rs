@@ -2,7 +2,7 @@ mod common;
 
 use std::time::Duration;
 
-use kafrust::{ConsumerGroupConfig, Error};
+use kafrust::{ConsumerGroupConfig, ConsumerGroupProtocol, Error};
 
 #[tokio::main]
 async fn main() -> kafrust::Result<()> {
@@ -16,13 +16,23 @@ async fn run_rejoin_scenario() -> kafrust::Result<()> {
     let group_id =
         std::env::var("KAFRUST_GROUP_ID").unwrap_or_else(|_| "kafrust-heartbeat-rejoin".to_owned());
     let topic = std::env::var("KAFRUST_TOPIC").unwrap_or_else(|_| "kafrust-smoke".to_owned());
-    let config = common::apply_security(
+    let mut config = common::apply_security(
         ConsumerGroupConfig::new(bootstrap_servers, group_id)
             .session_timeout_ms(6_000)
             .rebalance_timeout_ms(10_000)
             .max_wait_ms(100)
             .subscribe(topic),
     )?;
+    let protocol = std::env::var("KAFRUST_GROUP_PROTOCOL").unwrap_or_else(|_| "classic".to_owned());
+    config = match protocol.to_ascii_lowercase().as_str() {
+        "classic" => config,
+        "consumer" | "kip-848" => config.group_protocol(ConsumerGroupProtocol::Consumer),
+        _ => {
+            return Err(Error::Unsupported(
+                "KAFRUST_GROUP_PROTOCOL must be classic or consumer",
+            ))
+        }
+    };
 
     let mut first = config
         .clone()
@@ -40,12 +50,16 @@ async fn run_rejoin_scenario() -> kafrust::Result<()> {
     }
     let second = second_join.await??;
 
-    first.poll_with_heartbeat(&mut heartbeat).await?;
-    if first.generation_id() == initial_generation {
-        return Err(Error::Unsupported(
-            "consumer group generation did not change during rebalance",
-        ));
-    }
+    tokio::time::timeout(Duration::from_secs(10), async {
+        while first.generation_id() == initial_generation {
+            first.poll_with_heartbeat(&mut heartbeat).await?;
+        }
+        Ok::<(), kafrust::Error>(())
+    })
+    .await
+    .map_err(|_| {
+        Error::Unsupported("consumer group generation did not change during rebalance")
+    })??;
     if heartbeat.group_id() != first.group_id()
         || heartbeat.member_id() != first.member_id()
         || heartbeat.generation_id() != first.generation_id()

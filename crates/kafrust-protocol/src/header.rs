@@ -66,6 +66,22 @@ mod tests {
     }
 
     #[test]
+    fn encodes_request_header_v2_with_nullable_client_id_and_tagged_fields() {
+        let header = RequestHeader {
+            api_key: 3,
+            api_version: 12,
+            correlation_id: 7,
+            client_id: Some("kafrust".to_owned()),
+        };
+        let mut encoder = Encoder::new();
+        header.encode_v2(&mut encoder).unwrap();
+        assert_eq!(
+            encoder.into_bytes(),
+            [0, 3, 0, 12, 0, 0, 0, 7, 0, 7, b'k', b'a', b'f', b'r', b'u', b's', b't', 0]
+        );
+    }
+
+    #[test]
     fn decodes_response_header_v0() {
         let mut decoder = Decoder::new(&[0, 0, 0, 7]);
         let header = ResponseHeader::decode_v0(&mut decoder).unwrap();

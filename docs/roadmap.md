@@ -909,6 +909,12 @@ Evidence:
   single-record, batch, and buffered producer paths against Kafka 3.7.2 and
   Kafka 4.3.1; all six plaintext, multi-broker, TLS, SASL_PLAINTEXT, and
   SASL_SSL jobs passed.
+- Manual `Live Kafka Smoke` run
+  [`31495298593`](https://github.com/TaeeunKil/kafrust/actions/runs/31495298593)
+  passed idempotent producer recovery through the three-broker broker-stop
+  window. The failover example keeps idempotence enabled for both sends and
+  completed with all 11 plaintext, secured, multi-broker, ACL, and KIP-848
+  jobs green.
 
 ## M18 Transactions And Read-Committed Consumers
 
@@ -1189,6 +1195,31 @@ Strategic role:
 
 Implemented evidence:
 
+- Flexible `ApiVersions v3` request and response types report broker API
+  version ranges, preserve unknown top-level tagged fields, and share a common
+  capability lookup with the legacy v0 response. The high-level producer now
+  uses this negotiation path while retaining the v0 low-level method for
+  compatibility. Live Kafka Smoke run
+  [`31494820868`](https://github.com/TaeeunKil/kafrust/actions/runs/31494820868)
+  passed all 11 plaintext, secured, multi-broker, ACL, and KIP-848 jobs on
+  2026-08-11.
+- Producer leader sends reuse an authenticated broker `Client` and its cached
+  ApiVersions v3 response for sequential sends to the same broker address.
+  A focused injected-broker test proves one capability handshake followed by
+  two Produce requests on one socket; the existing ambiguous transport test
+  proves failed connections are discarded before retry. Full live smoke rerun
+  [`31496965137`](https://github.com/TaeeunKil/kafrust/actions/runs/31496965137)
+  passed all 11 broker, security, ACL, KIP-848, and multi-broker failover jobs
+  after this change.
+- Direct consumer fetch and watermark paths reuse a successful partition-leader
+  `Client` by broker address and evict it on request failure. A focused
+  injected-broker test verifies two sequential Fetch requests on one socket.
+- Classic consumer-group JoinGroup retries transient coordinator and membership
+  errors; an `UNKNOWN_MEMBER_ID` response clears the stale member id before the
+  next attempt. Live smoke run
+  [`31499359717`](https://github.com/TaeeunKil/kafrust/actions/runs/31499359717)
+  passed all 11 broker, security, ACL, KIP-848, and multi-broker failover jobs
+  after these runtime changes.
 - Producer records without an explicit partition use Kafka-compatible Murmur2
   routing when a key is present, preserving standard-client key affinity.
 - Keyless producer records use per-topic batch-sticky round-robin routing.
@@ -1233,6 +1264,24 @@ Implemented evidence:
   JoinGroup requests, preventing a rejoining member from being treated as a
   new member during cooperative or classic rebalances. Focused tests cover
   staged non-leader rejoin decisions and member-loss assignment recovery.
+- KIP-848 `ConsumerGroupHeartbeat v0` protocol types, Metadata v12 UUID
+  mappings, and a selectable high-level foreground group path are implemented
+  with assignment application, member-epoch heartbeats/rejoin, OffsetFetch v9,
+  OffsetCommit v9, explicit leave, and injected low-level roundtrip coverage.
+- KIP-848 background heartbeats share member epoch and broker assignment state
+  with the owning group handle. Assignment responses are applied once per
+  response, nullable assignments preserve existing ownership, and a rejoin
+  session token stops stale tasks from sending requests for a new member epoch.
+  Focused tests cover state updates and nullable assignment preservation.
+- Kafka 4.3.1 KIP-848 live qualification passed in
+  [`Live Kafka Smoke` run `31492612082`](https://github.com/TaeeunKil/kafrust/actions/runs/31492612082),
+  including foreground and background heartbeat, concurrent-member rejoin,
+  OffsetFetch v9, OffsetCommit v9, transient coordinator retry, and explicit
+  leave. Follow-up run
+  [`31493385844`](https://github.com/TaeeunKil/kafrust/actions/runs/31493385844)
+  reruns the same group to verify committed-offset recovery.
+- Broader failure-injection coverage across secured and multi-broker KIP-848
+  deployments remains open.
 - Dynamic and static members can explicitly leave through LeaveGroup v3,
   avoiding session-timeout cleanup after graceful shutdown.
 - Manual `Live Kafka Smoke` run `30065025169` passed graceful LeaveGroup v3 on
@@ -1280,3 +1329,14 @@ Implemented evidence:
   broker versions, TLS, SASL_PLAINTEXT, SASL_SSL/SCRAM, ACL authorizer,
   compression, idempotent, transactional, `read_committed`, admin,
   consumer-group, and `acks=0` smoke paths.
+- Release `v0.2.3` published `kafrust-protocol` before `kafrust` so the
+  packaged client resolves the matching protocol crate. Both package
+  verification steps passed, and a fresh external project compiled the
+  published client with its default and `tls` features while exercising the
+  public configuration and producer-record builders.
+- Release `v0.2.4` published `kafrust-protocol` before `kafrust`; both package
+  dry-runs and uploads passed. The exact docs.rs pages for both crates return
+  HTTP 200 and a fresh external project compiled the published client with
+  default and `tls` features, plus `RUSTDOCFLAGS=-D warnings`, on the project
+  MSRV Rust 1.81 toolchain. The current live qualification is
+  [`31499359717`](https://github.com/TaeeunKil/kafrust/actions/runs/31499359717).

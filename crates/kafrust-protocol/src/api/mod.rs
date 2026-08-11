@@ -4,6 +4,7 @@ pub mod alter_client_quotas;
 pub mod alter_partition_reassignments;
 pub mod alter_user_scram_credentials;
 pub mod api_versions;
+pub mod consumer_group_heartbeat;
 pub mod create_acls;
 pub mod create_partitions;
 pub mod create_topics;

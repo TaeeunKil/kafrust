@@ -20,7 +20,7 @@ Replace the dependency:
 
 ```toml
 [dependencies]
-kafrust = "0.2.2"
+kafrust = "0.2.4"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
 
@@ -112,6 +112,11 @@ Use `send_batch_report` when one call spans topics or partitions and the
 application must preserve per-record failures. Do not translate it to a single
 all-or-nothing error.
 
+The producer keeps authenticated leader connections and negotiated ApiVersions
+capabilities for sequential sends to the same broker. A transport or protocol
+failure evicts that connection before retry, so applications do not need to
+implement connection recycling around ordinary producer retries.
+
 ## Consumer Group
 
 Typical rust-rdkafka:
@@ -158,7 +163,8 @@ The semantic difference matters: kafrust currently returns a bounded batch and
 commits the current next offsets for its assignments. It does not expose
 rust-rdkafka's asynchronous per-message commit queue, rebalance callbacks,
 partition queue splitting, or regex subscription. The current group
-implementation uses the classic protocol with range or round-robin assignment.
+implementation supports the classic protocol with range or round-robin
+assignment and an explicitly selected KIP-848 consumer protocol path.
 
 For processing that can approach the session timeout, use
 `spawn_heartbeat_task` with `poll_with_heartbeat`. The task is explicit and
@@ -256,7 +262,7 @@ See [Admin API](admin-api.md) for typed request and response examples.
 | --- | --- |
 | Tokio producer with keys, values, headers, batching, or buffered delivery | Candidate |
 | Gzip, Snappy, LZ4, or Zstd production | Candidate on verified broker profiles |
-| Idempotent producer | Candidate with workload-specific failure testing |
+| Idempotent producer | Candidate; broker-stop recovery is live-verified on the documented three-broker profile, but qualify target-specific ambiguous, fencing, and throughput failures |
 | Direct assigned-partition consumer | Candidate |
 | Classic range-assigned consumer group | Candidate with rebalance testing |
 | TLS, SASL/PLAIN, or SASL/SCRAM-SHA-256 | Candidate on documented profiles |
@@ -265,7 +271,8 @@ See [Admin API](admin-api.md) for typed request and response examples.
 | `acks=0` fire-and-forget | Verified on Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 single-node plaintext smoke; qualify workload loss/error semantics |
 | Non-Tokio runtime or synchronous client | Blocked |
 | Custom partitioner or rebalance callback | Blocked |
-| `cooperative-sticky` assignor and consumer group protocol selection | Candidate for protocol and initial staged assignment; live multi-member transfer and failure qualification pending |
+| `cooperative-sticky` assignor and consumer group protocol selection | Candidate on the verified Kafka 3.7.2 three-broker transfer and failure profiles; qualify target workload callbacks and timing |
+| KIP-848 consumer group protocol (`ConsumerGroupHeartbeat`) | Candidate on the verified Kafka 4.3.1 PLAINTEXT profile, including assignment, foreground/background heartbeat, rejoin, OffsetFetch v9, OffsetCommit v9, and leave; qualify target broker and failure workloads before production migration |
 | Full librdkafka config passthrough | Blocked by design |
 | ACL describe/create/delete with an authorizer-enabled broker | Verified on Kafka 3.7.2; qualify target permissions and policy |
 | Client quota describe/alter | Verified on Kafka 3.7.2 StandardAuthorizer; qualify target permissions and quota policy |

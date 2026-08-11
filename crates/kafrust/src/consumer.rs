@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use kafrust_protocol::api::fetch::{FetchPartitionResponseV4, FetchResponseV4, MessageSetRecord};
 use kafrust_protocol::api::list_offsets::{
@@ -112,6 +112,7 @@ pub struct Consumer {
     config: ConsumerConfig,
     assignments: Vec<ConsumerAssignment>,
     metadata_cache: BTreeMap<String, MetadataResponseV1>,
+    broker_clients: BTreeMap<String, Client>,
 }
 
 impl Consumer {
@@ -125,7 +126,27 @@ impl Consumer {
             config,
             assignments,
             metadata_cache: BTreeMap::new(),
+            broker_clients: BTreeMap::new(),
         }
+    }
+
+    pub(crate) fn replace_assignments(&mut self, mut assignments: Vec<ConsumerAssignment>) {
+        let paused = self
+            .assignments
+            .iter()
+            .filter(|assignment| assignment.paused)
+            .map(|assignment| (assignment.topic.clone(), assignment.partition))
+            .collect::<BTreeSet<_>>();
+        for assignment in &mut assignments {
+            assignment.paused = paused.contains(&(assignment.topic.clone(), assignment.partition));
+        }
+        assignments.sort_by(|left, right| {
+            left.topic
+                .cmp(&right.topic)
+                .then_with(|| left.partition.cmp(&right.partition))
+        });
+        self.assignments = assignments;
+        self.metadata_cache.clear();
     }
 
     /// Assigns a topic partition and next offset to fetch.
@@ -202,13 +223,14 @@ impl Consumer {
         let metadata = self.metadata_for_topic(topic).await?;
         let leader = leader_for(&metadata, topic, partition)?;
         let broker_addr = broker_addr_for(&metadata, leader)?;
-        let mut leader_client = self.config.client.connect_broker(broker_addr).await?;
+        let mut leader_client = self.connect_or_reuse_broker(&broker_addr).await?;
         let low = self
             .request_partition_offset(&mut leader_client, topic, partition, EARLIEST_TIMESTAMP)
             .await?;
         let high = self
             .request_partition_offset(&mut leader_client, topic, partition, LATEST_TIMESTAMP)
             .await?;
+        self.broker_clients.insert(broker_addr, leader_client);
         Ok(PartitionWatermarks { low, high })
     }
 
@@ -371,7 +393,7 @@ impl Consumer {
             broker_addr = broker_addr.as_str(),
             "resolved fetch leader"
         );
-        let mut leader_client = self.config.client.connect_broker(broker_addr).await?;
+        let mut leader_client = self.connect_or_reuse_broker(&broker_addr).await?;
         let response = leader_client
             .fetch_one_v4(FetchOneRequestV4 {
                 replica_id: -1,
@@ -402,6 +424,7 @@ impl Consumer {
             .into_iter()
             .map(|record| ConsumerRecord::from_message_set(topic, partition, record))
             .collect();
+        self.broker_clients.insert(broker_addr, leader_client);
         Ok(FetchedPartition {
             records,
             next_offset,
@@ -443,6 +466,16 @@ impl Consumer {
         self.metadata_cache
             .insert(topic.to_owned(), metadata.clone());
         Ok(metadata)
+    }
+
+    async fn connect_or_reuse_broker(&mut self, broker_addr: &str) -> Result<Client> {
+        if let Some(client) = self.broker_clients.remove(broker_addr) {
+            return Ok(client);
+        }
+        self.config
+            .client
+            .connect_broker(broker_addr.to_owned())
+            .await
     }
 
     async fn request_metadata_for_topic(&mut self, topic: &str) -> Result<MetadataResponseV1> {
@@ -747,6 +780,7 @@ impl ConsumerConfig {
             config: self,
             assignments: Vec::new(),
             metadata_cache: BTreeMap::new(),
+            broker_clients: BTreeMap::new(),
         })
     }
 }
@@ -1266,6 +1300,44 @@ mod tests {
         assert_eq!(records.len(), 1);
         assert_eq!(records[0].offset(), 42);
         assert_eq!(metrics.snapshot().consumed_records, 1);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn reuses_partition_leader_connection_for_sequential_fetches() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            for _ in 0..2 {
+                let request = read_frame(&mut socket).await;
+                assert_eq!(&request[0..4], &[0, 1, 0, 4]);
+                write_frame(&mut socket, &fetch_v4_response_frame()).await;
+            }
+        });
+
+        let (client_stream, broker_stream) = tokio::io::duplex(64);
+        let _broker_stream = broker_stream;
+        let client = Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-consumer-reuse-test".to_owned()),
+            Some(std::time::Duration::from_millis(500)),
+        );
+        let config = ConsumerConfig::new([addr.to_string()]).request_timeout_ms(500);
+        let mut consumer = Consumer::from_assignments(client, config, Vec::new());
+        let mut metadata = metadata_fixture();
+        metadata.brokers[0].host = addr.ip().to_string();
+        metadata.brokers[0].port = i32::from(addr.port());
+        consumer
+            .metadata_cache
+            .insert("orders".to_owned(), metadata);
+
+        let first = consumer.fetch("orders", 0, 42).await.unwrap();
+        let second = consumer.fetch("orders", 0, 42).await.unwrap();
+
+        assert_eq!(first.len(), 1);
+        assert_eq!(second.len(), 1);
+        assert_eq!(consumer.broker_clients.len(), 1);
         server.await.unwrap();
     }
 

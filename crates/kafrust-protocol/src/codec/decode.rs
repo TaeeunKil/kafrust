@@ -135,6 +135,14 @@ impl<'a> Decoder<'a> {
         ]))
     }
 
+    /// Reads a Kafka UUID from its 16-byte network-order representation.
+    pub fn read_uuid(&mut self) -> Result<[u8; 16]> {
+        let bytes = self.read_exact(16)?;
+        let mut value = [0; 16];
+        value.copy_from_slice(bytes);
+        Ok(value)
+    }
+
     pub fn read_f64(&mut self) -> Result<f64> {
         let bytes = self.read_exact(8)?;
         Ok(f64::from_bits(u64::from_be_bytes([

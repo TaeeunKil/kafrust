@@ -36,6 +36,7 @@ client paths:
 - frame encoding and decoding
 - `ApiVersions v0`
 - `Metadata v1`
+- `Metadata v12` with topic UUIDs (KIP-848 assignment support)
 - `CreateTopics v2`
 - `DeleteTopics v3`
 - `DescribeConfigs v1`
@@ -50,6 +51,7 @@ client paths:
 - `JoinGroup v2` and `JoinGroup v5`
 - `SyncGroup v2` and `SyncGroup v3`
 - `Heartbeat v2` and `Heartbeat v3`
+- `ConsumerGroupHeartbeat v0` (KIP-848 flexible protocol foundation)
 - `LeaveGroup v3`
 - `OffsetFetch v2`
 - `OffsetCommit v2` and `OffsetCommit v7`

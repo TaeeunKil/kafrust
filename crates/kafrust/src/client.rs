@@ -13,7 +13,13 @@ use kafrust_protocol::api::alter_partition_reassignments::{
 use kafrust_protocol::api::alter_user_scram_credentials::{
     AlterUserScramCredentialsRequestV0, AlterUserScramCredentialsResponseV0,
 };
-use kafrust_protocol::api::api_versions::{ApiVersionsRequestV0, ApiVersionsResponseV0};
+use kafrust_protocol::api::api_versions::{
+    ApiVersionsRequestV0, ApiVersionsRequestV3, ApiVersionsResponseV0, ApiVersionsResponseV3,
+};
+use kafrust_protocol::api::consumer_group_heartbeat::{
+    ConsumerGroupHeartbeatRequestV0, ConsumerGroupHeartbeatResponseV0,
+    ConsumerGroupHeartbeatTopicPartitions,
+};
 use kafrust_protocol::api::create_acls::{CreateAclsRequestV1, CreateAclsResponseV1};
 use kafrust_protocol::api::create_partitions::{
     CreatePartitionsRequestV0, CreatePartitionsResponseV0, CreatePartitionsTopicV0,
@@ -64,16 +70,21 @@ use kafrust_protocol::api::list_offsets::{
 use kafrust_protocol::api::list_partition_reassignments::{
     ListPartitionReassignmentsRequestV0, ListPartitionReassignmentsResponseV0,
 };
-use kafrust_protocol::api::metadata::{MetadataRequestV1, MetadataResponseV1};
+use kafrust_protocol::api::metadata::{
+    MetadataRequestTopicV12, MetadataRequestV1, MetadataRequestV12, MetadataResponseV1,
+    MetadataResponseV12,
+};
 use kafrust_protocol::api::offset_commit::{
-    OffsetCommitRequestV2, OffsetCommitRequestV7, OffsetCommitResponseV2, OffsetCommitResponseV7,
-    OffsetCommitTopic, OffsetCommitTopicV7,
+    OffsetCommitRequestV2, OffsetCommitRequestV7, OffsetCommitRequestV9, OffsetCommitResponseV2,
+    OffsetCommitResponseV7, OffsetCommitResponseV9, OffsetCommitTopic, OffsetCommitTopicV7,
+    OffsetCommitTopicV9,
 };
 use kafrust_protocol::api::offset_delete::{
     OffsetDeleteRequestTopicV0, OffsetDeleteRequestV0, OffsetDeleteResponseV0,
 };
 use kafrust_protocol::api::offset_fetch::{
-    OffsetFetchRequestV2, OffsetFetchResponseV2, OffsetFetchTopic,
+    OffsetFetchRequestV2, OffsetFetchRequestV9, OffsetFetchResponseV2, OffsetFetchResponseV9,
+    OffsetFetchTopic, OffsetFetchTopicV9,
 };
 use kafrust_protocol::api::produce::{
     MessageSetMessage, ProducePartitionV2, ProducePartitionV3, ProduceRequestV2, ProduceRequestV3,
@@ -114,6 +125,7 @@ pub struct Client {
     max_response_bytes: usize,
     decode_limits: DecodeLimits,
     metrics: ClientMetrics,
+    api_versions_v3_cache: Option<ApiVersionsResponseV3>,
 }
 
 pub(crate) trait BrokerStream: AsyncRead + AsyncWrite + Unpin + Send + Sync {}
@@ -193,6 +205,7 @@ impl Client {
             max_response_bytes,
             decode_limits,
             metrics,
+            api_versions_v3_cache: None,
         }
     }
 
@@ -220,6 +233,58 @@ impl Client {
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(ApiVersionsResponseV0::decode_body(&mut decoder)?)
+    }
+
+    /// Sends flexible ApiVersions v3 and decodes the broker capability ranges.
+    ///
+    /// The legacy [`Self::api_versions`] method remains available for callers
+    /// that need the fixed v0 response shape. This method reports KIP-511
+    /// client software fields and preserves unknown response tags so newer
+    /// brokers can add capability metadata without breaking decoding.
+    pub async fn api_versions_v3(
+        &mut self,
+        client_software_name: impl Into<String>,
+        client_software_version: impl Into<String>,
+    ) -> Result<ApiVersionsResponseV3> {
+        let request = ApiVersionsRequestV3 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            client_software_name: client_software_name.into(),
+            client_software_version: client_software_version.into(),
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        let response = ApiVersionsResponseV3::decode_body(&mut decoder)?;
+        self.api_versions_v3_cache = Some(response.clone());
+        Ok(response)
+    }
+
+    /// Returns ApiVersions v3 capabilities cached for this broker connection.
+    ///
+    /// If this connection has not negotiated capabilities yet, this method
+    /// sends ApiVersions v3 once and caches the decoded response. Use
+    /// [`Self::api_versions_v3`] when an explicit capability refresh is needed.
+    pub async fn api_versions_v3_cached(
+        &mut self,
+        client_software_name: impl Into<String>,
+        client_software_version: impl Into<String>,
+    ) -> Result<ApiVersionsResponseV3> {
+        if let Some(response) = self.api_versions_v3_cache.clone() {
+            return Ok(response);
+        }
+        self.api_versions_v3(client_software_name, client_software_version)
+            .await
+    }
+
+    /// Returns the last ApiVersions v3 response negotiated on this connection.
+    pub fn cached_api_versions_v3(&self) -> Option<&ApiVersionsResponseV3> {
+        self.api_versions_v3_cache.as_ref()
+    }
+
+    /// Clears the cached ApiVersions v3 response so the next cached lookup refreshes it.
+    pub fn clear_api_versions_v3_cache(&mut self) {
+        self.api_versions_v3_cache = None;
     }
 
     pub(crate) async fn sasl_handshake_v1(
@@ -263,6 +328,24 @@ impl Client {
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(MetadataResponseV1::decode_body(&mut decoder)?)
+    }
+
+    /// Sends Metadata v12 and returns topic UUIDs needed by KIP-848 groups.
+    pub async fn metadata_v12(
+        &mut self,
+        topics: Option<Vec<MetadataRequestTopicV12>>,
+    ) -> Result<MetadataResponseV12> {
+        let request = MetadataRequestV12 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            topics,
+            allow_auto_topic_creation: false,
+            include_topic_authorized_operations: false,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(MetadataResponseV12::decode_body(&mut decoder)?)
     }
 
     /// Sends CreateTopics v2 to the broker represented by this connection.
@@ -810,6 +893,29 @@ impl Client {
         Ok(OffsetFetchResponseV2::decode_body(&mut decoder)?)
     }
 
+    /// Sends OffsetFetch v9 for Kafka's KIP-848 consumer group protocol.
+    pub async fn offset_fetch_v9(
+        &mut self,
+        group_id: impl Into<String>,
+        member_id: Option<String>,
+        member_epoch: i32,
+        topics: Option<Vec<OffsetFetchTopicV9>>,
+    ) -> Result<OffsetFetchResponseV9> {
+        let request = OffsetFetchRequestV9 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            group_id: group_id.into(),
+            member_id,
+            member_epoch,
+            topics,
+            require_stable: false,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(OffsetFetchResponseV9::decode_body(&mut decoder)?)
+    }
+
     /// Sends ListOffsets v1 to resolve timestamp-based partition offsets.
     pub async fn list_offsets_v1(
         &mut self,
@@ -970,6 +1076,39 @@ impl Client {
         Ok(HeartbeatResponseV2::decode_body(&mut decoder)?)
     }
 
+    /// Sends KIP-848 ConsumerGroupHeartbeat v0.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn consumer_group_heartbeat_v0(
+        &mut self,
+        group_id: impl Into<String>,
+        member_id: impl Into<String>,
+        member_epoch: i32,
+        instance_id: Option<String>,
+        rack_id: Option<String>,
+        rebalance_timeout_ms: i32,
+        subscribed_topic_names: Option<Vec<String>>,
+        server_assignor: Option<String>,
+        topic_partitions: Option<Vec<ConsumerGroupHeartbeatTopicPartitions>>,
+    ) -> Result<ConsumerGroupHeartbeatResponseV0> {
+        let request = ConsumerGroupHeartbeatRequestV0 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            group_id: group_id.into(),
+            member_id: member_id.into(),
+            member_epoch,
+            instance_id,
+            rack_id,
+            rebalance_timeout_ms,
+            subscribed_topic_names,
+            server_assignor,
+            topic_partitions,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(ConsumerGroupHeartbeatResponseV0::decode_body(&mut decoder)?)
+    }
+
     /// Sends LeaveGroup v3 for one or more dynamic or static group members.
     pub async fn leave_group_v3(
         &mut self,
@@ -1034,6 +1173,30 @@ impl Client {
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(OffsetCommitResponseV7::decode_body(&mut decoder)?)
+    }
+
+    /// Sends OffsetCommit v9 for Kafka's KIP-848 consumer group protocol.
+    pub async fn offset_commit_v9(
+        &mut self,
+        group_id: impl Into<String>,
+        member_epoch: i32,
+        member_id: impl Into<String>,
+        group_instance_id: Option<String>,
+        topics: Vec<OffsetCommitTopicV9>,
+    ) -> Result<OffsetCommitResponseV9> {
+        let request = OffsetCommitRequestV9 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            group_id: group_id.into(),
+            generation_id_or_member_epoch: member_epoch,
+            member_id: member_id.into(),
+            group_instance_id,
+            topics,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(OffsetCommitResponseV9::decode_body(&mut decoder)?)
     }
 
     pub(crate) async fn fetch_one_v4(
@@ -1651,6 +1814,104 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn sends_flexible_api_versions_v3_over_injected_broker_stream() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(1024);
+        let broker = tokio::spawn(async move {
+            let mut request_size = [0u8; 4];
+            broker_stream.read_exact(&mut request_size).await.unwrap();
+            let request_size = usize::try_from(i32::from_be_bytes(request_size)).unwrap();
+            let mut request = vec![0u8; request_size];
+            broker_stream.read_exact(&mut request).await.unwrap();
+
+            assert_eq!(
+                request,
+                [
+                    0, 18, // api key
+                    0, 3, // api version
+                    0, 0, 0, 1, // correlation id
+                    0xff, 0xff, // nullable client id
+                    0,    // request header tagged fields
+                    8, b'k', b'a', b'f', b'r', b'u', b's', b't', // software name
+                    6, b'0', b'.', b'3', b'.', b'0', // software version
+                    0,    // request body tagged fields
+                ]
+            );
+
+            let response = [
+                0, 0, 0, 1, // correlation id
+                0, 0, // error code
+                2, // compact api key count: one entry
+                0, 18, 0, 0, 0, 4, 0, // ApiVersions min/max + entry tags
+                0, 0, 0, 0, // throttle time
+                0, // response tagged fields
+            ];
+            broker_stream
+                .write_all(&(response.len() as i32).to_be_bytes())
+                .await
+                .unwrap();
+            broker_stream.write_all(&response).await.unwrap();
+            broker_stream.flush().await.unwrap();
+        });
+
+        let mut client =
+            Client::from_stream(Box::new(client_stream), None, Some(Duration::from_secs(1)));
+
+        let response = client.api_versions_v3("kafrust", "0.3.0").await.unwrap();
+
+        assert_eq!(response.error_code, 0);
+        assert_eq!(response.throttle_time_ms, 0);
+        assert_eq!(response.highest_supported_version(18, 4), Some(4));
+        assert!(response.tagged_fields.is_empty());
+        let metrics = client.metrics().snapshot();
+        assert_eq!(metrics.requests_started, 1);
+        assert_eq!(metrics.requests_succeeded, 1);
+        assert_eq!(metrics.response_bytes, 19);
+        broker.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn caches_flexible_api_versions_v3_per_connection() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(1024);
+        let broker = tokio::spawn(async move {
+            let request = read_test_frame(&mut broker_stream).await;
+            assert_eq!(&request[0..2], &[0, 18]);
+            assert_eq!(&request[2..4], &[0, 3]);
+
+            let response = [
+                0, 0, 0, 1, // correlation id
+                0, 0, // error code
+                2, // compact api key count: one entry
+                0, 18, 0, 0, 0, 4, 0, // ApiVersions min/max + entry tags
+                0, 0, 0, 0, // throttle time
+                0, // response tagged fields
+            ];
+            broker_stream
+                .write_all(&(response.len() as i32).to_be_bytes())
+                .await
+                .unwrap();
+            broker_stream.write_all(&response).await.unwrap();
+            broker_stream.flush().await.unwrap();
+        });
+
+        let mut client =
+            Client::from_stream(Box::new(client_stream), None, Some(Duration::from_secs(1)));
+
+        let first = client
+            .api_versions_v3_cached("kafrust", "0.3.0")
+            .await
+            .unwrap();
+        let second = client
+            .api_versions_v3_cached("kafrust", "0.3.0")
+            .await
+            .unwrap();
+
+        assert_eq!(first, second);
+        assert_eq!(client.cached_api_versions_v3(), Some(&first));
+        assert_eq!(client.metrics().snapshot().requests_started, 1);
+        broker.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn initializes_producer_id_over_injected_broker_stream() {
         let (client_stream, mut broker_stream) = tokio::io::duplex(1024);
         let broker = tokio::spawn(async move {
@@ -1690,6 +1951,58 @@ mod tests {
         assert_eq!(response.error_code, 0);
         assert_eq!(response.producer_id, 42);
         assert_eq!(response.producer_epoch, 3);
+        broker.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn sends_kip_848_consumer_group_heartbeat_over_injected_broker_stream() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(1024);
+        let broker = tokio::spawn(async move {
+            let request = read_test_frame(&mut broker_stream).await;
+            assert_eq!(&request[0..4], &[0, 68, 0, 0]);
+            assert_eq!(&request[4..8], &[0, 0, 0, 1]);
+            assert_eq!(request.last(), Some(&0));
+
+            let mut response = Vec::new();
+            response.extend_from_slice(&[0, 0, 0, 1]); // response correlation id
+            response.push(0); // response header tagged fields
+            response.extend_from_slice(&[0, 0, 0, 0]); // throttle time
+            response.extend_from_slice(&[0, 0]); // error code
+            response.push(0); // null error message
+            response.push(9); // member id length + 1
+            response.extend_from_slice(b"member-a");
+            response.extend_from_slice(&[0, 0, 0, 2]); // member epoch
+            response.extend_from_slice(&2500_i32.to_be_bytes());
+            response.push(0xff); // null nullable assignment struct
+            response.push(0); // response tagged fields
+            write_test_frame(&mut broker_stream, &response).await;
+        });
+        let mut client = Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-stream-test".to_owned()),
+            Some(Duration::from_secs(1)),
+        );
+
+        let response = client
+            .consumer_group_heartbeat_v0(
+                "orders-group",
+                "",
+                0,
+                None,
+                None,
+                30_000,
+                Some(vec!["orders".to_owned()]),
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.error_code, 0);
+        assert_eq!(response.member_id.as_deref(), Some("member-a"));
+        assert_eq!(response.member_epoch, 2);
+        assert_eq!(response.heartbeat_interval_ms, 2500);
+        assert!(response.assignment.is_none());
         broker.await.unwrap();
     }
 

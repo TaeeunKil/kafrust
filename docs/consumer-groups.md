@@ -1,6 +1,6 @@
 # Consumer Group Direction
 
-Consumer groups are being added incrementally after the direct consumer path. The alpha path supports the classic consumer group protocol with range, round-robin, and an opt-in cooperative-sticky assignor.
+Consumer groups are being added incrementally after the direct consumer path. The alpha path supports the classic consumer group protocol with range, round-robin, and an opt-in cooperative-sticky assignor, plus a selectable KIP-848 consumer protocol path.
 
 ```rust
 use kafrust::ConsumerGroupConfig;
@@ -72,6 +72,43 @@ rollback behavior still require live qualification before production use.
 Assignment state keeps Kafka group ID, member ID, generation ID, topic,
 partition, and next offset visible through the public API.
 
+## KIP-848 Consumer Protocol
+
+Select Kafka's newer broker-side consumer protocol explicitly:
+
+```rust
+use kafrust::{ConsumerGroupConfig, ConsumerGroupProtocol};
+
+# async fn example() -> kafrust::Result<()> {
+let mut group = ConsumerGroupConfig::new(["localhost:9092"], "orders-group")
+    .group_protocol(ConsumerGroupProtocol::Consumer)
+    .subscribe("orders")
+    .join()
+    .await?;
+
+let records = group.poll().await?;
+group.commit_offsets().await?;
+group.leave().await?;
+# let _ = records;
+# Ok(())
+# }
+```
+
+The high-level path uses `ConsumerGroupHeartbeat v0` (API key 68), Metadata
+v12 topic UUIDs, broker-side assignment, member epochs, assignment updates,
+foreground and background heartbeat/rejoin, offset fetch/commit, and explicit
+heartbeat leave.
+`ConsumerGroupAssignmentStrategy` is a classic-protocol setting and must stay
+at its default when selecting KIP-848; use `server_assignor` to request a
+broker-side assignor. When `poll_with_heartbeat` receives a KIP-848 background
+response, the heartbeat task shares member epoch and assignment state with the
+owning group handle. Updated assignments are applied by the foreground group
+handle, while a `null` assignment response preserves the current assignment.
+The session token changes on rejoin so an older heartbeat task is stopped before
+it can send requests for the new member epoch. Kafka 4.x compatibility is
+scoped to the verified Kafka 4.3.1 profile documented in
+`docs/compatibility.md`.
+
 ## Offset Reset
 
 Committed offsets always take precedence. For a newly assigned partition with
@@ -127,7 +164,7 @@ changing local position or committed offsets.
 
 `ConsumerGroup::poll` sends a foreground heartbeat before fetching assigned partitions. If that heartbeat reports a rebalance, stale generation, stale member ID, stale coordinator, coordinator connection I/O error, or coordinator request timeout, `poll` rejoins the group before fetching records.
 
-Use `ConsumerGroup::spawn_heartbeat_task` when application work between polls can approach the group session timeout. It starts an opt-in background heartbeat loop on a separate coordinator connection. The returned `ConsumerGroupHeartbeat` records the group ID, member ID, and generation ID it belongs to.
+Use `ConsumerGroup::spawn_heartbeat_task` when application work between polls can approach the group session timeout. It starts an opt-in background heartbeat loop on a separate coordinator connection. The returned `ConsumerGroupHeartbeat` records the group ID, member ID, and generation ID it belongs to. For KIP-848 groups, member epoch and broker assignment updates are shared with the owning group and applied by `poll_with_heartbeat`.
 
 Pass the heartbeat handle to `ConsumerGroup::poll_with_heartbeat` when a
 background heartbeat task is running. This checks for early task completion
@@ -140,8 +177,9 @@ replaces it for the current member and generation.
 Call `ConsumerGroupHeartbeat::try_wait` to observe early task completion without polling. Call `ConsumerGroupHeartbeat::stop` to shut the task down and observe any broker error returned by the task.
 
 The `consumer_group_heartbeat_rejoin` example starts two members concurrently
-to force a classic-group rebalance and verifies that the first member's mutable
-heartbeat handle is replaced with its new member and generation identity.
+to force a group rebalance and verifies that the first member's mutable
+heartbeat handle tracks the new member epoch. The Kafka 4.3.1 KIP-848 version
+of this scenario is live-verified in `Live Kafka Smoke` run `31492612082`.
 
 ## Leaving
 
@@ -154,6 +192,12 @@ calling `leave`.
 ## Offset Commits
 
 `ConsumerGroup::commit_offsets` commits the current next offsets for assigned partitions. If Kafka reports a rejoinable generation, member, rebalance, or coordinator error, or if the coordinator request fails with I/O or timeout, `commit_offsets` rejoins the group and returns the original commit error instead of retrying the old assignment offsets under the new generation. After that, callers should poll the refreshed assignment state before deciding whether to commit again.
+
+KIP-848 groups use OffsetCommit v9, including flexible request/response
+encoding and the member epoch in `GenerationIdOrMemberEpoch`. Classic groups
+retain the existing v2/v7 routing. KIP-848 assignment initialization uses
+OffsetFetch v9 with the member ID and member epoch; classic assignment
+initialization continues to use OffsetFetch v2.
 
 Current implementation status:
 
@@ -169,6 +213,18 @@ Current implementation status:
 - JoinGroup v2 request/response protocol types exist.
 - SyncGroup v2 request/response protocol types exist.
 - Heartbeat v2 request/response protocol types exist.
+- KIP-848 `ConsumerGroupHeartbeat v0` request/response protocol types exist,
+  including flexible headers, UUID topic partitions, nullable arrays, and
+  tagged fields.
+- Metadata v12 exposes UUID-to-name mappings needed to apply KIP-848
+  assignments.
+- `Client::consumer_group_heartbeat_v0` can send the KIP-848 heartbeat over a
+  coordinator-scoped connection; focused injected-broker coverage verifies
+  the request and response framing.
+- `ConsumerGroupProtocol::Consumer` provides foreground join, assignment
+  application, heartbeat/rejoin, background heartbeat state sharing, offset
+  commit, and explicit leave behavior; its dedicated live broker qualification
+  remains pending.
 - Static member JoinGroup v5, SyncGroup v3, Heartbeat v3, and OffsetCommit v7
   protocol types and high-level routing exist.
 - `ConsumerGroup::leave` uses LeaveGroup v3 for dynamic and static members and
@@ -202,6 +258,11 @@ Current implementation status:
   before polling, rejoins when the task ended with a rejoinable group error,
   and replaces completed or stale same-group heartbeat handles with a new task
   for the current member and generation using the original interval.
+- KIP-848 background heartbeats share member epoch and broker assignment state
+  with the owning group. Assignment updates are applied once per heartbeat
+  response, and nullable assignment responses preserve the existing local
+  assignment. Rejoin session tokens prevent an older task from updating a new
+  group member.
 
 Run the opt-in coordinator example against a local broker:
 

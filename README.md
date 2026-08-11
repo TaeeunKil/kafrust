@@ -15,7 +15,7 @@ visible in public APIs: bootstrap servers, client IDs, topics, partitions,
 offsets, acknowledgements, metadata refresh, consumer groups, heartbeats, and
 commits.
 
-Current release: `0.2.2`.
+Current release: `0.2.4`.
 
 Use kafrust today for experiments, local broker checks, simple internal tools,
 and API evaluation. For broad production Kafka workloads that need mature
@@ -269,14 +269,17 @@ async fn main() -> kafrust::Result<()> {
 
 ### Consumer Group
 
-The current consumer group API is an alpha classic consumer group path with
-dynamic or static membership, range, round-robin, or opt-in cooperative-sticky
-assignment, join, sync, heartbeat, poll, offset commit, explicit leave, and
-earliest/latest reset for partitions that have no committed offset. The
+The current consumer group API is an alpha classic or KIP-848 consumer group
+path with dynamic or static membership, range, round-robin, or opt-in
+cooperative-sticky assignment for classic groups, join, heartbeat, poll,
+offset fetch/commit, explicit leave, and earliest/latest reset for partitions
+that have no committed offset. The
 cooperative-sticky path includes protocol, staged assignment, multi-member
 ownership transfer, transient-member rollback, and member-loss recovery. These
 cooperative failure paths are live-verified in the Kafka `3.7.2` three-broker
-profile; the group API itself remains pre-`1.0`.
+profile. The KIP-848 path, including flexible offset fetch/commit and background
+heartbeat rejoin, is live-verified against Kafka `4.3.1`; the group API itself
+remains pre-`1.0`.
 
 ```rust
 use kafrust::{ConsumerGroupConfig, OffsetResetPolicy};
@@ -318,10 +321,13 @@ brokers.
 
 Verified paths currently include:
 
-- `ApiVersions v0` and `Metadata v1` roundtrips.
+- `ApiVersions v0` and flexible `ApiVersions v3` capability roundtrips, plus
+  `Metadata v1` roundtrips.
 - High-level producer single-record, batch, and buffered sends.
 - Direct topic-partition fetch with Fetch v4 response decoding.
 - Classic consumer group join, sync, heartbeat, poll, and offset commit.
+- KIP-848 consumer group assignment, member-epoch heartbeat, OffsetFetch v9,
+  OffsetCommit v9, background rejoin, and explicit leave against Kafka `4.3.1`.
 
 See [Compatibility](docs/compatibility.md) and
 [Broker Roundtrip](docs/broker-roundtrip.md) for the current evidence.
@@ -390,7 +396,8 @@ Primary public entry points:
 - `ProducerConfig`, `Producer`, `BufferedProducer`, and `ProducerRecord`.
 - `Compression` for opt-in producer RecordBatch compression.
 - `ConsumerConfig`, `Consumer`, `ConsumerAssignment`, and `ConsumerRecord`.
-- `ConsumerGroupConfig`, `ConsumerGroup`, and `ConsumerGroupHeartbeat`.
+- `ConsumerGroupConfig`, `ConsumerGroup`, `ConsumerGroupProtocol`, and
+  `ConsumerGroupHeartbeat`.
 - `SecurityProtocol`, `SaslMechanism`, and `SaslCredentials` for plaintext,
   TLS, and SASL connection modes.
 - `ClientMetrics` and `ClientMetricsSnapshot` for request-level observability.
@@ -402,8 +409,8 @@ Primary public entry points:
 
 Generated API documentation:
 
-- [`kafrust`](https://docs.rs/kafrust/0.2.2/kafrust/)
-- [`kafrust-protocol`](https://docs.rs/kafrust-protocol/0.2.2/kafrust_protocol/)
+- [`kafrust`](https://docs.rs/kafrust/0.2.4/kafrust/)
+- [`kafrust-protocol`](https://docs.rs/kafrust-protocol/0.2.4/kafrust_protocol/)
 
 ## Documentation
 
