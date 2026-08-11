@@ -92,7 +92,10 @@ Use Kafka's comma-separated bootstrap format for multiple brokers, for example
 `localhost:9092`.
 Smoke examples also accept `KAFRUST_SECURITY_PROTOCOL`,
 `KAFRUST_SASL_USERNAME`, `KAFRUST_SASL_PASSWORD`, and
-`KAFRUST_SASL_MECHANISM` for secured broker checks.
+`KAFRUST_SASL_MECHANISM` for secured broker checks. Set
+`KAFRUST_SASL_MECHANISM=oauthbearer` with `KAFRUST_SASL_TOKEN` for the
+OAUTHBEARER path; `KAFRUST_SASL_USERNAME` is optional for its authorization
+identity.
 
 ```sh
 KAFRUST_BOOTSTRAP_SERVERS=localhost:9092 \
@@ -338,6 +341,10 @@ See [Compatibility](docs/compatibility.md) and
   group smoke paths. SASL/SCRAM-SHA-256 and SCRAM-SHA-512 are verified over
   `SaslTls`; the SHA-512 profile covers broker roundtrip, producer, batch,
   buffered producer, direct consumer, and consumer group poll paths.
+- SASL/OAUTHBEARER token authentication is available through
+  `sasl_oauthbearer` and `sasl_oauthbearer_with_username` on the client,
+  producer, consumer, and consumer-group builders. It is covered by injected
+  handshake tests but is not included in the current live broker matrix.
 - Single-node plaintext compatibility is verified against Kafka `3.7.2`,
   `3.8.1`, `3.9.1`, and `4.3.1`. Secured and multi-broker profiles remain
   verified against `3.7.2`.

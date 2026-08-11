@@ -34,6 +34,16 @@ where
             ExampleSaslMechanism::ScramSha512 => {
                 config.sasl_scram_sha_512(credentials.username, credentials.password)
             }
+            ExampleSaslMechanism::OAuthBearer => {
+                if credentials.username.is_empty() {
+                    config.sasl_oauthbearer(credentials.token.unwrap_or_default())
+                } else {
+                    config.sasl_oauthbearer_with_username(
+                        credentials.username,
+                        credentials.token.unwrap_or_default(),
+                    )
+                }
+            }
         };
     }
     if let Some(server_name) = tls_server_name_from_env() {
@@ -95,6 +105,8 @@ pub(crate) trait ExampleSecurityConfig: Sized {
     fn sasl_plain(self, username: String, password: String) -> Self;
     fn sasl_scram_sha_256(self, username: String, password: String) -> Self;
     fn sasl_scram_sha_512(self, username: String, password: String) -> Self;
+    fn sasl_oauthbearer(self, token: String) -> Self;
+    fn sasl_oauthbearer_with_username(self, username: String, token: String) -> Self;
 }
 
 impl ExampleSecurityConfig for ClientConfig {
@@ -120,6 +132,14 @@ impl ExampleSecurityConfig for ClientConfig {
 
     fn sasl_scram_sha_512(self, username: String, password: String) -> Self {
         ClientConfig::sasl_scram_sha_512(self, username, password)
+    }
+
+    fn sasl_oauthbearer(self, token: String) -> Self {
+        ClientConfig::sasl_oauthbearer(self, token)
+    }
+
+    fn sasl_oauthbearer_with_username(self, username: String, token: String) -> Self {
+        ClientConfig::sasl_oauthbearer_with_username(self, username, token)
     }
 }
 
@@ -147,6 +167,14 @@ impl ExampleSecurityConfig for ProducerConfig {
     fn sasl_scram_sha_512(self, username: String, password: String) -> Self {
         ProducerConfig::sasl_scram_sha_512(self, username, password)
     }
+
+    fn sasl_oauthbearer(self, token: String) -> Self {
+        ProducerConfig::sasl_oauthbearer(self, token)
+    }
+
+    fn sasl_oauthbearer_with_username(self, username: String, token: String) -> Self {
+        ProducerConfig::sasl_oauthbearer_with_username(self, username, token)
+    }
 }
 
 impl ExampleSecurityConfig for ConsumerConfig {
@@ -172,6 +200,14 @@ impl ExampleSecurityConfig for ConsumerConfig {
 
     fn sasl_scram_sha_512(self, username: String, password: String) -> Self {
         ConsumerConfig::sasl_scram_sha_512(self, username, password)
+    }
+
+    fn sasl_oauthbearer(self, token: String) -> Self {
+        ConsumerConfig::sasl_oauthbearer(self, token)
+    }
+
+    fn sasl_oauthbearer_with_username(self, username: String, token: String) -> Self {
+        ConsumerConfig::sasl_oauthbearer_with_username(self, username, token)
     }
 }
 
@@ -199,6 +235,14 @@ impl ExampleSecurityConfig for ConsumerGroupConfig {
     fn sasl_scram_sha_512(self, username: String, password: String) -> Self {
         ConsumerGroupConfig::sasl_scram_sha_512(self, username, password)
     }
+
+    fn sasl_oauthbearer(self, token: String) -> Self {
+        ConsumerGroupConfig::sasl_oauthbearer(self, token)
+    }
+
+    fn sasl_oauthbearer_with_username(self, username: String, token: String) -> Self {
+        ConsumerGroupConfig::sasl_oauthbearer_with_username(self, username, token)
+    }
 }
 
 fn security_protocol_from_env() -> kafrust::Result<SecurityProtocol> {
@@ -213,15 +257,30 @@ struct ExampleSaslCredentials {
     mechanism: ExampleSaslMechanism,
     username: String,
     password: String,
+    token: Option<String>,
 }
 
 enum ExampleSaslMechanism {
     Plain,
     ScramSha256,
     ScramSha512,
+    OAuthBearer,
 }
 
 fn sasl_credentials_from_env() -> kafrust::Result<Option<ExampleSaslCredentials>> {
+    let mechanism = sasl_mechanism_from_env()?;
+    if matches!(mechanism, ExampleSaslMechanism::OAuthBearer) {
+        let token = std::env::var("KAFRUST_SASL_TOKEN").map_err(|_| {
+            kafrust::Error::Unsupported("KAFRUST_SASL_TOKEN is required for SASL/OAUTHBEARER")
+        })?;
+        return Ok(Some(ExampleSaslCredentials {
+            mechanism,
+            username: std::env::var("KAFRUST_SASL_USERNAME").unwrap_or_default(),
+            password: String::new(),
+            token: Some(token),
+        }));
+    }
+
     let Some(username) = std::env::var("KAFRUST_SASL_USERNAME").ok() else {
         return Ok(None);
     };
@@ -231,9 +290,10 @@ fn sasl_credentials_from_env() -> kafrust::Result<Option<ExampleSaslCredentials>
         )
     })?;
     Ok(Some(ExampleSaslCredentials {
-        mechanism: sasl_mechanism_from_env()?,
+        mechanism,
         username,
         password,
+        token: None,
     }))
 }
 
@@ -247,8 +307,9 @@ fn sasl_mechanism_from_env() -> kafrust::Result<ExampleSaslMechanism> {
         "" | "plain" => Ok(ExampleSaslMechanism::Plain),
         "scram-sha-256" => Ok(ExampleSaslMechanism::ScramSha256),
         "scram-sha-512" => Ok(ExampleSaslMechanism::ScramSha512),
+        "oauthbearer" | "oauth-bearer" => Ok(ExampleSaslMechanism::OAuthBearer),
         _ => Err(kafrust::Error::Unsupported(
-            "unsupported KAFRUST_SASL_MECHANISM; expected plain, scram-sha-256, or scram-sha-512",
+            "unsupported KAFRUST_SASL_MECHANISM; expected plain, scram-sha-256, scram-sha-512, or oauthbearer",
         )),
     }
 }

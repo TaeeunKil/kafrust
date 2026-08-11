@@ -2976,6 +2976,22 @@ impl ProducerConfig {
         self
     }
 
+    /// Sets SASL/OAUTHBEARER credentials for producer broker connections.
+    pub fn sasl_oauthbearer(mut self, token: impl Into<String>) -> Self {
+        self.client = self.client.sasl_oauthbearer(token);
+        self
+    }
+
+    /// Sets SASL/OAUTHBEARER credentials with an authorization identity.
+    pub fn sasl_oauthbearer_with_username(
+        mut self,
+        username: impl Into<String>,
+        token: impl Into<String>,
+    ) -> Self {
+        self.client = self.client.sasl_oauthbearer_with_username(username, token);
+        self
+    }
+
     /// Sets the Kafka produce acknowledgement policy.
     pub fn acks(mut self, acks: Acks) -> Self {
         self.acks = acks;

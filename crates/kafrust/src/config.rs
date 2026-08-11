@@ -37,6 +37,8 @@ pub enum SaslMechanism {
     ScramSha256,
     /// Kafka `SCRAM-SHA-512` SASL mechanism.
     ScramSha512,
+    /// Kafka `OAUTHBEARER` SASL mechanism.
+    OAuthBearer,
 }
 
 impl SaslMechanism {
@@ -46,6 +48,7 @@ impl SaslMechanism {
             Self::Plain => "PLAIN",
             Self::ScramSha256 => "SCRAM-SHA-256",
             Self::ScramSha512 => "SCRAM-SHA-512",
+            Self::OAuthBearer => "OAUTHBEARER",
         }
     }
 
@@ -54,6 +57,7 @@ impl SaslMechanism {
             Self::Plain => None,
             Self::ScramSha256 => Some(ScramHash::Sha256),
             Self::ScramSha512 => Some(ScramHash::Sha512),
+            Self::OAuthBearer => None,
         }
     }
 }
@@ -68,6 +72,7 @@ pub struct SaslCredentials {
     mechanism: SaslMechanism,
     username: String,
     password: String,
+    oauthbearer_token: Option<String>,
 }
 
 impl SaslCredentials {
@@ -77,6 +82,7 @@ impl SaslCredentials {
             mechanism: SaslMechanism::Plain,
             username: username.into(),
             password: password.into(),
+            oauthbearer_token: None,
         }
     }
 
@@ -86,6 +92,7 @@ impl SaslCredentials {
             mechanism: SaslMechanism::ScramSha256,
             username: username.into(),
             password: password.into(),
+            oauthbearer_token: None,
         }
     }
 
@@ -95,6 +102,29 @@ impl SaslCredentials {
             mechanism: SaslMechanism::ScramSha512,
             username: username.into(),
             password: password.into(),
+            oauthbearer_token: None,
+        }
+    }
+
+    /// Creates SASL/OAUTHBEARER credentials from a bearer token.
+    ///
+    /// The token is sent only during the SASL exchange and is redacted from
+    /// `Debug` output. Use [`Self::oauthbearer_with_username`] when the broker
+    /// requires an authorization identity in the GS2 header.
+    pub fn oauthbearer(token: impl Into<String>) -> Self {
+        Self::oauthbearer_with_username("", token)
+    }
+
+    /// Creates SASL/OAUTHBEARER credentials with an optional authorization identity.
+    pub fn oauthbearer_with_username(
+        username: impl Into<String>,
+        token: impl Into<String>,
+    ) -> Self {
+        Self {
+            mechanism: SaslMechanism::OAuthBearer,
+            username: username.into(),
+            password: String::new(),
+            oauthbearer_token: Some(token.into()),
         }
     }
 
@@ -112,6 +142,11 @@ impl SaslCredentials {
     pub fn password(&self) -> &str {
         &self.password
     }
+
+    /// Returns the configured OAUTHBEARER token, if this is an OAUTHBEARER credential.
+    pub fn oauthbearer_token(&self) -> Option<&str> {
+        self.oauthbearer_token.as_deref()
+    }
 }
 
 impl fmt::Debug for SaslCredentials {
@@ -120,6 +155,10 @@ impl fmt::Debug for SaslCredentials {
             .field("mechanism", &self.mechanism)
             .field("username", &self.username)
             .field("password", &"<redacted>")
+            .field(
+                "oauthbearer_token",
+                &self.oauthbearer_token.as_ref().map(|_| "<redacted>"),
+            )
             .finish()
     }
 }
@@ -245,6 +284,22 @@ impl ClientConfig {
         password: impl Into<String>,
     ) -> Self {
         self.sasl_credentials = Some(SaslCredentials::scram_sha_512(username, password));
+        self
+    }
+
+    /// Sets SASL/OAUTHBEARER credentials without changing the configured security protocol.
+    pub fn sasl_oauthbearer(mut self, token: impl Into<String>) -> Self {
+        self.sasl_credentials = Some(SaslCredentials::oauthbearer(token));
+        self
+    }
+
+    /// Sets SASL/OAUTHBEARER credentials with an authorization identity.
+    pub fn sasl_oauthbearer_with_username(
+        mut self,
+        username: impl Into<String>,
+        token: impl Into<String>,
+    ) -> Self {
+        self.sasl_credentials = Some(SaslCredentials::oauthbearer_with_username(username, token));
         self
     }
 
@@ -482,8 +537,29 @@ async fn authenticate_sasl(client: &mut Client, credentials: &SaslCredentials) -
     if let Some(hash) = credentials.mechanism().scram_hash() {
         return authenticate_sasl_scram(client, credentials, mechanism, hash).await;
     }
+    if credentials.mechanism() == SaslMechanism::OAuthBearer {
+        return authenticate_sasl_oauthbearer(client, credentials, mechanism).await;
+    }
 
     authenticate_sasl_plain(client, credentials, mechanism).await
+}
+
+async fn authenticate_sasl_oauthbearer(
+    client: &mut Client,
+    credentials: &SaslCredentials,
+    mechanism: &'static str,
+) -> Result<()> {
+    let response = client
+        .sasl_authenticate_v0(sasl_oauthbearer_auth_bytes(credentials)?)
+        .await?;
+    if response.error_code != 0 {
+        return Err(client.broker_error(
+            response.error_code,
+            format!("sasl authenticate {mechanism}"),
+        ));
+    }
+
+    Ok(())
 }
 
 async fn authenticate_sasl_plain(
@@ -573,6 +649,37 @@ fn sasl_plain_auth_bytes(credentials: &SaslCredentials) -> Vec<u8> {
     bytes
 }
 
+fn sasl_oauthbearer_auth_bytes(credentials: &SaslCredentials) -> Result<Vec<u8>> {
+    let token = credentials
+        .oauthbearer_token()
+        .ok_or(Error::Unsupported("SASL/OAUTHBEARER token is missing"))?;
+    if token.is_empty() {
+        return Err(Error::Unsupported(
+            "SASL/OAUTHBEARER token must not be empty",
+        ));
+    }
+    if credentials.username().contains('\u{1}') || token.contains('\u{1}') {
+        return Err(Error::Unsupported(
+            "SASL/OAUTHBEARER credentials contain a forbidden control character",
+        ));
+    }
+
+    let mut bytes = Vec::with_capacity(
+        4 + credentials.username().len() + token.len() + "auth=Bearer ".len() + 2,
+    );
+    if credentials.username().is_empty() {
+        bytes.extend_from_slice(b"n,,");
+    } else {
+        bytes.extend_from_slice(b"n,a=");
+        bytes.extend_from_slice(credentials.username().as_bytes());
+        bytes.push(b',');
+    }
+    bytes.extend_from_slice(b"\x01auth=Bearer ");
+    bytes.extend_from_slice(token.as_bytes());
+    bytes.extend_from_slice(b"\x01\x01");
+    Ok(bytes)
+}
+
 #[cfg(any(feature = "tls", test))]
 fn tls_server_name_from_bootstrap_server(server: &str) -> Result<String> {
     let trimmed = server.trim();
@@ -608,8 +715,8 @@ fn tls_server_name_from_bootstrap_server(server: &str) -> Result<String> {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::{
-        tls_server_name_from_bootstrap_server, ClientConfig, SaslCredentials, SaslMechanism,
-        SecurityProtocol,
+        sasl_oauthbearer_auth_bytes, tls_server_name_from_bootstrap_server, ClientConfig,
+        SaslCredentials, SaslMechanism, SecurityProtocol,
     };
     use crate::scram::{self, ScramHash};
     use crate::{ClientMetrics, Error};
@@ -733,6 +840,20 @@ mod tests {
     }
 
     #[test]
+    fn stores_sasl_oauthbearer_credentials_without_changing_security_protocol() {
+        let config = ClientConfig::new(["localhost:9092"])
+            .sasl_oauthbearer_with_username("alice", "jwt-token");
+        let credentials = config.sasl_credentials_ref().unwrap();
+
+        assert_eq!(config.security_protocol_ref(), SecurityProtocol::Plaintext);
+        assert_eq!(credentials.mechanism(), SaslMechanism::OAuthBearer);
+        assert_eq!(credentials.mechanism().as_str(), "OAUTHBEARER");
+        assert_eq!(credentials.username(), "alice");
+        assert_eq!(credentials.password(), "");
+        assert_eq!(credentials.oauthbearer_token(), Some("jwt-token"));
+    }
+
+    #[test]
     fn redacts_sasl_password_in_debug_output() {
         let credentials = SaslCredentials::plain("alice", "secret-password");
         let config = ClientConfig::new(["localhost:9092"])
@@ -743,6 +864,39 @@ mod tests {
         assert!(format!("{credentials:?}").contains("<redacted>"));
         assert!(!format!("{config:?}").contains("secret-password"));
         assert!(format!("{config:?}").contains("<redacted>"));
+
+        let oauth = SaslCredentials::oauthbearer("jwt-token");
+        assert!(!format!("{oauth:?}").contains("jwt-token"));
+        assert!(format!("{oauth:?}").contains("<redacted>"));
+    }
+
+    #[test]
+    fn encodes_sasl_oauthbearer_initial_response() {
+        let credentials = SaslCredentials::oauthbearer_with_username("alice", "jwt-token");
+
+        assert_eq!(
+            sasl_oauthbearer_auth_bytes(&credentials).unwrap(),
+            b"n,a=alice,\x01auth=Bearer jwt-token\x01\x01"
+        );
+
+        let credentials = SaslCredentials::oauthbearer("jwt-token");
+        assert_eq!(
+            sasl_oauthbearer_auth_bytes(&credentials).unwrap(),
+            b"n,,\x01auth=Bearer jwt-token\x01\x01"
+        );
+
+        assert!(matches!(
+            sasl_oauthbearer_auth_bytes(&SaslCredentials::oauthbearer("")),
+            Err(Error::Unsupported(
+                "SASL/OAUTHBEARER token must not be empty"
+            ))
+        ));
+        assert!(matches!(
+            sasl_oauthbearer_auth_bytes(&SaslCredentials::oauthbearer("bad\u{1}token")),
+            Err(Error::Unsupported(
+                "SASL/OAUTHBEARER credentials contain a forbidden control character"
+            ))
+        ));
     }
 
     #[tokio::test]
@@ -848,6 +1002,56 @@ mod tests {
         let client = ClientConfig::new([addr.to_string()])
             .security_protocol(SecurityProtocol::SaslPlaintext)
             .sasl_plain("alice", "secret")
+            .request_timeout_ms(1_000)
+            .connect()
+            .await;
+
+        assert!(client.is_ok());
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn sasl_oauthbearer_connect_sends_handshake_and_authenticate() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+
+            let handshake = read_frame(&mut socket).await;
+            assert_eq!(
+                handshake,
+                [
+                    0, 17, // api key
+                    0, 1, // api version
+                    0, 0, 0, 1, // correlation id
+                    0xff, 0xff, // null client id
+                    0, 11, b'O', b'A', b'U', b'T', b'H', b'B', b'E', b'A', b'R', b'E',
+                    b'R', // mechanism
+                ]
+            );
+            write_frame(
+                &mut socket,
+                &[
+                    0, 0, 0, 1, // correlation id
+                    0, 0, // error code
+                    0, 0, 0, 1, // mechanism count
+                    0, 11, b'O', b'A', b'U', b'T', b'H', b'B', b'E', b'A', b'R', b'E',
+                    b'R', // mechanism
+                ],
+            )
+            .await;
+
+            let authenticate = read_frame(&mut socket).await;
+            assert_eq!(
+                sasl_authenticate_auth_bytes(&authenticate, 2),
+                b"n,a=alice,\x01auth=Bearer jwt-token\x01\x01"
+            );
+            write_sasl_authenticate_response(&mut socket, 2, &[]).await;
+        });
+
+        let client = ClientConfig::new([addr.to_string()])
+            .security_protocol(SecurityProtocol::SaslPlaintext)
+            .sasl_oauthbearer_with_username("alice", "jwt-token")
             .request_timeout_ms(1_000)
             .connect()
             .await;

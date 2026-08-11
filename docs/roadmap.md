@@ -486,6 +486,7 @@ Scope:
 - configurable root certificates and server name validation
 - SASL PLAIN
 - SASL SCRAM-SHA-256 and SCRAM-SHA-512
+- SASL OAUTHBEARER token authentication
 - credential redaction in errors, debug output, logs, and tracing
 - secured broker examples and manual smoke instructions
 
@@ -499,7 +500,8 @@ Exit criteria:
 
 Known limits:
 
-- SASL mechanisms beyond PLAIN and SCRAM-SHA-256/512 are not implemented.
+- SASL/OAUTHBEARER is implemented and covered by injected handshake tests, but
+  live OAuth-provider compatibility is not yet claimed.
 
 Evidence:
 
@@ -512,22 +514,24 @@ Evidence:
   and consumer group builders add DER-encoded root certificates while keeping
   platform roots enabled. Broker smoke examples accept
   `KAFRUST_TLS_ROOT_CERT_DER_PATH`.
-- `SaslMechanism` models Kafka `PLAIN`, `SCRAM-SHA-256`, and
-  `SCRAM-SHA-512`; `SaslCredentials` has matching constructors and the shared
-  client, producer, consumer, and consumer group configs expose SCRAM builder
-  methods without changing `SecurityProtocol`.
+- `SaslMechanism` models Kafka `PLAIN`, `SCRAM-SHA-256`, `SCRAM-SHA-512`, and
+  `OAUTHBEARER`; `SaslCredentials` has matching password and token
+  constructors and the shared client, producer, consumer, and consumer group
+  configs expose matching builder methods without changing
+  `SecurityProtocol`.
 - `ClientConfig` performs SCRAM client-first and client-final
   `SaslAuthenticate v0` exchanges after `SaslHandshake v1`, verifies the
   server-final signature, and reports invalid SCRAM responses without exposing
   passwords or raw credentials.
 - Focused tests cover SCRAM-SHA-256 and SCRAM-SHA-512 proof generation,
   username escaping, nonce mismatch handling, server-final verification, mock
-  broker SCRAM authentication ordering, and secret-safe invalid server-final
-  errors.
+  broker SCRAM authentication ordering, OAUTHBEARER RFC 7628 initial response
+  encoding, and secret-safe authentication errors.
 - The broker roundtrip test and smoke examples accept
   `KAFRUST_SASL_MECHANISM` with `plain`, `scram-sha-256`, and
-  `scram-sha-512`, so live broker profiles can exercise the same entry points
-  once SCRAM users are configured.
+  `scram-sha-512`; they also accept `oauthbearer` with
+  `KAFRUST_SASL_TOKEN` and an optional `KAFRUST_SASL_USERNAME`, so a future
+  OAuth provider profile can exercise the same entry points.
 - The `Live Kafka Smoke` workflow includes a SASL_SSL SCRAM profile that
   creates separate Kafka SCRAM-SHA-256 and SCRAM-SHA-512 credentials, configures
   kafrust with `KAFRUST_SECURITY_PROTOCOL=sasl_tls`, the selected
@@ -1198,6 +1202,11 @@ Implemented evidence:
   classified separately from rejoinable group errors.
 - Classic groups can advertise and execute either Kafka's `range` or
   `roundrobin` assignor, including mixed topic subscriptions.
+- SASL/OAUTHBEARER uses the RFC 7628 GS2 initial response with either an empty
+  authorization identity (`n,,`) or an explicit identity (`n,a=<id>,`), keeps
+  the bearer token out of `Debug` output, and is exposed through all high-level
+  connection builders. Injected broker tests cover handshake ordering and
+  exact authentication bytes; live OAuth-provider verification remains open.
 - Cooperative-sticky group membership encodes Subscription v1 owned
   partitions and performs staged ownership transfers with focused local tests.
   Manual `Live Kafka Smoke` run `31464021305` passed the Kafka 3.7.2
