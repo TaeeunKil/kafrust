@@ -770,6 +770,11 @@ Implemented evidence:
   -> delete against Kafka 3.7.2 in run `31461980967` on 2026-08-11. Upsertion
   derives the salted password locally and does not retain plaintext passwords
   or expose credential bytes in `Debug` output.
+- AlterPartitionReassignments v0 and ListPartitionReassignments v0 expose
+  typed replica targets, cancellation, ongoing replica sets, and controller
+  routing. Focused wire tests and a controller-routing mock test cover the
+  flexible schemas. The Kafka 3.7.2 three-broker profile passed reassignment
+  submission and completion polling in live run `31462962605` on 2026-08-11.
 - The `admin_describe_group` example runs after the consumer-group smoke path
   across plaintext, multi-broker, TLS, SASL_PLAINTEXT, and SASL_SSL profiles.
 - The admin lifecycle example waits for asynchronous metadata propagation in

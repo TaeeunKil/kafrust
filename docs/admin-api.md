@@ -239,6 +239,63 @@ topic from its subscription before deleting committed offsets. A member can
 remain visible until its broker-side session timeout expires after an
 unclean process exit.
 
+## Reassign Partitions
+
+Partition reassignment requests are routed to the active controller. A target
+replica list changes the preferred replica order; `cancel` sends Kafka's
+nullable replica sentinel to cancel a pending reassignment. The status API
+returns only reassignments still in progress, including replicas being added
+and removed.
+
+```rust
+use kafrust::{
+    AdminClient, ClientConfig, PartitionReassignment, PartitionReassignmentOptions,
+    PartitionReassignmentQuery,
+};
+use std::time::Duration;
+
+# async fn example() -> kafrust::Result<()> {
+let admin = AdminClient::new(ClientConfig::new([
+    "localhost:19092",
+    "localhost:19093",
+    "localhost:19094",
+]));
+let options = PartitionReassignmentOptions::new().timeout(Duration::from_secs(30));
+let request = [PartitionReassignment::new("orders").partition(0, [3, 1, 2])];
+let submitted = admin
+    .alter_partition_reassignments(&request, options)
+    .await?;
+if !submitted.is_success() {
+    eprintln!("reassignment rejected: {:?}", submitted.error_message());
+}
+
+let query = [PartitionReassignmentQuery::new("orders").partition(0)];
+let status = admin
+    .list_partition_reassignments(Some(&query), options)
+    .await?;
+for topic in status.topics() {
+    for partition in topic.partitions() {
+        println!(
+            "{}-{} replicas={:?} adding={:?} removing={:?}",
+            topic.name(),
+            partition.partition_index(),
+            partition.replicas(),
+            partition.adding_replicas(),
+            partition.removing_replicas(),
+        );
+    }
+}
+# Ok(())
+# }
+```
+
+`list_partition_reassignments(None, options)` asks Kafka for every ongoing
+reassignment. An empty topic result means the selected reassignment is no
+longer in progress, but callers should verify final metadata when they need
+to assert the broker's completed replica assignment. The repository's
+`admin_reassign_partitions` example performs bounded status polling and is
+live-verified on the Kafka 3.7.2 three-broker profile.
+
 ## Create Topics
 
 ```rust

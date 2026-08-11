@@ -340,6 +340,12 @@ jobs:
       - name: Run multi-broker admin delete group offsets example
         run: cargo run -p kafrust --example admin_delete_group_offsets
 
+      - name: Run multi-broker admin partition reassignment example
+        env:
+          KAFRUST_REASSIGNMENT_PARTITION: "0"
+          KAFRUST_REASSIGNMENT_REPLICAS: "3,1,2"
+        run: cargo run -p kafrust --example admin_reassign_partitions
+
       - name: Run transaction coordinator failover through broker stop
         run: |
           KAFRUST_TRANSACTIONAL_ID="kafrust-transaction-failover-${GITHUB_RUN_ID}" \
