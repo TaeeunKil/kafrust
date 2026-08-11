@@ -1,6 +1,6 @@
 # Consumer Group Direction
 
-Consumer groups are being added incrementally after the direct consumer path. The alpha path supports the classic consumer group protocol with the range assignor.
+Consumer groups are being added incrementally after the direct consumer path. The alpha path supports the classic consumer group protocol with range, round-robin, and an opt-in cooperative-sticky assignor.
 
 ```rust
 use kafrust::ConsumerGroupConfig;
@@ -63,9 +63,14 @@ assigned partitions, and builds a direct `Consumer` for fetching records.
 
 The alpha path uses the classic consumer group protocol. Range assignment is
 the default; `ConsumerGroupConfig::assignment_strategy` can select
-`ConsumerGroupAssignmentStrategy::RoundRobin`. Assignment state keeps Kafka
-group ID, member ID, generation ID, topic, partition, and next offset visible
-through the public API.
+`ConsumerGroupAssignmentStrategy::RoundRobin` or
+`ConsumerGroupAssignmentStrategy::CooperativeSticky`. Cooperative sticky
+members advertise Subscription v1 owned partitions and preserve valid
+ownership across staged transfers. The current implementation has focused
+and single-member live coverage; multi-member transfer, member-loss, and
+rollback behavior still require live qualification before production use.
+Assignment state keeps Kafka group ID, member ID, generation ID, topic,
+partition, and next offset visible through the public API.
 
 ## Offset Reset
 
@@ -173,6 +178,10 @@ Current implementation status:
 - Internal range assignment can compute SyncGroup assignment payloads from JoinGroup member subscriptions and topic metadata.
 - Internal round-robin assignment follows sorted member/topic/partition order
   and skips members that do not subscribe to the current topic.
+- Cooperative-sticky Subscription v1 encoding and staged ownership transfer
+  are implemented with focused assignment tests. Kafka 3.7.2 three-broker
+  protocol/example coverage passed in `Live Kafka Smoke` run `31464021305`;
+  multi-member failure qualification remains pending.
 - OffsetFetch v2 request/response protocol types exist.
 - ListOffsets v1 request/response protocol types exist and the group join path
   uses them for leader-routed earliest/latest offset reset.
