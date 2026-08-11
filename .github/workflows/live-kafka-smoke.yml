@@ -974,7 +974,8 @@ jobs:
             -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1 \
             -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1 \
             -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 \
-            -e KAFKA_SASL_ENABLED_MECHANISMS=SCRAM-SHA-256,SCRAM-SHA-512 \
+            -e KAFKA_SASL_ENABLED_MECHANISMS=SCRAM-SHA-256,SCRAM-SHA-512,OAUTHBEARER \
+            -e 'KAFKA_LISTENER_NAME_SASL_SSL_OAUTHBEARER_SASL_JAAS_CONFIG=org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required unsecuredValidatorPrincipalClaimName="sub";' \
             -e KAFKA_SSL_KEYSTORE_FILENAME=kafka.server.keystore.p12 \
             -e KAFKA_SSL_KEYSTORE_CREDENTIALS=keystore-password \
             -e KAFKA_SSL_KEY_CREDENTIALS=key-password \
@@ -1099,6 +1100,34 @@ jobs:
           KAFRUST_PARTITION=0 KAFRUST_OFFSET=0 \
             cargo run -p kafrust --features tls --example consumer_fetch
           cargo run -p kafrust --features tls --example consumer_group_poll
+
+      - name: Generate unsecured OAuth test token
+        run: |
+          python3 - <<'PY' > sasl-ssl/oauth-token
+          import base64
+          import json
+          import time
+
+          def encode(value):
+              payload = json.dumps(value, separators=(",", ":")).encode()
+              return base64.urlsafe_b64encode(payload).rstrip(b"=").decode()
+
+          now = int(time.time())
+          print(
+              f"{encode({'alg': 'none', 'typ': 'JWT'})}."
+              f"{encode({'sub': 'kafrust', 'iat': now, 'exp': now + 3600})}."
+          )
+          PY
+          echo "KAFRUST_SASL_TOKEN=$(cat sasl-ssl/oauth-token)" >> "$GITHUB_ENV"
+
+      - name: Run SASL_SSL OAUTHBEARER broker roundtrip
+        env:
+          KAFRUST_SASL_MECHANISM: oauthbearer
+          KAFRUST_GROUP_ID: kafrust-smoke-oauthbearer-${{ github.run_id }}
+        run: |
+          cargo test -p kafrust --features tls --test broker_roundtrip -- --nocapture
+          cargo run -p kafrust --features tls --example broker_roundtrip
+          cargo run -p kafrust --features tls --example producer_send
 
       - name: Dump SASL_SSL SCRAM Kafka logs
         if: failure()
