@@ -158,7 +158,8 @@ The semantic difference matters: kafrust currently returns a bounded batch and
 commits the current next offsets for its assignments. It does not expose
 rust-rdkafka's asynchronous per-message commit queue, rebalance callbacks,
 partition queue splitting, or regex subscription. The current group
-implementation uses the classic protocol with range or round-robin assignment.
+implementation supports the classic protocol with range or round-robin
+assignment and an explicitly selected KIP-848 consumer protocol path.
 
 For processing that can approach the session timeout, use
 `spawn_heartbeat_task` with `poll_with_heartbeat`. The task is explicit and
@@ -266,7 +267,7 @@ See [Admin API](admin-api.md) for typed request and response examples.
 | Non-Tokio runtime or synchronous client | Blocked |
 | Custom partitioner or rebalance callback | Blocked |
 | `cooperative-sticky` assignor and consumer group protocol selection | Candidate for protocol and initial staged assignment; live multi-member transfer and failure qualification pending |
-| KIP-848 consumer group protocol (`ConsumerGroupHeartbeat`) | High-level foreground path is implemented; qualify Kafka 4.x broker-side assignment, rejoin, offset, and failure behavior before production migration |
+| KIP-848 consumer group protocol (`ConsumerGroupHeartbeat`) | High-level foreground and state-sharing background paths are implemented; qualify Kafka 4.x broker-side assignment, rejoin, offset, and failure behavior before production migration |
 | Full librdkafka config passthrough | Blocked by design |
 | ACL describe/create/delete with an authorizer-enabled broker | Verified on Kafka 3.7.2; qualify target permissions and policy |
 | Client quota describe/alter | Verified on Kafka 3.7.2 StandardAuthorizer; qualify target permissions and quota policy |

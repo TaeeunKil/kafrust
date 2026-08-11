@@ -1236,8 +1236,14 @@ Implemented evidence:
 - KIP-848 `ConsumerGroupHeartbeat v0` protocol types, Metadata v12 UUID
   mappings, and a selectable high-level foreground group path are implemented
   with assignment application, member-epoch heartbeats/rejoin, offset commit,
-  explicit leave, and injected low-level roundtrip coverage. Kafka 4.x live
-  qualification and a state-sharing background heartbeat remain open.
+  explicit leave, and injected low-level roundtrip coverage.
+- KIP-848 background heartbeats share member epoch and broker assignment state
+  with the owning group handle. Assignment responses are applied once per
+  response, nullable assignments preserve existing ownership, and a rejoin
+  session token stops stale tasks from sending requests for a new member epoch.
+  Focused tests cover state updates and nullable assignment preservation.
+- Kafka 4.x live qualification and broader failure-injection coverage remain
+  open.
 - Dynamic and static members can explicitly leave through LeaveGroup v3,
   avoiding session-timeout cleanup after graceful shutdown.
 - Manual `Live Kafka Smoke` run `30065025169` passed graceful LeaveGroup v3 on

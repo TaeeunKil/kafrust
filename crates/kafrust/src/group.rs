@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
 use std::time::Duration;
 
 use kafrust_protocol::api::consumer_group_heartbeat::{
@@ -35,7 +36,7 @@ use crate::consumer::{
 };
 use crate::error::{BrokerErrorKind, Error, Result};
 use crate::metrics::ClientMetrics;
-use tokio::sync::oneshot;
+use tokio::sync::{oneshot, Mutex};
 use tokio::task::JoinHandle;
 use tokio::time::{self, MissedTickBehavior};
 use tracing::{debug, Instrument};
@@ -134,6 +135,23 @@ pub struct ConsumerGroupConfig {
     assignment_strategy: ConsumerGroupAssignmentStrategy,
     group_protocol: ConsumerGroupProtocol,
     server_assignor: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+struct ConsumerProtocolHeartbeatState {
+    member_id: String,
+    member_epoch: i32,
+    owned_partitions: Option<Vec<ConsumerGroupHeartbeatTopicPartitions>>,
+    assignment_version: u64,
+}
+
+#[derive(Debug, Clone)]
+struct ConsumerProtocolHeartbeatConfig {
+    group_instance_id: Option<String>,
+    topics: Vec<String>,
+    server_assignor: Option<String>,
+    rebalance_timeout_ms: i32,
+    interval: Duration,
 }
 
 impl ConsumerGroupConfig {
@@ -661,6 +679,9 @@ impl ConsumerGroupConfig {
                 cooperative_rejoin_required,
                 protocol: ConsumerGroupProtocol::Classic,
                 consumer_topic_ids: BTreeMap::new(),
+                consumer_session: None,
+                consumer_heartbeat_state: None,
+                consumer_heartbeat_assignment_version: 0,
                 consumer_owned_partitions: None,
                 consumer: Consumer::from_assignments(
                     consumer_client,
@@ -773,6 +794,9 @@ impl ConsumerGroupConfig {
             cooperative_rejoin_required: false,
             protocol: ConsumerGroupProtocol::Consumer,
             consumer_topic_ids: topic_ids,
+            consumer_session: Some(Arc::new(())),
+            consumer_heartbeat_state: None,
+            consumer_heartbeat_assignment_version: 0,
             consumer_owned_partitions: response.assignment,
             consumer: Consumer::from_assignments(
                 consumer_client,
@@ -795,6 +819,9 @@ pub struct ConsumerGroup {
     cooperative_rejoin_required: bool,
     protocol: ConsumerGroupProtocol,
     consumer_topic_ids: BTreeMap<String, [u8; 16]>,
+    consumer_session: Option<Arc<()>>,
+    consumer_heartbeat_state: Option<Arc<Mutex<ConsumerProtocolHeartbeatState>>>,
+    consumer_heartbeat_assignment_version: u64,
     consumer_owned_partitions: Option<Vec<ConsumerGroupHeartbeatTopicPartitions>>,
     consumer: Consumer,
 }
@@ -1022,6 +1049,9 @@ impl ConsumerGroup {
         &mut self,
         heartbeat: &mut ConsumerGroupHeartbeat,
     ) -> Result<Vec<ConsumerRecord>> {
+        if self.protocol == ConsumerGroupProtocol::Consumer {
+            return self.poll_with_consumer_heartbeat(heartbeat).await;
+        }
         let interval = heartbeat.interval;
         let mut restart_heartbeat = false;
         match heartbeat.state_for(&self.group_id, &self.member_id, self.generation_id) {
@@ -1078,6 +1108,115 @@ impl ConsumerGroup {
         result
     }
 
+    async fn poll_with_consumer_heartbeat(
+        &mut self,
+        heartbeat: &mut ConsumerGroupHeartbeat,
+    ) -> Result<Vec<ConsumerRecord>> {
+        let interval = heartbeat.interval;
+        match heartbeat.state_for_consumer(&self.group_id, self.consumer_session.as_ref()) {
+            HeartbeatHandleState::Current => {}
+            HeartbeatHandleState::StaleGeneration => {
+                debug!(
+                    group_id = self.group_id.as_str(),
+                    member_id = self.member_id.as_str(),
+                    generation_id = self.generation_id,
+                    "stopping stale KIP-848 consumer group heartbeat task"
+                );
+                heartbeat.stop_stale_generation().await?;
+                *heartbeat = self.spawn_heartbeat_task(interval).await?;
+            }
+            HeartbeatHandleState::DifferentGroup => {
+                return Err(Error::Unsupported(
+                    "background heartbeat handle belongs to a different consumer group",
+                ));
+            }
+        }
+
+        self.consumer_heartbeat_state = heartbeat.consumer_state_handle();
+        match heartbeat.try_wait().await {
+            Ok(None) => {}
+            Ok(Some(())) => {
+                self.apply_consumer_heartbeat_state(heartbeat).await?;
+                *heartbeat = self.spawn_heartbeat_task(interval).await?;
+                self.consumer_heartbeat_state = heartbeat.consumer_state_handle();
+            }
+            Err(error) if should_rejoin_group(&error) => {
+                debug!(
+                    group_id = self.group_id.as_str(),
+                    member_id = self.member_id.as_str(),
+                    generation_id = self.generation_id,
+                    error = %error,
+                    "rejoining KIP-848 consumer group after background heartbeat"
+                );
+                self.config.client.record_retry();
+                self.rejoin().await?;
+                *heartbeat = self.spawn_heartbeat_task(interval).await?;
+                self.consumer_heartbeat_state = heartbeat.consumer_state_handle();
+            }
+            Err(error) => return Err(error),
+        }
+
+        self.apply_consumer_heartbeat_state(heartbeat).await?;
+        let result = self.consumer.poll().await;
+
+        if result.is_ok() {
+            match heartbeat.try_wait().await {
+                Ok(None) => {}
+                Ok(Some(())) => {
+                    self.apply_consumer_heartbeat_state(heartbeat).await?;
+                    *heartbeat = self.spawn_heartbeat_task(interval).await?;
+                    self.consumer_heartbeat_state = heartbeat.consumer_state_handle();
+                }
+                Err(error) if should_rejoin_group(&error) => {
+                    self.config.client.record_retry();
+                    self.rejoin().await?;
+                    *heartbeat = self.spawn_heartbeat_task(interval).await?;
+                    self.consumer_heartbeat_state = heartbeat.consumer_state_handle();
+                    return Err(error);
+                }
+                Err(error) => return Err(error),
+            }
+            self.apply_consumer_heartbeat_state(heartbeat).await?;
+        }
+
+        result
+    }
+
+    async fn apply_consumer_heartbeat_state(
+        &mut self,
+        heartbeat: &ConsumerGroupHeartbeat,
+    ) -> Result<()> {
+        let Some(state) = heartbeat.consumer_state_snapshot().await else {
+            return Ok(());
+        };
+
+        if let Some(assignment) = state
+            .owned_partitions
+            .clone()
+            .filter(|_| state.assignment_version > self.consumer_heartbeat_assignment_version)
+        {
+            let protocol_assignment =
+                consumer_protocol_assignment(&assignment, &self.consumer_topic_ids)?;
+            let mut bootstrap = self.config.client.clone().connect().await?;
+            let assignments = assignments_from_protocol(
+                &mut self.coordinator,
+                &mut bootstrap,
+                &self.config.client,
+                &self.group_id,
+                self.config.offset_reset_policy,
+                &protocol_assignment,
+            )
+            .await?;
+            self.consumer.replace_assignments(assignments);
+            self.consumer_owned_partitions = Some(assignment);
+            self.consumer_heartbeat_assignment_version = state.assignment_version;
+        }
+
+        self.member_id = state.member_id;
+        self.generation_id = state.member_epoch;
+        Ok(())
+    }
+
     /// Starts a background heartbeat task for this joined group member.
     #[tracing::instrument(
         level = "debug",
@@ -1088,11 +1227,6 @@ impl ConsumerGroup {
     )]
     pub async fn spawn_heartbeat_task(&self, interval: Duration) -> Result<ConsumerGroupHeartbeat> {
         validate_heartbeat_interval(interval)?;
-        if self.protocol == ConsumerGroupProtocol::Consumer {
-            return Err(Error::Unsupported(
-                "background heartbeat for KIP-848 groups is not available yet",
-            ));
-        }
         debug!(
             group_id = self.group_id.as_str(),
             member_id = self.member_id.as_str(),
@@ -1121,6 +1255,19 @@ impl ConsumerGroup {
         let generation_id = self.generation_id;
         let member_id = self.member_id.clone();
         let group_instance_id = self.config.group_instance_id.clone();
+        let consumer_session = self.consumer_session.clone();
+        let consumer_state = (self.protocol == ConsumerGroupProtocol::Consumer).then(|| {
+            Arc::new(Mutex::new(ConsumerProtocolHeartbeatState {
+                member_id: self.member_id.clone(),
+                member_epoch: self.generation_id,
+                owned_partitions: self.consumer_owned_partitions.clone(),
+                assignment_version: 0,
+            }))
+        });
+        let consumer_state_for_task = consumer_state.clone();
+        let topics = self.config.topics.clone();
+        let server_assignor = self.config.server_assignor.clone();
+        let rebalance_timeout_ms = self.config.rebalance_timeout_ms;
         let (shutdown, shutdown_rx) = oneshot::channel();
         let heartbeat_span = tracing::debug_span!(
             "kafka.consumer_group.background_heartbeat",
@@ -1131,16 +1278,33 @@ impl ConsumerGroup {
         );
         let handle = tokio::spawn(
             async move {
-                run_background_heartbeat(
-                    &mut coordinator,
-                    group_id,
-                    generation_id,
-                    member_id,
-                    group_instance_id,
-                    interval,
-                    shutdown_rx,
-                )
-                .await
+                if let Some(consumer_state) = consumer_state_for_task {
+                    run_background_consumer_heartbeat(
+                        &mut coordinator,
+                        group_id,
+                        consumer_state,
+                        ConsumerProtocolHeartbeatConfig {
+                            group_instance_id,
+                            topics,
+                            server_assignor,
+                            rebalance_timeout_ms,
+                            interval,
+                        },
+                        shutdown_rx,
+                    )
+                    .await
+                } else {
+                    run_background_heartbeat(
+                        &mut coordinator,
+                        group_id,
+                        generation_id,
+                        member_id,
+                        group_instance_id,
+                        interval,
+                        shutdown_rx,
+                    )
+                    .await
+                }
             }
             .instrument(heartbeat_span),
         );
@@ -1152,6 +1316,8 @@ impl ConsumerGroup {
             interval,
             shutdown: Some(shutdown),
             handle: Some(handle),
+            consumer_session,
+            consumer_state,
         })
     }
 
@@ -1294,8 +1460,6 @@ impl ConsumerGroup {
             .await?;
             self.consumer.replace_assignments(assignments);
             self.consumer_owned_partitions = Some(assignment);
-        } else {
-            self.consumer_owned_partitions = None;
         }
         debug!(
             group_id = self.group_id.as_str(),
@@ -1399,6 +1563,8 @@ pub struct ConsumerGroupHeartbeat {
     interval: Duration,
     shutdown: Option<oneshot::Sender<()>>,
     handle: Option<JoinHandle<Result<()>>>,
+    consumer_session: Option<Arc<()>>,
+    consumer_state: Option<Arc<Mutex<ConsumerProtocolHeartbeatState>>>,
 }
 
 impl ConsumerGroupHeartbeat {
@@ -1470,6 +1636,35 @@ impl ConsumerGroupHeartbeat {
             return HeartbeatHandleState::StaleGeneration;
         }
         HeartbeatHandleState::Current
+    }
+
+    fn state_for_consumer(
+        &self,
+        group_id: &str,
+        group_session: Option<&Arc<()>>,
+    ) -> HeartbeatHandleState {
+        if self.group_id != group_id {
+            return HeartbeatHandleState::DifferentGroup;
+        }
+        if self
+            .consumer_session
+            .as_ref()
+            .zip(group_session)
+            .is_some_and(|(handle, group)| Arc::ptr_eq(handle, group))
+        {
+            HeartbeatHandleState::Current
+        } else {
+            HeartbeatHandleState::StaleGeneration
+        }
+    }
+
+    fn consumer_state_handle(&self) -> Option<Arc<Mutex<ConsumerProtocolHeartbeatState>>> {
+        self.consumer_state.clone()
+    }
+
+    async fn consumer_state_snapshot(&self) -> Option<ConsumerProtocolHeartbeatState> {
+        let state = self.consumer_state.as_ref()?;
+        Some(state.lock().await.clone())
     }
 
     async fn stop_stale_generation(&mut self) -> Result<()> {
@@ -2372,6 +2567,79 @@ async fn run_background_heartbeat(
     }
 }
 
+async fn run_background_consumer_heartbeat(
+    coordinator: &mut Client,
+    group_id: String,
+    state: Arc<Mutex<ConsumerProtocolHeartbeatState>>,
+    config: ConsumerProtocolHeartbeatConfig,
+    mut shutdown: oneshot::Receiver<()>,
+) -> Result<()> {
+    let mut heartbeat = time::interval(config.interval);
+    heartbeat.set_missed_tick_behavior(MissedTickBehavior::Delay);
+    heartbeat.tick().await;
+
+    loop {
+        tokio::select! {
+            _ = &mut shutdown => return Ok(()),
+            _ = heartbeat.tick() => {
+                let (member_id, member_epoch, owned_partitions) = {
+                    let state = state.lock().await;
+                    (
+                        state.member_id.clone(),
+                        state.member_epoch,
+                        state.owned_partitions.clone(),
+                    )
+                };
+                debug!(
+                    group_id = group_id.as_str(),
+                    member_id = member_id.as_str(),
+                    member_epoch,
+                    "sending background KIP-848 consumer group heartbeat"
+                );
+                let response = coordinator
+                    .consumer_group_heartbeat_v0(
+                        group_id.clone(),
+                        member_id,
+                        member_epoch,
+                        config.group_instance_id.clone(),
+                        None,
+                        config.rebalance_timeout_ms,
+                        Some(config.topics.clone()),
+                        config.server_assignor.clone(),
+                        owned_partitions,
+                    )
+                    .await?;
+                if response.error_code != 0 {
+                    let message = response
+                        .error_message
+                        .as_deref()
+                        .unwrap_or("broker returned a consumer-group heartbeat error");
+                    return Err(coordinator.broker_error(
+                        response.error_code,
+                        format!("consumer group heartbeat {group_id}: {message}"),
+                    ));
+                }
+                record_consumer_heartbeat_response(&state, response).await;
+            }
+        }
+    }
+}
+
+async fn record_consumer_heartbeat_response(
+    state: &Arc<Mutex<ConsumerProtocolHeartbeatState>>,
+    response: ConsumerGroupHeartbeatResponseV0,
+) {
+    let mut state = state.lock().await;
+    if let Some(member_id) = response.member_id {
+        state.member_id = member_id;
+    }
+    state.member_epoch = response.member_epoch;
+    if let Some(assignment) = response.assignment {
+        state.owned_partitions = Some(assignment);
+        state.assignment_version = state.assignment_version.wrapping_add(1);
+    }
+}
+
 fn coordinator_addr(coordinator: &FindCoordinatorResponseV1) -> String {
     format!("{}:{}", coordinator.host, coordinator.port)
 }
@@ -2503,13 +2771,16 @@ mod tests {
         cooperative_rejoin_required_for_assignment, cooperative_sticky_assignments,
         leave_group_response_error, list_offset, list_offsets_topics, offset_commit_response_error,
         offset_commit_topics, offset_commit_topics_v7, offset_fetch_topics, range_assignments,
-        round_robin_assignments, should_rejoin_after_background_heartbeat, should_rejoin_group,
-        validate_heartbeat_interval, ConsumerGroupAssignmentStrategy, ConsumerGroupConfig,
-        ConsumerGroupHeartbeat, ConsumerGroupProtocol, HeartbeatHandleState, IsolationLevel,
-        OffsetResetPolicy, SecurityProtocol,
+        record_consumer_heartbeat_response, round_robin_assignments,
+        should_rejoin_after_background_heartbeat, should_rejoin_group, validate_heartbeat_interval,
+        ConsumerGroupAssignmentStrategy, ConsumerGroupConfig, ConsumerGroupHeartbeat,
+        ConsumerGroupHeartbeatTopicPartitions, ConsumerGroupProtocol,
+        ConsumerProtocolHeartbeatState as ConsumerGroupHeartbeatState, HeartbeatHandleState,
+        IsolationLevel, OffsetResetPolicy, SecurityProtocol,
     };
     use crate::consumer::ConsumerAssignment;
     use crate::Error;
+    use kafrust_protocol::api::consumer_group_heartbeat::ConsumerGroupHeartbeatResponseV0;
     use kafrust_protocol::api::join_group::JoinGroupMember;
     use kafrust_protocol::api::leave_group::{LeaveGroupMemberResponse, LeaveGroupResponseV3};
     use kafrust_protocol::api::list_offsets::{
@@ -3092,6 +3363,64 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn kip_848_background_state_preserves_null_assignment_and_tracks_updates() {
+        let initial_assignment = vec![ConsumerGroupHeartbeatTopicPartitions {
+            topic_id: [1; 16],
+            partitions: vec![0, 1],
+        }];
+        let state = std::sync::Arc::new(tokio::sync::Mutex::new(ConsumerGroupHeartbeatState {
+            member_id: "member-a".to_owned(),
+            member_epoch: 4,
+            owned_partitions: Some(initial_assignment.clone()),
+            assignment_version: 0,
+        }));
+
+        record_consumer_heartbeat_response(
+            &state,
+            ConsumerGroupHeartbeatResponseV0 {
+                throttle_time_ms: 0,
+                error_code: 0,
+                error_message: None,
+                member_id: None,
+                member_epoch: 5,
+                heartbeat_interval_ms: 2_500,
+                assignment: None,
+            },
+        )
+        .await;
+        {
+            let state = state.lock().await;
+            assert_eq!(state.member_epoch, 5);
+            assert_eq!(state.owned_partitions, Some(initial_assignment));
+            assert_eq!(state.assignment_version, 0);
+        }
+
+        let updated_assignment = vec![ConsumerGroupHeartbeatTopicPartitions {
+            topic_id: [2; 16],
+            partitions: vec![2],
+        }];
+        record_consumer_heartbeat_response(
+            &state,
+            ConsumerGroupHeartbeatResponseV0 {
+                throttle_time_ms: 0,
+                error_code: 0,
+                error_message: None,
+                member_id: Some("member-b".to_owned()),
+                member_epoch: 6,
+                heartbeat_interval_ms: 2_500,
+                assignment: Some(updated_assignment.clone()),
+            },
+        )
+        .await;
+
+        let state = state.lock().await;
+        assert_eq!(state.member_id, "member-b");
+        assert_eq!(state.member_epoch, 6);
+        assert_eq!(state.owned_partitions, Some(updated_assignment));
+        assert_eq!(state.assignment_version, 1);
+    }
+
+    #[tokio::test]
     async fn try_wait_reports_running_heartbeat_task() {
         let (shutdown, shutdown_rx) = tokio::sync::oneshot::channel();
         let handle = tokio::spawn(async move {
@@ -3314,6 +3643,8 @@ mod tests {
             interval: std::time::Duration::from_millis(100),
             shutdown: Some(shutdown),
             handle: Some(handle),
+            consumer_session: None,
+            consumer_state: None,
         }
     }
 
