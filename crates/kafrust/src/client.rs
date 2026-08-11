@@ -1770,7 +1770,7 @@ mod tests {
             response.extend_from_slice(b"member-a");
             response.extend_from_slice(&[0, 0, 0, 2]); // member epoch
             response.extend_from_slice(&2500_i32.to_be_bytes());
-            response.push(0); // null assignment
+            response.push(0xff); // null nullable assignment struct
             response.push(0); // response tagged fields
             write_test_frame(&mut broker_stream, &response).await;
         });

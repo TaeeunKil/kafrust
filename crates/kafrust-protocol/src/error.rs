@@ -9,6 +9,7 @@ pub enum Error {
         remaining: usize,
     },
     InvalidBool(i8),
+    InvalidNullableStruct(i8),
     NegativeLength {
         kind: &'static str,
         length: i32,
@@ -42,6 +43,9 @@ impl fmt::Display for Error {
                 "unexpected end of input: needed {needed} bytes, had {remaining}"
             ),
             Self::InvalidBool(value) => write!(f, "invalid boolean value {value}"),
+            Self::InvalidNullableStruct(value) => {
+                write!(f, "invalid nullable struct marker {value}")
+            }
             Self::NegativeLength { kind, length } => {
                 write!(f, "negative {kind} length {length}")
             }

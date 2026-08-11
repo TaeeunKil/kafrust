@@ -102,10 +102,21 @@ impl ConsumerGroupHeartbeatResponseV0 {
         let member_id = decoder.read_compact_nullable_string()?;
         let member_epoch = decoder.read_i32()?;
         let heartbeat_interval_ms = decoder.read_i32()?;
-        let assignment = decoder
-            .read_compact_array("consumer group heartbeat assignment", |decoder| {
-                ConsumerGroupHeartbeatTopicPartitions::decode(decoder)
-            })?;
+        // Assignment is a nullable struct, not a compact nullable array. The
+        // struct contains the compact topic-partitions array and its tags.
+        let assignment = match decoder.read_i8()? {
+            -1 => None,
+            1 => {
+                let topic_partitions = decoder
+                    .read_compact_array("consumer group heartbeat assignment", |decoder| {
+                        ConsumerGroupHeartbeatTopicPartitions::decode(decoder)
+                    })?
+                    .unwrap_or_default();
+                decoder.read_tagged_fields()?;
+                Some(topic_partitions)
+            }
+            marker => return Err(crate::error::Error::InvalidNullableStruct(marker)),
+        };
         decoder.read_tagged_fields()?;
         Ok(Self {
             throttle_time_ms,
@@ -166,6 +177,7 @@ mod tests {
             .unwrap();
         bytes.write_i32(5);
         bytes.write_i32(2500);
+        bytes.write_i8(1);
         bytes
             .write_compact_array(
                 Some(&[ConsumerGroupHeartbeatTopicPartitions {
@@ -175,6 +187,7 @@ mod tests {
                 |encoder, topic| topic.encode(encoder),
             )
             .unwrap();
+        bytes.write_empty_tagged_fields();
         bytes.write_empty_tagged_fields();
 
         let bytes = bytes.into_bytes();
@@ -187,6 +200,28 @@ mod tests {
         assert_eq!(response.member_epoch, 5);
         assert_eq!(response.heartbeat_interval_ms, 2500);
         assert_eq!(response.assignment.unwrap()[0].partitions, vec![1, 3]);
+        assert!(decoder.is_empty());
+    }
+
+    #[test]
+    fn decodes_kip_848_heartbeat_response_with_null_assignment_struct() {
+        let mut bytes = Encoder::new();
+        bytes.write_i32(0);
+        bytes.write_i16(0);
+        bytes.write_compact_nullable_string(None).unwrap();
+        bytes
+            .write_compact_nullable_string(Some("member-a"))
+            .unwrap();
+        bytes.write_i32(1);
+        bytes.write_i32(2500);
+        bytes.write_i8(-1);
+        bytes.write_empty_tagged_fields();
+
+        let bytes = bytes.into_bytes();
+        let mut decoder = Decoder::new(&bytes);
+        let response = ConsumerGroupHeartbeatResponseV0::decode_body(&mut decoder).unwrap();
+
+        assert!(response.assignment.is_none());
         assert!(decoder.is_empty());
     }
 
