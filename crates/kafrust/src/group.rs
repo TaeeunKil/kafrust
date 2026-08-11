@@ -546,7 +546,7 @@ impl ConsumerGroupConfig {
                         self.group_id.clone(),
                         self.session_timeout_ms,
                         self.rebalance_timeout_ms,
-                        requested_member_id,
+                        requested_member_id.clone(),
                         Some(group_instance_id.clone()),
                         PROTOCOL_TYPE,
                         protocols,
@@ -573,7 +573,7 @@ impl ConsumerGroupConfig {
                         self.group_id.clone(),
                         self.session_timeout_ms,
                         self.rebalance_timeout_ms,
-                        requested_member_id,
+                        requested_member_id.clone(),
                         PROTOCOL_TYPE,
                         protocols,
                     )
@@ -588,9 +588,30 @@ impl ConsumerGroupConfig {
                 }
             };
             if joined.error_code != 0 {
-                return Err(self
+                let error = self
                     .client
-                    .broker_error(joined.error_code, format!("join group {}", self.group_id)));
+                    .broker_error(joined.error_code, format!("join group {}", self.group_id));
+                if retry_attempt < self.max_retries && should_rejoin_group(&error) {
+                    retry_attempt += 1;
+                    self.client.record_retry();
+                    member_id = if matches!(
+                        error.broker_error_kind(),
+                        Some(BrokerErrorKind::UnknownMemberId)
+                    ) {
+                        None
+                    } else {
+                        Some(requested_member_id)
+                    };
+                    debug!(
+                        group_id = self.group_id.as_str(),
+                        retry_attempt,
+                        error = %error,
+                        "retrying kafka consumer group join after transient join error"
+                    );
+                    time::sleep(GROUP_JOIN_RETRY_BACKOFF).await;
+                    continue;
+                }
+                return Err(error);
             }
 
             let assignments = if joined.member_id == joined.leader {
