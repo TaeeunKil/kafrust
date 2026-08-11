@@ -1243,3 +1243,10 @@ Implemented evidence:
   heartbeat, and OffsetCommit v7 on Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1
   plaintext brokers while every existing secured and multi-broker regression
   job remained green.
+- Release `v0.2.2` post-publish verification run
+  [`31471610040`](https://github.com/TaeeunKil/kafrust/actions/runs/31471610040)
+  passed all nine Live Kafka Smoke jobs on 2026-08-11. This included the
+  three-broker coordinator and broker-stop recovery paths, all four plaintext
+  broker versions, TLS, SASL_PLAINTEXT, SASL_SSL/SCRAM, ACL authorizer,
+  compression, idempotent, transactional, `read_committed`, admin,
+  consumer-group, and `acks=0` smoke paths.
