@@ -705,6 +705,11 @@ impl ConsumerGroupConfig {
 
         let config = self.clone();
         let mut bootstrap = self.client.clone().connect().await?;
+        let topic_partitions = match owned_partitions {
+            Some(owned_partitions) => Some(owned_partitions),
+            None if member_epoch == 0 => Some(Vec::new()),
+            None => None,
+        };
         let coordinator = find_group_coordinator_with_retry(
             &mut bootstrap,
             &self.client,
@@ -744,7 +749,7 @@ impl ConsumerGroupConfig {
                 self.rebalance_timeout_ms,
                 Some(self.topics.clone()),
                 self.server_assignor.clone(),
-                owned_partitions.clone(),
+                topic_partitions,
             )
             .await?;
         if response.error_code != 0 {
