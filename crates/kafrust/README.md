@@ -327,12 +327,15 @@ covers broker roundtrip, producer, batch, buffered producer, direct consumer,
 and consumer group poll paths.
 
 SASL/OAUTHBEARER token authentication is available through
-`sasl_oauthbearer(token)` or `sasl_oauthbearer_with_username(username, token)`.
-The RFC 7628 initial response and secret redaction are covered by injected
-handshake tests, and Kafka 3.7.2 SASL_SSL is covered by a dedicated smoke using
-the broker's built-in unsecured validator (`Live Kafka Smoke` run
-`31478375106`). Production OAuth/OIDC provider integration, signed JWT/JWKS
-validation, and token retrieval or refresh callbacks remain unclaimed.
+`sasl_oauthbearer(token)` or
+`sasl_oauthbearer_with_username(username, token)`. Async token providers are
+available through `sasl_oauthbearer_provider` and
+`sasl_oauthbearer_with_username_and_provider`; kafrust calls them for each new
+broker authentication. The RFC 7628 initial response and secret redaction are
+covered by injected handshake tests, and Kafka 3.7.2 SASL_SSL is covered by a
+dedicated smoke using the broker's built-in unsecured validator (`Live Kafka
+Smoke` run `31478375106`). Production OAuth/OIDC provider integration and
+signed JWT/JWKS policy remain unclaimed.
 
 The default build does not include TLS dependencies. The current `tls` feature
 uses the `rustls` ring crypto provider, which can require native build tooling
@@ -439,8 +442,9 @@ Verified high-level paths include:
   smoke paths; the SHA-512 profile also covers batch and buffered producer
   paths.
 - SASL/OAUTHBEARER is implemented with token-only and authorization-identity
-  builders and live-verified against Kafka 3.7.2's built-in unsecured validator.
-  Production OAuth/OIDC provider behavior remains unclaimed.
+  builders plus async token-provider builders, and live-verified against Kafka
+  3.7.2's built-in unsecured validator. Production OAuth/OIDC provider
+  behavior and signed JWT/JWKS policy remain unclaimed.
 - Broker compatibility is verified against Kafka `3.7.2`, `3.8.1`, `3.9.1`,
   and `4.3.1` for the single-node plaintext profile. Secured and multi-broker
   profiles are verified against `3.7.2`.

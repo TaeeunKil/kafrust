@@ -255,9 +255,9 @@ The Kafka 3.7.2 SASL_SSL OAUTHBEARER smoke path covers:
   `31478375106`.
 
 This profile uses Kafka's built-in unsecured validator for deterministic
-compatibility testing. Signed JWT/JWKS validation, issuer and audience policy,
-token retrieval and refresh callbacks, and production OAuth/OIDC provider
-integration remain unclaimed.
+compatibility testing. The public API also supports an async token provider for
+new broker authentications, but signed JWT/JWKS validation, issuer and audience
+policy, and production OAuth/OIDC provider integration remain unclaimed.
 
 ## Not Yet Claimed
 
@@ -266,10 +266,10 @@ The current compatibility claim does not cover:
 - TLS workflows beyond the listed TLS smoke examples.
 - SASL workflows beyond the listed SASL_PLAINTEXT and SASL_SSL smoke examples.
 - Production SASL/OAUTHBEARER provider compatibility, including signed
-  JWT/JWKS validation, issuer/audience policy, token retrieval and refresh
-  callbacks, and provider-specific failure behavior. The Kafka 3.7.2
-  built-in unsecured-validator smoke is test-only evidence, not an identity
-  provider qualification.
+  JWT/JWKS validation, issuer/audience policy, and provider-specific failure
+  behavior. The async token-provider callback is implemented, but the Kafka
+  3.7.2 built-in unsecured-validator smoke is test-only evidence, not an
+  identity provider qualification.
 - Secured multi-broker clusters, broader consumer-group failover beyond the listed coordinator reconnect checks, or rack-aware client routing.
 - Broader transaction failure-injection profiles beyond the verified
   coordinator broker-stop commit path.

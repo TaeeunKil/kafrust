@@ -503,7 +503,9 @@ Known limits:
 - SASL/OAUTHBEARER is live-verified against Kafka 3.7.2's built-in unsecured
   validator in the dedicated OAuth-only smoke job `31478375106`. Production
   OAuth/OIDC provider compatibility, signed JWT/JWKS validation, issuer and
-  audience policy, token retrieval, and token refresh callbacks remain open.
+  audience policy, and provider-specific failure behavior remain open. The
+  public async token-provider callback is implemented and called for each new
+  broker authentication.
 
 Evidence:
 
@@ -535,6 +537,9 @@ Evidence:
   `KAFRUST_SASL_TOKEN` and an optional `KAFRUST_SASL_USERNAME`. The dedicated
   Kafka 3.7.2 SASL_SSL OAuth-only job exercises those entry points against the
   broker's built-in unsecured validator.
+- `OAuthBearerTokenProvider` and the matching `*_provider` builders allow an
+  application to retrieve a fresh token for each new broker connection without
+  exposing it through `Debug` output.
 - The `Live Kafka Smoke` workflow includes a SASL_SSL SCRAM profile that
   creates separate Kafka SCRAM-SHA-256 and SCRAM-SHA-512 credentials, configures
   kafrust with `KAFRUST_SECURITY_PROTOCOL=sasl_tls`, the selected
@@ -1214,8 +1219,9 @@ Implemented evidence:
   the bearer token out of `Debug` output, and is exposed through all high-level
   connection builders. Injected broker tests cover handshake ordering and
   exact authentication bytes; run `31478375106` adds live Kafka 3.7.2
-  SASL_SSL coverage using the built-in unsecured validator. Production
-  OAuth/OIDC provider verification remains open.
+  SASL_SSL coverage using the built-in unsecured validator. Async token
+  providers are covered by injected connection tests; production OAuth/OIDC
+  provider verification remains open.
 - Cooperative-sticky group membership encodes Subscription v1 owned
   partitions and performs staged ownership transfers with focused local tests.
   Manual `Live Kafka Smoke` run `31464021305` passed the Kafka 3.7.2

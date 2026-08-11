@@ -343,11 +343,12 @@ See [Compatibility](docs/compatibility.md) and
   buffered producer, direct consumer, and consumer group poll paths.
 - SASL/OAUTHBEARER token authentication is available through
   `sasl_oauthbearer` and `sasl_oauthbearer_with_username` on the client,
-  producer, consumer, and consumer-group builders. It is covered by injected
-  handshake tests and a Kafka 3.7.2 SASL_SSL smoke using the broker's built-in
-  unsecured validator (`Live Kafka Smoke` run `31478375106`). Production
-  OAuth/OIDC provider, signed JWT/JWKS validation, and token refresh behavior
-  are not yet claimed.
+  producer, consumer, and consumer-group builders. Async token providers are
+  available through the corresponding `*_provider` builders and are called for
+  each new broker authentication. It is covered by injected handshake tests
+  and a Kafka 3.7.2 SASL_SSL smoke using the broker's built-in unsecured
+  validator (`Live Kafka Smoke` run `31478375106`). Production OAuth/OIDC
+  provider behavior and signed JWT/JWKS policy are not yet claimed.
 - Single-node plaintext compatibility is verified against Kafka `3.7.2`,
   `3.8.1`, `3.9.1`, and `4.3.1`. Secured and multi-broker profiles remain
   verified against `3.7.2`.
