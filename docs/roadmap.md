@@ -1202,7 +1202,7 @@ Implemented evidence:
   partitions and performs staged ownership transfers with focused local tests.
   Manual `Live Kafka Smoke` run `31464021305` passed the Kafka 3.7.2
   three-broker cooperative group example. Live Kafka Smoke run
-  [`31473920781`](https://github.com/TaeeunKil/kafrust/actions/runs/31473920781)
+  [`31474626799`](https://github.com/TaeeunKil/kafrust/actions/runs/31474626799)
   additionally passed multi-member ownership transfer, transient-member
   rollback, and member-loss recovery in the three-broker profile.
 - Consumer-group rejoin preserves the broker-assigned dynamic member ID in
