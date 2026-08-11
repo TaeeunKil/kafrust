@@ -73,8 +73,9 @@ use kafrust_protocol::api::metadata::{
     MetadataResponseV12,
 };
 use kafrust_protocol::api::offset_commit::{
-    OffsetCommitRequestV2, OffsetCommitRequestV7, OffsetCommitResponseV2, OffsetCommitResponseV7,
-    OffsetCommitTopic, OffsetCommitTopicV7,
+    OffsetCommitRequestV2, OffsetCommitRequestV7, OffsetCommitRequestV9, OffsetCommitResponseV2,
+    OffsetCommitResponseV7, OffsetCommitResponseV9, OffsetCommitTopic, OffsetCommitTopicV7,
+    OffsetCommitTopicV9,
 };
 use kafrust_protocol::api::offset_delete::{
     OffsetDeleteRequestTopicV0, OffsetDeleteRequestV0, OffsetDeleteResponseV0,
@@ -1092,6 +1093,30 @@ impl Client {
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(OffsetCommitResponseV7::decode_body(&mut decoder)?)
+    }
+
+    /// Sends OffsetCommit v9 for Kafka's KIP-848 consumer group protocol.
+    pub async fn offset_commit_v9(
+        &mut self,
+        group_id: impl Into<String>,
+        member_epoch: i32,
+        member_id: impl Into<String>,
+        group_instance_id: Option<String>,
+        topics: Vec<OffsetCommitTopicV9>,
+    ) -> Result<OffsetCommitResponseV9> {
+        let request = OffsetCommitRequestV9 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            group_id: group_id.into(),
+            generation_id_or_member_epoch: member_epoch,
+            member_id: member_id.into(),
+            group_instance_id,
+            topics,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(OffsetCommitResponseV9::decode_body(&mut decoder)?)
     }
 
     pub(crate) async fn fetch_one_v4(

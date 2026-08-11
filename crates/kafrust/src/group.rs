@@ -16,8 +16,8 @@ use kafrust_protocol::api::metadata::{
     MetadataRequestTopicV12, MetadataResponseV1, MetadataResponseV12,
 };
 use kafrust_protocol::api::offset_commit::{
-    OffsetCommitPartition, OffsetCommitPartitionV7, OffsetCommitTopic, OffsetCommitTopicResponse,
-    OffsetCommitTopicV7,
+    OffsetCommitPartition, OffsetCommitPartitionV7, OffsetCommitPartitionV9, OffsetCommitTopic,
+    OffsetCommitTopicResponse, OffsetCommitTopicV7, OffsetCommitTopicV9,
 };
 use kafrust_protocol::api::offset_fetch::{
     OffsetFetchPartitionResponse, OffsetFetchTopic, OffsetFetchTopicResponse,
@@ -1507,8 +1507,18 @@ impl ConsumerGroup {
             topic_count = offset_commit_topics(self.consumer.assignments()).len(),
             "committing kafka consumer group offsets"
         );
-        let response_topics = match if let Some(group_instance_id) = &self.config.group_instance_id
-        {
+        let response_topics = match if self.protocol == ConsumerGroupProtocol::Consumer {
+            self.coordinator
+                .offset_commit_v9(
+                    self.group_id.clone(),
+                    self.generation_id,
+                    self.member_id.clone(),
+                    self.config.group_instance_id.clone(),
+                    offset_commit_topics_v9(self.consumer.assignments()),
+                )
+                .await
+                .map(|response| response.topics)
+        } else if let Some(group_instance_id) = &self.config.group_instance_id {
             self.coordinator
                 .offset_commit_v7(
                     self.group_id.clone(),
@@ -2454,6 +2464,25 @@ fn offset_commit_topics_v7(assignments: &[ConsumerAssignment]) -> Vec<OffsetComm
                 .partitions
                 .into_iter()
                 .map(|partition| OffsetCommitPartitionV7 {
+                    partition_index: partition.partition_index,
+                    committed_offset: partition.committed_offset,
+                    committed_leader_epoch: -1,
+                    committed_metadata: partition.committed_metadata,
+                })
+                .collect(),
+        })
+        .collect()
+}
+
+fn offset_commit_topics_v9(assignments: &[ConsumerAssignment]) -> Vec<OffsetCommitTopicV9> {
+    offset_commit_topics(assignments)
+        .into_iter()
+        .map(|topic| OffsetCommitTopicV9 {
+            name: topic.name,
+            partitions: topic
+                .partitions
+                .into_iter()
+                .map(|partition| OffsetCommitPartitionV9 {
                     partition_index: partition.partition_index,
                     committed_offset: partition.committed_offset,
                     committed_leader_epoch: -1,
