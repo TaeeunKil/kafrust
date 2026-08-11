@@ -3,7 +3,7 @@ mod common;
 use std::io::{self, Write};
 use std::time::Duration;
 
-use kafrust::{Acks, Error, ProducerConfig, ProducerRecord, RecordMetadata};
+use kafrust::{Error, ProducerConfig, ProducerRecord, RecordMetadata};
 
 #[tokio::main]
 async fn main() -> kafrust::Result<()> {
@@ -15,7 +15,7 @@ async fn main() -> kafrust::Result<()> {
     let mut producer = common::apply_security(
         ProducerConfig::new(bootstrap_servers).client_id("kafrust-producer-failover-example"),
     )?
-    .acks(Acks::Leader)
+    .enable_idempotence(true)
     .compression(common::compression_from_env()?)
     .max_retries(5)
     .build()
