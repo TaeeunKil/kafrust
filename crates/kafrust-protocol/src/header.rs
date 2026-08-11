@@ -18,7 +18,10 @@ impl RequestHeader {
     }
 
     pub fn encode_v2(&self, encoder: &mut Encoder) -> Result<()> {
-        self.encode_v1(encoder)?;
+        encoder.write_i16(self.api_key);
+        encoder.write_i16(self.api_version);
+        encoder.write_i32(self.correlation_id);
+        encoder.write_compact_nullable_string(self.client_id.as_deref())?;
         encoder.write_empty_tagged_fields();
         Ok(())
     }
@@ -62,6 +65,22 @@ mod tests {
         assert_eq!(
             encoder.into_bytes(),
             [0, 18, 0, 0, 0, 0, 0, 7, 0, 7, b'k', b'a', b'f', b'r', b'u', b's', b't']
+        );
+    }
+
+    #[test]
+    fn encodes_request_header_v2_with_compact_client_id() {
+        let header = RequestHeader {
+            api_key: 3,
+            api_version: 12,
+            correlation_id: 7,
+            client_id: Some("kafrust".to_owned()),
+        };
+        let mut encoder = Encoder::new();
+        header.encode_v2(&mut encoder).unwrap();
+        assert_eq!(
+            encoder.into_bytes(),
+            [0, 3, 0, 12, 0, 0, 0, 7, 8, b'k', b'a', b'f', b'r', b'u', b's', b't', 0]
         );
     }
 
