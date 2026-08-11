@@ -305,7 +305,7 @@ mod tests {
         let encoded = request.encode().unwrap();
 
         assert_eq!(&encoded[0..8], &[0, 28, 0, 3, 0, 0, 0, 62]);
-        assert_eq!(encoded[16], 0); // request-header tagged fields
+        assert_eq!(encoded[17], 0); // request-header tagged fields
         assert!(encoded.windows(8).any(|bytes| bytes == b"member-1"));
         assert!(encoded.windows(10).any(|bytes| bytes == b"instance-1"));
         assert_eq!(encoded.last(), Some(&0)); // request tagged fields

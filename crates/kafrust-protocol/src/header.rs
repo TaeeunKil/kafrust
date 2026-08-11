@@ -18,10 +18,7 @@ impl RequestHeader {
     }
 
     pub fn encode_v2(&self, encoder: &mut Encoder) -> Result<()> {
-        encoder.write_i16(self.api_key);
-        encoder.write_i16(self.api_version);
-        encoder.write_i32(self.correlation_id);
-        encoder.write_compact_nullable_string(self.client_id.as_deref())?;
+        self.encode_v1(encoder)?;
         encoder.write_empty_tagged_fields();
         Ok(())
     }
@@ -69,7 +66,7 @@ mod tests {
     }
 
     #[test]
-    fn encodes_request_header_v2_with_compact_client_id() {
+    fn encodes_request_header_v2_with_nullable_client_id_and_tagged_fields() {
         let header = RequestHeader {
             api_key: 3,
             api_version: 12,
@@ -80,7 +77,7 @@ mod tests {
         header.encode_v2(&mut encoder).unwrap();
         assert_eq!(
             encoder.into_bytes(),
-            [0, 3, 0, 12, 0, 0, 0, 7, 8, b'k', b'a', b'f', b'r', b'u', b's', b't', 0]
+            [0, 3, 0, 12, 0, 0, 0, 7, 0, 7, b'k', b'a', b'f', b'r', b'u', b's', b't', 0]
         );
     }
 

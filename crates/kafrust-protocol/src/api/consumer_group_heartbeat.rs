@@ -149,7 +149,7 @@ mod tests {
 
         let encoded = request.encode().unwrap();
         assert_eq!(&encoded[0..4], &[0, 68, 0, 0]);
-        assert_eq!(&encoded[4..12], &[0, 0, 0, 23, 8, b'k', b'a', b'f']);
+        assert_eq!(&encoded[4..12], &[0, 0, 0, 23, 0, 7, b'k', b'a']);
         assert!(encoded.windows(12).any(|bytes| bytes == b"orders-group"));
         assert!(encoded.windows(16).any(|bytes| bytes == [1; 16]));
         assert_eq!(*encoded.last().unwrap(), 0);
@@ -207,8 +207,8 @@ mod tests {
         };
 
         let encoded = request.encode().unwrap();
-        assert_eq!(&encoded[0..10], &[0, 68, 0, 0, 0, 0, 0, 1, 0, 0]);
-        assert_eq!(encoded[9], 0); // request-header tagged fields
+        assert_eq!(&encoded[0..10], &[0, 68, 0, 0, 0, 0, 0, 1, 0xff, 0xff]);
+        assert_eq!(encoded[10], 0); // request-header tagged fields
         assert!(encoded.ends_with(&[0, 0, 0]));
     }
 }
