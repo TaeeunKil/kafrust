@@ -639,6 +639,14 @@ Evidence:
   SASL_PLAINTEXT, SASL_SSL/SCRAM, and ACL-authorizer profiles. The
   three-broker job completed producer, direct-consumer, consumer-group,
   admin, reassignment, and broker-stop recovery paths.
+- Manual `Live Kafka Smoke` run
+  [`31502322974`](https://github.com/TaeeunKil/kafrust/actions/runs/31502322974)
+  passed all 12 jobs on 2026-08-11. Its dedicated Kafka 3.7.2 three-broker
+  `SASL_PLAINTEXT` job authenticated with SASL/PLAIN, stopped the broker that
+  led the selected partition, and completed producer and direct-consumer
+  operations before and after the stop through the remaining brokers. The
+  workflow first builds both failover examples serially so the result is not
+  contaminated by concurrent Rust toolchain initialization.
 
 ## M15 Compression Compatibility
 
@@ -1350,3 +1358,10 @@ Implemented evidence:
   MSRV Rust 1.81 toolchain. The current live qualification is
   [`31500606310`](https://github.com/TaeeunKil/kafrust/actions/runs/31500606310)
   on the merged `main` branch.
+- Secured multi-broker failure injection is now partially qualified: the
+  `SASL_PLAINTEXT` three-broker profile in
+  [`31502322974`](https://github.com/TaeeunKil/kafrust/actions/runs/31502322974)
+  verified authenticated producer and direct-consumer recovery across a
+  stopped partition leader. Secured consumer-group and transaction failover,
+  production OAuth/OIDC provider compatibility, and broader workload-specific
+  canary evidence remain before a 1.0 replacement claim.
