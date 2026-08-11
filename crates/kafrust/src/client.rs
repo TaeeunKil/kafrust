@@ -125,6 +125,7 @@ pub struct Client {
     max_response_bytes: usize,
     decode_limits: DecodeLimits,
     metrics: ClientMetrics,
+    api_versions_v3_cache: Option<ApiVersionsResponseV3>,
 }
 
 pub(crate) trait BrokerStream: AsyncRead + AsyncWrite + Unpin + Send + Sync {}
@@ -204,6 +205,7 @@ impl Client {
             max_response_bytes,
             decode_limits,
             metrics,
+            api_versions_v3_cache: None,
         }
     }
 
@@ -253,7 +255,36 @@ impl Client {
         let response = self.send_request(&request.encode()?).await?;
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
-        Ok(ApiVersionsResponseV3::decode_body(&mut decoder)?)
+        let response = ApiVersionsResponseV3::decode_body(&mut decoder)?;
+        self.api_versions_v3_cache = Some(response.clone());
+        Ok(response)
+    }
+
+    /// Returns ApiVersions v3 capabilities cached for this broker connection.
+    ///
+    /// If this connection has not negotiated capabilities yet, this method
+    /// sends ApiVersions v3 once and caches the decoded response. Use
+    /// [`Self::api_versions_v3`] when an explicit capability refresh is needed.
+    pub async fn api_versions_v3_cached(
+        &mut self,
+        client_software_name: impl Into<String>,
+        client_software_version: impl Into<String>,
+    ) -> Result<ApiVersionsResponseV3> {
+        if let Some(response) = self.api_versions_v3_cache.clone() {
+            return Ok(response);
+        }
+        self.api_versions_v3(client_software_name, client_software_version)
+            .await
+    }
+
+    /// Returns the last ApiVersions v3 response negotiated on this connection.
+    pub fn cached_api_versions_v3(&self) -> Option<&ApiVersionsResponseV3> {
+        self.api_versions_v3_cache.as_ref()
+    }
+
+    /// Clears the cached ApiVersions v3 response so the next cached lookup refreshes it.
+    pub fn clear_api_versions_v3_cache(&mut self) {
+        self.api_versions_v3_cache = None;
     }
 
     pub(crate) async fn sasl_handshake_v1(
@@ -1835,6 +1866,48 @@ mod tests {
         assert_eq!(metrics.requests_started, 1);
         assert_eq!(metrics.requests_succeeded, 1);
         assert_eq!(metrics.response_bytes, 19);
+        broker.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn caches_flexible_api_versions_v3_per_connection() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(1024);
+        let broker = tokio::spawn(async move {
+            let request = read_test_frame(&mut broker_stream).await;
+            assert_eq!(&request[0..2], &[0, 18]);
+            assert_eq!(&request[2..4], &[0, 3]);
+
+            let response = [
+                0, 0, 0, 1, // correlation id
+                0, 0, // error code
+                2, // compact api key count: one entry
+                0, 18, 0, 0, 0, 4, 0, // ApiVersions min/max + entry tags
+                0, 0, 0, 0, // throttle time
+                0, // response tagged fields
+            ];
+            broker_stream
+                .write_all(&(response.len() as i32).to_be_bytes())
+                .await
+                .unwrap();
+            broker_stream.write_all(&response).await.unwrap();
+            broker_stream.flush().await.unwrap();
+        });
+
+        let mut client =
+            Client::from_stream(Box::new(client_stream), None, Some(Duration::from_secs(1)));
+
+        let first = client
+            .api_versions_v3_cached("kafrust", "0.3.0")
+            .await
+            .unwrap();
+        let second = client
+            .api_versions_v3_cached("kafrust", "0.3.0")
+            .await
+            .unwrap();
+
+        assert_eq!(first, second);
+        assert_eq!(client.cached_api_versions_v3(), Some(&first));
+        assert_eq!(client.metrics().snapshot().requests_started, 1);
         broker.await.unwrap();
     }
 

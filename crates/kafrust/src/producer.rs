@@ -1872,7 +1872,7 @@ impl Producer {
             .connect_broker(key.broker_addr.clone())
             .await?;
         let api_versions = leader_client
-            .api_versions_v3("kafrust", env!("CARGO_PKG_VERSION"))
+            .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
             .await?;
         if api_versions.error_code != 0 {
             return Err(self.config.client.broker_error(
@@ -2158,7 +2158,7 @@ impl Producer {
 
         let mut leader_client = self.config.client.connect_broker(broker_addr).await?;
         let api_versions = leader_client
-            .api_versions_v3("kafrust", env!("CARGO_PKG_VERSION"))
+            .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
             .await?;
         if api_versions.error_code != 0 {
             return Err(self.config.client.broker_error(
