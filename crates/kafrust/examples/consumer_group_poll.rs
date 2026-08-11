@@ -1,6 +1,6 @@
 mod common;
 
-use kafrust::{ConsumerGroupAssignmentStrategy, ConsumerGroupConfig, Error};
+use kafrust::{ConsumerGroupAssignmentStrategy, ConsumerGroupConfig, ConsumerGroupProtocol, Error};
 
 #[tokio::main]
 async fn main() -> kafrust::Result<()> {
@@ -26,6 +26,17 @@ async fn main() -> kafrust::Result<()> {
                     "KAFRUST_ASSIGNMENT_STRATEGY must be range, roundrobin, or cooperative-sticky",
                 )),
             });
+    }
+    if let Ok(protocol) = std::env::var("KAFRUST_GROUP_PROTOCOL") {
+        config = config.group_protocol(match protocol.to_ascii_lowercase().as_str() {
+            "classic" => ConsumerGroupProtocol::Classic,
+            "consumer" | "kip-848" => ConsumerGroupProtocol::Consumer,
+            _ => {
+                return Err(Error::Unsupported(
+                    "KAFRUST_GROUP_PROTOCOL must be classic or consumer",
+                ))
+            }
+        });
     }
     let mut group = config.subscribe(topic).join().await?;
 

@@ -34,6 +34,11 @@ impl Encoder {
         self.output.extend_from_slice(&value.to_be_bytes());
     }
 
+    /// Writes a Kafka UUID as its 16-byte network-order representation.
+    pub fn write_uuid(&mut self, value: &[u8; 16]) {
+        self.output.extend_from_slice(value);
+    }
+
     pub fn write_f64(&mut self, value: f64) {
         self.output
             .extend_from_slice(&value.to_bits().to_be_bytes());

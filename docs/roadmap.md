@@ -1233,6 +1233,11 @@ Implemented evidence:
   JoinGroup requests, preventing a rejoining member from being treated as a
   new member during cooperative or classic rebalances. Focused tests cover
   staged non-leader rejoin decisions and member-loss assignment recovery.
+- KIP-848 `ConsumerGroupHeartbeat v0` protocol types, Metadata v12 UUID
+  mappings, and a selectable high-level foreground group path are implemented
+  with assignment application, member-epoch heartbeats/rejoin, offset commit,
+  explicit leave, and injected low-level roundtrip coverage. Kafka 4.x live
+  qualification and a state-sharing background heartbeat remain open.
 - Dynamic and static members can explicitly leave through LeaveGroup v3,
   avoiding session-timeout cleanup after graceful shutdown.
 - Manual `Live Kafka Smoke` run `30065025169` passed graceful LeaveGroup v3 on

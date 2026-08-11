@@ -14,6 +14,10 @@ use kafrust_protocol::api::alter_user_scram_credentials::{
     AlterUserScramCredentialsRequestV0, AlterUserScramCredentialsResponseV0,
 };
 use kafrust_protocol::api::api_versions::{ApiVersionsRequestV0, ApiVersionsResponseV0};
+use kafrust_protocol::api::consumer_group_heartbeat::{
+    ConsumerGroupHeartbeatRequestV0, ConsumerGroupHeartbeatResponseV0,
+    ConsumerGroupHeartbeatTopicPartitions,
+};
 use kafrust_protocol::api::create_acls::{CreateAclsRequestV1, CreateAclsResponseV1};
 use kafrust_protocol::api::create_partitions::{
     CreatePartitionsRequestV0, CreatePartitionsResponseV0, CreatePartitionsTopicV0,
@@ -64,7 +68,10 @@ use kafrust_protocol::api::list_offsets::{
 use kafrust_protocol::api::list_partition_reassignments::{
     ListPartitionReassignmentsRequestV0, ListPartitionReassignmentsResponseV0,
 };
-use kafrust_protocol::api::metadata::{MetadataRequestV1, MetadataResponseV1};
+use kafrust_protocol::api::metadata::{
+    MetadataRequestTopicV12, MetadataRequestV1, MetadataRequestV12, MetadataResponseV1,
+    MetadataResponseV12,
+};
 use kafrust_protocol::api::offset_commit::{
     OffsetCommitRequestV2, OffsetCommitRequestV7, OffsetCommitResponseV2, OffsetCommitResponseV7,
     OffsetCommitTopic, OffsetCommitTopicV7,
@@ -263,6 +270,24 @@ impl Client {
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(MetadataResponseV1::decode_body(&mut decoder)?)
+    }
+
+    /// Sends Metadata v12 and returns topic UUIDs needed by KIP-848 groups.
+    pub async fn metadata_v12(
+        &mut self,
+        topics: Option<Vec<MetadataRequestTopicV12>>,
+    ) -> Result<MetadataResponseV12> {
+        let request = MetadataRequestV12 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            topics,
+            allow_auto_topic_creation: false,
+            include_topic_authorized_operations: false,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(MetadataResponseV12::decode_body(&mut decoder)?)
     }
 
     /// Sends CreateTopics v2 to the broker represented by this connection.
@@ -968,6 +993,39 @@ impl Client {
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(HeartbeatResponseV2::decode_body(&mut decoder)?)
+    }
+
+    /// Sends KIP-848 ConsumerGroupHeartbeat v0.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn consumer_group_heartbeat_v0(
+        &mut self,
+        group_id: impl Into<String>,
+        member_id: impl Into<String>,
+        member_epoch: i32,
+        instance_id: Option<String>,
+        rack_id: Option<String>,
+        rebalance_timeout_ms: i32,
+        subscribed_topic_names: Option<Vec<String>>,
+        server_assignor: Option<String>,
+        topic_partitions: Option<Vec<ConsumerGroupHeartbeatTopicPartitions>>,
+    ) -> Result<ConsumerGroupHeartbeatResponseV0> {
+        let request = ConsumerGroupHeartbeatRequestV0 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            group_id: group_id.into(),
+            member_id: member_id.into(),
+            member_epoch,
+            instance_id,
+            rack_id,
+            rebalance_timeout_ms,
+            subscribed_topic_names,
+            server_assignor,
+            topic_partitions,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(ConsumerGroupHeartbeatResponseV0::decode_body(&mut decoder)?)
     }
 
     /// Sends LeaveGroup v3 for one or more dynamic or static group members.
@@ -1690,6 +1748,58 @@ mod tests {
         assert_eq!(response.error_code, 0);
         assert_eq!(response.producer_id, 42);
         assert_eq!(response.producer_epoch, 3);
+        broker.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn sends_kip_848_consumer_group_heartbeat_over_injected_broker_stream() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(1024);
+        let broker = tokio::spawn(async move {
+            let request = read_test_frame(&mut broker_stream).await;
+            assert_eq!(&request[0..4], &[0, 68, 0, 0]);
+            assert_eq!(&request[4..8], &[0, 0, 0, 1]);
+            assert_eq!(request.last(), Some(&0));
+
+            let mut response = Vec::new();
+            response.extend_from_slice(&[0, 0, 0, 1]); // response correlation id
+            response.push(0); // response header tagged fields
+            response.extend_from_slice(&[0, 0, 0, 0]); // throttle time
+            response.extend_from_slice(&[0, 0]); // error code
+            response.push(0); // null error message
+            response.push(9); // member id length + 1
+            response.extend_from_slice(b"member-a");
+            response.extend_from_slice(&[0, 0, 0, 2]); // member epoch
+            response.extend_from_slice(&2500_i32.to_be_bytes());
+            response.push(0); // null assignment
+            response.push(0); // response tagged fields
+            write_test_frame(&mut broker_stream, &response).await;
+        });
+        let mut client = Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-stream-test".to_owned()),
+            Some(Duration::from_secs(1)),
+        );
+
+        let response = client
+            .consumer_group_heartbeat_v0(
+                "orders-group",
+                "",
+                0,
+                None,
+                None,
+                30_000,
+                Some(vec!["orders".to_owned()]),
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.error_code, 0);
+        assert_eq!(response.member_id.as_deref(), Some("member-a"));
+        assert_eq!(response.member_epoch, 2);
+        assert_eq!(response.heartbeat_interval_ms, 2500);
+        assert!(response.assignment.is_none());
         broker.await.unwrap();
     }
 

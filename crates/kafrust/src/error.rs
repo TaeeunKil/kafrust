@@ -72,6 +72,10 @@ pub enum BrokerErrorKind {
     GroupSubscribedToTopic,
     /// Kafka fenced a static consumer because another member uses the same instance ID.
     FencedInstanceId,
+    /// Kafka fenced a consumer-group member epoch.
+    FencedMemberEpoch,
+    /// Kafka reported a stale consumer-group member epoch.
+    StaleMemberEpoch,
 }
 
 impl BrokerErrorKind {
@@ -108,6 +112,8 @@ impl BrokerErrorKind {
             68 => Self::NonEmptyGroup,
             69 => Self::GroupIdNotFound,
             82 => Self::FencedInstanceId,
+            110 => Self::FencedMemberEpoch,
+            113 => Self::StaleMemberEpoch,
             86 => Self::GroupSubscribedToTopic,
             90 => Self::ProducerFenced,
             _ => Self::Unknown,

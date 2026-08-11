@@ -390,7 +390,8 @@ Primary public entry points:
 - `ProducerConfig`, `Producer`, `BufferedProducer`, and `ProducerRecord`.
 - `Compression` for opt-in producer RecordBatch compression.
 - `ConsumerConfig`, `Consumer`, `ConsumerAssignment`, and `ConsumerRecord`.
-- `ConsumerGroupConfig`, `ConsumerGroup`, and `ConsumerGroupHeartbeat`.
+- `ConsumerGroupConfig`, `ConsumerGroup`, `ConsumerGroupProtocol`, and
+  `ConsumerGroupHeartbeat`.
 - `SecurityProtocol`, `SaslMechanism`, and `SaslCredentials` for plaintext,
   TLS, and SASL connection modes.
 - `ClientMetrics` and `ClientMetricsSnapshot` for request-level observability.

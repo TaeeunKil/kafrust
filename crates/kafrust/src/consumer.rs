@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use kafrust_protocol::api::fetch::{FetchPartitionResponseV4, FetchResponseV4, MessageSetRecord};
 use kafrust_protocol::api::list_offsets::{
@@ -126,6 +126,25 @@ impl Consumer {
             assignments,
             metadata_cache: BTreeMap::new(),
         }
+    }
+
+    pub(crate) fn replace_assignments(&mut self, mut assignments: Vec<ConsumerAssignment>) {
+        let paused = self
+            .assignments
+            .iter()
+            .filter(|assignment| assignment.paused)
+            .map(|assignment| (assignment.topic.clone(), assignment.partition))
+            .collect::<BTreeSet<_>>();
+        for assignment in &mut assignments {
+            assignment.paused = paused.contains(&(assignment.topic.clone(), assignment.partition));
+        }
+        assignments.sort_by(|left, right| {
+            left.topic
+                .cmp(&right.topic)
+                .then_with(|| left.partition.cmp(&right.partition))
+        });
+        self.assignments = assignments;
+        self.metadata_cache.clear();
     }
 
     /// Assigns a topic partition and next offset to fetch.

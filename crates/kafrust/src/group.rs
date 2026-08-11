@@ -1,6 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
 
+use kafrust_protocol::api::consumer_group_heartbeat::{
+    ConsumerGroupHeartbeatResponseV0, ConsumerGroupHeartbeatTopicPartitions,
+};
 use kafrust_protocol::api::find_coordinator::FindCoordinatorResponseV1;
 use kafrust_protocol::api::join_group::JoinGroupMember;
 use kafrust_protocol::api::leave_group::{LeaveGroupMemberIdentity, LeaveGroupResponseV3};
@@ -8,7 +11,9 @@ use kafrust_protocol::api::list_offsets::{
     ListOffsetsPartitionV1, ListOffsetsResponseV1, ListOffsetsTopicV1, EARLIEST_TIMESTAMP,
     LATEST_TIMESTAMP,
 };
-use kafrust_protocol::api::metadata::MetadataResponseV1;
+use kafrust_protocol::api::metadata::{
+    MetadataRequestTopicV12, MetadataResponseV1, MetadataResponseV12,
+};
 use kafrust_protocol::api::offset_commit::{
     OffsetCommitPartition, OffsetCommitPartitionV7, OffsetCommitTopic, OffsetCommitTopicResponse,
     OffsetCommitTopicV7,
@@ -40,6 +45,16 @@ const RANGE_PROTOCOL: &str = "range";
 const ROUND_ROBIN_PROTOCOL: &str = "roundrobin";
 const COOPERATIVE_STICKY_PROTOCOL: &str = "cooperative-sticky";
 const GROUP_JOIN_RETRY_BACKOFF: Duration = Duration::from_millis(50);
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+/// Consumer group membership protocol used by a group member.
+pub enum ConsumerGroupProtocol {
+    /// Kafka's classic JoinGroup/SyncGroup protocol.
+    #[default]
+    Classic,
+    /// Kafka's KIP-848 consumer group protocol.
+    Consumer,
+}
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 /// Partition assignment strategy advertised by a classic consumer group member.
@@ -117,6 +132,8 @@ pub struct ConsumerGroupConfig {
     max_poll_records: usize,
     isolation_level: IsolationLevel,
     assignment_strategy: ConsumerGroupAssignmentStrategy,
+    group_protocol: ConsumerGroupProtocol,
+    server_assignor: Option<String>,
 }
 
 impl ConsumerGroupConfig {
@@ -141,6 +158,8 @@ impl ConsumerGroupConfig {
             max_poll_records: 500,
             isolation_level: IsolationLevel::ReadUncommitted,
             assignment_strategy: ConsumerGroupAssignmentStrategy::Range,
+            group_protocol: ConsumerGroupProtocol::Classic,
+            server_assignor: None,
         }
     }
 
@@ -367,6 +386,28 @@ impl ConsumerGroupConfig {
         self.assignment_strategy
     }
 
+    /// Selects the classic or KIP-848 consumer group membership protocol.
+    pub fn group_protocol(mut self, group_protocol: ConsumerGroupProtocol) -> Self {
+        self.group_protocol = group_protocol;
+        self
+    }
+
+    /// Returns the configured consumer group membership protocol.
+    pub fn group_protocol_ref(&self) -> ConsumerGroupProtocol {
+        self.group_protocol
+    }
+
+    /// Sets the optional Kafka server-side assignor used by KIP-848 groups.
+    pub fn server_assignor(mut self, server_assignor: impl Into<String>) -> Self {
+        self.server_assignor = Some(server_assignor.into());
+        self
+    }
+
+    /// Returns the configured KIP-848 server-side assignor, if any.
+    pub fn server_assignor_ref(&self) -> Option<&str> {
+        self.server_assignor.as_deref()
+    }
+
     /// Returns the policy used for partitions without committed offsets.
     pub fn offset_reset_policy_ref(&self) -> OffsetResetPolicy {
         self.offset_reset_policy
@@ -406,6 +447,14 @@ impl ConsumerGroupConfig {
         err
     )]
     pub async fn join(self) -> Result<ConsumerGroup> {
+        if self.group_protocol == ConsumerGroupProtocol::Consumer {
+            if self.assignment_strategy != ConsumerGroupAssignmentStrategy::Range {
+                return Err(Error::Unsupported(
+                    "KIP-848 groups use a broker-side assignor; configure ConsumerGroupAssignmentStrategy::Range or select the classic protocol",
+                ));
+            }
+            return self.join_consumer(None, 0, None).await;
+        }
         self.join_with_owned_partitions(Vec::new()).await
     }
 
@@ -610,6 +659,9 @@ impl ConsumerGroupConfig {
                 retention_time_ms: self.retention_time_ms,
                 coordinator: coordinator_client,
                 cooperative_rejoin_required,
+                protocol: ConsumerGroupProtocol::Classic,
+                consumer_topic_ids: BTreeMap::new(),
+                consumer_owned_partitions: None,
                 consumer: Consumer::from_assignments(
                     consumer_client,
                     consumer_config,
@@ -617,6 +669,117 @@ impl ConsumerGroupConfig {
                 ),
             });
         }
+    }
+
+    async fn join_consumer(
+        self,
+        member_id: Option<String>,
+        member_epoch: i32,
+        owned_partitions: Option<Vec<ConsumerGroupHeartbeatTopicPartitions>>,
+    ) -> Result<ConsumerGroup> {
+        if self.topics.is_empty() {
+            return Err(Error::Unsupported("consumer group without subscriptions"));
+        }
+        if self.group_instance_id.as_deref() == Some("") {
+            return Err(Error::InvalidGroupInstanceId);
+        }
+
+        let config = self.clone();
+        let mut bootstrap = self.client.clone().connect().await?;
+        let coordinator = bootstrap
+            .find_group_coordinator(self.group_id.clone())
+            .await?;
+        if coordinator.error_code != 0 {
+            return Err(self.client.broker_error(
+                coordinator.error_code,
+                format!("find group coordinator {}", self.group_id),
+            ));
+        }
+
+        let metadata = bootstrap
+            .metadata_v12(Some(
+                self.topics
+                    .iter()
+                    .map(|name| MetadataRequestTopicV12 {
+                        topic_id: [0; 16],
+                        name: Some(name.clone()),
+                    })
+                    .collect(),
+            ))
+            .await?;
+        let topic_ids =
+            topic_ids_for_names(&metadata, &self.topics).map_err(|error| match error {
+                Error::Broker { code, context } => self.client.broker_error(code, context),
+                error => error,
+            })?;
+        let mut coordinator_client = self
+            .client
+            .connect_broker(coordinator_addr(&coordinator))
+            .await?;
+        let requested_member_id = member_id.clone().unwrap_or_default();
+        let response = coordinator_client
+            .consumer_group_heartbeat_v0(
+                self.group_id.clone(),
+                requested_member_id,
+                member_epoch,
+                self.group_instance_id.clone(),
+                None,
+                self.rebalance_timeout_ms,
+                Some(self.topics.clone()),
+                self.server_assignor.clone(),
+                owned_partitions.clone(),
+            )
+            .await?;
+        if response.error_code != 0 {
+            return Err(consumer_group_heartbeat_error(
+                &self.client,
+                &self.group_id,
+                &response,
+            ));
+        }
+
+        let member_id = response.member_id.or(member_id).ok_or(Error::Unsupported(
+            "consumer group heartbeat omitted member ID",
+        ))?;
+        let assignment = response.assignment.clone().unwrap_or_default();
+        let protocol_assignment = consumer_protocol_assignment(&assignment, &topic_ids)?;
+        let consumer_assignments = assignments_from_protocol(
+            &mut coordinator_client,
+            &mut bootstrap,
+            &self.client,
+            &self.group_id,
+            self.offset_reset_policy,
+            &protocol_assignment,
+        )
+        .await?;
+        let consumer_config = self.consumer_config();
+        let consumer_client = self.client.clone().connect().await?;
+
+        debug!(
+            group_id = self.group_id.as_str(),
+            member_id = member_id.as_str(),
+            member_epoch = response.member_epoch,
+            assignment_count = consumer_assignments.len(),
+            "joined kafka KIP-848 consumer group"
+        );
+
+        Ok(ConsumerGroup {
+            config,
+            group_id: self.group_id,
+            generation_id: response.member_epoch,
+            member_id,
+            retention_time_ms: self.retention_time_ms,
+            coordinator: coordinator_client,
+            cooperative_rejoin_required: false,
+            protocol: ConsumerGroupProtocol::Consumer,
+            consumer_topic_ids: topic_ids,
+            consumer_owned_partitions: response.assignment,
+            consumer: Consumer::from_assignments(
+                consumer_client,
+                consumer_config,
+                consumer_assignments,
+            ),
+        })
     }
 }
 
@@ -630,6 +793,9 @@ pub struct ConsumerGroup {
     retention_time_ms: i64,
     coordinator: Client,
     cooperative_rejoin_required: bool,
+    protocol: ConsumerGroupProtocol,
+    consumer_topic_ids: BTreeMap<String, [u8; 16]>,
+    consumer_owned_partitions: Option<Vec<ConsumerGroupHeartbeatTopicPartitions>>,
     consumer: Consumer,
 }
 
@@ -648,7 +814,7 @@ impl ConsumerGroupMetadata {
         &self.group_id
     }
 
-    /// Returns the current classic group generation ID.
+    /// Returns the current classic generation ID or KIP-848 member epoch.
     pub fn generation_id(&self) -> i32 {
         self.generation_id
     }
@@ -670,12 +836,17 @@ impl ConsumerGroup {
         &self.group_id
     }
 
+    /// Returns the membership protocol used by this group handle.
+    pub fn group_protocol(&self) -> ConsumerGroupProtocol {
+        self.protocol
+    }
+
     /// Returns the broker-assigned group member ID.
     pub fn member_id(&self) -> &str {
         &self.member_id
     }
 
-    /// Returns the current group generation ID.
+    /// Returns the current classic generation ID or KIP-848 member epoch.
     pub fn generation_id(&self) -> i32 {
         self.generation_id
     }
@@ -748,6 +919,9 @@ impl ConsumerGroup {
         err
     )]
     pub async fn leave(mut self) -> Result<()> {
+        if self.protocol == ConsumerGroupProtocol::Consumer {
+            return self.leave_consumer().await;
+        }
         let response = self
             .coordinator
             .leave_group_v3(
@@ -763,6 +937,31 @@ impl ConsumerGroup {
                 Error::Broker { code, context } => self.config.client.broker_error(code, context),
                 error => error,
             });
+        }
+        Ok(())
+    }
+
+    async fn leave_consumer(mut self) -> Result<()> {
+        let response = self
+            .coordinator
+            .consumer_group_heartbeat_v0(
+                self.group_id.clone(),
+                self.member_id.clone(),
+                -1,
+                self.config.group_instance_id.clone(),
+                None,
+                -1,
+                None,
+                None,
+                None,
+            )
+            .await?;
+        if response.error_code != 0 {
+            return Err(consumer_group_heartbeat_error(
+                &self.config.client,
+                &self.group_id,
+                &response,
+            ));
         }
         Ok(())
     }
@@ -889,6 +1088,11 @@ impl ConsumerGroup {
     )]
     pub async fn spawn_heartbeat_task(&self, interval: Duration) -> Result<ConsumerGroupHeartbeat> {
         validate_heartbeat_interval(interval)?;
+        if self.protocol == ConsumerGroupProtocol::Consumer {
+            return Err(Error::Unsupported(
+                "background heartbeat for KIP-848 groups is not available yet",
+            ));
+        }
         debug!(
             group_id = self.group_id.as_str(),
             member_id = self.member_id.as_str(),
@@ -960,6 +1164,28 @@ impl ConsumerGroup {
             .map(|assignment| (assignment.topic().to_owned(), assignment.partition()))
             .collect::<Vec<_>>();
         let owned_partitions = owned_partitions_from_assignments(self.consumer.assignments());
+        if self.protocol == ConsumerGroupProtocol::Consumer {
+            let owned_partitions = consumer_owned_partitions_from_assignments(
+                self.consumer.assignments(),
+                &self.consumer_topic_ids,
+            );
+            let mut joined = self
+                .config
+                .clone()
+                .join_consumer(
+                    Some(self.member_id.clone()),
+                    self.generation_id,
+                    Some(owned_partitions),
+                )
+                .await?;
+            for (topic, partition) in paused {
+                if joined.consumer.position(&topic, partition).is_some() {
+                    joined.consumer.pause(&topic, partition)?;
+                }
+            }
+            *self = joined;
+            return Ok(());
+        }
         let mut joined = self
             .config
             .clone()
@@ -983,6 +1209,9 @@ impl ConsumerGroup {
         err
     )]
     pub async fn heartbeat(&mut self) -> Result<()> {
+        if self.protocol == ConsumerGroupProtocol::Consumer {
+            return self.heartbeat_consumer().await;
+        }
         debug!(
             group_id = self.group_id.as_str(),
             member_id = self.member_id.as_str(),
@@ -1018,6 +1247,62 @@ impl ConsumerGroup {
             member_id = self.member_id.as_str(),
             generation_id = self.generation_id,
             "sent kafka consumer group heartbeat"
+        );
+        Ok(())
+    }
+
+    async fn heartbeat_consumer(&mut self) -> Result<()> {
+        let owned_partitions = self.consumer_owned_partitions.clone();
+        let response = self
+            .coordinator
+            .consumer_group_heartbeat_v0(
+                self.group_id.clone(),
+                self.member_id.clone(),
+                self.generation_id,
+                self.config.group_instance_id.clone(),
+                None,
+                self.config.rebalance_timeout_ms,
+                Some(self.config.topics.clone()),
+                self.config.server_assignor.clone(),
+                owned_partitions,
+            )
+            .await?;
+        if let Some(member_id) = response.member_id.clone() {
+            self.member_id = member_id;
+        }
+        self.generation_id = response.member_epoch;
+        if response.error_code != 0 {
+            return Err(consumer_group_heartbeat_error(
+                &self.config.client,
+                &self.group_id,
+                &response,
+            ));
+        }
+
+        if let Some(assignment) = response.assignment {
+            let protocol_assignment =
+                consumer_protocol_assignment(&assignment, &self.consumer_topic_ids)?;
+            let mut bootstrap = self.config.client.clone().connect().await?;
+            let assignments = assignments_from_protocol(
+                &mut self.coordinator,
+                &mut bootstrap,
+                &self.config.client,
+                &self.group_id,
+                self.config.offset_reset_policy,
+                &protocol_assignment,
+            )
+            .await?;
+            self.consumer.replace_assignments(assignments);
+            self.consumer_owned_partitions = Some(assignment);
+        } else {
+            self.consumer_owned_partitions = None;
+        }
+        debug!(
+            group_id = self.group_id.as_str(),
+            member_id = self.member_id.as_str(),
+            member_epoch = self.generation_id,
+            assignment_count = self.consumer.assignments().len(),
+            "sent kafka KIP-848 consumer group heartbeat"
         );
         Ok(())
     }
@@ -1548,6 +1833,31 @@ fn owned_partitions_from_assignments(
         .collect()
 }
 
+fn consumer_owned_partitions_from_assignments(
+    assignments: &[ConsumerAssignment],
+    topic_ids: &BTreeMap<String, [u8; 16]>,
+) -> Vec<ConsumerGroupHeartbeatTopicPartitions> {
+    let mut by_topic = BTreeMap::<[u8; 16], Vec<i32>>::new();
+    for assignment in assignments {
+        if let Some(topic_id) = topic_ids.get(assignment.topic()) {
+            by_topic
+                .entry(*topic_id)
+                .or_default()
+                .push(assignment.partition());
+        }
+    }
+    by_topic
+        .into_iter()
+        .map(|(topic_id, mut partitions)| {
+            partitions.sort_unstable();
+            ConsumerGroupHeartbeatTopicPartitions {
+                topic_id,
+                partitions,
+            }
+        })
+        .collect()
+}
+
 fn cooperative_assignment_requires_rejoin(
     members: &[JoinGroupMember],
     assignment: &ConsumerProtocolAssignmentV0,
@@ -1989,6 +2299,8 @@ fn should_rejoin_group(error: &Error) -> bool {
                 | BrokerErrorKind::IllegalGeneration
                 | BrokerErrorKind::UnknownMemberId
                 | BrokerErrorKind::RebalanceInProgress
+                | BrokerErrorKind::FencedMemberEpoch
+                | BrokerErrorKind::StaleMemberEpoch
         )
     )
 }
@@ -2064,6 +2376,76 @@ fn coordinator_addr(coordinator: &FindCoordinatorResponseV1) -> String {
     format!("{}:{}", coordinator.host, coordinator.port)
 }
 
+fn topic_ids_for_names(
+    metadata: &MetadataResponseV12,
+    topic_names: &[String],
+) -> Result<BTreeMap<String, [u8; 16]>> {
+    let mut topic_ids = BTreeMap::new();
+    for topic_name in topic_names {
+        let topic = metadata
+            .topics
+            .iter()
+            .find(|topic| topic.name.as_deref() == Some(topic_name.as_str()))
+            .ok_or_else(|| Error::UnknownTopicOrPartition {
+                topic: topic_name.clone(),
+                partition: -1,
+            })?;
+        if topic.error_code != 0 {
+            return Err(Error::Broker {
+                code: topic.error_code,
+                context: format!("metadata topic {topic_name}"),
+            });
+        }
+        topic_ids.insert(topic_name.clone(), topic.topic_id);
+    }
+    Ok(topic_ids)
+}
+
+fn consumer_protocol_assignment(
+    assignment: &[ConsumerGroupHeartbeatTopicPartitions],
+    topic_ids: &BTreeMap<String, [u8; 16]>,
+) -> Result<ConsumerProtocolAssignmentV0> {
+    let names_by_id = topic_ids
+        .iter()
+        .map(|(name, topic_id)| (*topic_id, name.clone()))
+        .collect::<BTreeMap<_, _>>();
+    let assignments = assignment
+        .iter()
+        .map(|topic| {
+            let topic_name =
+                names_by_id
+                    .get(&topic.topic_id)
+                    .ok_or_else(|| Error::UnknownTopicOrPartition {
+                        topic: format!("topic-id-{:02x?}", topic.topic_id),
+                        partition: -1,
+                    })?;
+            Ok(ConsumerProtocolTopicAssignment {
+                topic: topic_name.clone(),
+                partitions: topic.partitions.clone(),
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+    Ok(ConsumerProtocolAssignmentV0 {
+        assignments,
+        user_data: None,
+    })
+}
+
+fn consumer_group_heartbeat_error(
+    client: &ClientConfig,
+    group_id: &str,
+    response: &ConsumerGroupHeartbeatResponseV0,
+) -> Error {
+    let message = response
+        .error_message
+        .as_deref()
+        .unwrap_or("broker returned a consumer-group heartbeat error");
+    client.broker_error(
+        response.error_code,
+        format!("consumer group heartbeat {group_id}: {message}"),
+    )
+}
+
 fn duration_millis(duration: std::time::Duration) -> u64 {
     u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
 }
@@ -2123,8 +2505,8 @@ mod tests {
         offset_commit_topics, offset_commit_topics_v7, offset_fetch_topics, range_assignments,
         round_robin_assignments, should_rejoin_after_background_heartbeat, should_rejoin_group,
         validate_heartbeat_interval, ConsumerGroupAssignmentStrategy, ConsumerGroupConfig,
-        ConsumerGroupHeartbeat, HeartbeatHandleState, IsolationLevel, OffsetResetPolicy,
-        SecurityProtocol,
+        ConsumerGroupHeartbeat, ConsumerGroupProtocol, HeartbeatHandleState, IsolationLevel,
+        OffsetResetPolicy, SecurityProtocol,
     };
     use crate::consumer::ConsumerAssignment;
     use crate::Error;
@@ -2197,6 +2579,17 @@ mod tests {
     }
 
     #[test]
+    fn configures_kip_848_consumer_protocol_and_server_assignor() {
+        let config = ConsumerGroupConfig::new(["localhost:9092"], "orders-group")
+            .group_protocol(ConsumerGroupProtocol::Consumer)
+            .server_assignor("uniform")
+            .subscribe("orders");
+
+        assert_eq!(config.group_protocol_ref(), ConsumerGroupProtocol::Consumer);
+        assert_eq!(config.server_assignor_ref(), Some("uniform"));
+    }
+
+    #[test]
     fn configures_offset_reset_policy_and_preserves_offset_zero_default() {
         let default = ConsumerGroupConfig::new(["localhost:9092"], "orders-group");
         assert_eq!(
@@ -2220,6 +2613,24 @@ mod tests {
             .unwrap_err();
 
         assert!(matches!(error, Error::InvalidGroupInstanceId));
+    }
+
+    #[tokio::test]
+    async fn rejects_classic_assignment_strategy_for_kip_848_before_connecting() {
+        let error = ConsumerGroupConfig::new(["localhost:9092"], "orders-group")
+            .group_protocol(ConsumerGroupProtocol::Consumer)
+            .assignment_strategy(ConsumerGroupAssignmentStrategy::RoundRobin)
+            .subscribe("orders")
+            .join()
+            .await
+            .unwrap_err();
+
+        assert!(matches!(
+            error,
+            Error::Unsupported(
+                "KIP-848 groups use a broker-side assignor; configure ConsumerGroupAssignmentStrategy::Range or select the classic protocol"
+            )
+        ));
     }
 
     #[test]

@@ -72,6 +72,39 @@ rollback behavior still require live qualification before production use.
 Assignment state keeps Kafka group ID, member ID, generation ID, topic,
 partition, and next offset visible through the public API.
 
+## KIP-848 Consumer Protocol
+
+Select Kafka's newer broker-side consumer protocol explicitly:
+
+```rust
+use kafrust::{ConsumerGroupConfig, ConsumerGroupProtocol};
+
+# async fn example() -> kafrust::Result<()> {
+let mut group = ConsumerGroupConfig::new(["localhost:9092"], "orders-group")
+    .group_protocol(ConsumerGroupProtocol::Consumer)
+    .subscribe("orders")
+    .join()
+    .await?;
+
+let records = group.poll().await?;
+group.commit_offsets().await?;
+group.leave().await?;
+# let _ = records;
+# Ok(())
+# }
+```
+
+The high-level path uses `ConsumerGroupHeartbeat v0` (API key 68), Metadata
+v12 topic UUIDs, broker-side assignment, member epochs, assignment updates,
+foreground heartbeat/rejoin, offset fetch/commit, and explicit heartbeat leave.
+`ConsumerGroupAssignmentStrategy` is a classic-protocol setting and must stay
+at its default when selecting KIP-848; use `server_assignor` to request a
+broker-side assignor. The existing background heartbeat handle is currently
+classic-only because KIP-848 heartbeat responses can carry updated member
+epochs and assignments that must be applied by the owning group handle. No
+live Kafka 4.x compatibility claim is made until the dedicated smoke profile
+passes.
+
 ## Offset Reset
 
 Committed offsets always take precedence. For a newly assigned partition with
@@ -169,6 +202,17 @@ Current implementation status:
 - JoinGroup v2 request/response protocol types exist.
 - SyncGroup v2 request/response protocol types exist.
 - Heartbeat v2 request/response protocol types exist.
+- KIP-848 `ConsumerGroupHeartbeat v0` request/response protocol types exist,
+  including flexible headers, UUID topic partitions, nullable arrays, and
+  tagged fields.
+- Metadata v12 exposes UUID-to-name mappings needed to apply KIP-848
+  assignments.
+- `Client::consumer_group_heartbeat_v0` can send the KIP-848 heartbeat over a
+  coordinator-scoped connection; focused injected-broker coverage verifies
+  the request and response framing.
+- `ConsumerGroupProtocol::Consumer` provides foreground join, assignment
+  application, heartbeat/rejoin, offset commit, and explicit leave behavior;
+  its dedicated live broker qualification remains pending.
 - Static member JoinGroup v5, SyncGroup v3, Heartbeat v3, and OffsetCommit v7
   protocol types and high-level routing exist.
 - `ConsumerGroup::leave` uses LeaveGroup v3 for dynamic and static members and
