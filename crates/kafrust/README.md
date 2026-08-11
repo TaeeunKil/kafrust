@@ -7,8 +7,8 @@
 A pure Rust Kafka client with no librdkafka or C toolchain dependency.
 
 `kafrust` is the high-level client crate in the kafrust workspace. It provides
-Tokio-based admin, producer, direct consumer, and alpha classic consumer group
-APIs on top of the companion
+Tokio-based admin, producer, direct consumer, and alpha classic/KIP-848
+consumer group APIs on top of the companion
 [`kafrust-protocol`](https://docs.rs/kafrust-protocol) wire-format crate.
 
 Current release: `0.2.2`.
@@ -259,13 +259,16 @@ async fn main() -> kafrust::Result<()> {
 
 ## Consumer Group
 
-The consumer group API is an alpha classic consumer group path with dynamic or
-static membership, range, round-robin, or opt-in cooperative-sticky assignment,
-join, sync, heartbeat, poll, offset commit, and explicit leave support. The
+The consumer group API is an alpha classic or KIP-848 consumer group path with
+dynamic or static membership, range, round-robin, or opt-in cooperative-sticky
+assignment for classic groups, join, heartbeat, poll, offset fetch/commit, and
+explicit leave support. The
 cooperative-sticky path includes protocol, staged assignment, multi-member
 ownership transfer, transient-member rollback, and member-loss recovery. These
 cooperative failure paths are live-verified in the Kafka `3.7.2` three-broker
-profile; the group API itself remains pre-`1.0`.
+profile. The KIP-848 path, including OffsetFetch v9, OffsetCommit v9, and
+background heartbeat rejoin, is live-verified against Kafka `4.3.1`; the group
+API itself remains pre-`1.0`.
 
 ```rust,no_run
 use kafrust::ConsumerGroupConfig;
