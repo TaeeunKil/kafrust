@@ -53,6 +53,7 @@ the currently supported settings through typed builders.
 | `sasl.mechanism=PLAIN` | `.sasl_plain(username, password)` | Use with SASL_PLAINTEXT or SASL_TLS. |
 | `sasl.mechanism=SCRAM-SHA-256` | `.sasl_scram_sha_256(username, password)` | Live verified over SASL_SSL. |
 | `sasl.mechanism=SCRAM-SHA-512` | `.sasl_scram_sha_512(username, password)` | Live verified over SASL_SSL against Kafka 3.7.2. |
+| `sasl.mechanism=OAUTHBEARER` | `.sasl_oauthbearer(token)` or `.sasl_oauthbearer_with_username(username, token)` | Live verified only against Kafka 3.7.2's built-in unsecured validator; production OAuth/OIDC provider and token refresh behavior are not claimed. |
 | statistics callback | `ClientMetrics::snapshot()` | kafrust exposes counters/gauges and tracing, not librdkafka statistics JSON. |
 
 Do not silently discard an old configuration map. Classify every key as
@@ -259,6 +260,7 @@ See [Admin API](admin-api.md) for typed request and response examples.
 | Direct assigned-partition consumer | Candidate |
 | Classic range-assigned consumer group | Candidate with rebalance testing |
 | TLS, SASL/PLAIN, or SASL/SCRAM-SHA-256 | Candidate on documented profiles |
+| SASL/OAUTHBEARER | Candidate only for the documented Kafka 3.7.2 unsecured-validator smoke; qualify the production OAuth/OIDC provider, token lifecycle, and authorization policy |
 | Transactions and read-committed consumption | Alpha candidate |
 | `acks=0` fire-and-forget | Verified on Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 single-node plaintext smoke; qualify workload loss/error semantics |
 | Non-Tokio runtime or synchronous client | Blocked |

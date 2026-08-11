@@ -500,8 +500,10 @@ Exit criteria:
 
 Known limits:
 
-- SASL/OAUTHBEARER is implemented and covered by injected handshake tests, but
-  live OAuth-provider compatibility is not yet claimed.
+- SASL/OAUTHBEARER is live-verified against Kafka 3.7.2's built-in unsecured
+  validator in the dedicated OAuth-only smoke job `31478375106`. Production
+  OAuth/OIDC provider compatibility, signed JWT/JWKS validation, issuer and
+  audience policy, token retrieval, and token refresh callbacks remain open.
 
 Evidence:
 
@@ -530,8 +532,9 @@ Evidence:
 - The broker roundtrip test and smoke examples accept
   `KAFRUST_SASL_MECHANISM` with `plain`, `scram-sha-256`, and
   `scram-sha-512`; they also accept `oauthbearer` with
-  `KAFRUST_SASL_TOKEN` and an optional `KAFRUST_SASL_USERNAME`, so a future
-  OAuth provider profile can exercise the same entry points.
+  `KAFRUST_SASL_TOKEN` and an optional `KAFRUST_SASL_USERNAME`. The dedicated
+  Kafka 3.7.2 SASL_SSL OAuth-only job exercises those entry points against the
+  broker's built-in unsecured validator.
 - The `Live Kafka Smoke` workflow includes a SASL_SSL SCRAM profile that
   creates separate Kafka SCRAM-SHA-256 and SCRAM-SHA-512 credentials, configures
   kafrust with `KAFRUST_SECURITY_PROTOCOL=sasl_tls`, the selected
@@ -545,6 +548,10 @@ Evidence:
 - Manual `Live Kafka Smoke` run `31452872400` passed on 2026-08-11 from
   `main`; all eight profiles passed, including the SASL_SSL SCRAM-SHA-256 and
   SCRAM-SHA-512 subpaths against Kafka 3.7.2.
+- Manual `Live Kafka Smoke` run `31478375106` passed on 2026-08-11 from
+  `codex/live-oauth-smoke`; the dedicated Kafka 3.7.2 SASL_SSL OAUTHBEARER
+  job passed with the built-in unsecured validator. This does not qualify a
+  production OAuth/OIDC provider.
 
 Strategic role:
 
@@ -1206,7 +1213,9 @@ Implemented evidence:
   authorization identity (`n,,`) or an explicit identity (`n,a=<id>,`), keeps
   the bearer token out of `Debug` output, and is exposed through all high-level
   connection builders. Injected broker tests cover handshake ordering and
-  exact authentication bytes; live OAuth-provider verification remains open.
+  exact authentication bytes; run `31478375106` adds live Kafka 3.7.2
+  SASL_SSL coverage using the built-in unsecured validator. Production
+  OAuth/OIDC provider verification remains open.
 - Cooperative-sticky group membership encodes Subscription v1 owned
   partitions and performs staged ownership transfers with focused local tests.
   Manual `Live Kafka Smoke` run `31464021305` passed the Kafka 3.7.2

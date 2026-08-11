@@ -4,7 +4,7 @@ kafrust compatibility claims are scoped to behavior that has been verified again
 
 ## Current Compatibility Claim
 
-The `0.2.x` alpha line is verified against Apache Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 KRaft brokers over plaintext TCP in the single-node profile. Kafka 3.7.2 is also verified in a three-broker plaintext profile. TLS, SASL/PLAIN over SASL_PLAINTEXT, and SASL/SCRAM-SHA-256 and SCRAM-SHA-512 over SASL_SSL are verified against Kafka 3.7.2 for the documented single-node smoke paths. The SHA-512 profile covers broker roundtrip, producer, batch producer, buffered producer, direct consumer, and consumer group poll paths. ACL create, describe, and delete plus client quota set, describe, and remove are live-verified against a Kafka 3.7.2 KRaft broker with StandardAuthorizer enabled. SCRAM credential upsert, describe, and delete are live-verified over the SASL_SSL profile. Controller-routed partition reassignment submission and completion polling are live-verified in the Kafka 3.7.2 three-broker profile. The cooperative-sticky consumer protocol path, multi-member ownership transfer, transient-member rollback, and member-loss recovery are live-verified in the three-broker profile by main run `31474626799`. Acks=0 immediate and batch Produce dispatch is live-verified against Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 single-node plaintext profiles; this verifies request completion, not broker acceptance.
+The `0.2.x` alpha line is verified against Apache Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 KRaft brokers over plaintext TCP in the single-node profile. Kafka 3.7.2 is also verified in a three-broker plaintext profile. TLS, SASL/PLAIN over SASL_PLAINTEXT, and SASL/SCRAM-SHA-256 and SCRAM-SHA-512 over SASL_SSL are verified against Kafka 3.7.2 for the documented single-node smoke paths. A Kafka 3.7.2 SASL_SSL OAUTHBEARER path is also live-verified against Kafka's built-in unsecured test validator; this does not claim production OAuth/OIDC provider integration. The SHA-512 profile covers broker roundtrip, producer, batch producer, buffered producer, direct consumer, and consumer group poll paths. ACL create, describe, and delete plus client quota set, describe, and remove are live-verified against a Kafka 3.7.2 KRaft broker with StandardAuthorizer enabled. SCRAM credential upsert, describe, and delete are live-verified over the SASL_SSL profile. Controller-routed partition reassignment submission and completion polling are live-verified in the Kafka 3.7.2 three-broker profile. The cooperative-sticky consumer protocol path, multi-member ownership transfer, transient-member rollback, and member-loss recovery are live-verified in the three-broker profile by main run `31474626799`. Acks=0 immediate and batch Produce dispatch is live-verified against Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 single-node plaintext profiles; this verifies request completion, not broker acceptance.
 
 | Broker | Mode | Security | Verification | Status |
 | --- | --- | --- | --- | --- |
@@ -14,6 +14,7 @@ The `0.2.x` alpha line is verified against Apache Kafka 3.7.2, 3.8.1, 3.9.1, and
 | Apache Kafka 3.7.2 | single-node KRaft | SASL_PLAINTEXT with SASL/PLAIN | `Live Kafka Smoke` SASL_PLAINTEXT job, manual run `30067372344` on 2026-07-24 | Passing |
 | Apache Kafka 3.7.2 | single-node KRaft | SASL_SSL with SCRAM-SHA-256 | `Live Kafka Smoke` SASL_SSL SCRAM job, manual run `30067372344` on 2026-07-24 | Passing |
 | Apache Kafka 3.7.2 | single-node KRaft | SASL_SSL with SCRAM-SHA-512 | `Live Kafka Smoke` SASL_SSL SCRAM-SHA-512 subpath, manual run `31452872400` on 2026-08-11 | Passing |
+| Apache Kafka 3.7.2 | single-node KRaft | SASL_SSL with OAUTHBEARER and Kafka's built-in unsecured validator | `Live Kafka Smoke` OAuth-only job, manual run `31478375106` on 2026-08-11 | Passing; test-only validator |
 | Apache Kafka 3.8.1 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, manual run `30067372344` on 2026-07-24 | Passing |
 | Apache Kafka 3.9.1 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, manual run `30067372344` on 2026-07-24 | Passing |
 | Apache Kafka 4.3.1 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, manual run `30067372344` on 2026-07-24 | Passing |
@@ -243,14 +244,32 @@ The same Kafka 3.7.2 SASL_SSL profile's SCRAM-SHA-512 subpath covers:
 - SCRAM-SHA-512 authentication against the live Kafka 3.7.2 broker using the
   same DER root certificate validation path.
 
+The Kafka 3.7.2 SASL_SSL OAUTHBEARER smoke path covers:
+
+- `ApiVersions v0` and `Metadata v1` roundtrips through
+  `SecurityProtocol::SaslTls` using SASL/OAUTHBEARER.
+- The broker roundtrip path with a token supplied through
+  `KAFRUST_SASL_TOKEN` and optional authorization identity.
+- TLS certificate validation with the configured DER root certificate.
+- The dedicated OAuth-only broker job in `Live Kafka Smoke` run
+  `31478375106`.
+
+This profile uses Kafka's built-in unsecured validator for deterministic
+compatibility testing. Signed JWT/JWKS validation, issuer and audience policy,
+token retrieval and refresh callbacks, and production OAuth/OIDC provider
+integration remain unclaimed.
+
 ## Not Yet Claimed
 
 The current compatibility claim does not cover:
 
 - TLS workflows beyond the listed TLS smoke examples.
 - SASL workflows beyond the listed SASL_PLAINTEXT and SASL_SSL smoke examples.
-- SASL/OAUTHBEARER live compatibility; the token exchange is covered by
-  injected tests but no OAuth identity provider is part of the workflow yet.
+- Production SASL/OAUTHBEARER provider compatibility, including signed
+  JWT/JWKS validation, issuer/audience policy, token retrieval and refresh
+  callbacks, and provider-specific failure behavior. The Kafka 3.7.2
+  built-in unsecured-validator smoke is test-only evidence, not an identity
+  provider qualification.
 - Secured multi-broker clusters, broader consumer-group failover beyond the listed coordinator reconnect checks, or rack-aware client routing.
 - Broader transaction failure-injection profiles beyond the verified
   coordinator broker-stop commit path.
