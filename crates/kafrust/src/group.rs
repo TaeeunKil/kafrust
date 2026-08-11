@@ -594,14 +594,7 @@ impl ConsumerGroupConfig {
                 if retry_attempt < self.max_retries && should_rejoin_group(&error) {
                     retry_attempt += 1;
                     self.client.record_retry();
-                    member_id = if matches!(
-                        error.broker_error_kind(),
-                        Some(BrokerErrorKind::UnknownMemberId)
-                    ) {
-                        None
-                    } else {
-                        Some(requested_member_id)
-                    };
+                    member_id = member_id_after_join_error(&error, requested_member_id);
                     debug!(
                         group_id = self.group_id.as_str(),
                         retry_attempt,
@@ -2637,6 +2630,17 @@ fn should_rejoin_group(error: &Error) -> bool {
     )
 }
 
+fn member_id_after_join_error(error: &Error, requested_member_id: String) -> Option<String> {
+    if matches!(
+        error.broker_error_kind(),
+        Some(BrokerErrorKind::UnknownMemberId)
+    ) {
+        None
+    } else {
+        Some(requested_member_id)
+    }
+}
+
 async fn should_rejoin_after_background_heartbeat(
     heartbeat: &mut ConsumerGroupHeartbeat,
 ) -> Result<bool> {
@@ -2955,12 +2959,12 @@ mod tests {
     use super::{
         assignments_for_strategy, committed_offset, cooperative_assignment_requires_rejoin,
         cooperative_rejoin_required_for_assignment, cooperative_sticky_assignments,
-        leave_group_response_error, list_offset, list_offsets_topics, offset_commit_response_error,
-        offset_commit_topics, offset_commit_topics_v7, offset_fetch_topics, range_assignments,
-        record_consumer_heartbeat_response, round_robin_assignments,
-        should_rejoin_after_background_heartbeat, should_rejoin_group, validate_heartbeat_interval,
-        ConsumerGroupAssignmentStrategy, ConsumerGroupConfig, ConsumerGroupHeartbeat,
-        ConsumerGroupHeartbeatTopicPartitions, ConsumerGroupProtocol,
+        leave_group_response_error, list_offset, list_offsets_topics, member_id_after_join_error,
+        offset_commit_response_error, offset_commit_topics, offset_commit_topics_v7,
+        offset_fetch_topics, range_assignments, record_consumer_heartbeat_response,
+        round_robin_assignments, should_rejoin_after_background_heartbeat, should_rejoin_group,
+        validate_heartbeat_interval, ConsumerGroupAssignmentStrategy, ConsumerGroupConfig,
+        ConsumerGroupHeartbeat, ConsumerGroupHeartbeatTopicPartitions, ConsumerGroupProtocol,
         ConsumerProtocolHeartbeatState as ConsumerGroupHeartbeatState, HeartbeatHandleState,
         IsolationLevel, OffsetResetPolicy, SecurityProtocol, DEFAULT_GROUP_MAX_RETRIES,
     };
@@ -3538,6 +3542,32 @@ mod tests {
             "reset",
         ))));
         assert!(!should_rejoin_group(&Error::Unsupported("group feature")));
+    }
+
+    #[test]
+    fn clears_unknown_member_id_before_join_retry() {
+        let error = Error::Broker {
+            code: 25,
+            context: "join group orders-group".to_owned(),
+        };
+
+        assert_eq!(
+            member_id_after_join_error(&error, "member-a".to_owned()),
+            None
+        );
+    }
+
+    #[test]
+    fn preserves_member_id_for_other_transient_join_errors() {
+        let error = Error::Broker {
+            code: 27,
+            context: "join group orders-group".to_owned(),
+        };
+
+        assert_eq!(
+            member_id_after_join_error(&error, "member-a".to_owned()),
+            Some("member-a".to_owned())
+        );
     }
 
     #[test]
