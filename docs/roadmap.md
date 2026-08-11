@@ -1189,6 +1189,14 @@ Strategic role:
 
 Implemented evidence:
 
+- Flexible `ApiVersions v3` request and response types report broker API
+  version ranges, preserve unknown top-level tagged fields, and share a common
+  capability lookup with the legacy v0 response. The high-level producer now
+  uses this negotiation path while retaining the v0 low-level method for
+  compatibility. Live Kafka Smoke run
+  [`31494820868`](https://github.com/TaeeunKil/kafrust/actions/runs/31494820868)
+  passed all 11 plaintext, secured, multi-broker, ACL, and KIP-848 jobs on
+  2026-08-11.
 - Producer records without an explicit partition use Kafka-compatible Murmur2
   routing when a key is present, preserving standard-client key affinity.
 - Keyless producer records use per-topic batch-sticky round-robin routing.

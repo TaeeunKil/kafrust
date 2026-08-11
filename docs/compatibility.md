@@ -11,7 +11,7 @@ v9 offset fetch, rejoin, and graceful leave behavior.
 
 ## Current Compatibility Claim
 
-The `0.2.x` alpha line is verified against Apache Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 KRaft brokers over plaintext TCP in the single-node profile. Kafka 3.7.2 is also verified in a three-broker plaintext profile. TLS, SASL/PLAIN over SASL_PLAINTEXT, and SASL/SCRAM-SHA-256 and SCRAM-SHA-512 over SASL_SSL are verified against Kafka 3.7.2 for the documented single-node smoke paths. A Kafka 3.7.2 SASL_SSL OAUTHBEARER path is also live-verified against Kafka's built-in unsecured test validator; this does not claim production OAuth/OIDC provider integration. The SHA-512 profile covers broker roundtrip, producer, batch producer, buffered producer, direct consumer, and consumer group poll paths. ACL create, describe, and delete plus client quota set, describe, and remove are live-verified against a Kafka 3.7.2 KRaft broker with StandardAuthorizer enabled. SCRAM credential upsert, describe, and delete are live-verified over the SASL_SSL profile. Controller-routed partition reassignment submission and completion polling are live-verified in the Kafka 3.7.2 three-broker profile. The cooperative-sticky consumer protocol path, multi-member ownership transfer, transient-member rollback, and member-loss recovery are live-verified in the three-broker profile by main run `31474626799`. Acks=0 immediate and batch Produce dispatch is live-verified against Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 single-node plaintext profiles; this verifies request completion, not broker acceptance.
+The `0.2.x` alpha line is verified against Apache Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 KRaft brokers over plaintext TCP in the single-node profile. Kafka 3.7.2 is also verified in a three-broker plaintext profile. TLS, SASL/PLAIN over SASL_PLAINTEXT, and SASL/SCRAM-SHA-256 and SCRAM-SHA-512 over SASL_SSL are verified against Kafka 3.7.2 for the documented single-node smoke paths. A Kafka 3.7.2 SASL_SSL OAUTHBEARER path is also live-verified against Kafka's built-in unsecured test validator; this does not claim production OAuth/OIDC provider integration. The SHA-512 profile covers broker roundtrip, producer, batch producer, buffered producer, direct consumer, and consumer group poll paths. ACL create, describe, and delete plus client quota set, describe, and remove are live-verified against a Kafka 3.7.2 KRaft broker with StandardAuthorizer enabled. SCRAM credential upsert, describe, and delete are live-verified over the SASL_SSL profile. Controller-routed partition reassignment submission and completion polling are live-verified in the Kafka 3.7.2 three-broker profile. The cooperative-sticky consumer protocol path, multi-member ownership transfer, transient-member rollback, and member-loss recovery are live-verified in the three-broker profile by main run `31474626799`. Acks=0 immediate and batch Produce dispatch is live-verified against Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 single-node plaintext profiles; this verifies request completion, not broker acceptance. The high-level producer uses flexible `ApiVersions v3` capability negotiation across all supported plaintext, TLS, SASL, and multi-broker profiles in live run `31494820868`.
 
 | Broker | Mode | Security | Verification | Status |
 | --- | --- | --- | --- | --- |
@@ -36,7 +36,8 @@ The `0.2.x` alpha line is verified against Apache Kafka 3.7.2, 3.8.1, 3.9.1, and
 
 The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
 
-- `ApiVersions v0` and `Metadata v1` roundtrips.
+- `ApiVersions v0` and `Metadata v1` roundtrips, plus flexible `ApiVersions
+  v3` capability negotiation used by the high-level producer.
 - `FindCoordinator v1` for consumer group coordinator discovery.
 - `ListOffsets v1` for earliest/latest consumer group offset reset, routed to
   each assigned partition leader.
@@ -102,7 +103,13 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
   and 3.9.1, including all four compression codecs, idempotent and
   transactional production, direct and group consumption, topic/config admin,
   group description, and offset deletion.
-- High-level producer metadata lookup, leader routing, negotiated Produce API selection, single-record send, batch send, gzip-, Snappy-, LZ4-, and Zstd-compressed batch send, and buffered send with `acks=1`. Against Kafka 3.7.2, the current path selects Produce v3 RecordBatch for Gzip, Snappy, and LZ4, and Produce v7 for Zstd.
+- High-level producer metadata lookup, leader routing, flexible `ApiVersions v3`
+  capability negotiation, negotiated Produce API selection, single-record send,
+  batch send, gzip-, Snappy-, LZ4-, and Zstd-compressed batch send, and buffered
+  send with `acks=1`. Against Kafka 3.7.2, the current path selects Produce v3
+  RecordBatch for Gzip, Snappy, and LZ4, and Produce v7 for Zstd. Live run
+  `31494820868` passed this producer path across the supported plaintext,
+  secured, and three-broker profiles.
 - Kafka-compatible Murmur2 routing for keyed records without an explicit
   partition. Manual run `30066328105` verified key-derived routing and
   fetch-back by partition and offset across the three-broker Kafka 3.7.2
