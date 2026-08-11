@@ -115,9 +115,10 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
   test verifies one ApiVersions exchange followed by two Produce requests on
   one socket. Transport failure eviction remains covered by the ambiguous
   idempotent retry test.
-- Full live smoke rerun after the leader connection reuse change passed all 11
-  broker, security, ACL, KIP-848, and multi-broker failover jobs in
-  [`31496965137`](https://github.com/TaeeunKil/kafrust/actions/runs/31496965137).
+- Full live smoke rerun after the leader connection reuse and transient
+  classic-group JoinGroup retry changes passed all 11 broker, security, ACL,
+  KIP-848, and multi-broker failover jobs in
+  [`31499359717`](https://github.com/TaeeunKil/kafrust/actions/runs/31499359717).
 - Direct consumer sequential fetches reuse one partition-leader connection;
   the focused injected-broker test covers two Fetch requests on one socket.
 - Kafka-compatible Murmur2 routing for keyed records without an explicit
