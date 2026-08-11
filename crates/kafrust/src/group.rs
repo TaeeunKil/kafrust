@@ -223,6 +223,22 @@ impl ConsumerGroupConfig {
         self
     }
 
+    /// Sets SASL/OAUTHBEARER credentials for group, coordinator, and fetch requests.
+    pub fn sasl_oauthbearer(mut self, token: impl Into<String>) -> Self {
+        self.client = self.client.sasl_oauthbearer(token);
+        self
+    }
+
+    /// Sets SASL/OAUTHBEARER credentials with an authorization identity.
+    pub fn sasl_oauthbearer_with_username(
+        mut self,
+        username: impl Into<String>,
+        token: impl Into<String>,
+    ) -> Self {
+        self.client = self.client.sasl_oauthbearer_with_username(username, token);
+        self
+    }
+
     /// Subscribes this group member to a Kafka topic.
     pub fn subscribe(mut self, topic: impl Into<String>) -> Self {
         self.topics.push(topic.into());

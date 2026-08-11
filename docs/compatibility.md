@@ -249,6 +249,8 @@ The current compatibility claim does not cover:
 
 - TLS workflows beyond the listed TLS smoke examples.
 - SASL workflows beyond the listed SASL_PLAINTEXT and SASL_SSL smoke examples.
+- SASL/OAUTHBEARER live compatibility; the token exchange is covered by
+  injected tests but no OAuth identity provider is part of the workflow yet.
 - Secured multi-broker clusters, broader consumer-group failover beyond the listed coordinator reconnect checks, or rack-aware client routing.
 - Broader transaction failure-injection profiles beyond the verified
   coordinator broker-stop commit path.

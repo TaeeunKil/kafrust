@@ -642,6 +642,22 @@ impl ConsumerConfig {
         self
     }
 
+    /// Sets SASL/OAUTHBEARER credentials for consumer broker connections.
+    pub fn sasl_oauthbearer(mut self, token: impl Into<String>) -> Self {
+        self.client = self.client.sasl_oauthbearer(token);
+        self
+    }
+
+    /// Sets SASL/OAUTHBEARER credentials with an authorization identity.
+    pub fn sasl_oauthbearer_with_username(
+        mut self,
+        username: impl Into<String>,
+        token: impl Into<String>,
+    ) -> Self {
+        self.client = self.client.sasl_oauthbearer_with_username(username, token);
+        self
+    }
+
     /// Sets the Kafka fetch max wait time in milliseconds.
     pub fn max_wait_ms(mut self, max_wait_ms: i32) -> Self {
         self.max_wait_ms = max_wait_ms;

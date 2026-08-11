@@ -326,6 +326,12 @@ verified against Kafka `3.7.2`; SASL/SCRAM-SHA-256 and SCRAM-SHA-512 over
 covers broker roundtrip, producer, batch, buffered producer, direct consumer,
 and consumer group poll paths.
 
+SASL/OAUTHBEARER token authentication is available through
+`sasl_oauthbearer(token)` or `sasl_oauthbearer_with_username(username, token)`.
+The RFC 7628 initial response and secret redaction are covered by injected
+handshake tests; no live OAuth provider is currently part of the compatibility
+matrix.
+
 The default build does not include TLS dependencies. The current `tls` feature
 uses the `rustls` ring crypto provider, which can require native build tooling
 in some environments; this is not part of the default kafrust toolchain.
@@ -430,6 +436,9 @@ Verified high-level paths include:
   documented broker roundtrip, producer, direct consumer, and consumer group
   smoke paths; the SHA-512 profile also covers batch and buffered producer
   paths.
+- SASL/OAUTHBEARER is implemented with token-only and authorization-identity
+  builders, but remains unclaimed for live broker compatibility until an OAuth
+  provider profile is added.
 - Broker compatibility is verified against Kafka `3.7.2`, `3.8.1`, `3.9.1`,
   and `4.3.1` for the single-node plaintext profile. Secured and multi-broker
   profiles are verified against `3.7.2`.
@@ -470,7 +479,9 @@ The smoke examples accept `KAFRUST_SECURITY_PROTOCOL`,
 `KAFRUST_SASL_USERNAME`, `KAFRUST_SASL_PASSWORD`, and
 `KAFRUST_SASL_MECHANISM` so the same examples can be run against plaintext,
 TLS, and SASL broker profiles. `KAFRUST_SASL_MECHANISM` defaults to `plain` and
-also accepts `scram-sha-256` or `scram-sha-512`.
+also accepts `scram-sha-256`, `scram-sha-512`, or `oauthbearer`. The
+OAUTHBEARER path reads its token from `KAFRUST_SASL_TOKEN` and treats
+`KAFRUST_SASL_USERNAME` as an optional authorization identity.
 `KAFRUST_BOOTSTRAP_SERVERS` accepts Kafka's comma-separated bootstrap format for
 multiple brokers, for example `localhost:19092,localhost:19093`.
 
