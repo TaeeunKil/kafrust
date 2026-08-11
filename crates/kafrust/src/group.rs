@@ -143,6 +143,7 @@ struct ConsumerProtocolHeartbeatState {
     member_epoch: i32,
     owned_partitions: Option<Vec<ConsumerGroupHeartbeatTopicPartitions>>,
     assignment_version: u64,
+    heartbeat_interval: Duration,
 }
 
 #[derive(Debug, Clone)]
@@ -151,7 +152,6 @@ struct ConsumerProtocolHeartbeatConfig {
     topics: Vec<String>,
     server_assignor: Option<String>,
     rebalance_timeout_ms: i32,
-    interval: Duration,
 }
 
 impl ConsumerGroupConfig {
@@ -1262,6 +1262,7 @@ impl ConsumerGroup {
                 member_epoch: self.generation_id,
                 owned_partitions: self.consumer_owned_partitions.clone(),
                 assignment_version: 0,
+                heartbeat_interval: interval,
             }))
         });
         let consumer_state_for_task = consumer_state.clone();
@@ -1288,7 +1289,6 @@ impl ConsumerGroup {
                             topics,
                             server_assignor,
                             rebalance_timeout_ms,
-                            interval,
                         },
                         shutdown_rx,
                     )
@@ -2574,54 +2574,56 @@ async fn run_background_consumer_heartbeat(
     config: ConsumerProtocolHeartbeatConfig,
     mut shutdown: oneshot::Receiver<()>,
 ) -> Result<()> {
-    let mut heartbeat = time::interval(config.interval);
-    heartbeat.set_missed_tick_behavior(MissedTickBehavior::Delay);
-    heartbeat.tick().await;
+    let mut first_heartbeat = true;
 
     loop {
-        tokio::select! {
-            _ = &mut shutdown => return Ok(()),
-            _ = heartbeat.tick() => {
-                let (member_id, member_epoch, owned_partitions) = {
-                    let state = state.lock().await;
-                    (
-                        state.member_id.clone(),
-                        state.member_epoch,
-                        state.owned_partitions.clone(),
-                    )
-                };
-                debug!(
-                    group_id = group_id.as_str(),
-                    member_id = member_id.as_str(),
-                    member_epoch,
-                    "sending background KIP-848 consumer group heartbeat"
-                );
-                let response = coordinator
-                    .consumer_group_heartbeat_v0(
-                        group_id.clone(),
-                        member_id,
-                        member_epoch,
-                        config.group_instance_id.clone(),
-                        None,
-                        config.rebalance_timeout_ms,
-                        Some(config.topics.clone()),
-                        config.server_assignor.clone(),
-                        owned_partitions,
-                    )
-                    .await?;
-                if response.error_code != 0 {
-                    let message = response
-                        .error_message
-                        .as_deref()
-                        .unwrap_or("broker returned a consumer-group heartbeat error");
-                    return Err(coordinator.broker_error(
-                        response.error_code,
-                        format!("consumer group heartbeat {group_id}: {message}"),
-                    ));
-                }
-                record_consumer_heartbeat_response(&state, response).await;
+        if !first_heartbeat {
+            let interval = state.lock().await.heartbeat_interval;
+            tokio::select! {
+                _ = &mut shutdown => return Ok(()),
+                _ = time::sleep(interval) => {}
             }
         }
+        first_heartbeat = false;
+
+        let (member_id, member_epoch, owned_partitions) = {
+            let state = state.lock().await;
+            (
+                state.member_id.clone(),
+                state.member_epoch,
+                state.owned_partitions.clone(),
+            )
+        };
+        debug!(
+            group_id = group_id.as_str(),
+            member_id = member_id.as_str(),
+            member_epoch,
+            "sending background KIP-848 consumer group heartbeat"
+        );
+        let response = coordinator
+            .consumer_group_heartbeat_v0(
+                group_id.clone(),
+                member_id,
+                member_epoch,
+                config.group_instance_id.clone(),
+                None,
+                config.rebalance_timeout_ms,
+                Some(config.topics.clone()),
+                config.server_assignor.clone(),
+                owned_partitions,
+            )
+            .await?;
+        if response.error_code != 0 {
+            let message = response
+                .error_message
+                .as_deref()
+                .unwrap_or("broker returned a consumer-group heartbeat error");
+            return Err(coordinator.broker_error(
+                response.error_code,
+                format!("consumer group heartbeat {group_id}: {message}"),
+            ));
+        }
+        record_consumer_heartbeat_response(&state, response).await;
     }
 }
 
@@ -2634,6 +2636,11 @@ async fn record_consumer_heartbeat_response(
         state.member_id = member_id;
     }
     state.member_epoch = response.member_epoch;
+    if response.heartbeat_interval_ms > 0 {
+        state.heartbeat_interval = Duration::from_millis(
+            u64::try_from(response.heartbeat_interval_ms).unwrap_or(u64::MAX),
+        );
+    }
     if let Some(assignment) = response.assignment {
         state.owned_partitions = Some(assignment);
         state.assignment_version = state.assignment_version.wrapping_add(1);
@@ -3373,6 +3380,7 @@ mod tests {
             member_epoch: 4,
             owned_partitions: Some(initial_assignment.clone()),
             assignment_version: 0,
+            heartbeat_interval: std::time::Duration::from_secs(1),
         }));
 
         record_consumer_heartbeat_response(
@@ -3393,6 +3401,10 @@ mod tests {
             assert_eq!(state.member_epoch, 5);
             assert_eq!(state.owned_partitions, Some(initial_assignment));
             assert_eq!(state.assignment_version, 0);
+            assert_eq!(
+                state.heartbeat_interval,
+                std::time::Duration::from_millis(2_500)
+            );
         }
 
         let updated_assignment = vec![ConsumerGroupHeartbeatTopicPartitions {
