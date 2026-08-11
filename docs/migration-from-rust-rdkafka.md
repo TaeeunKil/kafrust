@@ -257,7 +257,7 @@ See [Admin API](admin-api.md) for typed request and response examples.
 | --- | --- |
 | Tokio producer with keys, values, headers, batching, or buffered delivery | Candidate |
 | Gzip, Snappy, LZ4, or Zstd production | Candidate on verified broker profiles |
-| Idempotent producer | Candidate with workload-specific failure testing |
+| Idempotent producer | Candidate; broker-stop recovery is live-verified on the documented three-broker profile, but qualify target-specific ambiguous, fencing, and throughput failures |
 | Direct assigned-partition consumer | Candidate |
 | Classic range-assigned consumer group | Candidate with rebalance testing |
 | TLS, SASL/PLAIN, or SASL/SCRAM-SHA-256 | Candidate on documented profiles |

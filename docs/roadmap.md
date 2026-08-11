@@ -909,6 +909,12 @@ Evidence:
   single-record, batch, and buffered producer paths against Kafka 3.7.2 and
   Kafka 4.3.1; all six plaintext, multi-broker, TLS, SASL_PLAINTEXT, and
   SASL_SSL jobs passed.
+- Manual `Live Kafka Smoke` run
+  [`31495298593`](https://github.com/TaeeunKil/kafrust/actions/runs/31495298593)
+  passed idempotent producer recovery through the three-broker broker-stop
+  window. The failover example keeps idempotence enabled for both sends and
+  completed with all 11 plaintext, secured, multi-broker, ACL, and KIP-848
+  jobs green.
 
 ## M18 Transactions And Read-Committed Consumers
 
