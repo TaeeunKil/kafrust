@@ -370,6 +370,14 @@ impl ConsumerGroupConfig {
         self,
         owned_partitions: Vec<ConsumerProtocolTopicAssignment>,
     ) -> Result<ConsumerGroup> {
+        self.join_with_member_id(owned_partitions, None).await
+    }
+
+    async fn join_with_member_id(
+        self,
+        owned_partitions: Vec<ConsumerProtocolTopicAssignment>,
+        member_id: Option<String>,
+    ) -> Result<ConsumerGroup> {
         if self.topics.is_empty() {
             return Err(Error::Unsupported("consumer group without subscriptions"));
         }
@@ -414,13 +422,15 @@ impl ConsumerGroupConfig {
             name: self.assignment_strategy.protocol_name().to_owned(),
             metadata: subscription,
         }];
+        let is_rejoin = member_id.is_some();
+        let member_id = member_id.unwrap_or_default();
         let joined = if let Some(group_instance_id) = &self.group_instance_id {
             let response = coordinator_client
                 .join_group_v5(
                     self.group_id.clone(),
                     self.session_timeout_ms,
                     self.rebalance_timeout_ms,
-                    "",
+                    member_id,
                     Some(group_instance_id.clone()),
                     PROTOCOL_TYPE,
                     protocols,
@@ -447,7 +457,7 @@ impl ConsumerGroupConfig {
                     self.group_id.clone(),
                     self.session_timeout_ms,
                     self.rebalance_timeout_ms,
-                    "",
+                    member_id,
                     PROTOCOL_TYPE,
                     protocols,
                 )
@@ -502,7 +512,12 @@ impl ConsumerGroupConfig {
         let assignment = ConsumerProtocolAssignmentV0::decode(&synced.assignment)?;
         let cooperative_rejoin_required = self.assignment_strategy
             == ConsumerGroupAssignmentStrategy::CooperativeSticky
-            && owned_partitions_require_rejoin(&owned_partitions, &assignment);
+            && cooperative_rejoin_required_for_assignment(
+                &joined.members,
+                &owned_partitions,
+                &assignment,
+                is_rejoin,
+            )?;
         let consumer_assignments = assignments_from_protocol(
             &mut coordinator_client,
             &mut bootstrap,
@@ -883,7 +898,7 @@ impl ConsumerGroup {
         let mut joined = self
             .config
             .clone()
-            .join_with_owned_partitions(owned_partitions)
+            .join_with_member_id(owned_partitions, Some(self.member_id.clone()))
             .await?;
         for (topic, partition) in paused {
             if joined.consumer.position(&topic, partition).is_some() {
@@ -1468,6 +1483,52 @@ fn owned_partitions_from_assignments(
         .collect()
 }
 
+fn cooperative_assignment_requires_rejoin(
+    members: &[JoinGroupMember],
+    assignment: &ConsumerProtocolAssignmentV0,
+) -> Result<bool> {
+    let mut owned_partitions = BTreeSet::<(String, i32)>::new();
+    for member in members {
+        let subscription = ConsumerProtocolSubscriptionV1::decode(&member.metadata)?;
+        for owned in subscription.owned_partitions {
+            for partition in owned.partitions {
+                owned_partitions.insert((owned.topic.clone(), partition));
+            }
+        }
+    }
+
+    let assigned_partitions = assignment
+        .assignments
+        .iter()
+        .flat_map(|assigned| {
+            assigned
+                .partitions
+                .iter()
+                .map(move |partition| (assigned.topic.clone(), *partition))
+        })
+        .collect::<BTreeSet<_>>();
+
+    Ok(owned_partitions
+        .iter()
+        .any(|partition| !assigned_partitions.contains(partition)))
+}
+
+fn cooperative_rejoin_required_for_assignment(
+    members: &[JoinGroupMember],
+    owned_partitions: &[ConsumerProtocolTopicAssignment],
+    assignment: &ConsumerProtocolAssignmentV0,
+    is_rejoin: bool,
+) -> Result<bool> {
+    if !members.is_empty() {
+        return cooperative_assignment_requires_rejoin(members, assignment);
+    }
+
+    Ok(
+        owned_partitions_require_rejoin(owned_partitions, assignment)
+            || (!is_rejoin && assignment.assignments.is_empty()),
+    )
+}
+
 fn owned_partitions_require_rejoin(
     owned_partitions: &[ConsumerProtocolTopicAssignment],
     assignment: &ConsumerProtocolAssignmentV0,
@@ -1991,7 +2052,8 @@ mod tests {
     use std::collections::BTreeMap;
 
     use super::{
-        assignments_for_strategy, committed_offset, cooperative_sticky_assignments,
+        assignments_for_strategy, committed_offset, cooperative_assignment_requires_rejoin,
+        cooperative_rejoin_required_for_assignment, cooperative_sticky_assignments,
         leave_group_response_error, list_offset, list_offsets_topics, offset_commit_response_error,
         offset_commit_topics, offset_commit_topics_v7, offset_fetch_topics, range_assignments,
         round_robin_assignments, should_rejoin_after_background_heartbeat, should_rejoin_group,
@@ -2240,6 +2302,62 @@ mod tests {
         let member_b = decode_assignment(&assignments[1].assignment);
         assert_eq!(member_a.assignments[0].partitions, vec![0, 2]);
         assert_eq!(member_b.assignments[0].partitions, vec![1, 3]);
+    }
+
+    #[test]
+    fn requests_cooperative_rejoin_for_staged_transfer() {
+        let members = vec![
+            cooperative_member(
+                "member-a",
+                &["orders"],
+                vec![ConsumerProtocolTopicAssignment {
+                    topic: "orders".to_owned(),
+                    partitions: vec![0, 1, 2, 3],
+                }],
+            ),
+            cooperative_member("member-b", &["orders"], Vec::new()),
+        ];
+        let assignment = ConsumerProtocolAssignmentV0 {
+            assignments: vec![ConsumerProtocolTopicAssignment {
+                topic: "orders".to_owned(),
+                partitions: vec![0, 2],
+            }],
+            user_data: None,
+        };
+
+        assert!(cooperative_assignment_requires_rejoin(&members, &assignment).unwrap());
+    }
+
+    #[test]
+    fn does_not_request_cooperative_rejoin_after_member_loss() {
+        let members = vec![cooperative_member(
+            "member-a",
+            &["orders"],
+            vec![ConsumerProtocolTopicAssignment {
+                topic: "orders".to_owned(),
+                partitions: vec![0],
+            }],
+        )];
+        let assignment = ConsumerProtocolAssignmentV0 {
+            assignments: vec![ConsumerProtocolTopicAssignment {
+                topic: "orders".to_owned(),
+                partitions: vec![0, 1],
+            }],
+            user_data: None,
+        };
+
+        assert!(!cooperative_assignment_requires_rejoin(&members, &assignment).unwrap());
+    }
+
+    #[test]
+    fn requests_one_rejoin_for_new_non_leader_with_empty_assignment() {
+        let assignment = ConsumerProtocolAssignmentV0 {
+            assignments: Vec::new(),
+            user_data: None,
+        };
+
+        assert!(cooperative_rejoin_required_for_assignment(&[], &[], &assignment, false,).unwrap());
+        assert!(!cooperative_rejoin_required_for_assignment(&[], &[], &assignment, true,).unwrap());
     }
 
     #[test]
