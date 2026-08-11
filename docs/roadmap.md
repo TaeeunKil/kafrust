@@ -1334,3 +1334,9 @@ Implemented evidence:
   verification steps passed, and a fresh external project compiled the
   published client with its default and `tls` features while exercising the
   public configuration and producer-record builders.
+- Release `v0.2.4` published `kafrust-protocol` before `kafrust`; both package
+  dry-runs and uploads passed. The exact docs.rs pages for both crates return
+  HTTP 200 and a fresh external project compiled the published client with
+  default and `tls` features, plus `RUSTDOCFLAGS=-D warnings`, on the project
+  MSRV Rust 1.81 toolchain. The current live qualification is
+  [`31499359717`](https://github.com/TaeeunKil/kafrust/actions/runs/31499359717).

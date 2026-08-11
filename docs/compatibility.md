@@ -121,6 +121,10 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
   [`31499359717`](https://github.com/TaeeunKil/kafrust/actions/runs/31499359717).
 - Direct consumer sequential fetches reuse one partition-leader connection;
   the focused injected-broker test covers two Fetch requests on one socket.
+- Release `v0.2.4` published both crates after protocol-first dry-run and
+  upload verification. The exact docs.rs pages for `kafrust` and
+  `kafrust-protocol` return HTTP 200, and a fresh external project compiled
+  the published client with default and `tls` features on Rust 1.81.
 - Kafka-compatible Murmur2 routing for keyed records without an explicit
   partition. Manual run `30066328105` verified key-derived routing and
   fetch-back by partition and offset across the three-broker Kafka 3.7.2
