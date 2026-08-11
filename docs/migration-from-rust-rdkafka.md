@@ -267,7 +267,7 @@ See [Admin API](admin-api.md) for typed request and response examples.
 | Non-Tokio runtime or synchronous client | Blocked |
 | Custom partitioner or rebalance callback | Blocked |
 | `cooperative-sticky` assignor and consumer group protocol selection | Candidate for protocol and initial staged assignment; live multi-member transfer and failure qualification pending |
-| KIP-848 consumer group protocol (`ConsumerGroupHeartbeat`) | High-level foreground and state-sharing background paths are implemented; qualify Kafka 4.x broker-side assignment, rejoin, offset, and failure behavior before production migration |
+| KIP-848 consumer group protocol (`ConsumerGroupHeartbeat`) | Candidate on the verified Kafka 4.3.1 PLAINTEXT profile, including assignment, foreground/background heartbeat, rejoin, OffsetCommit v9, and leave; qualify target broker and failure workloads before production migration |
 | Full librdkafka config passthrough | Blocked by design |
 | ACL describe/create/delete with an authorizer-enabled broker | Verified on Kafka 3.7.2; qualify target permissions and policy |
 | Client quota describe/alter | Verified on Kafka 3.7.2 StandardAuthorizer; qualify target permissions and quota policy |

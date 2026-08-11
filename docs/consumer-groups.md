@@ -105,8 +105,9 @@ response, the heartbeat task shares member epoch and assignment state with the
 owning group handle. Updated assignments are applied by the foreground group
 handle, while a `null` assignment response preserves the current assignment.
 The session token changes on rejoin so an older heartbeat task is stopped before
-it can send requests for the new member epoch. No live Kafka 4.x compatibility
-claim is made until the dedicated smoke profile passes.
+it can send requests for the new member epoch. Kafka 4.x compatibility is
+scoped to the verified Kafka 4.3.1 profile documented in
+`docs/compatibility.md`.
 
 ## Offset Reset
 
@@ -176,8 +177,9 @@ replaces it for the current member and generation.
 Call `ConsumerGroupHeartbeat::try_wait` to observe early task completion without polling. Call `ConsumerGroupHeartbeat::stop` to shut the task down and observe any broker error returned by the task.
 
 The `consumer_group_heartbeat_rejoin` example starts two members concurrently
-to force a classic-group rebalance and verifies that the first member's mutable
-heartbeat handle is replaced with its new member and generation identity.
+to force a group rebalance and verifies that the first member's mutable
+heartbeat handle tracks the new member epoch. The Kafka 4.3.1 KIP-848 version
+of this scenario is live-verified in `Live Kafka Smoke` run `31492612082`.
 
 ## Leaving
 
@@ -190,6 +192,10 @@ calling `leave`.
 ## Offset Commits
 
 `ConsumerGroup::commit_offsets` commits the current next offsets for assigned partitions. If Kafka reports a rejoinable generation, member, rebalance, or coordinator error, or if the coordinator request fails with I/O or timeout, `commit_offsets` rejoins the group and returns the original commit error instead of retrying the old assignment offsets under the new generation. After that, callers should poll the refreshed assignment state before deciding whether to commit again.
+
+KIP-848 groups use OffsetCommit v9, including flexible request/response
+encoding and the member epoch in `GenerationIdOrMemberEpoch`. Classic groups
+retain the existing v2/v7 routing.
 
 Current implementation status:
 

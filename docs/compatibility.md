@@ -5,8 +5,9 @@ kafrust compatibility claims are scoped to behavior that has been verified again
 The KIP-848 `ConsumerGroupHeartbeat v0` wire types, Metadata v12 topic UUID
 mapping, and high-level foreground group path are implemented and covered by
 focused tests. The classic and KIP-848 paths are separate selections through
-`ConsumerGroupProtocol`; no Kafka 4.x KIP-848 compatibility claim is made
-until the dedicated live smoke profile passes.
+`ConsumerGroupProtocol`. The dedicated Kafka 4.3.1 KIP-848 live profile also
+passes join, assignment, foreground/background heartbeat, v9 offset commit,
+rejoin, and graceful leave behavior.
 
 ## Current Compatibility Claim
 
@@ -24,6 +25,7 @@ The `0.2.x` alpha line is verified against Apache Kafka 3.7.2, 3.8.1, 3.9.1, and
 | Apache Kafka 3.8.1 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, manual run `30067372344` on 2026-07-24 | Passing |
 | Apache Kafka 3.9.1 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, manual run `30067372344` on 2026-07-24 | Passing |
 | Apache Kafka 4.3.1 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, manual run `30067372344` on 2026-07-24 | Passing |
+| Apache Kafka 4.3.1 | single-node KRaft | KIP-848 consumer protocol over PLAINTEXT | [`Live Kafka Smoke`, run `31492612082`](https://github.com/TaeeunKil/kafrust/actions/runs/31492612082) on 2026-08-11 | Passing |
 | Apache Kafka 3.7.2 | single-node KRaft with StandardAuthorizer | PLAINTEXT ACL and client-quota admin | `Live Kafka Smoke` ACL authorizer job, manual run `31459874329` on 2026-08-11 | Passing |
 | Apache Kafka 3.7.2 | single-node KRaft | SASL_SSL SCRAM credential administration | `Live Kafka Smoke` SASL_SSL SCRAM job, manual run `31461980967` on 2026-08-11 | Passing |
 | Apache Kafka 3.7.2 | three-broker KRaft | controller-routed partition reassignment | `Live Kafka Smoke` multi-broker job, manual run `31462962605` on 2026-08-11 | Passing |
@@ -154,6 +156,11 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
   tests and by the plaintext single-node and multi-broker live smoke profiles.
 - Direct consumer fetch from an assigned topic partition using Fetch v4 response decoding. The v4 path is required because Kafka 4.x no longer accepts Fetch v2.
 - Consumer group join, sync, heartbeat, poll, and offset commit through the alpha classic consumer group path with range assignment.
+- KIP-848 consumer groups through `ConsumerGroupHeartbeat v0`, Metadata v12
+  topic UUID assignment, member-epoch foreground/background heartbeats,
+  OffsetCommit v9, rejoin after concurrent membership, and explicit leave.
+  The dedicated Kafka 4.3.1 profile passed this path in
+  [`Live Kafka Smoke` run `31492612082`](https://github.com/TaeeunKil/kafrust/actions/runs/31492612082).
 - Consumer group assignments without committed offsets resolve
   `OffsetResetPolicy::Earliest` or `Latest` from the partition leader. Manual
   `Live Kafka Smoke` run `30229718813` passed both policies on Kafka 3.7.2,
