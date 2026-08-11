@@ -1211,6 +1211,9 @@ Implemented evidence:
   [`31496965137`](https://github.com/TaeeunKil/kafrust/actions/runs/31496965137)
   passed all 11 broker, security, ACL, KIP-848, and multi-broker failover jobs
   after this change.
+- Direct consumer fetch and watermark paths reuse a successful partition-leader
+  `Client` by broker address and evict it on request failure. A focused
+  injected-broker test verifies two sequential Fetch requests on one socket.
 - Producer records without an explicit partition use Kafka-compatible Murmur2
   routing when a key is present, preserving standard-client key affinity.
 - Keyless producer records use per-topic batch-sticky round-robin routing.
