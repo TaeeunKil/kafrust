@@ -1320,3 +1320,8 @@ Implemented evidence:
   broker versions, TLS, SASL_PLAINTEXT, SASL_SSL/SCRAM, ACL authorizer,
   compression, idempotent, transactional, `read_committed`, admin,
   consumer-group, and `acks=0` smoke paths.
+- Release `v0.2.3` published `kafrust-protocol` before `kafrust` so the
+  packaged client resolves the matching protocol crate. Both package
+  verification steps passed, and a fresh external project compiled the
+  published client with its default and `tls` features while exercising the
+  public configuration and producer-record builders.
