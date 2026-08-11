@@ -118,7 +118,8 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
 - Full live smoke rerun after the leader connection reuse and transient
   classic-group JoinGroup retry changes passed all 11 broker, security, ACL,
   KIP-848, and multi-broker failover jobs in
-  [`31499359717`](https://github.com/TaeeunKil/kafrust/actions/runs/31499359717).
+  [`31500606310`](https://github.com/TaeeunKil/kafrust/actions/runs/31500606310)
+  on the merged `main` branch.
 - Direct consumer sequential fetches reuse one partition-leader connection;
   the focused injected-broker test covers two Fetch requests on one socket.
 - Release `v0.2.4` published both crates after protocol-first dry-run and

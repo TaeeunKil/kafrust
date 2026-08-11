@@ -1217,9 +1217,9 @@ Implemented evidence:
 - Classic consumer-group JoinGroup retries transient coordinator and membership
   errors; an `UNKNOWN_MEMBER_ID` response clears the stale member id before the
   next attempt. Live smoke run
-  [`31499359717`](https://github.com/TaeeunKil/kafrust/actions/runs/31499359717)
+  [`31500606310`](https://github.com/TaeeunKil/kafrust/actions/runs/31500606310)
   passed all 11 broker, security, ACL, KIP-848, and multi-broker failover jobs
-  after these runtime changes.
+  after these runtime changes on the merged `main` branch.
 - Producer records without an explicit partition use Kafka-compatible Murmur2
   routing when a key is present, preserving standard-client key affinity.
 - Keyless producer records use per-topic batch-sticky round-robin routing.
@@ -1339,4 +1339,5 @@ Implemented evidence:
   HTTP 200 and a fresh external project compiled the published client with
   default and `tls` features, plus `RUSTDOCFLAGS=-D warnings`, on the project
   MSRV Rust 1.81 toolchain. The current live qualification is
-  [`31499359717`](https://github.com/TaeeunKil/kafrust/actions/runs/31499359717).
+  [`31500606310`](https://github.com/TaeeunKil/kafrust/actions/runs/31500606310)
+  on the merged `main` branch.
