@@ -112,6 +112,11 @@ Use `send_batch_report` when one call spans topics or partitions and the
 application must preserve per-record failures. Do not translate it to a single
 all-or-nothing error.
 
+The producer keeps authenticated leader connections and negotiated ApiVersions
+capabilities for sequential sends to the same broker. A transport or protocol
+failure evicts that connection before retry, so applications do not need to
+implement connection recycling around ordinary producer retries.
+
 ## Consumer Group
 
 Typical rust-rdkafka:

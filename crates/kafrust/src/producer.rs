@@ -388,6 +388,7 @@ pub struct Producer {
     config: ProducerConfig,
     metadata_cache: BTreeMap<String, MetadataResponseV1>,
     keyless_partition_indexes: BTreeMap<String, usize>,
+    broker_clients: BTreeMap<String, Client>,
     idempotent_state: Option<IdempotentProducerState>,
     transaction_state: Option<TransactionState>,
 }
@@ -1866,274 +1867,282 @@ impl Producer {
             "resolved produce batch leader"
         );
 
-        let mut leader_client = self
-            .config
-            .client
-            .connect_broker(key.broker_addr.clone())
-            .await?;
-        let api_versions = leader_client
-            .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
-            .await?;
-        if api_versions.error_code != 0 {
-            return Err(self.config.client.broker_error(
-                api_versions.error_code,
-                format!("api versions for produce {}-{}", key.topic, key.partition),
-            ));
-        }
+        let mut leader_client = self.connect_or_reuse_broker(&key.broker_addr).await?;
+        let result = async {
+            let api_versions = leader_client
+                .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
+                .await?;
+            if api_versions.error_code != 0 {
+                return Err(self.config.client.broker_error(
+                    api_versions.error_code,
+                    format!("api versions for produce {}-{}", key.topic, key.partition),
+                ));
+            }
 
-        let produce_version =
-            select_produce_batch_version(&api_versions, records, self.config.compression)?;
-        if self.idempotent_state.is_some() && produce_version == ProduceVersion::V2 {
-            return Err(Error::Unsupported(
-                "idempotent producer requires Produce API v3 or newer",
-            ));
-        }
-        debug!(
-            topic = key.topic.as_str(),
-            partition = key.partition,
-            produce_version = ?produce_version,
-            record_count = records.len(),
-            "selected produce batch api version"
-        );
+            let produce_version =
+                select_produce_batch_version(&api_versions, records, self.config.compression)?;
+            if self.idempotent_state.is_some() && produce_version == ProduceVersion::V2 {
+                return Err(Error::Unsupported(
+                    "idempotent producer requires Produce API v3 or newer",
+                ));
+            }
+            debug!(
+                topic = key.topic.as_str(),
+                partition = key.partition,
+                produce_version = ?produce_version,
+                record_count = records.len(),
+                "selected produce batch api version"
+            );
 
-        let chunks = batch_record_chunks(
-            records,
-            self.config.max_records_per_batch,
-            self.config.max_batch_bytes,
-            produce_version,
-            self.config.compression,
-        )?;
-        let transactional_id = self
-            .transaction_state
-            .as_ref()
-            .map(|state| state.transactional_id.clone());
-        let mut output = Vec::with_capacity(records.len());
-        for (chunk_index, records) in chunks.iter().copied().enumerate() {
-            let identity = sequence_tracker.identity_for_chunk(
-                self.idempotent_state.as_ref(),
-                key,
+            let chunks = batch_record_chunks(
                 records,
+                self.config.max_records_per_batch,
+                self.config.max_batch_bytes,
+                produce_version,
+                self.config.compression,
             )?;
-            if self.config.acks == Acks::None {
-                match produce_version {
-                    ProduceVersion::V7 => {
-                        leader_client
-                            .produce_v7_no_response(
-                                transactional_id.clone(),
-                                self.config.acks.as_i16(),
-                                30_000,
-                                vec![ProduceTopicV3 {
-                                    name: key.topic.clone(),
-                                    partitions: vec![ProducePartitionV3 {
-                                        partition_index: key.partition,
-                                        compression: self
-                                            .config
-                                            .compression
-                                            .as_record_batch_compression(),
-                                        identity,
-                                        records: records
-                                            .iter()
-                                            .map(|record| {
-                                                record_batch_message(
-                                                    &record.record.record,
-                                                    record.record.timestamp_ms,
-                                                )
-                                            })
-                                            .collect(),
+            let transactional_id = self
+                .transaction_state
+                .as_ref()
+                .map(|state| state.transactional_id.clone());
+            let mut output = Vec::with_capacity(records.len());
+            for (chunk_index, records) in chunks.iter().copied().enumerate() {
+                let identity = sequence_tracker.identity_for_chunk(
+                    self.idempotent_state.as_ref(),
+                    key,
+                    records,
+                )?;
+                if self.config.acks == Acks::None {
+                    match produce_version {
+                        ProduceVersion::V7 => {
+                            leader_client
+                                .produce_v7_no_response(
+                                    transactional_id.clone(),
+                                    self.config.acks.as_i16(),
+                                    30_000,
+                                    vec![ProduceTopicV3 {
+                                        name: key.topic.clone(),
+                                        partitions: vec![ProducePartitionV3 {
+                                            partition_index: key.partition,
+                                            compression: self
+                                                .config
+                                                .compression
+                                                .as_record_batch_compression(),
+                                            identity,
+                                            records: records
+                                                .iter()
+                                                .map(|record| {
+                                                    record_batch_message(
+                                                        &record.record.record,
+                                                        record.record.timestamp_ms,
+                                                    )
+                                                })
+                                                .collect(),
+                                        }],
                                     }],
-                                }],
-                            )
-                            .await?;
-                    }
-                    ProduceVersion::V3 => {
-                        leader_client
-                            .produce_v3_no_response(
-                                transactional_id.clone(),
-                                self.config.acks.as_i16(),
-                                30_000,
-                                vec![ProduceTopicV3 {
-                                    name: key.topic.clone(),
-                                    partitions: vec![ProducePartitionV3 {
-                                        partition_index: key.partition,
-                                        compression: self
-                                            .config
-                                            .compression
-                                            .as_record_batch_compression(),
-                                        identity,
-                                        records: records
-                                            .iter()
-                                            .map(|record| {
-                                                record_batch_message(
-                                                    &record.record.record,
-                                                    record.record.timestamp_ms,
-                                                )
-                                            })
-                                            .collect(),
+                                )
+                                .await?;
+                        }
+                        ProduceVersion::V3 => {
+                            leader_client
+                                .produce_v3_no_response(
+                                    transactional_id.clone(),
+                                    self.config.acks.as_i16(),
+                                    30_000,
+                                    vec![ProduceTopicV3 {
+                                        name: key.topic.clone(),
+                                        partitions: vec![ProducePartitionV3 {
+                                            partition_index: key.partition,
+                                            compression: self
+                                                .config
+                                                .compression
+                                                .as_record_batch_compression(),
+                                            identity,
+                                            records: records
+                                                .iter()
+                                                .map(|record| {
+                                                    record_batch_message(
+                                                        &record.record.record,
+                                                        record.record.timestamp_ms,
+                                                    )
+                                                })
+                                                .collect(),
+                                        }],
                                     }],
-                                }],
-                            )
-                            .await?;
-                    }
-                    ProduceVersion::V2 => {
-                        leader_client
-                            .produce_v2_no_response(
-                                self.config.acks.as_i16(),
-                                30_000,
-                                vec![ProduceTopicV2 {
-                                    name: key.topic.clone(),
-                                    partitions: vec![ProducePartitionV2 {
-                                        partition_index: key.partition,
-                                        records: records
-                                            .iter()
-                                            .map(|record| {
-                                                message_set_message(
-                                                    &record.record.record,
-                                                    record.record.timestamp_ms,
-                                                )
-                                            })
-                                            .collect(),
+                                )
+                                .await?;
+                        }
+                        ProduceVersion::V2 => {
+                            leader_client
+                                .produce_v2_no_response(
+                                    self.config.acks.as_i16(),
+                                    30_000,
+                                    vec![ProduceTopicV2 {
+                                        name: key.topic.clone(),
+                                        partitions: vec![ProducePartitionV2 {
+                                            partition_index: key.partition,
+                                            records: records
+                                                .iter()
+                                                .map(|record| {
+                                                    message_set_message(
+                                                        &record.record.record,
+                                                        record.record.timestamp_ms,
+                                                    )
+                                                })
+                                                .collect(),
+                                        }],
                                     }],
-                                }],
-                            )
-                            .await?;
+                                )
+                                .await?;
+                        }
                     }
+                    self.config.client.record_produce_batch(records.len());
+                    output.extend(batch_no_ack_outcomes(key, records));
+                    continue;
                 }
-                self.config.client.record_produce_batch(records.len());
-                output.extend(batch_no_ack_outcomes(key, records));
-                continue;
-            }
-            let response = match produce_version {
-                ProduceVersion::V7 => ProduceResponse::V7(
-                    leader_client
-                        .produce_v7(
-                            transactional_id.clone(),
-                            self.config.acks.as_i16(),
-                            30_000,
-                            vec![ProduceTopicV3 {
-                                name: key.topic.clone(),
-                                partitions: vec![ProducePartitionV3 {
-                                    partition_index: key.partition,
-                                    compression: self
-                                        .config
-                                        .compression
-                                        .as_record_batch_compression(),
-                                    identity,
-                                    records: records
-                                        .iter()
-                                        .map(|record| {
-                                            record_batch_message(
-                                                &record.record.record,
-                                                record.record.timestamp_ms,
-                                            )
-                                        })
-                                        .collect(),
+                let response = match produce_version {
+                    ProduceVersion::V7 => ProduceResponse::V7(
+                        leader_client
+                            .produce_v7(
+                                transactional_id.clone(),
+                                self.config.acks.as_i16(),
+                                30_000,
+                                vec![ProduceTopicV3 {
+                                    name: key.topic.clone(),
+                                    partitions: vec![ProducePartitionV3 {
+                                        partition_index: key.partition,
+                                        compression: self
+                                            .config
+                                            .compression
+                                            .as_record_batch_compression(),
+                                        identity,
+                                        records: records
+                                            .iter()
+                                            .map(|record| {
+                                                record_batch_message(
+                                                    &record.record.record,
+                                                    record.record.timestamp_ms,
+                                                )
+                                            })
+                                            .collect(),
+                                    }],
                                 }],
-                            }],
-                        )
-                        .await?,
-                ),
-                ProduceVersion::V3 => ProduceResponse::V2(
-                    leader_client
-                        .produce_v3(
-                            transactional_id.clone(),
-                            self.config.acks.as_i16(),
-                            30_000,
-                            vec![ProduceTopicV3 {
-                                name: key.topic.clone(),
-                                partitions: vec![ProducePartitionV3 {
-                                    partition_index: key.partition,
-                                    compression: self
-                                        .config
-                                        .compression
-                                        .as_record_batch_compression(),
-                                    identity,
-                                    records: records
-                                        .iter()
-                                        .map(|record| {
-                                            record_batch_message(
-                                                &record.record.record,
-                                                record.record.timestamp_ms,
-                                            )
-                                        })
-                                        .collect(),
+                            )
+                            .await?,
+                    ),
+                    ProduceVersion::V3 => ProduceResponse::V2(
+                        leader_client
+                            .produce_v3(
+                                transactional_id.clone(),
+                                self.config.acks.as_i16(),
+                                30_000,
+                                vec![ProduceTopicV3 {
+                                    name: key.topic.clone(),
+                                    partitions: vec![ProducePartitionV3 {
+                                        partition_index: key.partition,
+                                        compression: self
+                                            .config
+                                            .compression
+                                            .as_record_batch_compression(),
+                                        identity,
+                                        records: records
+                                            .iter()
+                                            .map(|record| {
+                                                record_batch_message(
+                                                    &record.record.record,
+                                                    record.record.timestamp_ms,
+                                                )
+                                            })
+                                            .collect(),
+                                    }],
                                 }],
-                            }],
-                        )
-                        .await?,
-                ),
-                ProduceVersion::V2 => ProduceResponse::V2(
-                    leader_client
-                        .produce_one_v2(
-                            self.config.acks.as_i16(),
-                            30_000,
-                            key.topic.clone(),
-                            key.partition,
-                            records
-                                .iter()
-                                .map(|record| {
-                                    message_set_message(
-                                        &record.record.record,
-                                        record.record.timestamp_ms,
-                                    )
-                                })
-                                .collect(),
-                        )
-                        .await?,
-                ),
-            };
-            let partition_response =
-                produce_partition_response(&response, &key.topic, key.partition)?;
-            if partition_response.error_code != 0 {
-                self.config.client.record_broker_error();
-                if self.idempotent_state.is_some() {
-                    match idempotent_produce_error_disposition(partition_response.error_code) {
-                        IdempotentProduceErrorDisposition::Duplicate => {
-                            sequence_tracker.acknowledge_chunk(
-                                self.idempotent_state.as_mut(),
+                            )
+                            .await?,
+                    ),
+                    ProduceVersion::V2 => ProduceResponse::V2(
+                        leader_client
+                            .produce_one_v2(
+                                self.config.acks.as_i16(),
+                                30_000,
+                                key.topic.clone(),
+                                key.partition,
+                                records
+                                    .iter()
+                                    .map(|record| {
+                                        message_set_message(
+                                            &record.record.record,
+                                            record.record.timestamp_ms,
+                                        )
+                                    })
+                                    .collect(),
+                            )
+                            .await?,
+                    ),
+                };
+                let partition_response =
+                    produce_partition_response(&response, &key.topic, key.partition)?;
+                if partition_response.error_code != 0 {
+                    self.config.client.record_broker_error();
+                    if self.idempotent_state.is_some() {
+                        match idempotent_produce_error_disposition(partition_response.error_code) {
+                            IdempotentProduceErrorDisposition::Duplicate => {
+                                sequence_tracker.acknowledge_chunk(
+                                    self.idempotent_state.as_mut(),
+                                    key,
+                                    records,
+                                )?;
+                                self.config.client.record_produce_batch(records.len());
+                                output.extend(batch_duplicate_outcomes(key, records));
+                                continue;
+                            }
+                            IdempotentProduceErrorDisposition::Fatal => {
+                                self.record_idempotent_fatal_error(partition_response.error_code);
+                                return Err(Error::Broker {
+                                    code: partition_response.error_code,
+                                    context: format!("produce {}-{}", key.topic, key.partition),
+                                });
+                            }
+                            IdempotentProduceErrorDisposition::Other => {}
+                        }
+                    }
+                    output.extend(batch_failure_outcomes(
+                        key,
+                        records,
+                        partition_response.error_code,
+                    ));
+                    if self.idempotent_state.is_some() {
+                        for remaining in chunks.iter().skip(chunk_index + 1).copied() {
+                            output.extend(batch_failure_outcomes(
                                 key,
-                                records,
-                            )?;
-                            self.config.client.record_produce_batch(records.len());
-                            output.extend(batch_duplicate_outcomes(key, records));
-                            continue;
+                                remaining,
+                                partition_response.error_code,
+                            ));
                         }
-                        IdempotentProduceErrorDisposition::Fatal => {
-                            self.record_idempotent_fatal_error(partition_response.error_code);
-                            return Err(Error::Broker {
-                                code: partition_response.error_code,
-                                context: format!("produce {}-{}", key.topic, key.partition),
-                            });
-                        }
-                        IdempotentProduceErrorDisposition::Other => {}
+                        break;
                     }
+                } else {
+                    sequence_tracker.acknowledge_chunk(
+                        self.idempotent_state.as_mut(),
+                        key,
+                        records,
+                    )?;
+                    self.config.client.record_produce_batch(records.len());
+                    output.extend(batch_success_outcomes(
+                        key,
+                        records,
+                        partition_response.base_offset,
+                    ));
                 }
-                output.extend(batch_failure_outcomes(
-                    key,
-                    records,
-                    partition_response.error_code,
-                ));
-                if self.idempotent_state.is_some() {
-                    for remaining in chunks.iter().skip(chunk_index + 1).copied() {
-                        output.extend(batch_failure_outcomes(
-                            key,
-                            remaining,
-                            partition_response.error_code,
-                        ));
-                    }
-                    break;
-                }
-            } else {
-                sequence_tracker.acknowledge_chunk(self.idempotent_state.as_mut(), key, records)?;
-                self.config.client.record_produce_batch(records.len());
-                output.extend(batch_success_outcomes(
-                    key,
-                    records,
-                    partition_response.base_offset,
-                ));
             }
-        }
 
-        Ok(output)
+            Ok(output)
+        }
+        .await;
+        if result.is_ok() {
+            self.broker_clients
+                .insert(key.broker_addr.clone(), leader_client);
+        }
+        result
     }
 
     async fn send_with_metadata(
@@ -2156,45 +2165,114 @@ impl Producer {
             "resolved produce leader"
         );
 
-        let mut leader_client = self.config.client.connect_broker(broker_addr).await?;
-        let api_versions = leader_client
-            .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
-            .await?;
-        if api_versions.error_code != 0 {
-            return Err(self.config.client.broker_error(
-                api_versions.error_code,
-                format!("api versions for produce {}-{}", record.topic(), partition),
-            ));
-        }
+        let mut leader_client = self.connect_or_reuse_broker(&broker_addr).await?;
+        let result = async {
+            let api_versions = leader_client
+                .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
+                .await?;
+            if api_versions.error_code != 0 {
+                return Err(self.config.client.broker_error(
+                    api_versions.error_code,
+                    format!("api versions for produce {}-{}", record.topic(), partition),
+                ));
+            }
 
-        let produce_version =
-            select_produce_version(&api_versions, record, self.config.compression)?;
-        if self.idempotent_state.is_some() && produce_version == ProduceVersion::V2 {
-            return Err(Error::Unsupported(
-                "idempotent producer requires Produce API v3 or newer",
-            ));
-        }
-        let identity = self
-            .idempotent_state
-            .as_ref()
-            .map(|state| state.identity(record.topic(), partition))
-            .unwrap_or(RecordBatchIdentity::NON_IDEMPOTENT);
-        let transactional_id = self
-            .transaction_state
-            .as_ref()
-            .map(|state| state.transactional_id.clone());
-        debug!(
-            topic = record.topic(),
-            partition,
-            produce_version = ?produce_version,
-            "selected produce api version"
-        );
+            let produce_version =
+                select_produce_version(&api_versions, record, self.config.compression)?;
+            if self.idempotent_state.is_some() && produce_version == ProduceVersion::V2 {
+                return Err(Error::Unsupported(
+                    "idempotent producer requires Produce API v3 or newer",
+                ));
+            }
+            let identity = self
+                .idempotent_state
+                .as_ref()
+                .map(|state| state.identity(record.topic(), partition))
+                .unwrap_or(RecordBatchIdentity::NON_IDEMPOTENT);
+            let transactional_id = self
+                .transaction_state
+                .as_ref()
+                .map(|state| state.transactional_id.clone());
+            debug!(
+                topic = record.topic(),
+                partition,
+                produce_version = ?produce_version,
+                "selected produce api version"
+            );
 
-        if self.config.acks == Acks::None {
-            match produce_version {
-                ProduceVersion::V7 => {
+            if self.config.acks == Acks::None {
+                match produce_version {
+                    ProduceVersion::V7 => {
+                        leader_client
+                            .produce_v7_no_response(
+                                transactional_id.clone(),
+                                self.config.acks.as_i16(),
+                                30_000,
+                                vec![ProduceTopicV3 {
+                                    name: record.topic().to_owned(),
+                                    partitions: vec![ProducePartitionV3 {
+                                        partition_index: partition,
+                                        compression: self
+                                            .config
+                                            .compression
+                                            .as_record_batch_compression(),
+                                        identity,
+                                        records: vec![record_batch_message(record, timestamp_ms)],
+                                    }],
+                                }],
+                            )
+                            .await?;
+                    }
+                    ProduceVersion::V3 => {
+                        leader_client
+                            .produce_v3_no_response(
+                                transactional_id.clone(),
+                                self.config.acks.as_i16(),
+                                30_000,
+                                vec![ProduceTopicV3 {
+                                    name: record.topic().to_owned(),
+                                    partitions: vec![ProducePartitionV3 {
+                                        partition_index: partition,
+                                        compression: self
+                                            .config
+                                            .compression
+                                            .as_record_batch_compression(),
+                                        identity,
+                                        records: vec![record_batch_message(record, timestamp_ms)],
+                                    }],
+                                }],
+                            )
+                            .await?;
+                    }
+                    ProduceVersion::V2 => {
+                        leader_client
+                            .produce_v2_no_response(
+                                self.config.acks.as_i16(),
+                                30_000,
+                                vec![ProduceTopicV2 {
+                                    name: record.topic().to_owned(),
+                                    partitions: vec![ProducePartitionV2 {
+                                        partition_index: partition,
+                                        records: vec![message_set_message(record, timestamp_ms)],
+                                    }],
+                                }],
+                            )
+                            .await?;
+                    }
+                }
+                self.config.client.record_produce_batch(1);
+                return Ok(RecordMetadata::new(
+                    record.topic(),
+                    partition,
+                    -1,
+                    Some(timestamp),
+                ));
+            }
+
+            let response = match produce_version {
+                ProduceVersion::V7 => ProduceResponse::V7(
                     leader_client
-                        .produce_v7_no_response(
+                        .produce_v7(
                             transactional_id.clone(),
                             self.config.acks.as_i16(),
                             30_000,
@@ -2211,12 +2289,12 @@ impl Producer {
                                 }],
                             }],
                         )
-                        .await?;
-                }
-                ProduceVersion::V3 => {
+                        .await?,
+                ),
+                ProduceVersion::V3 => ProduceResponse::V2(
                     leader_client
-                        .produce_v3_no_response(
-                            transactional_id.clone(),
+                        .produce_v3(
+                            transactional_id,
                             self.config.acks.as_i16(),
                             30_000,
                             vec![ProduceTopicV3 {
@@ -2232,116 +2310,61 @@ impl Producer {
                                 }],
                             }],
                         )
-                        .await?;
-                }
-                ProduceVersion::V2 => {
+                        .await?,
+                ),
+                ProduceVersion::V2 => ProduceResponse::V2(
                     leader_client
-                        .produce_v2_no_response(
+                        .produce_one_v2(
                             self.config.acks.as_i16(),
                             30_000,
-                            vec![ProduceTopicV2 {
-                                name: record.topic().to_owned(),
-                                partitions: vec![ProducePartitionV2 {
-                                    partition_index: partition,
-                                    records: vec![message_set_message(record, timestamp_ms)],
-                                }],
-                            }],
+                            record.topic().to_owned(),
+                            partition,
+                            vec![message_set_message(record, timestamp_ms)],
                         )
-                        .await?;
+                        .await?,
+                ),
+            };
+            let partition_response =
+                produce_partition_response(&response, record.topic(), partition)?;
+            if partition_response.error_code != 0 {
+                self.config.client.record_broker_error();
+                if self.idempotent_state.is_some() {
+                    match idempotent_produce_error_disposition(partition_response.error_code) {
+                        IdempotentProduceErrorDisposition::Duplicate => {
+                            if let Some(state) = &mut self.idempotent_state {
+                                state.acknowledge(record.topic(), partition, 1);
+                            }
+                            self.config.client.record_produce_batch(1);
+                            return Ok(RecordMetadata::new(record.topic(), partition, -1, None));
+                        }
+                        IdempotentProduceErrorDisposition::Fatal => {
+                            self.record_idempotent_fatal_error(partition_response.error_code);
+                        }
+                        IdempotentProduceErrorDisposition::Other => {}
+                    }
                 }
+                return Err(Error::Broker {
+                    code: partition_response.error_code,
+                    context: format!("produce {}-{}", record.topic(), partition),
+                });
+            }
+            if let Some(state) = &mut self.idempotent_state {
+                state.acknowledge(record.topic(), partition, 1);
             }
             self.config.client.record_produce_batch(1);
-            return Ok(RecordMetadata::new(
+
+            Ok(RecordMetadata::new(
                 record.topic(),
                 partition,
-                -1,
+                partition_response.base_offset,
                 Some(timestamp),
-            ));
+            ))
         }
-
-        let response = match produce_version {
-            ProduceVersion::V7 => ProduceResponse::V7(
-                leader_client
-                    .produce_v7(
-                        transactional_id.clone(),
-                        self.config.acks.as_i16(),
-                        30_000,
-                        vec![ProduceTopicV3 {
-                            name: record.topic().to_owned(),
-                            partitions: vec![ProducePartitionV3 {
-                                partition_index: partition,
-                                compression: self.config.compression.as_record_batch_compression(),
-                                identity,
-                                records: vec![record_batch_message(record, timestamp_ms)],
-                            }],
-                        }],
-                    )
-                    .await?,
-            ),
-            ProduceVersion::V3 => ProduceResponse::V2(
-                leader_client
-                    .produce_v3(
-                        transactional_id,
-                        self.config.acks.as_i16(),
-                        30_000,
-                        vec![ProduceTopicV3 {
-                            name: record.topic().to_owned(),
-                            partitions: vec![ProducePartitionV3 {
-                                partition_index: partition,
-                                compression: self.config.compression.as_record_batch_compression(),
-                                identity,
-                                records: vec![record_batch_message(record, timestamp_ms)],
-                            }],
-                        }],
-                    )
-                    .await?,
-            ),
-            ProduceVersion::V2 => ProduceResponse::V2(
-                leader_client
-                    .produce_one_v2(
-                        self.config.acks.as_i16(),
-                        30_000,
-                        record.topic().to_owned(),
-                        partition,
-                        vec![message_set_message(record, timestamp_ms)],
-                    )
-                    .await?,
-            ),
-        };
-        let partition_response = produce_partition_response(&response, record.topic(), partition)?;
-        if partition_response.error_code != 0 {
-            self.config.client.record_broker_error();
-            if self.idempotent_state.is_some() {
-                match idempotent_produce_error_disposition(partition_response.error_code) {
-                    IdempotentProduceErrorDisposition::Duplicate => {
-                        if let Some(state) = &mut self.idempotent_state {
-                            state.acknowledge(record.topic(), partition, 1);
-                        }
-                        self.config.client.record_produce_batch(1);
-                        return Ok(RecordMetadata::new(record.topic(), partition, -1, None));
-                    }
-                    IdempotentProduceErrorDisposition::Fatal => {
-                        self.record_idempotent_fatal_error(partition_response.error_code);
-                    }
-                    IdempotentProduceErrorDisposition::Other => {}
-                }
-            }
-            return Err(Error::Broker {
-                code: partition_response.error_code,
-                context: format!("produce {}-{}", record.topic(), partition),
-            });
+        .await;
+        if result.is_ok() {
+            self.broker_clients.insert(broker_addr, leader_client);
         }
-        if let Some(state) = &mut self.idempotent_state {
-            state.acknowledge(record.topic(), partition, 1);
-        }
-        self.config.client.record_produce_batch(1);
-
-        Ok(RecordMetadata::new(
-            record.topic(),
-            partition,
-            partition_response.base_offset,
-            Some(timestamp),
-        ))
+        result
     }
 
     fn ensure_idempotent_producer_usable(&self) -> Result<()> {
@@ -2355,6 +2378,16 @@ impl Producer {
         if let Some(state) = &mut self.idempotent_state {
             state.record_fatal_error(code);
         }
+    }
+
+    async fn connect_or_reuse_broker(&mut self, broker_addr: &str) -> Result<Client> {
+        if let Some(client) = self.broker_clients.remove(broker_addr) {
+            return Ok(client);
+        }
+        self.config
+            .client
+            .connect_broker(broker_addr.to_owned())
+            .await
     }
 
     fn ensure_transaction_active(&self) -> Result<()> {
@@ -3196,6 +3229,7 @@ impl ProducerConfig {
             config: self,
             metadata_cache: BTreeMap::new(),
             keyless_partition_indexes: BTreeMap::new(),
+            broker_clients: BTreeMap::new(),
             idempotent_state,
             transaction_state,
         })
@@ -4700,6 +4734,7 @@ mod tests {
             config,
             metadata_cache: BTreeMap::new(),
             keyless_partition_indexes: BTreeMap::new(),
+            broker_clients: BTreeMap::new(),
             idempotent_state: Some(IdempotentProducerState::new(42, 3)),
             transaction_state: Some(transaction_state),
         };
@@ -5508,6 +5543,7 @@ mod tests {
             config,
             metadata_cache: BTreeMap::new(),
             keyless_partition_indexes: BTreeMap::new(),
+            broker_clients: BTreeMap::new(),
             idempotent_state: None,
             transaction_state: None,
         };
@@ -5519,6 +5555,62 @@ mod tests {
         assert!(producer.metadata_cache.contains_key("orders"));
         assert_eq!(metrics.snapshot().retries, 1);
         server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn reuses_leader_connection_and_capabilities_for_sequential_sends() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let leader_server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+
+            let versions = read_frame(&mut socket).await;
+            assert_eq!(&versions[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut socket, &api_versions_response_frame(3)).await;
+
+            let first_produce = read_frame(&mut socket).await;
+            assert_eq!(&first_produce[0..4], &[0, 0, 0, 3]);
+            write_frame(&mut socket, &produce_v3_response_frame(0, 0)).await;
+
+            let second_produce = read_frame(&mut socket).await;
+            assert_eq!(&second_produce[0..4], &[0, 0, 0, 3]);
+            write_frame(&mut socket, &produce_v3_response_frame(0, 1)).await;
+        });
+
+        let (client_stream, broker_stream) = tokio::io::duplex(4096);
+        drop(broker_stream);
+        let client = Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-producer-reuse-test".to_owned()),
+            Some(std::time::Duration::from_millis(500)),
+        );
+        let config = ProducerConfig::new([addr.to_string()]).request_timeout_ms(500);
+        let mut metadata_cache = BTreeMap::new();
+        metadata_cache.insert("orders".to_owned(), metadata_fixture_for(addr));
+        let mut producer = Producer {
+            client,
+            config,
+            metadata_cache,
+            keyless_partition_indexes: BTreeMap::new(),
+            broker_clients: BTreeMap::new(),
+            idempotent_state: None,
+            transaction_state: None,
+        };
+
+        let first = producer
+            .send(ProducerRecord::to("orders").partition(0).value("first"))
+            .await
+            .unwrap();
+        assert_eq!(producer.broker_clients.len(), 1);
+        let second = producer
+            .send(ProducerRecord::to("orders").partition(0).value("second"))
+            .await;
+        let second = second.unwrap();
+
+        assert_eq!(first.offset(), 0);
+        assert_eq!(second.offset(), 1);
+        assert_eq!(producer.broker_clients.len(), 1);
+        leader_server.await.unwrap();
     }
 
     #[tokio::test]
@@ -5572,6 +5664,7 @@ mod tests {
             config,
             metadata_cache,
             keyless_partition_indexes: BTreeMap::new(),
+            broker_clients: BTreeMap::new(),
             idempotent_state: Some(IdempotentProducerState::new(42, 3)),
             transaction_state: None,
         };

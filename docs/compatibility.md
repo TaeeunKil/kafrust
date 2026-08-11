@@ -110,6 +110,11 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
   RecordBatch for Gzip, Snappy, and LZ4, and Produce v7 for Zstd. Live run
   `31494820868` passed this producer path across the supported plaintext,
   secured, and three-broker profiles.
+- Sequential producer sends to the same leader reuse one authenticated broker
+  connection and its negotiated capability response; a focused injected-broker
+  test verifies one ApiVersions exchange followed by two Produce requests on
+  one socket. Transport failure eviction remains covered by the ambiguous
+  idempotent retry test.
 - Kafka-compatible Murmur2 routing for keyed records without an explicit
   partition. Manual run `30066328105` verified key-derived routing and
   fetch-back by partition and offset across the three-broker Kafka 3.7.2

@@ -1203,6 +1203,11 @@ Implemented evidence:
   [`31494820868`](https://github.com/TaeeunKil/kafrust/actions/runs/31494820868)
   passed all 11 plaintext, secured, multi-broker, ACL, and KIP-848 jobs on
   2026-08-11.
+- Producer leader sends reuse an authenticated broker `Client` and its cached
+  ApiVersions v3 response for sequential sends to the same broker address.
+  A focused injected-broker test proves one capability handshake followed by
+  two Produce requests on one socket; the existing ambiguous transport test
+  proves failed connections are discarded before retry.
 - Producer records without an explicit partition use Kafka-compatible Murmur2
   routing when a key is present, preserving standard-client key affinity.
 - Keyless producer records use per-topic batch-sticky round-robin routing.
