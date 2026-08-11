@@ -393,8 +393,8 @@ Known limits:
 - SASL/PLAIN authentication is implemented and has completed recorded broker
   roundtrip, producer, direct consumer, and consumer group smoke paths against a
   SASL_PLAINTEXT broker.
-- SASL_SSL and SASL workflows beyond the listed SASL_PLAINTEXT smoke examples
-  are not claimed yet.
+- SASL_SSL with SCRAM-SHA-256 and SCRAM-SHA-512 is verified in the M13 live
+  profile; SASL workflows beyond the listed smoke examples are not claimed yet.
 - SCRAM live smoke and SASL_SSL are owned by M13 Secured Enterprise Connectivity.
 
 Evidence:
@@ -491,8 +491,6 @@ Exit criteria:
 
 Known limits:
 
-- SASL/SCRAM-SHA-512 is implemented and covered by focused tests, but the live
-  broker profile is not claimed yet.
 - SASL mechanisms beyond PLAIN and SCRAM-SHA-256/512 are not implemented.
 
 Evidence:
@@ -523,15 +521,18 @@ Evidence:
   `scram-sha-512`, so live broker profiles can exercise the same entry points
   once SCRAM users are configured.
 - The `Live Kafka Smoke` workflow includes a SASL_SSL SCRAM profile that
-  creates a Kafka SCRAM-SHA-256 user, configures kafrust with
-  `KAFRUST_SECURITY_PROTOCOL=sasl_tls`,
-  `KAFRUST_SASL_MECHANISM=scram-sha-256`, and a DER root certificate, then runs
-  the broker roundtrip, producer, direct consumer, and consumer group smoke
-  paths.
+  creates separate Kafka SCRAM-SHA-256 and SCRAM-SHA-512 credentials, configures
+  kafrust with `KAFRUST_SECURITY_PROTOCOL=sasl_tls`, the selected
+  `KAFRUST_SASL_MECHANISM`, and a DER root certificate, then runs the shared
+  broker roundtrip, producer, consumer, and group smoke paths for both
+  mechanisms.
 - Manual `Live Kafka Smoke` run `27531812308` passed on 2026-06-15 from
   `main`; the plaintext, TLS, SASL_PLAINTEXT, and SASL_SSL SCRAM jobs completed
   broker roundtrip, producer, direct consumer, and consumer group checks against
   Kafka 3.7.2.
+- Manual `Live Kafka Smoke` run `31452872400` passed on 2026-08-11 from
+  `main`; all eight profiles passed, including the SASL_SSL SCRAM-SHA-256 and
+  SCRAM-SHA-512 subpaths against Kafka 3.7.2.
 
 Strategic role:
 
