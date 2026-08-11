@@ -126,6 +126,12 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
   upload verification. The exact docs.rs pages for `kafrust` and
   `kafrust-protocol` return HTTP 200, and a fresh external project compiled
   the published client with default and `tls` features on Rust 1.81.
+- Current `main` performance and recovery evidence includes benchmark run
+  [`31501263160`](https://github.com/TaeeunKil/kafrust/actions/runs/31501263160)
+  and 120-second broker-restart soak run
+  [`31501263268`](https://github.com/TaeeunKil/kafrust/actions/runs/31501263268).
+  The soak processed 6,138,200 records and ended with zero in-flight and
+  buffered records after recovery.
 - Kafka-compatible Murmur2 routing for keyed records without an explicit
   partition. Manual run `30066328105` verified key-derived routing and
   fetch-back by partition and offset across the three-broker Kafka 3.7.2
