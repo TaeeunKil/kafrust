@@ -54,12 +54,14 @@ OAUTHBEARER, ACL administration, multi-broker failover, and KIP-848. The
 Kafka 3.7.2 multi-broker job also passed the in-flight DeleteRecords and
 DescribeProducers leader-stop recovery gates.
 
-The latest complete matrix and rack-aware qualification in
-[`31638178940`](https://github.com/TaeeunKil/kafrust/actions/runs/31638178940)
-passed at commit `41baba7`. Its Kafka 3.7.2 three-broker profile configured
+The latest complete matrix and rack-aware/Produce v9 qualification in
+[`31640494509`](https://github.com/TaeeunKil/kafrust/actions/runs/31640494509)
+passed at commit `be78225`. Its Kafka 3.7.2 three-broker profile configured
 broker racks and Kafka's `RackAwareReplicaSelector`; the direct consumer sent
 Fetch v12 with `client_rack`, fetched records, and observed a preferred replica
-route. The same consumer retains Fetch v11 and Fetch v4 fallback paths.
+route. The single-node profiles also passed the flexible Produce v9
+negotiation gate on Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1. The same consumer
+retains Fetch v11 and Fetch v4 fallback paths.
 This qualifies the documented rack-aware replica-selection path, not every
 possible rack topology or security combination.
 
@@ -333,8 +335,10 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
   batch send, gzip-, Snappy-, LZ4-, and Zstd-compressed batch send, and buffered
   send with `acks=1`. The current path prefers flexible Produce v9 RecordBatch
   on brokers that advertise it, then falls back to Produce v7, v3, or v2.
-  The focused v9 request/response fixtures pass locally; a new live matrix is
-  required before this version-selection path becomes a release qualification.
+  The focused v9 request/response fixtures pass locally, and the complete
+  live matrix passed the explicit v9 negotiation gate on Kafka 3.7.2, 3.8.1,
+  3.9.1, and 4.3.1 in
+  [`31640494509`](https://github.com/TaeeunKil/kafrust/actions/runs/31640494509).
 - Sequential producer sends to the same leader reuse one authenticated broker
   connection and its negotiated capability response; a focused injected-broker
   test verifies one ApiVersions exchange followed by two Produce requests on
@@ -466,7 +470,7 @@ with zero in-flight requests and buffered records.
   `preferred_read_replica` when available;
   focused wire and injected multi-broker routing tests cover this path. The
   Kafka 3.7.2 three-broker rack-aware profile is also live-qualified in
-  [`31638178940`](https://github.com/TaeeunKil/kafrust/actions/runs/31638178940).
+  [`31640494509`](https://github.com/TaeeunKil/kafrust/actions/runs/31640494509).
 - Consumer group join, sync, heartbeat, poll, and offset commit through the alpha classic consumer group path with range assignment.
 - Client-side regex topic subscription resolves Metadata v1 topic names before
   classic or KIP-848 joins and is covered by focused ordering, filtering, and

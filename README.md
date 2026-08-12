@@ -306,7 +306,7 @@ Fetch v12, kafrust sends the rack ID using the flexible Fetch schema and follows
 Fetch v11 and then the existing Fetch v4 leader path when newer versions are
 unavailable. Wire-level and injected multi-broker routing tests cover this path. The Kafka 3.7.2
 three-broker `broker.rack` plus `RackAwareReplicaSelector` profile passed in
-[`Live Kafka Smoke`, run `31638178940`](https://github.com/TaeeunKil/kafrust/actions/runs/31638178940),
+[`Live Kafka Smoke`, run `31640494509`](https://github.com/TaeeunKil/kafrust/actions/runs/31640494509),
 including live Fetch v12 requests and preferred-replica routing.
 
 ### Consumer Group
@@ -416,12 +416,13 @@ Verified paths currently include:
 - The complete 17-job matrix also passed at commit `25d614a` in
   [`31627790408`](https://github.com/TaeeunKil/kafrust/actions/runs/31627790408)
   after the ACL authorizer example added bounded post-create visibility polling.
-- The latest complete 17-job matrix passed at commit `41baba7` in
-  [`31638178940`](https://github.com/TaeeunKil/kafrust/actions/runs/31638178940).
+- The latest complete 17-job matrix passed at commit `be78225` in
+  [`31640494509`](https://github.com/TaeeunKil/kafrust/actions/runs/31640494509).
   It included the Kafka 3.7.2 multi-broker rack-aware Fetch v12
-  replica-selection gate, DeleteRecords and DescribeProducers leader-stop
-  recovery gates, alongside the supported version, security, ACL, failover,
-  and KIP-848 profiles.
+  replica-selection gate, the flexible Produce v9 negotiation gate on Kafka
+  3.7.2, 3.8.1, 3.9.1, and 4.3.1, DeleteRecords and DescribeProducers
+  leader-stop recovery gates, and the supported security, ACL, failover, and
+  KIP-848 profiles.
 
 See [Compatibility](docs/compatibility.md) and
 [Broker Roundtrip](docs/broker-roundtrip.md) for the current evidence.
@@ -465,7 +466,7 @@ See [Compatibility](docs/compatibility.md) and
   Rack-aware client routing prefers flexible Fetch v12, falls back to Fetch v11
   and then Fetch v4, and follows the broker's preferred-replica response. The
   Kafka 3.7.2 three-broker rack-aware profile is live-qualified in
-  [`31638178940`](https://github.com/TaeeunKil/kafrust/actions/runs/31638178940);
+  [`31640494509`](https://github.com/TaeeunKil/kafrust/actions/runs/31640494509);
   this covers replica selection, not every possible rack or security topology.
 - `ProducerConfig::partitioner` supports thread-safe custom routing for records
   without explicit partitions across immediate, batch, and buffered sends.

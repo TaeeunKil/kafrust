@@ -1535,8 +1535,10 @@ Implemented evidence:
 - Producer capability negotiation now prefers flexible Produce v9 for
   RecordBatch sends, including transactional and no-ack paths, while retaining
   Produce v7, v3, and v2 fallbacks. Focused request/response fixtures and
-  producer selection tests cover the new path; live broker qualification is the
-  next release gate.
+  producer selection tests cover the new path. The complete 17-job live matrix
+  passed the explicit v9 negotiation gate on Kafka 3.7.2, 3.8.1, 3.9.1, and
+  4.3.1 in
+  [`31640494509`](https://github.com/TaeeunKil/kafrust/actions/runs/31640494509).
 - Rack-aware direct and group fetches now expose `client_rack` through their
   builders. Connections prefer flexible Fetch v12 through ApiVersions, encode
   the compact/tagged rack-aware request, decode `preferred_read_replica`, and
@@ -1788,3 +1790,7 @@ Implemented evidence:
   It included the Kafka 3.7.2 multi-broker DeleteRecords and DescribeProducers
   leader-stop recovery gates, alongside the supported version, security, ACL,
   failover, and KIP-848 profiles.
+- The latest complete 17-job matrix passed at commit `be78225` in
+  [`31640494509`](https://github.com/TaeeunKil/kafrust/actions/runs/31640494509)
+  after adding the flexible Produce v9 negotiation gate while retaining the
+  rack-aware Fetch v12 and multi-broker recovery gates.

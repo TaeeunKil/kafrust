@@ -278,7 +278,7 @@ rack ID using the flexible schema and follows Kafka's `preferred_read_replica`
 response when supported; Fetch v11 and the existing Fetch v4 leader path remain
 fallbacks. The protocol and injected routing tests pass. The Kafka 3.7.2 three-broker `broker.rack` plus
 `RackAwareReplicaSelector` profile is live-qualified in
-[`31638178940`](https://github.com/TaeeunKil/kafrust/actions/runs/31638178940).
+[`31640494509`](https://github.com/TaeeunKil/kafrust/actions/runs/31640494509).
 
 ## Consumer Group
 
@@ -493,7 +493,7 @@ Verified high-level paths include:
   routing prefers flexible Fetch v12, falls back through Fetch v11 to Fetch v4,
   and follows the preferred-replica response. The three-broker `3.7.2`
   rack-aware profile is live-qualified in
-  [`31638178940`](https://github.com/TaeeunKil/kafrust/actions/runs/31638178940).
+  [`31640494509`](https://github.com/TaeeunKil/kafrust/actions/runs/31640494509).
 - Idempotent single-record, batch, and buffered sends are available through
   `ProducerConfig::enable_idempotence(true)`. Transactional immediate and batch
   sends support explicit begin, commit, and abort.
