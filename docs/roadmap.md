@@ -537,7 +537,7 @@ Evidence:
   configs expose matching builder methods without changing
   `SecurityProtocol`.
 - `ClientConfig` performs SCRAM client-first and client-final
-  `SaslAuthenticate v0` exchanges after `SaslHandshake v1`, verifies the
+  `SaslAuthenticate v1` exchanges after `SaslHandshake v1`, verifies the
   server-final signature, and reports invalid SCRAM responses without exposing
   passwords or raw credentials.
 - Focused tests cover SCRAM-SHA-256 and SCRAM-SHA-512 proof generation,
@@ -553,6 +553,10 @@ Evidence:
 - `OAuthBearerTokenProvider` and the matching `*_provider` builders allow an
   application to retrieve a fresh token for each new broker connection without
   exposing it through `Debug` output.
+- The `SaslAuthenticate v1` response is decoded for all configured SASL
+  mechanisms, and `Client::sasl_session_lifetime_ms` exposes the broker's
+  re-authentication window. Automatic re-authentication and token refresh
+  scheduling remain the responsibility of a future connection-lifecycle layer.
 - The `Live Kafka Smoke` workflow includes a SASL_SSL SCRAM profile that
   creates separate Kafka SCRAM-SHA-256 and SCRAM-SHA-512 credentials, configures
   kafrust with `KAFRUST_SECURITY_PROTOCOL=sasl_tls`, the selected

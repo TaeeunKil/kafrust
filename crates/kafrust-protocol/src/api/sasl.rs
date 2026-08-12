@@ -53,6 +53,28 @@ pub struct SaslAuthenticateRequestV0 {
     pub auth_bytes: Vec<u8>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SaslAuthenticateRequestV1 {
+    pub correlation_id: i32,
+    pub client_id: Option<String>,
+    pub auth_bytes: Vec<u8>,
+}
+
+impl SaslAuthenticateRequestV1 {
+    pub fn encode(&self) -> Result<Vec<u8>> {
+        let mut encoder = Encoder::new();
+        RequestHeader {
+            api_key: SASL_AUTHENTICATE_API_KEY,
+            api_version: 1,
+            correlation_id: self.correlation_id,
+            client_id: self.client_id.clone(),
+        }
+        .encode_v1(&mut encoder)?;
+        encoder.write_bytes(&self.auth_bytes)?;
+        Ok(encoder.into_bytes())
+    }
+}
+
 impl SaslAuthenticateRequestV0 {
     pub fn encode(&self) -> Result<Vec<u8>> {
         let mut encoder = Encoder::new();
@@ -75,6 +97,25 @@ pub struct SaslAuthenticateResponseV0 {
     pub auth_bytes: Vec<u8>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SaslAuthenticateResponseV1 {
+    pub error_code: i16,
+    pub error_message: Option<String>,
+    pub auth_bytes: Vec<u8>,
+    pub session_lifetime_ms: i64,
+}
+
+impl SaslAuthenticateResponseV1 {
+    pub fn decode_body(decoder: &mut Decoder<'_>) -> Result<Self> {
+        Ok(Self {
+            error_code: decoder.read_i16()?,
+            error_message: decoder.read_nullable_string()?,
+            auth_bytes: decoder.read_bytes()?,
+            session_lifetime_ms: decoder.read_i64()?,
+        })
+    }
+}
+
 impl SaslAuthenticateResponseV0 {
     pub fn decode_body(decoder: &mut Decoder<'_>) -> Result<Self> {
         Ok(Self {
@@ -89,8 +130,9 @@ impl SaslAuthenticateResponseV0 {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::{
-        SaslAuthenticateRequestV0, SaslAuthenticateResponseV0, SaslHandshakeRequestV1,
-        SaslHandshakeResponseV1, SASL_AUTHENTICATE_API_KEY, SASL_HANDSHAKE_API_KEY,
+        SaslAuthenticateRequestV0, SaslAuthenticateRequestV1, SaslAuthenticateResponseV0,
+        SaslAuthenticateResponseV1, SaslHandshakeRequestV1, SaslHandshakeResponseV1,
+        SASL_AUTHENTICATE_API_KEY, SASL_HANDSHAKE_API_KEY,
     };
     use crate::codec::Decoder;
 
@@ -168,6 +210,47 @@ mod tests {
         assert_eq!(response.error_code, 0);
         assert_eq!(response.error_message, None);
         assert_eq!(response.auth_bytes, [1, 2]);
+        assert!(decoder.is_empty());
+    }
+
+    #[test]
+    fn encodes_sasl_authenticate_v1_request() {
+        let request = SaslAuthenticateRequestV1 {
+            correlation_id: 9,
+            client_id: Some("kafrust".to_owned()),
+            auth_bytes: b"n,,\x01auth=token\x01\x01".to_vec(),
+        };
+
+        assert_eq!(
+            request.encode().unwrap(),
+            [
+                0, 36, // api key
+                0, 1, // api version
+                0, 0, 0, 9, // correlation id
+                0, 7, b'k', b'a', b'f', b'r', b'u', b's', b't', // client id
+                0, 0, 0, 16, // auth bytes length
+                b'n', b',', b',', 1, b'a', b'u', b't', b'h', b'=', b't', b'o', b'k', b'e', b'n', 1,
+                1,
+            ]
+        );
+    }
+
+    #[test]
+    fn decodes_sasl_authenticate_v1_response() {
+        let bytes = [
+            0, 0, // error code
+            0xff, 0xff, // null error message
+            0, 0, 0, 2, // auth bytes length
+            1, 2, // auth bytes
+            0, 0, 0, 0, 0, 0, 0, 42, // session lifetime ms
+        ];
+        let mut decoder = Decoder::new(&bytes);
+        let response = SaslAuthenticateResponseV1::decode_body(&mut decoder).unwrap();
+
+        assert_eq!(response.error_code, 0);
+        assert_eq!(response.error_message, None);
+        assert_eq!(response.auth_bytes, [1, 2]);
+        assert_eq!(response.session_lifetime_ms, 42);
         assert!(decoder.is_empty());
     }
 }

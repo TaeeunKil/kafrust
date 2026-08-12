@@ -668,7 +668,7 @@ async fn authenticate_sasl_oauthbearer(
 ) -> Result<()> {
     let token = credentials.oauthbearer_token_for_auth().await?;
     let response = client
-        .sasl_authenticate_v0(sasl_oauthbearer_auth_bytes_with_token(credentials, &token)?)
+        .sasl_authenticate_v1(sasl_oauthbearer_auth_bytes_with_token(credentials, &token)?)
         .await?;
     if response.error_code != 0 {
         return Err(client.broker_error(
@@ -686,7 +686,7 @@ async fn authenticate_sasl_plain(
     mechanism: &'static str,
 ) -> Result<()> {
     let response = client
-        .sasl_authenticate_v0(sasl_plain_auth_bytes(credentials))
+        .sasl_authenticate_v1(sasl_plain_auth_bytes(credentials))
         .await?;
     if response.error_code != 0 {
         return Err(client.broker_error(
@@ -708,7 +708,7 @@ async fn authenticate_sasl_scram(
     let client_first = scram::client_first(credentials.username(), &nonce);
 
     let server_first = client
-        .sasl_authenticate_v0(client_first.message.into_bytes())
+        .sasl_authenticate_v1(client_first.message.into_bytes())
         .await?;
     if server_first.error_code != 0 {
         return Err(client.broker_error(
@@ -735,7 +735,7 @@ async fn authenticate_sasl_scram(
     })?;
 
     let server_final = client
-        .sasl_authenticate_v0(client_final.message.into_bytes())
+        .sasl_authenticate_v1(client_final.message.into_bytes())
         .await?;
     if server_final.error_code != 0 {
         return Err(client.broker_error(
@@ -1148,7 +1148,7 @@ mod tests {
                 authenticate,
                 [
                     0, 36, // api key
-                    0, 0, // api version
+                    0, 1, // api version
                     0, 0, 0, 2, // correlation id
                     0xff, 0xff, // null client id
                     0, 0, 0, 13, // auth bytes length
@@ -1162,6 +1162,7 @@ mod tests {
                     0, 0, // error code
                     0xff, 0xff, // null error message
                     0, 0, 0, 0, // auth bytes
+                    0, 0, 0, 0, 0, 0, 0, 0, // session lifetime ms
                 ],
             )
             .await;
@@ -1326,6 +1327,7 @@ mod tests {
                     0, 58, // error code
                     0, 6, b's', b'e', b'c', b'r', b'e', b't', // error message
                     0, 0, 0, 0, // auth bytes
+                    0, 0, 0, 0, 0, 0, 0, 0, // session lifetime ms
                 ],
             )
             .await;
@@ -1494,7 +1496,7 @@ mod tests {
 
     fn sasl_authenticate_auth_bytes(frame: &[u8], correlation_id: i32) -> &[u8] {
         assert_eq!(&frame[0..2], &[0, 36]);
-        assert_eq!(&frame[2..4], &[0, 0]);
+        assert_eq!(&frame[2..4], &[0, 1]);
         assert_eq!(&frame[4..8], &correlation_id.to_be_bytes());
         assert_eq!(&frame[8..10], &[0xff, 0xff]);
         let auth_len = i32::from_be_bytes(frame[10..14].try_into().unwrap());
@@ -1514,6 +1516,7 @@ mod tests {
         frame.extend_from_slice(&(-1i16).to_be_bytes());
         frame.extend_from_slice(&(auth_bytes.len() as i32).to_be_bytes());
         frame.extend_from_slice(auth_bytes);
+        frame.extend_from_slice(&0i64.to_be_bytes());
         write_frame(socket, &frame).await;
     }
 

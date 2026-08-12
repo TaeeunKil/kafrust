@@ -92,7 +92,7 @@ use kafrust_protocol::api::produce::{
     RecordBatchIdentity, RecordBatchMessage,
 };
 use kafrust_protocol::api::sasl::{
-    SaslAuthenticateRequestV0, SaslAuthenticateResponseV0, SaslHandshakeRequestV1,
+    SaslAuthenticateRequestV1, SaslAuthenticateResponseV1, SaslHandshakeRequestV1,
     SaslHandshakeResponseV1,
 };
 use kafrust_protocol::api::sync_group::{
@@ -126,6 +126,7 @@ pub struct Client {
     decode_limits: DecodeLimits,
     metrics: ClientMetrics,
     api_versions_v3_cache: Option<ApiVersionsResponseV3>,
+    sasl_session_lifetime_ms: Option<i64>,
 }
 
 pub(crate) trait BrokerStream: AsyncRead + AsyncWrite + Unpin + Send + Sync {}
@@ -206,6 +207,7 @@ impl Client {
             decode_limits,
             metrics,
             api_versions_v3_cache: None,
+            sasl_session_lifetime_ms: None,
         }
     }
 
@@ -287,6 +289,16 @@ impl Client {
         self.api_versions_v3_cache = None;
     }
 
+    /// Returns the broker-advertised SASL session lifetime in milliseconds.
+    ///
+    /// A non-zero value indicates when the broker expects re-authentication on
+    /// this connection. The client currently exposes the value for scheduling
+    /// by a higher-level owner; it does not run a detached re-authentication
+    /// task automatically.
+    pub fn sasl_session_lifetime_ms(&self) -> Option<i64> {
+        self.sasl_session_lifetime_ms
+    }
+
     pub(crate) async fn sasl_handshake_v1(
         &mut self,
         mechanism: impl Into<String>,
@@ -302,11 +314,11 @@ impl Client {
         Ok(SaslHandshakeResponseV1::decode_body(&mut decoder)?)
     }
 
-    pub(crate) async fn sasl_authenticate_v0(
+    pub(crate) async fn sasl_authenticate_v1(
         &mut self,
         auth_bytes: Vec<u8>,
-    ) -> Result<SaslAuthenticateResponseV0> {
-        let request = SaslAuthenticateRequestV0 {
+    ) -> Result<SaslAuthenticateResponseV1> {
+        let request = SaslAuthenticateRequestV1 {
             correlation_id: self.next_correlation_id(),
             client_id: self.client_id.clone(),
             auth_bytes,
@@ -314,7 +326,9 @@ impl Client {
         let response = self.send_request(&request.encode()?).await?;
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
-        Ok(SaslAuthenticateResponseV0::decode_body(&mut decoder)?)
+        let response = SaslAuthenticateResponseV1::decode_body(&mut decoder)?;
+        self.sasl_session_lifetime_ms = Some(response.session_lifetime_ms);
+        Ok(response)
     }
 
     /// Sends Metadata v1 for all topics or the provided topic names.
@@ -1866,6 +1880,47 @@ mod tests {
         assert_eq!(metrics.requests_started, 1);
         assert_eq!(metrics.requests_succeeded, 1);
         assert_eq!(metrics.response_bytes, 19);
+        broker.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn records_sasl_v1_session_lifetime() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(1024);
+        let broker = tokio::spawn(async move {
+            let request = read_test_frame(&mut broker_stream).await;
+            assert_eq!(
+                request,
+                [
+                    0, 36, // api key
+                    0, 1, // api version
+                    0, 0, 0, 1, // correlation id
+                    0xff, 0xff, // null client id
+                    0, 0, 0, 2, // auth bytes length
+                    1, 2,
+                ]
+            );
+
+            let response = [
+                0, 0, 0, 1, // correlation id
+                0, 0, // error code
+                0xff, 0xff, // null error message
+                0, 0, 0, 0, // auth bytes
+                0, 0, 0, 0, 0, 0, 0, 123, // session lifetime ms
+            ];
+            broker_stream
+                .write_all(&(response.len() as i32).to_be_bytes())
+                .await
+                .unwrap();
+            broker_stream.write_all(&response).await.unwrap();
+            broker_stream.flush().await.unwrap();
+        });
+
+        let mut client =
+            Client::from_stream(Box::new(client_stream), None, Some(Duration::from_secs(1)));
+        let response = client.sasl_authenticate_v1(vec![1, 2]).await.unwrap();
+
+        assert_eq!(response.session_lifetime_ms, 123);
+        assert_eq!(client.sasl_session_lifetime_ms(), Some(123));
         broker.await.unwrap();
     }
 
