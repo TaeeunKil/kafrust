@@ -350,7 +350,7 @@ policy, and production OAuth/OIDC provider integration remain unclaimed.
   `SaslAuthenticate v1`, the complete live matrix passed again, including
   Kafka 3.7.2 SASL_PLAINTEXT, SASL_SSL SCRAM/OAUTHBEARER, secured multi-broker
   failover, and Kafka 4.3.1 KIP-848 in [`Live Kafka Smoke`, run
-  `31560914663`](https://github.com/TaeeunKil/kafrust/actions/runs/31560914663).
+  `31561506697`](https://github.com/TaeeunKil/kafrust/actions/runs/31561506697).
   The low-level `Client` records the broker-advertised SASL session lifetime;
   provider-backed OAUTHBEARER re-authentication is covered by focused injected
   tests; detached refresh workers and production OAuth/OIDC qualification

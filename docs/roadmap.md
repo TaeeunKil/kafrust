@@ -582,7 +582,7 @@ Evidence:
   production OAuth/OIDC provider.
 - After switching the high-level PLAIN, SCRAM, and OAUTHBEARER exchanges to
   `SaslAuthenticate v1`, [`Live Kafka Smoke`, run
-  `31560914663`](https://github.com/TaeeunKil/kafrust/actions/runs/31560914663)
+  `31561506697`](https://github.com/TaeeunKil/kafrust/actions/runs/31561506697)
   passed the full plaintext, TLS, SASL, secured failover, ACL, and KIP-848
   matrix. Provider-backed OAUTHBEARER re-authentication is covered by focused
   injected-client tests; detached refresh workers and production OAuth/OIDC
