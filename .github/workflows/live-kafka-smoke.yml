@@ -690,6 +690,12 @@ jobs:
             exit 1
           fi
 
+      - name: Run KIP-848 SASL member-aware admin offset path
+        env:
+          KAFRUST_GROUP_ID: kafrust-kip848-admin-offsets-sasl-${{ github.run_id }}
+          KAFRUST_ADMIN_OFFSET: "0"
+        run: cargo run -p kafrust --example admin_consumer_group_offsets_member
+
       - name: Dump KIP-848 SASL Kafka logs
         if: failure()
         run: |
@@ -926,6 +932,12 @@ jobs:
             docker logs "$coordinator_container"
             exit 1
           fi
+
+      - name: Run KIP-848 SCRAM member-aware admin offset path
+        env:
+          KAFRUST_GROUP_ID: kafrust-kip848-admin-offsets-scram-${{ github.run_id }}
+          KAFRUST_ADMIN_OFFSET: "0"
+        run: cargo run -p kafrust --features tls --example admin_consumer_group_offsets_member
 
       - name: Dump KIP-848 SCRAM Kafka logs
         if: failure()
