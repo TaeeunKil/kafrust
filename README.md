@@ -301,12 +301,13 @@ async fn main() -> kafrust::Result<()> {
 
 For rack-aware reads, set `ConsumerConfig::client_rack("rack-a")` (or the
 matching `ConsumerGroupConfig` builder). When the selected broker advertises
-Fetch v11, kafrust sends the rack ID and follows Kafka's
+Fetch v12, kafrust sends the rack ID using the flexible Fetch schema and follows Kafka's
 `preferred_read_replica` response on the next fetch. It falls back to the
-existing Fetch v4 leader path when Fetch v11 is unavailable. Wire-level and
-injected multi-broker routing tests cover this path. The Kafka 3.7.2
+Fetch v11 and then the existing Fetch v4 leader path when newer versions are
+unavailable. Wire-level and injected multi-broker routing tests cover this path. The Kafka 3.7.2
 three-broker `broker.rack` plus `RackAwareReplicaSelector` profile passed in
-[`Live Kafka Smoke`, run `31636073592`](https://github.com/TaeeunKil/kafrust/actions/runs/31636073592).
+[`Live Kafka Smoke`, run `31638178940`](https://github.com/TaeeunKil/kafrust/actions/runs/31638178940),
+including live Fetch v12 requests and preferred-replica routing.
 
 ### Consumer Group
 
@@ -388,7 +389,8 @@ Verified paths currently include:
   `Metadata v1` roundtrips.
 - High-level producer single-record, batch, and buffered sends.
 - Direct topic-partition fetch with Fetch v4 response decoding, plus focused
-  rack-aware Fetch v11 negotiation and preferred-replica routing tests.
+  flexible Fetch v12 and legacy Fetch v11 rack-aware negotiation and
+  preferred-replica routing tests.
 - Classic consumer group join, sync, heartbeat, poll, and offset commit.
 - KIP-848 consumer group assignment, member-epoch heartbeat, OffsetFetch v9,
   OffsetCommit v9, member-aware administrative offset listing/alteration,
@@ -414,11 +416,12 @@ Verified paths currently include:
 - The complete 17-job matrix also passed at commit `25d614a` in
   [`31627790408`](https://github.com/TaeeunKil/kafrust/actions/runs/31627790408)
   after the ACL authorizer example added bounded post-create visibility polling.
-- The latest complete 17-job matrix passed at commit `168df38` in
-  [`31636073592`](https://github.com/TaeeunKil/kafrust/actions/runs/31636073592).
-  It included the Kafka 3.7.2 multi-broker rack-aware replica-selection gate,
-  DeleteRecords and DescribeProducers leader-stop recovery gates, alongside
-  the supported version, security, ACL, failover, and KIP-848 profiles.
+- The latest complete 17-job matrix passed at commit `41baba7` in
+  [`31638178940`](https://github.com/TaeeunKil/kafrust/actions/runs/31638178940).
+  It included the Kafka 3.7.2 multi-broker rack-aware Fetch v12
+  replica-selection gate, DeleteRecords and DescribeProducers leader-stop
+  recovery gates, alongside the supported version, security, ACL, failover,
+  and KIP-848 profiles.
 
 See [Compatibility](docs/compatibility.md) and
 [Broker Roundtrip](docs/broker-roundtrip.md) for the current evidence.
@@ -459,9 +462,10 @@ See [Compatibility](docs/compatibility.md) and
   producer, direct consumer, classic consumer group, KIP-848 consumer group,
   and transaction paths. Topic
   partition expansion is verified through CreatePartitions v0 and Metadata v1.
-  Rack-aware client routing is implemented through Fetch v11 negotiation and
-  preferred-replica follow-up. The Kafka 3.7.2 three-broker rack-aware profile
-  is live-qualified in [`31636073592`](https://github.com/TaeeunKil/kafrust/actions/runs/31636073592);
+  Rack-aware client routing prefers flexible Fetch v12, falls back to Fetch v11
+  and then Fetch v4, and follows the broker's preferred-replica response. The
+  Kafka 3.7.2 three-broker rack-aware profile is live-qualified in
+  [`31638178940`](https://github.com/TaeeunKil/kafrust/actions/runs/31638178940);
   this covers replica selection, not every possible rack or security topology.
 - `ProducerConfig::partitioner` supports thread-safe custom routing for records
   without explicit partitions across immediate, batch, and buffered sends.

@@ -55,10 +55,11 @@ Kafka 3.7.2 multi-broker job also passed the in-flight DeleteRecords and
 DescribeProducers leader-stop recovery gates.
 
 The latest complete matrix and rack-aware qualification in
-[`31636073592`](https://github.com/TaeeunKil/kafrust/actions/runs/31636073592)
-passed at commit `168df38`. Its Kafka 3.7.2 three-broker profile configured
+[`31638178940`](https://github.com/TaeeunKil/kafrust/actions/runs/31638178940)
+passed at commit `41baba7`. Its Kafka 3.7.2 three-broker profile configured
 broker racks and Kafka's `RackAwareReplicaSelector`; the direct consumer sent
-Fetch v11 with `client_rack` and observed a preferred replica route to broker 1.
+Fetch v12 with `client_rack`, fetched records, and observed a preferred replica
+route. The same consumer retains Fetch v11 and Fetch v4 fallback paths.
 This qualifies the documented rack-aware replica-selection path, not every
 possible rack topology or security combination.
 
@@ -460,11 +461,12 @@ with zero in-flight requests and buffered records.
   covered by focused standard-frame, declared-window, and decompression-limit
   tests and by the plaintext single-node and multi-broker live smoke profiles.
 - Direct consumer fetch from an assigned topic partition using Fetch v4 response
-  decoding. When `client_rack` is configured and the broker advertises Fetch
-  v11, the consumer uses the rack field and follows `preferred_read_replica`;
+  decoding. When `client_rack` is configured, the consumer prefers flexible
+  Fetch v12, falls back to Fetch v11 or Fetch v4, and follows
+  `preferred_read_replica` when available;
   focused wire and injected multi-broker routing tests cover this path. The
   Kafka 3.7.2 three-broker rack-aware profile is also live-qualified in
-  [`31636073592`](https://github.com/TaeeunKil/kafrust/actions/runs/31636073592).
+  [`31638178940`](https://github.com/TaeeunKil/kafrust/actions/runs/31638178940).
 - Consumer group join, sync, heartbeat, poll, and offset commit through the alpha classic consumer group path with range assignment.
 - Client-side regex topic subscription resolves Metadata v1 topic names before
   classic or KIP-848 joins and is covered by focused ordering, filtering, and
