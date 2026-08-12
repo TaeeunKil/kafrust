@@ -533,7 +533,48 @@ pub type ProduceResponseV11 = ProduceResponseV9;
 pub type ProduceResponseV12 = ProduceResponseV9;
 
 /// Flexible Produce response for Kafka API version 13.
-pub type ProduceResponseV13 = ProduceResponseV9;
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProduceResponseV13 {
+    pub responses: Vec<ProduceTopicResponseV13>,
+    pub throttle_time_ms: i32,
+}
+
+impl ProduceResponseV13 {
+    pub fn decode_body(decoder: &mut Decoder<'_>) -> Result<Self> {
+        let responses = decoder
+            .read_compact_array("produce responses", ProduceTopicResponseV13::decode)?
+            .unwrap_or_default();
+        let throttle_time_ms = decoder.read_i32()?;
+        decoder.read_tagged_fields()?;
+        Ok(Self {
+            responses,
+            throttle_time_ms,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProduceTopicResponseV13 {
+    pub topic_id: [u8; 16],
+    pub partitions: Vec<ProducePartitionResponseV9>,
+}
+
+impl ProduceTopicResponseV13 {
+    fn decode(decoder: &mut Decoder<'_>) -> Result<Self> {
+        let topic_id = decoder.read_uuid()?;
+        let partitions = decoder
+            .read_compact_array(
+                "produce partition responses",
+                ProducePartitionResponseV9::decode,
+            )?
+            .unwrap_or_default();
+        decoder.read_tagged_fields()?;
+        Ok(Self {
+            topic_id,
+            partitions,
+        })
+    }
+}
 
 impl ProduceResponseV9 {
     pub fn decode_body(decoder: &mut Decoder<'_>) -> Result<Self> {
@@ -859,9 +900,9 @@ mod tests {
         encode_record_batch_set_with_compression_identity_and_transaction, encoded_message_set_len,
         encoded_record_batch_set_len, MessageSetMessage, ProducePartitionV2, ProducePartitionV3,
         ProduceRequestV11, ProduceRequestV12, ProduceRequestV13, ProduceRequestV2,
-        ProduceRequestV3, ProduceRequestV7, ProduceRequestV9, ProduceResponseV2, ProduceResponseV7,
-        ProduceResponseV9, ProduceTopicV13, ProduceTopicV2, ProduceTopicV3, RecordBatchIdentity,
-        RecordBatchMessage,
+        ProduceRequestV3, ProduceRequestV7, ProduceRequestV9, ProduceResponseV13,
+        ProduceResponseV2, ProduceResponseV7, ProduceResponseV9, ProduceTopicV13, ProduceTopicV2,
+        ProduceTopicV3, RecordBatchIdentity, RecordBatchMessage,
     };
     use crate::codec::{DecodeLimits, Decoder};
     use crate::record_batch::RecordBatchCompression;
@@ -1429,6 +1470,40 @@ mod tests {
             Some("bad record")
         );
         assert_eq!(partition.error_message.as_deref(), Some("batch rejected"));
+        assert!(decoder.is_empty());
+    }
+
+    #[test]
+    fn decodes_produce_response_v13_with_topic_uuid() {
+        let mut bytes = Encoder::new();
+        bytes
+            .write_compact_array(Some(&[()]), |encoder, _| {
+                encoder.write_uuid(&[7; 16]);
+                encoder.write_compact_array(Some(&[()]), |encoder, _| {
+                    encoder.write_i32(0);
+                    encoder.write_i16(0);
+                    encoder.write_i64(42);
+                    encoder.write_i64(-1);
+                    encoder.write_i64(7);
+                    encoder.write_unsigned_varint(1);
+                    encoder.write_compact_nullable_string(None)?;
+                    encoder.write_empty_tagged_fields();
+                    Ok(())
+                })?;
+                encoder.write_empty_tagged_fields();
+                Ok(())
+            })
+            .unwrap();
+        bytes.write_i32(0);
+        bytes.write_empty_tagged_fields();
+
+        let bytes = bytes.into_bytes();
+        let mut decoder = Decoder::new(&bytes);
+        let response = ProduceResponseV13::decode_body(&mut decoder).unwrap();
+
+        assert_eq!(response.responses[0].topic_id, [7; 16]);
+        assert_eq!(response.responses[0].partitions[0].base_offset, 42);
+        assert_eq!(response.responses[0].partitions[0].log_start_offset, 7);
         assert!(decoder.is_empty());
     }
 }

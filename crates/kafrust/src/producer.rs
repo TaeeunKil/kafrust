@@ -13,9 +13,9 @@ use kafrust_protocol::api::metadata::{
 };
 use kafrust_protocol::api::produce::{
     encoded_message_set_len, encoded_record_batch_set_len_with_compression, MessageSetMessage,
-    ProducePartitionV2, ProducePartitionV3, ProduceResponseV2, ProduceResponseV7,
-    ProduceResponseV9, ProduceTopicV13, ProduceTopicV2, ProduceTopicV3, RecordBatchIdentity,
-    RecordBatchMessage, API_KEY as PRODUCE_API_KEY,
+    ProducePartitionV2, ProducePartitionV3, ProduceResponseV13, ProduceResponseV2,
+    ProduceResponseV7, ProduceResponseV9, ProduceTopicV13, ProduceTopicV2, ProduceTopicV3,
+    RecordBatchIdentity, RecordBatchMessage, API_KEY as PRODUCE_API_KEY,
 };
 use kafrust_protocol::api::txn_offset_commit::{
     TxnOffsetCommitPartition, TxnOffsetCommitPartitionV3, TxnOffsetCommitTopic,
@@ -2297,7 +2297,7 @@ impl Producer {
                     ProduceVersion::V13 => {
                         let topic_id = topic_id
                             .ok_or(Error::Unsupported("Produce v13 requires a topic UUID"))?;
-                        ProduceResponse::V9(
+                        ProduceResponse::V13(
                             leader_client
                                 .produce_v13(
                                     transactional_id.clone(),
@@ -2680,7 +2680,7 @@ impl Producer {
                 ProduceVersion::V13 => {
                     let topic_id =
                         topic_id.ok_or(Error::Unsupported("Produce v13 requires a topic UUID"))?;
-                    ProduceResponse::V9(
+                    ProduceResponse::V13(
                         leader_client
                             .produce_v13(
                                 transactional_id,
@@ -4311,6 +4311,7 @@ enum ProduceResponse {
     V2(ProduceResponseV2),
     V7(ProduceResponseV7),
     V9(ProduceResponseV9),
+    V13(ProduceResponseV13),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -4357,6 +4358,19 @@ fn produce_partition_response(
             .responses
             .iter()
             .find(|topic| topic.name == topic_name)
+            .and_then(|topic| {
+                topic
+                    .partitions
+                    .iter()
+                    .find(|partition| partition.partition_index == partition_index)
+            })
+            .map(|partition| ProducePartitionResult {
+                error_code: partition.error_code,
+                base_offset: partition.base_offset,
+            }),
+        ProduceResponse::V13(response) => response
+            .responses
+            .first()
             .and_then(|topic| {
                 topic
                     .partitions
