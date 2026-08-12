@@ -72,6 +72,8 @@ verifies a failed `FindCoordinator v1`, bootstrap reconnect, successful
 rediscovery, and the subsequent `OffsetFetch v2` request. This is request
 discovery coverage only; a coordinator stop after the admin connection has been
 established still requires live failure-injection evidence.
+The default five-attempt budget can be changed with
+`AdminClient::max_retries`, including `0` to disable admin coordinator retries.
 
 The read-only `OffsetFetch v2` admin path additionally reconnects and retries
 after a coordinator connection drops, a request timeout, or a transient

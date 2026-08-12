@@ -907,7 +907,8 @@ Implemented evidence:
   retry semantics remain deliberately conservative while ambiguous outcomes are
   not yet modeled. Read-only `DescribeGroups v1` now shares the coordinator
   reconnect path, with focused coverage for a dropped request and successful
-  rediscovery.
+  rediscovery. The default five-attempt budget is configurable through
+  `AdminClient::max_retries`, including disabling retries with zero.
 - DescribeAcls v1, CreateAcls v1, and DeleteAcls v1 expose typed ACL bindings
   and filters through `AdminClient`, preserving top-level, per-entry,
   per-filter, and matching-ACL outcomes. Wire and mock-broker tests cover the

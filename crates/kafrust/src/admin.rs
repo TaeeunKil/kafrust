@@ -80,12 +80,28 @@ const ADMIN_COORDINATOR_MAX_RETRY_BACKOFF: Duration = Duration::from_millis(800)
 #[derive(Debug, Clone)]
 pub struct AdminClient {
     config: ClientConfig,
+    max_retries: u32,
 }
 
 impl AdminClient {
     /// Creates an admin client from shared Kafka connection configuration.
     pub fn new(config: ClientConfig) -> Self {
-        Self { config }
+        Self {
+            config,
+            max_retries: ADMIN_COORDINATOR_MAX_RETRIES,
+        }
+    }
+
+    /// Sets the maximum retry attempts for transient coordinator discovery and
+    /// coordinator-routed request failures.
+    pub fn max_retries(mut self, max_retries: u32) -> Self {
+        self.max_retries = max_retries;
+        self
+    }
+
+    /// Returns the configured maximum retry count.
+    pub fn max_retries_ref(&self) -> u32 {
+        self.max_retries
     }
 
     /// Returns the shared metrics handle used by admin broker connections.
@@ -558,7 +574,7 @@ impl AdminClient {
                             group.group_id == *group_id
                                 && is_retryable_admin_coordinator_code(group.error_code)
                         });
-                        if retry < ADMIN_COORDINATOR_MAX_RETRIES && retryable {
+                        if retry < self.max_retries && retryable {
                             self.config.record_broker_error();
                             retry += 1;
                             self.config.record_retry();
@@ -568,7 +584,7 @@ impl AdminClient {
                         }
                     }
                     Err(error)
-                        if retry < ADMIN_COORDINATOR_MAX_RETRIES
+                        if retry < self.max_retries
                             && is_retryable_admin_coordinator_error(&error) =>
                     {
                         retry += 1;
@@ -758,7 +774,7 @@ impl AdminClient {
                 .await
             {
                 Ok(response)
-                    if retry < ADMIN_COORDINATOR_MAX_RETRIES
+                    if retry < self.max_retries
                         && is_retryable_admin_coordinator_code(response.error_code) =>
                 {
                     self.config.record_broker_error();
@@ -768,8 +784,7 @@ impl AdminClient {
                 }
                 Ok(response) => break response,
                 Err(error)
-                    if retry < ADMIN_COORDINATOR_MAX_RETRIES
-                        && is_retryable_admin_coordinator_error(&error) =>
+                    if retry < self.max_retries && is_retryable_admin_coordinator_error(&error) =>
                 {
                     retry += 1;
                     self.config.record_retry();
@@ -842,7 +857,7 @@ impl AdminClient {
                             is_retryable_admin_coordinator_code(partition.error_code)
                         })
                     });
-                    if retry < ADMIN_COORDINATOR_MAX_RETRIES && retryable {
+                    if retry < self.max_retries && retryable {
                         for topic in &response.topics {
                             for partition in &topic.partitions {
                                 if partition.error_code != 0 {
@@ -858,8 +873,7 @@ impl AdminClient {
                     }
                 }
                 Err(error)
-                    if retry < ADMIN_COORDINATOR_MAX_RETRIES
-                        && is_retryable_admin_coordinator_error(&error) =>
+                    if retry < self.max_retries && is_retryable_admin_coordinator_error(&error) =>
                 {
                     retry += 1;
                     self.config.record_retry();
@@ -889,8 +903,7 @@ impl AdminClient {
             match self.group_coordinator_client_once(group_id).await {
                 Ok(client) => return Ok(client),
                 Err(error)
-                    if retry < ADMIN_COORDINATOR_MAX_RETRIES
-                        && is_retryable_admin_coordinator_error(&error) =>
+                    if retry < self.max_retries && is_retryable_admin_coordinator_error(&error) =>
                 {
                     retry += 1;
                     self.config.record_retry();
@@ -5949,6 +5962,15 @@ mod tests {
             super::admin_coordinator_retry_backoff(u32::MAX),
             Duration::from_millis(800)
         );
+    }
+
+    #[test]
+    fn configures_admin_coordinator_retry_budget() {
+        let admin = AdminClient::new(ClientConfig::new(["127.0.0.1:9092"])).max_retries(0);
+        assert_eq!(admin.max_retries_ref(), 0);
+
+        let admin = AdminClient::new(ClientConfig::new(["127.0.0.1:9092"])).max_retries(9);
+        assert_eq!(admin.max_retries_ref(), 9);
     }
 
     #[test]
