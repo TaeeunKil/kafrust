@@ -3029,6 +3029,85 @@ jobs:
             kafrust-client \
             http://host.docker.internal:8089/issuer
 
+      - name: Probe signed token with Kafka Java client
+        continue-on-error: true
+        run: |
+          export KAFRUST_SASL_TOKEN="$(cat sasl-ssl-oauth-oidc/oidc/oauth-token)"
+          cat > /tmp/KafkaOauthAdminProbe.java <<'JAVA'
+          import java.nio.file.Files;
+          import java.nio.file.Path;
+          import java.util.List;
+          import java.util.Map;
+          import java.util.Properties;
+          import java.util.Set;
+          import java.util.concurrent.TimeUnit;
+          import javax.security.auth.Subject;
+          import javax.security.auth.callback.Callback;
+          import javax.security.auth.callback.CallbackHandler;
+          import javax.security.auth.callback.UnsupportedCallbackException;
+          import javax.security.auth.login.AppConfigurationEntry;
+          import org.apache.kafka.clients.CommonClientConfigs;
+          import org.apache.kafka.clients.admin.Admin;
+          import org.apache.kafka.common.config.SaslConfigs;
+          import org.apache.kafka.common.config.SslConfigs;
+          import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
+          import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
+          import org.apache.kafka.common.security.oauthbearer.OAuthBearerTokenCallback;
+          import org.apache.kafka.common.security.oauthbearer.internals.secured.BasicOAuthBearerToken;
+
+          public final class KafkaOauthAdminProbe {
+              public static final class Handler implements AuthenticateCallbackHandler {
+                  private String token;
+
+                  @Override
+                  public void configure(Map<String, ?> configs, String mechanism,
+                      List<AppConfigurationEntry> jaasConfigEntries) {
+                      token = System.getenv("KAFRUST_SASL_TOKEN");
+                  }
+
+                  @Override
+                  public void handle(Callback[] callbacks) throws UnsupportedCallbackException {
+                      for (Callback callback : callbacks) {
+                          if (callback instanceof OAuthBearerTokenCallback tokenCallback) {
+                              tokenCallback.token(new BasicOAuthBearerToken(
+                                  token,
+                                  Set.of("kafrust-smoke"),
+                                  System.currentTimeMillis() + 3_600_000,
+                                  "kafrust",
+                                  System.currentTimeMillis()));
+                          } else if (!(callback instanceof SaslExtensionsCallback)) {
+                              throw new UnsupportedCallbackException(callback);
+                          }
+                      }
+                  }
+
+                  @Override
+                  public void close() {
+                  }
+              }
+
+              public static void main(String[] args) throws Exception {
+                  Properties properties = new Properties();
+                  properties.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, "localhost:9098");
+                  properties.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SASL_SSL");
+                  properties.put(SaslConfigs.SASL_MECHANISM, "OAUTHBEARER");
+                  properties.put(SaslConfigs.SASL_JAAS_CONFIG,
+                      "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;");
+                  properties.put(SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, Handler.class.getName());
+                  properties.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, "PEM");
+                  properties.put(SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG,
+                      Files.readString(Path.of("sasl-ssl-oauth-oidc/ca.crt")));
+
+                  try (Admin admin = Admin.create(properties)) {
+                      admin.describeCluster().nodes().get(30, TimeUnit.SECONDS);
+                      System.out.println("kafka_java_client=ok");
+                  }
+              }
+          }
+          JAVA
+          javac -cp /tmp/kafka-clients.jar:/tmp/slf4j-api.jar /tmp/KafkaOauthAdminProbe.java
+          java -cp /tmp:/tmp/kafka-clients.jar:/tmp/slf4j-api.jar KafkaOauthAdminProbe
+
       - name: Run signed OAUTHBEARER with static token
         run: |
           export KAFRUST_SASL_TOKEN="$(cat sasl-ssl-oauth-oidc/oidc/oauth-token)"
