@@ -1206,6 +1206,71 @@ jobs:
           KAFRUST_TRANSACTIONAL_ID: kafrust-transaction-failover-${{ github.run_id }}
         run: cargo run -p kafrust --example admin_describe_transactions
 
+      - name: Run multi-broker Admin DescribeTransactions during coordinator stop
+        run: |
+          ready_file=/tmp/kafrust-admin-describe-transactions-ready
+          release_file=/tmp/kafrust-admin-describe-transactions-release
+          request_log=/tmp/kafrust-admin-describe-transactions.log
+          rm -f "$ready_file" "$release_file" "$request_log"
+          KAFRUST_TRANSACTIONAL_ID="kafrust-transaction-failover-${GITHUB_RUN_ID}" \
+          KAFRUST_REQUEST_READY_FILE="$ready_file" \
+          KAFRUST_REQUEST_RELEASE_FILE="$release_file" \
+          RUST_LOG=kafrust=debug \
+          cargo run -p kafrust --example admin_describe_transactions_failover \
+            >"$request_log" 2>&1 &
+          transaction_admin_pid=$!
+
+          coordinator_node=""
+          request_ready=""
+          for attempt in {1..600}; do
+            coordinator_node="$(sed -n 's/.*transaction coordinator node \([0-9][0-9]*\)$/\1/p' "$request_log" | tail -n 1)"
+            if [ -f "$ready_file" ]; then
+              request_ready=1
+              break
+            fi
+            if ! kill -0 "$transaction_admin_pid" 2>/dev/null; then
+              cat "$request_log" || true
+              wait "$transaction_admin_pid"
+            fi
+            sleep 0.1
+          done
+          if ! [[ "$coordinator_node" =~ ^[123]$ ]] || [ -z "$request_ready" ] || \
+             ! kill -0 "$transaction_admin_pid" 2>/dev/null; then
+            cat "$request_log" || true
+            echo "DescribeTransactions request was not held before transmission"
+            kill "$transaction_admin_pid" 2>/dev/null || true
+            wait "$transaction_admin_pid" || true
+            exit 1
+          fi
+
+          docker stop "kafrust-kafka-multi-${coordinator_node}"
+          touch "$release_file"
+
+          transaction_admin_status=0
+          wait "$transaction_admin_pid" || transaction_admin_status=$?
+          cat "$request_log"
+
+          docker start "kafrust-kafka-multi-${coordinator_node}"
+          coordinator_ready=""
+          for attempt in {1..120}; do
+            if docker exec "kafrust-kafka-multi-${coordinator_node}" \
+              /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server "kafrust-kafka-multi-${coordinator_node}:29092" \
+              >/tmp/kafrust-admin-describe-transactions-recovery.log 2>&1; then
+              coordinator_ready=1
+              break
+            fi
+            sleep 2
+          done
+
+          if [ "$transaction_admin_status" -ne 0 ] || [ -z "$coordinator_ready" ] || \
+             ! grep -Eq "retries=[1-9][0-9]*" "$request_log"; then
+            cat /tmp/kafrust-admin-describe-transactions-recovery.log || true
+            docker logs "kafrust-kafka-multi-${coordinator_node}"
+            echo "Admin DescribeTransactions did not prove retry recovery"
+            exit 1
+          fi
+
       - name: Run multi-broker producer and consumer failover through broker stop
         run: |
           KAFRUST_PARTITION="$KAFRUST_FAILOVER_PARTITION" \
@@ -1637,6 +1702,70 @@ jobs:
             cat /tmp/kafrust-admin-describe-producers-recovery.log || true
             docker logs "kafrust-kafka-multi-${describe_leader_node}"
             echo "Admin DescribeProducers did not prove retry recovery"
+            exit 1
+          fi
+
+      - name: Run multi-broker Admin DescribeGroups during coordinator stop
+        run: |
+          ready_file=/tmp/kafrust-admin-describe-group-ready
+          release_file=/tmp/kafrust-admin-describe-group-release
+          request_log=/tmp/kafrust-admin-describe-group.log
+          rm -f "$ready_file" "$release_file" "$request_log"
+          KAFRUST_REQUEST_READY_FILE="$ready_file" \
+          KAFRUST_REQUEST_RELEASE_FILE="$release_file" \
+          RUST_LOG=kafrust=debug \
+          cargo run -p kafrust --example admin_describe_group_failover \
+            >"$request_log" 2>&1 &
+          group_admin_pid=$!
+
+          coordinator_node=""
+          request_ready=""
+          for attempt in {1..600}; do
+            coordinator_node="$(sed -n 's/.*group coordinator node \([0-9][0-9]*\)$/\1/p' "$request_log" | tail -n 1)"
+            if [ -f "$ready_file" ]; then
+              request_ready=1
+              break
+            fi
+            if ! kill -0 "$group_admin_pid" 2>/dev/null; then
+              cat "$request_log" || true
+              wait "$group_admin_pid"
+            fi
+            sleep 0.1
+          done
+          if ! [[ "$coordinator_node" =~ ^[123]$ ]] || [ -z "$request_ready" ] || \
+             ! kill -0 "$group_admin_pid" 2>/dev/null; then
+            cat "$request_log" || true
+            echo "DescribeGroups request was not held before transmission"
+            kill "$group_admin_pid" 2>/dev/null || true
+            wait "$group_admin_pid" || true
+            exit 1
+          fi
+
+          docker stop "kafrust-kafka-multi-${coordinator_node}"
+          touch "$release_file"
+
+          group_admin_status=0
+          wait "$group_admin_pid" || group_admin_status=$?
+          cat "$request_log"
+
+          docker start "kafrust-kafka-multi-${coordinator_node}"
+          coordinator_ready=""
+          for attempt in {1..120}; do
+            if docker exec "kafrust-kafka-multi-${coordinator_node}" \
+              /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server "kafrust-kafka-multi-${coordinator_node}:29092" \
+              >/tmp/kafrust-admin-describe-group-recovery.log 2>&1; then
+              coordinator_ready=1
+              break
+            fi
+            sleep 2
+          done
+
+          if [ "$group_admin_status" -ne 0 ] || [ -z "$coordinator_ready" ] || \
+             ! grep -Eq "retries=[1-9][0-9]*" "$request_log"; then
+            cat /tmp/kafrust-admin-describe-group-recovery.log || true
+            docker logs "kafrust-kafka-multi-${coordinator_node}"
+            echo "Admin DescribeGroups did not prove retry recovery"
             exit 1
           fi
 
