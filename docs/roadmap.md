@@ -1452,6 +1452,14 @@ Implemented evidence:
   Rust 1.81 all passed. The release includes the custom partitioner and
   synchronous rebalance listener surfaces, with live qualification in
   [`31557534371`](https://github.com/TaeeunKil/kafrust/actions/runs/31557534371).
+- Release `v0.2.6` published both crates after protocol-first verification.
+  Fresh external default and dependency-level TLS projects compiled against
+  the published client, the exact [`kafrust 0.2.6 docs.rs`](https://docs.rs/kafrust/0.2.6/kafrust/)
+  and [`kafrust-protocol 0.2.6 docs.rs`](https://docs.rs/kafrust-protocol/0.2.6/kafrust_protocol/)
+  pages returned HTTP 200, release CI passed on stable and Rust 1.81 in
+  [`31566231208`](https://github.com/TaeeunKil/kafrust/actions/runs/31566231208),
+  and the post-release live matrix passed in
+  [`31565059236`](https://github.com/TaeeunKil/kafrust/actions/runs/31565059236).
 - Secured multi-broker failure injection is now qualified for the tested
   `SASL_PLAINTEXT` paths: the three-broker profile in
   [`31554396594`](https://github.com/TaeeunKil/kafrust/actions/runs/31554396594)

@@ -136,6 +136,15 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
   default and `tls` features on Rust 1.81. The release's live qualification is
   [`31557534371`](https://github.com/TaeeunKil/kafrust/actions/runs/31557534371),
   including the cooperative multi-member rebalance listener lifecycle check.
+- Release `v0.2.6` published `kafrust-protocol` before `kafrust`; both crates
+  resolve at `0.2.6`, fresh external projects compiled the published client
+  with default and dependency-level `tls` features, and the exact docs.rs
+  pages return HTTP 200 for [`kafrust 0.2.6`](https://docs.rs/kafrust/0.2.6/kafrust/)
+  and [`kafrust-protocol 0.2.6`](https://docs.rs/kafrust-protocol/0.2.6/kafrust_protocol/).
+  Release CI passed on stable and Rust 1.81 in
+  [`31566231208`](https://github.com/TaeeunKil/kafrust/actions/runs/31566231208),
+  and the post-release live matrix passed in
+  [`31565059236`](https://github.com/TaeeunKil/kafrust/actions/runs/31565059236).
 - Current `main` performance and recovery evidence includes benchmark run
   [`31562321010`](https://github.com/TaeeunKil/kafrust/actions/runs/31562321010)
   and 120-second broker-restart soak run
