@@ -2940,6 +2940,15 @@ jobs:
             -e KAFKA_SASL_OAUTHBEARER_EXPECTED_AUDIENCE=kafrust-client \
             -e KAFKA_SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS=2 \
             -e KAFKA_SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS=1000 \
+            -e KAFKA_LISTENER_NAME_SASL_SSL_OAUTHBEARER_SASL_JAAS_CONFIG="org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;" \
+            -e KAFKA_LISTENER_NAME_SASL_SSL_OAUTHBEARER_SASL_SERVER_CALLBACK_HANDLER_CLASS=org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallbackHandler \
+            -e KAFKA_LISTENER_NAME_SASL_SSL_OAUTHBEARER_SASL_OAUTHBEARER_JWKS_ENDPOINT_URL=http://host.docker.internal:8089/jwks.json \
+            -e KAFKA_LISTENER_NAME_SASL_SSL_OAUTHBEARER_SASL_OAUTHBEARER_EXPECTED_ISSUER=http://host.docker.internal:8089/issuer \
+            -e KAFKA_LISTENER_NAME_SASL_SSL_OAUTHBEARER_SASL_OAUTHBEARER_EXPECTED_AUDIENCE=kafrust-client \
+            -e KAFKA_LISTENER_NAME_SASL_SSL_OAUTHBEARER_SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS=2 \
+            -e KAFKA_LISTENER_NAME_SASL_SSL_OAUTHBEARER_SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS=1000 \
+            -e KAFKA_LISTENER_NAME_SASL_SSL_OAUTHBEARER_SASL_OAUTHBEARER_SCOPE_CLAIM_NAME=scope \
+            -e KAFKA_LISTENER_NAME_SASL_SSL_OAUTHBEARER_SASL_OAUTHBEARER_SUB_CLAIM_NAME=sub \
             -e KAFKA_LOG4J_ROOT_LOGLEVEL=DEBUG \
             -e KAFKA_LOG4J_LOGGERS=org.apache.kafka.common.security.oauthbearer=DEBUG,org.apache.kafka.common.security.oauthbearer.internals.secured=DEBUG,org.apache.kafka.common.security.authenticator=DEBUG \
             -e KAFKA_SSL_KEYSTORE_FILENAME=kafka.server.keystore.p12 \
