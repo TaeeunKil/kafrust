@@ -2032,6 +2032,150 @@ jobs:
             exit 1
           fi
 
+      - name: Run multi-broker Admin DescribeCluster during broker stop
+        run: |
+          ready_file=/tmp/kafrust-admin-describe-cluster-ready
+          release_file=/tmp/kafrust-admin-describe-cluster-release
+          request_log=/tmp/kafrust-admin-describe-cluster.log
+          rm -f "$ready_file" "$release_file" "$request_log"
+          KAFRUST_METADATA_OPERATION=cluster \
+          KAFRUST_REQUEST_READY_FILE="$ready_file" \
+          KAFRUST_REQUEST_RELEASE_FILE="$release_file" \
+          RUST_LOG=kafrust=debug \
+          cargo run -p kafrust --example admin_metadata_failover \
+            >"$request_log" 2>&1 &
+          metadata_pid=$!
+
+          request_ready=""
+          for attempt in {1..600}; do
+            if [ -f "$ready_file" ]; then
+              request_ready=1
+              break
+            fi
+            if ! kill -0 "$metadata_pid" 2>/dev/null; then
+              cat "$request_log" || true
+              wait "$metadata_pid"
+            fi
+            sleep 0.1
+          done
+          if [ -z "$request_ready" ] || ! kill -0 "$metadata_pid" 2>/dev/null; then
+            cat "$request_log" || true
+            echo "DescribeCluster request was not held before transmission"
+            kill "$metadata_pid" 2>/dev/null || true
+            wait "$metadata_pid" || true
+            exit 1
+          fi
+
+          docker stop kafrust-kafka-multi-1
+          touch "$release_file"
+
+          failure_seen=""
+          for attempt in {1..100}; do
+            if grep -Eq "kafka request failed|Connection refused" "$request_log"; then
+              failure_seen=1
+              break
+            fi
+            sleep 0.1
+          done
+
+          docker start kafrust-kafka-multi-1
+
+          metadata_status=0
+          wait "$metadata_pid" || metadata_status=$?
+          cat "$request_log"
+
+          broker_ready=""
+          for attempt in {1..120}; do
+            if docker exec kafrust-kafka-multi-1 \
+              /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server kafrust-kafka-multi-1:29092 \
+              >/tmp/kafrust-admin-describe-cluster-recovery.log 2>&1; then
+              broker_ready=1
+              break
+            fi
+            sleep 2
+          done
+
+          if [ "$metadata_status" -ne 0 ] || [ -z "$failure_seen" ] || [ -z "$broker_ready" ] || \
+             ! grep -Eq "admin describe cluster failover completed brokers=[1-9][0-9]* controller=-?[0-9]+ retries=[1-9][0-9]*" "$request_log"; then
+            cat /tmp/kafrust-admin-describe-cluster-recovery.log || true
+            docker logs kafrust-kafka-multi-1
+            echo "Admin DescribeCluster did not prove retry recovery"
+            exit 1
+          fi
+
+      - name: Run multi-broker Admin ListTopics during broker stop
+        run: |
+          ready_file=/tmp/kafrust-admin-list-topics-ready
+          release_file=/tmp/kafrust-admin-list-topics-release
+          request_log=/tmp/kafrust-admin-list-topics.log
+          rm -f "$ready_file" "$release_file" "$request_log"
+          KAFRUST_METADATA_OPERATION=topics \
+          KAFRUST_REQUEST_READY_FILE="$ready_file" \
+          KAFRUST_REQUEST_RELEASE_FILE="$release_file" \
+          RUST_LOG=kafrust=debug \
+          cargo run -p kafrust --example admin_metadata_failover \
+            >"$request_log" 2>&1 &
+          metadata_pid=$!
+
+          request_ready=""
+          for attempt in {1..600}; do
+            if [ -f "$ready_file" ]; then
+              request_ready=1
+              break
+            fi
+            if ! kill -0 "$metadata_pid" 2>/dev/null; then
+              cat "$request_log" || true
+              wait "$metadata_pid"
+            fi
+            sleep 0.1
+          done
+          if [ -z "$request_ready" ] || ! kill -0 "$metadata_pid" 2>/dev/null; then
+            cat "$request_log" || true
+            echo "ListTopics request was not held before transmission"
+            kill "$metadata_pid" 2>/dev/null || true
+            wait "$metadata_pid" || true
+            exit 1
+          fi
+
+          docker stop kafrust-kafka-multi-1
+          touch "$release_file"
+
+          failure_seen=""
+          for attempt in {1..100}; do
+            if grep -Eq "kafka request failed|Connection refused" "$request_log"; then
+              failure_seen=1
+              break
+            fi
+            sleep 0.1
+          done
+
+          docker start kafrust-kafka-multi-1
+
+          metadata_status=0
+          wait "$metadata_pid" || metadata_status=$?
+          cat "$request_log"
+
+          broker_ready=""
+          for attempt in {1..120}; do
+            if docker exec kafrust-kafka-multi-1 \
+              /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server kafrust-kafka-multi-1:29092 \
+              >/tmp/kafrust-admin-list-topics-recovery.log 2>&1; then
+              broker_ready=1
+              break
+            fi
+            sleep 2
+          done
+
+          if [ "$metadata_status" -ne 0 ] || [ -z "$failure_seen" ] || [ -z "$broker_ready" ] || \
+             ! grep -Eq "admin list topics failover completed topics=[1-9][0-9]* retries=[1-9][0-9]*" "$request_log"; then
+            cat /tmp/kafrust-admin-list-topics-recovery.log || true
+            docker logs kafrust-kafka-multi-1
+            echo "Admin ListTopics did not prove retry recovery"
+            exit 1
+          fi
+
       - name: Dump multi-broker Kafka logs
         if: failure()
         run: |
