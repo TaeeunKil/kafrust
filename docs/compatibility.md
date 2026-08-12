@@ -214,8 +214,10 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
   graceful worker shutdown passed across the Kafka 3.7.2, 3.8.1, 3.9.1, and
   4.3.1 matrix; the KIP-848 worker path passed on Kafka 4.3.1 in
   [`Live Kafka Smoke`, run `31563953123`](https://github.com/TaeeunKil/kafrust/actions/runs/31563953123).
-  Partition queue splitting and secured topic-discovery permission behavior
-  remain open compatibility work.
+  Direct and group consumers now also expose bounded partition queues through
+  `split_partition_queue`; focused tests cover routing, queue backpressure,
+  and position preservation. Secured topic-discovery permission behavior
+  remains open compatibility work.
 - KIP-848 consumer groups through `ConsumerGroupHeartbeat v0`, Metadata v12
   topic UUID assignment, member-epoch foreground/background heartbeats,
   OffsetFetch v9, OffsetCommit v9, rejoin after concurrent membership, and

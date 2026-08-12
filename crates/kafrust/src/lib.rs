@@ -51,8 +51,8 @@ pub use config::{
     SecurityProtocol,
 };
 pub use consumer::{
-    Consumer, ConsumerAssignment, ConsumerConfig, ConsumerRecord, IsolationLevel,
-    PartitionWatermarks,
+    Consumer, ConsumerAssignment, ConsumerConfig, ConsumerPartitionQueue, ConsumerRecord,
+    IsolationLevel, PartitionWatermarks,
 };
 pub use error::{BrokerErrorKind, Error, Result};
 pub use group::{

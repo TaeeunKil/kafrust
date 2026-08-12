@@ -1396,6 +1396,15 @@ fn delivery_error_from_request_error(error: &Error) -> Error {
             topic: topic.clone(),
             partition: *partition,
         },
+        Error::PartitionQueueFull {
+            topic,
+            partition,
+            capacity,
+        } => Error::PartitionQueueFull {
+            topic: topic.clone(),
+            partition: *partition,
+            capacity: *capacity,
+        },
         Error::MissingLeader { topic, partition } => Error::MissingLeader {
             topic: topic.clone(),
             partition: *partition,
@@ -4053,6 +4062,7 @@ fn can_retry_send(error: &Error) -> bool {
         Error::MissingBootstrapServer
         | Error::InvalidPartition { .. }
         | Error::UnassignedTopicPartition { .. }
+        | Error::PartitionQueueFull { .. }
         | Error::MissingGroupDescription { .. }
         | Error::MissingDeleteGroupResult { .. }
         | Error::ResponseCountMismatch { .. }

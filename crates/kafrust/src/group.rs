@@ -33,8 +33,8 @@ use kafrust_protocol::consumer_group::{
 use crate::client::Client;
 use crate::config::{ClientConfig, OAuthBearerTokenProvider, SecurityProtocol};
 use crate::consumer::{
-    Consumer, ConsumerAssignment, ConsumerConfig, ConsumerRecord, IsolationLevel,
-    PartitionWatermarks,
+    Consumer, ConsumerAssignment, ConsumerConfig, ConsumerPartitionQueue, ConsumerRecord,
+    IsolationLevel, PartitionWatermarks,
 };
 use crate::error::{BrokerErrorKind, Error, Result};
 use crate::metrics::ClientMetrics;
@@ -208,6 +208,7 @@ pub struct ConsumerGroupConfig {
     max_partition_bytes: i32,
     max_retries: u32,
     max_poll_records: usize,
+    partition_queue_capacity: usize,
     isolation_level: IsolationLevel,
     assignment_strategy: ConsumerGroupAssignmentStrategy,
     group_protocol: ConsumerGroupProtocol,
@@ -253,6 +254,7 @@ impl ConsumerGroupConfig {
             max_partition_bytes: 1_048_576,
             max_retries: DEFAULT_GROUP_MAX_RETRIES,
             max_poll_records: 500,
+            partition_queue_capacity: 1024,
             isolation_level: IsolationLevel::ReadUncommitted,
             assignment_strategy: ConsumerGroupAssignmentStrategy::Range,
             group_protocol: ConsumerGroupProtocol::Classic,
@@ -477,6 +479,20 @@ impl ConsumerGroupConfig {
         self
     }
 
+    /// Sets the bounded capacity of queues returned by
+    /// [`ConsumerGroup::split_partition_queue`]. A value of zero is
+    /// normalized to one because Tokio channels cannot be created without
+    /// capacity.
+    pub fn partition_queue_capacity(mut self, partition_queue_capacity: usize) -> Self {
+        self.partition_queue_capacity = partition_queue_capacity.max(1);
+        self
+    }
+
+    /// Returns the configured partition queue capacity.
+    pub fn partition_queue_capacity_ref(&self) -> usize {
+        self.partition_queue_capacity
+    }
+
     /// Sets whether group fetches expose records from aborted transactions.
     pub fn isolation_level(mut self, isolation_level: IsolationLevel) -> Self {
         self.isolation_level = isolation_level;
@@ -594,6 +610,7 @@ impl ConsumerGroupConfig {
             .max_partition_bytes(self.max_partition_bytes)
             .max_retries(self.max_retries)
             .max_poll_records(self.max_poll_records)
+            .partition_queue_capacity(self.partition_queue_capacity)
             .isolation_level(self.isolation_level)
     }
 
@@ -1119,6 +1136,7 @@ impl fmt::Debug for ConsumerGroupConfig {
             .field("max_partition_bytes", &self.max_partition_bytes)
             .field("max_retries", &self.max_retries)
             .field("max_poll_records", &self.max_poll_records)
+            .field("partition_queue_capacity", &self.partition_queue_capacity)
             .field("isolation_level", &self.isolation_level)
             .field("assignment_strategy", &self.assignment_strategy)
             .field("group_protocol", &self.group_protocol)
@@ -1144,6 +1162,7 @@ impl PartialEq for ConsumerGroupConfig {
             && self.max_partition_bytes == other.max_partition_bytes
             && self.max_retries == other.max_retries
             && self.max_poll_records == other.max_poll_records
+            && self.partition_queue_capacity == other.partition_queue_capacity
             && self.isolation_level == other.isolation_level
             && self.assignment_strategy == other.assignment_strategy
             && self.group_protocol == other.group_protocol
@@ -1470,6 +1489,17 @@ impl ConsumerGroup {
     /// Returns the assigned topic partitions and next offsets.
     pub fn assignments(&self) -> &[ConsumerAssignment] {
         self.consumer.assignments()
+    }
+
+    /// Splits one currently assigned topic partition into a bounded receive
+    /// queue. The queue is fed by [`Self::poll`] and is closed when a rejoin
+    /// removes the partition from this member's assignment.
+    pub fn split_partition_queue(
+        &mut self,
+        topic: impl Into<String>,
+        partition: i32,
+    ) -> Result<ConsumerPartitionQueue> {
+        self.consumer.split_partition_queue(topic, partition)
     }
 
     /// Queues a record's next offset for a later group commit.
@@ -4081,6 +4111,7 @@ mod tests {
             .max_partition_bytes(1024)
             .max_retries(3)
             .max_poll_records(10)
+            .partition_queue_capacity(7)
             .isolation_level(IsolationLevel::ReadCommitted)
             .assignment_strategy(ConsumerGroupAssignmentStrategy::RoundRobin);
 
@@ -4091,6 +4122,7 @@ mod tests {
             config.client.security_protocol_ref(),
             SecurityProtocol::SaslPlaintext
         );
+        assert_eq!(config.partition_queue_capacity_ref(), 7);
         assert_eq!(
             config.client.tls_server_name_ref(),
             Some("broker.example.com")

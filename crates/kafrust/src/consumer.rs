@@ -11,6 +11,8 @@ use crate::client::{Client, FetchOneRequestV4};
 use crate::config::{ClientConfig, OAuthBearerTokenProvider, SecurityProtocol};
 use crate::error::{BrokerErrorKind, Error, Result};
 use crate::metrics::ClientMetrics;
+use tokio::sync::mpsc;
+use tokio::sync::mpsc::error::TrySendError;
 use tracing::debug;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -41,6 +43,68 @@ pub struct ConsumerRecord {
     timestamp_ms: i64,
     key: Option<Vec<u8>>,
     value: Option<Vec<u8>>,
+}
+
+/// A bounded queue containing records fetched for one topic partition.
+///
+/// A queue is created with [`Consumer::split_partition_queue`]. The owning
+/// consumer continues to perform network polling, while this handle provides
+/// an independent receive path for the selected partition. Dropping the
+/// handle closes the split and causes subsequent records to return through
+/// [`Consumer::poll`]. Records already buffered in the queue remain readable
+/// until it is drained.
+#[derive(Debug)]
+pub struct ConsumerPartitionQueue {
+    topic: String,
+    partition: i32,
+    receiver: mpsc::Receiver<ConsumerRecord>,
+}
+
+impl ConsumerPartitionQueue {
+    /// Returns the topic served by this queue.
+    pub fn topic(&self) -> &str {
+        &self.topic
+    }
+
+    /// Returns the partition served by this queue.
+    pub fn partition(&self) -> i32 {
+        self.partition
+    }
+
+    /// Waits for the next record, or returns `None` after the queue is closed
+    /// and drained.
+    pub async fn recv(&mut self) -> Option<ConsumerRecord> {
+        self.receiver.recv().await
+    }
+
+    /// Returns one immediately available record.
+    ///
+    /// `None` means that the queue is currently empty or has been closed and
+    /// drained. Use [`Self::recv`] when the distinction matters.
+    pub fn try_recv(&mut self) -> Option<ConsumerRecord> {
+        self.receiver.try_recv().ok()
+    }
+
+    /// Receives up to `max_records`, waiting for the first record when the
+    /// queue is not already closed. A zero limit returns an empty vector.
+    pub async fn recv_batch(&mut self, max_records: usize) -> Vec<ConsumerRecord> {
+        if max_records == 0 {
+            return Vec::new();
+        }
+
+        let Some(first) = self.recv().await else {
+            return Vec::new();
+        };
+        let mut records = Vec::with_capacity(max_records.min(16));
+        records.push(first);
+        while records.len() < max_records {
+            let Some(record) = self.try_recv() else {
+                break;
+            };
+            records.push(record);
+        }
+        records
+    }
 }
 
 impl ConsumerRecord {
@@ -111,6 +175,7 @@ pub struct Consumer {
     client: Client,
     config: ConsumerConfig,
     assignments: Vec<ConsumerAssignment>,
+    partition_queues: BTreeMap<(String, i32), mpsc::Sender<ConsumerRecord>>,
     metadata_cache: BTreeMap<String, MetadataResponseV1>,
     broker_clients: BTreeMap<String, Client>,
 }
@@ -125,12 +190,23 @@ impl Consumer {
             client,
             config,
             assignments,
+            partition_queues: BTreeMap::new(),
             metadata_cache: BTreeMap::new(),
             broker_clients: BTreeMap::new(),
         }
     }
 
     pub(crate) fn replace_assignments(&mut self, mut assignments: Vec<ConsumerAssignment>) {
+        let previous_positions = self
+            .assignments
+            .iter()
+            .map(|assignment| {
+                (
+                    (assignment.topic.clone(), assignment.partition),
+                    assignment.next_offset,
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
         let paused = self
             .assignments
             .iter()
@@ -145,18 +221,62 @@ impl Consumer {
                 .cmp(&right.topic)
                 .then_with(|| left.partition.cmp(&right.partition))
         });
+        self.partition_queues.retain(|(topic, partition), _| {
+            assignments.iter().any(|assignment| {
+                assignment.topic == *topic
+                    && assignment.partition == *partition
+                    && previous_positions.get(&(topic.clone(), *partition))
+                        == Some(&assignment.next_offset)
+            })
+        });
         self.assignments = assignments;
         self.metadata_cache.clear();
     }
 
     /// Assigns a topic partition and next offset to fetch.
     pub fn assign(&mut self, topic: impl Into<String>, partition: i32, offset: i64) {
-        assign_partition(&mut self.assignments, topic.into(), partition, offset);
+        let topic = topic.into();
+        self.partition_queues.remove(&(topic.clone(), partition));
+        assign_partition(&mut self.assignments, topic, partition, offset);
     }
 
     /// Returns the current topic partition assignments.
     pub fn assignments(&self) -> &[ConsumerAssignment] {
         &self.assignments
+    }
+
+    /// Splits one assigned topic partition into a bounded receive queue.
+    ///
+    /// Records fetched for the partition are delivered to the returned queue
+    /// instead of the vector returned by [`Self::poll`]. The queue capacity is
+    /// configured with [`ConsumerConfig::partition_queue_capacity`]. When the
+    /// queue is full, `poll` returns an error and does not advance beyond the
+    /// last record accepted by the queue.
+    pub fn split_partition_queue(
+        &mut self,
+        topic: impl Into<String>,
+        partition: i32,
+    ) -> Result<ConsumerPartitionQueue> {
+        let topic = topic.into();
+        if self.assignment(&topic, partition).is_none() {
+            return Err(Error::UnassignedTopicPartition { topic, partition });
+        }
+
+        let key = (topic.clone(), partition);
+        if let Some(sender) = self.partition_queues.get(&key) {
+            if !sender.is_closed() {
+                return Err(Error::Unsupported("partition queue is already split"));
+            }
+        }
+        self.partition_queues.remove(&key);
+
+        let (sender, receiver) = mpsc::channel(self.config.partition_queue_capacity);
+        self.partition_queues.insert(key, sender);
+        Ok(ConsumerPartitionQueue {
+            topic,
+            partition,
+            receiver,
+        })
     }
 
     /// Returns the next offset for an assigned topic partition.
@@ -167,6 +287,15 @@ impl Consumer {
 
     /// Changes the next offset for an assigned topic partition.
     pub fn seek(&mut self, topic: &str, partition: i32, offset: i64) -> Result<()> {
+        if self
+            .partition_queues
+            .get(&(topic.to_owned(), partition))
+            .is_some_and(|sender| !sender.is_closed())
+        {
+            return Err(Error::Unsupported(
+                "seek requires dropping the active partition queue",
+            ));
+        }
         self.assignment_mut(topic, partition)?.next_offset = offset;
         Ok(())
     }
@@ -272,6 +401,7 @@ impl Consumer {
     pub async fn poll(&mut self) -> Result<Vec<ConsumerRecord>> {
         let assignments = self.assignments.clone();
         let mut records = Vec::new();
+        let mut delivered_record_count = 0;
         debug!(
             assignment_count = assignments.len(),
             max_poll_records = self.config.max_poll_records,
@@ -279,7 +409,7 @@ impl Consumer {
         );
 
         for assignment in assignments {
-            if records.len() >= self.config.max_poll_records {
+            if delivered_record_count >= self.config.max_poll_records {
                 break;
             }
             if assignment.paused {
@@ -296,9 +426,32 @@ impl Consumer {
             let fetched_record_count = fetched.records.len();
             limit_fetched_records(
                 &mut fetched.records,
-                records.len(),
+                delivered_record_count,
                 self.config.max_poll_records,
             );
+            let was_truncated = fetched.records.len() < fetched_record_count;
+
+            let key = (assignment.topic.clone(), assignment.partition);
+            if self.partition_queues.contains_key(&key) {
+                let route = self.enqueue_partition_records(&key, fetched.records)?;
+                fetched.records = route.records;
+                delivered_record_count += route.queued_count;
+                if fetched.records.is_empty() {
+                    let next_offset = if was_truncated {
+                        route.next_offset
+                    } else {
+                        (fetched_record_count > 0).then_some(fetched.next_offset)
+                    };
+                    if let Some(next_offset) = next_offset {
+                        self.update_assignment_offset(
+                            &assignment.topic,
+                            assignment.partition,
+                            next_offset,
+                        );
+                    }
+                    continue;
+                }
+            }
             let next_offset = if fetched.records.len() < fetched_record_count {
                 fetched
                     .records
@@ -310,6 +463,10 @@ impl Consumer {
             if let Some(next_offset) = next_offset {
                 self.update_assignment_offset(&assignment.topic, assignment.partition, next_offset);
             }
+            if was_truncated && fetched.records.is_empty() {
+                break;
+            }
+            delivered_record_count += fetched.records.len();
             records.extend(fetched.records);
         }
 
@@ -317,8 +474,70 @@ impl Consumer {
             record_count = records.len(),
             "polled kafka consumer records"
         );
-        self.config.client.record_consumed(records.len());
+        self.config.client.record_consumed(delivered_record_count);
         Ok(records)
+    }
+
+    fn enqueue_partition_records(
+        &mut self,
+        key: &(String, i32),
+        records: Vec<ConsumerRecord>,
+    ) -> Result<PartitionRoute> {
+        let Some(sender) = self.partition_queues.get(key).cloned() else {
+            return Ok(PartitionRoute {
+                records,
+                next_offset: None,
+                queued_count: 0,
+            });
+        };
+        if sender.is_closed() {
+            self.partition_queues.remove(key);
+            return Ok(PartitionRoute {
+                records,
+                next_offset: None,
+                queued_count: 0,
+            });
+        }
+
+        let mut iterator = records.into_iter();
+        let mut queued_count = 0;
+        let mut next_offset = None;
+        while let Some(record) = iterator.next() {
+            let record_next_offset = record.offset().saturating_add(1);
+            match sender.try_send(record) {
+                Ok(()) => {
+                    queued_count += 1;
+                    next_offset = Some(record_next_offset);
+                }
+                Err(TrySendError::Closed(record)) => {
+                    self.partition_queues.remove(key);
+                    let mut main_records = Vec::with_capacity(iterator.len() + 1);
+                    main_records.push(record);
+                    main_records.extend(iterator);
+                    return Ok(PartitionRoute {
+                        records: main_records,
+                        next_offset,
+                        queued_count,
+                    });
+                }
+                Err(TrySendError::Full(_record)) => {
+                    if let Some(next_offset) = next_offset {
+                        self.update_assignment_offset(key.0.as_str(), key.1, next_offset);
+                    }
+                    return Err(Error::PartitionQueueFull {
+                        topic: key.0.clone(),
+                        partition: key.1,
+                        capacity: self.config.partition_queue_capacity,
+                    });
+                }
+            }
+        }
+
+        Ok(PartitionRoute {
+            records: Vec::new(),
+            next_offset,
+            queued_count,
+        })
     }
 
     /// Fetches records for one topic partition without changing assignment state.
@@ -503,6 +722,12 @@ struct FetchedPartition {
     next_offset: i64,
 }
 
+struct PartitionRoute {
+    records: Vec<ConsumerRecord>,
+    next_offset: Option<i64>,
+    queued_count: usize,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// Direct consumer topic partition assignment.
 pub struct ConsumerAssignment {
@@ -574,6 +799,7 @@ pub struct ConsumerConfig {
     max_partition_bytes: i32,
     max_retries: u32,
     max_poll_records: usize,
+    partition_queue_capacity: usize,
     isolation_level: IsolationLevel,
 }
 
@@ -591,6 +817,7 @@ impl ConsumerConfig {
             max_partition_bytes: 1_048_576,
             max_retries: 1,
             max_poll_records: 500,
+            partition_queue_capacity: 1024,
             isolation_level: IsolationLevel::ReadUncommitted,
         }
     }
@@ -756,6 +983,19 @@ impl ConsumerConfig {
         self.max_poll_records
     }
 
+    /// Sets the bounded capacity of queues returned by
+    /// [`Consumer::split_partition_queue`]. A value of zero is normalized to
+    /// one because Tokio channels cannot be created without capacity.
+    pub fn partition_queue_capacity(mut self, partition_queue_capacity: usize) -> Self {
+        self.partition_queue_capacity = partition_queue_capacity.max(1);
+        self
+    }
+
+    /// Returns the configured partition queue capacity.
+    pub fn partition_queue_capacity_ref(&self) -> usize {
+        self.partition_queue_capacity
+    }
+
     /// Sets whether fetches expose records from aborted transactions.
     pub fn isolation_level(mut self, isolation_level: IsolationLevel) -> Self {
         self.isolation_level = isolation_level;
@@ -779,6 +1019,7 @@ impl ConsumerConfig {
             client,
             config: self,
             assignments: Vec::new(),
+            partition_queues: BTreeMap::new(),
             metadata_cache: BTreeMap::new(),
             broker_clients: BTreeMap::new(),
         })
@@ -922,6 +1163,7 @@ fn can_retry_fetch(error: &Error) -> bool {
         Error::MissingBootstrapServer
         | Error::InvalidPartition { .. }
         | Error::UnassignedTopicPartition { .. }
+        | Error::PartitionQueueFull { .. }
         | Error::MissingGroupDescription { .. }
         | Error::MissingDeleteGroupResult { .. }
         | Error::ResponseCountMismatch { .. }
@@ -989,6 +1231,7 @@ mod tests {
             .max_partition_bytes(1024)
             .max_retries(3)
             .max_poll_records(10)
+            .partition_queue_capacity(7)
             .isolation_level(IsolationLevel::ReadCommitted);
 
         assert_eq!(
@@ -1017,7 +1260,48 @@ mod tests {
         );
         assert_eq!(config.max_retries_ref(), 3);
         assert_eq!(config.max_poll_records_ref(), 10);
+        assert_eq!(config.partition_queue_capacity_ref(), 7);
         assert_eq!(config.isolation_level_ref(), IsolationLevel::ReadCommitted);
+    }
+
+    #[test]
+    fn normalizes_zero_partition_queue_capacity() {
+        assert_eq!(
+            ConsumerConfig::new(["localhost:9092"])
+                .partition_queue_capacity(0)
+                .partition_queue_capacity_ref(),
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn split_partition_queue_requires_assignment_and_protects_seek_state() {
+        let (client_stream, _broker_stream) = tokio::io::duplex(64);
+        let client = Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-partition-queue-api-test".to_owned()),
+            Some(std::time::Duration::from_millis(500)),
+        );
+        let config = ConsumerConfig::new(["localhost:9092"]);
+        let mut consumer = Consumer::from_assignments(client, config, Vec::new());
+
+        assert!(matches!(
+            consumer.split_partition_queue("orders", 0).unwrap_err(),
+            Error::UnassignedTopicPartition { topic, partition: 0 } if topic == "orders"
+        ));
+        consumer.assign("orders", 0, 10);
+        let queue = consumer.split_partition_queue("orders", 0).unwrap();
+        assert!(matches!(
+            consumer.split_partition_queue("orders", 0).unwrap_err(),
+            Error::Unsupported("partition queue is already split")
+        ));
+        assert!(matches!(
+            consumer.seek("orders", 0, 20).unwrap_err(),
+            Error::Unsupported("seek requires dropping the active partition queue")
+        ));
+        drop(queue);
+        consumer.seek("orders", 0, 20).unwrap();
+        assert_eq!(consumer.position("orders", 0), Some(20));
     }
 
     #[test]
@@ -1302,6 +1586,96 @@ mod tests {
         assert_eq!(records.len(), 1);
         assert_eq!(records[0].offset(), 42);
         assert_eq!(metrics.snapshot().consumed_records, 1);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn split_partition_queue_routes_poll_records_and_advances_position() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let request = read_frame(&mut socket).await;
+            assert_eq!(&request[0..4], &[0, 1, 0, 4]);
+            write_frame(&mut socket, &fetch_v4_response_frame()).await;
+        });
+
+        let (client_stream, broker_stream) = tokio::io::duplex(64);
+        let _broker_stream = broker_stream;
+        let client = Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-partition-queue-test".to_owned()),
+            Some(std::time::Duration::from_millis(500)),
+        );
+        let config = ConsumerConfig::new([addr.to_string()])
+            .request_timeout_ms(500)
+            .partition_queue_capacity(2);
+        let mut consumer = Consumer::from_assignments(client, config, Vec::new());
+        let mut metadata = metadata_fixture();
+        metadata.brokers[0].host = addr.ip().to_string();
+        metadata.brokers[0].port = i32::from(addr.port());
+        consumer
+            .metadata_cache
+            .insert("orders".to_owned(), metadata);
+        consumer.assign("orders", 0, 42);
+
+        let mut queue = consumer.split_partition_queue("orders", 0).unwrap();
+        assert_eq!(queue.topic(), "orders");
+        assert_eq!(queue.partition(), 0);
+        assert!(consumer.poll().await.unwrap().is_empty());
+        assert_eq!(consumer.position("orders", 0), Some(43));
+
+        let record = queue.recv().await.unwrap();
+        assert_eq!(record.offset(), 42);
+        assert!(queue.try_recv().is_none());
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn split_partition_queue_reports_backpressure_without_skipping_records() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            for _ in 0..2 {
+                let request = read_frame(&mut socket).await;
+                assert_eq!(&request[0..4], &[0, 1, 0, 4]);
+                write_frame(&mut socket, &fetch_v4_response_frame()).await;
+            }
+        });
+
+        let (client_stream, broker_stream) = tokio::io::duplex(64);
+        let _broker_stream = broker_stream;
+        let client = Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-partition-queue-capacity-test".to_owned()),
+            Some(std::time::Duration::from_millis(500)),
+        );
+        let config = ConsumerConfig::new([addr.to_string()])
+            .request_timeout_ms(500)
+            .partition_queue_capacity(1);
+        let mut consumer = Consumer::from_assignments(client, config, Vec::new());
+        let mut metadata = metadata_fixture();
+        metadata.brokers[0].host = addr.ip().to_string();
+        metadata.brokers[0].port = i32::from(addr.port());
+        consumer
+            .metadata_cache
+            .insert("orders".to_owned(), metadata);
+        consumer.assign("orders", 0, 42);
+        let mut queue = consumer.split_partition_queue("orders", 0).unwrap();
+
+        consumer.poll().await.unwrap();
+        let error = consumer.poll().await.unwrap_err();
+        assert!(matches!(
+            error,
+            Error::PartitionQueueFull {
+                topic,
+                partition: 0,
+                capacity: 1
+            } if topic == "orders"
+        ));
+        assert_eq!(consumer.position("orders", 0), Some(43));
+        assert_eq!(queue.recv().await.unwrap().offset(), 42);
         server.await.unwrap();
     }
 

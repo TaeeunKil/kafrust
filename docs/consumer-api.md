@@ -23,6 +23,27 @@ for record in records {
 }
 ```
 
+To process one assigned partition independently, split it into a bounded
+queue before polling:
+
+```rust
+consumer.assign("orders", 0, 0);
+let mut partition_queue = consumer.split_partition_queue("orders", 0)?;
+
+consumer.poll().await?;
+while let Some(record) = partition_queue.try_recv() {
+    process(record)?;
+}
+```
+
+`ConsumerPartitionQueue::recv` waits for a record and `recv_batch` drains a
+bounded batch. The owning consumer remains responsible for network polling;
+the queue only changes where records for that topic-partition are delivered.
+Dropping the queue closes the split, so later records return through
+`Consumer::poll`. A full queue returns `Error::PartitionQueueFull` and leaves
+the assignment position at the first record that was not accepted. The same
+API is available on `ConsumerGroup` for currently assigned partitions.
+
 Run the opt-in fetch example against a local broker:
 
 ```bash
@@ -51,7 +72,9 @@ consumer.resume("orders", 0)?;
 in-memory position without committing it to Kafka. Paused assignments remain
 visible and retain their position, but `poll` skips their fetch requests.
 Seeking, pausing, or resuming a partition that is not assigned returns
-`Error::UnassignedTopicPartition`.
+`Error::UnassignedTopicPartition`. Seek a split partition only after dropping
+its active queue; this prevents buffered records from being mixed with a new
+position. Reassigning a partition closes its existing split queue.
 
 ## Partition Watermarks
 
@@ -75,6 +98,8 @@ Current implementation status:
 - `ConsumerConfig`, `Consumer`, and `ConsumerRecord` are public API types.
 - `Consumer::fetch` accepts topic, partition, and offset directly.
 - `Consumer::assign` and `Consumer::poll` provide a stream-like path that advances assigned partition offsets after records are returned.
+- `Consumer::split_partition_queue` and `ConsumerPartitionQueue` provide a
+  bounded per-partition delivery path for direct and group consumers.
 - `Consumer::position`, `seek`, `pause`, and `resume` provide explicit local
   assignment control.
 - `Consumer::fetch_watermarks` exposes leader-routed earliest and latest
@@ -84,6 +109,9 @@ Current implementation status:
 - `ConsumerConfig::security_protocol` stores the Kafka security protocol for consumer broker connections. `Plaintext` is the default transport; TLS requires the non-default `tls` crate feature; `tls_server_name(name)` overrides the certificate validation name when the bootstrap host differs from the broker certificate; `tls_root_certificate_der(bytes)` adds DER-encoded root certificates while keeping platform roots enabled; `sasl_plain(username, password)`, `sasl_scram_sha_256(username, password)`, and `sasl_scram_sha_512(username, password)` provide SASL credentials for `SaslPlaintext` or `SaslTls`.
 - `ConsumerConfig::max_retries` controls retry attempts for stale metadata, unknown topic-partition entries in cached metadata, missing leader or broker metadata, transient fetch broker errors, request timeouts, and connection I/O failures.
 - `ConsumerConfig::max_poll_records` limits how many records one `poll` call returns.
+- `ConsumerConfig::partition_queue_capacity` bounds each split partition queue;
+  group consumers configure the same limit with
+  `ConsumerGroupConfig::partition_queue_capacity`.
 - `ConsumerConfig::isolation_level` selects `ReadUncommitted` (the default) or
   `ReadCommitted`. Read-committed Fetch v4 responses hide control records and
   records belonging to aborted transaction ranges. Poll assignment offsets

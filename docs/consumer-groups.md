@@ -207,6 +207,28 @@ group.resume(&topic, partition)?;
 Assignment changes remain Kafka-visible: operations against a partition this
 member does not currently own return `Error::UnassignedTopicPartition`.
 
+For independent processing of one current assignment, use the same bounded
+partition queue API as the direct consumer:
+
+```rust
+let assignment = group.assignments().first().unwrap();
+let topic = assignment.topic().to_owned();
+let partition = assignment.partition();
+let mut partition_queue = group.split_partition_queue(&topic, partition)?;
+
+group.poll().await?;
+while let Some(record) = partition_queue.try_recv() {
+    process(record)?;
+}
+```
+
+Configure the queue bound with
+`ConsumerGroupConfig::partition_queue_capacity`. A full queue returns
+`Error::PartitionQueueFull`; the group assignment position remains at the
+first record that could not be accepted. When a rejoin removes or resets a
+partition, its split queue is closed and the application must create a new
+queue for the new assignment.
+
 `ConsumerGroup::fetch_watermarks` delegates to the group's direct consumer and
 does not require the requested partition to be in the current assignment. It
 returns the earliest retained offset and the latest log-end offset without

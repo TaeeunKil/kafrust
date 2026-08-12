@@ -219,7 +219,11 @@ Known limits:
   worker's focused unit coverage and live qualification passed for classic
   Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1, and KIP-848 Kafka 4.3.1 in
   [`Live Kafka Smoke`, run `31563953123`](https://github.com/TaeeunKil/kafrust/actions/runs/31563953123).
-  Partition queue splitting remains open.
+- `Consumer::split_partition_queue` and
+  `ConsumerGroup::split_partition_queue` provide bounded per-partition
+  delivery through `ConsumerPartitionQueue`. Focused tests cover independent
+  routing, queue-full backpressure, and preservation of the first rejected
+  offset; assignment replacement closes queues for partitions no longer owned.
 - `ConsumerGroup::rejoin` is public and refreshes regex topic discovery before
   joining again. The classic matrix and Kafka 4.3.1 KIP-848 regex paths passed
   initial and explicit rejoin assignment checks in [`Live Kafka Smoke`, run

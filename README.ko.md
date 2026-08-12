@@ -259,7 +259,8 @@ kafrust의 호환성 주장은 실제 broker로 검증된 동작으로 제한합
 
 - low-level Kafka request roundtrip용 `Client`.
 - `ProducerConfig`, `Producer`, `BufferedProducer`, `ProducerRecord`.
-- `ConsumerConfig`, `Consumer`, `ConsumerAssignment`, `ConsumerRecord`.
+- `ConsumerConfig`, `Consumer`, `ConsumerAssignment`, `ConsumerRecord`, 그리고
+  bounded per-partition delivery를 위한 `ConsumerPartitionQueue`.
 - `ConsumerGroupConfig`, `ConsumerGroup`, `ConsumerGroupHeartbeat`.
 - plaintext, TLS, SASL connection mode를 표현하는 `SecurityProtocol`.
 - companion crate인 `kafrust-protocol`을 위한 `kafrust::protocol`.

@@ -164,7 +164,10 @@ commits the current next offsets for its assignments. `commit_record` plus
 `commit_queued_offsets` provides an explicit, coalescing per-message commit
 queue. `spawn_commit_worker` adds an opt-in bounded interval worker that shares
 rejoin state and retries transport/coordinator-transition errors; partition
-queue splitting is still not provided. `ConsumerGroupConfig::subscribe_pattern`
+queue splitting is available through bounded `split_partition_queue` handles
+for assigned direct or group partitions; a full queue returns
+`Error::PartitionQueueFull` without advancing past the first rejected record.
+`ConsumerGroupConfig::subscribe_pattern`
 provides client-side regex
 topic subscription by resolving the broker's Metadata v1 topic list before each
 join or rejoin; it is not a broker-side subscription protocol. A synchronous
@@ -276,7 +279,7 @@ See [Admin API](admin-api.md) for typed request and response examples.
 | Idempotent producer | Candidate; broker-stop recovery is live-verified on the documented three-broker profile, but qualify target-specific ambiguous, fencing, and throughput failures |
 | Direct assigned-partition consumer | Candidate |
 | Classic range-assigned consumer group | Candidate with rebalance testing |
-| Explicit per-message commit queue | Candidate; `commit_record` coalesces per-partition offsets and `commit_queued_offsets` flushes them under the current generation. The record-fetch and OffsetCommit path is live-verified across Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1, including KIP-848 on 4.3.1, in [`Live Kafka Smoke` run `31561944247`](https://github.com/TaeeunKil/kafrust/actions/runs/31561944247). `spawn_commit_worker` adds bounded interval flush, retry, rejoin synchronization, and explicit shutdown; classic and KIP-848 worker paths are live-qualified in [`Live Kafka Smoke`, run `31563953123`](https://github.com/TaeeunKil/kafrust/actions/runs/31563953123). Partition queue splitting remains open |
+| Explicit per-message commit queue | Candidate; `commit_record` coalesces per-partition offsets and `commit_queued_offsets` flushes them under the current generation. The record-fetch and OffsetCommit path is live-verified across Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1, including KIP-848 on 4.3.1, in [`Live Kafka Smoke` run `31561944247`](https://github.com/TaeeunKil/kafrust/actions/runs/31561944247). `spawn_commit_worker` adds bounded interval flush, retry, rejoin synchronization, and explicit shutdown; classic and KIP-848 worker paths are live-qualified in [`Live Kafka Smoke`, run `31563953123`](https://github.com/TaeeunKil/kafrust/actions/runs/31563953123). `split_partition_queue` now provides bounded direct/group per-partition delivery; focused tests cover routing and full-queue position preservation |
 | Regex topic subscription | Verified for initial and explicit rejoin two-topic assignment on Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke, including the corrected KIP-848 path on 4.3.1, in [`Live Kafka Smoke` run `31561944247`](https://github.com/TaeeunKil/kafrust/actions/runs/31561944247); qualify topic-discovery permissions on secured target brokers |
 | TLS, SASL/PLAIN, or SASL/SCRAM-SHA-256 | Candidate on documented profiles |
 | SASL/OAUTHBEARER | Candidate only for the documented Kafka 3.7.2 unsecured-validator smoke; SASL Authenticate v1 session lifetime metadata is live-regressed in `Live Kafka Smoke` run `31561944247`, while async token-provider callbacks and opportunistic provider-backed re-authentication are covered by focused tests; detached refresh workers and production OAuth/OIDC provider, token policy, and authorization behavior remain open |

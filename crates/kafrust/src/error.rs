@@ -159,6 +159,15 @@ pub enum Error {
         /// Kafka partition index.
         partition: i32,
     },
+    /// A split consumer partition queue reached its configured bound.
+    PartitionQueueFull {
+        /// Kafka topic name.
+        topic: String,
+        /// Kafka partition index.
+        partition: i32,
+        /// Configured queue capacity.
+        capacity: usize,
+    },
     /// Metadata did not contain a usable leader for a topic partition.
     MissingLeader {
         /// Kafka topic name.
@@ -278,6 +287,14 @@ impl fmt::Display for Error {
             Self::UnassignedTopicPartition { topic, partition } => {
                 write!(f, "unassigned topic partition {topic}-{partition}")
             }
+            Self::PartitionQueueFull {
+                topic,
+                partition,
+                capacity,
+            } => write!(
+                f,
+                "partition queue for {topic}-{partition} is full (capacity {capacity})"
+            ),
             Self::MissingLeader { topic, partition } => {
                 write!(f, "missing leader for topic partition {topic}-{partition}")
             }
@@ -346,6 +363,7 @@ impl std::error::Error for Error {
             | Self::UnknownTopicOrPartition { .. }
             | Self::InvalidPartition { .. }
             | Self::UnassignedTopicPartition { .. }
+            | Self::PartitionQueueFull { .. }
             | Self::MissingLeader { .. }
             | Self::MissingBroker { .. }
             | Self::MissingGroupDescription { .. }

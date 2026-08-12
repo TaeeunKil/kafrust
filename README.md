@@ -424,7 +424,8 @@ Primary public entry points:
   and client-quota administration types.
 - `ProducerConfig`, `Producer`, `BufferedProducer`, and `ProducerRecord`.
 - `Compression` for opt-in producer RecordBatch compression.
-- `ConsumerConfig`, `Consumer`, `ConsumerAssignment`, and `ConsumerRecord`.
+- `ConsumerConfig`, `Consumer`, `ConsumerAssignment`, `ConsumerRecord`, and
+  `ConsumerPartitionQueue` for bounded per-partition delivery.
 - `ConsumerGroupConfig`, `ConsumerGroup`, `ConsumerGroupProtocol`, and
   `ConsumerGroupHeartbeat`.
 - `SecurityProtocol`, `SaslMechanism`, and `SaslCredentials` for plaintext,
