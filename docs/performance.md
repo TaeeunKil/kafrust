@@ -139,6 +139,12 @@ processed 16,773,500 1-KiB records across a ten-second broker outage, observed
 147 high-level operation errors, 774 failed requests, and 1,028 retries, then
 recovered successfully with zero in-flight requests and buffered records.
 
+The latest five-minute merged-main run
+[`31631358207`](https://github.com/TaeeunKil/kafrust/actions/runs/31631358207)
+processed 16,847,700 1-KiB records across a ten-second broker outage, observed
+148 high-level operation errors, 782 failed requests, and 1,035 retries, then
+recovered successfully with zero in-flight requests and buffered records.
+
 The scheduled five-minute run
 [`31568595989`](https://github.com/TaeeunKil/kafrust/actions/runs/31568595989)
 roundtripped 17,019,900 1-KiB records across the same ten-second outage,
@@ -151,5 +157,12 @@ The latest 20,000-record benchmark run
 [`31574062876`](https://github.com/TaeeunKil/kafrust/actions/runs/31574062876)
 against Kafka 4.3.1 measured 115,388 records/s for 100-byte payloads, 55,938
 records/s for 1-KiB payloads, 3,292 records/s for 10-KiB payloads, and 64,355
+records/s for 1-KiB Zstd payloads. Each profile completed with zero retries;
+these are hosted-runner baselines, not cross-client parity claims.
+
+The latest 20,000-record benchmark run
+[`31631563194`](https://github.com/TaeeunKil/kafrust/actions/runs/31631563194)
+against Kafka 4.3.1 measured 118,556 records/s for 100-byte payloads, 54,006
+records/s for 1-KiB payloads, 3,030 records/s for 10-KiB payloads, and 60,486
 records/s for 1-KiB Zstd payloads. Each profile completed with zero retries;
 these are hosted-runner baselines, not cross-client parity claims.

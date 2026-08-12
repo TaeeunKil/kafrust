@@ -385,13 +385,21 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
   for 1-KiB Zstd payloads against Kafka 4.3.1, with zero retries in every
   profile.
 - The newer merged-main benchmark run
-  [`31621648602`](https://github.com/TaeeunKil/kafrust/actions/runs/31621648602)
-  completed all four profiles with zero retries: 142,018 records/s for 100-byte
-  payloads, 68,037 for 1-KiB, 3,773 for 10-KiB, and 68,922 for 1-KiB Zstd.
+[`31621648602`](https://github.com/TaeeunKil/kafrust/actions/runs/31621648602)
+completed all four profiles with zero retries: 142,018 records/s for 100-byte
+payloads, 68,037 for 1-KiB, 3,773 for 10-KiB, and 68,922 for 1-KiB Zstd.
   The newer five-minute soak run
   [`31621654970`](https://github.com/TaeeunKil/kafrust/actions/runs/31621654970)
-  processed 16,773,500 records across a ten-second outage and ended recovered
-  with zero in-flight requests and buffered records.
+processed 16,773,500 records across a ten-second outage and ended recovered
+with zero in-flight requests and buffered records.
+- The latest five-minute broker-restart soak run
+  [`31631358207`](https://github.com/TaeeunKil/kafrust/actions/runs/31631358207)
+  processed 16,847,700 1-KiB records across a ten-second outage, observed 148
+  operation errors, 782 failed requests, and 1,035 retries, then recovered with
+  zero in-flight requests and buffered records. The latest 20,000-record
+  benchmark run [`31631563194`](https://github.com/TaeeunKil/kafrust/actions/runs/31631563194)
+  measured 118,556 records/s for 100-byte payloads, 54,006 for 1-KiB, 3,030
+  for 10-KiB, and 60,486 for 1-KiB Zstd, with zero retries in every profile.
 - Kafka-compatible Murmur2 routing for keyed records without an explicit
   partition. Manual run `30066328105` verified key-derived routing and
   fetch-back by partition and offset across the three-broker Kafka 3.7.2
