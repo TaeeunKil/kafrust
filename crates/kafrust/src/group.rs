@@ -843,6 +843,7 @@ impl ConsumerGroupConfig {
                     consumer_config,
                     consumer_assignments,
                 ),
+                pending_commit_offsets: BTreeMap::new(),
             };
             group.notify_rebalance(RebalancePhase::After, group.consumer.assignments());
             return Ok(group);
@@ -1018,6 +1019,7 @@ impl ConsumerGroupConfig {
                 consumer_config,
                 consumer_assignments,
             ),
+            pending_commit_offsets: BTreeMap::new(),
         };
         group.notify_rebalance(RebalancePhase::After, group.consumer.assignments());
         Ok(group)
@@ -1047,6 +1049,42 @@ fn resolve_topic_pattern(pattern: &str, metadata: &MetadataResponseV1) -> Result
         ));
     }
     Ok(topics)
+}
+
+fn queue_commit_offset(
+    pending: &mut BTreeMap<(String, i32), i64>,
+    topic: &str,
+    partition: i32,
+    offset: i64,
+) -> Result<()> {
+    let next_offset = offset
+        .checked_add(1)
+        .ok_or(Error::Unsupported("consumer record offset overflow"))?;
+    let queued = pending
+        .entry((topic.to_owned(), partition))
+        .or_insert(next_offset);
+    *queued = (*queued).max(next_offset);
+    Ok(())
+}
+
+fn pending_commit_assignments(
+    assignments: &[ConsumerAssignment],
+    pending: &BTreeMap<(String, i32), i64>,
+) -> Vec<ConsumerAssignment> {
+    assignments
+        .iter()
+        .filter_map(|assignment| {
+            pending
+                .get(&(assignment.topic().to_owned(), assignment.partition()))
+                .map(|offset| {
+                    ConsumerAssignment::new(
+                        assignment.topic().to_owned(),
+                        assignment.partition(),
+                        *offset,
+                    )
+                })
+        })
+        .collect()
 }
 
 impl fmt::Debug for ConsumerGroupConfig {
@@ -1124,6 +1162,7 @@ pub struct ConsumerGroup {
     consumer_heartbeat_assignment_version: u64,
     consumer_owned_partitions: Option<Vec<ConsumerGroupHeartbeatTopicPartitions>>,
     consumer: Consumer,
+    pending_commit_offsets: BTreeMap<(String, i32), i64>,
 }
 
 /// Consumer group identity used to fence transactional offset commits.
@@ -1194,6 +1233,35 @@ impl ConsumerGroup {
     /// Returns the assigned topic partitions and next offsets.
     pub fn assignments(&self) -> &[ConsumerAssignment] {
         self.consumer.assignments()
+    }
+
+    /// Queues a record's next offset for a later group commit.
+    ///
+    /// This method does not contact Kafka. Multiple records for one topic
+    /// partition are coalesced to the greatest next offset. Call
+    /// [`Self::commit_queued_offsets`] to flush the queue.
+    pub fn commit_record(&mut self, record: &ConsumerRecord) -> Result<()> {
+        if self
+            .consumer
+            .position(record.topic(), record.partition())
+            .is_none()
+        {
+            return Err(Error::UnassignedTopicPartition {
+                topic: record.topic().to_owned(),
+                partition: record.partition(),
+            });
+        }
+        queue_commit_offset(
+            &mut self.pending_commit_offsets,
+            record.topic(),
+            record.partition(),
+            record.offset(),
+        )
+    }
+
+    /// Returns the number of topic partitions waiting for a queued commit.
+    pub fn pending_commit_count(&self) -> usize {
+        self.pending_commit_offsets.len()
     }
 
     /// Returns the next offset for a currently assigned topic partition.
@@ -1639,6 +1707,7 @@ impl ConsumerGroup {
             .map(|assignment| (assignment.topic().to_owned(), assignment.partition()))
             .collect::<Vec<_>>();
         let owned_partitions = owned_partitions_from_assignments(self.consumer.assignments());
+        let pending_commit_offsets = self.pending_commit_offsets.clone();
         if self.protocol == ConsumerGroupProtocol::Consumer {
             let owned_partitions = consumer_owned_partitions_from_assignments(
                 self.consumer.assignments(),
@@ -1658,6 +1727,8 @@ impl ConsumerGroup {
                     joined.consumer.pause(&topic, partition)?;
                 }
             }
+            joined.pending_commit_offsets = pending_commit_offsets;
+            joined.retain_pending_commit_offsets();
             let current_assignments = joined.consumer.assignments().to_vec();
             *self = joined;
             self.notify_rebalance(RebalancePhase::After, &current_assignments);
@@ -1673,6 +1744,8 @@ impl ConsumerGroup {
                 joined.consumer.pause(&topic, partition)?;
             }
         }
+        joined.pending_commit_offsets = pending_commit_offsets;
+        joined.retain_pending_commit_offsets();
         let current_assignments = joined.consumer.assignments().to_vec();
         *self = joined;
         self.notify_rebalance(RebalancePhase::After, &current_assignments);
@@ -1690,6 +1763,17 @@ impl ConsumerGroup {
                 assignments,
             });
         }
+    }
+
+    fn retain_pending_commit_offsets(&mut self) {
+        let assigned = self
+            .consumer
+            .assignments()
+            .iter()
+            .map(|assignment| (assignment.topic().to_owned(), assignment.partition()))
+            .collect::<BTreeSet<_>>();
+        self.pending_commit_offsets
+            .retain(|key, _| assigned.contains(key));
     }
 
     /// Sends an explicit heartbeat for this group member.
@@ -1859,13 +1943,47 @@ impl ConsumerGroup {
         err
     )]
     pub async fn commit_offsets(&mut self) -> Result<()> {
+        let assignments = self.consumer.assignments().to_vec();
         debug!(
             group_id = self.group_id.as_str(),
             member_id = self.member_id.as_str(),
             generation_id = self.generation_id,
-            topic_count = offset_commit_topics(self.consumer.assignments()).len(),
+            topic_count = offset_commit_topics(&assignments).len(),
             "committing kafka consumer group offsets"
         );
+        self.commit_assignment_offsets(&assignments).await?;
+        self.clear_pending_commit_offsets(&assignments);
+        Ok(())
+    }
+
+    /// Flushes queued per-record offsets to the group coordinator.
+    ///
+    /// Queued offsets for partitions no longer assigned after a rebalance are
+    /// discarded. On a successful flush, only the offsets included in that
+    /// request are removed from the queue.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.consumer_group.commit_queued_offsets",
+        skip_all,
+        fields(group_id = self.group_id.as_str(), member_id = self.member_id.as_str(), generation_id = self.generation_id),
+        err
+    )]
+    pub async fn commit_queued_offsets(&mut self) -> Result<()> {
+        self.retain_pending_commit_offsets();
+        let assignments =
+            pending_commit_assignments(self.consumer.assignments(), &self.pending_commit_offsets);
+        if assignments.is_empty() {
+            return Ok(());
+        }
+        self.commit_assignment_offsets(&assignments).await?;
+        self.clear_pending_commit_offsets(&assignments);
+        Ok(())
+    }
+
+    async fn commit_assignment_offsets(
+        &mut self,
+        assignments: &[ConsumerAssignment],
+    ) -> Result<()> {
         let response_topics = match if self.protocol == ConsumerGroupProtocol::Consumer {
             self.coordinator
                 .offset_commit_v9(
@@ -1873,7 +1991,7 @@ impl ConsumerGroup {
                     self.generation_id,
                     self.member_id.clone(),
                     self.config.group_instance_id.clone(),
-                    offset_commit_topics_v9(self.consumer.assignments()),
+                    offset_commit_topics_v9(assignments),
                 )
                 .await
                 .map(|response| response.topics)
@@ -1884,7 +2002,7 @@ impl ConsumerGroup {
                     self.generation_id,
                     self.member_id.clone(),
                     Some(group_instance_id.clone()),
-                    offset_commit_topics_v7(self.consumer.assignments()),
+                    offset_commit_topics_v7(assignments),
                 )
                 .await
                 .map(|response| response.topics)
@@ -1895,7 +2013,7 @@ impl ConsumerGroup {
                     self.generation_id,
                     self.member_id.clone(),
                     self.retention_time_ms,
-                    offset_commit_topics(self.consumer.assignments()),
+                    offset_commit_topics(assignments),
                 )
                 .await
                 .map(|response| response.topics)
@@ -1940,6 +2058,19 @@ impl ConsumerGroup {
             "committed kafka consumer group offsets"
         );
         Ok(())
+    }
+
+    fn clear_pending_commit_offsets(&mut self, assignments: &[ConsumerAssignment]) {
+        for assignment in assignments {
+            let key = (assignment.topic().to_owned(), assignment.partition());
+            let committed = self
+                .pending_commit_offsets
+                .get(&key)
+                .is_some_and(|pending| *pending <= assignment.next_offset());
+            if committed {
+                self.pending_commit_offsets.remove(&key);
+            }
+        }
     }
 }
 
@@ -3322,9 +3453,9 @@ mod tests {
         cooperative_rejoin_required_for_assignment, cooperative_sticky_assignments,
         group_retry_backoff, leave_group_response_error, list_offset, list_offsets_topics,
         member_id_after_join_error, offset_commit_response_error, offset_commit_topics,
-        offset_commit_topics_v7, offset_fetch_topics, range_assignments,
-        record_consumer_heartbeat_response, round_robin_assignments,
-        should_rejoin_after_background_heartbeat, should_rejoin_group,
+        offset_commit_topics_v7, offset_fetch_topics, pending_commit_assignments,
+        queue_commit_offset, range_assignments, record_consumer_heartbeat_response,
+        round_robin_assignments, should_rejoin_after_background_heartbeat, should_rejoin_group,
         should_retry_consumer_join_transport, validate_heartbeat_interval,
         ConsumerGroupAssignmentStrategy, ConsumerGroupConfig, ConsumerGroupHeartbeat,
         ConsumerGroupHeartbeatTopicPartitions, ConsumerGroupProtocol,
@@ -3448,6 +3579,34 @@ mod tests {
             Some(Error::Unsupported(
                 "consumer group topic pattern matched no topics"
             ))
+        ));
+    }
+
+    #[test]
+    fn coalesces_queued_offsets_and_filters_unassigned_partitions() {
+        let mut pending = BTreeMap::new();
+        assert!(queue_commit_offset(&mut pending, "orders", 0, 4).is_ok());
+        assert!(queue_commit_offset(&mut pending, "orders", 0, 7).is_ok());
+        assert!(queue_commit_offset(&mut pending, "orders", 0, 5).is_ok());
+
+        let assignments = vec![
+            ConsumerAssignment::new("orders".to_owned(), 0, 8),
+            ConsumerAssignment::new("payments".to_owned(), 0, 3),
+        ];
+        assert_eq!(
+            pending_commit_assignments(&assignments, &pending),
+            vec![ConsumerAssignment::new("orders".to_owned(), 0, 8)]
+        );
+        assert_eq!(pending.get(&("orders".to_owned(), 0)), Some(&8));
+    }
+
+    #[test]
+    fn rejects_queued_offset_overflow() {
+        let mut pending = BTreeMap::new();
+        let error = queue_commit_offset(&mut pending, "orders", 0, i64::MAX).err();
+        assert!(matches!(
+            error,
+            Some(Error::Unsupported("consumer record offset overflow"))
         ));
     }
 

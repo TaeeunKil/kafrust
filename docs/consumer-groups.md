@@ -245,6 +245,25 @@ calling `leave`.
 
 `ConsumerGroup::commit_offsets` commits the current next offsets for assigned partitions. If Kafka reports a rejoinable generation, member, rebalance, or coordinator error, or if the coordinator request fails with I/O or timeout, `commit_offsets` rejoins the group and returns the original commit error instead of retrying the old assignment offsets under the new generation. After that, callers should poll the refreshed assignment state before deciding whether to commit again.
 
+For per-record processing, queue the record's next offset and flush the queue
+explicitly:
+
+```rust
+for record in &records {
+    process(record.value())?;
+    group.commit_record(record)?;
+}
+group.commit_queued_offsets().await?;
+```
+
+`commit_record` performs no network I/O and coalesces offsets independently per
+topic partition, keeping only the greatest next offset. `commit_queued_offsets`
+sends only currently assigned queued partitions using the current group
+generation. A queued partition lost during rejoin is discarded; a failed flush
+keeps the queue so the caller can retry after observing the returned error.
+`commit_offsets` also clears queued offsets that it covers. This is an explicit
+flush queue, not a detached background auto-commit task.
+
 KIP-848 groups use OffsetCommit v9, including flexible request/response
 encoding and the member epoch in `GenerationIdOrMemberEpoch`. Classic groups
 retain the existing v2/v7 routing. KIP-848 assignment initialization uses

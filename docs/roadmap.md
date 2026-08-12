@@ -188,6 +188,8 @@ Scope:
 - ConsumerGroup alpha API with join, sync, heartbeat, background heartbeat, poll, rejoin, and commit
 - client-side regex topic subscription through Metadata v1 resolution before
   each classic or KIP-848 join/rejoin
+- explicit per-record offset commit queue with per-partition coalescing and
+  current-generation flush
 - rebalance handling (poll-triggered rejoin for coordinator, generation, member, and rebalance heartbeat errors)
 
 Known limits:

@@ -160,9 +160,11 @@ group.commit_offsets().await?;
 ```
 
 The semantic difference matters: kafrust currently returns a bounded batch and
-commits the current next offsets for its assignments. It does not expose
-rust-rdkafka's asynchronous per-message commit queue or partition queue
-splitting. `ConsumerGroupConfig::subscribe_pattern` provides client-side regex
+commits the current next offsets for its assignments. `commit_record` plus
+`commit_queued_offsets` provides an explicit, coalescing per-message commit
+queue, but it does not yet provide rust-rdkafka's detached background commit
+worker or partition queue splitting. `ConsumerGroupConfig::subscribe_pattern`
+provides client-side regex
 topic subscription by resolving the broker's Metadata v1 topic list before each
 join or rejoin; it is not a broker-side subscription protocol. A synchronous
 `RebalanceListener` now covers the initial join after-snapshot, before/after
@@ -273,6 +275,7 @@ See [Admin API](admin-api.md) for typed request and response examples.
 | Idempotent producer | Candidate; broker-stop recovery is live-verified on the documented three-broker profile, but qualify target-specific ambiguous, fencing, and throughput failures |
 | Direct assigned-partition consumer | Candidate |
 | Classic range-assigned consumer group | Candidate with rebalance testing |
+| Explicit per-message commit queue | Candidate; `commit_record` coalesces per-partition offsets and `commit_queued_offsets` flushes them under the current generation; detached background commit worker remains open |
 | Regex topic subscription | Verified for initial two-topic assignment on Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke, including the corrected KIP-848 path on 4.3.1 in `Live Kafka Smoke` run `31559409300`; qualify topic-discovery permissions and rejoin behavior on the target broker |
 | TLS, SASL/PLAIN, or SASL/SCRAM-SHA-256 | Candidate on documented profiles |
 | SASL/OAUTHBEARER | Candidate only for the documented Kafka 3.7.2 unsecured-validator smoke; async token-provider callbacks exist, but qualify the production OAuth/OIDC provider, token policy, and authorization behavior |
