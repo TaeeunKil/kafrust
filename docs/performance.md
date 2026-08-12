@@ -126,3 +126,10 @@ observed 190 high-level operation errors, 1,118 failed requests, and 1,329
 retries, recovered successfully, and finished with zero in-flight requests and
 buffered records. The result artifact measured approximately 56.7k records/s
 over the full window.
+
+The latest 20,000-record benchmark run
+[`31569180500`](https://github.com/TaeeunKil/kafrust/actions/runs/31569180500)
+against Kafka 4.3.1 measured 109,368 records/s for 100-byte payloads, 58,135
+records/s for 1-KiB payloads, 3,295 records/s for 10-KiB payloads, and 55,226
+records/s for 1-KiB Zstd payloads. Each profile completed with zero retries;
+these are hosted-runner baselines, not cross-client parity claims.

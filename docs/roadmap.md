@@ -1203,6 +1203,12 @@ Implemented evidence:
   retries. Recovery completed and the final in-flight and buffered-record
   gauges were both zero; the result artifact reports approximately 56.7k
   records/s over the five-minute window.
+- Latest `main` benchmark run
+  [`31569180500`](https://github.com/TaeeunKil/kafrust/actions/runs/31569180500)
+  published 20,000-record Kafka 4.3.1 baselines: 109,368 records/s for
+  100-byte payloads, 58,135 records/s for 1-KiB payloads, 3,295 records/s for
+  10-KiB payloads, and 55,226 records/s for 1-KiB Zstd payloads. All four
+  profiles completed with zero retries.
 - Merged `main` benchmark run
   [`31562321010`](https://github.com/TaeeunKil/kafrust/actions/runs/31562321010)
   published fresh Kafka 4.3.1 release-profile baselines: 104,277 records/s

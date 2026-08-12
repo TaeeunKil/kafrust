@@ -167,6 +167,12 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
   failed requests, and 1,329 retries, then recovered with zero in-flight and
   buffered records. The artifact reports approximately 56.7k records/s over
   the full window.
+- Latest benchmark run
+  [`31569180500`](https://github.com/TaeeunKil/kafrust/actions/runs/31569180500)
+  measured 109,368 records/s for 100-byte payloads, 58,135 records/s for
+  1-KiB payloads, 3,295 records/s for 10-KiB payloads, and 55,226 records/s
+  for 1-KiB Zstd payloads against Kafka 4.3.1, with zero retries in every
+  profile.
 - Kafka-compatible Murmur2 routing for keyed records without an explicit
   partition. Manual run `30066328105` verified key-derived routing and
   fetch-back by partition and offset across the three-broker Kafka 3.7.2
