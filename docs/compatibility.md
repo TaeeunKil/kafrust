@@ -209,8 +209,13 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
   `commit_queued_offsets`. The classic path passed across Kafka 3.7.2, 3.8.1,
   3.9.1, and 4.3.1, and the KIP-848 path passed on Kafka 4.3.1 in
   [`Live Kafka Smoke`, run `31561944247`](https://github.com/TaeeunKil/kafrust/actions/runs/31561944247).
-  Detached background commit workers, partition queue splitting, and rejoin
-  topic discovery remain open compatibility work.
+- The same regex smoke now starts the bounded interval commit worker. Classic
+  worker flush, explicit worker flush, rejoin state synchronization, and
+  graceful worker shutdown passed across the Kafka 3.7.2, 3.8.1, 3.9.1, and
+  4.3.1 matrix; the KIP-848 worker path passed on Kafka 4.3.1 in
+  [`Live Kafka Smoke`, run `31563953123`](https://github.com/TaeeunKil/kafrust/actions/runs/31563953123).
+  Partition queue splitting and secured topic-discovery permission behavior
+  remain open compatibility work.
 - KIP-848 consumer groups through `ConsumerGroupHeartbeat v0`, Metadata v12
   topic UUID assignment, member-epoch foreground/background heartbeats,
   OffsetFetch v9, OffsetCommit v9, rejoin after concurrent membership, and

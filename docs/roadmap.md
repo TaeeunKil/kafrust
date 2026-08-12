@@ -216,8 +216,10 @@ Known limits:
   queued-offset worker. It coalesces by partition, retries transport and
   coordinator-transition failures, synchronizes generation/member/assignment
   state across explicit rejoin, and waits for shutdown before LeaveGroup. The
-  worker's focused unit coverage is complete; broker qualification is pending
-  in the next live smoke run. Partition queue splitting remains open.
+  worker's focused unit coverage and live qualification passed for classic
+  Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1, and KIP-848 Kafka 4.3.1 in
+  [`Live Kafka Smoke`, run `31563953123`](https://github.com/TaeeunKil/kafrust/actions/runs/31563953123).
+  Partition queue splitting remains open.
 - `ConsumerGroup::rejoin` is public and refreshes regex topic discovery before
   joining again. The classic matrix and Kafka 4.3.1 KIP-848 regex paths passed
   initial and explicit rejoin assignment checks in [`Live Kafka Smoke`, run
@@ -1349,6 +1351,10 @@ Implemented evidence:
   flushes them under the current generation. Its record-fetch plus OffsetCommit
   behavior passed the classic Kafka 3.7.2 through 4.3.1 matrix and KIP-848 on
   Kafka 4.3.1 in [`Live Kafka Smoke`, run `31560143467`](https://github.com/TaeeunKil/kafrust/actions/runs/31560143467).
+- The bounded `ConsumerGroup::spawn_commit_worker` passed interval flush,
+  explicit flush, classic and KIP-848 rejoin synchronization, and graceful
+  shutdown across the current live matrix in
+  [`Live Kafka Smoke`, run `31563953123`](https://github.com/TaeeunKil/kafrust/actions/runs/31563953123).
 - `RebalanceListener` exposes synchronous assignment snapshots for initial join,
   classic and KIP-848 rejoin, and broker-assigned KIP-848 assignment changes
   from foreground or background heartbeats. Callback lifecycle behavior is
