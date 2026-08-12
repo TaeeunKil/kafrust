@@ -908,7 +908,14 @@ Implemented evidence:
   not yet modeled. Read-only `DescribeGroups v1` now shares the coordinator
   reconnect path, with focused coverage for a dropped request and successful
   rediscovery. The default five-attempt budget is configurable through
-  `AdminClient::max_retries`, including disabling retries with zero.
+  `AdminClient::max_retries`, including disabling retries with zero. The
+  read-only `DescribeProducers v0` path now retries transient leader movement,
+  metadata convergence, transport, and timeout failures through fresh Metadata
+  v1 routing; transient per-partition leader responses are also retried. The
+  `DescribeTransactions v0` path retries coordinator rediscovery, transport,
+  and transient per-ID coordinator responses. Focused mock-broker tests cover
+  dropped requests and transient responses for both APIs; live broker-stop
+  injection during these requests remains open.
 - DescribeAcls v1, CreateAcls v1, and DeleteAcls v1 expose typed ACL bindings
   and filters through `AdminClient`, preserving top-level, per-entry,
   per-filter, and matching-ACL outcomes. Wire and mock-broker tests cover the

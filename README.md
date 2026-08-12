@@ -157,9 +157,10 @@ status inspection; the Kafka 3.7.2 three-broker path is live-verified.
 preserves per-partition low watermarks and broker errors for partial deletion.
 `describe_producers` routes DescribeProducers v0 to each current partition
 leader and exposes producer IDs, epochs, sequences, and active transaction
-offsets. `describe_transactions` discovers each transactional ID's
-coordinator and preserves transaction state, producer identity, and topic
-partition membership.
+offsets; transient leader movement and transport failures are retried through
+fresh metadata. `describe_transactions` discovers each transactional ID's
+coordinator, retries transient coordinator failures, and preserves transaction
+state, producer identity, and topic partition membership.
 Teams evaluating replacement of a librdkafka-backed application should follow
 the staged [rust-rdkafka migration guide](docs/migration-from-rust-rdkafka.md).
 

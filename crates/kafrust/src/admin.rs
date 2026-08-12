@@ -1127,8 +1127,10 @@ impl AdminClient {
     /// Describes active producers for selected topic partitions.
     ///
     /// Metadata is resolved first and requests are grouped by current
-    /// partition leader. Per-partition broker errors and producer sequence
-    /// state remain available in the typed result.
+    /// partition leader. Transient leader movement, broker transport, and
+    /// request-timeout failures are retried through fresh metadata while
+    /// per-partition broker errors and producer sequence state remain
+    /// available in the typed result.
     #[tracing::instrument(
         level = "debug",
         name = "kafka.admin.describe_producers",
@@ -1140,18 +1142,102 @@ impl AdminClient {
         &self,
         topics: &[DescribeProducersTopic],
     ) -> Result<DescribeProducersResult> {
-        let mut bootstrap = self.config.clone().connect().await?;
-        let metadata = bootstrap
-            .metadata(Some(
-                topics.iter().map(|topic| topic.name.clone()).collect(),
-            ))
-            .await?;
-        let requests = describe_producers_requests(&metadata, topics)?;
-        let mut responses = Vec::with_capacity(requests.len());
-        for (broker_addr, topics) in requests {
-            let mut client = self.config.connect_broker(broker_addr).await?;
-            responses.push(client.describe_producers_v0(topics).await?);
-        }
+        let mut retry = 0;
+        let responses = 'attempt: loop {
+            let mut bootstrap = match self.config.clone().connect().await {
+                Ok(client) => client,
+                Err(error)
+                    if retry < self.max_retries && is_retryable_admin_leader_error(&error) =>
+                {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    continue 'attempt;
+                }
+                Err(error) => return Err(error),
+            };
+            let metadata = match bootstrap
+                .metadata(Some(
+                    topics.iter().map(|topic| topic.name.clone()).collect(),
+                ))
+                .await
+            {
+                Ok(metadata) => metadata,
+                Err(error)
+                    if retry < self.max_retries && is_retryable_admin_leader_error(&error) =>
+                {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    continue 'attempt;
+                }
+                Err(error) => return Err(error),
+            };
+            let requests = match describe_producers_requests(&metadata, topics) {
+                Ok(requests) => requests,
+                Err(error)
+                    if retry < self.max_retries && is_retryable_admin_leader_error(&error) =>
+                {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    continue 'attempt;
+                }
+                Err(error) => return Err(error),
+            };
+            let mut responses = Vec::with_capacity(requests.len());
+            for (broker_addr, request_topics) in requests {
+                let mut client = match self.config.connect_broker(broker_addr).await {
+                    Ok(client) => client,
+                    Err(error)
+                        if retry < self.max_retries && is_retryable_admin_leader_error(&error) =>
+                    {
+                        retry += 1;
+                        self.config.record_retry();
+                        tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                        continue 'attempt;
+                    }
+                    Err(error) => return Err(error),
+                };
+                match client.describe_producers_v0(request_topics).await {
+                    Ok(response) => responses.push(response),
+                    Err(error)
+                        if retry < self.max_retries && is_retryable_admin_leader_error(&error) =>
+                    {
+                        retry += 1;
+                        self.config.record_retry();
+                        tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                        continue 'attempt;
+                    }
+                    Err(error) => return Err(error),
+                }
+            }
+
+            let retryable = responses.iter().any(|response| {
+                response.topics.iter().any(|topic| {
+                    topic
+                        .partitions
+                        .iter()
+                        .any(|partition| is_retryable_admin_leader_code(partition.error_code))
+                })
+            });
+            if retry < self.max_retries && retryable {
+                for response in &responses {
+                    for topic in &response.topics {
+                        for partition in &topic.partitions {
+                            if partition.error_code != 0 {
+                                self.config.record_broker_error();
+                            }
+                        }
+                    }
+                }
+                retry += 1;
+                self.config.record_retry();
+                tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                continue 'attempt;
+            }
+            break responses;
+        };
 
         let requested_partitions = topics.iter().map(|topic| topic.partitions.len()).sum();
         let returned_partitions = responses
@@ -1181,7 +1267,9 @@ impl AdminClient {
 
     /// Describes transactional IDs through their active transaction
     /// coordinators. IDs are grouped by coordinator so a request never goes
-    /// to a broker that does not own the transaction state.
+    /// to a broker that does not own the transaction state. Coordinator
+    /// movement, transport failures, and transient coordinator responses are
+    /// retried through fresh discovery.
     #[tracing::instrument(
         level = "debug",
         name = "kafka.admin.describe_transactions",
@@ -1193,30 +1281,112 @@ impl AdminClient {
         &self,
         transactional_ids: &[String],
     ) -> Result<DescribeTransactionsResult> {
-        let mut coordinator_ids: BTreeMap<String, Vec<String>> = BTreeMap::new();
-        let mut bootstrap = self.config.clone().connect().await?;
-        for transactional_id in transactional_ids {
-            let coordinator = bootstrap
-                .find_transaction_coordinator(transactional_id)
-                .await?;
-            if coordinator.error_code != 0 {
-                self.config.record_broker_error();
-                return Err(Error::Broker {
-                    code: coordinator.error_code,
-                    context: format!("find coordinator for transactional ID {transactional_id}"),
-                });
+        let mut retry = 0;
+        let responses = 'attempt: loop {
+            let mut coordinator_ids: BTreeMap<String, Vec<String>> = BTreeMap::new();
+            let mut bootstrap = match self.config.clone().connect().await {
+                Ok(client) => client,
+                Err(error)
+                    if retry < self.max_retries && is_retryable_admin_coordinator_error(&error) =>
+                {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    continue 'attempt;
+                }
+                Err(error) => return Err(error),
+            };
+            for transactional_id in transactional_ids {
+                let coordinator = match bootstrap
+                    .find_transaction_coordinator(transactional_id)
+                    .await
+                {
+                    Ok(coordinator) => coordinator,
+                    Err(error)
+                        if retry < self.max_retries
+                            && is_retryable_admin_coordinator_error(&error) =>
+                    {
+                        retry += 1;
+                        self.config.record_retry();
+                        tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                        continue 'attempt;
+                    }
+                    Err(error) => return Err(error),
+                };
+                if coordinator.error_code != 0 {
+                    self.config.record_broker_error();
+                    if retry < self.max_retries
+                        && is_retryable_admin_coordinator_code(coordinator.error_code)
+                    {
+                        retry += 1;
+                        self.config.record_retry();
+                        tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                        continue 'attempt;
+                    }
+                    return Err(Error::Broker {
+                        code: coordinator.error_code,
+                        context: format!(
+                            "find coordinator for transactional ID {transactional_id}"
+                        ),
+                    });
+                }
+                coordinator_ids
+                    .entry(format!("{}:{}", coordinator.host, coordinator.port))
+                    .or_default()
+                    .push(transactional_id.clone());
             }
-            coordinator_ids
-                .entry(format!("{}:{}", coordinator.host, coordinator.port))
-                .or_default()
-                .push(transactional_id.clone());
-        }
 
-        let mut responses = Vec::with_capacity(coordinator_ids.len());
-        for (broker_addr, transactional_ids) in coordinator_ids {
-            let mut client = self.config.connect_broker(broker_addr).await?;
-            responses.push(client.describe_transactions_v0(transactional_ids).await?);
-        }
+            let mut responses = Vec::with_capacity(coordinator_ids.len());
+            for (broker_addr, request_ids) in coordinator_ids {
+                let mut client = match self.config.connect_broker(broker_addr).await {
+                    Ok(client) => client,
+                    Err(error)
+                        if retry < self.max_retries
+                            && is_retryable_admin_coordinator_error(&error) =>
+                    {
+                        retry += 1;
+                        self.config.record_retry();
+                        tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                        continue 'attempt;
+                    }
+                    Err(error) => return Err(error),
+                };
+                match client.describe_transactions_v0(request_ids).await {
+                    Ok(response) => responses.push(response),
+                    Err(error)
+                        if retry < self.max_retries
+                            && is_retryable_admin_coordinator_error(&error) =>
+                    {
+                        retry += 1;
+                        self.config.record_retry();
+                        tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                        continue 'attempt;
+                    }
+                    Err(error) => return Err(error),
+                }
+            }
+
+            let retryable = responses.iter().any(|response| {
+                response
+                    .transaction_states
+                    .iter()
+                    .any(|state| is_retryable_admin_coordinator_code(state.error_code))
+            });
+            if retry < self.max_retries && retryable {
+                for response in &responses {
+                    for state in &response.transaction_states {
+                        if state.error_code != 0 {
+                            self.config.record_broker_error();
+                        }
+                    }
+                }
+                retry += 1;
+                self.config.record_retry();
+                tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                continue 'attempt;
+            }
+            break responses;
+        };
 
         for response in &responses {
             for state in &response.transaction_states {
@@ -4143,6 +4313,21 @@ fn is_retryable_admin_coordinator_code(code: i16) -> bool {
             | BrokerErrorKind::CoordinatorNotAvailable
             | BrokerErrorKind::NotCoordinator
     )
+}
+
+fn is_retryable_admin_leader_error(error: &Error) -> bool {
+    match error {
+        Error::Broker { code, .. } => is_retryable_admin_leader_code(*code),
+        Error::Io(_)
+        | Error::RequestTimedOut { .. }
+        | Error::MissingLeader { .. }
+        | Error::MissingBroker { .. } => true,
+        _ => false,
+    }
+}
+
+fn is_retryable_admin_leader_code(code: i16) -> bool {
+    matches!(code, 5..=9)
 }
 
 fn admin_coordinator_retry_backoff(retry_attempt: u32) -> Duration {
@@ -7368,6 +7553,104 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn retries_describe_producers_after_leader_disconnect() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            read_frame(&mut bootstrap).await;
+            write_frame(
+                &mut bootstrap,
+                &describe_producers_metadata_response(addr.port()),
+            )
+            .await;
+
+            let (mut leader, _) = listener.accept().await.unwrap();
+            read_frame(&mut leader).await;
+            drop(leader);
+
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            read_frame(&mut bootstrap).await;
+            write_frame(
+                &mut bootstrap,
+                &describe_producers_metadata_response(addr.port()),
+            )
+            .await;
+
+            let (mut leader, _) = listener.accept().await.unwrap();
+            read_frame(&mut leader).await;
+            write_frame(&mut leader, &describe_producers_response()).await;
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        );
+
+        let result = admin
+            .describe_producers(&[DescribeProducersTopic::new("orders")
+                .partition(0)
+                .partition(1)])
+            .await
+            .unwrap();
+
+        assert_eq!(result.topics().len(), 1);
+        assert_eq!(metrics.snapshot().retries, 1);
+        assert_eq!(metrics.snapshot().broker_errors, 1);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn retries_describe_producers_after_transient_leader_error() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            read_frame(&mut bootstrap).await;
+            write_frame(
+                &mut bootstrap,
+                &describe_producers_metadata_response(addr.port()),
+            )
+            .await;
+
+            let (mut leader, _) = listener.accept().await.unwrap();
+            read_frame(&mut leader).await;
+            write_frame(&mut leader, &describe_producers_error_response(6)).await;
+
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            read_frame(&mut bootstrap).await;
+            write_frame(
+                &mut bootstrap,
+                &describe_producers_metadata_response(addr.port()),
+            )
+            .await;
+
+            let (mut leader, _) = listener.accept().await.unwrap();
+            read_frame(&mut leader).await;
+            write_frame(&mut leader, &describe_producers_response()).await;
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        );
+
+        let result = admin
+            .describe_producers(&[DescribeProducersTopic::new("orders")
+                .partition(0)
+                .partition(1)])
+            .await
+            .unwrap();
+
+        assert_eq!(result.topics().len(), 1);
+        assert_eq!(metrics.snapshot().retries, 1);
+        assert_eq!(metrics.snapshot().broker_errors, 3);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn routes_describe_transactions_to_transaction_coordinator() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -7405,6 +7688,99 @@ mod tests {
         assert_eq!(transaction.producer_epoch(), 4);
         assert_eq!(transaction.topics()[0].topic(), "orders");
         assert_eq!(transaction.topics()[0].partitions(), &[0, 2]);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn retries_describe_transactions_after_coordinator_disconnect() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            read_frame(&mut bootstrap).await;
+            write_frame(
+                &mut bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let (mut coordinator, _) = listener.accept().await.unwrap();
+            read_frame(&mut coordinator).await;
+            drop(coordinator);
+
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            read_frame(&mut bootstrap).await;
+            write_frame(
+                &mut bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let (mut coordinator, _) = listener.accept().await.unwrap();
+            read_frame(&mut coordinator).await;
+            write_frame(&mut coordinator, &describe_transactions_response()).await;
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        );
+
+        let result = admin
+            .describe_transactions(&["payments-tx".to_owned()])
+            .await
+            .unwrap();
+
+        assert_eq!(result.transactions().len(), 1);
+        assert_eq!(metrics.snapshot().retries, 1);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn retries_describe_transactions_after_transient_coordinator_error() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            read_frame(&mut bootstrap).await;
+            write_frame(
+                &mut bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let (mut coordinator, _) = listener.accept().await.unwrap();
+            read_frame(&mut coordinator).await;
+            write_frame(&mut coordinator, &describe_transactions_error_response(14)).await;
+
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            read_frame(&mut bootstrap).await;
+            write_frame(
+                &mut bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let (mut coordinator, _) = listener.accept().await.unwrap();
+            read_frame(&mut coordinator).await;
+            write_frame(&mut coordinator, &describe_transactions_response()).await;
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        );
+
+        let result = admin
+            .describe_transactions(&["payments-tx".to_owned()])
+            .await
+            .unwrap();
+
+        assert_eq!(result.transactions().len(), 1);
+        assert_eq!(metrics.snapshot().retries, 1);
+        assert_eq!(metrics.snapshot().broker_errors, 1);
         server.await.unwrap();
     }
 
@@ -7585,6 +7961,30 @@ mod tests {
         encoder.into_bytes()
     }
 
+    fn describe_producers_error_response(error_code: i16) -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_empty_tagged_fields(); // response header tags
+        encoder.write_i32(0); // throttle time
+        encoder
+            .write_compact_array(Some(&[()]), |encoder, ()| {
+                encoder.write_compact_string("orders")?;
+                encoder.write_compact_array(Some(&[0_i32, 1_i32]), |encoder, partition| {
+                    encoder.write_i32(*partition);
+                    encoder.write_i16(error_code);
+                    encoder.write_compact_nullable_string(Some("retry"))?;
+                    encoder.write_compact_array(Some(&[]), |_, ()| Ok(()))?;
+                    encoder.write_empty_tagged_fields();
+                    Ok(())
+                })?;
+                encoder.write_empty_tagged_fields();
+                Ok(())
+            })
+            .unwrap();
+        encoder.write_empty_tagged_fields();
+        encoder.into_bytes()
+    }
+
     fn describe_transactions_response() -> Vec<u8> {
         let mut encoder = Encoder::new();
         encoder.write_i32(1); // correlation ID
@@ -7614,6 +8014,12 @@ mod tests {
             .unwrap();
         encoder.write_empty_tagged_fields();
         encoder.into_bytes()
+    }
+
+    fn describe_transactions_error_response(error_code: i16) -> Vec<u8> {
+        let mut response = describe_transactions_response();
+        response[10..12].copy_from_slice(&error_code.to_be_bytes());
+        response
     }
 
     fn write_topic_metadata(encoder: &mut Encoder, name: &str, partitions: &[i32]) {

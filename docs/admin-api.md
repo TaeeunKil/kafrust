@@ -368,7 +368,10 @@ for topic in result.topics() {
 DescribeProducers v0 requests by current partition leader. Each partition
 retains its error code/message and active producer sequence state, so a
 leader-specific authorization or availability failure does not erase results
-for other partitions.
+for other partitions. Transient leader movement, metadata convergence errors,
+transport disconnects, and request timeouts are retried through fresh metadata
+within the configured `AdminClient::max_retries` budget. Set the budget to
+zero to disable this recovery.
 
 ## Describe Transactions
 
@@ -398,7 +401,9 @@ for transaction in result.transactions() {
 for each transactional ID, groups IDs by coordinator, and sends
 DescribeTransactions v0. Transaction state, timeout, producer identity, and
 the topic partitions currently in the transaction remain available in the
-typed response.
+typed response. Coordinator movement, transport disconnects, request timeouts,
+and transient coordinator responses are retried through fresh discovery using
+the same bounded `max_retries` budget.
 
 ## Reassign Partitions
 

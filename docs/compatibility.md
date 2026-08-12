@@ -73,7 +73,7 @@ rediscovery, and the subsequent `OffsetFetch v2` request. This is request
 discovery coverage only; a coordinator stop after the admin connection has been
 established still requires live failure-injection evidence.
 The default five-attempt budget can be changed with
-`AdminClient::max_retries`, including `0` to disable admin coordinator retries.
+`AdminClient::max_retries`, including `0` to disable these admin retries.
 
 The read-only `OffsetFetch v2` admin path additionally reconnects and retries
 after a coordinator connection drops, a request timeout, or a transient
@@ -89,6 +89,17 @@ The read-only `DescribeGroups v1` admin path also reconnects and retries after
 an established coordinator connection drops. Its focused mock-broker test
 verifies the failed request, coordinator rediscovery, and successful group
 description on the replacement connection.
+
+The read-only `DescribeProducers v0` path retries leader movement, metadata
+convergence failures, transport disconnects, and request timeouts through a
+fresh Metadata v1 lookup. A transient per-partition leader error causes the
+whole read to be re-routed so the final typed response is assembled from the
+current leaders. `DescribeTransactions v0` applies the same bounded retry
+policy to transaction-coordinator discovery, coordinator transport failures,
+and transient per-ID coordinator errors. Focused mock-broker tests cover a
+dropped leader/coordinator request and transient leader/coordinator responses.
+These tests prove client-side recovery; live broker-stop injection during
+these two requests remains a separate qualification item.
 
 | Broker | Mode | Security | Verification | Status |
 | --- | --- | --- | --- | --- |
