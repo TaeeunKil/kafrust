@@ -2990,6 +2990,48 @@ jobs:
           print("signature_bytes=", len(base64.urlsafe_b64decode(signature + "=" * (-len(signature) % 4))))
           PY
 
+      - name: Validate signed token with Kafka jose4j
+        continue-on-error: true
+        run: |
+          docker cp kafrust-kafka-sasl-ssl-oauth-oidc:/opt/kafka/libs/jose4j-0.9.4.jar /tmp/jose4j.jar
+          docker cp kafrust-kafka-sasl-ssl-oauth-oidc:/opt/kafka/libs/slf4j-api-1.7.36.jar /tmp/slf4j-api.jar
+          cat > /tmp/KafkaOauthJwtProbe.java <<'JAVA'
+          import static org.jose4j.jwa.AlgorithmConstraints.DISALLOW_NONE;
+
+          import java.nio.file.Files;
+          import java.nio.file.Path;
+          import org.jose4j.jwk.HttpsJwks;
+          import org.jose4j.jws.AlgorithmIdentifiers;
+          import org.jose4j.jwt.JwtClaims;
+          import org.jose4j.jwt.consumer.JwtConsumer;
+          import org.jose4j.jwt.consumer.JwtConsumerBuilder;
+          import org.jose4j.keys.resolvers.HttpsJwksVerificationKeyResolver;
+
+          public final class KafkaOauthJwtProbe {
+              public static void main(String[] args) throws Exception {
+                  String token = Files.readString(Path.of(args[0])).trim();
+                  HttpsJwks jwks = new HttpsJwks(args[1]);
+                  JwtConsumer consumer = new JwtConsumerBuilder()
+                      .setAllowedClockSkewInSeconds(2)
+                      .setExpectedAudience(args[2])
+                      .setExpectedIssuer(args[3])
+                      .setJwsAlgorithmConstraints(DISALLOW_NONE)
+                      .setRequireExpirationTime()
+                      .setRequireIssuedAt()
+                      .setVerificationKeyResolver(new HttpsJwksVerificationKeyResolver(jwks))
+                      .build();
+                  JwtClaims claims = consumer.processToClaims(token);
+                  System.out.println("jose4j_validation=ok subject=" + claims.getSubject());
+              }
+          }
+          JAVA
+          javac -cp /tmp/jose4j.jar:/tmp/slf4j-api.jar /tmp/KafkaOauthJwtProbe.java
+          java -cp /tmp:/tmp/jose4j.jar:/tmp/slf4j-api.jar KafkaOauthJwtProbe \
+            sasl-ssl-oauth-oidc/oidc/oauth-token \
+            http://127.0.0.1:8089/jwks.json \
+            kafrust-client \
+            http://host.docker.internal:8089/issuer
+
       - name: Run signed OAUTHBEARER with static token
         run: |
           export KAFRUST_SASL_TOKEN="$(cat sasl-ssl-oauth-oidc/oidc/oauth-token)"
