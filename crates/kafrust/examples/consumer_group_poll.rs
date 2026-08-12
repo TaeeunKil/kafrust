@@ -40,6 +40,22 @@ async fn main() -> kafrust::Result<()> {
     }
     let mut group = config.subscribe(topic).join().await?;
 
+    let use_partition_queue = std::env::var("KAFRUST_PARTITION_QUEUE")
+        .is_ok_and(|value| value == "1" || value.eq_ignore_ascii_case("true"));
+    let require_partition_queue_record = std::env::var("KAFRUST_PARTITION_QUEUE_REQUIRE_RECORD")
+        .is_ok_and(|value| value == "1" || value.eq_ignore_ascii_case("true"));
+    let mut partition_queue = if use_partition_queue {
+        let assignment = group
+            .assignments()
+            .first()
+            .ok_or(Error::Unsupported("consumer group has no assignment"))?;
+        let topic = assignment.topic().to_owned();
+        let partition = assignment.partition();
+        Some(group.split_partition_queue(topic, partition)?)
+    } else {
+        None
+    };
+
     println!(
         "joined group {} as member {} generation {} instance {:?} with {} assignments",
         group.group_id(),
@@ -50,6 +66,12 @@ async fn main() -> kafrust::Result<()> {
     );
 
     let records = group.poll().await?;
+    let mut queued_records = Vec::new();
+    if let Some(queue) = partition_queue.as_mut() {
+        while let Some(record) = queue.try_recv() {
+            queued_records.push(record);
+        }
+    }
     for record in &records {
         println!(
             "{}-{}@{}",
@@ -58,8 +80,25 @@ async fn main() -> kafrust::Result<()> {
             record.offset()
         );
     }
+    if require_partition_queue_record && queued_records.is_empty() {
+        return Err(Error::Unsupported(
+            "consumer group partition queue smoke expected at least one record",
+        ));
+    }
+    for record in &queued_records {
+        println!(
+            "queued {}-{}@{}",
+            record.topic(),
+            record.partition(),
+            record.offset()
+        );
+    }
     group.commit_offsets().await?;
-    println!("committed offsets for {} records", records.len());
+    println!(
+        "committed offsets for {} polled and {} queued records",
+        records.len(),
+        queued_records.len()
+    );
     group.leave().await?;
     println!("left consumer group");
 

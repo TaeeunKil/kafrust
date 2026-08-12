@@ -174,7 +174,21 @@ jobs:
           KAFRUST_OFFSET: "0"
         run: cargo run -p kafrust --example consumer_fetch
 
+      - name: Run direct partition queue example
+        env:
+          KAFRUST_PARTITION: "0"
+          KAFRUST_OFFSET: "0"
+          KAFRUST_PARTITION_QUEUE_REQUIRE_RECORD: "1"
+        run: cargo run -p kafrust --example consumer_partition_queue
+
       - name: Run consumer group example
+        run: cargo run -p kafrust --example consumer_group_poll
+
+      - name: Run consumer group partition queue example
+        env:
+          KAFRUST_GROUP_ID: kafrust-partition-queue-group-${{ matrix.kafka-version }}-${{ github.run_id }}
+          KAFRUST_PARTITION_QUEUE: "1"
+          KAFRUST_PARTITION_QUEUE_REQUIRE_RECORD: "1"
         run: cargo run -p kafrust --example consumer_group_poll
 
       - name: Produce regex subscription smoke record

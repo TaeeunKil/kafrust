@@ -14,6 +14,8 @@ async fn main() -> kafrust::Result<()> {
         .ok()
         .and_then(|value| value.parse::<i64>().ok())
         .unwrap_or(0);
+    let require_record = std::env::var("KAFRUST_PARTITION_QUEUE_REQUIRE_RECORD")
+        .is_ok_and(|value| value == "1" || value.eq_ignore_ascii_case("true"));
 
     let mut consumer = common::apply_security(
         ConsumerConfig::new(bootstrap_servers)
@@ -26,7 +28,9 @@ async fn main() -> kafrust::Result<()> {
     let mut queue = consumer.split_partition_queue(&topic, partition)?;
 
     consumer.poll().await?;
+    let mut queued_count = 0;
     while let Some(record) = queue.try_recv() {
+        queued_count += 1;
         println!(
             "queued {}-{}@{} key={:?} value={:?}",
             record.topic(),
@@ -36,5 +40,11 @@ async fn main() -> kafrust::Result<()> {
             record.value().map(String::from_utf8_lossy)
         );
     }
+    if require_record && queued_count == 0 {
+        return Err(kafrust::Error::Unsupported(
+            "partition queue smoke expected at least one record",
+        ));
+    }
+    println!("partition queue delivered {queued_count} records");
     Ok(())
 }
