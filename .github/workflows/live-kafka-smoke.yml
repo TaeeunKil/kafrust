@@ -1104,6 +1104,11 @@ jobs:
           KAFRUST_PARTITIONS: 0,1,2
         run: cargo run -p kafrust --example admin_describe_producers
 
+      - name: Run multi-broker admin consumer group offsets example
+        env:
+          KAFRUST_ADMIN_OFFSET: "0"
+        run: cargo run -p kafrust --example admin_consumer_group_offsets
+
       - name: Run multi-broker admin delete group offsets example
         run: cargo run -p kafrust --example admin_delete_group_offsets
 
@@ -2344,6 +2349,11 @@ jobs:
       - name: Run TLS admin describe group example
         run: cargo run -p kafrust --features tls --example admin_describe_group
 
+      - name: Run TLS admin consumer group offsets example
+        env:
+          KAFRUST_ADMIN_OFFSET: "0"
+        run: cargo run -p kafrust --features tls --example admin_consumer_group_offsets
+
       - name: Run TLS admin delete group offsets example
         run: cargo run -p kafrust --features tls --example admin_delete_group_offsets
 
@@ -2464,6 +2474,11 @@ jobs:
 
       - name: Run SASL admin describe group example
         run: cargo run -p kafrust --example admin_describe_group
+
+      - name: Run SASL admin consumer group offsets example
+        env:
+          KAFRUST_ADMIN_OFFSET: "0"
+        run: cargo run -p kafrust --example admin_consumer_group_offsets
 
       - name: Run SASL admin delete group offsets example
         run: cargo run -p kafrust --example admin_delete_group_offsets
@@ -2688,6 +2703,11 @@ jobs:
 
       - name: Run SASL_SSL SCRAM admin describe group example
         run: cargo run -p kafrust --features tls --example admin_describe_group
+
+      - name: Run SASL_SSL SCRAM admin consumer group offsets example
+        env:
+          KAFRUST_ADMIN_OFFSET: "0"
+        run: cargo run -p kafrust --features tls --example admin_consumer_group_offsets
 
       - name: Run SASL_SSL SCRAM admin delete group offsets example
         run: cargo run -p kafrust --features tls --example admin_delete_group_offsets
