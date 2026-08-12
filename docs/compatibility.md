@@ -198,11 +198,11 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
 - Client-side regex topic subscription resolves Metadata v1 topic names before
   classic or KIP-848 joins and is covered by focused ordering, filtering, and
   no-match tests. The two-topic initial assignment path passed on Kafka 3.7.2,
-  3.8.1, 3.9.1, and 4.3.1 in [`Live Kafka Smoke`, run `31558990231`](https://github.com/TaeeunKil/kafrust/actions/runs/31558990231).
-  The corrected resolved-topic retention also passed the dedicated Kafka 4.3.1
-  KIP-848 path in [`Live Kafka Smoke`, run `31559409300`](https://github.com/TaeeunKil/kafrust/actions/runs/31559409300).
-  Rejoin topic discovery and secured-broker permission behavior still require
-  targeted qualification.
+  3.8.1, 3.9.1, and 4.3.1, including explicit rejoin and the corrected Kafka
+  4.3.1 KIP-848 path, in [`Live Kafka Smoke`, run
+  `31561944247`](https://github.com/TaeeunKil/kafrust/actions/runs/31561944247).
+  Secured-broker topic-discovery permission behavior still requires targeted
+  qualification.
 - The regex consumer smoke also fetched a produced record, queued its next
   offset with `commit_record`, and flushed the queue through
   `commit_queued_offsets`. The classic path passed across Kafka 3.7.2, 3.8.1,
@@ -350,7 +350,7 @@ policy, and production OAuth/OIDC provider integration remain unclaimed.
   `SaslAuthenticate v1`, the complete live matrix passed again, including
   Kafka 3.7.2 SASL_PLAINTEXT, SASL_SSL SCRAM/OAUTHBEARER, secured multi-broker
   failover, and Kafka 4.3.1 KIP-848 in [`Live Kafka Smoke`, run
-  `31561506697`](https://github.com/TaeeunKil/kafrust/actions/runs/31561506697).
+  `31561944247`](https://github.com/TaeeunKil/kafrust/actions/runs/31561944247).
   The low-level `Client` records the broker-advertised SASL session lifetime;
   provider-backed OAUTHBEARER re-authentication is covered by focused injected
   tests; detached refresh workers and production OAuth/OIDC qualification

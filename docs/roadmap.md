@@ -200,15 +200,21 @@ Known limits:
   `poll_with_heartbeat` triggers poll-time rejoin and replaces completed or
   stale same-group heartbeat tasks for the current generation.
 - Live group validation runs through the scheduled/manual `Live Kafka Smoke` workflow.
-- Regex subscription has focused unit coverage and initial two-topic assignment
-  qualification across Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1, including the
-  corrected KIP-848 path on 4.3.1 in live run `31559409300`; secured permission
-  and rejoin qualification remain.
+- Regex subscription has focused unit coverage and initial plus explicit rejoin
+  two-topic assignment qualification across Kafka 3.7.2, 3.8.1, 3.9.1, and
+  4.3.1, including the corrected KIP-848 path on 4.3.1 in [`Live Kafka Smoke`,
+  run `31561944247`](https://github.com/TaeeunKil/kafrust/actions/runs/31561944247);
+  secured permission qualification remains.
 - The regex record path also fetched a produced record, coalesced its next
   offset through `commit_record`, and flushed it with
   `commit_queued_offsets`. Classic Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plus
   KIP-848 Kafka 4.3.1 passed this live path in run `31560143467`; a detached
   background commit worker and partition queue splitting remain open.
+- `ConsumerGroup::rejoin` is public and refreshes regex topic discovery before
+  joining again. The classic matrix and Kafka 4.3.1 KIP-848 regex paths passed
+  initial and explicit rejoin assignment checks in [`Live Kafka Smoke`, run
+  `31561944247`](https://github.com/TaeeunKil/kafrust/actions/runs/31561944247);
+  secured topic-discovery permissions remain open.
 
 ## M6 Production Behavior
 
@@ -582,7 +588,7 @@ Evidence:
   production OAuth/OIDC provider.
 - After switching the high-level PLAIN, SCRAM, and OAUTHBEARER exchanges to
   `SaslAuthenticate v1`, [`Live Kafka Smoke`, run
-  `31561506697`](https://github.com/TaeeunKil/kafrust/actions/runs/31561506697)
+  `31561944247`](https://github.com/TaeeunKil/kafrust/actions/runs/31561944247)
   passed the full plaintext, TLS, SASL, secured failover, ACL, and KIP-848
   matrix. Provider-backed OAUTHBEARER re-authentication is covered by focused
   injected-client tests; detached refresh workers and production OAuth/OIDC
