@@ -1148,9 +1148,14 @@ impl ConsumerConfig {
         &self.client
     }
 
+    /// Validates this consumer configuration without opening a broker connection.
+    pub fn validate(&self) -> Result<()> {
+        self.client.validate()?;
+        self.validate_values()
+    }
+
     /// Connects to Kafka and builds a direct consumer.
     pub async fn build(self) -> Result<Consumer> {
-        self.client.validate()?;
         self.validate()?;
         let client = self.client.clone().connect().await?;
         Ok(Consumer {
@@ -1164,7 +1169,7 @@ impl ConsumerConfig {
         })
     }
 
-    fn validate(&self) -> Result<()> {
+    fn validate_values(&self) -> Result<()> {
         if self.max_wait_ms < 0 {
             return Err(Error::InvalidConfiguration {
                 field: "max_wait_ms",
@@ -1536,6 +1541,8 @@ mod tests {
                 } if actual == field
             ));
         }
+
+        assert!(ConsumerConfig::new(["127.0.0.1:1"]).validate().is_ok());
     }
 
     #[tokio::test]

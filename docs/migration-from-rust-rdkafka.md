@@ -20,7 +20,7 @@ Replace the dependency:
 
 ```toml
 [dependencies]
-kafrust = "0.2.9"
+kafrust = "0.2.10"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
 
@@ -66,6 +66,9 @@ server list remains `Error::MissingBootstrapServer`; a blank address inside a
 non-empty list is a configuration error. This is intentionally different from
 retryable broker or transport failures and should be handled as a startup
 configuration failure in an adapter.
+Call the matching `*.validate()` method on the client, producer, direct
+consumer, or consumer-group config when an adapter needs to preflight startup
+configuration before it starts its connection lifecycle.
 
 Do not silently discard an old configuration map. Classify every key as
 mapped, intentionally removed, or blocking the migration.

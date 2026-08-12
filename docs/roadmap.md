@@ -1836,3 +1836,7 @@ Implemented evidence:
   project outside this repository compiles the published client with all
   features. The release still requires the supported live Kafka matrix before
   any broader replacement claim.
+- The same typed checks are exposed as connection-free `validate()` preflight
+  methods on `ClientConfig`, `ProducerConfig`, `ConsumerConfig`, and
+  `ConsumerGroupConfig`, so applications can fail startup configuration before
+  beginning their broker connection lifecycle.

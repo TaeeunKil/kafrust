@@ -11,7 +11,7 @@ Tokio-based admin, producer, direct consumer, and alpha classic/KIP-848
 consumer group APIs on top of the companion
 [`kafrust-protocol`](https://docs.rs/kafrust-protocol) wire-format crate.
 
-Current release: `0.2.9`.
+Current release: `0.2.10`.
 
 This crate is alpha. Use it for experiments, local broker checks, simple
 internal tools, and API evaluation. For broad production Kafka workloads that
@@ -454,6 +454,9 @@ response size fails that operation instead of partially decoding it.
 ## Configuration Validation
 
 High-level builders validate configuration before opening a broker connection.
+Call `ClientConfig::validate`, `ProducerConfig::validate`,
+`ConsumerConfig::validate`, or `ConsumerGroupConfig::validate` to run the same
+startup preflight explicitly before deciding when to connect.
 Invalid timeouts, response or decode limits, negative fetch values, zero poll
 limits, fetch bounds, poll limits, group IDs or subscriptions, zero commit or
 heartbeat intervals, and invalid transaction settings return

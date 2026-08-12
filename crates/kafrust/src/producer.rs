@@ -3702,8 +3702,8 @@ impl ProducerConfig {
         &self.client
     }
 
-    /// Connects to Kafka and builds a producer.
-    pub async fn build(self) -> Result<Producer> {
+    /// Validates this producer configuration without opening a broker connection.
+    pub fn validate(&self) -> Result<()> {
         self.client.validate()?;
         if self.idempotence && (self.acks != Acks::All || self.max_retries == 0) {
             return Err(Error::Unsupported(
@@ -3722,6 +3722,12 @@ impl ProducerConfig {
                 reason: "must be greater than zero",
             });
         }
+        Ok(())
+    }
+
+    /// Connects to Kafka and builds a producer.
+    pub async fn build(self) -> Result<Producer> {
+        self.validate()?;
         let mut client = self.client.clone().connect().await?;
         let idempotent_state = if self.idempotence {
             Some(
@@ -4754,6 +4760,8 @@ mod tests {
                 ..
             }
         ));
+
+        assert!(ProducerConfig::new(["127.0.0.1:1"]).validate().is_ok());
     }
 
     #[test]

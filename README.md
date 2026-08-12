@@ -15,7 +15,7 @@ visible in public APIs: bootstrap servers, client IDs, topics, partitions,
 offsets, acknowledgements, metadata refresh, consumer groups, heartbeats, and
 commits.
 
-Current release: `0.2.9`.
+Current release: `0.2.10`.
 
 Use kafrust today for experiments, local broker checks, simple internal tools,
 and API evaluation. For broad production Kafka workloads that need mature
@@ -514,6 +514,9 @@ Primary public entry points:
 - `SecurityProtocol`, `SaslMechanism`, and `SaslCredentials` for plaintext,
   TLS, and SASL connection modes.
 - `ClientMetrics` and `ClientMetricsSnapshot` for request-level observability.
+- `ClientConfig::validate`, `ProducerConfig::validate`,
+  `ConsumerConfig::validate`, and `ConsumerGroupConfig::validate` for startup
+  preflight without opening a broker connection.
 - `Error::ResponseTooLarge` and `max_response_bytes` builders for bounded
   broker response allocation.
 - `Error::InvalidConfiguration` for invalid builder values detected before
@@ -526,8 +529,8 @@ Primary public entry points:
 
 Generated API documentation:
 
-- [`kafrust`](https://docs.rs/kafrust/0.2.9/kafrust/)
-- [`kafrust-protocol`](https://docs.rs/kafrust-protocol/0.2.9/kafrust_protocol/)
+- [`kafrust`](https://docs.rs/kafrust/0.2.10/kafrust/)
+- [`kafrust-protocol`](https://docs.rs/kafrust-protocol/0.2.10/kafrust_protocol/)
 
 ## Documentation
 

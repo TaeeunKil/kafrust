@@ -526,25 +526,18 @@ impl ClientConfig {
         self.sasl_credentials.as_ref()
     }
 
-    /// Connects to the first reachable bootstrap server.
-    pub async fn connect(self) -> Result<Client> {
+    /// Validates this configuration without opening a broker connection.
+    ///
+    /// Use this during application startup when configuration errors should be
+    /// reported before any network operation is attempted.
+    pub fn validate(&self) -> Result<()> {
         if self.bootstrap_servers.is_empty() {
             return Err(Error::MissingBootstrapServer);
         }
-        self.validate()?;
-
-        let mut last_error = None;
-        for server in &self.bootstrap_servers {
-            match self.connect_broker(server.clone()).await {
-                Ok(client) => return Ok(client),
-                Err(error) => last_error = Some(error),
-            }
-        }
-
-        Err(last_error.unwrap_or(Error::MissingBootstrapServer))
+        self.validate_values()
     }
 
-    pub(crate) fn validate(&self) -> Result<()> {
+    fn validate_values(&self) -> Result<()> {
         if self
             .bootstrap_servers
             .iter()
@@ -580,6 +573,21 @@ impl ClientConfig {
             });
         }
         Ok(())
+    }
+
+    /// Connects to the first reachable bootstrap server.
+    pub async fn connect(self) -> Result<Client> {
+        self.validate()?;
+
+        let mut last_error = None;
+        for server in &self.bootstrap_servers {
+            match self.connect_broker(server.clone()).await {
+                Ok(client) => return Ok(client),
+                Err(error) => last_error = Some(error),
+            }
+        }
+
+        Err(last_error.unwrap_or(Error::MissingBootstrapServer))
     }
 
     pub(crate) async fn connect_broker(&self, server: String) -> Result<Client> {
@@ -1006,6 +1014,11 @@ mod tests {
                 }) if actual == field
             ));
         }
+
+        assert!(matches!(
+            ClientConfig::new(std::iter::empty::<String>()).validate(),
+            Err(Error::MissingBootstrapServer)
+        ));
     }
 
     #[test]

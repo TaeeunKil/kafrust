@@ -917,7 +917,8 @@ impl ConsumerGroupConfig {
         }
     }
 
-    fn validate(&self) -> Result<()> {
+    /// Validates this consumer-group configuration without opening a broker connection.
+    pub fn validate(&self) -> Result<()> {
         if self.group_id.trim().is_empty() {
             return Err(Error::InvalidConfiguration {
                 field: "group_id",
@@ -4421,6 +4422,11 @@ mod tests {
                 } if actual == field
             ));
         }
+
+        assert!(ConsumerGroupConfig::new(["127.0.0.1:1"], "orders-group")
+            .subscribe("orders")
+            .validate()
+            .is_ok());
     }
 
     #[test]
