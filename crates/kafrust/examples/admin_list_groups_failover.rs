@@ -15,7 +15,8 @@ async fn main() -> kafrust::Result<()> {
             .client_id("kafrust-admin-list-groups-failover")
             .metrics(metrics.clone()),
     )?;
-    let admin = AdminClient::new(config);
+    // Broker restart recovery can exceed the short default retry budget.
+    let admin = AdminClient::new(config).max_retries(12);
     let groups = admin.list_groups().await?;
 
     println!(
