@@ -216,6 +216,18 @@ changing local position or committed offsets.
 
 `ConsumerGroup::poll` sends a foreground heartbeat before fetching assigned partitions. If that heartbeat reports a rebalance, stale generation, stale member ID, stale coordinator, coordinator connection I/O error, or coordinator request timeout, `poll` rejoins the group before fetching records.
 
+Applications can also request a rejoin explicitly:
+
+```rust
+group.rejoin().await?;
+```
+
+An explicit rejoin refreshes client-side regex topic discovery before joining,
+rebuilds the current assignment, preserves pause state for partitions that
+remain assigned, and retains queued per-record commit offsets only for those
+partitions. Rebalance callbacks receive the same `Before` and `After` events as
+an automatic rejoin.
+
 Use `ConsumerGroup::spawn_heartbeat_task` when application work between polls can approach the group session timeout. It starts an opt-in background heartbeat loop on a separate coordinator connection. The returned `ConsumerGroupHeartbeat` records the group ID, member ID, and generation ID it belongs to. For KIP-848 groups, member epoch and broker assignment updates are shared with the owning group and applied by `poll_with_heartbeat`.
 
 Pass the heartbeat handle to `ConsumerGroup::poll_with_heartbeat` when a

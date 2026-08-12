@@ -208,7 +208,7 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
   offset with `commit_record`, and flushed the queue through
   `commit_queued_offsets`. The classic path passed across Kafka 3.7.2, 3.8.1,
   3.9.1, and 4.3.1, and the KIP-848 path passed on Kafka 4.3.1 in
-  [`Live Kafka Smoke`, run `31560143467`](https://github.com/TaeeunKil/kafrust/actions/runs/31560143467).
+  [`Live Kafka Smoke`, run `31561944247`](https://github.com/TaeeunKil/kafrust/actions/runs/31561944247).
   Detached background commit workers, partition queue splitting, and rejoin
   topic discovery remain open compatibility work.
 - KIP-848 consumer groups through `ConsumerGroupHeartbeat v0`, Metadata v12

@@ -208,7 +208,8 @@ Known limits:
 - The regex record path also fetched a produced record, coalesced its next
   offset through `commit_record`, and flushed it with
   `commit_queued_offsets`. Classic Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plus
-  KIP-848 Kafka 4.3.1 passed this live path in run `31560143467`; a detached
+  KIP-848 Kafka 4.3.1 passed this live path in
+  [`Live Kafka Smoke`, run `31561944247`](https://github.com/TaeeunKil/kafrust/actions/runs/31561944247); a detached
   background commit worker and partition queue splitting remain open.
 - `ConsumerGroup::rejoin` is public and refreshes regex topic discovery before
   joining again. The classic matrix and Kafka 4.3.1 KIP-848 regex paths passed
