@@ -1830,3 +1830,9 @@ Implemented evidence:
   intervals, and invalid transaction settings. Focused boundary tests prove
   these failures do not open a broker connection; `MissingBootstrapServer`
   remains the dedicated empty-list error.
+- Release `v0.2.9` published `kafrust-protocol` before `kafrust` after both
+  package dry-runs and staged all-feature docs builds passed. crates.io resolves
+  both packages at `0.2.9`, both docs.rs pages return HTTP 200, and a fresh
+  project outside this repository compiles the published client with all
+  features. The release still requires the supported live Kafka matrix before
+  any broader replacement claim.
