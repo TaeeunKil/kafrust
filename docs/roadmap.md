@@ -890,8 +890,9 @@ Implemented evidence:
   listing and administrative alteration. Queries can target selected
   topic-partitions or all topics, offset updates are grouped by topic, and
   top-level plus per-partition errors remain observable. Focused wire and
-  coordinator-routing tests pass; the live smoke qualification is tracked as
-  a separate release gate.
+  coordinator-routing tests pass, and the Kafka 3.7.2, 3.8.1, 3.9.1, and
+  4.3.1 live smoke paths are qualified in
+  [`31595485915`](https://github.com/TaeeunKil/kafrust/actions/runs/31595485915).
 - DescribeAcls v1, CreateAcls v1, and DeleteAcls v1 expose typed ACL bindings
   and filters through `AdminClient`, preserving top-level, per-entry,
   per-filter, and matching-ACL outcomes. Wire and mock-broker tests cover the
