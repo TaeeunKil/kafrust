@@ -157,7 +157,8 @@ controller-routed replica target changes, cancellation, and bounded ongoing
 status inspection; the read-only listing path re-discovers the controller after
 transient failures, and the Kafka 3.7.2 three-broker path is live-verified.
 `describe_cluster` and `list_topics` likewise retry transport and timeout
-failures while preserving topic-level metadata errors.
+failures, and `list_topics` retries transient topic/partition metadata errors
+while preserving final topic-level metadata errors.
 `delete_records` routes DeleteRecords v1 to each current partition leader and
 preserves per-partition low watermarks and broker errors for partial deletion;
 fixed-offset deletions retry transient leader and transport failures through

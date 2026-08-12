@@ -867,7 +867,8 @@ Implemented evidence:
   endpoints, rack IDs, and the active controller. `AdminClient::list_topics`
   exposes names, internal-topic flags, partition counts, and topic-level Kafka
   error classifications. Both read-only metadata paths retry transport and
-  timeout failures within the bounded AdminClient budget while preserving
+  timeout failures within the bounded AdminClient budget. `list_topics` also
+  retries transient topic/partition metadata errors while preserving final
   topic-level partial errors.
 - Injected broker tests distinguish Metadata v1's empty topic array for
   cluster-only inspection from its null array for all-topic listing and verify

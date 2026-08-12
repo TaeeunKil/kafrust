@@ -129,6 +129,14 @@ impl AdminClient {
                 Err(error) => return Err(error),
             };
             match client.metadata(topics.clone()).await {
+                Ok(metadata)
+                    if retry < self.max_retries && is_retryable_metadata_response(&metadata) =>
+                {
+                    self.config.record_broker_error();
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                }
                 Ok(metadata) => return Ok(metadata),
                 Err(error) if retry < self.max_retries && is_retryable_admin_read_error(&error) => {
                     retry += 1;
@@ -4781,6 +4789,16 @@ fn is_retryable_admin_controller_read_error(error: &Error) -> bool {
     is_retryable_admin_read_error(error) || matches!(error, Error::MissingBroker { .. })
 }
 
+fn is_retryable_metadata_response(metadata: &MetadataResponseV1) -> bool {
+    metadata.topics.iter().any(|topic| {
+        is_retryable_admin_read_code(topic.error_code)
+            || topic
+                .partitions
+                .iter()
+                .any(|partition| is_retryable_admin_read_code(partition.error_code))
+    })
+}
+
 fn is_retryable_admin_read_code(code: i16) -> bool {
     matches!(
         BrokerErrorKind::from_code(code),
@@ -7023,6 +7041,41 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn retries_list_topics_after_retryable_metadata_response() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut first, _) = listener.accept().await.unwrap();
+            let request = read_frame(&mut first).await;
+            assert_eq!(&request[0..4], &[0, 3, 0, 1]);
+            assert_eq!(&request[request.len() - 4..], &[0xff, 0xff, 0xff, 0xff]);
+            write_frame(&mut first, &topic_metadata_retryable_response(addr.port())).await;
+
+            let (mut second, _) = listener.accept().await.unwrap();
+            let request = read_frame(&mut second).await;
+            assert_eq!(&request[0..4], &[0, 3, 0, 1]);
+            assert_eq!(&request[request.len() - 4..], &[0xff, 0xff, 0xff, 0xff]);
+            write_frame(&mut second, &topic_metadata_response(addr.port())).await;
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        );
+
+        let result = admin.list_topics().await.unwrap();
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].name(), "orders");
+        assert!(result[0].is_success());
+        assert_eq!(result[1].error_code(), 3);
+        assert_eq!(metrics.snapshot().retries, 1);
+        assert_eq!(metrics.snapshot().broker_errors, 2);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn describes_acls_and_maps_typed_bindings() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -9008,6 +9061,12 @@ mod tests {
             1,    // internal
             0, 0, 0, 0, // partition count
         ]);
+        response
+    }
+
+    fn topic_metadata_retryable_response(port: u16) -> Vec<u8> {
+        let mut response = topic_metadata_response(port);
+        response[37..39].copy_from_slice(&5i16.to_be_bytes());
         response
     }
 

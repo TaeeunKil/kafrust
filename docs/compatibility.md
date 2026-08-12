@@ -207,8 +207,9 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
   DescribeConfigs v1, and DeleteTopics v3. Manual run `30060723690` passed this
   lifecycle against Kafka 3.7.2 and Kafka 4.3.1. The read-only
   `describe_cluster` and `list_topics` paths retry metadata transport and
-  timeout failures within the bounded `AdminClient` budget; focused mock-broker
-  coverage preserves the existing topic-level partial-error contract.
+  timeout failures within the bounded `AdminClient` budget. `list_topics` also
+  retries transient topic/partition metadata errors while preserving final
+  topic-level partial errors; focused mock-broker coverage verifies both paths.
 - ACL create, describe, and delete through `AdminClient` with typed bindings,
   filters, and partial outcomes. The focused ACL authorizer job in manual run
   `31457478358` passed create -> describe -> delete against Kafka 3.7.2

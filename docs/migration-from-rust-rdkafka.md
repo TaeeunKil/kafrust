@@ -292,8 +292,9 @@ See [Admin API](admin-api.md) for typed request and response examples.
 
 `AdminClient::describe_cluster` and `AdminClient::list_topics` retry metadata
 transport and timeout failures within the bounded retry budget. `list_topics`
-still returns topic-level metadata errors as typed partial results rather than
-turning them into a whole-operation failure. Both paths recovered from a
+also retries transient topic/partition metadata errors and still returns final
+topic-level metadata errors as typed partial results rather than turning them
+into a whole-operation failure. Both paths recovered from a
 pre-transmission broker stop with `retries=1` on the Kafka 3.7.2 three-broker
 profile in [`Live Kafka Smoke` run `31620595346`](https://github.com/TaeeunKil/kafrust/actions/runs/31620595346).
 
