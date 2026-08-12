@@ -1900,6 +1900,67 @@ jobs:
             exit 1
           fi
 
+      - name: Run multi-broker Admin DescribeConfigs during broker stop
+        run: |
+          ready_file=/tmp/kafrust-admin-describe-configs-ready
+          release_file=/tmp/kafrust-admin-describe-configs-release
+          request_log=/tmp/kafrust-admin-describe-configs.log
+          rm -f "$ready_file" "$release_file" "$request_log"
+          KAFRUST_REQUEST_READY_FILE="$ready_file" \
+          KAFRUST_REQUEST_RELEASE_FILE="$release_file" \
+          RUST_LOG=kafrust=debug \
+          cargo run -p kafrust --example admin_describe_topic_configs_failover \
+            >"$request_log" 2>&1 &
+          describe_configs_pid=$!
+
+          request_ready=""
+          for attempt in {1..600}; do
+            if [ -f "$ready_file" ]; then
+              request_ready=1
+              break
+            fi
+            if ! kill -0 "$describe_configs_pid" 2>/dev/null; then
+              cat "$request_log" || true
+              wait "$describe_configs_pid"
+            fi
+            sleep 0.1
+          done
+          if [ -z "$request_ready" ] || ! kill -0 "$describe_configs_pid" 2>/dev/null; then
+            cat "$request_log" || true
+            echo "DescribeConfigs request was not held before transmission"
+            kill "$describe_configs_pid" 2>/dev/null || true
+            wait "$describe_configs_pid" || true
+            exit 1
+          fi
+
+          docker stop kafrust-kafka-multi-1
+          touch "$release_file"
+
+          describe_configs_status=0
+          wait "$describe_configs_pid" || describe_configs_status=$?
+          cat "$request_log"
+
+          docker start kafrust-kafka-multi-1
+          broker_ready=""
+          for attempt in {1..120}; do
+            if docker exec kafrust-kafka-multi-1 \
+              /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server kafrust-kafka-multi-1:29092 \
+              >/tmp/kafrust-admin-describe-configs-recovery.log 2>&1; then
+              broker_ready=1
+              break
+            fi
+            sleep 2
+          done
+
+          if [ "$describe_configs_status" -ne 0 ] || [ -z "$broker_ready" ] || \
+             ! grep -Eq "retries=[1-9][0-9]*" "$request_log"; then
+            cat /tmp/kafrust-admin-describe-configs-recovery.log || true
+            docker logs kafrust-kafka-multi-1
+            echo "Admin DescribeConfigs did not prove retry recovery"
+            exit 1
+          fi
+
       - name: Dump multi-broker Kafka logs
         if: failure()
         run: |

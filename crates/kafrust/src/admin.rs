@@ -481,16 +481,46 @@ impl AdminClient {
         resources: &[TopicConfigResource],
         options: DescribeConfigsOptions,
     ) -> Result<DescribeConfigsResult> {
-        let mut client = self.config.clone().connect().await?;
-        let response = client
-            .describe_configs_v1(
-                resources
-                    .iter()
-                    .map(TopicConfigResource::as_protocol)
-                    .collect(),
-                options.include_synonyms,
-            )
-            .await?;
+        let request_resources = resources
+            .iter()
+            .map(TopicConfigResource::as_protocol)
+            .collect::<Vec<_>>();
+        let mut retry = 0;
+        let response = loop {
+            let mut client = match self.config.clone().connect().await {
+                Ok(client) => client,
+                Err(error) if retry < self.max_retries && is_retryable_admin_read_error(&error) => {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
+            match client
+                .describe_configs_v1(request_resources.clone(), options.include_synonyms)
+                .await
+            {
+                Ok(response)
+                    if retry < self.max_retries
+                        && response
+                            .results
+                            .iter()
+                            .any(|resource| is_retryable_admin_read_code(resource.error_code)) =>
+                {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                }
+                Ok(response) => break response,
+                Err(error) if retry < self.max_retries && is_retryable_admin_read_error(&error) => {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                }
+                Err(error) => return Err(error),
+            }
+        };
 
         for resource in &response.results {
             if resource.error_code != 0 {
@@ -4559,6 +4589,25 @@ fn is_retryable_admin_coordinator_error(error: &Error) -> bool {
     }
 }
 
+fn is_retryable_admin_read_error(error: &Error) -> bool {
+    match error {
+        Error::Broker { code, .. } => is_retryable_admin_read_code(*code),
+        Error::Io(_) | Error::RequestTimedOut { .. } => true,
+        _ => false,
+    }
+}
+
+fn is_retryable_admin_read_code(code: i16) -> bool {
+    matches!(
+        BrokerErrorKind::from_code(code),
+        BrokerErrorKind::LeaderNotAvailable
+            | BrokerErrorKind::NotLeaderOrFollower
+            | BrokerErrorKind::RequestTimedOut
+            | BrokerErrorKind::ReplicaNotAvailable
+            | BrokerErrorKind::NotController
+    )
+}
+
 fn is_retryable_admin_coordinator_code(code: i16) -> bool {
     matches!(
         BrokerErrorKind::from_code(code),
@@ -7061,6 +7110,41 @@ mod tests {
         );
         assert_eq!(metrics.snapshot().broker_errors, 1);
         assert_eq!(result.clone().into_resources().len(), 2);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn retries_topic_config_describe_after_connection_drop() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut first, _) = listener.accept().await.unwrap();
+            let request = read_frame(&mut first).await;
+            assert_eq!(&request[0..4], &[0, 32, 0, 1]);
+            drop(first);
+
+            let (mut second, _) = listener.accept().await.unwrap();
+            let request = read_frame(&mut second).await;
+            assert_eq!(&request[0..4], &[0, 32, 0, 1]);
+            write_frame(&mut second, &describe_configs_response()).await;
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        );
+
+        let result = admin
+            .describe_topic_configs(
+                &[TopicConfigResource::with_keys("orders", ["cleanup.policy"])],
+                DescribeConfigsOptions::new(),
+            )
+            .await
+            .unwrap();
+
+        assert!(result.resources()[0].is_success());
+        assert_eq!(metrics.snapshot().retries, 1);
         server.await.unwrap();
     }
 
