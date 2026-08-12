@@ -384,6 +384,10 @@ Verified paths currently include:
   [`31616181960`](https://github.com/TaeeunKil/kafrust/actions/runs/31616181960)
   at commit `17cae6e`; all eight gates passed, with ListGroups recording
   `retries=7` while its broker restarted.
+- The same profile also stopped broker 1 before Metadata v1 transmission and
+  recovered both `describe_cluster` and `list_topics`, each with `retries=1`,
+  in [`31620595346`](https://github.com/TaeeunKil/kafrust/actions/runs/31620595346)
+  at commit `b90a7e9`.
 
 See [Compatibility](docs/compatibility.md) and
 [Broker Roundtrip](docs/broker-roundtrip.md) for the current evidence.

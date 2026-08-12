@@ -928,6 +928,10 @@ Implemented evidence:
   1 after the request gate opens, restarts it while the bounded reconnect loop
   is active, and records `retries=7` before completing the full group listing
   in [`31616181960`](https://github.com/TaeeunKil/kafrust/actions/runs/31616181960).
+  The same three-broker profile now gates Metadata v1 before transmission,
+  stops broker 1, and verifies `retries=1` for both `describe_cluster` and
+  `list_topics` after bootstrap failover in
+  [`31620595346`](https://github.com/TaeeunKil/kafrust/actions/runs/31620595346).
   The read-only DescribeAcls v1 path also retries transport, timeout, and
   retryable top-level broker failures; a focused mock-broker regression test
   verifies the dropped request and typed ACL response. Authorizer-specific

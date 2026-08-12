@@ -143,7 +143,10 @@ current leaders. `DescribeTransactions v0` applies the same bounded retry
 policy to transaction-coordinator discovery, coordinator transport failures,
 and transient per-ID coordinator errors. Focused mock-broker tests cover a
 dropped leader/coordinator request and transient leader/coordinator responses.
-These tests prove client-side recovery. DeleteRecords, DescribeProducers,
+These tests prove client-side recovery. DescribeCluster and ListTopics also
+have live broker-stop injection coverage with `retries=1` each in
+[`31620595346`](https://github.com/TaeeunKil/kafrust/actions/runs/31620595346).
+DeleteRecords, DescribeProducers,
 DescribeTransactions, DescribeGroups, OffsetFetch, exact-offset OffsetCommit,
 DescribeConfigs, and ListGroups also have live broker-stop injection coverage
 in the three-broker profile in
@@ -179,6 +182,7 @@ other coordinator-routed writes remain separate qualification items.
 | Apache Kafka 3.7.2 | three-broker KRaft; PLAINTEXT and SASL_SSL SCRAM failover profiles | DescribeProducers v0 leader routing; DescribeTransactions v0 coordinator routing | [`Live Kafka Smoke`, run `31589394777`](https://github.com/TaeeunKil/kafrust/actions/runs/31589394777) on 2026-08-12 | Passing |
 | Apache Kafka 4.3.1 | single-node and three-broker KRaft; three-broker SASL_PLAINTEXT and SASL_SSL/SCRAM | KIP-848 member-aware Admin OffsetFetch v9 and OffsetCommit v9 | [`Live Kafka Smoke`, run `31607006237`](https://github.com/TaeeunKil/kafrust/actions/runs/31607006237) on 2026-08-12 | Passing; plaintext and secured profiles |
 | Apache Kafka 3.7.2 | three-broker KRaft | In-flight leader-routed DeleteRecords v1 and DescribeProducers v0, coordinator-routed DescribeTransactions v0, DescribeGroups v1, OffsetFetch v2, and exact-offset OffsetCommit v2, plus broker-routed DescribeConfigs v1 and ListGroups v1, pre-transmission gates, broker stops, fresh discovery/retry | [`Live Kafka Smoke`, run `31616181960`](https://github.com/TaeeunKil/kafrust/actions/runs/31616181960) on 2026-08-12 | Passing; ListGroups recorded `retries=7` |
+| Apache Kafka 3.7.2 | three-broker KRaft | Metadata v1 `DescribeCluster` and `ListTopics` bootstrap failover after broker 1 stop | [`Live Kafka Smoke`, run `31620595346`](https://github.com/TaeeunKil/kafrust/actions/runs/31620595346) on 2026-08-12 | Passing; `retries=1` for each path |
 | Apache Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1 | single-node KRaft | Produce `acks=0` immediate and batch dispatch | `Live Kafka Smoke`, manual run `31464933145` on 2026-08-11 | Passing; broker acceptance is intentionally unconfirmed |
 | Apache Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1; Kafka 4.3.1 KIP-848 | single-node KRaft | opt-in automatic consumer-group commit and restored positions | [`Live Kafka Smoke`, run `31593984640`](https://github.com/TaeeunKil/kafrust/actions/runs/31593984640) on 2026-08-12 | Passing; at-least-once tradeoff |
 | Apache Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1 | single-node KRaft | classic consumer-group offset listing and administrative alteration | [`Live Kafka Smoke`, run `31595485915`](https://github.com/TaeeunKil/kafrust/actions/runs/31595485915) on 2026-08-12 | Passing |
