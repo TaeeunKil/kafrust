@@ -54,6 +54,14 @@ OAUTHBEARER, ACL administration, multi-broker failover, and KIP-848. The
 Kafka 3.7.2 multi-broker job also passed the in-flight DeleteRecords and
 DescribeProducers leader-stop recovery gates.
 
+The latest complete matrix and rack-aware qualification in
+[`31636073592`](https://github.com/TaeeunKil/kafrust/actions/runs/31636073592)
+passed at commit `168df38`. Its Kafka 3.7.2 three-broker profile configured
+broker racks and Kafka's `RackAwareReplicaSelector`; the direct consumer sent
+Fetch v11 with `client_rack` and observed a preferred replica route to broker 1.
+This qualifies the documented rack-aware replica-selection path, not every
+possible rack topology or security combination.
+
 The `0.2.x` alpha line is verified against Apache Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 KRaft brokers over plaintext TCP in the single-node profile. Kafka 3.7.2 is also verified in a three-broker plaintext profile. TLS, SASL/PLAIN over SASL_PLAINTEXT, and SASL/SCRAM-SHA-256 and SCRAM-SHA-512 over SASL_SSL are verified against Kafka 3.7.2 for the documented single-node smoke paths. The Kafka 3.7.2 three-broker SASL_PLAINTEXT profile verifies authenticated transaction coordinator, consumer-group coordinator, producer, and direct-consumer recovery after broker stops in [`31554396594`](https://github.com/TaeeunKil/kafrust/actions/runs/31554396594). Kafka 4.3.1 KIP-848 coordinator recovery over SASL_PLAINTEXT is verified in a three-broker profile in [`31569709189`](https://github.com/TaeeunKil/kafrust/actions/runs/31569709189), and the SASL_SSL SCRAM-SHA-256 profile is verified in [`31570924845`](https://github.com/TaeeunKil/kafrust/actions/runs/31570924845). A Kafka 3.7.2 SASL_SSL OAUTHBEARER path is also live-verified against Kafka's built-in unsecured test validator; this does not claim production OAuth/OIDC provider integration. The SHA-512 profile covers broker roundtrip, producer, batch producer, buffered producer, direct consumer, and consumer group poll paths. ACL create, describe, and delete plus client quota set, describe, and remove are live-verified against a Kafka 3.7.2 KRaft broker with StandardAuthorizer enabled. SCRAM credential upsert, describe, and delete are live-verified over the SASL_SSL profile. Controller-routed partition reassignment submission and completion polling are live-verified in the Kafka 3.7.2 three-broker profile. The cooperative-sticky consumer protocol path, multi-member ownership transfer, transient-member rollback, and member-loss recovery are live-verified in the three-broker profile by main run `31474626799`. Acks=0 immediate and batch Produce dispatch is live-verified against Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 single-node plaintext profiles; this verifies request completion, not broker acceptance. The high-level producer uses flexible `ApiVersions v3` capability negotiation across all supported plaintext, TLS, SASL, and multi-broker profiles in live run `31494820868`. Idempotent producer recovery through the three-broker broker-stop window is live-verified in run `31495298593`. The Kafka 3.7.2 three-broker SASL_SSL SCRAM profile also qualifies safe transactional producer recovery after coordinator failure in [`31572745537`](https://github.com/TaeeunKil/kafrust/actions/runs/31572745537): the old producer terminates on `INVALID_PRODUCER_EPOCH`, and a new producer with the same transactional ID reinitializes, completes recovery, and commits a new transaction verified with `read_committed`.
 
 The signed local OIDC/JWKS fixture also passes Kafka's validator, the Java Kafka
@@ -455,7 +463,8 @@ with zero in-flight requests and buffered records.
   decoding. When `client_rack` is configured and the broker advertises Fetch
   v11, the consumer uses the rack field and follows `preferred_read_replica`;
   focused wire and injected multi-broker routing tests cover this path. The
-  live rack-aware broker profile remains unqualified.
+  Kafka 3.7.2 three-broker rack-aware profile is also live-qualified in
+  [`31636073592`](https://github.com/TaeeunKil/kafrust/actions/runs/31636073592).
 - Consumer group join, sync, heartbeat, poll, and offset commit through the alpha classic consumer group path with range assignment.
 - Client-side regex topic subscription resolves Metadata v1 topic names before
   classic or KIP-848 joins and is covered by focused ordering, filtering, and
@@ -672,9 +681,6 @@ The current compatibility claim does not cover:
   `ClientConfig::request_timeout_ms`.
 - Production OAuth/OIDC provider compatibility beyond the local signed
   OIDC/JWKS fixture.
-- Rack-aware client routing against a live broker deployment with broker racks
-  and replica selection configured. The Fetch v11 implementation and focused
-  routing tests are complete, but live qualification is still required.
 - The SCRAM multi-broker group-coordinator, partition-leader, and safe
   transactional producer reinitialization paths are claimed above. This does
   not claim transparent continuation of the old producer or the outcome of a

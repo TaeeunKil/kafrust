@@ -1538,8 +1538,10 @@ Implemented evidence:
   the next partition fetch to the selected broker. A focused protocol fixture
   verifies the Fetch v11 wire fields, and an injected two-broker test verifies
   leader-to-preferred-replica routing plus fallback when the preference clears.
-  A live Kafka profile with broker racks and replica selection remains an open
-  qualification item; this evidence does not claim that live behavior yet.
+  The Kafka 3.7.2 three-broker `broker.rack` plus `RackAwareReplicaSelector`
+  profile passed live qualification in
+  [`31636073592`](https://github.com/TaeeunKil/kafrust/actions/runs/31636073592),
+  including a direct consumer request routed to the preferred replica.
 - Classic consumer-group JoinGroup retries transient coordinator and membership
   errors; an `UNKNOWN_MEMBER_ID` response clears the stale member id before the
   next attempt. Live smoke run

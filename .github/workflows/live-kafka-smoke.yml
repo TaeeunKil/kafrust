@@ -1129,9 +1129,9 @@ jobs:
           RUST_LOG: kafrust=debug
         run: |
           cargo run -p kafrust --example consumer_fetch 2>&1 | tee /tmp/kafrust-rack-aware.log
-          if ! sed -E 's/\x1B\[[0-9;]*m//g' /tmp/kafrust-rack-aware.log | grep -Eq 'selected_broker[[:space:]]*=[[:space:]]*1'; then
+          if ! sed -E 's/\x1B\[[0-9;]*m//g' /tmp/kafrust-rack-aware.log | grep -E 'selected_broker[[:space:]]*=[[:space:]]*1' >/dev/null; then
             cat /tmp/kafrust-rack-aware.log
-            echo "rack-aware fetch did not route a follow-up request to broker 1"
+            echo "rack-aware fetch did not route a request to broker 1"
             exit 1
           fi
 

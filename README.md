@@ -304,8 +304,9 @@ matching `ConsumerGroupConfig` builder). When the selected broker advertises
 Fetch v11, kafrust sends the rack ID and follows Kafka's
 `preferred_read_replica` response on the next fetch. It falls back to the
 existing Fetch v4 leader path when Fetch v11 is unavailable. Wire-level and
-injected multi-broker routing tests cover this path; a live broker profile with
-rack-aware replica selection is still a release qualification item.
+injected multi-broker routing tests cover this path. The Kafka 3.7.2
+three-broker `broker.rack` plus `RackAwareReplicaSelector` profile passed in
+[`Live Kafka Smoke`, run `31636073592`](https://github.com/TaeeunKil/kafrust/actions/runs/31636073592).
 
 ### Consumer Group
 
@@ -379,6 +380,7 @@ brokers.
 | `0.2.x` | Apache Kafka `3.7.2` | single-node KRaft | `SASL_SSL` with SCRAM-SHA-512 | Passing live smoke |
 | `0.2.x` | Apache Kafka `3.8.1` | single-node KRaft | `PLAINTEXT` | Passing live smoke |
 | `0.2.x` | Apache Kafka `3.9.1` | single-node KRaft | `PLAINTEXT` | Passing live smoke |
+| `0.2.x` | Apache Kafka `3.7.2` | three-broker KRaft | `PLAINTEXT` with broker racks | Passing live smoke |
 
 Verified paths currently include:
 
@@ -412,11 +414,11 @@ Verified paths currently include:
 - The complete 17-job matrix also passed at commit `25d614a` in
   [`31627790408`](https://github.com/TaeeunKil/kafrust/actions/runs/31627790408)
   after the ACL authorizer example added bounded post-create visibility polling.
-- The latest complete 17-job matrix passed at commit `43969e0` in
-  [`31630339333`](https://github.com/TaeeunKil/kafrust/actions/runs/31630339333).
-  It included the Kafka 3.7.2 multi-broker DeleteRecords and DescribeProducers
-  leader-stop recovery gates, alongside the supported version, security, ACL,
-  failover, and KIP-848 profiles.
+- The latest complete 17-job matrix passed at commit `168df38` in
+  [`31636073592`](https://github.com/TaeeunKil/kafrust/actions/runs/31636073592).
+  It included the Kafka 3.7.2 multi-broker rack-aware replica-selection gate,
+  DeleteRecords and DescribeProducers leader-stop recovery gates, alongside
+  the supported version, security, ACL, failover, and KIP-848 profiles.
 
 See [Compatibility](docs/compatibility.md) and
 [Broker Roundtrip](docs/broker-roundtrip.md) for the current evidence.
@@ -458,8 +460,9 @@ See [Compatibility](docs/compatibility.md) and
   and transaction paths. Topic
   partition expansion is verified through CreatePartitions v0 and Metadata v1.
   Rack-aware client routing is implemented through Fetch v11 negotiation and
-  preferred-replica follow-up, but its live broker qualification is not yet
-  claimed.
+  preferred-replica follow-up. The Kafka 3.7.2 three-broker rack-aware profile
+  is live-qualified in [`31636073592`](https://github.com/TaeeunKil/kafrust/actions/runs/31636073592);
+  this covers replica selection, not every possible rack or security topology.
 - `ProducerConfig::partitioner` supports thread-safe custom routing for records
   without explicit partitions across immediate, batch, and buffered sends.
 - Gzip, Snappy, and LZ4 compression use Produce v3 RecordBatch encoding; Zstd
