@@ -1290,10 +1290,10 @@ jobs:
               -e KAFKA_CLUSTER_ID="${KAFKA_CLUSTER_ID}" \
               -e KAFKA_NODE_ID="${node}" \
               -e KAFKA_PROCESS_ROLES=broker,controller \
-              -e KAFKA_LISTENERS=INTERNAL://:29092,EXTERNAL://:9095,CONTROLLER://:9093 \
-              -e KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafrust-kafka-sasl-ssl-multi-${node}:29092,EXTERNAL://localhost:${external_port} \
+              -e KAFKA_LISTENERS=INTERNAL://:29092,SASL_SSL://:9095,CONTROLLER://:9093 \
+              -e KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafrust-kafka-sasl-ssl-multi-${node}:29092,SASL_SSL://localhost:${external_port} \
               -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
-              -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:SASL_SSL \
+              -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,SASL_SSL:SASL_SSL \
               -e KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL \
               -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafrust-kafka-sasl-ssl-multi-1:9093,2@kafrust-kafka-sasl-ssl-multi-2:9093,3@kafrust-kafka-sasl-ssl-multi-3:9093 \
               -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=3 \
