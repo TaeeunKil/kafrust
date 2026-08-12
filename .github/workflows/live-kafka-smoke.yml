@@ -978,9 +978,17 @@ jobs:
       - name: Dump multi-broker SASL Kafka logs
         if: failure()
         run: |
-          docker logs kafrust-kafka-sasl-multi-1 || true
-          docker logs kafrust-kafka-sasl-multi-2 || true
-          docker logs kafrust-kafka-sasl-multi-3 || true
+          docker logs kafrust-kafka-sasl-multi-1 2>&1 | tee /tmp/kafrust-sasl-multi-1.log || true
+          docker logs kafrust-kafka-sasl-multi-2 2>&1 | tee /tmp/kafrust-sasl-multi-2.log || true
+          docker logs kafrust-kafka-sasl-multi-3 2>&1 | tee /tmp/kafrust-sasl-multi-3.log || true
+
+      - name: Upload secured failover diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: secured-sasl-failover-diagnostics-${{ github.run_id }}
+          path: /tmp/kafrust-sasl-*.log
+          if-no-files-found: ignore
 
   kafka-tls:
     name: Kafka 3.7.2 TLS
