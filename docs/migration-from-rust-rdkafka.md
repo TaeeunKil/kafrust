@@ -20,7 +20,7 @@ Replace the dependency:
 
 ```toml
 [dependencies]
-kafrust = "0.2.6"
+kafrust = "0.2.7"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
 
@@ -254,6 +254,7 @@ kafrust currently provides:
 - consumer group description
 - consumer group listing and deletion
 - selected consumer group offset deletion
+- record deletion before partition offsets with leader-routed DeleteRecords
 - topic partition expansion with automatic or explicit replica assignment
 - controller-routed partition reassignment and bounded in-progress status polling
 
@@ -298,6 +299,7 @@ See [Admin API](admin-api.md) for typed request and response examples.
 | ACL describe/create/delete with an authorizer-enabled broker | Verified on Kafka 3.7.2; qualify target permissions and policy |
 | Client quota describe/alter | Verified on Kafka 3.7.2 StandardAuthorizer; qualify target permissions and quota policy |
 | SCRAM credential administration | Verified on Kafka 3.7.2 SASL_SSL; qualify target permissions and credential policy |
+| Record deletion | Candidate; DeleteRecords v1 is leader-routed and preserves low watermarks and per-partition errors; qualify retention policy and destructive-operation controls on the target broker |
 | Replica reassignment | Verified on Kafka 3.7.2 three-broker smoke; qualify target broker permissions and failure behavior |
 
 "Candidate" means the API exists and relevant project tests pass. It does not

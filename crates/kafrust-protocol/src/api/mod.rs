@@ -10,6 +10,7 @@ pub mod create_partitions;
 pub mod create_topics;
 pub mod delete_acls;
 pub mod delete_groups;
+pub mod delete_records;
 pub mod delete_topics;
 pub mod describe_acls;
 pub mod describe_client_quotas;

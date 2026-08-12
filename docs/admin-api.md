@@ -239,6 +239,50 @@ topic from its subscription before deleting committed offsets. A member can
 remain visible until its broker-side session timeout expires after an
 unclean process exit.
 
+## Delete Records
+
+```rust
+use kafrust::{AdminClient, ClientConfig, DeleteRecordsOptions, DeleteRecordsTopic};
+
+# async fn example() -> kafrust::Result<()> {
+let admin = AdminClient::new(ClientConfig::new([
+    "localhost:19092",
+    "localhost:19093",
+]));
+let result = admin
+    .delete_records(
+        &[
+            DeleteRecordsTopic::new("orders")
+                .partition(0, 100)
+                .partition(1, -1),
+            DeleteRecordsTopic::new("payments").partition(0, 50),
+        ],
+        DeleteRecordsOptions::new(),
+    )
+    .await?;
+
+for topic in result.topics() {
+    for partition in topic.partitions() {
+        println!(
+            "{}-{} low_watermark={} error={}",
+            topic.name(),
+            partition.partition_index(),
+            partition.low_watermark(),
+            partition.error_code(),
+        );
+    }
+}
+# Ok(())
+# }
+```
+
+`AdminClient::delete_records` sends Metadata v1 first, groups the requested
+partitions by their current leaders, and sends DeleteRecords v1 to each leader.
+This matters in multi-broker clusters because a bootstrap broker is not
+necessarily the leader for every requested partition. The result preserves
+each partition's low watermark and broker error, including partial success.
+An offset of `-1` asks Kafka to delete through the current high watermark.
+
 ## Reassign Partitions
 
 Partition reassignment requests are routed to the active controller. A target

@@ -29,6 +29,9 @@ use kafrust_protocol::api::create_topics::{
 };
 use kafrust_protocol::api::delete_acls::{DeleteAclsRequestV1, DeleteAclsResponseV1};
 use kafrust_protocol::api::delete_groups::{DeleteGroupsRequestV1, DeleteGroupsResponseV1};
+use kafrust_protocol::api::delete_records::{
+    DeleteRecordsRequestV1, DeleteRecordsResponseV1, DeleteRecordsTopicV1,
+};
 use kafrust_protocol::api::delete_topics::{DeleteTopicsRequestV3, DeleteTopicsResponseV3};
 use kafrust_protocol::api::describe_acls::{DescribeAclsRequestV1, DescribeAclsResponseV1};
 use kafrust_protocol::api::describe_client_quotas::{
@@ -538,6 +541,28 @@ impl Client {
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(DeleteTopicsResponseV3::decode_body(&mut decoder)?)
+    }
+
+    /// Sends DeleteRecords v1 to the broker represented by this connection.
+    ///
+    /// Kafka expects this request on a broker that can serve the target
+    /// partitions. High-level callers should prefer [`crate::AdminClient`],
+    /// which discovers and routes the request through a bootstrap connection.
+    pub async fn delete_records_v1(
+        &mut self,
+        topics: Vec<DeleteRecordsTopicV1>,
+        timeout_ms: i32,
+    ) -> Result<DeleteRecordsResponseV1> {
+        let request = DeleteRecordsRequestV1 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            topics,
+            timeout_ms,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(DeleteRecordsResponseV1::decode_body(&mut decoder)?)
     }
 
     /// Sends DescribeConfigs v1 to the broker represented by this connection.

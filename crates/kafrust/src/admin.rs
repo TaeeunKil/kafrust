@@ -22,6 +22,9 @@ use kafrust_protocol::api::delete_acls::{
     DeleteAclsFilterResultV1, DeleteAclsFilterV1, DeleteAclsMatchingAclV1,
 };
 use kafrust_protocol::api::delete_groups::DeleteGroupResultV1;
+use kafrust_protocol::api::delete_records::{
+    DeleteRecordsPartitionResponseV1, DeleteRecordsTopicResponseV1, DeleteRecordsTopicV1,
+};
 use kafrust_protocol::api::delete_topics::DeleteTopicsTopicResultV3;
 use kafrust_protocol::api::describe_acls::{DescribeAclsEntryV1, DescribeAclsResponseV1};
 use kafrust_protocol::api::describe_client_quotas::{
@@ -42,7 +45,7 @@ use kafrust_protocol::api::incremental_alter_configs::{
 };
 use kafrust_protocol::api::list_groups::ListedGroupV1;
 use kafrust_protocol::api::list_partition_reassignments::ListPartitionReassignmentsTopicV0;
-use kafrust_protocol::api::metadata::{BrokerMetadata, TopicMetadata};
+use kafrust_protocol::api::metadata::{BrokerMetadata, MetadataResponseV1, TopicMetadata};
 use kafrust_protocol::api::offset_delete::{
     OffsetDeleteRequestPartitionV0, OffsetDeleteRequestTopicV0, OffsetDeleteResponsePartitionV0,
     OffsetDeleteResponseTopicV0,
@@ -830,6 +833,64 @@ impl AdminClient {
                 .map(DeleteTopicResult::from_protocol)
                 .collect(),
         })
+    }
+
+    /// Deletes records before the requested offsets using DeleteRecords v1.
+    ///
+    /// Kafka routes the request to the partition leaders. The broker response
+    /// retains each partition's resulting low watermark and independent error
+    /// code, so a partial deletion is observable without flattening it into a
+    /// single operation error.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.delete_records",
+        skip_all,
+        fields(topic_count = topics.len()),
+        err
+    )]
+    pub async fn delete_records(
+        &self,
+        topics: &[DeleteRecordsTopic],
+        options: DeleteRecordsOptions,
+    ) -> Result<DeleteRecordsResult> {
+        let mut bootstrap = self.config.clone().connect().await?;
+        let metadata = bootstrap
+            .metadata(Some(
+                topics.iter().map(|topic| topic.name.clone()).collect(),
+            ))
+            .await?;
+        let requests = delete_records_requests(&metadata, topics)?;
+        let mut responses = Vec::with_capacity(requests.len());
+        for (broker_addr, topics) in requests {
+            let mut client = self.config.connect_broker(broker_addr).await?;
+            responses.push(
+                client
+                    .delete_records_v1(topics, duration_millis_i32(options.timeout))
+                    .await?,
+            );
+        }
+
+        let mut returned_partitions = 0usize;
+        for response in &responses {
+            for topic in &response.topics {
+                for partition in &topic.partitions {
+                    returned_partitions += 1;
+                    if partition.error_code != 0 {
+                        self.config.record_broker_error();
+                    }
+                }
+            }
+        }
+        let requested_partitions = topics.iter().map(|topic| topic.partitions.len()).sum();
+        if returned_partitions != requested_partitions {
+            return Err(Error::ResponseCountMismatch {
+                operation: "DeleteRecords",
+                expected: requested_partitions,
+                actual: returned_partitions,
+            });
+        }
+
+        Ok(DeleteRecordsResult::from_protocol_responses(responses))
     }
 }
 
@@ -4292,6 +4353,227 @@ impl CreatePartitionsTopicResult {
     }
 }
 
+/// Partition offset target for one DeleteRecords operation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DeleteRecordsPartition {
+    partition_index: i32,
+    offset: i64,
+}
+
+impl DeleteRecordsPartition {
+    /// Creates a deletion target for a partition.
+    pub fn new(partition_index: i32, offset: i64) -> Self {
+        Self {
+            partition_index,
+            offset,
+        }
+    }
+
+    /// Returns the target partition index.
+    pub fn partition_index(&self) -> i32 {
+        self.partition_index
+    }
+
+    /// Returns the offset before which Kafka should delete records.
+    pub fn offset(&self) -> i64 {
+        self.offset
+    }
+}
+
+/// Topic and partition targets for one DeleteRecords operation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeleteRecordsTopic {
+    name: String,
+    partitions: Vec<DeleteRecordsPartition>,
+}
+
+impl DeleteRecordsTopic {
+    /// Creates an empty topic target.
+    pub fn new(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            partitions: Vec::new(),
+        }
+    }
+
+    /// Adds a partition offset target to this topic.
+    pub fn partition(mut self, partition_index: i32, offset: i64) -> Self {
+        self.partitions
+            .push(DeleteRecordsPartition::new(partition_index, offset));
+        self
+    }
+
+    /// Returns the topic name.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Returns the requested partition deletion targets.
+    pub fn partitions(&self) -> &[DeleteRecordsPartition] {
+        &self.partitions
+    }
+}
+
+/// Options for one DeleteRecords operation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DeleteRecordsOptions {
+    timeout: Duration,
+}
+
+impl DeleteRecordsOptions {
+    /// Creates options with a 30-second broker timeout.
+    pub fn new() -> Self {
+        Self {
+            timeout: Duration::from_secs(30),
+        }
+    }
+
+    /// Sets how long the broker may wait for record deletion.
+    pub fn timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = timeout;
+        self
+    }
+
+    /// Returns the configured broker-side timeout.
+    pub fn timeout_ref(&self) -> Duration {
+        self.timeout
+    }
+}
+
+impl Default for DeleteRecordsOptions {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Complete response from one DeleteRecords operation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeleteRecordsResult {
+    throttle_time: Duration,
+    topics: Vec<DeleteRecordsTopicResult>,
+}
+
+impl DeleteRecordsResult {
+    /// Returns the broker throttle time.
+    pub fn throttle_time(&self) -> Duration {
+        self.throttle_time
+    }
+
+    /// Returns per-topic outcomes in broker response order.
+    pub fn topics(&self) -> &[DeleteRecordsTopicResult] {
+        &self.topics
+    }
+
+    /// Consumes this response and returns per-topic outcomes.
+    pub fn into_topics(self) -> Vec<DeleteRecordsTopicResult> {
+        self.topics
+    }
+
+    /// Returns whether at least one partition deletion was rejected.
+    pub fn has_errors(&self) -> bool {
+        self.topics.iter().any(DeleteRecordsTopicResult::has_errors)
+    }
+
+    fn from_protocol_responses(
+        responses: Vec<kafrust_protocol::api::delete_records::DeleteRecordsResponseV1>,
+    ) -> Self {
+        Self {
+            throttle_time: Duration::from_millis(
+                responses
+                    .iter()
+                    .map(|response| nonnegative_i32_to_u64(response.throttle_time_ms))
+                    .max()
+                    .unwrap_or(0),
+            ),
+            topics: responses
+                .into_iter()
+                .flat_map(|response| response.topics)
+                .map(DeleteRecordsTopicResult::from_protocol)
+                .collect(),
+        }
+    }
+}
+
+/// Outcome for one topic in a DeleteRecords response.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeleteRecordsTopicResult {
+    name: String,
+    partitions: Vec<DeleteRecordsPartitionResult>,
+}
+
+impl DeleteRecordsTopicResult {
+    /// Returns the topic name.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Returns per-partition deletion outcomes.
+    pub fn partitions(&self) -> &[DeleteRecordsPartitionResult] {
+        &self.partitions
+    }
+
+    /// Returns whether at least one partition deletion was rejected.
+    pub fn has_errors(&self) -> bool {
+        self.partitions
+            .iter()
+            .any(|partition| !partition.is_success())
+    }
+
+    fn from_protocol(result: DeleteRecordsTopicResponseV1) -> Self {
+        Self {
+            name: result.name,
+            partitions: result
+                .partitions
+                .into_iter()
+                .map(DeleteRecordsPartitionResult::from_protocol)
+                .collect(),
+        }
+    }
+}
+
+/// Outcome for one partition in a DeleteRecords response.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DeleteRecordsPartitionResult {
+    partition_index: i32,
+    low_watermark: i64,
+    error_code: i16,
+}
+
+impl DeleteRecordsPartitionResult {
+    /// Returns the partition index.
+    pub fn partition_index(&self) -> i32 {
+        self.partition_index
+    }
+
+    /// Returns the low watermark after deletion.
+    pub fn low_watermark(&self) -> i64 {
+        self.low_watermark
+    }
+
+    /// Returns whether Kafka accepted this partition deletion.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+    }
+
+    /// Returns Kafka's raw error code, or zero for success.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns kafrust's classification for a non-zero Kafka error code.
+    pub fn broker_error_kind(&self) -> Option<BrokerErrorKind> {
+        (self.error_code != 0).then(|| BrokerErrorKind::from_code(self.error_code))
+    }
+
+    fn from_protocol(result: DeleteRecordsPartitionResponseV1) -> Self {
+        Self {
+            partition_index: result.partition_index,
+            low_watermark: result.low_watermark,
+            error_code: result.error_code,
+        }
+    }
+}
+
 /// Options for one DeleteTopics operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DeleteTopicsOptions {
@@ -4389,6 +4671,84 @@ impl DeleteTopicResult {
     }
 }
 
+fn delete_records_requests(
+    metadata: &MetadataResponseV1,
+    topics: &[DeleteRecordsTopic],
+) -> Result<BTreeMap<String, Vec<DeleteRecordsTopicV1>>> {
+    let mut requests: BTreeMap<String, BTreeMap<String, Vec<_>>> = BTreeMap::new();
+
+    for topic in topics {
+        for partition in &topic.partitions {
+            let topic_metadata = metadata
+                .topics
+                .iter()
+                .find(|candidate| candidate.name == topic.name)
+                .ok_or_else(|| Error::UnknownTopicOrPartition {
+                    topic: topic.name.clone(),
+                    partition: partition.partition_index,
+                })?;
+            if topic_metadata.error_code != 0 {
+                return Err(Error::Broker {
+                    code: topic_metadata.error_code,
+                    context: format!("metadata for topic {}", topic.name),
+                });
+            }
+
+            let partition_metadata = topic_metadata
+                .partitions
+                .iter()
+                .find(|candidate| candidate.partition_index == partition.partition_index)
+                .ok_or_else(|| Error::UnknownTopicOrPartition {
+                    topic: topic.name.clone(),
+                    partition: partition.partition_index,
+                })?;
+            if partition_metadata.error_code != 0 {
+                return Err(Error::Broker {
+                    code: partition_metadata.error_code,
+                    context: format!("metadata for {}-{}", topic.name, partition.partition_index),
+                });
+            }
+            let leader_id = partition_metadata.leader_id;
+            if leader_id < 0 {
+                return Err(Error::MissingLeader {
+                    topic: topic.name.clone(),
+                    partition: partition.partition_index,
+                });
+            }
+            let broker = metadata
+                .brokers
+                .iter()
+                .find(|broker| broker.node_id == leader_id)
+                .ok_or(Error::MissingBroker { node_id: leader_id })?;
+            let broker_address = format!("{}:{}", broker.host, broker.port);
+            requests
+                .entry(broker_address)
+                .or_default()
+                .entry(topic.name.clone())
+                .or_default()
+                .push(
+                    kafrust_protocol::api::delete_records::DeleteRecordsPartitionV1 {
+                        partition_index: partition.partition_index,
+                        offset: partition.offset,
+                    },
+                );
+        }
+    }
+
+    Ok(requests
+        .into_iter()
+        .map(|(broker_address, topics)| {
+            (
+                broker_address,
+                topics
+                    .into_iter()
+                    .map(|(name, partitions)| DeleteRecordsTopicV1 { name, partitions })
+                    .collect(),
+            )
+        })
+        .collect())
+}
+
 fn duration_millis_i32(duration: Duration) -> i32 {
     i32::try_from(duration.as_millis()).unwrap_or(i32::MAX)
 }
@@ -4405,10 +4765,10 @@ mod tests {
         AlterConfigsOptions, ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter,
         ClientQuotaFilterComponent, ClientQuotaMatchType, ConfigAlterOperationKind, ConfigSource,
         ConsumerGroupOffsetDelete, CreatePartitionsOptions, CreateTopicsOptions,
-        DeleteTopicsOptions, DescribeConfigsOptions, NewPartitions, NewTopic,
-        PartitionReassignment, PartitionReassignmentOptions, PartitionReassignmentQuery,
-        ScramCredentialDeletion, ScramCredentialMechanism, ScramCredentialUpsertion,
-        TopicConfigAlteration, TopicConfigResource,
+        DeleteRecordsOptions, DeleteRecordsTopic, DeleteTopicsOptions, DescribeConfigsOptions,
+        NewPartitions, NewTopic, PartitionReassignment, PartitionReassignmentOptions,
+        PartitionReassignmentQuery, ScramCredentialDeletion, ScramCredentialMechanism,
+        ScramCredentialUpsertion, TopicConfigAlteration, TopicConfigResource,
     };
     use crate::{BrokerErrorKind, ClientConfig, ClientMetrics};
     use kafrust_protocol::codec::Encoder;
@@ -4473,6 +4833,23 @@ mod tests {
         let options = DeleteTopicsOptions::new().timeout(Duration::from_secs(9));
 
         assert_eq!(options.timeout_ref(), Duration::from_secs(9));
+    }
+
+    #[test]
+    fn builds_delete_records_targets_and_options() {
+        let topic = DeleteRecordsTopic::new("orders")
+            .partition(0, 100)
+            .partition(1, -1);
+        assert_eq!(topic.name(), "orders");
+        assert_eq!(topic.partitions().len(), 2);
+        assert_eq!(topic.partitions()[0].partition_index(), 0);
+        assert_eq!(topic.partitions()[0].offset(), 100);
+        assert_eq!(
+            DeleteRecordsOptions::new()
+                .timeout(Duration::from_secs(5))
+                .timeout_ref(),
+            Duration::from_secs(5)
+        );
     }
 
     #[test]
@@ -5288,6 +5665,63 @@ mod tests {
         server.await.unwrap();
     }
 
+    #[tokio::test]
+    async fn routes_delete_records_and_preserves_partition_results() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let metadata_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+            write_frame(
+                &mut bootstrap,
+                &delete_records_metadata_response(addr.port()),
+            )
+            .await;
+
+            let (mut connection, _) = listener.accept().await.unwrap();
+            let request = read_frame(&mut connection).await;
+            assert_eq!(&request[0..4], &[0, 21, 0, 1]);
+            assert_eq!(&request[request.len() - 4..], &[0, 0, 117, 48]);
+            write_frame(&mut connection, &delete_records_response()).await;
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        );
+
+        let result = admin
+            .delete_records(
+                &[
+                    DeleteRecordsTopic::new("orders")
+                        .partition(0, 100)
+                        .partition(1, -1),
+                    DeleteRecordsTopic::new("payments").partition(2, 40),
+                ],
+                DeleteRecordsOptions::new(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(result.throttle_time(), Duration::from_millis(8));
+        assert!(result.has_errors());
+        assert_eq!(result.topics().len(), 2);
+        assert_eq!(result.topics()[0].name(), "orders");
+        assert_eq!(result.topics()[0].partitions()[0].low_watermark(), 100);
+        assert!(!result.topics()[0].partitions()[1].is_success());
+        assert_eq!(result.topics()[0].partitions()[1].error_code(), 3);
+        assert_eq!(
+            result.topics()[0].partitions()[1].broker_error_kind(),
+            Some(BrokerErrorKind::UnknownTopicOrPartition)
+        );
+        assert_eq!(result.topics()[1].partitions()[0].partition_index(), 2);
+        assert_eq!(metrics.snapshot().broker_errors, 1);
+        assert_eq!(result.clone().into_topics().len(), 2);
+        server.await.unwrap();
+    }
+
     async fn read_frame(stream: &mut tokio::net::TcpStream) -> Vec<u8> {
         let length = stream.read_i32().await.unwrap();
         let mut frame = vec![0; usize::try_from(length).unwrap()];
@@ -5374,6 +5808,63 @@ mod tests {
             0, 6, b'o', b'r', b'd', b'e', b'r', b's', // topic name
             0, 3, // unknown topic or partition
         ]
+    }
+
+    fn delete_records_response() -> Vec<u8> {
+        vec![
+            0, 0, 0, 1, // correlation ID
+            0, 0, 0, 8, // throttle time
+            0, 0, 0, 2, // topic count
+            0, 6, b'o', b'r', b'd', b'e', b'r', b's', // topic
+            0, 0, 0, 2, // partition count
+            0, 0, 0, 0, // partition 0
+            0, 0, 0, 0, 0, 0, 0, 100, // low watermark
+            0, 0, // success
+            0, 0, 0, 1, // partition 1
+            0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, // low watermark
+            0, 3, // unknown topic or partition
+            0, 8, b'p', b'a', b'y', b'm', b'e', b'n', b't', b's', // topic
+            0, 0, 0, 1, // partition count
+            0, 0, 0, 2, // partition 2
+            0, 0, 0, 0, 0, 0, 0, 40, // low watermark
+            0, 0, // success
+        ]
+    }
+
+    fn delete_records_metadata_response(port: u16) -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_i32(1); // broker count
+        encoder.write_i32(1); // broker node ID
+        encoder.write_string("127.0.0.1").unwrap();
+        encoder.write_i32(i32::from(port));
+        encoder.write_nullable_string(None).unwrap();
+        encoder.write_i32(1); // controller ID
+        encoder.write_i32(2); // topic count
+        write_topic_metadata(&mut encoder, "orders", &[0, 1]);
+        write_topic_metadata(&mut encoder, "payments", &[2]);
+        encoder.into_bytes()
+    }
+
+    fn write_topic_metadata(encoder: &mut Encoder, name: &str, partitions: &[i32]) {
+        encoder.write_i16(0); // topic error
+        encoder.write_string(name).unwrap();
+        encoder.write_bool(false);
+        encoder
+            .write_array(Some(partitions), |encoder, partition| {
+                encoder.write_i16(0); // partition error
+                encoder.write_i32(*partition);
+                encoder.write_i32(1); // leader
+                encoder.write_array(Some(&[1]), |encoder, broker| {
+                    encoder.write_i32(*broker);
+                    Ok(())
+                })?;
+                encoder.write_array(Some(&[1]), |encoder, broker| {
+                    encoder.write_i32(*broker);
+                    Ok(())
+                })
+            })
+            .unwrap();
     }
 
     fn describe_configs_response() -> Vec<u8> {
