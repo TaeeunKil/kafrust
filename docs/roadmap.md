@@ -1736,3 +1736,8 @@ Implemented evidence:
   This rerun covered the supported Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1
   profiles, TLS, SASL/PLAIN, SASL/SCRAM, the test-only OAUTHBEARER validator,
   ACL administration, secured multi-broker failover, and KIP-848 recovery.
+- The latest complete 17-job matrix passed at commit `256847f` in
+  [`31624278107`](https://github.com/TaeeunKil/kafrust/actions/runs/31624278107)
+  after adding bounded pre-transmission controller discovery retries for
+  controller-routed Admin writes. Existing topic, partition, SCRAM, and
+  reassignment workflows remained green across all supported profiles.

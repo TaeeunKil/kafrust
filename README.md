@@ -389,6 +389,9 @@ Verified paths currently include:
   recovered both `describe_cluster` and `list_topics`, each with `retries=1`,
   in [`31620595346`](https://github.com/TaeeunKil/kafrust/actions/runs/31620595346)
   at commit `b90a7e9`.
+- After adding safe pre-transmission controller discovery retries for Admin
+  writes, the complete 17-job matrix passed at commit `256847f` in
+  [`31624278107`](https://github.com/TaeeunKil/kafrust/actions/runs/31624278107).
 
 See [Compatibility](docs/compatibility.md) and
 [Broker Roundtrip](docs/broker-roundtrip.md) for the current evidence.
