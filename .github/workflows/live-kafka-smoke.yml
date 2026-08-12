@@ -1236,6 +1236,143 @@ jobs:
             exit 1
           fi
 
+      - name: Run repeated leader failover through a second broker stop
+        run: |
+          docker start kafrust-kafka-multi-1
+          broker_one_ready=""
+          for attempt in {1..120}; do
+            if docker exec kafrust-kafka-multi-1 /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server kafrust-kafka-multi-1:29092 \
+              >/tmp/kafrust-multi-repeat-probe.log 2>&1; then
+              broker_one_ready=1
+              break
+            fi
+            sleep 2
+          done
+
+          if [ -z "$broker_one_ready" ]; then
+            cat /tmp/kafrust-multi-repeat-probe.log || true
+            docker logs kafrust-kafka-multi-1
+            exit 1
+          fi
+
+          repeated_partition=""
+          for attempt in {1..120}; do
+            docker exec kafrust-kafka-multi-1 /opt/kafka/bin/kafka-topics.sh \
+              --bootstrap-server kafrust-kafka-multi-1:29092 \
+              --describe \
+              --topic "$KAFRUST_TOPIC" \
+              >/tmp/kafrust-multi-repeat-topic.log 2>&1 || true
+            repeated_partition="$(awk '/Partition:/ && /Leader: 2/ { for (i = 1; i <= NF; i++) if ($i == "Partition:") { print $(i + 1); exit } }' /tmp/kafrust-multi-repeat-topic.log)"
+            if [ -n "$repeated_partition" ]; then
+              break
+            fi
+            sleep 2
+          done
+
+          if [ -z "$repeated_partition" ]; then
+            cat /tmp/kafrust-multi-repeat-topic.log || true
+            exit 1
+          fi
+
+          KAFRUST_PARTITION="$repeated_partition" \
+          KAFRUST_FAILOVER_PAUSE_MS=30000 \
+          cargo run -p kafrust --example producer_failover \
+            >/tmp/kafrust-producer-repeat-failover.log 2>&1 &
+          repeat_producer_pid=$!
+          KAFRUST_PARTITION="$repeated_partition" \
+          KAFRUST_OFFSET=0 \
+          KAFRUST_FAILOVER_PAUSE_MS=30000 \
+          cargo run -p kafrust --example consumer_failover \
+            >/tmp/kafrust-consumer-repeat-failover.log 2>&1 &
+          repeat_consumer_pid=$!
+
+          repeat_send_seen=""
+          repeat_fetch_seen=""
+          for attempt in {1..60}; do
+            if grep -q "failover before produced" /tmp/kafrust-producer-repeat-failover.log; then
+              repeat_send_seen=1
+            fi
+            if grep -q "failover before fetched" /tmp/kafrust-consumer-repeat-failover.log; then
+              repeat_fetch_seen=1
+            fi
+            if [ -n "$repeat_send_seen" ] && [ -n "$repeat_fetch_seen" ]; then
+              break
+            fi
+            if ! kill -0 "$repeat_producer_pid" 2>/dev/null; then
+              cat /tmp/kafrust-producer-repeat-failover.log || true
+              wait "$repeat_producer_pid"
+            fi
+            if ! kill -0 "$repeat_consumer_pid" 2>/dev/null; then
+              cat /tmp/kafrust-consumer-repeat-failover.log || true
+              wait "$repeat_consumer_pid"
+            fi
+            sleep 1
+          done
+
+          if [ -z "$repeat_send_seen" ] || [ -z "$repeat_fetch_seen" ]; then
+            echo "second leader failover did not reach both pre-stop operations"
+            cat /tmp/kafrust-producer-repeat-failover.log || true
+            cat /tmp/kafrust-consumer-repeat-failover.log || true
+            kill "$repeat_producer_pid" 2>/dev/null || true
+            kill "$repeat_consumer_pid" 2>/dev/null || true
+            wait "$repeat_producer_pid" || true
+            wait "$repeat_consumer_pid" || true
+            exit 1
+          fi
+
+          docker stop kafrust-kafka-multi-2
+          repeat_cluster_ready=""
+          for attempt in {1..120}; do
+            if docker exec kafrust-kafka-multi-1 /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server kafrust-kafka-multi-1:29092 \
+              >/tmp/kafrust-multi-repeat-after-stop-probe.log 2>&1; then
+              docker exec kafrust-kafka-multi-1 /opt/kafka/bin/kafka-topics.sh \
+                --bootstrap-server kafrust-kafka-multi-1:29092 \
+                --describe \
+                --topic "$KAFRUST_TOPIC" \
+                >/tmp/kafrust-multi-repeat-after-stop-topic.log 2>&1
+              if ! grep -Eq "Leader: -1|Leader: none" /tmp/kafrust-multi-repeat-after-stop-topic.log; then
+                repeat_cluster_ready=1
+                break
+              fi
+            fi
+            sleep 2
+          done
+
+          repeat_producer_status=0
+          wait "$repeat_producer_pid" || repeat_producer_status=$?
+          repeat_consumer_status=0
+          wait "$repeat_consumer_pid" || repeat_consumer_status=$?
+          cat /tmp/kafrust-producer-repeat-failover.log
+          cat /tmp/kafrust-consumer-repeat-failover.log
+          if [ "$repeat_producer_status" -ne 0 ] || \
+             [ "$repeat_consumer_status" -ne 0 ] || \
+             [ -z "$repeat_cluster_ready" ]; then
+            cat /tmp/kafrust-multi-repeat-after-stop-probe.log || true
+            cat /tmp/kafrust-multi-repeat-after-stop-topic.log || true
+            docker logs kafrust-kafka-multi-1
+            docker logs kafrust-kafka-multi-3
+            exit 1
+          fi
+
+          docker start kafrust-kafka-multi-2
+          broker_two_ready=""
+          for attempt in {1..120}; do
+            if docker exec kafrust-kafka-multi-2 /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server kafrust-kafka-multi-2:29092 \
+              >/tmp/kafrust-multi-repeat-recovery.log 2>&1; then
+              broker_two_ready=1
+              break
+            fi
+            sleep 2
+          done
+          if [ -z "$broker_two_ready" ]; then
+            cat /tmp/kafrust-multi-repeat-recovery.log || true
+            docker logs kafrust-kafka-multi-2
+            exit 1
+          fi
+
       - name: Wait for multi-broker Kafka after broker stop
         run: |
           for attempt in {1..120}; do
