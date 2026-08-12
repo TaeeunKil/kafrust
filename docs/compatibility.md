@@ -83,6 +83,11 @@ committed offsets is state-idempotent; focused tests cover both a lost response
 and a transient coordinator partition error. Other administrative writes remain
 conservative because a timeout can leave their broker-side outcome ambiguous.
 
+The read-only `DescribeGroups v1` admin path also reconnects and retries after
+an established coordinator connection drops. Its focused mock-broker test
+verifies the failed request, coordinator rediscovery, and successful group
+description on the replacement connection.
+
 | Broker | Mode | Security | Verification | Status |
 | --- | --- | --- | --- | --- |
 | Apache Kafka 3.7.2 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, manual run `30067372344` on 2026-07-24 | Passing |

@@ -549,10 +549,35 @@ impl AdminClient {
     ) -> Result<Vec<ConsumerGroupDescription>> {
         let mut descriptions = Vec::with_capacity(group_ids.len());
         for group_id in group_ids {
-            let mut coordinator = self.group_coordinator_client(group_id).await?;
-            let response = coordinator
-                .describe_groups_v1(vec![group_id.clone()])
-                .await?;
+            let mut retry = 0;
+            let response = loop {
+                let mut coordinator = self.group_coordinator_client(group_id).await?;
+                match coordinator.describe_groups_v1(vec![group_id.clone()]).await {
+                    Ok(response) => {
+                        let retryable = response.groups.iter().any(|group| {
+                            group.group_id == *group_id
+                                && is_retryable_admin_coordinator_code(group.error_code)
+                        });
+                        if retry < ADMIN_COORDINATOR_MAX_RETRIES && retryable {
+                            self.config.record_broker_error();
+                            retry += 1;
+                            self.config.record_retry();
+                            tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                        } else {
+                            break response;
+                        }
+                    }
+                    Err(error)
+                        if retry < ADMIN_COORDINATOR_MAX_RETRIES
+                            && is_retryable_admin_coordinator_error(&error) =>
+                    {
+                        retry += 1;
+                        self.config.record_retry();
+                        tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    }
+                    Err(error) => return Err(error),
+                }
+            };
             let throttle_time =
                 Duration::from_millis(nonnegative_i32_to_u64(response.throttle_time_ms));
             let group = response
@@ -6557,6 +6582,56 @@ mod tests {
         assert_eq!(member.client_host(), "/127.0.0.1");
         assert_eq!(member.member_metadata(), [1, 2]);
         assert_eq!(member.member_assignment(), [3, 4, 5]);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn retries_describe_group_after_coordinator_disconnect() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let coordinator_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&coordinator_request[0..4], &[0, 10, 0, 1]);
+            write_frame(
+                &mut bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let (mut coordinator, _) = listener.accept().await.unwrap();
+            let describe_request = read_frame(&mut coordinator).await;
+            assert_eq!(&describe_request[0..4], &[0, 15, 0, 1]);
+            drop(coordinator);
+
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let coordinator_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&coordinator_request[0..4], &[0, 10, 0, 1]);
+            write_frame(
+                &mut bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let (mut coordinator, _) = listener.accept().await.unwrap();
+            let describe_request = read_frame(&mut coordinator).await;
+            assert_eq!(&describe_request[0..4], &[0, 15, 0, 1]);
+            write_frame(&mut coordinator, &describe_groups_response()).await;
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        );
+
+        let descriptions = admin
+            .describe_consumer_groups(&["orders-group".to_owned()])
+            .await
+            .unwrap();
+        assert_eq!(descriptions.len(), 1);
+        assert!(descriptions[0].is_success());
+        assert_eq!(metrics.snapshot().retries, 1);
         server.await.unwrap();
     }
 
