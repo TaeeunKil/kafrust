@@ -3,7 +3,9 @@ mod common;
 use std::io::{self, Write};
 use std::time::Duration;
 
-use kafrust::{BrokerErrorKind, Client, ClientConfig, ConsumerGroupConfig, Error};
+use kafrust::{
+    BrokerErrorKind, Client, ClientConfig, ConsumerGroupConfig, ConsumerGroupProtocol, Error,
+};
 
 const COORDINATOR_LOOKUP_MAX_RETRIES: u32 = 120;
 const COORDINATOR_LOOKUP_BACKOFF: Duration = Duration::from_millis(250);
@@ -14,6 +16,7 @@ async fn main() -> kafrust::Result<()> {
     let group_id =
         std::env::var("KAFRUST_GROUP_ID").unwrap_or_else(|_| "kafrust-group-failover".to_owned());
     let topic = std::env::var("KAFRUST_TOPIC").unwrap_or_else(|_| "kafrust-smoke".to_owned());
+    let protocol = group_protocol_from_env()?;
     let pause = pause_from_env()?;
 
     let mut bootstrap = common::apply_security(
@@ -26,6 +29,7 @@ async fn main() -> kafrust::Result<()> {
 
     let config = common::apply_security(
         ConsumerGroupConfig::new(bootstrap_servers, group_id)
+            .group_protocol(protocol)
             .client_id("kafrust-group-failover-consumer")
             .session_timeout_ms(6_000)
             .rebalance_timeout_ms(10_000)
@@ -59,6 +63,21 @@ async fn main() -> kafrust::Result<()> {
     group.leave().await?;
     println!("consumer group failover left group");
     Ok(())
+}
+
+fn group_protocol_from_env() -> kafrust::Result<ConsumerGroupProtocol> {
+    let value = std::env::var("KAFRUST_GROUP_PROTOCOL").unwrap_or_else(|_| "classic".to_owned());
+    group_protocol_from_value(&value)
+}
+
+fn group_protocol_from_value(value: &str) -> kafrust::Result<ConsumerGroupProtocol> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "classic" => Ok(ConsumerGroupProtocol::Classic),
+        "consumer" | "kip-848" => Ok(ConsumerGroupProtocol::Consumer),
+        _ => Err(Error::Unsupported(
+            "KAFRUST_GROUP_PROTOCOL must be classic or consumer",
+        )),
+    }
 }
 
 fn pause_from_env() -> kafrust::Result<Duration> {
@@ -116,7 +135,26 @@ async fn find_group_coordinator_with_retry(
 mod tests {
     use std::time::Duration;
 
-    use super::parse_pause;
+    use kafrust::ConsumerGroupProtocol;
+
+    use super::{group_protocol_from_value, parse_pause};
+
+    #[test]
+    fn parses_group_protocol() {
+        assert_eq!(
+            group_protocol_from_value(" KIP-848 ").expect("protocol should parse"),
+            ConsumerGroupProtocol::Consumer
+        );
+        assert_eq!(
+            group_protocol_from_value("classic").expect("protocol should parse"),
+            ConsumerGroupProtocol::Classic
+        );
+    }
+
+    #[test]
+    fn rejects_unknown_group_protocol() {
+        assert!(group_protocol_from_value("unknown").is_err());
+    }
 
     #[test]
     fn parses_pause() {

@@ -295,6 +295,149 @@ jobs:
         if: failure()
         run: docker logs kafrust-kafka-kip848
 
+  kafka-kip848-multi-broker-failover:
+    name: Kafka 4.3.1 multi-broker KIP-848 failover
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      KAFRUST_BOOTSTRAP_SERVERS: localhost:19192,localhost:19193,localhost:19194
+      KAFRUST_EXPECTED_BROKERS: "3"
+      KAFRUST_GROUP_PROTOCOL: consumer
+      KAFRUST_GROUP_ID: kafrust-kip848-failover-${{ github.run_id }}
+      KAFRUST_TOPIC: kafrust-kip848-failover-${{ github.run_id }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.81.0"
+
+      - name: Start multi-broker Kafka 4.3.1
+        run: |
+          docker network create kafrust-kip848-multi
+          KAFKA_CLUSTER_ID="$(docker run --rm apache/kafka:4.3.1 /opt/kafka/bin/kafka-storage.sh random-uuid)"
+          for node in 1 2 3; do
+            external_port=$((19191 + node))
+            docker run -d --name "kafrust-kafka-kip848-multi-${node}" \
+              --network kafrust-kip848-multi \
+              -p "${external_port}:9092" \
+              -e KAFKA_CLUSTER_ID="${KAFKA_CLUSTER_ID}" \
+              -e KAFKA_NODE_ID="${node}" \
+              -e KAFKA_PROCESS_ROLES=broker,controller \
+              -e KAFKA_LISTENERS=INTERNAL://:29092,EXTERNAL://:9092,CONTROLLER://:9093 \
+              -e KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafrust-kafka-kip848-multi-${node}:29092,EXTERNAL://localhost:${external_port} \
+              -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+              -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT \
+              -e KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL \
+              -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafrust-kafka-kip848-multi-1:9093,2@kafrust-kafka-kip848-multi-2:9093,3@kafrust-kafka-kip848-multi-3:9093 \
+              -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=3 \
+              -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=3 \
+              -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=2 \
+              -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 \
+              apache/kafka:4.3.1
+          done
+
+      - name: Wait for multi-broker Kafka 4.3.1
+        run: |
+          for attempt in {1..120}; do
+            if docker exec kafrust-kafka-kip848-multi-1 /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server kafrust-kafka-kip848-multi-1:29092 \
+              >/tmp/kafrust-kip848-multi-probe.log 2>&1; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/kafrust-kip848-multi-probe.log || true
+          docker logs kafrust-kafka-kip848-multi-1
+          docker logs kafrust-kafka-kip848-multi-2
+          docker logs kafrust-kafka-kip848-multi-3
+          exit 1
+
+      - name: Create KIP-848 failover topic
+        run: |
+          docker exec kafrust-kafka-kip848-multi-1 /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server kafrust-kafka-kip848-multi-1:29092 \
+            --create \
+            --if-not-exists \
+            --topic "$KAFRUST_TOPIC" \
+            --partitions 3 \
+            --replication-factor 3
+
+      - name: Build KIP-848 failover example
+        run: cargo build -p kafrust --example consumer_group_failover
+
+      - name: Run KIP-848 coordinator failover
+        run: |
+          KAFRUST_FAILOVER_PAUSE_MS=30000 \
+          cargo run -p kafrust --example consumer_group_failover \
+            >/tmp/kafrust-kip848-failover.log 2>&1 &
+          group_pid=$!
+
+          coordinator_node=""
+          before_seen=""
+          for attempt in {1..120}; do
+            coordinator_node="$(
+              sed -n 's/.*coordinator node \([0-9][0-9]*\)$/\1/p' \
+                /tmp/kafrust-kip848-failover.log | tail -n 1
+            )"
+            if grep -q "consumer group failover before polled" /tmp/kafrust-kip848-failover.log; then
+              before_seen=1
+            fi
+            if [ -n "$coordinator_node" ] && [ -n "$before_seen" ]; then
+              break
+            fi
+            if ! kill -0 "$group_pid" 2>/dev/null; then
+              cat /tmp/kafrust-kip848-failover.log || true
+              wait "$group_pid"
+            fi
+            sleep 1
+          done
+
+          if ! [[ "$coordinator_node" =~ ^[123]$ ]] || [ -z "$before_seen" ]; then
+            echo "KIP-848 failover example did not reach its first poll"
+            cat /tmp/kafrust-kip848-failover.log || true
+            kill "$group_pid" 2>/dev/null || true
+            wait "$group_pid" || true
+            exit 1
+          fi
+
+          coordinator_container="kafrust-kafka-kip848-multi-${coordinator_node}"
+          docker stop "$coordinator_container"
+
+          group_status=0
+          wait "$group_pid" || group_status=$?
+          cat /tmp/kafrust-kip848-failover.log
+
+          docker start "$coordinator_container"
+          coordinator_ready=""
+          for attempt in {1..120}; do
+            if docker exec "$coordinator_container" \
+              /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server "${coordinator_container}:29092" \
+              >/tmp/kafrust-kip848-coordinator-recovery.log 2>&1; then
+              coordinator_ready=1
+              break
+            fi
+            sleep 2
+          done
+
+          if [ "$group_status" -ne 0 ] || [ -z "$coordinator_ready" ]; then
+            cat /tmp/kafrust-kip848-coordinator-recovery.log || true
+            docker logs "$coordinator_container"
+            exit 1
+          fi
+
+      - name: Dump KIP-848 multi-broker Kafka logs
+        if: failure()
+        run: |
+          cat /tmp/kafrust-kip848-failover.log || true
+          docker logs kafrust-kafka-kip848-multi-1
+          docker logs kafrust-kafka-kip848-multi-2
+          docker logs kafrust-kafka-kip848-multi-3
+
   kafka-multi-broker:
     name: Kafka 3.7.2 multi-broker
     runs-on: ubuntu-latest
