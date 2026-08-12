@@ -726,6 +726,12 @@ Evidence:
   recovery transaction visible to `read_committed`. This qualifies safe
   reinitialization, not transparent continuation or an assertion about the
   old transaction's outcome.
+- Manual `Live Kafka Smoke` run
+  [`31573662135`](https://github.com/TaeeunKil/kafrust/actions/runs/31573662135)
+  passed all 16 jobs on 2026-08-12. The Kafka 3.7.2 plaintext three-broker
+  profile repeated producer and direct-consumer leader failover after stopping
+  broker 1, restoring it, then stopping a broker 2 leader partition. Both
+  recovery windows completed without losing the client process.
 
 ## M15 Compression Compatibility
 
@@ -1525,6 +1531,10 @@ Implemented evidence:
   reinitialization after coordinator failure. Production OAuth/OIDC provider
   compatibility, broader KIP-848 and transaction fault matrices, and
   workload-specific canary evidence remain before a 1.0 replacement claim.
+  The plaintext three-broker profile now also qualifies a repeated
+  partition-leader fault sequence in
+  [`31573662135`](https://github.com/TaeeunKil/kafrust/actions/runs/31573662135);
+  broader secured and KIP-848 repeated-fault matrices remain open.
   Kafka 4.3.1 KIP-848 coordinator broker-stop
   recovery is qualified over PLAINTEXT, SASL_PLAINTEXT, and SASL_SSL/SCRAM in
   the three-broker profiles by

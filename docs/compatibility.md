@@ -38,6 +38,7 @@ The `0.2.x` alpha line is verified against Apache Kafka 3.7.2, 3.8.1, 3.9.1, and
 | Apache Kafka 3.7.2 | three-broker KRaft | SASL_PLAINTEXT with SASL/PLAIN; transaction/group coordinator, producer, and direct-consumer broker-stop recovery | [`Live Kafka Smoke`, run `31554396594`](https://github.com/TaeeunKil/kafrust/actions/runs/31554396594) on 2026-08-12 | Passing |
 | Apache Kafka 3.7.2 | three-broker KRaft | SASL_SSL with SCRAM-SHA-256; group-coordinator and partition-leader broker-stop recovery | [`Live Kafka Smoke`, run `31568412595`](https://github.com/TaeeunKil/kafrust/actions/runs/31568412595) on 2026-08-12 | Passing |
 | Apache Kafka 3.7.2 | three-broker KRaft | SASL_SSL with SCRAM-SHA-256; safe transactional producer reinitialization after transaction-coordinator broker stop | [`Live Kafka Smoke`, run `31572745537`](https://github.com/TaeeunKil/kafrust/actions/runs/31572745537) on 2026-08-12 | Passing; old producer outcome remains explicitly unknown |
+| Apache Kafka 3.7.2 | three-broker KRaft | PLAINTEXT; repeated partition-leader broker-stop recovery for producer and direct consumer | [`Live Kafka Smoke`, run `31573662135`](https://github.com/TaeeunKil/kafrust/actions/runs/31573662135) on 2026-08-12 | Passing |
 | Apache Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1 | single-node KRaft | Produce `acks=0` immediate and batch dispatch | `Live Kafka Smoke`, manual run `31464933145` on 2026-08-11 | Passing; broker acceptance is intentionally unconfirmed |
 
 ## Verified Paths
@@ -450,8 +451,8 @@ The current compatibility claim does not cover:
   not claim transparent continuation of the old producer or the outcome of a
   transaction whose commit returned `INVALID_PRODUCER_EPOCH`.
 - Broader transaction and KIP-848 failure-injection profiles beyond the
-  verified coordinator broker-stop paths, including repeated or
-  partition-leader fault matrices.
+  verified coordinator broker-stop paths, including repeated transaction or
+  KIP-848 coordinator faults and broader partition-leader fault matrices.
 - Idempotent failure-injection profiles beyond the verified three-broker
   leader-stop recovery path. The ambiguous-response duplicate path is covered
   by a deterministic injected broker test.
