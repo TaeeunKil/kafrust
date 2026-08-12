@@ -712,6 +712,39 @@ impl ConsumerGroupConfig {
         member_epoch: i32,
         owned_partitions: Option<Vec<ConsumerGroupHeartbeatTopicPartitions>>,
     ) -> Result<ConsumerGroup> {
+        let mut retry_attempt = 0;
+        loop {
+            match self
+                .clone()
+                .join_consumer_once(member_id.clone(), member_epoch, owned_partitions.clone())
+                .await
+            {
+                Ok(group) => return Ok(group),
+                Err(error)
+                    if retry_attempt < self.max_retries
+                        && should_retry_consumer_join_transport(&error) =>
+                {
+                    retry_attempt += 1;
+                    self.client.record_retry();
+                    debug!(
+                        group_id = self.group_id.as_str(),
+                        retry_attempt,
+                        error = %error,
+                        "retrying KIP-848 consumer group join after transport failure"
+                    );
+                    time::sleep(GROUP_JOIN_RETRY_BACKOFF).await;
+                }
+                Err(error) => return Err(error),
+            }
+        }
+    }
+
+    async fn join_consumer_once(
+        self,
+        member_id: Option<String>,
+        member_epoch: i32,
+        owned_partitions: Option<Vec<ConsumerGroupHeartbeatTopicPartitions>>,
+    ) -> Result<ConsumerGroup> {
         if self.topics.is_empty() {
             return Err(Error::Unsupported("consumer group without subscriptions"));
         }
@@ -2650,6 +2683,10 @@ fn should_rejoin_group(error: &Error) -> bool {
     )
 }
 
+fn should_retry_consumer_join_transport(error: &Error) -> bool {
+    matches!(error, Error::Io(_) | Error::RequestTimedOut { .. })
+}
+
 fn member_id_after_join_error(error: &Error, requested_member_id: String) -> Option<String> {
     if matches!(
         error.broker_error_kind(),
@@ -3021,8 +3058,9 @@ mod tests {
         offset_commit_response_error, offset_commit_topics, offset_commit_topics_v7,
         offset_fetch_topics, range_assignments, record_consumer_heartbeat_response,
         round_robin_assignments, should_rejoin_after_background_heartbeat, should_rejoin_group,
-        validate_heartbeat_interval, ConsumerGroupAssignmentStrategy, ConsumerGroupConfig,
-        ConsumerGroupHeartbeat, ConsumerGroupHeartbeatTopicPartitions, ConsumerGroupProtocol,
+        should_retry_consumer_join_transport, validate_heartbeat_interval,
+        ConsumerGroupAssignmentStrategy, ConsumerGroupConfig, ConsumerGroupHeartbeat,
+        ConsumerGroupHeartbeatTopicPartitions, ConsumerGroupProtocol,
         ConsumerProtocolHeartbeatState as ConsumerGroupHeartbeatState, HeartbeatHandleState,
         IsolationLevel, OffsetResetPolicy, SecurityProtocol, DEFAULT_GROUP_MAX_RETRIES,
     };
@@ -3600,6 +3638,20 @@ mod tests {
             "reset",
         ))));
         assert!(!should_rejoin_group(&Error::Unsupported("group feature")));
+    }
+
+    #[test]
+    fn retries_kip_848_join_transport_failures() {
+        assert!(should_retry_consumer_join_transport(
+            &Error::RequestTimedOut { timeout_ms: 1_000 }
+        ));
+        assert!(should_retry_consumer_join_transport(&Error::Io(
+            std::io::Error::new(std::io::ErrorKind::ConnectionReset, "reset"),
+        )));
+        assert!(!should_retry_consumer_join_transport(&Error::Broker {
+            code: 15,
+            context: "consumer group coordinator".to_owned(),
+        }));
     }
 
     #[test]
