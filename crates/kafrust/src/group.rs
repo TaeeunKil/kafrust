@@ -46,6 +46,7 @@ const RANGE_PROTOCOL: &str = "range";
 const ROUND_ROBIN_PROTOCOL: &str = "roundrobin";
 const COOPERATIVE_STICKY_PROTOCOL: &str = "cooperative-sticky";
 const GROUP_JOIN_RETRY_BACKOFF: Duration = Duration::from_millis(50);
+const GROUP_JOIN_MAX_RETRY_BACKOFF: Duration = Duration::from_secs(1);
 const DEFAULT_GROUP_MAX_RETRIES: u32 = 5;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -601,7 +602,7 @@ impl ConsumerGroupConfig {
                         error = %error,
                         "retrying kafka consumer group join after transient join error"
                     );
-                    time::sleep(GROUP_JOIN_RETRY_BACKOFF).await;
+                    time::sleep(group_retry_backoff(retry_attempt)).await;
                     continue;
                 }
                 return Err(error);
@@ -647,7 +648,7 @@ impl ConsumerGroupConfig {
                         error = %error,
                         "retrying kafka consumer group join after transient sync error"
                     );
-                    time::sleep(GROUP_JOIN_RETRY_BACKOFF).await;
+                    time::sleep(group_retry_backoff(retry_attempt)).await;
                     continue;
                 }
                 return Err(error);
@@ -732,7 +733,7 @@ impl ConsumerGroupConfig {
                         error = %error,
                         "retrying KIP-848 consumer group join after transport failure"
                     );
-                    time::sleep(GROUP_JOIN_RETRY_BACKOFF).await;
+                    time::sleep(group_retry_backoff(retry_attempt)).await;
                 }
                 Err(error) => return Err(error),
             }
@@ -819,7 +820,7 @@ impl ConsumerGroupConfig {
                 error = %error,
                 "retrying kafka KIP-848 consumer group heartbeat"
             );
-            time::sleep(GROUP_JOIN_RETRY_BACKOFF).await;
+            time::sleep(group_retry_backoff(heartbeat_retry_attempt)).await;
             coordinator = find_group_coordinator_with_retry(
                 &mut bootstrap,
                 &self.client,
@@ -1522,7 +1523,7 @@ impl ConsumerGroup {
                         error = %error,
                         "retrying kafka KIP-848 consumer heartbeat after transport failure"
                     );
-                    time::sleep(GROUP_JOIN_RETRY_BACKOFF).await;
+                    time::sleep(group_retry_backoff(retry_attempt)).await;
                     self.coordinator = connect_group_coordinator_with_retry(
                         &self.config.client,
                         &self.group_id,
@@ -1552,7 +1553,7 @@ impl ConsumerGroup {
                 error = %error,
                 "retrying kafka KIP-848 consumer group heartbeat"
             );
-            time::sleep(GROUP_JOIN_RETRY_BACKOFF).await;
+            time::sleep(group_retry_backoff(retry_attempt)).await;
             self.coordinator = connect_group_coordinator_with_retry(
                 &self.config.client,
                 &self.group_id,
@@ -2687,6 +2688,13 @@ fn should_retry_consumer_join_transport(error: &Error) -> bool {
     matches!(error, Error::Io(_) | Error::RequestTimedOut { .. })
 }
 
+fn group_retry_backoff(retry_attempt: u32) -> Duration {
+    let exponent = retry_attempt.saturating_sub(1).min(5);
+    let multiplier = 1u64 << exponent;
+    let milliseconds = (GROUP_JOIN_RETRY_BACKOFF.as_millis() as u64).saturating_mul(multiplier);
+    Duration::from_millis(milliseconds).min(GROUP_JOIN_MAX_RETRY_BACKOFF)
+}
+
 fn member_id_after_join_error(error: &Error, requested_member_id: String) -> Option<String> {
     if matches!(
         error.broker_error_kind(),
@@ -2861,7 +2869,7 @@ async fn connect_group_coordinator_with_retry(
             Err(error) if retry_attempt < max_retries && should_rejoin_group(&error) => {
                 retry_attempt += 1;
                 client.record_retry();
-                time::sleep(GROUP_JOIN_RETRY_BACKOFF).await;
+                time::sleep(group_retry_backoff(retry_attempt)).await;
                 continue;
             }
             Err(error) => return Err(error),
@@ -2880,7 +2888,7 @@ async fn connect_group_coordinator_with_retry(
                     error = %error,
                     "retrying kafka consumer group coordinator connection"
                 );
-                time::sleep(GROUP_JOIN_RETRY_BACKOFF).await;
+                time::sleep(group_retry_backoff(retry_attempt)).await;
             }
             Err(error) => return Err(error),
         }
@@ -2900,7 +2908,7 @@ async fn find_group_coordinator_with_retry(
             Err(error) if retry_attempt < max_retries && should_rejoin_group(&error) => {
                 retry_attempt += 1;
                 client.record_retry();
-                time::sleep(GROUP_JOIN_RETRY_BACKOFF).await;
+                time::sleep(group_retry_backoff(retry_attempt)).await;
                 continue;
             }
             Err(error) => return Err(error),
@@ -2922,7 +2930,7 @@ async fn find_group_coordinator_with_retry(
                 error = %error,
                 "retrying kafka consumer group coordinator lookup"
             );
-            time::sleep(GROUP_JOIN_RETRY_BACKOFF).await;
+            time::sleep(group_retry_backoff(retry_attempt)).await;
             continue;
         }
         return Err(error);
@@ -3050,19 +3058,22 @@ fn range_for_topic(members: &[String], partitions: &[i32]) -> Vec<(String, Vec<i
 #[allow(clippy::unwrap_used)]
 mod tests {
     use std::collections::BTreeMap;
+    use std::time::Duration;
 
     use super::{
         assignments_for_strategy, committed_offset, cooperative_assignment_requires_rejoin,
         cooperative_rejoin_required_for_assignment, cooperative_sticky_assignments,
-        leave_group_response_error, list_offset, list_offsets_topics, member_id_after_join_error,
-        offset_commit_response_error, offset_commit_topics, offset_commit_topics_v7,
-        offset_fetch_topics, range_assignments, record_consumer_heartbeat_response,
-        round_robin_assignments, should_rejoin_after_background_heartbeat, should_rejoin_group,
+        group_retry_backoff, leave_group_response_error, list_offset, list_offsets_topics,
+        member_id_after_join_error, offset_commit_response_error, offset_commit_topics,
+        offset_commit_topics_v7, offset_fetch_topics, range_assignments,
+        record_consumer_heartbeat_response, round_robin_assignments,
+        should_rejoin_after_background_heartbeat, should_rejoin_group,
         should_retry_consumer_join_transport, validate_heartbeat_interval,
         ConsumerGroupAssignmentStrategy, ConsumerGroupConfig, ConsumerGroupHeartbeat,
         ConsumerGroupHeartbeatTopicPartitions, ConsumerGroupProtocol,
         ConsumerProtocolHeartbeatState as ConsumerGroupHeartbeatState, HeartbeatHandleState,
         IsolationLevel, OffsetResetPolicy, SecurityProtocol, DEFAULT_GROUP_MAX_RETRIES,
+        GROUP_JOIN_MAX_RETRY_BACKOFF,
     };
     use crate::consumer::ConsumerAssignment;
     use crate::Error;
@@ -3652,6 +3663,15 @@ mod tests {
             code: 15,
             context: "consumer group coordinator".to_owned(),
         }));
+    }
+
+    #[test]
+    fn group_retry_backoff_is_bounded_and_exponential() {
+        assert_eq!(group_retry_backoff(1), Duration::from_millis(50));
+        assert_eq!(group_retry_backoff(2), Duration::from_millis(100));
+        assert_eq!(group_retry_backoff(5), Duration::from_millis(800));
+        assert_eq!(group_retry_backoff(6), GROUP_JOIN_MAX_RETRY_BACKOFF);
+        assert_eq!(group_retry_backoff(u32::MAX), GROUP_JOIN_MAX_RETRY_BACKOFF);
     }
 
     #[test]
