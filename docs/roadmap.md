@@ -711,6 +711,14 @@ Evidence:
   coordinator, then verified transactional commit/read-committed recovery,
   consumer-group recovery, and producer/direct-consumer recovery through the
   remaining authenticated brokers.
+- Manual `Live Kafka Smoke` run
+  [`31568412595`](https://github.com/TaeeunKil/kafrust/actions/runs/31568412595)
+  passed all jobs on 2026-08-12. Its Kafka 3.7.2 three-broker `SASL_SSL`
+  SCRAM job validated all three external TLS listeners, then verified
+  consumer-group coordinator and partition-leader broker-stop recovery with
+  the same authenticated bootstrap set. SCRAM transaction-coordinator failure
+  remains a separate open matrix because the broker returned
+  `INVALID_PRODUCER_EPOCH` during coordinator recovery.
 
 ## M15 Compression Compatibility
 
@@ -1468,13 +1476,17 @@ Implemented evidence:
   and the post-release live matrix passed in
   [`31565059236`](https://github.com/TaeeunKil/kafrust/actions/runs/31565059236).
 - Secured multi-broker failure injection is now qualified for the tested
-  `SASL_PLAINTEXT` paths: the three-broker profile in
-  [`31554396594`](https://github.com/TaeeunKil/kafrust/actions/runs/31554396594)
+  `SASL_PLAINTEXT` and `SASL_SSL` paths. The three-broker `SASL_PLAINTEXT`
+  profile in [`31554396594`](https://github.com/TaeeunKil/kafrust/actions/runs/31554396594)
   verified transaction coordinator, consumer-group coordinator, producer,
-  and direct-consumer recovery after broker stops. Production OAuth/OIDC
-  provider compatibility, broader KIP-848 and transaction failure injection,
-  and workload-specific canary evidence remain before a 1.0 replacement
-  claim. Kafka 4.3.1 KIP-848 coordinator broker-stop recovery is also
-  qualified in the three-broker profile by
+  and direct-consumer recovery after broker stops. The three-broker
+  `SASL_SSL` SCRAM profile in
+  [`31568412595`](https://github.com/TaeeunKil/kafrust/actions/runs/31568412595)
+  verified all external TLS listeners plus consumer-group coordinator and
+  partition-leader recovery. Production OAuth/OIDC provider compatibility,
+  SCRAM transaction-coordinator failure injection, broader KIP-848 and
+  transaction fault matrices, and workload-specific canary evidence remain
+  before a 1.0 replacement claim. Kafka 4.3.1 KIP-848 coordinator broker-stop
+  recovery is also qualified in the three-broker profile by
   [`31557534371`](https://github.com/TaeeunKil/kafrust/actions/runs/31557534371),
   while the broader KIP-848 fault matrix remains open.

@@ -34,6 +34,7 @@ The `0.2.x` alpha line is verified against Apache Kafka 3.7.2, 3.8.1, 3.9.1, and
 | Apache Kafka 3.7.2 | three-broker KRaft | controller-routed partition reassignment | `Live Kafka Smoke` multi-broker job, manual run `31462962605` on 2026-08-11 | Passing |
 | Apache Kafka 3.7.2 | three-broker KRaft | cooperative-sticky consumer protocol, multi-member transfer, transient-member rollback, member-loss recovery, and rebalance listener lifecycle | [`Live Kafka Smoke`, run `31557534371`](https://github.com/TaeeunKil/kafrust/actions/runs/31557534371) on 2026-08-12 | Passing |
 | Apache Kafka 3.7.2 | three-broker KRaft | SASL_PLAINTEXT with SASL/PLAIN; transaction/group coordinator, producer, and direct-consumer broker-stop recovery | [`Live Kafka Smoke`, run `31554396594`](https://github.com/TaeeunKil/kafrust/actions/runs/31554396594) on 2026-08-12 | Passing |
+| Apache Kafka 3.7.2 | three-broker KRaft | SASL_SSL with SCRAM-SHA-256; group-coordinator and partition-leader broker-stop recovery | [`Live Kafka Smoke`, run `31568412595`](https://github.com/TaeeunKil/kafrust/actions/runs/31568412595) on 2026-08-12 | Passing |
 | Apache Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1 | single-node KRaft | Produce `acks=0` immediate and batch dispatch | `Live Kafka Smoke`, manual run `31464933145` on 2026-08-11 | Passing; broker acceptance is intentionally unconfirmed |
 
 ## Verified Paths
@@ -351,6 +352,18 @@ The Kafka 3.7.2 SASL_SSL SCRAM smoke path covers:
 - Consumer group join, sync, heartbeat, poll, and offset commit through `SecurityProtocol::SaslTls`.
 - TLS certificate validation with an extra DER root certificate configured through `tls_root_certificate_der`.
 
+The Kafka 3.7.2 secured SCRAM failover path covers:
+
+- A three-broker KRaft cluster with a shared `SASL_SSL` listener and
+  SCRAM-SHA-256 credentials.
+- TLS preflight validation against all three externally advertised broker
+  listeners with the generated test CA.
+- Consumer-group coordinator broker-stop recovery while the client keeps its
+  configured SCRAM/TLS settings and partition queue handle.
+- Partition-leader broker-stop recovery for a producer and direct consumer
+  using the same authenticated bootstrap set.
+- [`Live Kafka Smoke`, run `31568412595`](https://github.com/TaeeunKil/kafrust/actions/runs/31568412595).
+
 The same Kafka 3.7.2 SASL_SSL profile's SCRAM-SHA-512 subpath covers:
 
 - `ApiVersions v0` and `Metadata v1` roundtrips through `SecurityProtocol::SaslTls`.
@@ -394,10 +407,10 @@ The current compatibility claim does not cover:
   behavior. The async token-provider callback is implemented, but the Kafka
   3.7.2 built-in unsecured-validator smoke is test-only evidence, not an
   identity provider qualification.
-- SCRAM multi-broker failure injection, production OAuth/OIDC provider
-  compatibility, or rack-aware client routing. The SASL/PLAIN coordinator and
-  broker-stop paths are claimed above, but these broader secured cluster paths
-  remain open.
+- Production OAuth/OIDC provider compatibility or rack-aware client routing.
+  The SCRAM multi-broker group-coordinator and partition-leader broker-stop
+  paths are claimed above, while transaction-coordinator failure under SCRAM
+  remains open.
 - Broader transaction and KIP-848 failure-injection profiles beyond the
   verified coordinator broker-stop paths, including secured KIP-848 and
   repeated or partition-leader fault matrices.
