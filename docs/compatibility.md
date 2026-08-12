@@ -164,11 +164,12 @@ responses. Its focused mock-broker regression test verifies that the typed
 filter is resent after a dropped request and the quota result is preserved;
 StandardAuthorizer permission and broker-stop qualification remain separate.
 
-The read-only `DescribeProducers v0` path retries leader movement, metadata
-convergence failures, transport disconnects, and request timeouts through a
-fresh Metadata v1 lookup. A transient per-partition leader error causes the
-whole read to be re-routed so the final typed response is assembled from the
-current leaders. `DescribeTransactions v0` applies the same bounded retry
+The read-only `DescribeProducers v0` path retries retryable Metadata topic or
+partition responses, leader movement, metadata convergence failures, transport
+disconnects, and request timeouts through a fresh Metadata v1 lookup. A
+transient per-partition leader error causes the whole read to be re-routed so
+the final typed response is assembled from the current leaders.
+`DescribeTransactions v0` applies the same bounded retry
 policy to transaction-coordinator discovery, coordinator transport failures,
 and transient per-ID coordinator errors. Focused mock-broker tests cover a
 dropped leader/coordinator request and transient leader/coordinator responses.

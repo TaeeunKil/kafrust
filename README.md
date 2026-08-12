@@ -168,12 +168,13 @@ while preserving final topic-level metadata errors.
 advertised brokers.
 `delete_records` routes DeleteRecords v1 to each current partition leader and
 preserves per-partition low watermarks and broker errors for partial deletion;
-fixed-offset deletions retry transient leader and transport failures through
-fresh metadata.
+fixed-offset deletions retry retryable Metadata responses, transient leader
+movement, and transport failures through fresh metadata.
 `describe_producers` routes DescribeProducers v0 to each current partition
 leader and exposes producer IDs, epochs, sequences, and active transaction
-offsets; transient leader movement and transport failures are retried through
-fresh metadata. `describe_transactions` discovers each transactional ID's
+offsets; retryable Metadata responses, transient leader movement, and transport
+failures are retried through fresh metadata. `describe_transactions` discovers
+each transactional ID's
 coordinator, retries transient coordinator failures, and preserves transaction
 state, producer identity, and topic partition membership.
 Teams evaluating replacement of a librdkafka-backed application should follow

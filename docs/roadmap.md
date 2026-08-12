@@ -1033,8 +1033,9 @@ Implemented evidence:
 - `AdminClient::delete_records` implements DeleteRecords v1 with metadata-based
   partition-leader routing, groups requests per broker, and preserves each
   partition's low watermark and error code. Fixed-offset deletion is retried
-  after transient transport, leader-movement, or retryable partition errors
-  through fresh metadata within the Admin retry budget. Focused protocol and
+  after retryable Metadata responses, transient transport, leader-movement, or
+  retryable partition errors through fresh metadata within the Admin retry
+  budget. Focused protocol and
   injected multi-broker routing tests cover partial success, broker error
   metrics, and a dropped leader request; live destructive-retention
   qualification remains a separate opt-in workflow. The live three-broker
@@ -1053,9 +1054,10 @@ Implemented evidence:
   DescribeProducers on the Kafka 3.7.2 three-broker profile, and
   DescribeTransactions through the Kafka 3.7.2 three-broker SASL_SSL SCRAM
   failover profile. Both read-only paths now retry transient leader/coordinator
-  movement, metadata convergence, transport disconnects, request timeouts,
-  and transient routed response errors through fresh discovery within the
-  configurable `AdminClient::max_retries` budget. Focused mock-broker tests
+  movement, retryable Metadata responses, metadata convergence, transport
+  disconnects, request timeouts, and transient routed response errors through
+  fresh discovery within the configurable `AdminClient::max_retries` budget.
+  Focused mock-broker tests
   cover dropped and transient responses, while the latest 17-job live matrix
   at commit `65b607e` passed the current single-node, secured, multi-broker,
   and KIP-848 examples in

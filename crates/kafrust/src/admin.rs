@@ -118,31 +118,44 @@ impl AdminClient {
         topics: Option<Vec<String>>,
     ) -> Result<MetadataResponseV1> {
         let mut retry = 0;
+        self.metadata_with_admin_retries_from(topics, &mut retry)
+            .await
+    }
+
+    async fn metadata_with_admin_retries_from(
+        &self,
+        topics: Option<Vec<String>>,
+        retry: &mut u32,
+    ) -> Result<MetadataResponseV1> {
         loop {
             let mut client = match self.config.clone().connect().await {
                 Ok(client) => client,
-                Err(error) if retry < self.max_retries && is_retryable_admin_read_error(&error) => {
-                    retry += 1;
+                Err(error)
+                    if *retry < self.max_retries && is_retryable_admin_read_error(&error) =>
+                {
+                    *retry += 1;
                     self.config.record_retry();
-                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    tokio::time::sleep(admin_coordinator_retry_backoff(*retry)).await;
                     continue;
                 }
                 Err(error) => return Err(error),
             };
             match client.metadata(topics.clone()).await {
                 Ok(metadata)
-                    if retry < self.max_retries && is_retryable_metadata_response(&metadata) =>
+                    if *retry < self.max_retries && is_retryable_metadata_response(&metadata) =>
                 {
                     self.config.record_broker_error();
-                    retry += 1;
+                    *retry += 1;
                     self.config.record_retry();
-                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    tokio::time::sleep(admin_coordinator_retry_backoff(*retry)).await;
                 }
                 Ok(metadata) => return Ok(metadata),
-                Err(error) if retry < self.max_retries && is_retryable_admin_read_error(&error) => {
-                    retry += 1;
+                Err(error)
+                    if *retry < self.max_retries && is_retryable_admin_read_error(&error) =>
+                {
+                    *retry += 1;
                     self.config.record_retry();
-                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    tokio::time::sleep(admin_coordinator_retry_backoff(*retry)).await;
                 }
                 Err(error) => return Err(error),
             }
@@ -1506,35 +1519,12 @@ impl AdminClient {
         // dropped request or a moved leader can safely restart the full route.
         let mut retry = 0;
         let responses = 'attempt: loop {
-            let mut bootstrap = match self.config.clone().connect().await {
-                Ok(client) => client,
-                Err(error)
-                    if retry < self.max_retries && is_retryable_admin_leader_error(&error) =>
-                {
-                    retry += 1;
-                    self.config.record_retry();
-                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
-                    continue 'attempt;
-                }
-                Err(error) => return Err(error),
-            };
-            let metadata = match bootstrap
-                .metadata(Some(
-                    topics.iter().map(|topic| topic.name.clone()).collect(),
-                ))
-                .await
-            {
-                Ok(metadata) => metadata,
-                Err(error)
-                    if retry < self.max_retries && is_retryable_admin_leader_error(&error) =>
-                {
-                    retry += 1;
-                    self.config.record_retry();
-                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
-                    continue 'attempt;
-                }
-                Err(error) => return Err(error),
-            };
+            let metadata = self
+                .metadata_with_admin_retries_from(
+                    Some(topics.iter().map(|topic| topic.name.clone()).collect()),
+                    &mut retry,
+                )
+                .await?;
             let requests = match delete_records_requests(&metadata, topics) {
                 Ok(requests) => requests,
                 Err(error)
@@ -1647,35 +1637,12 @@ impl AdminClient {
     ) -> Result<DescribeProducersResult> {
         let mut retry = 0;
         let responses = 'attempt: loop {
-            let mut bootstrap = match self.config.clone().connect().await {
-                Ok(client) => client,
-                Err(error)
-                    if retry < self.max_retries && is_retryable_admin_leader_error(&error) =>
-                {
-                    retry += 1;
-                    self.config.record_retry();
-                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
-                    continue 'attempt;
-                }
-                Err(error) => return Err(error),
-            };
-            let metadata = match bootstrap
-                .metadata(Some(
-                    topics.iter().map(|topic| topic.name.clone()).collect(),
-                ))
-                .await
-            {
-                Ok(metadata) => metadata,
-                Err(error)
-                    if retry < self.max_retries && is_retryable_admin_leader_error(&error) =>
-                {
-                    retry += 1;
-                    self.config.record_retry();
-                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
-                    continue 'attempt;
-                }
-                Err(error) => return Err(error),
-            };
+            let metadata = self
+                .metadata_with_admin_retries_from(
+                    Some(topics.iter().map(|topic| topic.name.clone()).collect()),
+                    &mut retry,
+                )
+                .await?;
             let requests = match describe_producers_requests(&metadata, topics) {
                 Ok(requests) => requests,
                 Err(error)
@@ -8927,6 +8894,55 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn retries_delete_records_after_retryable_metadata_response() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut first, _) = listener.accept().await.unwrap();
+            read_frame(&mut first).await;
+            write_frame(
+                &mut first,
+                &delete_records_retryable_metadata_response(addr.port()),
+            )
+            .await;
+
+            let (mut second, _) = listener.accept().await.unwrap();
+            read_frame(&mut second).await;
+            write_frame(&mut second, &delete_records_metadata_response(addr.port())).await;
+
+            let (mut leader, _) = listener.accept().await.unwrap();
+            let request = read_frame(&mut leader).await;
+            assert_eq!(&request[0..4], &[0, 21, 0, 1]);
+            write_frame(&mut leader, &delete_records_response()).await;
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        );
+
+        let result = admin
+            .delete_records(
+                &[
+                    DeleteRecordsTopic::new("orders")
+                        .partition(0, 100)
+                        .partition(1, -1),
+                    DeleteRecordsTopic::new("payments").partition(2, 40),
+                ],
+                DeleteRecordsOptions::new(),
+            )
+            .await
+            .unwrap();
+
+        assert!(result.has_errors());
+        assert_eq!(result.topics()[0].partitions()[0].low_watermark(), 100);
+        assert_eq!(metrics.snapshot().retries, 1);
+        assert_eq!(metrics.snapshot().broker_errors, 2);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn routes_describe_producers_to_partition_leader() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -9075,6 +9091,52 @@ mod tests {
         assert_eq!(result.topics().len(), 1);
         assert_eq!(metrics.snapshot().retries, 1);
         assert_eq!(metrics.snapshot().broker_errors, 3);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn retries_describe_producers_after_retryable_metadata_response() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut first, _) = listener.accept().await.unwrap();
+            read_frame(&mut first).await;
+            write_frame(
+                &mut first,
+                &describe_producers_retryable_metadata_response(addr.port()),
+            )
+            .await;
+
+            let (mut second, _) = listener.accept().await.unwrap();
+            read_frame(&mut second).await;
+            write_frame(
+                &mut second,
+                &describe_producers_metadata_response(addr.port()),
+            )
+            .await;
+
+            let (mut leader, _) = listener.accept().await.unwrap();
+            let request = read_frame(&mut leader).await;
+            assert_eq!(&request[0..4], &[0, 61, 0, 0]);
+            write_frame(&mut leader, &describe_producers_response()).await;
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        );
+
+        let result = admin
+            .describe_producers(&[DescribeProducersTopic::new("orders")
+                .partition(0)
+                .partition(1)])
+            .await
+            .unwrap();
+
+        assert_eq!(result.topics().len(), 1);
+        assert_eq!(metrics.snapshot().retries, 1);
+        assert_eq!(metrics.snapshot().broker_errors, 2);
         server.await.unwrap();
     }
 
@@ -9343,6 +9405,14 @@ mod tests {
     }
 
     fn describe_producers_metadata_response(port: u16) -> Vec<u8> {
+        describe_producers_metadata_response_with_error(port, 0)
+    }
+
+    fn describe_producers_retryable_metadata_response(port: u16) -> Vec<u8> {
+        describe_producers_metadata_response_with_error(port, 5)
+    }
+
+    fn describe_producers_metadata_response_with_error(port: u16, topic_error: i16) -> Vec<u8> {
         let mut encoder = Encoder::new();
         encoder.write_i32(1); // correlation ID
         encoder.write_i32(1); // broker count
@@ -9352,7 +9422,22 @@ mod tests {
         encoder.write_nullable_string(None).unwrap();
         encoder.write_i32(1); // controller ID
         encoder.write_i32(1); // topic count
-        write_topic_metadata(&mut encoder, "orders", &[0, 1]);
+        write_topic_metadata_with_error(&mut encoder, "orders", &[0, 1], topic_error);
+        encoder.into_bytes()
+    }
+
+    fn delete_records_retryable_metadata_response(port: u16) -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_i32(1); // broker count
+        encoder.write_i32(1); // broker node ID
+        encoder.write_string("127.0.0.1").unwrap();
+        encoder.write_i32(i32::from(port));
+        encoder.write_nullable_string(None).unwrap();
+        encoder.write_i32(1); // controller ID
+        encoder.write_i32(2); // topic count
+        write_topic_metadata_with_error(&mut encoder, "orders", &[0, 1], 5);
+        write_topic_metadata(&mut encoder, "payments", &[2]);
         encoder.into_bytes()
     }
 
@@ -9457,7 +9542,16 @@ mod tests {
     }
 
     fn write_topic_metadata(encoder: &mut Encoder, name: &str, partitions: &[i32]) {
-        encoder.write_i16(0); // topic error
+        write_topic_metadata_with_error(encoder, name, partitions, 0);
+    }
+
+    fn write_topic_metadata_with_error(
+        encoder: &mut Encoder,
+        name: &str,
+        partitions: &[i32],
+        topic_error: i16,
+    ) {
+        encoder.write_i16(topic_error); // topic error
         encoder.write_string(name).unwrap();
         encoder.write_bool(false);
         encoder
