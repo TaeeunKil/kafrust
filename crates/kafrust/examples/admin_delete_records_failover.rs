@@ -1,29 +1,12 @@
 mod common;
 
-use std::{
-    fmt,
-    path::PathBuf,
-    sync::atomic::{AtomicBool, Ordering},
-    time::{Duration, Instant},
-};
-
 use kafrust::{
     AdminClient, ClientConfig, ClientMetrics, DeleteRecordsOptions, DeleteRecordsTopic, Error,
-};
-use tracing::{
-    field::{Field, Visit},
-    Event, Subscriber,
-};
-use tracing_subscriber::{
-    layer::SubscriberExt,
-    layer::{Context, Layer},
-    util::SubscriberInitExt,
-    EnvFilter,
 };
 
 #[tokio::main]
 async fn main() -> kafrust::Result<()> {
-    init_tracing()?;
+    common::init_request_gate(21)?;
 
     let bootstrap_servers = common::bootstrap_servers_from_env();
     let topic = std::env::var("KAFRUST_TOPIC").unwrap_or_else(|_| "kafrust-smoke".to_owned());
@@ -98,95 +81,4 @@ fn parse_u64(name: &'static str, default: u64) -> kafrust::Result<u64> {
         .map(|value| value.parse().map_err(|_| Error::Unsupported(name)))
         .transpose()
         .map(|value| value.unwrap_or(default))
-}
-
-fn init_tracing() -> kafrust::Result<()> {
-    let filter = EnvFilter::from_default_env();
-    match (
-        std::env::var_os("KAFRUST_REQUEST_SENT_FILE"),
-        std::env::var_os("KAFRUST_REQUEST_RELEASE_FILE"),
-    ) {
-        (Some(sent_file), Some(release_file)) => tracing_subscriber::registry()
-            .with(filter)
-            .with(tracing_subscriber::fmt::layer())
-            .with(RequestGateLayer::new(sent_file.into(), release_file.into()))
-            .try_init()
-            .map_err(|_| Error::Unsupported("tracing subscriber was already initialized")),
-        _ => tracing_subscriber::fmt()
-            .with_env_filter(filter)
-            .try_init()
-            .map_err(|_| Error::Unsupported("tracing subscriber was already initialized")),
-    }
-}
-
-struct RequestGateLayer {
-    sent_file: PathBuf,
-    release_file: PathBuf,
-    entered: AtomicBool,
-}
-
-impl RequestGateLayer {
-    fn new(sent_file: PathBuf, release_file: PathBuf) -> Self {
-        Self {
-            sent_file,
-            release_file,
-            entered: AtomicBool::new(false),
-        }
-    }
-}
-
-impl<S> Layer<S> for RequestGateLayer
-where
-    S: Subscriber,
-{
-    fn on_event(&self, event: &Event<'_>, _context: Context<'_, S>) {
-        let mut visitor = RequestVisitor::default();
-        event.record(&mut visitor);
-        if visitor.api_key != Some(21)
-            || !visitor
-                .message
-                .as_deref()
-                .is_some_and(|message| message.contains("kafka request sent"))
-            || self.entered.swap(true, Ordering::AcqRel)
-        {
-            return;
-        }
-
-        if let Err(error) = std::fs::write(&self.sent_file, b"delete-records-request-sent\n") {
-            eprintln!("failed to write request gate file: {error}");
-            return;
-        }
-        let deadline = Instant::now() + Duration::from_secs(30);
-        while !self.release_file.exists() && Instant::now() < deadline {
-            std::thread::sleep(Duration::from_millis(10));
-        }
-    }
-}
-
-#[derive(Default)]
-struct RequestVisitor {
-    api_key: Option<i64>,
-    message: Option<String>,
-}
-
-impl Visit for RequestVisitor {
-    fn record_i64(&mut self, field: &Field, value: i64) {
-        if field.name() == "api_key" {
-            self.api_key = Some(value);
-        }
-    }
-
-    fn record_str(&mut self, field: &Field, value: &str) {
-        if field.name() == "message" {
-            self.message = Some(value.to_owned());
-        }
-    }
-
-    fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
-        if field.name() == "api_key" {
-            self.api_key = format!("{value:?}").parse().ok();
-        } else if field.name() == "message" {
-            self.message = Some(format!("{value:?}"));
-        }
-    }
 }
