@@ -1196,6 +1196,13 @@ Implemented evidence:
   records, 135 operation errors, 678 failed requests, and 944 retries.
   Recovery completed and the final in-flight and buffered-record gauges were
   both zero.
+- Scheduled `Kafka Soak` run
+  [`31568595989`](https://github.com/TaeeunKil/kafrust/actions/runs/31568595989)
+  passed a 300-second Kafka 4.3.1 broker restart profile with 17,019,900
+  1-KiB records, 190 operation errors, 1,118 failed requests, and 1,329
+  retries. Recovery completed and the final in-flight and buffered-record
+  gauges were both zero; the result artifact reports approximately 56.7k
+  records/s over the five-minute window.
 - Merged `main` benchmark run
   [`31562321010`](https://github.com/TaeeunKil/kafrust/actions/runs/31562321010)
   published fresh Kafka 4.3.1 release-profile baselines: 104,277 records/s

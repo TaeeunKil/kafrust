@@ -118,3 +118,11 @@ The latest merged-main 120-second run
 roundtripped 6,019,400 records across a ten-second broker outage, observed 135
 high-level operation errors, 678 failed requests, and 944 retries, recovered
 successfully, and finished with zero in-flight requests and buffered records.
+
+The scheduled five-minute run
+[`31568595989`](https://github.com/TaeeunKil/kafrust/actions/runs/31568595989)
+roundtripped 17,019,900 1-KiB records across the same ten-second outage,
+observed 190 high-level operation errors, 1,118 failed requests, and 1,329
+retries, recovered successfully, and finished with zero in-flight requests and
+buffered records. The result artifact measured approximately 56.7k records/s
+over the full window.

@@ -161,6 +161,12 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
   The benchmark covered 100-byte, 1-KiB, 10-KiB, and 1-KiB Zstd profiles. The
   soak processed 6,019,400 records across a ten-second outage and ended with
   zero in-flight and buffered records after recovery.
+- The scheduled five-minute broker-restart soak run
+  [`31568595989`](https://github.com/TaeeunKil/kafrust/actions/runs/31568595989)
+  processed 17,019,900 1-KiB records, observed 190 operation errors, 1,118
+  failed requests, and 1,329 retries, then recovered with zero in-flight and
+  buffered records. The artifact reports approximately 56.7k records/s over
+  the full window.
 - Kafka-compatible Murmur2 routing for keyed records without an explicit
   partition. Manual run `30066328105` verified key-derived routing and
   fetch-back by partition and offset across the three-broker Kafka 3.7.2
