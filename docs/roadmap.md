@@ -198,8 +198,9 @@ Known limits:
   `poll_with_heartbeat` triggers poll-time rejoin and replaces completed or
   stale same-group heartbeat tasks for the current generation.
 - Live group validation runs through the scheduled/manual `Live Kafka Smoke` workflow.
-- Regex subscription has focused unit coverage and is included in the live smoke
-  workflow; the first successful run is still required for broker qualification.
+- Regex subscription has focused unit coverage and initial two-topic assignment
+  qualification across Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 in the live smoke
+  workflow; secured permission and rejoin qualification remain.
 
 ## M6 Production Behavior
 
