@@ -494,6 +494,177 @@ jobs:
           docker logs kafrust-kafka-kip848-multi-2
           docker logs kafrust-kafka-kip848-multi-3
 
+  kafka-kip848-sasl-multi-failover:
+    name: Kafka 4.3.1 multi-broker SASL_PLAINTEXT KIP-848 failover
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      KAFRUST_BOOTSTRAP_SERVERS: localhost:19392,localhost:19393,localhost:19394
+      KAFRUST_SECURITY_PROTOCOL: sasl_plaintext
+      KAFRUST_SASL_MECHANISM: plain
+      KAFRUST_SASL_USERNAME: kafrust
+      KAFRUST_SASL_PASSWORD: kafrust-secret
+      KAFRUST_EXPECTED_BROKERS: "3"
+      KAFRUST_GROUP_PROTOCOL: consumer
+      KAFRUST_GROUP_ID: kafrust-kip848-sasl-failover-${{ github.run_id }}
+      KAFRUST_TOPIC: kafrust-kip848-sasl-failover-${{ github.run_id }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.81.0"
+
+      - name: Write SASL config
+        run: |
+          mkdir -p sasl-kip848
+          cat > sasl-kip848/kafka_server_jaas.conf <<'EOF'
+          KafkaServer {
+            org.apache.kafka.common.security.plain.PlainLoginModule required
+            username="broker"
+            password="broker-secret"
+            user_kafrust="kafrust-secret";
+          };
+          EOF
+          chmod 644 sasl-kip848/kafka_server_jaas.conf
+
+      - name: Start multi-broker Kafka 4.3.1 with SASL_PLAINTEXT
+        run: |
+          docker network create kafrust-kip848-sasl
+          KAFKA_CLUSTER_ID="$(docker run --rm apache/kafka:4.3.1 /opt/kafka/bin/kafka-storage.sh random-uuid)"
+          for node in 1 2 3; do
+            external_port=$((19391 + node))
+            docker run -d --name "kafrust-kafka-kip848-sasl-${node}" \
+              --network kafrust-kip848-sasl \
+              -p "${external_port}:9092" \
+              -v "$PWD/sasl-kip848:/etc/kafka/secrets:ro" \
+              -e KAFKA_OPTS="-Djava.security.auth.login.config=/etc/kafka/secrets/kafka_server_jaas.conf" \
+              -e KAFKA_CLUSTER_ID="${KAFKA_CLUSTER_ID}" \
+              -e KAFKA_NODE_ID="${node}" \
+              -e KAFKA_PROCESS_ROLES=broker,controller \
+              -e KAFKA_LISTENERS=INTERNAL://:29092,EXTERNAL://:9092,CONTROLLER://:9093 \
+              -e KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafrust-kafka-kip848-sasl-${node}:29092,EXTERNAL://localhost:${external_port} \
+              -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+              -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:SASL_PLAINTEXT \
+              -e KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL \
+              -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafrust-kafka-kip848-sasl-1:9093,2@kafrust-kafka-kip848-sasl-2:9093,3@kafrust-kafka-kip848-sasl-3:9093 \
+              -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=3 \
+              -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=3 \
+              -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=2 \
+              -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 \
+              -e KAFKA_SASL_ENABLED_MECHANISMS=PLAIN \
+              apache/kafka:4.3.1
+          done
+
+      - name: Wait for multi-broker Kafka
+        run: |
+          for attempt in {1..120}; do
+            if docker exec kafrust-kafka-kip848-sasl-1 /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server kafrust-kafka-kip848-sasl-1:29092 \
+              >/tmp/kafrust-kip848-sasl-startup.log 2>&1; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/kafrust-kip848-sasl-startup.log || true
+          docker logs kafrust-kafka-kip848-sasl-1
+          docker logs kafrust-kafka-kip848-sasl-2
+          docker logs kafrust-kafka-kip848-sasl-3
+          exit 1
+
+      - name: Create KIP-848 SASL topic
+        run: |
+          docker exec kafrust-kafka-kip848-sasl-1 /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server kafrust-kafka-kip848-sasl-1:29092 \
+            --create \
+            --topic "$KAFRUST_TOPIC" \
+            --partitions 3 \
+            --replication-factor 3
+
+      - name: Build KIP-848 SASL failover example
+        run: cargo build -p kafrust --example consumer_group_failover
+
+      - name: Run KIP-848 SASL coordinator failover
+        run: |
+          KAFRUST_PARTITION_QUEUE=1 \
+          KAFRUST_FAILOVER_PAUSE_MS=30000 \
+          cargo run -p kafrust --example consumer_group_failover \
+            >/tmp/kafrust-kip848-sasl-failover.log 2>&1 &
+          group_pid=$!
+
+          coordinator_node=""
+          before_seen=""
+          for attempt in {1..120}; do
+            coordinator_node="$(
+              sed -n 's/.*coordinator node \([0-9][0-9]*\)$/\1/p' \
+                /tmp/kafrust-kip848-sasl-failover.log | tail -n 1
+            )"
+            if grep -q "consumer group failover before polled" /tmp/kafrust-kip848-sasl-failover.log; then
+              before_seen=1
+            fi
+            if [ -n "$coordinator_node" ] && [ -n "$before_seen" ]; then
+              break
+            fi
+            if ! kill -0 "$group_pid" 2>/dev/null; then
+              cat /tmp/kafrust-kip848-sasl-failover.log || true
+              wait "$group_pid"
+            fi
+            sleep 1
+          done
+
+          if ! [[ "$coordinator_node" =~ ^[123]$ ]] || [ -z "$before_seen" ]; then
+            echo "KIP-848 SASL failover example did not reach its first poll"
+            cat /tmp/kafrust-kip848-sasl-failover.log || true
+            kill "$group_pid" 2>/dev/null || true
+            wait "$group_pid" || true
+            exit 1
+          fi
+
+          coordinator_container="kafrust-kafka-kip848-sasl-${coordinator_node}"
+          docker stop "$coordinator_container"
+
+          group_status=0
+          wait "$group_pid" || group_status=$?
+          cat /tmp/kafrust-kip848-sasl-failover.log
+
+          docker start "$coordinator_container"
+          coordinator_ready=""
+          for attempt in {1..120}; do
+            if docker exec "$coordinator_container" \
+              /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server "${coordinator_container}:29092" \
+              >/tmp/kafrust-kip848-sasl-recovery.log 2>&1; then
+              coordinator_ready=1
+              break
+            fi
+            sleep 2
+          done
+
+          if [ "$group_status" -ne 0 ] || [ -z "$coordinator_ready" ]; then
+            cat /tmp/kafrust-kip848-sasl-recovery.log || true
+            docker logs "$coordinator_container"
+            exit 1
+          fi
+
+      - name: Dump KIP-848 SASL Kafka logs
+        if: failure()
+        run: |
+          cat /tmp/kafrust-kip848-sasl-failover.log || true
+          docker logs kafrust-kafka-kip848-sasl-1
+          docker logs kafrust-kafka-kip848-sasl-2
+          docker logs kafrust-kafka-kip848-sasl-3
+
+      - name: Upload KIP-848 SASL diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kip848-sasl-failover-diagnostics-${{ github.run_id }}
+          path: /tmp/kafrust-kip848-sasl-*.log
+          if-no-files-found: ignore
+
   kafka-multi-broker:
     name: Kafka 3.7.2 multi-broker
     runs-on: ubuntu-latest
