@@ -203,7 +203,7 @@ impl SaslCredentials {
         self.oauthbearer_token.as_deref()
     }
 
-    async fn oauthbearer_token_for_auth(&self) -> Result<String> {
+    pub(crate) async fn oauthbearer_token_for_auth(&self) -> Result<String> {
         if let Some(token) = &self.oauthbearer_token {
             return Ok(token.clone());
         }
@@ -212,6 +212,10 @@ impl SaslCredentials {
             .ok_or(Error::Unsupported("SASL/OAUTHBEARER token is missing"))?
             .fetch_token()
             .await
+    }
+
+    pub(crate) fn supports_oauthbearer_reauthentication(&self) -> bool {
+        self.mechanism == SaslMechanism::OAuthBearer && self.oauthbearer_token_provider.is_some()
     }
 }
 
@@ -542,6 +546,7 @@ impl ClientConfig {
         )
         .await?;
         authenticate_sasl(&mut client, credentials).await?;
+        client.enable_sasl_reauthentication(credentials.clone());
         Ok(client)
     }
 
@@ -552,6 +557,7 @@ impl ClientConfig {
             .ok_or(Error::MissingSaslCredentials)?;
         let mut client = self.connect_tls_broker(server).await?;
         authenticate_sasl(&mut client, credentials).await?;
+        client.enable_sasl_reauthentication(credentials.clone());
         Ok(client)
     }
 
@@ -775,7 +781,7 @@ fn sasl_oauthbearer_auth_bytes(credentials: &SaslCredentials) -> Result<Vec<u8>>
     sasl_oauthbearer_auth_bytes_with_token(credentials, token)
 }
 
-fn sasl_oauthbearer_auth_bytes_with_token(
+pub(crate) fn sasl_oauthbearer_auth_bytes_with_token(
     credentials: &SaslCredentials,
     token: &str,
 ) -> Result<Vec<u8>> {

@@ -553,10 +553,16 @@ Evidence:
 - `OAuthBearerTokenProvider` and the matching `*_provider` builders allow an
   application to retrieve a fresh token for each new broker connection without
   exposing it through `Debug` output.
+- Provider-backed OAUTHBEARER connections also refresh the token and send
+  `SaslAuthenticate v1` again on the existing connection before requests after
+  half of the broker-advertised session lifetime has elapsed; the focused
+  client test covers this lifecycle.
 - The `SaslAuthenticate v1` response is decoded for all configured SASL
   mechanisms, and `Client::sasl_session_lifetime_ms` exposes the broker's
-  re-authentication window. Automatic re-authentication and token refresh
-  scheduling remain the responsibility of a future connection-lifecycle layer.
+  re-authentication window. Provider-backed OAUTHBEARER connections use that
+  window to re-authenticate on the existing connection before requests after
+  half the lifetime; detached refresh workers and production token policy
+  remain open.
 - The `Live Kafka Smoke` workflow includes a SASL_SSL SCRAM profile that
   creates separate Kafka SCRAM-SHA-256 and SCRAM-SHA-512 credentials, configures
   kafrust with `KAFRUST_SECURITY_PROTOCOL=sasl_tls`, the selected
@@ -578,8 +584,9 @@ Evidence:
   `SaslAuthenticate v1`, [`Live Kafka Smoke`, run
   `31560914663`](https://github.com/TaeeunKil/kafrust/actions/runs/31560914663)
   passed the full plaintext, TLS, SASL, secured failover, ACL, and KIP-848
-  matrix. Automatic re-authentication and production OAuth/OIDC qualification
-  remain open.
+  matrix. Provider-backed OAUTHBEARER re-authentication is covered by focused
+  injected-client tests; detached refresh workers and production OAuth/OIDC
+  qualification remain open.
 
 Strategic role:
 

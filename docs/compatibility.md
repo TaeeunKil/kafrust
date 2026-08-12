@@ -352,8 +352,9 @@ policy, and production OAuth/OIDC provider integration remain unclaimed.
   failover, and Kafka 4.3.1 KIP-848 in [`Live Kafka Smoke`, run
   `31560914663`](https://github.com/TaeeunKil/kafrust/actions/runs/31560914663).
   The low-level `Client` records the broker-advertised SASL session lifetime;
-  automatic re-authentication and production OAuth/OIDC qualification remain
-  unclaimed.
+  provider-backed OAUTHBEARER re-authentication is covered by focused injected
+  tests; detached refresh workers and production OAuth/OIDC qualification
+  remain unclaimed.
 
 ## Not Yet Claimed
 

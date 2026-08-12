@@ -343,8 +343,10 @@ dedicated smoke using the broker's built-in unsecured validator (`Live Kafka
 Smoke` run `31478375106`). SASL authentication uses Kafka's
 `SaslAuthenticate v1` wire response, and the low-level `Client` exposes the
 broker-advertised `session_lifetime_ms` for an application-owned refresh
-schedule. Automatic re-authentication, production OAuth/OIDC provider
-integration, and signed JWT/JWKS policy remain unclaimed.
+schedule. Provider-backed OAUTHBEARER connections also re-authenticate on the
+existing connection before requests after half of that lifetime; detached
+refresh workers, production OAuth/OIDC provider integration, and signed
+JWT/JWKS policy remain unclaimed.
 
 The default build does not include TLS dependencies. The current `tls` feature
 uses the `rustls` ring crypto provider, which can require native build tooling
@@ -454,9 +456,10 @@ Verified high-level paths include:
 - SASL/OAUTHBEARER is implemented with token-only and authorization-identity
   builders plus async token-provider builders, and live-verified against Kafka
   3.7.2's built-in unsecured validator. SASL Authenticate v1 session lifetime
-  metadata is exposed by the low-level client for application-owned refresh
-  scheduling; automatic re-authentication and production OAuth/OIDC provider
-  behavior and signed JWT/JWKS policy remain unclaimed.
+  metadata is exposed by the low-level client, and provider-backed connections
+  re-authenticate before requests as the session expires. Detached refresh
+  workers and production OAuth/OIDC provider behavior and signed JWT/JWKS
+  policy remain unclaimed.
 - Broker compatibility is verified against Kafka `3.7.2`, `3.8.1`, `3.9.1`,
   and `4.3.1` for the single-node plaintext profile. Secured and multi-broker
   profiles are verified against `3.7.2`.

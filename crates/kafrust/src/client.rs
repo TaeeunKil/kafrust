@@ -111,6 +111,7 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tracing::{debug, debug_span, Instrument, Span};
 
+use crate::config::{sasl_oauthbearer_auth_bytes_with_token, SaslCredentials};
 use crate::error::{Error, Result};
 use crate::metrics::ClientMetrics;
 
@@ -127,6 +128,9 @@ pub struct Client {
     metrics: ClientMetrics,
     api_versions_v3_cache: Option<ApiVersionsResponseV3>,
     sasl_session_lifetime_ms: Option<i64>,
+    sasl_credentials: Option<SaslCredentials>,
+    sasl_authenticated_at: Option<std::time::Instant>,
+    sasl_authentication_in_progress: bool,
 }
 
 pub(crate) trait BrokerStream: AsyncRead + AsyncWrite + Unpin + Send + Sync {}
@@ -208,6 +212,9 @@ impl Client {
             metrics,
             api_versions_v3_cache: None,
             sasl_session_lifetime_ms: None,
+            sasl_credentials: None,
+            sasl_authenticated_at: None,
+            sasl_authentication_in_progress: false,
         }
     }
 
@@ -292,11 +299,67 @@ impl Client {
     /// Returns the broker-advertised SASL session lifetime in milliseconds.
     ///
     /// A non-zero value indicates when the broker expects re-authentication on
-    /// this connection. The client currently exposes the value for scheduling
-    /// by a higher-level owner; it does not run a detached re-authentication
-    /// task automatically.
+    /// this connection. Provider-backed OAUTHBEARER connections opportunistically
+    /// re-authenticate before requests after half of this lifetime has elapsed;
+    /// the client does not run a detached re-authentication task.
     pub fn sasl_session_lifetime_ms(&self) -> Option<i64> {
         self.sasl_session_lifetime_ms
+    }
+
+    pub(crate) fn enable_sasl_reauthentication(&mut self, credentials: SaslCredentials) {
+        self.sasl_credentials = Some(credentials);
+        self.sasl_authenticated_at = Some(std::time::Instant::now());
+    }
+
+    async fn maybe_reauthenticate(&mut self) -> Result<()> {
+        if self.sasl_authentication_in_progress {
+            return Ok(());
+        }
+
+        let Some(credentials) = self.sasl_credentials.clone() else {
+            return Ok(());
+        };
+        if !credentials.supports_oauthbearer_reauthentication() {
+            return Ok(());
+        }
+
+        let Some(session_lifetime_ms) = self.sasl_session_lifetime_ms else {
+            return Ok(());
+        };
+        let Ok(session_lifetime_ms) = u64::try_from(session_lifetime_ms) else {
+            return Ok(());
+        };
+        if session_lifetime_ms == 0 {
+            return Ok(());
+        }
+        let Some(authenticated_at) = self.sasl_authenticated_at else {
+            return Ok(());
+        };
+        let refresh_after = Duration::from_millis(session_lifetime_ms) / 2;
+        if authenticated_at.elapsed() < refresh_after {
+            return Ok(());
+        }
+
+        self.sasl_authentication_in_progress = true;
+        let result = async {
+            let token = credentials.oauthbearer_token_for_auth().await?;
+            let response = self
+                .sasl_authenticate_v1(sasl_oauthbearer_auth_bytes_with_token(
+                    &credentials,
+                    &token,
+                )?)
+                .await?;
+            if response.error_code != 0 {
+                return Err(self.broker_error(
+                    response.error_code,
+                    "sasl re-authenticate OAUTHBEARER".to_owned(),
+                ));
+            }
+            Ok(())
+        }
+        .await;
+        self.sasl_authentication_in_progress = false;
+        result
     }
 
     pub(crate) async fn sasl_handshake_v1(
@@ -323,11 +386,14 @@ impl Client {
             client_id: self.client_id.clone(),
             auth_bytes,
         };
-        let response = self.send_request(&request.encode()?).await?;
+        let response = self.send_request_traced(&request.encode()?).await?;
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         let response = SaslAuthenticateResponseV1::decode_body(&mut decoder)?;
-        self.sasl_session_lifetime_ms = Some(response.session_lifetime_ms);
+        if response.error_code == 0 {
+            self.sasl_session_lifetime_ms = Some(response.session_lifetime_ms);
+            self.sasl_authenticated_at = Some(std::time::Instant::now());
+        }
         Ok(response)
     }
 
@@ -1410,6 +1476,11 @@ impl Client {
     }
 
     async fn send_request_no_response(&mut self, request: &[u8]) -> Result<()> {
+        self.maybe_reauthenticate().await?;
+        self.send_request_no_response_traced(request).await
+    }
+
+    async fn send_request_no_response_traced(&mut self, request: &[u8]) -> Result<()> {
         let trace = RequestTrace::from_request(request);
         let span = RequestTrace::span(trace);
         let metrics = self.metrics.start_request(request.len());
@@ -1444,6 +1515,11 @@ impl Client {
     }
 
     async fn send_request(&mut self, request: &[u8]) -> Result<Vec<u8>> {
+        self.maybe_reauthenticate().await?;
+        self.send_request_traced(request).await
+    }
+
+    async fn send_request_traced(&mut self, request: &[u8]) -> Result<Vec<u8>> {
         let trace = RequestTrace::from_request(request);
         let span = RequestTrace::span(trace);
         let metrics = self.metrics.start_request(request.len());
@@ -1635,6 +1711,7 @@ mod tests {
         AddPartitionsToTxnTopic, Client, RequestTrace, TxnOffsetCommitTopic,
         DEFAULT_MAX_RESPONSE_BYTES,
     };
+    use crate::config::SaslCredentials;
     use crate::{ClientMetrics, Error};
     use kafrust_protocol::api::txn_offset_commit::TxnOffsetCommitPartition;
     use kafrust_protocol::codec::DecodeLimits;
@@ -1921,6 +1998,45 @@ mod tests {
 
         assert_eq!(response.session_lifetime_ms, 123);
         assert_eq!(client.sasl_session_lifetime_ms(), Some(123));
+        broker.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn reauthenticates_oauthbearer_provider_before_session_expiry() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(1024);
+        let broker = tokio::spawn(async move {
+            let request = read_test_frame(&mut broker_stream).await;
+            assert_eq!(&request[0..4], &[0, 36, 0, 1]);
+            assert_eq!(&request[4..8], &[0, 0, 0, 1]);
+            assert_eq!(&request[14..], b"n,,\x01auth=Bearer fresh-token\x01\x01");
+
+            let response = [
+                0, 0, 0, 1, // correlation id
+                0, 0, // error code
+                0xff, 0xff, // null error message
+                0, 0, 0, 0, // auth bytes
+                0, 0, 0, 0, 0, 0, 3, 0xe8, // session lifetime ms: 1000
+            ];
+            broker_stream
+                .write_all(&(response.len() as i32).to_be_bytes())
+                .await
+                .unwrap();
+            broker_stream.write_all(&response).await.unwrap();
+            broker_stream.flush().await.unwrap();
+        });
+
+        let mut client =
+            Client::from_stream(Box::new(client_stream), None, Some(Duration::from_secs(1)));
+        client.sasl_credentials = Some(SaslCredentials::oauthbearer_with_provider(|| async {
+            Ok("fresh-token".to_owned())
+        }));
+        client.sasl_session_lifetime_ms = Some(1);
+        client.sasl_authenticated_at = Some(std::time::Instant::now() - Duration::from_secs(1));
+
+        client.maybe_reauthenticate().await.unwrap();
+
+        assert_eq!(client.sasl_session_lifetime_ms(), Some(1000));
+        assert!(!client.sasl_authentication_in_progress);
         broker.await.unwrap();
     }
 
