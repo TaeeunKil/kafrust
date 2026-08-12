@@ -14,12 +14,13 @@ async fn main() -> kafrust::Result<()> {
     let transactional_id = std::env::var("KAFRUST_TRANSACTIONAL_ID")
         .unwrap_or_else(|_| "kafrust-transaction-failover".to_owned());
     let pause = pause_from_env()?;
+    let max_retries = max_retries_from_env()?;
 
     let mut producer = common::apply_security(
         ProducerConfig::new(bootstrap_servers.clone())
             .client_id("kafrust-transaction-failover-producer")
             .transactional_id(transactional_id.clone())
-            .max_retries(300),
+            .max_retries(max_retries),
     )?
     .build()
     .await?;
@@ -91,6 +92,19 @@ fn pause_from_env() -> kafrust::Result<Duration> {
         .unwrap_or(Ok(Duration::ZERO))
 }
 
+fn max_retries_from_env() -> kafrust::Result<u32> {
+    std::env::var("KAFRUST_FAILOVER_MAX_RETRIES")
+        .map(|value| parse_max_retries(&value))
+        .unwrap_or(Ok(300))
+}
+
+fn parse_max_retries(value: &str) -> kafrust::Result<u32> {
+    value
+        .trim()
+        .parse::<u32>()
+        .map_err(|_| Error::Unsupported("KAFRUST_FAILOVER_MAX_RETRIES must be an integer"))
+}
+
 fn parse_pause(value: &str) -> kafrust::Result<Duration> {
     value
         .trim()
@@ -107,7 +121,7 @@ fn flush_stdout() -> kafrust::Result<()> {
 mod tests {
     use std::time::Duration;
 
-    use super::parse_pause;
+    use super::{parse_max_retries, parse_pause};
 
     #[test]
     fn parses_pause() {
@@ -120,5 +134,15 @@ mod tests {
     #[test]
     fn rejects_invalid_pause() {
         assert!(parse_pause("later").is_err());
+    }
+
+    #[test]
+    fn parses_max_retries() {
+        assert_eq!(parse_max_retries(" 1200 ").unwrap(), 1200);
+    }
+
+    #[test]
+    fn rejects_invalid_max_retries() {
+        assert!(parse_max_retries("later").is_err());
     }
 }
