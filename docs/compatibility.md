@@ -13,7 +13,7 @@ the foreground group poll path.
 
 ## Current Compatibility Claim
 
-The `0.2.x` alpha line is verified against Apache Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 KRaft brokers over plaintext TCP in the single-node profile. Kafka 3.7.2 is also verified in a three-broker plaintext profile. TLS, SASL/PLAIN over SASL_PLAINTEXT, and SASL/SCRAM-SHA-256 and SCRAM-SHA-512 over SASL_SSL are verified against Kafka 3.7.2 for the documented single-node smoke paths. The Kafka 3.7.2 three-broker SASL_PLAINTEXT profile verifies authenticated transaction coordinator, consumer-group coordinator, producer, and direct-consumer recovery after broker stops in [`31554396594`](https://github.com/TaeeunKil/kafrust/actions/runs/31554396594). Kafka 4.3.1 KIP-848 coordinator recovery over SASL_PLAINTEXT is verified in a three-broker profile in [`31569709189`](https://github.com/TaeeunKil/kafrust/actions/runs/31569709189), and the SASL_SSL SCRAM-SHA-256 profile is verified in [`31570924845`](https://github.com/TaeeunKil/kafrust/actions/runs/31570924845). A Kafka 3.7.2 SASL_SSL OAUTHBEARER path is also live-verified against Kafka's built-in unsecured test validator; this does not claim production OAuth/OIDC provider integration. The SHA-512 profile covers broker roundtrip, producer, batch producer, buffered producer, direct consumer, and consumer group poll paths. ACL create, describe, and delete plus client quota set, describe, and remove are live-verified against a Kafka 3.7.2 KRaft broker with StandardAuthorizer enabled. SCRAM credential upsert, describe, and delete are live-verified over the SASL_SSL profile. Controller-routed partition reassignment submission and completion polling are live-verified in the Kafka 3.7.2 three-broker profile. The cooperative-sticky consumer protocol path, multi-member ownership transfer, transient-member rollback, and member-loss recovery are live-verified in the three-broker profile by main run `31474626799`. Acks=0 immediate and batch Produce dispatch is live-verified against Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 single-node plaintext profiles; this verifies request completion, not broker acceptance. The high-level producer uses flexible `ApiVersions v3` capability negotiation across all supported plaintext, TLS, SASL, and multi-broker profiles in live run `31494820868`. Idempotent producer recovery through the three-broker broker-stop window is live-verified in run `31495298593`.
+The `0.2.x` alpha line is verified against Apache Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 KRaft brokers over plaintext TCP in the single-node profile. Kafka 3.7.2 is also verified in a three-broker plaintext profile. TLS, SASL/PLAIN over SASL_PLAINTEXT, and SASL/SCRAM-SHA-256 and SCRAM-SHA-512 over SASL_SSL are verified against Kafka 3.7.2 for the documented single-node smoke paths. The Kafka 3.7.2 three-broker SASL_PLAINTEXT profile verifies authenticated transaction coordinator, consumer-group coordinator, producer, and direct-consumer recovery after broker stops in [`31554396594`](https://github.com/TaeeunKil/kafrust/actions/runs/31554396594). Kafka 4.3.1 KIP-848 coordinator recovery over SASL_PLAINTEXT is verified in a three-broker profile in [`31569709189`](https://github.com/TaeeunKil/kafrust/actions/runs/31569709189), and the SASL_SSL SCRAM-SHA-256 profile is verified in [`31570924845`](https://github.com/TaeeunKil/kafrust/actions/runs/31570924845). A Kafka 3.7.2 SASL_SSL OAUTHBEARER path is also live-verified against Kafka's built-in unsecured test validator; this does not claim production OAuth/OIDC provider integration. The SHA-512 profile covers broker roundtrip, producer, batch producer, buffered producer, direct consumer, and consumer group poll paths. ACL create, describe, and delete plus client quota set, describe, and remove are live-verified against a Kafka 3.7.2 KRaft broker with StandardAuthorizer enabled. SCRAM credential upsert, describe, and delete are live-verified over the SASL_SSL profile. Controller-routed partition reassignment submission and completion polling are live-verified in the Kafka 3.7.2 three-broker profile. The cooperative-sticky consumer protocol path, multi-member ownership transfer, transient-member rollback, and member-loss recovery are live-verified in the three-broker profile by main run `31474626799`. Acks=0 immediate and batch Produce dispatch is live-verified against Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 single-node plaintext profiles; this verifies request completion, not broker acceptance. The high-level producer uses flexible `ApiVersions v3` capability negotiation across all supported plaintext, TLS, SASL, and multi-broker profiles in live run `31494820868`. Idempotent producer recovery through the three-broker broker-stop window is live-verified in run `31495298593`. The Kafka 3.7.2 three-broker SASL_SSL SCRAM profile also qualifies safe transactional producer recovery after coordinator failure in [`31572745537`](https://github.com/TaeeunKil/kafrust/actions/runs/31572745537): the old producer terminates on `INVALID_PRODUCER_EPOCH`, and a new producer with the same transactional ID reinitializes, completes recovery, and commits a new transaction verified with `read_committed`.
 
 | Broker | Mode | Security | Verification | Status |
 | --- | --- | --- | --- | --- |
@@ -37,6 +37,7 @@ The `0.2.x` alpha line is verified against Apache Kafka 3.7.2, 3.8.1, 3.9.1, and
 | Apache Kafka 3.7.2 | three-broker KRaft | cooperative-sticky consumer protocol, multi-member transfer, transient-member rollback, member-loss recovery, and rebalance listener lifecycle | [`Live Kafka Smoke`, run `31557534371`](https://github.com/TaeeunKil/kafrust/actions/runs/31557534371) on 2026-08-12 | Passing |
 | Apache Kafka 3.7.2 | three-broker KRaft | SASL_PLAINTEXT with SASL/PLAIN; transaction/group coordinator, producer, and direct-consumer broker-stop recovery | [`Live Kafka Smoke`, run `31554396594`](https://github.com/TaeeunKil/kafrust/actions/runs/31554396594) on 2026-08-12 | Passing |
 | Apache Kafka 3.7.2 | three-broker KRaft | SASL_SSL with SCRAM-SHA-256; group-coordinator and partition-leader broker-stop recovery | [`Live Kafka Smoke`, run `31568412595`](https://github.com/TaeeunKil/kafrust/actions/runs/31568412595) on 2026-08-12 | Passing |
+| Apache Kafka 3.7.2 | three-broker KRaft | SASL_SSL with SCRAM-SHA-256; safe transactional producer reinitialization after transaction-coordinator broker stop | [`Live Kafka Smoke`, run `31572745537`](https://github.com/TaeeunKil/kafrust/actions/runs/31572745537) on 2026-08-12 | Passing; old producer outcome remains explicitly unknown |
 | Apache Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1 | single-node KRaft | Produce `acks=0` immediate and batch dispatch | `Live Kafka Smoke`, manual run `31464933145` on 2026-08-11 | Passing; broker acceptance is intentionally unconfirmed |
 
 ## Verified Paths
@@ -388,6 +389,18 @@ The Kafka 3.7.2 secured SCRAM failover path covers:
   using the same authenticated bootstrap set.
 - [`Live Kafka Smoke`, run `31568412595`](https://github.com/TaeeunKil/kafrust/actions/runs/31568412595).
 
+The same profile also covers safe transaction recovery after a transaction
+coordinator broker stop:
+
+- The original producer returns `INVALID_PRODUCER_EPOCH` and is treated as
+  defunct, matching Kafka's transactional producer safety model.
+- After the coordinator is restarted, a new producer with the same
+  `transactional_id` initializes successfully and lets Kafka finish the
+  incomplete transaction before beginning a new one.
+- The recovery transaction is committed and returned by a `read_committed`
+  consumer, while the old transaction is not claimed as committed.
+- [`Live Kafka Smoke`, run `31572745537`](https://github.com/TaeeunKil/kafrust/actions/runs/31572745537).
+
 The same Kafka 3.7.2 SASL_SSL profile's SCRAM-SHA-512 subpath covers:
 
 - `ApiVersions v0` and `Metadata v1` roundtrips through `SecurityProtocol::SaslTls`.
@@ -432,12 +445,13 @@ The current compatibility claim does not cover:
   3.7.2 built-in unsecured-validator smoke is test-only evidence, not an
   identity provider qualification.
 - Production OAuth/OIDC provider compatibility or rack-aware client routing.
-  The SCRAM multi-broker group-coordinator and partition-leader broker-stop
-  paths are claimed above, while transaction-coordinator failure under SCRAM
-  remains open.
+  The SCRAM multi-broker group-coordinator, partition-leader, and safe
+  transactional producer reinitialization paths are claimed above. This does
+  not claim transparent continuation of the old producer or the outcome of a
+  transaction whose commit returned `INVALID_PRODUCER_EPOCH`.
 - Broader transaction and KIP-848 failure-injection profiles beyond the
-  verified coordinator broker-stop paths, including SCRAM transaction-
-  coordinator recovery and repeated or partition-leader fault matrices.
+  verified coordinator broker-stop paths, including repeated or
+  partition-leader fault matrices.
 - Idempotent failure-injection profiles beyond the verified three-broker
   leader-stop recovery path. The ambiguous-response duplicate path is covered
   by a deterministic injected broker test.
