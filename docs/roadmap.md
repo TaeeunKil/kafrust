@@ -541,11 +541,14 @@ Exit criteria:
 Known limits:
 
 - SASL/OAUTHBEARER is live-verified against Kafka 3.7.2's built-in unsecured
-  validator in the dedicated OAuth-only smoke job `31478375106`. Production
-  OAuth/OIDC provider compatibility, signed JWT/JWKS validation, issuer and
-  audience policy, and provider-specific failure behavior remain open. The
-  public async token-provider callback is implemented and called for each new
-  broker authentication.
+  validator in the dedicated OAuth-only smoke job `31478375106`, and against a
+  signed local OIDC/JWKS fixture in the OIDC job
+  [`31584760474`](https://github.com/TaeeunKil/kafrust/actions/runs/31584760474/job/94078116567).
+  The fixture covers signature, issuer, audience, Java client, static-token,
+  and provider-backed paths. External provider compatibility and
+  provider-specific failure behavior remain open. The public async
+  token-provider callback is implemented and called for each new broker
+  authentication.
 
 Evidence:
 
@@ -583,15 +586,15 @@ Evidence:
   `ClientConfig::request_timeout_ms` and return the typed
   `Error::OAuthBearerTokenTimeout` when the callback exceeds that limit.
 - Provider-backed OAUTHBEARER connections also refresh the token and send
-  `SaslAuthenticate v1` again on the existing connection before requests after
-  half of the broker-advertised session lifetime has elapsed; the focused
-  client test covers this lifecycle.
-- The `SaslAuthenticate v1` response is decoded for all configured SASL
-  mechanisms, and `Client::sasl_session_lifetime_ms` exposes the broker's
-  re-authentication window. Provider-backed OAUTHBEARER connections use that
-  window to re-authenticate on the existing connection before requests after
-  half the lifetime; detached refresh workers and production token policy
-  remain open.
+  flexible `SaslAuthenticate v2` again on the existing connection before
+  requests after half of the broker-advertised session lifetime has elapsed;
+  the focused client test covers this lifecycle.
+- `SaslAuthenticate v1` responses remain decoded for PLAIN and SCRAM, while
+  flexible `v2` responses are used for OAUTHBEARER. `Client::sasl_session_lifetime_ms`
+  exposes the broker's re-authentication window. Provider-backed OAUTHBEARER
+  connections use that window to re-authenticate on the existing connection
+  before requests after half the lifetime; detached refresh workers and
+  production provider policy remain open.
 - The `Live Kafka Smoke` workflow includes a SASL_SSL SCRAM profile that
   creates separate Kafka SCRAM-SHA-256 and SCRAM-SHA-512 credentials, configures
   kafrust with `KAFRUST_SECURITY_PROTOCOL=sasl_tls`, the selected
@@ -609,13 +612,13 @@ Evidence:
   `codex/live-oauth-smoke`; the dedicated Kafka 3.7.2 SASL_SSL OAUTHBEARER
   job passed with the built-in unsecured validator. This does not qualify a
   production OAuth/OIDC provider.
-- After switching the high-level PLAIN, SCRAM, and OAUTHBEARER exchanges to
-  `SaslAuthenticate v1`, [`Live Kafka Smoke`, run
-  `31561944247`](https://github.com/TaeeunKil/kafrust/actions/runs/31561944247)
-  passed the full plaintext, TLS, SASL, secured failover, ACL, and KIP-848
-  matrix. Provider-backed OAUTHBEARER re-authentication is covered by focused
-  injected-client tests; detached refresh workers and production OAuth/OIDC
-  qualification remain open.
+- The signed local OIDC/JWKS fixture passed Kafka's validator, the Java Kafka
+  client, and kafrust static and provider-backed paths in the OIDC job
+  [`31584760474`](https://github.com/TaeeunKil/kafrust/actions/runs/31584760474/job/94078116567).
+  OAUTHBEARER initial authentication and provider re-authentication use
+  flexible `SaslAuthenticate v2`; PLAIN and SCRAM remain on `v1`. Detached
+  refresh workers and external provider-specific OAuth/OIDC qualification
+  remain open.
 
 Strategic role:
 
@@ -1404,11 +1407,13 @@ Implemented evidence:
 - SASL/OAUTHBEARER uses the RFC 7628 GS2 initial response with either an empty
   authorization identity (`n,,`) or an explicit identity (`n,a=<id>,`), keeps
   the bearer token out of `Debug` output, and is exposed through all high-level
-  connection builders. Injected broker tests cover handshake ordering and
-  exact authentication bytes; run `31478375106` adds live Kafka 3.7.2
-  SASL_SSL coverage using the built-in unsecured validator. Async token
-  providers are covered by injected connection tests; production OAuth/OIDC
-  provider verification remains open.
+  connection builders. OAUTHBEARER uses flexible `SaslAuthenticate v2` for
+  initial authentication and provider re-authentication, and sends Kafka's
+  control-A acknowledgement after an error challenge. Injected broker tests
+  cover handshake ordering, exact authentication bytes, and error challenge
+  acknowledgement; the signed OIDC live job above adds Kafka 3.7.2 coverage.
+  Async token providers are covered by injected connection tests; external
+  provider-specific OAuth/OIDC verification remains open.
 - Cooperative-sticky group membership encodes Subscription v1 owned
   partitions and performs staged ownership transfers with focused local tests.
   Manual `Live Kafka Smoke` run `31464021305` passed the Kafka 3.7.2
