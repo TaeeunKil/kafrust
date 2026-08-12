@@ -23,7 +23,7 @@ impl DescribeProducersRequestV0 {
         .encode_v2(&mut encoder)?;
         encoder.write_compact_array(Some(&self.topics), |encoder, topic| {
             encoder.write_compact_string(&topic.name)?;
-            encoder.write_array(Some(&topic.partition_indexes), |encoder, partition| {
+            encoder.write_compact_array(Some(&topic.partition_indexes), |encoder, partition| {
                 encoder.write_i32(*partition);
                 Ok(())
             })?;
@@ -148,6 +148,7 @@ mod tests {
         assert_eq!(&bytes[4..8], &[0, 0, 0, 61]);
         assert_eq!(&bytes[8..10], &[0, 7]); // fixed nullable client ID length
         assert_eq!(bytes[18], 2); // one topic
+        assert_eq!(bytes[26], 3); // two partition indexes
         assert_eq!(bytes.last(), Some(&0));
     }
 
