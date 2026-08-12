@@ -53,10 +53,14 @@ use kafrust_protocol::api::incremental_alter_configs::{
 use kafrust_protocol::api::list_groups::ListedGroupV1;
 use kafrust_protocol::api::list_partition_reassignments::ListPartitionReassignmentsTopicV0;
 use kafrust_protocol::api::metadata::{BrokerMetadata, MetadataResponseV1, TopicMetadata};
+use kafrust_protocol::api::offset_commit::{
+    OffsetCommitPartition, OffsetCommitTopic, OffsetCommitTopicResponse,
+};
 use kafrust_protocol::api::offset_delete::{
     OffsetDeleteRequestPartitionV0, OffsetDeleteRequestTopicV0, OffsetDeleteResponsePartitionV0,
     OffsetDeleteResponseTopicV0,
 };
+use kafrust_protocol::api::offset_fetch::{OffsetFetchTopic, OffsetFetchTopicResponse};
 
 use crate::client::Client;
 use crate::config::ClientConfig;
@@ -688,6 +692,112 @@ impl AdminClient {
                 .map(DeleteConsumerGroupOffsetsTopicResult::from_protocol)
                 .collect(),
         })
+    }
+
+    /// Lists committed offsets for a consumer group through OffsetFetch v2.
+    ///
+    /// Pass `None` to request every topic known to the group, or pass topic
+    /// and partition filters to limit the response. This admin form targets
+    /// classic group offset semantics; KIP-848 member-aware offset fetch is
+    /// exposed through the joined [`ConsumerGroup`](crate::group::ConsumerGroup)
+    /// path and remains a separate qualification surface.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.list_consumer_group_offsets",
+        skip_all,
+        fields(group_id, has_topic_filter = topics.is_some()),
+        err
+    )]
+    pub async fn list_consumer_group_offsets(
+        &self,
+        group_id: &str,
+        topics: Option<&[ConsumerGroupOffsetQuery]>,
+    ) -> Result<ListConsumerGroupOffsetsResult> {
+        let mut coordinator = self.group_coordinator_client(group_id).await?;
+        let response = coordinator
+            .offset_fetch_v2(
+                group_id,
+                topics.map(|topics| {
+                    topics
+                        .iter()
+                        .map(ConsumerGroupOffsetQuery::as_protocol)
+                        .collect()
+                }),
+            )
+            .await?;
+
+        if response.error_code != 0 {
+            self.config.record_broker_error();
+        }
+        for topic in &response.topics {
+            for partition in &topic.partitions {
+                if partition.error_code != 0 {
+                    self.config.record_broker_error();
+                }
+            }
+        }
+
+        Ok(ListConsumerGroupOffsetsResult::from_protocol(
+            group_id,
+            response.error_code,
+            response.topics,
+        ))
+    }
+
+    /// Alters committed offsets for a consumer group through OffsetCommit v2.
+    ///
+    /// This is an administrative commit with generation `-1`, an empty member
+    /// ID, and no retention override. Partition-level Kafka errors remain in
+    /// the typed result instead of being collapsed into one boolean.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.alter_consumer_group_offsets",
+        skip_all,
+        fields(group_id, offset_count = offsets.len()),
+        err
+    )]
+    pub async fn alter_consumer_group_offsets(
+        &self,
+        group_id: &str,
+        offsets: &[ConsumerGroupOffset],
+    ) -> Result<AlterConsumerGroupOffsetsResult> {
+        let mut coordinator = self.group_coordinator_client(group_id).await?;
+        let mut topics = BTreeMap::<String, Vec<OffsetCommitPartition>>::new();
+        for offset in offsets {
+            topics
+                .entry(offset.topic.clone())
+                .or_default()
+                .push(OffsetCommitPartition {
+                    partition_index: offset.partition,
+                    committed_offset: offset.offset,
+                    committed_metadata: offset.metadata.clone(),
+                });
+        }
+        let response = coordinator
+            .offset_commit_v2(
+                group_id,
+                -1,
+                "",
+                -1,
+                topics
+                    .into_iter()
+                    .map(|(name, partitions)| OffsetCommitTopic { name, partitions })
+                    .collect(),
+            )
+            .await?;
+
+        for topic in &response.topics {
+            for partition in &topic.partitions {
+                if partition.error_code != 0 {
+                    self.config.record_broker_error();
+                }
+            }
+        }
+
+        Ok(AlterConsumerGroupOffsetsResult::from_protocol(
+            group_id,
+            response.topics,
+        ))
     }
 
     async fn group_coordinator_client(&self, group_id: &str) -> Result<Client> {
@@ -3904,6 +4014,341 @@ impl ConsumerGroupMember {
     }
 }
 
+/// A topic and partition filter for consumer-group offset inspection.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConsumerGroupOffsetQuery {
+    topic: String,
+    partitions: Vec<i32>,
+}
+
+impl ConsumerGroupOffsetQuery {
+    /// Creates an offset query for one topic.
+    pub fn new(topic: impl Into<String>, partitions: impl IntoIterator<Item = i32>) -> Self {
+        Self {
+            topic: topic.into(),
+            partitions: partitions.into_iter().collect(),
+        }
+    }
+
+    /// Returns the topic name.
+    pub fn topic(&self) -> &str {
+        &self.topic
+    }
+
+    /// Returns partition indexes in request order.
+    pub fn partitions(&self) -> &[i32] {
+        &self.partitions
+    }
+
+    fn as_protocol(&self) -> OffsetFetchTopic {
+        OffsetFetchTopic {
+            name: self.topic.clone(),
+            partition_indexes: self.partitions.clone(),
+        }
+    }
+}
+
+/// One committed consumer-group offset to set administratively.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConsumerGroupOffset {
+    topic: String,
+    partition: i32,
+    offset: i64,
+    metadata: Option<String>,
+}
+
+impl ConsumerGroupOffset {
+    /// Creates an administrative offset update.
+    pub fn new(topic: impl Into<String>, partition: i32, offset: i64) -> Self {
+        Self {
+            topic: topic.into(),
+            partition,
+            offset,
+            metadata: None,
+        }
+    }
+
+    /// Sets optional group-offset metadata.
+    pub fn metadata(mut self, metadata: impl Into<String>) -> Self {
+        self.metadata = Some(metadata.into());
+        self
+    }
+
+    /// Returns the topic name.
+    pub fn topic(&self) -> &str {
+        &self.topic
+    }
+
+    /// Returns the partition index.
+    pub fn partition(&self) -> i32 {
+        self.partition
+    }
+
+    /// Returns the committed offset to set.
+    pub fn offset(&self) -> i64 {
+        self.offset
+    }
+
+    /// Returns optional group-offset metadata.
+    pub fn metadata_ref(&self) -> Option<&str> {
+        self.metadata.as_deref()
+    }
+}
+
+/// Complete response from one OffsetFetch v2 consumer-group offset query.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ListConsumerGroupOffsetsResult {
+    group_id: String,
+    error_code: i16,
+    topics: Vec<ConsumerGroupOffsetTopicResult>,
+}
+
+impl ListConsumerGroupOffsetsResult {
+    /// Returns the consumer group ID.
+    pub fn group_id(&self) -> &str {
+        &self.group_id
+    }
+
+    /// Returns whether Kafka accepted the group query and every partition.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+            && self
+                .topics
+                .iter()
+                .all(ConsumerGroupOffsetTopicResult::is_success)
+    }
+
+    /// Returns the top-level Kafka group error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns kafrust's classification for a top-level group error.
+    pub fn broker_error_kind(&self) -> Option<BrokerErrorKind> {
+        (self.error_code != 0).then(|| BrokerErrorKind::from_code(self.error_code))
+    }
+
+    /// Returns topic outcomes in broker response order.
+    pub fn topics(&self) -> &[ConsumerGroupOffsetTopicResult] {
+        &self.topics
+    }
+
+    fn from_protocol(
+        group_id: &str,
+        error_code: i16,
+        topics: Vec<OffsetFetchTopicResponse>,
+    ) -> Self {
+        Self {
+            group_id: group_id.to_owned(),
+            error_code,
+            topics: topics
+                .into_iter()
+                .map(ConsumerGroupOffsetTopicResult::from_fetch_protocol)
+                .collect(),
+        }
+    }
+}
+
+/// OffsetFetch results for one topic.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConsumerGroupOffsetTopicResult {
+    topic: String,
+    partitions: Vec<ConsumerGroupOffsetPartitionResult>,
+}
+
+impl ConsumerGroupOffsetTopicResult {
+    /// Returns the topic name.
+    pub fn topic(&self) -> &str {
+        &self.topic
+    }
+
+    /// Returns whether every partition query succeeded.
+    pub fn is_success(&self) -> bool {
+        self.partitions
+            .iter()
+            .all(ConsumerGroupOffsetPartitionResult::is_success)
+    }
+
+    /// Returns partition outcomes in broker response order.
+    pub fn partitions(&self) -> &[ConsumerGroupOffsetPartitionResult] {
+        &self.partitions
+    }
+
+    fn from_fetch_protocol(topic: OffsetFetchTopicResponse) -> Self {
+        Self {
+            topic: topic.name,
+            partitions: topic
+                .partitions
+                .into_iter()
+                .map(ConsumerGroupOffsetPartitionResult::from_fetch_protocol)
+                .collect(),
+        }
+    }
+}
+
+/// One OffsetFetch partition outcome.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConsumerGroupOffsetPartitionResult {
+    partition_index: i32,
+    committed_offset: i64,
+    metadata: Option<String>,
+    error_code: i16,
+}
+
+impl ConsumerGroupOffsetPartitionResult {
+    /// Returns the partition index.
+    pub fn partition_index(&self) -> i32 {
+        self.partition_index
+    }
+
+    /// Returns the committed offset, or Kafka's sentinel when absent.
+    pub fn committed_offset(&self) -> i64 {
+        self.committed_offset
+    }
+
+    /// Returns optional group-offset metadata.
+    pub fn metadata(&self) -> Option<&str> {
+        self.metadata.as_deref()
+    }
+
+    /// Returns whether Kafka returned this partition without an error.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+    }
+
+    /// Returns Kafka's raw partition error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns kafrust's classification for a partition error.
+    pub fn broker_error_kind(&self) -> Option<BrokerErrorKind> {
+        (self.error_code != 0).then(|| BrokerErrorKind::from_code(self.error_code))
+    }
+
+    fn from_fetch_protocol(
+        partition: kafrust_protocol::api::offset_fetch::OffsetFetchPartitionResponse,
+    ) -> Self {
+        Self {
+            partition_index: partition.partition_index,
+            committed_offset: partition.committed_offset,
+            metadata: partition.metadata,
+            error_code: partition.error_code,
+        }
+    }
+}
+
+/// Complete response from one administrative OffsetCommit v2 operation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AlterConsumerGroupOffsetsResult {
+    group_id: String,
+    topics: Vec<AlterConsumerGroupOffsetsTopicResult>,
+}
+
+impl AlterConsumerGroupOffsetsResult {
+    /// Returns the consumer group ID.
+    pub fn group_id(&self) -> &str {
+        &self.group_id
+    }
+
+    /// Returns whether every requested partition commit succeeded.
+    pub fn is_success(&self) -> bool {
+        self.topics
+            .iter()
+            .all(AlterConsumerGroupOffsetsTopicResult::is_success)
+    }
+
+    /// Returns topic outcomes in broker response order.
+    pub fn topics(&self) -> &[AlterConsumerGroupOffsetsTopicResult] {
+        &self.topics
+    }
+
+    fn from_protocol(group_id: &str, topics: Vec<OffsetCommitTopicResponse>) -> Self {
+        Self {
+            group_id: group_id.to_owned(),
+            topics: topics
+                .into_iter()
+                .map(AlterConsumerGroupOffsetsTopicResult::from_protocol)
+                .collect(),
+        }
+    }
+}
+
+/// OffsetCommit results for one topic.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AlterConsumerGroupOffsetsTopicResult {
+    topic: String,
+    partitions: Vec<AlterConsumerGroupOffsetsPartitionResult>,
+}
+
+impl AlterConsumerGroupOffsetsTopicResult {
+    /// Returns the topic name.
+    pub fn topic(&self) -> &str {
+        &self.topic
+    }
+
+    /// Returns whether every partition commit succeeded.
+    pub fn is_success(&self) -> bool {
+        self.partitions
+            .iter()
+            .all(AlterConsumerGroupOffsetsPartitionResult::is_success)
+    }
+
+    /// Returns partition outcomes in broker response order.
+    pub fn partitions(&self) -> &[AlterConsumerGroupOffsetsPartitionResult] {
+        &self.partitions
+    }
+
+    fn from_protocol(topic: OffsetCommitTopicResponse) -> Self {
+        Self {
+            topic: topic.name,
+            partitions: topic
+                .partitions
+                .into_iter()
+                .map(AlterConsumerGroupOffsetsPartitionResult::from_protocol)
+                .collect(),
+        }
+    }
+}
+
+/// One OffsetCommit partition outcome.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AlterConsumerGroupOffsetsPartitionResult {
+    partition_index: i32,
+    error_code: i16,
+}
+
+impl AlterConsumerGroupOffsetsPartitionResult {
+    /// Returns the partition index.
+    pub fn partition_index(&self) -> i32 {
+        self.partition_index
+    }
+
+    /// Returns whether Kafka accepted this partition commit.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+    }
+
+    /// Returns Kafka's raw partition error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns kafrust's classification for a partition error.
+    pub fn broker_error_kind(&self) -> Option<BrokerErrorKind> {
+        (self.error_code != 0).then(|| BrokerErrorKind::from_code(self.error_code))
+    }
+
+    fn from_protocol(
+        partition: kafrust_protocol::api::offset_commit::OffsetCommitPartitionResponse,
+    ) -> Self {
+        Self {
+            partition_index: partition.partition_index,
+            error_code: partition.error_code,
+        }
+    }
+}
+
 /// Topic partitions whose committed offsets should be deleted for a group.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConsumerGroupOffsetDelete {
@@ -5347,12 +5792,12 @@ mod tests {
         AclFilter, AclOperation, AclPatternType, AclPermissionType, AclResourceType, AdminClient,
         AlterConfigsOptions, ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter,
         ClientQuotaFilterComponent, ClientQuotaMatchType, ConfigAlterOperationKind, ConfigSource,
-        ConsumerGroupOffsetDelete, CreatePartitionsOptions, CreateTopicsOptions,
-        DeleteRecordsOptions, DeleteRecordsTopic, DeleteTopicsOptions, DescribeConfigsOptions,
-        DescribeProducersTopic, NewPartitions, NewTopic, PartitionReassignment,
-        PartitionReassignmentOptions, PartitionReassignmentQuery, ScramCredentialDeletion,
-        ScramCredentialMechanism, ScramCredentialUpsertion, TopicConfigAlteration,
-        TopicConfigResource,
+        ConsumerGroupOffset, ConsumerGroupOffsetDelete, ConsumerGroupOffsetQuery,
+        CreatePartitionsOptions, CreateTopicsOptions, DeleteRecordsOptions, DeleteRecordsTopic,
+        DeleteTopicsOptions, DescribeConfigsOptions, DescribeProducersTopic, NewPartitions,
+        NewTopic, PartitionReassignment, PartitionReassignmentOptions, PartitionReassignmentQuery,
+        ScramCredentialDeletion, ScramCredentialMechanism, ScramCredentialUpsertion,
+        TopicConfigAlteration, TopicConfigResource,
     };
     use crate::{BrokerErrorKind, ClientConfig, ClientMetrics};
     use kafrust_protocol::codec::Encoder;
@@ -6124,6 +6569,88 @@ mod tests {
             Some(BrokerErrorKind::GroupSubscribedToTopic)
         );
         assert_eq!(result.clone().into_topics().len(), 1);
+        assert_eq!(metrics.snapshot().broker_errors, 1);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn lists_and_alters_consumer_group_offsets_through_coordinator() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let coordinator_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&coordinator_request[0..4], &[0, 10, 0, 1]);
+            write_frame(
+                &mut bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let (mut coordinator, _) = listener.accept().await.unwrap();
+            let fetch_request = read_frame(&mut coordinator).await;
+            assert_eq!(&fetch_request[0..4], &[0, 9, 0, 2]);
+            write_frame(&mut coordinator, &offset_fetch_response()).await;
+
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let coordinator_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&coordinator_request[0..4], &[0, 10, 0, 1]);
+            write_frame(
+                &mut bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let (mut coordinator, _) = listener.accept().await.unwrap();
+            let commit_request = read_frame(&mut coordinator).await;
+            assert_eq!(&commit_request[0..4], &[0, 8, 0, 2]);
+            assert!(commit_request
+                .windows(4)
+                .any(|bytes| bytes == [0xff, 0xff, 0xff, 0xff]));
+            write_frame(&mut coordinator, &offset_commit_response()).await;
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        );
+
+        let listed = admin
+            .list_consumer_group_offsets(
+                "orders-group",
+                Some(&[ConsumerGroupOffsetQuery::new("orders", [0, 2])]),
+            )
+            .await
+            .unwrap();
+        assert_eq!(listed.group_id(), "orders-group");
+        assert_eq!(listed.error_code(), 0);
+        assert!(!listed.is_success());
+        assert_eq!(listed.topics().len(), 1);
+        assert_eq!(listed.topics()[0].topic(), "orders");
+        assert_eq!(listed.topics()[0].partitions()[0].committed_offset(), 42);
+        assert_eq!(listed.topics()[0].partitions()[0].metadata(), None);
+        assert_eq!(listed.topics()[0].partitions()[1].error_code(), 3);
+        assert_eq!(
+            listed.topics()[0].partitions()[1].broker_error_kind(),
+            Some(BrokerErrorKind::UnknownTopicOrPartition)
+        );
+
+        let altered = admin
+            .alter_consumer_group_offsets(
+                "orders-group",
+                &[
+                    ConsumerGroupOffset::new("orders", 0, 42),
+                    ConsumerGroupOffset::new("orders", 2, 99).metadata("admin-reset"),
+                ],
+            )
+            .await
+            .unwrap();
+        assert!(altered.is_success());
+        assert_eq!(altered.group_id(), "orders-group");
+        assert_eq!(altered.topics().len(), 1);
+        assert_eq!(altered.topics()[0].partitions().len(), 2);
+        assert_eq!(altered.topics()[0].partitions()[1].partition_index(), 2);
         assert_eq!(metrics.snapshot().broker_errors, 1);
         server.await.unwrap();
     }
@@ -6923,6 +7450,35 @@ mod tests {
             0, 0, // success
             0, 0, 0, 2, // partition 2
             0, 86, // group subscribed to topic
+        ]
+    }
+
+    fn offset_fetch_response() -> Vec<u8> {
+        vec![
+            0, 0, 0, 1, // correlation ID
+            0, 0, 0, 1, // topic count
+            0, 6, b'o', b'r', b'd', b'e', b'r', b's', // topic name
+            0, 0, 0, 2, // partition count
+            0, 0, 0, 0, // partition 0
+            0, 0, 0, 0, 0, 0, 0, 42, // committed offset
+            0xff, 0xff, // null metadata
+            0, 0, // success
+            0, 0, 0, 2, // partition 2
+            0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, // no offset
+            0xff, 0xff, // null metadata
+            0, 3, // unknown topic or partition
+            0, 0, // top-level success
+        ]
+    }
+
+    fn offset_commit_response() -> Vec<u8> {
+        vec![
+            0, 0, 0, 1, // correlation ID
+            0, 0, 0, 1, // topic count
+            0, 6, b'o', b'r', b'd', b'e', b'r', b's', // topic name
+            0, 0, 0, 2, // partition count
+            0, 0, 0, 0, 0, 0, // partition 0, success
+            0, 0, 0, 2, 0, 0, // partition 2, success
         ]
     }
 }

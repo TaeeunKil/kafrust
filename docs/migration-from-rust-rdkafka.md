@@ -263,6 +263,7 @@ kafrust currently provides:
 - consumer group description
 - consumer group listing and deletion
 - selected consumer group offset deletion
+- consumer group committed offset listing and administrative alteration
 - record deletion before partition offsets with leader-routed DeleteRecords
 - active producer sequence inspection with leader-routed DescribeProducers
 - transactional ID state inspection with coordinator-routed DescribeTransactions
@@ -285,6 +286,14 @@ against Kafka 3.7.2 StandardAuthorizer in `Live Kafka Smoke` run
 actual broker permissions and quota policy.
 
 See [Admin API](admin-api.md) for typed request and response examples.
+
+For the rust-rdkafka `AdminClient::fetch_offsets` and
+`AdminClient::alter_consumer_group_offsets` workflows, use
+`list_consumer_group_offsets` and `alter_consumer_group_offsets`. The kafrust
+methods preserve per-topic and per-partition outcomes and use classic
+OffsetFetch v2 and OffsetCommit v2 semantics. KIP-848 member-aware offset
+operations are intentionally documented separately from these administrative
+classic-group methods.
 
 ## Capability Gate
 

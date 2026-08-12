@@ -283,6 +283,11 @@ jobs:
       - name: Run admin describe group example
         run: cargo run -p kafrust --example admin_describe_group
 
+      - name: Run admin consumer group offsets example
+        env:
+          KAFRUST_ADMIN_OFFSET: "0"
+        run: cargo run -p kafrust --example admin_consumer_group_offsets
+
       - name: Run admin delete group offsets example
         run: cargo run -p kafrust --example admin_delete_group_offsets
 

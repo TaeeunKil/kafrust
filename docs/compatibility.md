@@ -78,6 +78,7 @@ positions; it does not claim exactly-once processing semantics.
 | Apache Kafka 3.7.2 | three-broker KRaft; PLAINTEXT and SASL_SSL SCRAM failover profiles | DescribeProducers v0 leader routing; DescribeTransactions v0 coordinator routing | [`Live Kafka Smoke`, run `31589394777`](https://github.com/TaeeunKil/kafrust/actions/runs/31589394777) on 2026-08-12 | Passing |
 | Apache Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1 | single-node KRaft | Produce `acks=0` immediate and batch dispatch | `Live Kafka Smoke`, manual run `31464933145` on 2026-08-11 | Passing; broker acceptance is intentionally unconfirmed |
 | Apache Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1; Kafka 4.3.1 KIP-848 | single-node KRaft | opt-in automatic consumer-group commit and restored positions | [`Live Kafka Smoke`, run `31593984640`](https://github.com/TaeeunKil/kafrust/actions/runs/31593984640) on 2026-08-12 | Passing; at-least-once tradeoff |
+| Apache Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1 | single-node KRaft | classic consumer-group offset listing and administrative alteration | Pending live smoke qualification | Candidate |
 
 ## Verified Paths
 
@@ -141,6 +142,9 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
   on Kafka 3.7.2 and 4.3.1 plaintext brokers, TLS, SASL_PLAINTEXT, SASL_SSL,
   and the three-broker profile. The three-broker job then passed its existing
   broker-stop failover sequence.
+- Coordinator-routed OffsetFetch v2 listing and OffsetCommit v2 administrative
+  alteration preserve group, topic, and partition outcomes. Byte-level and
+  injected-coordinator tests pass; live broker qualification remains pending.
 - Broker-wide ListGroups v1 and coordinator-routed DeleteGroups v1 are covered
   by manual run `30065771327` on Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1
   plaintext brokers plus TLS, SASL_PLAINTEXT, SASL_SSL, and the three-broker

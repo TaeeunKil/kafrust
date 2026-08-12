@@ -847,6 +847,7 @@ Scope:
 - describe consumer groups
 - list and delete groups
 - delete consumer group offsets evaluation
+- list and alter committed consumer group offsets
 - admin examples and typed request errors
 
 Exit criteria:
@@ -885,6 +886,12 @@ Implemented evidence:
 - OffsetDelete v0 routes to the group's coordinator and preserves its
   top-level group error plus every per-partition result. Typed classifications
   cover missing groups and active topic subscriptions.
+- OffsetFetch v2 and OffsetCommit v2 expose typed classic consumer-group offset
+  listing and administrative alteration. Queries can target selected
+  topic-partitions or all topics, offset updates are grouped by topic, and
+  top-level plus per-partition errors remain observable. Focused wire and
+  coordinator-routing tests pass; the live smoke qualification is tracked as
+  a separate release gate.
 - DescribeAcls v1, CreateAcls v1, and DeleteAcls v1 expose typed ACL bindings
   and filters through `AdminClient`, preserving top-level, per-entry,
   per-filter, and matching-ACL outcomes. Wire and mock-broker tests cover the

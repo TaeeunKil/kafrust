@@ -239,6 +239,54 @@ topic from its subscription before deleting committed offsets. A member can
 remain visible until its broker-side session timeout expires after an
 unclean process exit.
 
+## List And Alter Consumer Group Offsets
+
+```rust
+use kafrust::{
+    AdminClient, ClientConfig, ConsumerGroupOffset, ConsumerGroupOffsetQuery,
+};
+
+# async fn example() -> kafrust::Result<()> {
+let admin = AdminClient::new(ClientConfig::new(["localhost:9092"]));
+let query = [ConsumerGroupOffsetQuery::new("orders", [0, 1])];
+let before = admin
+    .list_consumer_group_offsets("orders-service", Some(&query))
+    .await?;
+
+for topic in before.topics() {
+    for partition in topic.partitions() {
+        println!(
+            "{}-{} offset={} metadata={:?} error={}",
+            topic.topic(),
+            partition.partition_index(),
+            partition.committed_offset(),
+            partition.metadata(),
+            partition.error_code(),
+        );
+    }
+}
+
+let altered = admin
+    .alter_consumer_group_offsets(
+        "orders-service",
+        &[ConsumerGroupOffset::new("orders", 0, 42).metadata("operator-reset")],
+    )
+    .await?;
+assert!(altered.is_success());
+# Ok(())
+# }
+```
+
+`list_consumer_group_offsets` routes OffsetFetch v2 to the group's active
+coordinator. `Some` requests selected topic partitions; `None` requests all
+topics known to the group. `alter_consumer_group_offsets` routes an
+administrative OffsetCommit v2 using generation `-1`, an empty member ID, and
+no retention override. Both APIs preserve top-level and partition-level Kafka
+errors instead of collapsing partial results. These admin methods use classic
+consumer-group offset semantics; member-aware KIP-848 offset operations remain
+part of the joined `ConsumerGroup` workflow and have separate compatibility
+qualification.
+
 ## Delete Records
 
 ```rust
