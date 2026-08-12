@@ -1563,3 +1563,9 @@ Implemented evidence:
   [`31569709189`](https://github.com/TaeeunKil/kafrust/actions/runs/31569709189),
   [`31570924845`](https://github.com/TaeeunKil/kafrust/actions/runs/31570924845),
   while the broader KIP-848 fault matrix remains open.
+- The complete 17-job `Live Kafka Smoke` matrix passed on `main` after the
+  transaction outcome-safety change in
+  [`31576212276`](https://github.com/TaeeunKil/kafrust/actions/runs/31576212276).
+  This rerun covered the supported Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1
+  profiles, TLS, SASL/PLAIN, SASL/SCRAM, the test-only OAUTHBEARER validator,
+  ACL administration, secured multi-broker failover, and KIP-848 recovery.
