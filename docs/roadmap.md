@@ -224,6 +224,8 @@ Known limits:
   delivery through `ConsumerPartitionQueue`. Focused tests cover independent
   routing, queue-full backpressure, and preservation of the first rejected
   offset; assignment replacement closes queues for partitions no longer owned.
+  Direct and group live examples passed across Kafka 3.7.2, 3.8.1, 3.9.1, and
+  4.3.1 in [`Live Kafka Smoke`, run `31566523106`](https://github.com/TaeeunKil/kafrust/actions/runs/31566523106).
 - `ConsumerGroup::rejoin` is public and refreshes regex topic discovery before
   joining again. The classic matrix and Kafka 4.3.1 KIP-848 regex paths passed
   initial and explicit rejoin assignment checks in [`Live Kafka Smoke`, run

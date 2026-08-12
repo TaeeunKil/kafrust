@@ -225,8 +225,10 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
   [`Live Kafka Smoke`, run `31563953123`](https://github.com/TaeeunKil/kafrust/actions/runs/31563953123).
   Direct and group consumers now also expose bounded partition queues through
   `split_partition_queue`; focused tests cover routing, queue backpressure,
-  and position preservation. Secured topic-discovery permission behavior
-  remains open compatibility work.
+  and position preservation. The direct and group queue examples passed across
+  Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 in
+  [`Live Kafka Smoke`, run `31566523106`](https://github.com/TaeeunKil/kafrust/actions/runs/31566523106).
+  Secured topic-discovery permission behavior remains open compatibility work.
 - KIP-848 consumer groups through `ConsumerGroupHeartbeat v0`, Metadata v12
   topic UUID assignment, member-epoch foreground/background heartbeats,
   OffsetFetch v9, OffsetCommit v9, rejoin after concurrent membership, and
