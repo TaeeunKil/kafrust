@@ -238,6 +238,12 @@ Current implementation status:
   determine the old transaction's outcome. An injected `EndTxn` regression
   covers `INVALID_PRODUCER_EPOCH` and confirms that later transaction commands
   keep returning the fatal code.
+- `Producer::transaction_status()` exposes `Ready`, `InTransaction`, and
+  `Defunct` so applications can distinguish a completed transaction from a
+  producer that must be discarded. `None` indicates a non-transactional
+  producer. A `Defunct` status reached during an active transaction leaves the
+  old transaction outcome unknown; it does not mean that the transaction
+  committed or aborted.
 - `ProducerConfig::transactional_id` enables idempotence and initializes the
   producer through the Kafka transaction coordinator. `begin_transaction`,
   `commit_transaction`, and `abort_transaction` expose the transaction

@@ -65,7 +65,7 @@ pub use metrics::{ClientMetrics, ClientMetricsSnapshot};
 pub use producer::{
     Acks, BufferedProducer, Compression, Header, Partitioner, ProducerBatchFailure,
     ProducerBatchRecordOutcome, ProducerBatchReport, ProducerConfig, ProducerDelivery,
-    ProducerRecord, RecordMetadata,
+    ProducerRecord, RecordMetadata, TransactionStatus,
 };
 
 /// Returns the crate version compiled into this build.

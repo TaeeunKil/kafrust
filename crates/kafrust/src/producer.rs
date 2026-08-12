@@ -421,8 +421,11 @@ struct TransactionState {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum TransactionStatus {
+/// Observable lifecycle state of a transactional producer.
+pub enum TransactionStatus {
+    /// The producer is ready to begin a transaction.
     Ready,
+    /// A transaction is currently active.
     InTransaction,
     /// The producer was fenced or otherwise made unusable by a fatal broker error.
     Defunct,
@@ -1612,6 +1615,16 @@ impl Producer {
         self.transaction_state
             .as_ref()
             .is_some_and(|state| state.status == TransactionStatus::InTransaction)
+    }
+
+    /// Returns the transactional producer lifecycle state.
+    ///
+    /// `None` means this producer is non-transactional. `Defunct` means the
+    /// producer must be discarded; if it was reached from an active
+    /// transaction, Kafka does not expose whether that transaction committed
+    /// or aborted successfully.
+    pub fn transaction_status(&self) -> Option<TransactionStatus> {
+        self.transaction_state.as_ref().map(|state| state.status)
     }
 
     /// Sends one record and returns Kafka delivery metadata.
@@ -4830,8 +4843,16 @@ mod tests {
             .unwrap();
 
         assert!(!producer.in_transaction());
+        assert_eq!(
+            producer.transaction_status(),
+            Some(TransactionStatus::Ready)
+        );
         producer.begin_transaction().unwrap();
         assert!(producer.in_transaction());
+        assert_eq!(
+            producer.transaction_status(),
+            Some(TransactionStatus::InTransaction)
+        );
         assert!(matches!(
             producer.begin_transaction().unwrap_err(),
             Error::Unsupported("transaction is already active")
@@ -4957,6 +4978,10 @@ mod tests {
             Err(Error::Broker { code: 47, .. })
         ));
         assert!(!producer.in_transaction());
+        assert_eq!(
+            producer.transaction_status(),
+            Some(TransactionStatus::Defunct)
+        );
         assert!(matches!(
             producer.begin_transaction(),
             Err(Error::Broker { code: 47, .. })
