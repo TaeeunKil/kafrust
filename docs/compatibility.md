@@ -167,6 +167,8 @@ DescribeTransactions, DescribeGroups, OffsetFetch, exact-offset OffsetCommit,
 DescribeConfigs, and ListGroups also have live broker-stop injection coverage
 in the three-broker profile in
 [`31616181960`](https://github.com/TaeeunKil/kafrust/actions/runs/31616181960);
+the initial ListGroups Metadata discovery additionally retries a dropped
+bootstrap response before broker enumeration.
 other coordinator-routed writes remain separate qualification items.
 
 | Broker | Mode | Security | Verification | Status |

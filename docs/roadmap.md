@@ -929,6 +929,9 @@ Implemented evidence:
   1 after the request gate opens, restarts it while the bounded reconnect loop
   is active, and records `retries=7` before completing the full group listing
   in [`31616181960`](https://github.com/TaeeunKil/kafrust/actions/runs/31616181960).
+  The initial ListGroups Metadata discovery now shares the same bounded retry
+  path as `describe_cluster` and `list_topics`, with focused coverage for a
+  dropped bootstrap response before broker enumeration.
   The same three-broker profile now gates Metadata v1 before transmission,
   stops broker 1, and verifies `retries=1` for both `describe_cluster` and
   `list_topics` after bootstrap failover in

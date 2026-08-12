@@ -811,8 +811,7 @@ impl AdminClient {
     /// the groups it owns. Results are sorted by group ID and deduplicated.
     #[tracing::instrument(level = "debug", name = "kafka.admin.list_groups", skip_all, err)]
     pub async fn list_groups(&self) -> Result<Vec<GroupListing>> {
-        let mut bootstrap = self.config.clone().connect().await?;
-        let metadata = bootstrap.metadata(Some(Vec::new())).await?;
+        let metadata = self.metadata_with_admin_retries(Some(Vec::new())).await?;
         let mut groups = BTreeMap::new();
 
         for broker in metadata.brokers {
@@ -7971,6 +7970,41 @@ mod tests {
             let list_request = read_frame(&mut second).await;
             assert_eq!(&list_request[0..4], &[0, 16, 0, 1]);
             write_frame(&mut second, &list_groups_response()).await;
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        );
+
+        let groups = admin.list_groups().await.unwrap();
+
+        assert_eq!(groups.len(), 2);
+        assert_eq!(groups[0].group_id(), "connect-cluster");
+        assert_eq!(metrics.snapshot().retries, 1);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn retries_list_groups_after_metadata_disconnect() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut first_bootstrap, _) = listener.accept().await.unwrap();
+            let metadata_request = read_frame(&mut first_bootstrap).await;
+            assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+            drop(first_bootstrap);
+
+            let (mut second_bootstrap, _) = listener.accept().await.unwrap();
+            let metadata_request = read_frame(&mut second_bootstrap).await;
+            assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+            write_frame(&mut second_bootstrap, &metadata_response(addr.port())).await;
+
+            let (mut broker, _) = listener.accept().await.unwrap();
+            let list_request = read_frame(&mut broker).await;
+            assert_eq!(&list_request[0..4], &[0, 16, 0, 1]);
+            write_frame(&mut broker, &list_groups_response()).await;
         });
         let metrics = ClientMetrics::new();
         let admin = AdminClient::new(
