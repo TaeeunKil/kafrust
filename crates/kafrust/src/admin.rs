@@ -70,7 +70,8 @@ use crate::scram::{derive_salted_password, ScramHash};
 use rand::RngCore;
 
 const ADMIN_COORDINATOR_MAX_RETRIES: u32 = 5;
-const ADMIN_COORDINATOR_RETRY_BACKOFF: Duration = Duration::from_millis(50);
+const ADMIN_COORDINATOR_RETRY_BACKOFF_BASE: Duration = Duration::from_millis(50);
+const ADMIN_COORDINATOR_MAX_RETRY_BACKOFF: Duration = Duration::from_millis(800);
 
 /// Kafka administration client.
 ///
@@ -738,7 +739,7 @@ impl AdminClient {
                     self.config.record_broker_error();
                     retry += 1;
                     self.config.record_retry();
-                    tokio::time::sleep(ADMIN_COORDINATOR_RETRY_BACKOFF).await;
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
                 }
                 Ok(response) => break response,
                 Err(error)
@@ -747,7 +748,7 @@ impl AdminClient {
                 {
                     retry += 1;
                     self.config.record_retry();
-                    tokio::time::sleep(ADMIN_COORDINATOR_RETRY_BACKOFF).await;
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
                 }
                 Err(error) => return Err(error),
             }
@@ -826,7 +827,7 @@ impl AdminClient {
                         }
                         retry += 1;
                         self.config.record_retry();
-                        tokio::time::sleep(ADMIN_COORDINATOR_RETRY_BACKOFF).await;
+                        tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
                     } else {
                         break response;
                     }
@@ -837,7 +838,7 @@ impl AdminClient {
                 {
                     retry += 1;
                     self.config.record_retry();
-                    tokio::time::sleep(ADMIN_COORDINATOR_RETRY_BACKOFF).await;
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
                 }
                 Err(error) => return Err(error),
             }
@@ -868,7 +869,7 @@ impl AdminClient {
                 {
                     retry += 1;
                     self.config.record_retry();
-                    tokio::time::sleep(ADMIN_COORDINATOR_RETRY_BACKOFF).await;
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
                 }
                 Err(error) => return Err(error),
             }
@@ -4106,6 +4107,14 @@ fn is_retryable_admin_coordinator_code(code: i16) -> bool {
     )
 }
 
+fn admin_coordinator_retry_backoff(retry_attempt: u32) -> Duration {
+    let exponent = retry_attempt.saturating_sub(1).min(4);
+    let multiplier = 1u64 << exponent;
+    let milliseconds =
+        (ADMIN_COORDINATOR_RETRY_BACKOFF_BASE.as_millis() as u64).saturating_mul(multiplier);
+    Duration::from_millis(milliseconds).min(ADMIN_COORDINATOR_MAX_RETRY_BACKOFF)
+}
+
 /// A topic and partition filter for consumer-group offset inspection.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConsumerGroupOffsetQuery {
@@ -5896,6 +5905,26 @@ mod tests {
     use std::time::Duration;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
+
+    #[test]
+    fn admin_coordinator_retry_backoff_is_bounded_and_exponential() {
+        assert_eq!(
+            super::admin_coordinator_retry_backoff(1),
+            Duration::from_millis(50)
+        );
+        assert_eq!(
+            super::admin_coordinator_retry_backoff(2),
+            Duration::from_millis(100)
+        );
+        assert_eq!(
+            super::admin_coordinator_retry_backoff(5),
+            Duration::from_millis(800)
+        );
+        assert_eq!(
+            super::admin_coordinator_retry_backoff(u32::MAX),
+            Duration::from_millis(800)
+        );
+    }
 
     #[test]
     fn builds_automatic_and_manual_topic_definitions() {

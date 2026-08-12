@@ -897,7 +897,7 @@ Implemented evidence:
   in [`31597505667`](https://github.com/TaeeunKil/kafrust/actions/runs/31597505667);
   coordinator-stop injection during the admin request remains open. Admin
   coordinator discovery also retries transient coordinator errors and discovery
-  transport failures with a bounded budget; the focused mock-broker regression
+  transport failures with bounded exponential backoff; the focused mock-broker regression
   test covers `CoordinatorLoadInProgress`, bootstrap reconnect, and the
   follow-up OffsetFetch request. The read-only admin `OffsetFetch v2` path also
   reconnects and retries after a coordinator disconnect, request timeout, or

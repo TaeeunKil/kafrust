@@ -65,7 +65,8 @@ coordinator stop during the admin request itself.
 
 Admin coordinator discovery now retries transient `CoordinatorLoadInProgress`,
 `CoordinatorNotAvailable`, and `NotCoordinator` responses, as well as discovery
-transport timeouts and I/O failures, with a bounded retry budget. The focused
+transport timeouts and I/O failures, with a bounded exponential retry budget
+from 50ms through 800ms. The focused
 mock-broker test `retries_group_coordinator_discovery_after_transient_error`
 verifies a failed `FindCoordinator v1`, bootstrap reconnect, successful
 rediscovery, and the subsequent `OffsetFetch v2` request. This is request
