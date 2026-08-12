@@ -58,6 +58,15 @@ the currently supported settings through typed builders.
 | `sasl.mechanism=OAUTHBEARER` | `.sasl_oauthbearer(token)`, `.sasl_oauthbearer_with_username(username, token)`, or the matching `*_provider` builder | Live verified against Kafka 3.7.2's built-in validator and a signed local OIDC/JWKS fixture, including Java client, static-token, and provider-backed paths in [`Live Kafka Smoke` OIDC job 31584760474`](https://github.com/TaeeunKil/kafrust/actions/runs/31584760474/job/94078116567). OAUTHBEARER uses flexible `SaslAuthenticate v2`; external provider-specific behavior remains open. |
 | statistics callback | `ClientMetrics::snapshot()` | kafrust exposes counters/gauges and tracing, not librdkafka statistics JSON. |
 
+Configuration is validated before kafrust opens a broker connection. Invalid
+timeouts, response or decode limits, fetch limits, empty group subscriptions,
+zero commit or heartbeat intervals, and invalid transaction settings return the typed
+`Error::InvalidConfiguration { field, reason }` variant. An empty bootstrap
+server list remains `Error::MissingBootstrapServer`; a blank address inside a
+non-empty list is a configuration error. This is intentionally different from
+retryable broker or transport failures and should be handled as a startup
+configuration failure in an adapter.
+
 Do not silently discard an old configuration map. Classify every key as
 mapped, intentionally removed, or blocking the migration.
 

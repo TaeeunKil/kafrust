@@ -1538,6 +1538,9 @@ fn delivery_error_from_request_error(error: &Error) -> Error {
             reason: reason.clone(),
         },
         Error::InvalidScramCredential { reason } => Error::InvalidScramCredential { reason },
+        Error::InvalidConfiguration { field, reason } => {
+            Error::InvalidConfiguration { field, reason }
+        }
         Error::Unsupported(feature) => Error::Unsupported(feature),
         Error::Io(error) => Error::Io(std::io::Error::new(error.kind(), error.to_string())),
         Error::TaskJoin(_) => Error::Unsupported("buffered producer task join failed"),
@@ -3701,18 +3704,23 @@ impl ProducerConfig {
 
     /// Connects to Kafka and builds a producer.
     pub async fn build(self) -> Result<Producer> {
+        self.client.validate()?;
         if self.idempotence && (self.acks != Acks::All || self.max_retries == 0) {
             return Err(Error::Unsupported(
                 "idempotence requires acks=all and at least one retry",
             ));
         }
         if self.transactional_id.as_deref() == Some("") {
-            return Err(Error::Unsupported("transactional ID must not be empty"));
+            return Err(Error::InvalidConfiguration {
+                field: "transactional_id",
+                reason: "must not be empty",
+            });
         }
         if self.transaction_timeout_ms <= 0 {
-            return Err(Error::Unsupported(
-                "transaction timeout must be greater than zero",
-            ));
+            return Err(Error::InvalidConfiguration {
+                field: "transaction_timeout_ms",
+                reason: "must be greater than zero",
+            });
         }
         let mut client = self.client.clone().connect().await?;
         let idempotent_state = if self.idempotence {
@@ -4633,6 +4641,7 @@ fn can_retry_send(error: &Error) -> bool {
         | Error::InvalidGroupInstanceId
         | Error::InvalidTopicPattern { .. }
         | Error::InvalidScramCredential { .. }
+        | Error::InvalidConfiguration { .. }
         | Error::Unsupported(_)
         | Error::TaskJoin(_)
         | Error::Protocol(_) => false,
@@ -4702,6 +4711,49 @@ mod tests {
         assert_eq!(Acks::None.as_i16(), 0);
         assert_eq!(Acks::Leader.as_i16(), 1);
         assert_eq!(Acks::All.as_i16(), -1);
+    }
+
+    #[tokio::test]
+    async fn rejects_invalid_transaction_configuration_before_connecting() {
+        let empty_id = ProducerConfig::new(["127.0.0.1:1"])
+            .transactional_id("")
+            .build()
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            empty_id,
+            Error::InvalidConfiguration {
+                field: "transactional_id",
+                ..
+            }
+        ));
+
+        let invalid_timeout = ProducerConfig::new(["127.0.0.1:1"])
+            .transactional_id("orders-producer")
+            .transaction_timeout_ms(0)
+            .build()
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            invalid_timeout,
+            Error::InvalidConfiguration {
+                field: "transaction_timeout_ms",
+                ..
+            }
+        ));
+
+        let invalid_client = ProducerConfig::new(["127.0.0.1:1"])
+            .request_timeout_ms(0)
+            .build()
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            invalid_client,
+            Error::InvalidConfiguration {
+                field: "request_timeout_ms",
+                ..
+            }
+        ));
     }
 
     #[test]

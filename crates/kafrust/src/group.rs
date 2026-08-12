@@ -662,6 +662,8 @@ impl ConsumerGroupConfig {
         err
     )]
     pub async fn join(self) -> Result<ConsumerGroup> {
+        self.client.validate()?;
+        self.validate()?;
         if self.auto_commit {
             validate_commit_worker_interval(self.auto_commit_interval)?;
         }
@@ -913,6 +915,79 @@ impl ConsumerGroupConfig {
             group.notify_rebalance(RebalancePhase::After, group.consumer.assignments());
             return Ok(group);
         }
+    }
+
+    fn validate(&self) -> Result<()> {
+        if self.group_id.trim().is_empty() {
+            return Err(Error::InvalidConfiguration {
+                field: "group_id",
+                reason: "must not be empty",
+            });
+        }
+        if self.topics.iter().any(|topic| topic.trim().is_empty()) {
+            return Err(Error::InvalidConfiguration {
+                field: "topics",
+                reason: "entries must not be empty",
+            });
+        }
+        if let Some(pattern) = self.topic_pattern.as_deref() {
+            if pattern.is_empty() {
+                return Err(Error::InvalidConfiguration {
+                    field: "topic_pattern",
+                    reason: "must not be empty",
+                });
+            }
+            Regex::new(pattern).map_err(|error| Error::InvalidTopicPattern {
+                pattern: pattern.to_owned(),
+                reason: error.to_string(),
+            })?;
+        }
+        if !self.has_subscription() {
+            return Err(Error::InvalidConfiguration {
+                field: "subscription",
+                reason: "at least one topic or topic pattern is required",
+            });
+        }
+        if self.group_instance_id.as_deref() == Some("") {
+            return Err(Error::InvalidGroupInstanceId);
+        }
+        if self.session_timeout_ms <= 0 {
+            return Err(Error::InvalidConfiguration {
+                field: "session_timeout_ms",
+                reason: "must be greater than zero",
+            });
+        }
+        if self.rebalance_timeout_ms <= 0 {
+            return Err(Error::InvalidConfiguration {
+                field: "rebalance_timeout_ms",
+                reason: "must be greater than zero",
+            });
+        }
+        if self.max_wait_ms < 0 {
+            return Err(Error::InvalidConfiguration {
+                field: "max_wait_ms",
+                reason: "must not be negative",
+            });
+        }
+        if self.min_bytes < 0 {
+            return Err(Error::InvalidConfiguration {
+                field: "min_bytes",
+                reason: "must not be negative",
+            });
+        }
+        if self.max_partition_bytes <= 0 {
+            return Err(Error::InvalidConfiguration {
+                field: "max_partition_bytes",
+                reason: "must be greater than zero",
+            });
+        }
+        if self.max_poll_records == 0 {
+            return Err(Error::InvalidConfiguration {
+                field: "max_poll_records",
+                reason: "must be greater than zero",
+            });
+        }
+        Ok(())
     }
 
     async fn join_consumer(
@@ -3674,18 +3749,20 @@ async fn should_rejoin_after_background_heartbeat(
 
 fn validate_heartbeat_interval(interval: Duration) -> Result<()> {
     if interval.is_zero() {
-        return Err(Error::Unsupported(
-            "heartbeat interval must be greater than zero",
-        ));
+        return Err(Error::InvalidConfiguration {
+            field: "heartbeat_interval",
+            reason: "must be greater than zero",
+        });
     }
     Ok(())
 }
 
 fn validate_commit_worker_interval(interval: Duration) -> Result<()> {
     if interval.is_zero() {
-        return Err(Error::Unsupported(
-            "commit worker interval must be greater than zero",
-        ));
+        return Err(Error::InvalidConfiguration {
+            field: "auto_commit_interval_ms",
+            reason: "must be greater than zero",
+        });
     }
     Ok(())
 }
@@ -4297,6 +4374,55 @@ mod tests {
         assert!(matches!(error, Some(Error::InvalidTopicPattern { .. })));
     }
 
+    #[tokio::test]
+    async fn rejects_invalid_group_configuration_before_connecting() {
+        let cases = [
+            (
+                ConsumerGroupConfig::new(["127.0.0.1:1"], "")
+                    .subscribe("orders")
+                    .join()
+                    .await
+                    .unwrap_err(),
+                "group_id",
+            ),
+            (
+                ConsumerGroupConfig::new(["127.0.0.1:1"], "orders-group")
+                    .join()
+                    .await
+                    .unwrap_err(),
+                "subscription",
+            ),
+            (
+                ConsumerGroupConfig::new(["127.0.0.1:1"], "orders-group")
+                    .subscribe("orders")
+                    .session_timeout_ms(0)
+                    .join()
+                    .await
+                    .unwrap_err(),
+                "session_timeout_ms",
+            ),
+            (
+                ConsumerGroupConfig::new(["127.0.0.1:1"], "orders-group")
+                    .subscribe("orders")
+                    .max_poll_records(0)
+                    .join()
+                    .await
+                    .unwrap_err(),
+                "max_poll_records",
+            ),
+        ];
+
+        for (error, field) in cases {
+            assert!(matches!(
+                error,
+                Error::InvalidConfiguration {
+                    field: actual,
+                    ..
+                } if actual == field
+            ));
+        }
+    }
+
     #[test]
     fn resolves_regex_topics_from_metadata_in_sorted_order() {
         let mut inaccessible = topic_metadata("orders-3", &[0]);
@@ -4443,9 +4569,10 @@ mod tests {
     fn rejects_zero_commit_worker_interval() {
         assert!(matches!(
             validate_commit_worker_interval(Duration::ZERO),
-            Err(Error::Unsupported(
-                "commit worker interval must be greater than zero"
-            ))
+            Err(Error::InvalidConfiguration {
+                field: "auto_commit_interval_ms",
+                reason: "must be greater than zero"
+            })
         ));
         assert!(validate_commit_worker_interval(Duration::from_millis(1)).is_ok());
     }
@@ -4535,7 +4662,10 @@ mod tests {
 
         assert!(matches!(
             error,
-            Error::Unsupported("commit worker interval must be greater than zero")
+            Error::InvalidConfiguration {
+                field: "auto_commit_interval_ms",
+                reason: "must be greater than zero"
+            }
         ));
     }
 
@@ -5059,7 +5189,10 @@ mod tests {
     fn rejects_zero_background_heartbeat_interval() {
         assert!(matches!(
             validate_heartbeat_interval(std::time::Duration::ZERO).unwrap_err(),
-            Error::Unsupported("heartbeat interval must be greater than zero")
+            Error::InvalidConfiguration {
+                field: "heartbeat_interval",
+                reason: "must be greater than zero"
+            }
         ));
         validate_heartbeat_interval(std::time::Duration::from_millis(1)).unwrap();
     }

@@ -531,6 +531,7 @@ impl ClientConfig {
         if self.bootstrap_servers.is_empty() {
             return Err(Error::MissingBootstrapServer);
         }
+        self.validate()?;
 
         let mut last_error = None;
         for server in &self.bootstrap_servers {
@@ -541,6 +542,44 @@ impl ClientConfig {
         }
 
         Err(last_error.unwrap_or(Error::MissingBootstrapServer))
+    }
+
+    pub(crate) fn validate(&self) -> Result<()> {
+        if self
+            .bootstrap_servers
+            .iter()
+            .any(|server| server.trim().is_empty())
+        {
+            return Err(Error::InvalidConfiguration {
+                field: "bootstrap_servers",
+                reason: "entries must not be empty",
+            });
+        }
+        if self.request_timeout.is_zero() {
+            return Err(Error::InvalidConfiguration {
+                field: "request_timeout_ms",
+                reason: "must be greater than zero",
+            });
+        }
+        if self.max_response_bytes == 0 {
+            return Err(Error::InvalidConfiguration {
+                field: "max_response_bytes",
+                reason: "must be greater than zero",
+            });
+        }
+        if self.decode_limits.max_array_elements() == 0 {
+            return Err(Error::InvalidConfiguration {
+                field: "max_decode_array_elements",
+                reason: "must be greater than zero",
+            });
+        }
+        if self.decode_limits.max_decompressed_record_bytes() == 0 {
+            return Err(Error::InvalidConfiguration {
+                field: "max_decompressed_record_bytes",
+                reason: "must be greater than zero",
+            });
+        }
+        Ok(())
     }
 
     pub(crate) async fn connect_broker(&self, server: String) -> Result<Client> {
@@ -926,6 +965,47 @@ mod tests {
             4 * 1024 * 1024
         );
         assert_eq!(config.security_protocol_ref(), SecurityProtocol::Plaintext);
+    }
+
+    #[test]
+    fn rejects_invalid_connection_limits_before_network_access() {
+        let cases = [
+            (ClientConfig::new([""]).validate(), "bootstrap_servers"),
+            (
+                ClientConfig::new(["localhost:9092"])
+                    .request_timeout_ms(0)
+                    .validate(),
+                "request_timeout_ms",
+            ),
+            (
+                ClientConfig::new(["localhost:9092"])
+                    .max_response_bytes(0)
+                    .validate(),
+                "max_response_bytes",
+            ),
+            (
+                ClientConfig::new(["localhost:9092"])
+                    .max_decode_array_elements(0)
+                    .validate(),
+                "max_decode_array_elements",
+            ),
+            (
+                ClientConfig::new(["localhost:9092"])
+                    .max_decompressed_record_bytes(0)
+                    .validate(),
+                "max_decompressed_record_bytes",
+            ),
+        ];
+
+        for (result, field) in cases {
+            assert!(matches!(
+                result,
+                Err(Error::InvalidConfiguration {
+                    field: actual,
+                    ..
+                }) if actual == field
+            ));
+        }
     }
 
     #[test]

@@ -451,6 +451,18 @@ The limit applies independently to each broker request. It must be large enough
 for metadata, fetch, and other expected responses; setting it below a valid
 response size fails that operation instead of partially decoding it.
 
+## Configuration Validation
+
+High-level builders validate configuration before opening a broker connection.
+Invalid timeouts, response or decode limits, negative fetch values, zero poll
+limits, fetch bounds, poll limits, group IDs or subscriptions, zero commit or
+heartbeat intervals, and invalid transaction settings return
+`Error::InvalidConfiguration { field, reason }`. Empty bootstrap lists retain
+the dedicated `Error::MissingBootstrapServer` variant, while blank bootstrap
+entries are reported as invalid configuration. This makes startup failures
+deterministic and avoids turning local configuration mistakes into network
+retries.
+
 ## Compatibility
 
 The `0.2.x` alpha line is verified against single-node Apache Kafka `3.7.2`,

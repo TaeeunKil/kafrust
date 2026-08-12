@@ -263,6 +263,13 @@ pub enum Error {
         /// Redacted validation failure reason.
         reason: &'static str,
     },
+    /// A public builder received a value outside the client's supported range.
+    InvalidConfiguration {
+        /// Configuration field that failed validation.
+        field: &'static str,
+        /// Stable, non-secret explanation of the validation failure.
+        reason: &'static str,
+    },
     /// The requested Kafka feature is not implemented by this alpha API yet.
     Unsupported(&'static str),
     /// I/O failure while connecting to or communicating with a broker.
@@ -368,6 +375,9 @@ impl fmt::Display for Error {
             Self::InvalidScramCredential { reason } => {
                 write!(f, "invalid SCRAM credential: {reason}")
             }
+            Self::InvalidConfiguration { field, reason } => {
+                write!(f, "invalid Kafka configuration field {field}: {reason}")
+            }
             Self::Unsupported(feature) => write!(f, "unsupported feature: {feature}"),
             Self::Io(error) => write!(f, "I/O error: {error}"),
             Self::TaskJoin(error) => write!(f, "background task join error: {error}"),
@@ -405,6 +415,7 @@ impl std::error::Error for Error {
             | Self::InvalidGroupInstanceId
             | Self::InvalidTopicPattern { .. }
             | Self::InvalidScramCredential { .. }
+            | Self::InvalidConfiguration { .. }
             | Self::Unsupported(_) => None,
         }
     }

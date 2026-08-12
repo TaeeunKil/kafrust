@@ -1150,6 +1150,8 @@ impl ConsumerConfig {
 
     /// Connects to Kafka and builds a direct consumer.
     pub async fn build(self) -> Result<Consumer> {
+        self.client.validate()?;
+        self.validate()?;
         let client = self.client.clone().connect().await?;
         Ok(Consumer {
             client,
@@ -1160,6 +1162,34 @@ impl ConsumerConfig {
             broker_clients: BTreeMap::new(),
             preferred_read_replicas: BTreeMap::new(),
         })
+    }
+
+    fn validate(&self) -> Result<()> {
+        if self.max_wait_ms < 0 {
+            return Err(Error::InvalidConfiguration {
+                field: "max_wait_ms",
+                reason: "must not be negative",
+            });
+        }
+        if self.min_bytes < 0 {
+            return Err(Error::InvalidConfiguration {
+                field: "min_bytes",
+                reason: "must not be negative",
+            });
+        }
+        if self.max_partition_bytes <= 0 {
+            return Err(Error::InvalidConfiguration {
+                field: "max_partition_bytes",
+                reason: "must be greater than zero",
+            });
+        }
+        if self.max_poll_records == 0 {
+            return Err(Error::InvalidConfiguration {
+                field: "max_poll_records",
+                reason: "must be greater than zero",
+            });
+        }
+        Ok(())
     }
 }
 
@@ -1358,6 +1388,7 @@ fn can_retry_fetch(error: &Error) -> bool {
         | Error::InvalidGroupInstanceId
         | Error::InvalidTopicPattern { .. }
         | Error::InvalidScramCredential { .. }
+        | Error::InvalidConfiguration { .. }
         | Error::Unsupported(_)
         | Error::TaskJoin(_)
         | Error::Protocol(_) => false,
@@ -1457,6 +1488,54 @@ mod tests {
                 .partition_queue_capacity_ref(),
             1
         );
+    }
+
+    #[tokio::test]
+    async fn rejects_invalid_fetch_configuration_before_connecting() {
+        let cases = [
+            (
+                ConsumerConfig::new(["127.0.0.1:1"])
+                    .max_wait_ms(-1)
+                    .build()
+                    .await
+                    .unwrap_err(),
+                "max_wait_ms",
+            ),
+            (
+                ConsumerConfig::new(["127.0.0.1:1"])
+                    .min_bytes(-1)
+                    .build()
+                    .await
+                    .unwrap_err(),
+                "min_bytes",
+            ),
+            (
+                ConsumerConfig::new(["127.0.0.1:1"])
+                    .max_partition_bytes(0)
+                    .build()
+                    .await
+                    .unwrap_err(),
+                "max_partition_bytes",
+            ),
+            (
+                ConsumerConfig::new(["127.0.0.1:1"])
+                    .max_poll_records(0)
+                    .build()
+                    .await
+                    .unwrap_err(),
+                "max_poll_records",
+            ),
+        ];
+
+        for (error, field) in cases {
+            assert!(matches!(
+                error,
+                Error::InvalidConfiguration {
+                    field: actual,
+                    ..
+                } if actual == field
+            ));
+        }
     }
 
     #[tokio::test]

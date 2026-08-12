@@ -1823,3 +1823,10 @@ Implemented evidence:
   Kafka 3.8.1 and 3.9.1 selected v11, and Kafka 3.7.2 selected v9; all
   existing security, failover, Admin, compression, transaction, and KIP-848
   gates remained green.
+- High-level client builders now validate startup configuration before network
+  access. `Error::InvalidConfiguration { field, reason }` covers blank
+  bootstrap entries, zero request or decode limits, invalid direct-consumer
+  fetch bounds, empty group subscriptions and IDs, zero commit or heartbeat
+  intervals, and invalid transaction settings. Focused boundary tests prove
+  these failures do not open a broker connection; `MissingBootstrapServer`
+  remains the dedicated empty-list error.
