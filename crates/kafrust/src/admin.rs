@@ -658,11 +658,42 @@ impl AdminClient {
         let mut groups = BTreeMap::new();
 
         for broker in metadata.brokers {
-            let mut client = self
-                .config
-                .connect_broker(format!("{}:{}", broker.host, broker.port))
-                .await?;
-            let response = client.list_groups_v1().await?;
+            let endpoint = format!("{}:{}", broker.host, broker.port);
+            let mut retry = 0;
+            let response = loop {
+                let mut client = match self.config.connect_broker(endpoint.clone()).await {
+                    Ok(client) => client,
+                    Err(error)
+                        if retry < self.max_retries && is_retryable_admin_read_error(&error) =>
+                    {
+                        retry += 1;
+                        self.config.record_retry();
+                        tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                        continue;
+                    }
+                    Err(error) => return Err(error),
+                };
+                match client.list_groups_v1().await {
+                    Ok(response)
+                        if retry < self.max_retries
+                            && is_retryable_admin_read_code(response.error_code) =>
+                    {
+                        self.config.record_broker_error();
+                        retry += 1;
+                        self.config.record_retry();
+                        tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    }
+                    Ok(response) => break response,
+                    Err(error)
+                        if retry < self.max_retries && is_retryable_admin_read_error(&error) =>
+                    {
+                        retry += 1;
+                        self.config.record_retry();
+                        tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    }
+                    Err(error) => return Err(error),
+                }
+            };
             if response.error_code != 0 {
                 return Err(self.config.broker_error(
                     response.error_code,
@@ -7321,6 +7352,41 @@ mod tests {
         assert_eq!(groups[1].protocol_type(), "consumer");
         assert_eq!(groups[1].coordinator_id(), 1);
         assert_eq!(groups[1].throttle_time(), Duration::from_millis(7));
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn retries_list_groups_after_broker_disconnect() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let metadata_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+            write_frame(&mut bootstrap, &metadata_response(addr.port())).await;
+
+            let (mut first, _) = listener.accept().await.unwrap();
+            let list_request = read_frame(&mut first).await;
+            assert_eq!(&list_request[0..4], &[0, 16, 0, 1]);
+            drop(first);
+
+            let (mut second, _) = listener.accept().await.unwrap();
+            let list_request = read_frame(&mut second).await;
+            assert_eq!(&list_request[0..4], &[0, 16, 0, 1]);
+            write_frame(&mut second, &list_groups_response()).await;
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        );
+
+        let groups = admin.list_groups().await.unwrap();
+
+        assert_eq!(groups.len(), 2);
+        assert_eq!(groups[0].group_id(), "connect-cluster");
+        assert_eq!(metrics.snapshot().retries, 1);
         server.await.unwrap();
     }
 
