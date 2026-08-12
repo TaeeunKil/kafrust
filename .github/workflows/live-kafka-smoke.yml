@@ -1997,11 +1997,21 @@ jobs:
           docker stop kafrust-kafka-multi-1
           touch "$release_file"
 
+          failure_seen=""
+          for attempt in {1..100}; do
+            if grep -Eq "kafka request failed|Connection refused" "$request_log"; then
+              failure_seen=1
+              break
+            fi
+            sleep 0.1
+          done
+
+          docker start kafrust-kafka-multi-1
+
           list_groups_status=0
           wait "$list_groups_pid" || list_groups_status=$?
           cat "$request_log"
 
-          docker start kafrust-kafka-multi-1
           broker_ready=""
           for attempt in {1..120}; do
             if docker exec kafrust-kafka-multi-1 \
@@ -2014,7 +2024,7 @@ jobs:
             sleep 2
           done
 
-          if [ "$list_groups_status" -ne 0 ] || [ -z "$broker_ready" ] || \
+          if [ "$list_groups_status" -ne 0 ] || [ -z "$failure_seen" ] || [ -z "$broker_ready" ] || \
              ! grep -Eq "retries=[1-9][0-9]*" "$request_log"; then
             cat /tmp/kafrust-admin-list-groups-recovery.log || true
             docker logs kafrust-kafka-multi-1
