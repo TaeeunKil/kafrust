@@ -63,11 +63,14 @@ async fn main() -> kafrust::Result<()> {
     }
     first_group.leave().await?;
 
-    let second_group = config
+    let mut second_group = config
         .enable_auto_commit(false)
         .subscribe(topic)
         .join()
         .await?;
+    if second_group.group_protocol() == ConsumerGroupProtocol::Consumer {
+        second_group.heartbeat().await?;
+    }
     let observed_positions = second_group
         .assignments()
         .iter()
