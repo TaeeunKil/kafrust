@@ -416,11 +416,11 @@ Verified paths currently include:
 - The complete 17-job matrix also passed at commit `25d614a` in
   [`31627790408`](https://github.com/TaeeunKil/kafrust/actions/runs/31627790408)
   after the ACL authorizer example added bounded post-create visibility polling.
-- The latest complete 17-job matrix passed at commit `3536376` in
-  [`31645842282`](https://github.com/TaeeunKil/kafrust/actions/runs/31645842282).
+- The latest complete 17-job matrix passed at commit `1a844d8` in
+  [`31648660947`](https://github.com/TaeeunKil/kafrust/actions/runs/31648660947).
   It included ListTransactions across the Kafka 3.7.2, 3.8.1, 3.9.1, and
   4.3.1 single-node profiles plus the 3.7.2 multi-broker profile. It also
-  included flexible Produce v12/v11/v9 negotiation (Kafka 4.3.1 selected v12;
+  included topic-ID Produce v13/v12/v11/v9 negotiation (Kafka 4.3.1 selected v13;
   Kafka 3.8.1 and 3.9.1 selected v11; Kafka 3.7.2 selected v9), rack-aware
   Fetch v12, DeleteRecords and DescribeProducers leader-stop recovery, and
   the supported security, ACL, failover, and KIP-848 profiles.
@@ -471,9 +471,10 @@ See [Compatibility](docs/compatibility.md) and
   this covers replica selection, not every possible rack or security topology.
 - `ProducerConfig::partitioner` supports thread-safe custom routing for records
   without explicit partitions across immediate, batch, and buffered sends.
-- Gzip, Snappy, LZ4, and Zstd compression prefer flexible Produce v12, then
-  v11, then v9, RecordBatch encoding when the broker advertises it, with
-  Produce v7/v3 fallbacks. Fetch v4
+- Gzip, Snappy, LZ4, and Zstd compression prefer topic-ID Produce v13 when the
+  broker advertises it and Metadata v12 returns a topic UUID; otherwise they
+  use flexible Produce v12, then v11, then v9, RecordBatch encoding when the
+  broker advertises it, with Produce v7/v3 fallbacks. Fetch v4
   decodes all four codecs. They are
   verified against Kafka `3.7.2` plaintext single-node and multi-broker smoke
   profiles and the single-node TLS profile. Snappy uses Kafka-compatible Xerial

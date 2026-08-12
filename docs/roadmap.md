@@ -1535,19 +1535,21 @@ Implemented evidence:
 - Direct consumer fetch and watermark paths reuse a successful partition-leader
   `Client` by broker address and evict it on request failure. A focused
   injected-broker test verifies two sequential Fetch requests on one socket.
-- Producer capability negotiation now prefers flexible Produce v12, then v11,
-  then v9, for RecordBatch sends, including transactional and no-ack paths,
-  while retaining Produce v7, v3, and v2 fallbacks. Focused request/response
-  fixtures and producer selection tests cover all three flexible versions. The
-  complete 17-job live matrix passed the flexible-version negotiation gate in
-  [`31645842282`](https://github.com/TaeeunKil/kafrust/actions/runs/31645842282):
-  Kafka 4.3.1 selected v12, Kafka 3.8.1 and 3.9.1 selected v11, and Kafka
-  3.7.2 selected v9.
+- Producer capability negotiation now prefers topic-ID Produce v13 when the
+  broker advertises it and Metadata v12 returns a topic UUID, then falls back
+  to name-based flexible Produce v12, v11, and v9 for RecordBatch sends,
+  including transactional and no-ack paths. Focused request/response fixtures
+  and producer selection tests cover the topic-ID path and UUID-unavailable
+  fallback. The live matrix now requires v13 on Kafka 4.3.1 and retains the
+  v12/v11/v9 compatibility gate on older brokers. The complete 17-job live
+  matrix [`31648660947`](https://github.com/TaeeunKil/kafrust/actions/runs/31648660947)
+  passed at commit `1a844d8`: Kafka 4.3.1 selected v13, Kafka 3.8.1 and 3.9.1
+  selected v11, and Kafka 3.7.2 selected v9.
 - `AdminClient::list_transactions` now queries every metadata broker, uses
   ListTransactions v1 when advertised, falls back to v0, and aggregates
   broker-local transaction-state shards. Focused protocol and injected-broker
   tests pass, and the complete 17-job live matrix passed the listing example
-  in [`31645842282`](https://github.com/TaeeunKil/kafrust/actions/runs/31645842282).
+  in [`31648660947`](https://github.com/TaeeunKil/kafrust/actions/runs/31648660947).
 - Request-level observability records structured terminal fields for successful,
   failed, fire-and-forget, and cancelled broker requests without recording
   request payloads or credential material. The span-lifecycle guard is covered

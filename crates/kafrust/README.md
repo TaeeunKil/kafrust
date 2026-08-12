@@ -165,7 +165,8 @@ async fn main() -> kafrust::Result<()> {
 ```
 
 `Compression::Gzip`, `Compression::Snappy`, `Compression::Lz4`, and
-`Compression::Zstd` prefer flexible Produce API v12, then v11, then v9, RecordBatch
+`Compression::Zstd` prefer topic-ID Produce API v13 when Metadata v12 supplies
+a non-zero topic UUID, then flexible Produce API v12, v11, and v9, RecordBatch
 encoding when available, then fall back to Produce API v7 or v3. Brokers without the required
 Produce API version return an explicit `Unsupported` error when compression is
 enabled.

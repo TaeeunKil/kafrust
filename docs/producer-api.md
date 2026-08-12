@@ -270,9 +270,11 @@ Current implementation status:
   fetch-back on a three-broker Kafka 3.7.2 cluster.
 - `Producer::send` performs metadata lookup, connects to the partition leader,
   negotiates Produce API support with flexible `ApiVersions v3`, and prefers
-  flexible Produce v12, then v11, then v9, for RecordBatch features. It falls back to Produce v7,
-  Produce v3, or Produce v2 MessageSet when the broker advertises only an older
-  path.
+  topic-ID Produce v13 when the broker advertises it and Metadata v12 returns a
+  non-zero topic UUID. It falls back to name-based flexible Produce v12, then
+  v11, then v9, and finally Produce v7, Produce v3, or Produce v2 MessageSet
+  when the broker advertises only an older path. The topic UUID is cached per
+  topic and invalidated with producer metadata after a retryable send failure.
 - `ProducerConfig::request_timeout_ms` controls the request timeout used for metadata and produce roundtrips.
 - `ProducerConfig::security_protocol` stores the Kafka security protocol for producer broker connections. `Plaintext` is the default transport; TLS requires the non-default `tls` crate feature; `tls_server_name(name)` overrides the certificate validation name when the bootstrap host differs from the broker certificate; `tls_root_certificate_der(bytes)` adds DER-encoded root certificates while keeping platform roots enabled; `sasl_plain(username, password)`, `sasl_scram_sha_256(username, password)`, and `sasl_scram_sha_512(username, password)` provide SASL credentials for `SaslPlaintext` or `SaslTls`.
 - `ProducerConfig::max_retries` controls retry attempts for stale metadata, unknown topic-partition entries in cached metadata, missing leader or broker metadata, transient leader errors classified by `BrokerErrorKind`, request timeouts, and connection I/O failures.
@@ -284,7 +286,7 @@ Current implementation status:
   compression policy. `Compression::None` is the default.
   `Compression::Gzip`, `Compression::Snappy`, `Compression::Lz4`, and
   `Compression::Zstd` encode compressed RecordBatch payloads. Gzip, Snappy, and
-  LZ4 and Zstd use Produce v12/v11/v9 when available and require Produce API v3 or
+  LZ4 and Zstd use Produce v13/v12/v11/v9 when available and require Produce API v3 or
   newer. Missing broker support returns `Unsupported`. Snappy output uses Kafka-compatible Xerial
   framing; LZ4 and Zstd output use their standard frames as expected by
   RecordBatch v2.
