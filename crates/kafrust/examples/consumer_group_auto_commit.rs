@@ -69,7 +69,15 @@ async fn main() -> kafrust::Result<()> {
         .join()
         .await?;
     if second_group.group_protocol() == ConsumerGroupProtocol::Consumer {
-        second_group.heartbeat().await?;
+        for _ in 0..10 {
+            if !second_group.assignments().is_empty() {
+                break;
+            }
+            second_group.heartbeat().await?;
+            if second_group.assignments().is_empty() {
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+        }
     }
     let observed_positions = second_group
         .assignments()
