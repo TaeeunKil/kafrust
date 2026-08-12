@@ -1602,6 +1602,16 @@ Implemented evidence:
   [`31585451218`](https://github.com/TaeeunKil/kafrust/actions/runs/31585451218),
   including signed OIDC/JWKS Kafka 3.7.2 coverage in job
   [`94078116567`](https://github.com/TaeeunKil/kafrust/actions/runs/31585451218/job/94078116567).
+- Release `v0.2.8` published `kafrust-protocol` before `kafrust` after package
+  dry-runs passed. Both crates were published to crates.io, fresh external
+  default and `tls` projects compiled against the published client, the exact
+  [`kafrust 0.2.8 docs.rs`](https://docs.rs/kafrust/0.2.8/kafrust/) and
+  [`kafrust-protocol 0.2.8 docs.rs`](https://docs.rs/kafrust-protocol/0.2.8/kafrust_protocol/)
+  pages returned HTTP 200, and GitHub release
+  [`v0.2.8`](https://github.com/TaeeunKil/kafrust/releases/tag/v0.2.8) was
+  published against the verified release commit. The admin offset live matrix
+  is qualified in [`31595485915`](https://github.com/TaeeunKil/kafrust/actions/runs/31595485915)
+  and [`31597505667`](https://github.com/TaeeunKil/kafrust/actions/runs/31597505667).
 - Secured multi-broker failure injection is now qualified for the tested
   `SASL_PLAINTEXT` and `SASL_SSL` paths. The three-broker `SASL_PLAINTEXT`
   profile in [`31554396594`](https://github.com/TaeeunKil/kafrust/actions/runs/31554396594)
