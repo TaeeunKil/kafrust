@@ -69,6 +69,20 @@ These measurements supersede the older selected-profile table below for
 current-main tracking. They are still diagnostic baselines, not claims of
 throughput parity with another Kafka client.
 
+The newer merged-main benchmark run
+[`31621648602`](https://github.com/TaeeunKil/kafrust/actions/runs/31621648602)
+completed with the same profile after the Admin read-retry changes:
+
+| Payload | Compression | Produce records/s | Produce MiB/s | Batch p50 | Batch p95 | Batch p99 | Fetch records/s |
+| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 100 B | none | 142,018 | 13.54 | 1.354 ms | 1.825 ms | 2.300 ms | 1,069,780 |
+| 1 KiB | none | 68,037 | 66.44 | 2.707 ms | 3.482 ms | 4.309 ms | 590,492 |
+| 10 KiB | none | 3,773 | 36.84 | 52.703 ms | 56.099 ms | 57.524 ms | 124,382 |
+| 1 KiB | Zstd | 68,922 | 67.31 | 2.505 ms | 4.376 ms | 4.643 ms | 605,726 |
+
+All four profiles completed with zero retries. These are hosted-runner
+diagnostic baselines, not cross-client throughput claims.
+
 Run [`30057817575`](https://github.com/TaeeunKil/kafrust/actions/runs/30057817575)
 completed on 2026-07-24 using the documented Kafka 4.3.1 single-broker profile,
 20,000 records, batches of 200, and a 900-KiB encoded chunk limit.
@@ -118,6 +132,12 @@ The latest merged-main 120-second run
 roundtripped 6,223,500 records across a ten-second broker outage, observed 136
 high-level operation errors, 685 failed requests, and 950 retries, recovered
 successfully, and finished with zero in-flight requests and buffered records.
+
+The newer five-minute merged-main run
+[`31621654970`](https://github.com/TaeeunKil/kafrust/actions/runs/31621654970)
+processed 16,773,500 1-KiB records across a ten-second broker outage, observed
+147 high-level operation errors, 774 failed requests, and 1,028 retries, then
+recovered successfully with zero in-flight requests and buffered records.
 
 The scheduled five-minute run
 [`31568595989`](https://github.com/TaeeunKil/kafrust/actions/runs/31568595989)

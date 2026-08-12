@@ -1376,6 +1376,16 @@ Implemented evidence:
   100-byte payloads, 55,938 records/s for 1-KiB payloads, 3,292 records/s for
   10-KiB payloads, and 64,355 records/s for 1-KiB Zstd payloads. All four
   profiles completed with zero retries.
+- Newer latest `main` benchmark run
+  [`31621648602`](https://github.com/TaeeunKil/kafrust/actions/runs/31621648602)
+  published 20,000-record Kafka 4.3.1 baselines: 142,018 records/s for
+  100-byte payloads, 68,037 for 1-KiB, 3,773 for 10-KiB, and 68,922 for
+  1-KiB Zstd. All four profiles completed with zero retries.
+- Newer latest `main` five-minute soak run
+  [`31621654970`](https://github.com/TaeeunKil/kafrust/actions/runs/31621654970)
+  processed 16,773,500 1-KiB records across a ten-second broker outage, with
+  147 operation errors, 774 failed requests, and 1,028 retries. Recovery
+  completed and both final resource gauges were zero.
 - Latest `main` soak run
   [`31574065286`](https://github.com/TaeeunKil/kafrust/actions/runs/31574065286)
   passed a 120-second Kafka 4.3.1 broker restart profile with 6,223,500
