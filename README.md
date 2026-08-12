@@ -367,7 +367,8 @@ Verified paths currently include:
   OffsetCommit v9, member-aware administrative offset listing/alteration,
   background rejoin, and explicit leave against Kafka `4.3.1` (including the
   PLAINTEXT single-node and three-broker Admin offset smoke in
-  [`31603195530`](https://github.com/TaeeunKil/kafrust/actions/runs/31603195530)).
+  [`31604033601`](https://github.com/TaeeunKil/kafrust/actions/runs/31604033601),
+  including SASL_PLAINTEXT and SASL_SSL/SCRAM profiles).
 
 See [Compatibility](docs/compatibility.md) and
 [Broker Roundtrip](docs/broker-roundtrip.md) for the current evidence.

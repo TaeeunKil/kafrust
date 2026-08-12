@@ -53,13 +53,14 @@ retry implementation against the supported live matrix; an injected broker
 stop during the Admin request itself remains a separate qualification item.
 
 The follow-up matrix in
-[`31603195530`](https://github.com/TaeeunKil/kafrust/actions/runs/31603195530)
-passed all 17 jobs at commit `c58d755`. Its Kafka 4.3.1 single-node and
+[`31604033601`](https://github.com/TaeeunKil/kafrust/actions/runs/31604033601)
+passed all 17 jobs at commit `eac94d5`. Its Kafka 4.3.1 single-node and
 three-broker KIP-848 jobs executed the member-aware Admin offset example,
 covering OffsetFetch v9 and OffsetCommit v9 with a live member ID and member
-epoch. This is live qualification for the PLAINTEXT KIP-848 profiles; secured
-KIP-848 Admin offset qualification and broker-stop injection during the Admin
-request remain open.
+epoch. The same path also passed on three-broker SASL_PLAINTEXT and
+SASL_SSL/SCRAM profiles. This live-qualifies the member-aware Admin offset
+path across the current plaintext and secured profiles; broker-stop injection
+during the Admin request remains open.
 
 The complete `Live Kafka Smoke` matrix in
 [`31593984640`](https://github.com/TaeeunKil/kafrust/actions/runs/31593984640)
@@ -148,7 +149,7 @@ these two requests remains a separate qualification item.
 | Apache Kafka 3.7.2 | three-broker KRaft | PLAINTEXT; repeated partition-leader broker-stop recovery for producer and direct consumer | [`Live Kafka Smoke`, run `31573662135`](https://github.com/TaeeunKil/kafrust/actions/runs/31573662135) on 2026-08-12 | Passing |
 | Apache Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1 | single-node KRaft | DescribeProducers v0 leader routing and DescribeTransactions v0 coordinator routing | [`Live Kafka Smoke`, run `31589394777`](https://github.com/TaeeunKil/kafrust/actions/runs/31589394777) on 2026-08-12 | Passing |
 | Apache Kafka 3.7.2 | three-broker KRaft; PLAINTEXT and SASL_SSL SCRAM failover profiles | DescribeProducers v0 leader routing; DescribeTransactions v0 coordinator routing | [`Live Kafka Smoke`, run `31589394777`](https://github.com/TaeeunKil/kafrust/actions/runs/31589394777) on 2026-08-12 | Passing |
-| Apache Kafka 4.3.1 | single-node and three-broker KRaft | KIP-848 member-aware Admin OffsetFetch v9 and OffsetCommit v9 | [`Live Kafka Smoke`, run `31603195530`](https://github.com/TaeeunKil/kafrust/actions/runs/31603195530) on 2026-08-12 | Passing; PLAINTEXT |
+| Apache Kafka 4.3.1 | single-node and three-broker KRaft; three-broker SASL_PLAINTEXT and SASL_SSL/SCRAM | KIP-848 member-aware Admin OffsetFetch v9 and OffsetCommit v9 | [`Live Kafka Smoke`, run `31604033601`](https://github.com/TaeeunKil/kafrust/actions/runs/31604033601) on 2026-08-12 | Passing; plaintext and secured profiles |
 | Apache Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1 | single-node KRaft | Produce `acks=0` immediate and batch dispatch | `Live Kafka Smoke`, manual run `31464933145` on 2026-08-11 | Passing; broker acceptance is intentionally unconfirmed |
 | Apache Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1; Kafka 4.3.1 KIP-848 | single-node KRaft | opt-in automatic consumer-group commit and restored positions | [`Live Kafka Smoke`, run `31593984640`](https://github.com/TaeeunKil/kafrust/actions/runs/31593984640) on 2026-08-12 | Passing; at-least-once tradeoff |
 | Apache Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1 | single-node KRaft | classic consumer-group offset listing and administrative alteration | [`Live Kafka Smoke`, run `31595485915`](https://github.com/TaeeunKil/kafrust/actions/runs/31595485915) on 2026-08-12 | Passing |
