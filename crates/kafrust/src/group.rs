@@ -1058,7 +1058,7 @@ impl ConsumerGroupConfig {
             "joined kafka KIP-848 consumer group"
         );
 
-        let group = ConsumerGroup {
+        let mut group = ConsumerGroup {
             config,
             group_id: self.group_id,
             generation_id: response.member_epoch,
@@ -1082,6 +1082,9 @@ impl ConsumerGroupConfig {
             commit_worker: None,
             auto_commit_worker: None,
         };
+        if group.consumer_owned_partitions.is_none() {
+            group.wait_for_consumer_assignment().await?;
+        }
         group.notify_rebalance(RebalancePhase::After, group.consumer.assignments());
         Ok(group)
     }
@@ -1544,6 +1547,24 @@ impl ConsumerGroup {
         let interval = self.config.auto_commit_interval;
         let worker = self.spawn_commit_worker(interval).await?;
         self.auto_commit_worker = Some(worker);
+        Ok(())
+    }
+
+    async fn wait_for_consumer_assignment(&mut self) -> Result<()> {
+        let timeout_ms = self.config.rebalance_timeout_ms.max(1) as u64;
+        let deadline = time::Instant::now() + Duration::from_millis(timeout_ms);
+        while self.consumer_owned_partitions.is_none() {
+            self.heartbeat_consumer().await?;
+            if self.consumer_owned_partitions.is_some() {
+                break;
+            }
+            if time::Instant::now() >= deadline {
+                return Err(Error::Unsupported(
+                    "consumer group assignment was not delivered before the rebalance timeout",
+                ));
+            }
+            time::sleep(Duration::from_millis(50)).await;
+        }
         Ok(())
     }
 
