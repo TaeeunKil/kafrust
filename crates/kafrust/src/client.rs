@@ -352,12 +352,14 @@ impl Client {
                 )?)
                 .await?;
             if response.error_code != 0 {
+                self.acknowledge_oauthbearer_error().await;
                 return Err(self.broker_error(
                     response.error_code,
                     "sasl re-authenticate OAUTHBEARER".to_owned(),
                 ));
             }
             if !response.auth_bytes.is_empty() {
+                self.acknowledge_oauthbearer_error().await;
                 return Err(Error::InvalidSaslResponse {
                     mechanism: "OAUTHBEARER",
                     reason: "broker rejected the OAUTHBEARER token",
@@ -409,6 +411,23 @@ impl Client {
         &mut self,
         auth_bytes: Vec<u8>,
     ) -> Result<SaslAuthenticateResponseV2> {
+        let response = self.sasl_authenticate_v2_request(auth_bytes).await?;
+        if response.error_code == 0 && response.auth_bytes.is_empty() {
+            self.sasl_session_lifetime_ms = Some(response.session_lifetime_ms);
+            self.sasl_authenticated_at = Some(std::time::Instant::now());
+        }
+        Ok(response)
+    }
+
+    pub(crate) async fn acknowledge_oauthbearer_error(&mut self) {
+        // Kafka's OAUTHBEARER client sends control-A after an error challenge.
+        let _ = self.sasl_authenticate_v2_request(vec![1]).await;
+    }
+
+    async fn sasl_authenticate_v2_request(
+        &mut self,
+        auth_bytes: Vec<u8>,
+    ) -> Result<SaslAuthenticateResponseV2> {
         let request = SaslAuthenticateRequestV2 {
             correlation_id: self.next_correlation_id(),
             client_id: self.client_id.clone(),
@@ -417,12 +436,7 @@ impl Client {
         let response = self.send_request_traced(&request.encode()?).await?;
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v1(&mut decoder)?;
-        let response = SaslAuthenticateResponseV2::decode_body(&mut decoder)?;
-        if response.error_code == 0 && response.auth_bytes.is_empty() {
-            self.sasl_session_lifetime_ms = Some(response.session_lifetime_ms);
-            self.sasl_authenticated_at = Some(std::time::Instant::now());
-        }
-        Ok(response)
+        Ok(SaslAuthenticateResponseV2::decode_body(&mut decoder)?)
     }
 
     /// Sends Metadata v1 for all topics or the provided topic names.

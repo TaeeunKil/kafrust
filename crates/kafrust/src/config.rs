@@ -697,12 +697,14 @@ async fn authenticate_sasl_oauthbearer(
         .sasl_authenticate_v2(sasl_oauthbearer_auth_bytes_with_token(credentials, &token)?)
         .await?;
     if response.error_code != 0 {
+        client.acknowledge_oauthbearer_error().await;
         return Err(client.broker_error(
             response.error_code,
             format!("sasl authenticate {mechanism}"),
         ));
     }
     if !response.auth_bytes.is_empty() {
+        client.acknowledge_oauthbearer_error().await;
         return Err(Error::InvalidSaslResponse {
             mechanism,
             reason: "broker rejected the OAUTHBEARER token",
@@ -1314,6 +1316,8 @@ mod tests {
             let _authenticate = read_frame(&mut socket).await;
             write_sasl_authenticate_v2_response(&mut socket, 2, br#"{"status":"invalid_token"}"#)
                 .await;
+            let acknowledgement = read_frame(&mut socket).await;
+            assert_eq!(sasl_authenticate_v2_auth_bytes(&acknowledgement, 3), &[1]);
         });
 
         let error = ClientConfig::new([addr.to_string()])
