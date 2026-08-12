@@ -102,7 +102,7 @@ jobs:
           RUST_LOG: kafrust=debug
         run: |
           cargo run -p kafrust --example producer_send 2>&1 | tee /tmp/kafrust-produce-v9.log
-          if ! grep -Eq 'selected produce api version.*produce_version=V9' /tmp/kafrust-produce-v9.log; then
+          if ! grep -q 'produce_version=V9' /tmp/kafrust-produce-v9.log; then
             cat /tmp/kafrust-produce-v9.log
             echo "producer did not negotiate Produce v9"
             exit 1

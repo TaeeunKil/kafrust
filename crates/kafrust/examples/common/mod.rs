@@ -45,6 +45,14 @@ pub(crate) fn init_request_gate(api_key: i16) -> kafrust::Result<()> {
 }
 
 #[allow(dead_code)]
+pub(crate) fn init_tracing() -> kafrust::Result<()> {
+    tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::from_default_env())
+        .try_init()
+        .map_err(|_| kafrust::Error::Unsupported("tracing subscriber was already initialized"))
+}
+
+#[allow(dead_code)]
 struct RequestGateLayer {
     api_key: i16,
     ready_file: PathBuf,

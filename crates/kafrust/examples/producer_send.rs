@@ -4,6 +4,7 @@ use kafrust::{Error, ProducerConfig, ProducerRecord};
 
 #[tokio::main]
 async fn main() -> kafrust::Result<()> {
+    common::init_tracing()?;
     let bootstrap_servers = common::bootstrap_servers_from_env();
     let topic = std::env::var("KAFRUST_TOPIC").unwrap_or_else(|_| "kafrust-smoke".to_owned());
     let key = std::env::var("KAFRUST_KEY").unwrap_or_else(|_| "kafrust-key".to_owned());
