@@ -56,6 +56,7 @@ def main() -> None:
         "exp": now + args.token_ttl_seconds,
         "iat": now,
         "iss": args.issuer,
+        "scope": "kafrust-smoke",
         "sub": args.subject,
     }
     encoded_header = b64url(json.dumps(header, separators=(",", ":")).encode())
@@ -78,6 +79,7 @@ def main() -> None:
                 "kty": "RSA",
                 "n": b64url(modulus),
                 "use": "sig",
+                "key_ops": ["verify"],
             }
         ]
     }

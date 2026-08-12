@@ -2940,7 +2940,8 @@ jobs:
             -e KAFKA_SASL_OAUTHBEARER_EXPECTED_AUDIENCE=kafrust-client \
             -e KAFKA_SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS=2 \
             -e KAFKA_SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS=1000 \
-            -e KAFKA_LOG4J_LOGGERS=org.apache.kafka.common.security.oauthbearer=DEBUG,org.apache.kafka.common.security.authenticator=DEBUG \
+            -e KAFKA_LOG4J_ROOT_LOGLEVEL=DEBUG \
+            -e KAFKA_LOG4J_LOGGERS=org.apache.kafka.common.security.oauthbearer=DEBUG,org.apache.kafka.common.security.oauthbearer.internals.secured=DEBUG,org.apache.kafka.common.security.authenticator=DEBUG \
             -e KAFKA_SSL_KEYSTORE_FILENAME=kafka.server.keystore.p12 \
             -e KAFKA_SSL_KEYSTORE_CREDENTIALS=keystore-password \
             -e KAFKA_SSL_KEY_CREDENTIALS=key-password \
