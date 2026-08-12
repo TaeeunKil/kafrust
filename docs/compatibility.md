@@ -232,7 +232,8 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
   filters, and partial outcomes. The focused ACL authorizer job in manual run
   `31457478358` passed create -> describe -> delete against Kafka 3.7.2
   StandardAuthorizer using the explicitly configured `User:ANONYMOUS`
-  superuser.
+  superuser. The example polls successful DescribeAcls responses for bounded
+  authorizer propagation after CreateAcls before asserting visibility.
 - Client quota set, exact-filter describe, and remove through `AdminClient`
   with typed entities, `FLOAT64` values, and per-entity outcomes. The focused
   ACL authorizer job in manual run `31459874329` passed the roundtrip against

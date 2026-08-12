@@ -4,6 +4,7 @@ use kafrust::{
     AclBinding, AclFilter, AclOperation, AclPatternType, AclPermissionType, AclResourceType,
     AdminClient, ClientConfig, Error,
 };
+use std::time::{Duration, Instant};
 
 #[tokio::main]
 async fn main() -> kafrust::Result<()> {
@@ -47,18 +48,7 @@ async fn main() -> kafrust::Result<()> {
         .host("*")
         .operation(AclOperation::Read)
         .permission_type(AclPermissionType::Allow);
-    let described = admin.describe_acls(&filter).await?;
-    if !described.is_success()
-        || !described
-            .bindings()
-            .iter()
-            .any(|candidate| candidate == &binding)
-    {
-        return Err(Error::Broker {
-            code: described.error_code(),
-            context: format!("describe ACL for topic {topic}"),
-        });
-    }
+    wait_for_acl_binding(&admin, &filter, &binding, &topic).await?;
     println!("described ACL for {principal} on topic {topic}");
 
     let deleted = admin.delete_acls(&[filter]).await?;
@@ -75,4 +65,36 @@ async fn main() -> kafrust::Result<()> {
     println!("deleted ACL for {principal} on topic {topic}");
 
     Ok(())
+}
+
+async fn wait_for_acl_binding(
+    admin: &AdminClient,
+    filter: &AclFilter,
+    binding: &AclBinding,
+    topic: &str,
+) -> kafrust::Result<()> {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        let described = admin.describe_acls(filter).await?;
+        if !described.is_success() {
+            return Err(Error::Broker {
+                code: described.error_code(),
+                context: format!("describe ACL for topic {topic}"),
+            });
+        }
+        if described
+            .bindings()
+            .iter()
+            .any(|candidate| candidate == binding)
+        {
+            return Ok(());
+        }
+        if Instant::now() >= deadline {
+            return Err(Error::Broker {
+                code: 0,
+                context: format!("ACL for topic {topic} was not visible before timeout"),
+            });
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
 }
