@@ -1555,7 +1555,7 @@ Implemented evidence:
   leader-to-preferred-replica routing plus fallback when the preference clears.
   The Kafka 3.7.2 three-broker `broker.rack` plus `RackAwareReplicaSelector`
   profile passed live qualification in
-  [`31638178940`](https://github.com/TaeeunKil/kafrust/actions/runs/31638178940),
+  [`31640494509`](https://github.com/TaeeunKil/kafrust/actions/runs/31640494509),
   including live Fetch v12 requests and preferred-replica routing.
 - Classic consumer-group JoinGroup retries transient coordinator and membership
   errors; an `UNKNOWN_MEMBER_ID` response clears the stale member id before the
