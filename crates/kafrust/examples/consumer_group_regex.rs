@@ -36,11 +36,26 @@ async fn main() -> kafrust::Result<()> {
         ));
     }
 
+    let records = group.poll().await?;
+    if records.is_empty() {
+        return Err(Error::Unsupported(
+            "regex subscription did not fetch the smoke record",
+        ));
+    }
+    for record in &records {
+        group.commit_record(record)?;
+    }
+    group.commit_queued_offsets().await?;
+    if group.pending_commit_count() != 0 {
+        return Err(Error::Unsupported(
+            "regex subscription left queued offsets after commit",
+        ));
+    }
+
     println!(
         "regex subscription {pattern:?} assigned topics: {}",
         assigned_topics.into_iter().collect::<Vec<_>>().join(",")
     );
-    let records = group.poll().await?;
     println!("polled {} records", records.len());
     group.leave().await?;
     Ok(())

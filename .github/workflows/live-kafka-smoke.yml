@@ -177,6 +177,13 @@ jobs:
       - name: Run consumer group example
         run: cargo run -p kafrust --example consumer_group_poll
 
+      - name: Produce regex subscription smoke record
+        env:
+          KAFRUST_TOPIC: kafrust-regex-orders
+          KAFRUST_KEY: kafrust-regex-key-${{ matrix.kafka-version }}
+          KAFRUST_VALUE: kafrust-regex-value-${{ github.run_id }}
+        run: cargo run -p kafrust --example producer_send
+
       - name: Run regex consumer group example
         env:
           KAFRUST_GROUP_ID: kafrust-regex-${{ matrix.kafka-version }}-${{ github.run_id }}
