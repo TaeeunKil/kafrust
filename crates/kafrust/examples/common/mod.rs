@@ -1,7 +1,8 @@
 use kafrust::{
-    Acks, ClientConfig, Compression, ConsumerConfig, ConsumerGroupConfig, ProducerConfig,
-    SecurityProtocol,
+    Acks, ClientConfig, Compression, ConsumerConfig, ConsumerGroupConfig, OAuthBearerTokenProvider,
+    ProducerConfig, SecurityProtocol,
 };
+use std::path::PathBuf;
 
 pub(crate) fn bootstrap_servers_from_env() -> Vec<String> {
     let value =
@@ -35,7 +36,17 @@ where
                 config.sasl_scram_sha_512(credentials.username, credentials.password)
             }
             ExampleSaslMechanism::OAuthBearer => {
-                if credentials.username.is_empty() {
+                if let Ok(path) = std::env::var("KAFRUST_SASL_TOKEN_PATH") {
+                    let provider = file_token_provider(PathBuf::from(path));
+                    if credentials.username.is_empty() {
+                        config.sasl_oauthbearer_provider(provider)
+                    } else {
+                        config.sasl_oauthbearer_with_username_and_provider(
+                            credentials.username,
+                            provider,
+                        )
+                    }
+                } else if credentials.username.is_empty() {
                     config.sasl_oauthbearer(credentials.token.unwrap_or_default())
                 } else {
                     config.sasl_oauthbearer_with_username(
@@ -107,6 +118,12 @@ pub(crate) trait ExampleSecurityConfig: Sized {
     fn sasl_scram_sha_512(self, username: String, password: String) -> Self;
     fn sasl_oauthbearer(self, token: String) -> Self;
     fn sasl_oauthbearer_with_username(self, username: String, token: String) -> Self;
+    fn sasl_oauthbearer_provider<P>(self, provider: P) -> Self
+    where
+        P: OAuthBearerTokenProvider + 'static;
+    fn sasl_oauthbearer_with_username_and_provider<P>(self, username: String, provider: P) -> Self
+    where
+        P: OAuthBearerTokenProvider + 'static;
 }
 
 impl ExampleSecurityConfig for ClientConfig {
@@ -140,6 +157,20 @@ impl ExampleSecurityConfig for ClientConfig {
 
     fn sasl_oauthbearer_with_username(self, username: String, token: String) -> Self {
         ClientConfig::sasl_oauthbearer_with_username(self, username, token)
+    }
+
+    fn sasl_oauthbearer_provider<P>(self, provider: P) -> Self
+    where
+        P: OAuthBearerTokenProvider + 'static,
+    {
+        ClientConfig::sasl_oauthbearer_provider(self, provider)
+    }
+
+    fn sasl_oauthbearer_with_username_and_provider<P>(self, username: String, provider: P) -> Self
+    where
+        P: OAuthBearerTokenProvider + 'static,
+    {
+        ClientConfig::sasl_oauthbearer_with_username_and_provider(self, username, provider)
     }
 }
 
@@ -175,6 +206,20 @@ impl ExampleSecurityConfig for ProducerConfig {
     fn sasl_oauthbearer_with_username(self, username: String, token: String) -> Self {
         ProducerConfig::sasl_oauthbearer_with_username(self, username, token)
     }
+
+    fn sasl_oauthbearer_provider<P>(self, provider: P) -> Self
+    where
+        P: OAuthBearerTokenProvider + 'static,
+    {
+        ProducerConfig::sasl_oauthbearer_provider(self, provider)
+    }
+
+    fn sasl_oauthbearer_with_username_and_provider<P>(self, username: String, provider: P) -> Self
+    where
+        P: OAuthBearerTokenProvider + 'static,
+    {
+        ProducerConfig::sasl_oauthbearer_with_username_and_provider(self, username, provider)
+    }
 }
 
 impl ExampleSecurityConfig for ConsumerConfig {
@@ -208,6 +253,20 @@ impl ExampleSecurityConfig for ConsumerConfig {
 
     fn sasl_oauthbearer_with_username(self, username: String, token: String) -> Self {
         ConsumerConfig::sasl_oauthbearer_with_username(self, username, token)
+    }
+
+    fn sasl_oauthbearer_provider<P>(self, provider: P) -> Self
+    where
+        P: OAuthBearerTokenProvider + 'static,
+    {
+        ConsumerConfig::sasl_oauthbearer_provider(self, provider)
+    }
+
+    fn sasl_oauthbearer_with_username_and_provider<P>(self, username: String, provider: P) -> Self
+    where
+        P: OAuthBearerTokenProvider + 'static,
+    {
+        ConsumerConfig::sasl_oauthbearer_with_username_and_provider(self, username, provider)
     }
 }
 
@@ -243,6 +302,20 @@ impl ExampleSecurityConfig for ConsumerGroupConfig {
     fn sasl_oauthbearer_with_username(self, username: String, token: String) -> Self {
         ConsumerGroupConfig::sasl_oauthbearer_with_username(self, username, token)
     }
+
+    fn sasl_oauthbearer_provider<P>(self, provider: P) -> Self
+    where
+        P: OAuthBearerTokenProvider + 'static,
+    {
+        ConsumerGroupConfig::sasl_oauthbearer_provider(self, provider)
+    }
+
+    fn sasl_oauthbearer_with_username_and_provider<P>(self, username: String, provider: P) -> Self
+    where
+        P: OAuthBearerTokenProvider + 'static,
+    {
+        ConsumerGroupConfig::sasl_oauthbearer_with_username_and_provider(self, username, provider)
+    }
 }
 
 fn security_protocol_from_env() -> kafrust::Result<SecurityProtocol> {
@@ -270,14 +343,21 @@ enum ExampleSaslMechanism {
 fn sasl_credentials_from_env() -> kafrust::Result<Option<ExampleSaslCredentials>> {
     let mechanism = sasl_mechanism_from_env()?;
     if matches!(mechanism, ExampleSaslMechanism::OAuthBearer) {
-        let token = std::env::var("KAFRUST_SASL_TOKEN").map_err(|_| {
-            kafrust::Error::Unsupported("KAFRUST_SASL_TOKEN is required for SASL/OAUTHBEARER")
-        })?;
+        let token = std::env::var("KAFRUST_SASL_TOKEN").ok().or_else(|| {
+            std::env::var("KAFRUST_SASL_TOKEN_PATH")
+                .ok()
+                .map(|_| String::new())
+        });
+        if token.is_none() {
+            return Err(kafrust::Error::Unsupported(
+                "KAFRUST_SASL_TOKEN or KAFRUST_SASL_TOKEN_PATH is required for SASL/OAUTHBEARER",
+            ));
+        }
         return Ok(Some(ExampleSaslCredentials {
             mechanism,
             username: std::env::var("KAFRUST_SASL_USERNAME").unwrap_or_default(),
             password: String::new(),
-            token: Some(token),
+            token,
         }));
     }
 
@@ -295,6 +375,21 @@ fn sasl_credentials_from_env() -> kafrust::Result<Option<ExampleSaslCredentials>
         password,
         token: None,
     }))
+}
+
+fn file_token_provider(path: PathBuf) -> impl OAuthBearerTokenProvider {
+    move || {
+        let path = path.clone();
+        async move {
+            let token = std::fs::read_to_string(path)?.trim().to_owned();
+            if token.is_empty() {
+                return Err(kafrust::Error::Unsupported(
+                    "KAFRUST_SASL_TOKEN_PATH must contain a non-empty token",
+                ));
+            }
+            Ok(token)
+        }
+    }
 }
 
 fn sasl_mechanism_from_env() -> kafrust::Result<ExampleSaslMechanism> {

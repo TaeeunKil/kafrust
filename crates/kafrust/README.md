@@ -352,9 +352,10 @@ Smoke` run `31478375106`). SASL authentication uses Kafka's
 `SaslAuthenticate v1` wire response, and the low-level `Client` exposes the
 broker-advertised `session_lifetime_ms` for an application-owned refresh
 schedule. Provider-backed OAUTHBEARER connections also re-authenticate on the
-existing connection before requests after half of that lifetime; detached
-refresh workers, production OAuth/OIDC provider integration, and signed
-JWT/JWKS policy remain unclaimed. Provider callbacks are bounded by
+existing connection before requests after half of that lifetime; the signed
+JWT/JWKS policy is exercised by the signed OIDC/JWKS fixture in the live smoke
+workflow, while external provider-specific behavior and detached refresh
+workers remain unclaimed. Provider callbacks are bounded by
 `ClientConfig::request_timeout_ms`; an expired callback returns
 `Error::OAuthBearerTokenTimeout` without including token material.
 
@@ -512,7 +513,9 @@ The smoke examples accept `KAFRUST_SECURITY_PROTOCOL`,
 TLS, and SASL broker profiles. `KAFRUST_SASL_MECHANISM` defaults to `plain` and
 also accepts `scram-sha-256`, `scram-sha-512`, or `oauthbearer`. The
 OAUTHBEARER path reads its token from `KAFRUST_SASL_TOKEN` and treats
-`KAFRUST_SASL_USERNAME` as an optional authorization identity.
+`KAFRUST_SASL_USERNAME` as an optional authorization identity. Set
+`KAFRUST_SASL_TOKEN_PATH` instead to use the example's provider-backed file
+callback, which reads a fresh token for each broker authentication.
 `KAFRUST_BOOTSTRAP_SERVERS` accepts Kafka's comma-separated bootstrap format for
 multiple brokers, for example `localhost:19092,localhost:19093`.
 

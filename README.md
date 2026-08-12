@@ -98,8 +98,9 @@ Smoke examples also accept `KAFRUST_SECURITY_PROTOCOL`,
 `KAFRUST_SASL_USERNAME`, `KAFRUST_SASL_PASSWORD`, and
 `KAFRUST_SASL_MECHANISM` for secured broker checks. Set
 `KAFRUST_SASL_MECHANISM=oauthbearer` with `KAFRUST_SASL_TOKEN` for the
-OAUTHBEARER path; `KAFRUST_SASL_USERNAME` is optional for its authorization
-identity.
+OAUTHBEARER path; `KAFRUST_SASL_TOKEN_PATH` can be used instead when the
+application owns a rotating token file and wants the provider-backed path.
+`KAFRUST_SASL_USERNAME` is optional for its authorization identity.
 
 ```sh
 KAFRUST_BOOTSTRAP_SERVERS=localhost:9092 \
@@ -379,8 +380,10 @@ See [Compatibility](docs/compatibility.md) and
   available through the corresponding `*_provider` builders and are called for
   each new broker authentication. It is covered by injected handshake tests
   and a Kafka 3.7.2 SASL_SSL smoke using the broker's built-in unsecured
-  validator (`Live Kafka Smoke` run `31478375106`). Production OAuth/OIDC
-  provider behavior and signed JWT/JWKS policy are not yet claimed.
+  validator (`Live Kafka Smoke` run `31478375106`). The live workflow also
+  contains a signed JWT/JWKS OIDC fixture path that exercises provider-backed
+  token loading; external provider-specific behavior remains separately
+  qualified.
 - Single-node plaintext compatibility is verified against Kafka `3.7.2`,
   `3.8.1`, `3.9.1`, and `4.3.1`. Secured and multi-broker profiles remain
   verified against `3.7.2`.
