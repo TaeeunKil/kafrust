@@ -45,6 +45,8 @@ the currently supported settings through typed builders.
 | `enable.idempotence` | `.enable_idempotence(true)` | Initializes producer identity and partition sequences. |
 | `transactional.id` | `.transactional_id(...)` | Enables the alpha transactional path. |
 | `group.id` | `ConsumerGroupConfig::new(brokers, group_id)` | Group ID is a required typed argument. |
+| `enable.auto.commit=true` | `.enable_auto_commit(true).auto_commit_interval_ms(...)` | Queues current assignment positions after successful polls and flushes them through a bounded background worker; defaults to `false` for explicit-commit compatibility. |
+| `enable.auto.commit=false` | omit `.enable_auto_commit(true)` | Use `commit_offsets` or `commit_record` plus `commit_queued_offsets` explicitly. |
 | `auto.offset.reset=earliest` | `.offset_reset_policy(OffsetResetPolicy::Earliest)` | Used only when an assigned partition has no committed offset. |
 | `auto.offset.reset=latest` | `.offset_reset_policy(OffsetResetPolicy::Latest)` | Resolves the current log end from the partition leader during group join. |
 | `isolation.level` | `.isolation_level(IsolationLevel::ReadCommitted)` | Supported by direct and group consumers. |
@@ -176,6 +178,13 @@ rejoin snapshots, and KIP-848 assignment changes from foreground or background
 heartbeats. The current group implementation supports the classic protocol
 with range or round-robin assignment and an explicitly selected KIP-848
 consumer protocol path.
+
+For Kafka-style automatic commits, enable
+`ConsumerGroupConfig::enable_auto_commit(true)`. The worker queues the current
+assignment positions after each successful poll and observes rejoin state for
+classic and KIP-848 groups. This is an at-least-once processing tradeoff: a
+successful poll can be committed before application processing completes. The
+worker is bounded and its terminal failure is returned by a later poll.
 
 For processing that can approach the session timeout, use
 `spawn_heartbeat_task` with `poll_with_heartbeat`. The task is explicit and

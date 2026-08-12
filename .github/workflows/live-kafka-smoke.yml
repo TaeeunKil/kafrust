@@ -192,6 +192,13 @@ jobs:
       - name: Run consumer group example
         run: cargo run -p kafrust --example consumer_group_poll
 
+      - name: Run consumer group automatic commit example
+        env:
+          KAFRUST_AUTO_COMMIT_INTERVAL_MS: "100"
+          KAFRUST_AUTO_COMMIT_REQUIRE_RECORD: "1"
+          KAFRUST_GROUP_ID: kafrust-auto-commit-${{ matrix.kafka-version }}-${{ github.run_id }}
+        run: cargo run -p kafrust --example consumer_group_auto_commit
+
       - name: Run consumer group partition queue example
         env:
           KAFRUST_GROUP_ID: kafrust-partition-queue-group-${{ matrix.kafka-version }}-${{ github.run_id }}
@@ -234,6 +241,15 @@ jobs:
           KAFRUST_PARTITION_QUEUE: "1"
           KAFRUST_PARTITION_QUEUE_REQUIRE_RECORD: "1"
         run: cargo run -p kafrust --example consumer_group_poll
+
+      - name: Run KIP-848 automatic commit example
+        if: matrix.kafka-version == '4.3.1'
+        env:
+          KAFRUST_AUTO_COMMIT_INTERVAL_MS: "100"
+          KAFRUST_AUTO_COMMIT_REQUIRE_RECORD: "1"
+          KAFRUST_GROUP_ID: kafrust-auto-commit-kip848-${{ github.run_id }}
+          KAFRUST_GROUP_PROTOCOL: consumer
+        run: cargo run -p kafrust --example consumer_group_auto_commit
 
       - name: Run KIP-848 background heartbeat rejoin example
         if: matrix.kafka-version == '4.3.1'

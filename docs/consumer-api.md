@@ -93,6 +93,33 @@ next offset after the current log end. The partition does not need to be
 assigned. Retriable metadata, leader, connection, timeout, and broker errors
 use the same bounded retry policy as fetch operations.
 
+## Automatic Group Commits
+
+Consumer groups keep explicit commits as the default. Applications that want
+Kafka-style interval commits can opt in when joining:
+
+```rust,ignore
+let mut group = ConsumerGroupConfig::new(["localhost:9092"], "orders-service")
+    .subscribe("orders")
+    .enable_auto_commit(true)
+    .auto_commit_interval_ms(5_000)
+    .join()
+    .await?;
+
+let records = group.poll().await?;
+process(records)?;
+```
+
+After each successful poll, kafrust queues the current next offset for every
+assigned partition. A bounded background worker flushes those offsets through
+the current group coordinator, retries coordinator and transport transitions,
+and follows rejoin generation and assignment changes. A worker failure is
+returned by the next poll. Automatic commits are an at-least-once processing
+tradeoff: records returned by a poll may be committed before the application
+finishes processing them. Call `commit_offsets` before leaving when a final
+synchronous commit is required; leaving stops the worker and does not force an
+additional flush.
+
 Current implementation status:
 
 - `ConsumerConfig`, `Consumer`, and `ConsumerRecord` are public API types.
@@ -124,3 +151,7 @@ Current implementation status:
   transactional/control batch metadata, and partial trailing MessageSet entries
   in Fetch responses.
 - Consumer groups and offset commits are available through the separate alpha `ConsumerGroupConfig` path.
+- `ConsumerGroupConfig::enable_auto_commit` enables interval commits after
+  successful polls; it defaults to `false` to preserve explicit-commit behavior.
+- `ConsumerGroupConfig::auto_commit_interval_ms` controls the bounded automatic
+  commit worker interval and rejects a zero interval when joining.

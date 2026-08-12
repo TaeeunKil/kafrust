@@ -192,6 +192,8 @@ Scope:
   current-generation flush
 - bounded opt-in background commit worker with interval flush, retry, shutdown,
   and rejoin membership synchronization
+- opt-in Kafka-style automatic commit mode that queues current assignment
+  positions after successful polls and surfaces worker failure on a later poll
 - rebalance handling (poll-triggered rejoin for coordinator, generation, member, and rebalance heartbeat errors)
 
 Known limits:
@@ -219,6 +221,11 @@ Known limits:
   worker's focused unit coverage and live qualification passed for classic
   Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1, and KIP-848 Kafka 4.3.1 in
   [`Live Kafka Smoke`, run `31563953123`](https://github.com/TaeeunKil/kafrust/actions/runs/31563953123).
+- `ConsumerGroupConfig::enable_auto_commit(true)` owns that worker for the
+  lifetime of a joined group, queues current assignment positions after each
+  successful classic or KIP-848 poll, preserves the worker through rejoin, and
+  surfaces a terminal worker failure on a later poll. The default remains
+  explicit commit mode for backward-compatible alpha behavior.
 - `Consumer::split_partition_queue` and
   `ConsumerGroup::split_partition_queue` provide bounded per-partition
   delivery through `ConsumerPartitionQueue`. Focused tests cover independent

@@ -202,6 +202,8 @@ pub struct ConsumerGroupConfig {
     session_timeout_ms: i32,
     rebalance_timeout_ms: i32,
     retention_time_ms: i64,
+    auto_commit: bool,
+    auto_commit_interval: Duration,
     offset_reset_policy: OffsetResetPolicy,
     max_wait_ms: i32,
     min_bytes: i32,
@@ -248,6 +250,8 @@ impl ConsumerGroupConfig {
             session_timeout_ms: 10_000,
             rebalance_timeout_ms: 30_000,
             retention_time_ms: 86_400_000,
+            auto_commit: false,
+            auto_commit_interval: Duration::from_millis(5_000),
             offset_reset_policy: OffsetResetPolicy::Offset(0),
             max_wait_ms: 500,
             min_bytes: 1,
@@ -434,6 +438,35 @@ impl ConsumerGroupConfig {
     pub fn retention_time_ms(mut self, retention_time_ms: i64) -> Self {
         self.retention_time_ms = retention_time_ms;
         self
+    }
+
+    /// Enables or disables automatic offset commits after successful polls.
+    ///
+    /// When enabled, the group starts a bounded background commit worker on
+    /// [`Self::join`]. Offsets are queued from the current assignment after a
+    /// successful poll and flushed at the configured interval. The default is
+    /// `false` so existing callers retain explicit-commit behavior.
+    pub fn enable_auto_commit(mut self, enabled: bool) -> Self {
+        self.auto_commit = enabled;
+        self
+    }
+
+    /// Sets the interval used to flush automatically queued offsets.
+    ///
+    /// A zero interval is rejected when the group is joined.
+    pub fn auto_commit_interval_ms(mut self, interval_ms: u64) -> Self {
+        self.auto_commit_interval = Duration::from_millis(interval_ms);
+        self
+    }
+
+    /// Returns whether automatic offset commits are enabled.
+    pub fn auto_commit_enabled(&self) -> bool {
+        self.auto_commit
+    }
+
+    /// Returns the configured automatic offset commit interval.
+    pub fn auto_commit_interval(&self) -> Duration {
+        self.auto_commit_interval
     }
 
     /// Sets the fallback start offset when no committed offset exists.
@@ -623,15 +656,21 @@ impl ConsumerGroupConfig {
         err
     )]
     pub async fn join(self) -> Result<ConsumerGroup> {
-        if self.group_protocol == ConsumerGroupProtocol::Consumer {
+        if self.auto_commit {
+            validate_commit_worker_interval(self.auto_commit_interval)?;
+        }
+        let mut group = if self.group_protocol == ConsumerGroupProtocol::Consumer {
             if self.assignment_strategy != ConsumerGroupAssignmentStrategy::Range {
                 return Err(Error::Unsupported(
                     "KIP-848 groups use a broker-side assignor; configure ConsumerGroupAssignmentStrategy::Range or select the classic protocol",
                 ));
             }
-            return self.join_consumer(None, 0, None).await;
-        }
-        self.join_with_owned_partitions(Vec::new()).await
+            self.join_consumer(None, 0, None).await?
+        } else {
+            self.join_with_owned_partitions(Vec::new()).await?
+        };
+        group.start_auto_commit_if_enabled().await?;
+        Ok(group)
     }
 
     async fn join_with_owned_partitions(
@@ -863,6 +902,7 @@ impl ConsumerGroupConfig {
                 ),
                 pending_commit_offsets: BTreeMap::new(),
                 commit_worker: None,
+                auto_commit_worker: None,
             };
             group.notify_rebalance(RebalancePhase::After, group.consumer.assignments());
             return Ok(group);
@@ -1040,6 +1080,7 @@ impl ConsumerGroupConfig {
             ),
             pending_commit_offsets: BTreeMap::new(),
             commit_worker: None,
+            auto_commit_worker: None,
         };
         group.notify_rebalance(RebalancePhase::After, group.consumer.assignments());
         Ok(group)
@@ -1130,6 +1171,8 @@ impl fmt::Debug for ConsumerGroupConfig {
             .field("session_timeout_ms", &self.session_timeout_ms)
             .field("rebalance_timeout_ms", &self.rebalance_timeout_ms)
             .field("retention_time_ms", &self.retention_time_ms)
+            .field("auto_commit", &self.auto_commit)
+            .field("auto_commit_interval", &self.auto_commit_interval)
             .field("offset_reset_policy", &self.offset_reset_policy)
             .field("max_wait_ms", &self.max_wait_ms)
             .field("min_bytes", &self.min_bytes)
@@ -1156,6 +1199,8 @@ impl PartialEq for ConsumerGroupConfig {
             && self.session_timeout_ms == other.session_timeout_ms
             && self.rebalance_timeout_ms == other.rebalance_timeout_ms
             && self.retention_time_ms == other.retention_time_ms
+            && self.auto_commit == other.auto_commit
+            && self.auto_commit_interval == other.auto_commit_interval
             && self.offset_reset_policy == other.offset_reset_policy
             && self.max_wait_ms == other.max_wait_ms
             && self.min_bytes == other.min_bytes
@@ -1197,6 +1242,7 @@ pub struct ConsumerGroup {
     consumer: Consumer,
     pending_commit_offsets: BTreeMap<(String, i32), i64>,
     commit_worker: Option<CommitWorkerLink>,
+    auto_commit_worker: Option<ConsumerGroupCommitWorker>,
 }
 
 #[derive(Debug, Clone)]
@@ -1491,6 +1537,37 @@ impl ConsumerGroup {
         self.consumer.assignments()
     }
 
+    async fn start_auto_commit_if_enabled(&mut self) -> Result<()> {
+        if !self.config.auto_commit {
+            return Ok(());
+        }
+        let interval = self.config.auto_commit_interval;
+        let worker = self.spawn_commit_worker(interval).await?;
+        self.auto_commit_worker = Some(worker);
+        Ok(())
+    }
+
+    fn queue_auto_commit_offsets(&self) -> Result<()> {
+        if !self.config.auto_commit {
+            return Ok(());
+        }
+        let worker = self.commit_worker.as_ref().ok_or(Error::Unsupported(
+            "automatic consumer group commit worker is not running",
+        ))?;
+        worker.queue_assignments(self.consumer.assignments())
+    }
+
+    async fn observe_auto_commit_worker(&mut self) -> Result<()> {
+        if let Some(worker) = &mut self.auto_commit_worker {
+            if worker.try_wait().await?.is_some() {
+                return Err(Error::Unsupported(
+                    "automatic consumer group commit worker stopped",
+                ));
+            }
+        }
+        Ok(())
+    }
+
     /// Splits one currently assigned topic partition into a bounded receive
     /// queue. The queue is fed by [`Self::poll`] and is closed when a rejoin
     /// removes the partition from this member's assignment.
@@ -1588,6 +1665,9 @@ impl ConsumerGroup {
         err
     )]
     pub async fn leave(mut self) -> Result<()> {
+        if let Some(worker) = self.auto_commit_worker.take() {
+            worker.stop().await?;
+        }
         if let Some(worker) = &self.commit_worker {
             worker.signal_shutdown();
             worker.wait_finished().await;
@@ -1648,6 +1728,7 @@ impl ConsumerGroup {
         err
     )]
     pub async fn poll(&mut self) -> Result<Vec<ConsumerRecord>> {
+        self.observe_auto_commit_worker().await?;
         if self.cooperative_rejoin_required {
             debug!(
                 group_id = self.group_id.as_str(),
@@ -1672,7 +1753,10 @@ impl ConsumerGroup {
             }
             Err(error) => return Err(error),
         }
-        self.consumer.poll().await
+        let records = self.consumer.poll().await?;
+        self.queue_auto_commit_offsets()?;
+        self.observe_auto_commit_worker().await?;
+        Ok(records)
     }
 
     /// Checks a background heartbeat task before polling assigned partitions.
@@ -1758,6 +1842,7 @@ impl ConsumerGroup {
         &mut self,
         heartbeat: &mut ConsumerGroupHeartbeat,
     ) -> Result<Vec<ConsumerRecord>> {
+        self.observe_auto_commit_worker().await?;
         let interval = heartbeat.interval;
         match heartbeat.state_for_consumer(&self.group_id, self.consumer_session.as_ref()) {
             HeartbeatHandleState::Current => {}
@@ -1806,6 +1891,8 @@ impl ConsumerGroup {
         let result = self.consumer.poll().await;
 
         if result.is_ok() {
+            self.queue_auto_commit_offsets()?;
+            self.observe_auto_commit_worker().await?;
             match heartbeat.try_wait().await {
                 Ok(None) => {}
                 Ok(Some(())) => {
@@ -2114,6 +2201,7 @@ impl ConsumerGroup {
                 pending_commit_offsets.clone()
             };
             joined.commit_worker = commit_worker.clone();
+            joined.auto_commit_worker = self.auto_commit_worker.take();
             if commit_worker.is_none() {
                 joined.retain_pending_commit_offsets();
             }
@@ -2152,6 +2240,7 @@ impl ConsumerGroup {
             pending_commit_offsets.clone()
         };
         joined.commit_worker = commit_worker.clone();
+        joined.auto_commit_worker = self.auto_commit_worker.take();
         if commit_worker.is_none() {
             joined.retain_pending_commit_offsets();
         }
@@ -4105,6 +4194,8 @@ mod tests {
             .session_timeout_ms(8_000)
             .rebalance_timeout_ms(20_000)
             .retention_time_ms(60_000)
+            .enable_auto_commit(true)
+            .auto_commit_interval_ms(250)
             .start_offset(5)
             .max_wait_ms(250)
             .min_bytes(10)
@@ -4133,6 +4224,8 @@ mod tests {
             "alice"
         );
         assert_eq!(config.isolation_level_ref(), IsolationLevel::ReadCommitted);
+        assert!(config.auto_commit_enabled());
+        assert_eq!(config.auto_commit_interval(), Duration::from_millis(250));
         assert_eq!(
             config.assignment_strategy_ref(),
             ConsumerGroupAssignmentStrategy::RoundRobin
@@ -4361,6 +4454,8 @@ mod tests {
             OffsetResetPolicy::Offset(0)
         );
         assert_eq!(default.max_retries, DEFAULT_GROUP_MAX_RETRIES);
+        assert!(!default.auto_commit_enabled());
+        assert_eq!(default.auto_commit_interval(), Duration::from_secs(5));
 
         let latest = default
             .start_offset(12)
@@ -4378,6 +4473,22 @@ mod tests {
             .unwrap_err();
 
         assert!(matches!(error, Error::InvalidGroupInstanceId));
+    }
+
+    #[tokio::test]
+    async fn rejects_zero_auto_commit_interval_before_connecting() {
+        let error = ConsumerGroupConfig::new(["localhost:9092"], "orders-group")
+            .subscribe("orders")
+            .enable_auto_commit(true)
+            .auto_commit_interval_ms(0)
+            .join()
+            .await
+            .unwrap_err();
+
+        assert!(matches!(
+            error,
+            Error::Unsupported("commit worker interval must be greater than zero")
+        ));
     }
 
     #[tokio::test]
