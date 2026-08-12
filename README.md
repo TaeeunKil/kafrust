@@ -307,6 +307,27 @@ async fn main() -> kafrust::Result<()> {
 }
 ```
 
+For interval-based queued commits, use the opt-in bounded worker and observe
+its handle before shutdown:
+
+```rust
+let mut commit_worker = group
+    .spawn_commit_worker(std::time::Duration::from_secs(1))
+    .await?;
+
+for record in &records {
+    process(record.value())?;
+    group.commit_record(record)?;
+}
+
+commit_worker.stop().await?;
+group.leave().await?;
+```
+
+The worker coalesces offsets per partition and synchronizes its generation and
+assignment state across `group.rejoin()`. Check `try_wait()` in long-running
+applications so terminal commit or generation errors are not hidden.
+
 ## Compatibility
 
 kafrust compatibility claims are limited to behavior verified against real

@@ -274,7 +274,43 @@ sends only currently assigned queued partitions using the current group
 generation. A queued partition lost during rejoin is discarded; a failed flush
 keeps the queue so the caller can retry after observing the returned error.
 `commit_offsets` also clears queued offsets that it covers. This is an explicit
-flush queue, not a detached background auto-commit task.
+flush queue.
+
+For interval-based queued commits, start the bounded background worker after
+joining:
+
+```rust
+use std::time::Duration;
+
+let mut commit_worker = group
+    .spawn_commit_worker(Duration::from_secs(1))
+    .await?;
+
+for record in &records {
+    process(record.value())?;
+    group.commit_record(record)?;
+}
+
+while group.pending_commit_count() != 0 {
+    if commit_worker.try_wait().await?.is_some() {
+        return Err(kafrust::Error::Unsupported(
+            "background commit worker stopped before flushing offsets",
+        ));
+    }
+    tokio::time::sleep(Duration::from_millis(25)).await;
+}
+
+commit_worker.stop().await?;
+group.leave().await?;
+```
+
+The worker coalesces offsets per topic-partition, retries transport and
+coordinator-transition errors within `max_retries`, and shares the current
+generation, member identity, protocol, and assignment state across
+`ConsumerGroup::rejoin`. `try_wait` exposes terminal commit or generation
+errors. `stop` should be called before application shutdown; `leave` also waits
+for a signaled worker to finish before sending LeaveGroup. This is an opt-in
+commit worker, not a broker-side auto-commit setting.
 
 KIP-848 groups use OffsetCommit v9, including flexible request/response
 encoding and the member epoch in `GenerationIdOrMemberEpoch`. Classic groups

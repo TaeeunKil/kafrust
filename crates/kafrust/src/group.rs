@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
-use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex as StdMutex};
 use std::time::Duration;
 
 use kafrust_protocol::api::consumer_group_heartbeat::{
@@ -38,7 +39,7 @@ use crate::consumer::{
 use crate::error::{BrokerErrorKind, Error, Result};
 use crate::metrics::ClientMetrics;
 use regex::Regex;
-use tokio::sync::{oneshot, Mutex};
+use tokio::sync::{mpsc, oneshot, Mutex, Notify};
 use tokio::task::JoinHandle;
 use tokio::time::{self, MissedTickBehavior};
 use tracing::{debug, Instrument};
@@ -844,6 +845,7 @@ impl ConsumerGroupConfig {
                     consumer_assignments,
                 ),
                 pending_commit_offsets: BTreeMap::new(),
+                commit_worker: None,
             };
             group.notify_rebalance(RebalancePhase::After, group.consumer.assignments());
             return Ok(group);
@@ -1020,6 +1022,7 @@ impl ConsumerGroupConfig {
                 consumer_assignments,
             ),
             pending_commit_offsets: BTreeMap::new(),
+            commit_worker: None,
         };
         group.notify_rebalance(RebalancePhase::After, group.consumer.assignments());
         Ok(group)
@@ -1065,6 +1068,17 @@ fn queue_commit_offset(
         .or_insert(next_offset);
     *queued = (*queued).max(next_offset);
     Ok(())
+}
+
+fn retain_pending_commit_offsets_for(
+    assignments: &[ConsumerAssignment],
+    pending: &mut BTreeMap<(String, i32), i64>,
+) {
+    let assigned = assignments
+        .iter()
+        .map(|assignment| (assignment.topic().to_owned(), assignment.partition()))
+        .collect::<BTreeSet<_>>();
+    pending.retain(|key, _| assigned.contains(key));
 }
 
 fn pending_commit_assignments(
@@ -1163,6 +1177,229 @@ pub struct ConsumerGroup {
     consumer_owned_partitions: Option<Vec<ConsumerGroupHeartbeatTopicPartitions>>,
     consumer: Consumer,
     pending_commit_offsets: BTreeMap<(String, i32), i64>,
+    commit_worker: Option<CommitWorkerLink>,
+}
+
+#[derive(Debug, Clone)]
+struct CommitWorkerState {
+    group_id: String,
+    generation_id: i32,
+    member_id: String,
+    group_instance_id: Option<String>,
+    protocol: ConsumerGroupProtocol,
+    retention_time_ms: i64,
+    assignments: Vec<ConsumerAssignment>,
+    pending_commit_offsets: BTreeMap<(String, i32), i64>,
+}
+
+#[derive(Debug, Clone)]
+struct CommitWorkerMembership {
+    group_id: String,
+    generation_id: i32,
+    member_id: String,
+    group_instance_id: Option<String>,
+    protocol: ConsumerGroupProtocol,
+    retention_time_ms: i64,
+    assignments: Vec<ConsumerAssignment>,
+}
+
+#[derive(Debug, Clone)]
+struct CommitWorkerLink {
+    state: Arc<StdMutex<CommitWorkerState>>,
+    flush_tx: mpsc::Sender<CommitWorkerCommand>,
+    shutdown: Arc<AtomicBool>,
+    shutdown_notify: Arc<Notify>,
+    finished: Arc<AtomicBool>,
+    finished_notify: Arc<Notify>,
+}
+
+#[derive(Debug)]
+enum CommitWorkerCommand {
+    Flush(oneshot::Sender<Result<()>>),
+}
+
+impl CommitWorkerLink {
+    fn lock_state(&self) -> Result<std::sync::MutexGuard<'_, CommitWorkerState>> {
+        self.state
+            .lock()
+            .map_err(|_| Error::Unsupported("consumer group commit worker state was poisoned"))
+    }
+
+    fn queue_record(&self, topic: &str, partition: i32, offset: i64) -> Result<()> {
+        let mut state = self.lock_state()?;
+        queue_commit_offset(&mut state.pending_commit_offsets, topic, partition, offset)?;
+        drop(state);
+        Ok(())
+    }
+
+    fn queue_assignments(&self, assignments: &[ConsumerAssignment]) -> Result<()> {
+        let mut state = self.lock_state()?;
+        for assignment in assignments {
+            state.pending_commit_offsets.insert(
+                (assignment.topic().to_owned(), assignment.partition()),
+                assignment.next_offset(),
+            );
+        }
+        drop(state);
+        Ok(())
+    }
+
+    fn pending_count(&self) -> usize {
+        match self.state.lock() {
+            Ok(state) => state.pending_commit_offsets.len(),
+            Err(poisoned) => poisoned.into_inner().pending_commit_offsets.len(),
+        }
+    }
+
+    fn snapshot_pending(&self) -> Result<BTreeMap<(String, i32), i64>> {
+        Ok(self.lock_state()?.pending_commit_offsets.clone())
+    }
+
+    fn update_membership(
+        &self,
+        membership: CommitWorkerMembership,
+        pending_commit_offsets: BTreeMap<(String, i32), i64>,
+    ) -> Result<()> {
+        let mut state = self.lock_state()?;
+        state.group_id = membership.group_id;
+        state.generation_id = membership.generation_id;
+        state.member_id = membership.member_id;
+        state.group_instance_id = membership.group_instance_id;
+        state.protocol = membership.protocol;
+        state.retention_time_ms = membership.retention_time_ms;
+        state.assignments = membership.assignments;
+        state.pending_commit_offsets = pending_commit_offsets;
+        let assignments = state.assignments.clone();
+        retain_pending_commit_offsets_for(&assignments, &mut state.pending_commit_offsets);
+        drop(state);
+        Ok(())
+    }
+
+    fn retain_assigned(&self) -> Result<()> {
+        let mut state = self.lock_state()?;
+        let assignments = state.assignments.clone();
+        retain_pending_commit_offsets_for(&assignments, &mut state.pending_commit_offsets);
+        Ok(())
+    }
+
+    fn clear_committed(
+        &self,
+        snapshot: &CommitWorkerState,
+        assignments: &[ConsumerAssignment],
+    ) -> Result<()> {
+        let mut state = self.lock_state()?;
+        if state.generation_id != snapshot.generation_id
+            || state.member_id != snapshot.member_id
+            || state.protocol != snapshot.protocol
+        {
+            return Ok(());
+        }
+        for assignment in assignments {
+            let key = (assignment.topic().to_owned(), assignment.partition());
+            let committed = state
+                .pending_commit_offsets
+                .get(&key)
+                .is_some_and(|pending| *pending <= assignment.next_offset());
+            if committed {
+                state.pending_commit_offsets.remove(&key);
+            }
+        }
+        Ok(())
+    }
+
+    async fn flush(&self) -> Result<()> {
+        let (ack_tx, ack_rx) = oneshot::channel();
+        self.flush_tx
+            .send(CommitWorkerCommand::Flush(ack_tx))
+            .await
+            .map_err(|_| Error::Unsupported("consumer group commit worker stopped"))?;
+        ack_rx
+            .await
+            .map_err(|_| Error::Unsupported("consumer group commit worker stopped"))?
+    }
+
+    fn signal_shutdown(&self) {
+        self.shutdown.store(true, Ordering::Release);
+        self.shutdown_notify.notify_waiters();
+    }
+
+    fn mark_finished(&self) {
+        self.finished.store(true, Ordering::Release);
+        self.finished_notify.notify_waiters();
+    }
+
+    async fn wait_finished(&self) {
+        while !self.finished.load(Ordering::Acquire) {
+            self.finished_notify.notified().await;
+        }
+    }
+}
+
+/// Handle for a bounded background consumer-group offset commit task.
+///
+/// The worker coalesces queued offsets by topic-partition and flushes them at
+/// the configured interval. Group rejoin state is synchronized by the owning
+/// [`ConsumerGroup`]. Call [`Self::try_wait`] to observe a terminal commit or
+/// generation error, and stop the worker before leaving the group.
+#[derive(Debug)]
+pub struct ConsumerGroupCommitWorker {
+    group_id: String,
+    interval: Duration,
+    link: CommitWorkerLink,
+    handle: Option<JoinHandle<Result<()>>>,
+}
+
+impl ConsumerGroupCommitWorker {
+    /// Returns the Kafka consumer group ID this worker serves.
+    pub fn group_id(&self) -> &str {
+        &self.group_id
+    }
+
+    /// Returns the interval used for automatic queued-offset flushes.
+    pub fn interval(&self) -> Duration {
+        self.interval
+    }
+
+    /// Returns whether the background commit task has completed.
+    pub fn is_finished(&self) -> bool {
+        match &self.handle {
+            Some(handle) => handle.is_finished(),
+            None => true,
+        }
+    }
+
+    /// Checks for task completion without requesting shutdown.
+    pub async fn try_wait(&mut self) -> Result<Option<()>> {
+        let Some(handle) = &self.handle else {
+            return Ok(Some(()));
+        };
+        if !handle.is_finished() {
+            return Ok(None);
+        }
+        let Some(handle) = self.handle.take() else {
+            return Ok(Some(()));
+        };
+        handle.await?.map(Some)
+    }
+
+    /// Stops the background commit task and waits for it to finish.
+    pub async fn stop(mut self) -> Result<()> {
+        self.link.signal_shutdown();
+        let Some(handle) = self.handle.take() else {
+            return Ok(());
+        };
+        handle.await?
+    }
+}
+
+impl Drop for ConsumerGroupCommitWorker {
+    fn drop(&mut self) {
+        self.link.signal_shutdown();
+        self.link.mark_finished();
+        if let Some(handle) = &self.handle {
+            handle.abort();
+        }
+    }
 }
 
 /// Consumer group identity used to fence transactional offset commits.
@@ -1251,17 +1488,24 @@ impl ConsumerGroup {
                 partition: record.partition(),
             });
         }
-        queue_commit_offset(
-            &mut self.pending_commit_offsets,
-            record.topic(),
-            record.partition(),
-            record.offset(),
-        )
+        if let Some(worker) = &self.commit_worker {
+            worker.queue_record(record.topic(), record.partition(), record.offset())
+        } else {
+            queue_commit_offset(
+                &mut self.pending_commit_offsets,
+                record.topic(),
+                record.partition(),
+                record.offset(),
+            )
+        }
     }
 
     /// Returns the number of topic partitions waiting for a queued commit.
     pub fn pending_commit_count(&self) -> usize {
-        self.pending_commit_offsets.len()
+        self.commit_worker.as_ref().map_or_else(
+            || self.pending_commit_offsets.len(),
+            CommitWorkerLink::pending_count,
+        )
     }
 
     /// Returns the next offset for a currently assigned topic partition.
@@ -1314,6 +1558,10 @@ impl ConsumerGroup {
         err
     )]
     pub async fn leave(mut self) -> Result<()> {
+        if let Some(worker) = &self.commit_worker {
+            worker.signal_shutdown();
+            worker.wait_finished().await;
+        }
         if self.protocol == ConsumerGroupProtocol::Consumer {
             return self.leave_consumer().await;
         }
@@ -1594,6 +1842,100 @@ impl ConsumerGroup {
         Ok(())
     }
 
+    /// Starts a background task that periodically flushes queued record offsets.
+    ///
+    /// [`Self::commit_record`] continues to coalesce offsets synchronously, but
+    /// the worker owns a separate authenticated coordinator connection for the
+    /// actual OffsetCommit requests. Rejoins update the worker's generation,
+    /// member ID, and assignments. Call [`ConsumerGroupCommitWorker::try_wait`]
+    /// to observe a terminal commit or generation error, and stop it before
+    /// leaving the group.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.consumer_group.spawn_commit_worker",
+        skip_all,
+        fields(group_id = self.group_id.as_str(), member_id = self.member_id.as_str(), generation_id = self.generation_id, interval_ms = duration_millis(interval)),
+        err
+    )]
+    pub async fn spawn_commit_worker(
+        &mut self,
+        interval: Duration,
+    ) -> Result<ConsumerGroupCommitWorker> {
+        validate_commit_worker_interval(interval)?;
+        if self.commit_worker.is_some() {
+            return Err(Error::Unsupported(
+                "consumer group commit worker is already running",
+            ));
+        }
+
+        let coordinator = connect_group_coordinator_with_retry(
+            &self.config.client,
+            &self.group_id,
+            self.config.max_retries,
+        )
+        .await?;
+        let state = Arc::new(StdMutex::new(CommitWorkerState {
+            group_id: self.group_id.clone(),
+            generation_id: self.generation_id,
+            member_id: self.member_id.clone(),
+            group_instance_id: self.config.group_instance_id.clone(),
+            protocol: self.protocol,
+            retention_time_ms: self.retention_time_ms,
+            assignments: self.consumer.assignments().to_vec(),
+            pending_commit_offsets: self.pending_commit_offsets.clone(),
+        }));
+        let shutdown = Arc::new(AtomicBool::new(false));
+        let shutdown_notify = Arc::new(Notify::new());
+        let finished = Arc::new(AtomicBool::new(false));
+        let finished_notify = Arc::new(Notify::new());
+        let (flush_tx, flush_rx) = mpsc::channel(8);
+        let link = CommitWorkerLink {
+            state: state.clone(),
+            flush_tx,
+            shutdown: shutdown.clone(),
+            shutdown_notify: shutdown_notify.clone(),
+            finished: finished.clone(),
+            finished_notify: finished_notify.clone(),
+        };
+        let client_config = self.config.client.clone();
+        let group_id = self.group_id.clone();
+        let max_retries = self.config.max_retries;
+        let worker_span = tracing::debug_span!(
+            "kafka.consumer_group.background_commit",
+            group_id = group_id.as_str(),
+            member_id = self.member_id.as_str(),
+            generation_id = self.generation_id,
+            interval_ms = duration_millis(interval),
+        );
+        let worker_link = link.clone();
+        let handle = tokio::spawn(
+            async move {
+                let result = run_background_commit_worker(
+                    coordinator,
+                    worker_link.clone(),
+                    flush_rx,
+                    client_config,
+                    group_id,
+                    max_retries,
+                    interval,
+                )
+                .await;
+                worker_link.mark_finished();
+                result
+            }
+            .instrument(worker_span),
+        );
+
+        self.pending_commit_offsets.clear();
+        self.commit_worker = Some(link.clone());
+        Ok(ConsumerGroupCommitWorker {
+            group_id: self.group_id.clone(),
+            interval,
+            link,
+            handle: Some(handle),
+        })
+    }
+
     /// Starts a background heartbeat task for this joined group member.
     #[tracing::instrument(
         level = "debug",
@@ -1712,7 +2054,11 @@ impl ConsumerGroup {
             .map(|assignment| (assignment.topic().to_owned(), assignment.partition()))
             .collect::<Vec<_>>();
         let owned_partitions = owned_partitions_from_assignments(self.consumer.assignments());
-        let pending_commit_offsets = self.pending_commit_offsets.clone();
+        let commit_worker = self.commit_worker.clone();
+        let pending_commit_offsets = match &commit_worker {
+            Some(worker) => worker.snapshot_pending()?,
+            None => self.pending_commit_offsets.clone(),
+        };
         if self.protocol == ConsumerGroupProtocol::Consumer {
             let owned_partitions = consumer_owned_partitions_from_assignments(
                 self.consumer.assignments(),
@@ -1732,10 +2078,31 @@ impl ConsumerGroup {
                     joined.consumer.pause(&topic, partition)?;
                 }
             }
-            joined.pending_commit_offsets = pending_commit_offsets;
-            joined.retain_pending_commit_offsets();
+            joined.pending_commit_offsets = if commit_worker.is_some() {
+                BTreeMap::new()
+            } else {
+                pending_commit_offsets.clone()
+            };
+            joined.commit_worker = commit_worker.clone();
+            if commit_worker.is_none() {
+                joined.retain_pending_commit_offsets();
+            }
             let current_assignments = joined.consumer.assignments().to_vec();
             *self = joined;
+            if let Some(worker) = &self.commit_worker {
+                worker.update_membership(
+                    CommitWorkerMembership {
+                        group_id: self.group_id.clone(),
+                        generation_id: self.generation_id,
+                        member_id: self.member_id.clone(),
+                        group_instance_id: self.config.group_instance_id.clone(),
+                        protocol: self.protocol,
+                        retention_time_ms: self.retention_time_ms,
+                        assignments: self.consumer.assignments().to_vec(),
+                    },
+                    pending_commit_offsets,
+                )?;
+            }
             self.notify_rebalance(RebalancePhase::After, &current_assignments);
             return Ok(());
         }
@@ -1749,10 +2116,31 @@ impl ConsumerGroup {
                 joined.consumer.pause(&topic, partition)?;
             }
         }
-        joined.pending_commit_offsets = pending_commit_offsets;
-        joined.retain_pending_commit_offsets();
+        joined.pending_commit_offsets = if commit_worker.is_some() {
+            BTreeMap::new()
+        } else {
+            pending_commit_offsets.clone()
+        };
+        joined.commit_worker = commit_worker.clone();
+        if commit_worker.is_none() {
+            joined.retain_pending_commit_offsets();
+        }
         let current_assignments = joined.consumer.assignments().to_vec();
         *self = joined;
+        if let Some(worker) = &self.commit_worker {
+            worker.update_membership(
+                CommitWorkerMembership {
+                    group_id: self.group_id.clone(),
+                    generation_id: self.generation_id,
+                    member_id: self.member_id.clone(),
+                    group_instance_id: self.config.group_instance_id.clone(),
+                    protocol: self.protocol,
+                    retention_time_ms: self.retention_time_ms,
+                    assignments: self.consumer.assignments().to_vec(),
+                },
+                pending_commit_offsets,
+            )?;
+        }
         self.notify_rebalance(RebalancePhase::After, &current_assignments);
         Ok(())
     }
@@ -1956,6 +2344,10 @@ impl ConsumerGroup {
             topic_count = offset_commit_topics(&assignments).len(),
             "committing kafka consumer group offsets"
         );
+        if let Some(worker) = &self.commit_worker {
+            worker.queue_assignments(&assignments)?;
+            return worker.flush().await;
+        }
         self.commit_assignment_offsets(&assignments).await?;
         self.clear_pending_commit_offsets(&assignments);
         Ok(())
@@ -1974,6 +2366,10 @@ impl ConsumerGroup {
         err
     )]
     pub async fn commit_queued_offsets(&mut self) -> Result<()> {
+        if let Some(worker) = &self.commit_worker {
+            worker.retain_assigned()?;
+            return worker.flush().await;
+        }
         self.retain_pending_commit_offsets();
         let assignments =
             pending_commit_assignments(self.consumer.assignments(), &self.pending_commit_offsets);
@@ -3118,6 +3514,178 @@ fn validate_heartbeat_interval(interval: Duration) -> Result<()> {
     Ok(())
 }
 
+fn validate_commit_worker_interval(interval: Duration) -> Result<()> {
+    if interval.is_zero() {
+        return Err(Error::Unsupported(
+            "commit worker interval must be greater than zero",
+        ));
+    }
+    Ok(())
+}
+
+async fn run_background_commit_worker(
+    mut coordinator: Client,
+    link: CommitWorkerLink,
+    mut flush_rx: mpsc::Receiver<CommitWorkerCommand>,
+    client_config: ClientConfig,
+    group_id: String,
+    max_retries: u32,
+    interval: Duration,
+) -> Result<()> {
+    let mut ticker = time::interval(interval);
+    ticker.set_missed_tick_behavior(MissedTickBehavior::Delay);
+    ticker.tick().await;
+
+    loop {
+        if link.shutdown.load(Ordering::Acquire) {
+            return Ok(());
+        }
+        tokio::select! {
+            _ = link.shutdown_notify.notified() => return Ok(()),
+            command = flush_rx.recv() => {
+                let Some(CommitWorkerCommand::Flush(ack)) = command else {
+                    return Ok(());
+                };
+                match flush_commit_worker(
+                    &mut coordinator,
+                    &link,
+                    &client_config,
+                    &group_id,
+                    max_retries,
+                )
+                .await
+                {
+                    Ok(()) => {
+                        let _ = ack.send(Ok(()));
+                    }
+                    Err(error) => {
+                        let _ = ack.send(Err(Error::Unsupported(
+                            "background commit worker stopped after a commit failure",
+                        )));
+                        link.signal_shutdown();
+                        return Err(error);
+                    }
+                }
+            }
+            _ = ticker.tick() => {
+                if let Err(error) = flush_commit_worker(
+                    &mut coordinator,
+                    &link,
+                    &client_config,
+                    &group_id,
+                    max_retries,
+                )
+                .await
+                {
+                    link.signal_shutdown();
+                    return Err(error);
+                }
+            }
+        }
+    }
+}
+
+async fn flush_commit_worker(
+    coordinator: &mut Client,
+    link: &CommitWorkerLink,
+    client_config: &ClientConfig,
+    group_id: &str,
+    max_retries: u32,
+) -> Result<()> {
+    let snapshot = link.lock_state()?.clone();
+    let assignments =
+        pending_commit_assignments(&snapshot.assignments, &snapshot.pending_commit_offsets);
+    if assignments.is_empty() {
+        return Ok(());
+    }
+
+    let mut retry_attempt = 0;
+    loop {
+        match commit_worker_request(coordinator, &snapshot, &assignments).await {
+            Ok(()) => {
+                link.clear_committed(&snapshot, &assignments)?;
+                return Ok(());
+            }
+            Err(error) if retry_attempt < max_retries && should_retry_commit_worker(&error) => {
+                retry_attempt += 1;
+                client_config.record_retry();
+                debug!(
+                    group_id,
+                    retry_attempt,
+                    error = %error,
+                    "retrying background kafka consumer group offset commit"
+                );
+                *coordinator =
+                    connect_group_coordinator_with_retry(client_config, group_id, max_retries)
+                        .await?;
+                time::sleep(group_retry_backoff(retry_attempt)).await;
+            }
+            Err(error) => return Err(error),
+        }
+    }
+}
+
+async fn commit_worker_request(
+    coordinator: &mut Client,
+    state: &CommitWorkerState,
+    assignments: &[ConsumerAssignment],
+) -> Result<()> {
+    let response_topics = match state.protocol {
+        ConsumerGroupProtocol::Consumer => coordinator
+            .offset_commit_v9(
+                state.group_id.clone(),
+                state.generation_id,
+                state.member_id.clone(),
+                state.group_instance_id.clone(),
+                offset_commit_topics_v9(assignments),
+            )
+            .await
+            .map(|response| response.topics),
+        ConsumerGroupProtocol::Classic if state.group_instance_id.is_some() => coordinator
+            .offset_commit_v7(
+                state.group_id.clone(),
+                state.generation_id,
+                state.member_id.clone(),
+                state.group_instance_id.clone(),
+                offset_commit_topics_v7(assignments),
+            )
+            .await
+            .map(|response| response.topics),
+        ConsumerGroupProtocol::Classic => coordinator
+            .offset_commit_v2(
+                state.group_id.clone(),
+                state.generation_id,
+                state.member_id.clone(),
+                state.retention_time_ms,
+                offset_commit_topics(assignments),
+            )
+            .await
+            .map(|response| response.topics),
+    }?;
+
+    if let Some(error) = offset_commit_response_error(&state.group_id, &response_topics) {
+        return Err(match error {
+            Error::Broker { code, context } => coordinator.broker_error(code, context),
+            error => error,
+        });
+    }
+    Ok(())
+}
+
+fn should_retry_commit_worker(error: &Error) -> bool {
+    if matches!(error, Error::Io(_) | Error::RequestTimedOut { .. }) {
+        return true;
+    }
+    matches!(
+        error.broker_error_kind(),
+        Some(
+            BrokerErrorKind::CoordinatorLoadInProgress
+                | BrokerErrorKind::CoordinatorNotAvailable
+                | BrokerErrorKind::NotCoordinator
+        )
+    )
+}
+
 async fn run_background_heartbeat(
     coordinator: &mut Client,
     group_id: String,
@@ -3461,12 +4029,13 @@ mod tests {
         offset_commit_topics_v7, offset_fetch_topics, pending_commit_assignments,
         queue_commit_offset, range_assignments, record_consumer_heartbeat_response,
         round_robin_assignments, should_rejoin_after_background_heartbeat, should_rejoin_group,
-        should_retry_consumer_join_transport, validate_heartbeat_interval,
-        ConsumerGroupAssignmentStrategy, ConsumerGroupConfig, ConsumerGroupHeartbeat,
-        ConsumerGroupHeartbeatTopicPartitions, ConsumerGroupProtocol,
-        ConsumerProtocolHeartbeatState as ConsumerGroupHeartbeatState, HeartbeatHandleState,
-        IsolationLevel, OffsetResetPolicy, RebalanceEvent, RebalancePhase, SecurityProtocol,
-        DEFAULT_GROUP_MAX_RETRIES, GROUP_JOIN_MAX_RETRY_BACKOFF,
+        should_retry_commit_worker, should_retry_consumer_join_transport,
+        validate_commit_worker_interval, validate_heartbeat_interval, CommitWorkerLink,
+        CommitWorkerMembership, CommitWorkerState, ConsumerGroupAssignmentStrategy,
+        ConsumerGroupConfig, ConsumerGroupHeartbeat, ConsumerGroupHeartbeatTopicPartitions,
+        ConsumerGroupProtocol, ConsumerProtocolHeartbeatState as ConsumerGroupHeartbeatState,
+        HeartbeatHandleState, IsolationLevel, OffsetResetPolicy, RebalanceEvent, RebalancePhase,
+        SecurityProtocol, DEFAULT_GROUP_MAX_RETRIES, GROUP_JOIN_MAX_RETRY_BACKOFF,
     };
     use crate::consumer::ConsumerAssignment;
     use crate::Error;
@@ -3488,7 +4057,9 @@ mod tests {
         ConsumerProtocolAssignmentV0, ConsumerProtocolSubscriptionV0,
         ConsumerProtocolSubscriptionV1, ConsumerProtocolTopicAssignment,
     };
+    use std::sync::atomic::AtomicBool;
     use std::sync::Arc;
+    use tokio::sync::{mpsc, Notify};
 
     #[test]
     fn builds_consumer_group_config() {
@@ -3613,6 +4184,97 @@ mod tests {
             error,
             Some(Error::Unsupported("consumer record offset overflow"))
         ));
+    }
+
+    #[test]
+    fn commit_worker_state_coalesces_and_tracks_current_assignments() {
+        let (flush_tx, _flush_rx) = mpsc::channel(1);
+        let link = CommitWorkerLink {
+            state: Arc::new(std::sync::Mutex::new(CommitWorkerState {
+                group_id: "orders-group".to_owned(),
+                generation_id: 4,
+                member_id: "member-a".to_owned(),
+                group_instance_id: None,
+                protocol: ConsumerGroupProtocol::Classic,
+                retention_time_ms: -1,
+                assignments: vec![ConsumerAssignment::new("orders".to_owned(), 0, 0)],
+                pending_commit_offsets: BTreeMap::new(),
+            })),
+            flush_tx,
+            shutdown: Arc::new(AtomicBool::new(false)),
+            shutdown_notify: Arc::new(Notify::new()),
+            finished: Arc::new(AtomicBool::new(false)),
+            finished_notify: Arc::new(Notify::new()),
+        };
+
+        link.queue_record("orders", 0, 4).unwrap();
+        link.queue_record("orders", 0, 7).unwrap();
+        link.queue_record("orders", 0, 5).unwrap();
+        link.queue_record("payments", 0, 2).unwrap();
+
+        assert_eq!(link.pending_count(), 2);
+        assert_eq!(
+            link.snapshot_pending().unwrap()[&(String::from("orders"), 0)],
+            8
+        );
+
+        link.update_membership(
+            CommitWorkerMembership {
+                group_id: "orders-group".to_owned(),
+                generation_id: 5,
+                member_id: "member-b".to_owned(),
+                group_instance_id: None,
+                protocol: ConsumerGroupProtocol::Classic,
+                retention_time_ms: -1,
+                assignments: vec![ConsumerAssignment::new("payments".to_owned(), 0, 3)],
+            },
+            link.snapshot_pending().unwrap(),
+        )
+        .unwrap();
+
+        assert_eq!(link.pending_count(), 1);
+        assert_eq!(
+            link.snapshot_pending().unwrap()[&(String::from("payments"), 0)],
+            3
+        );
+    }
+
+    #[test]
+    fn classifies_commit_worker_retryable_errors() {
+        assert!(should_retry_commit_worker(&Error::Io(std::io::Error::new(
+            std::io::ErrorKind::ConnectionReset,
+            "connection reset",
+        ))));
+        assert!(should_retry_commit_worker(&Error::RequestTimedOut {
+            timeout_ms: 1_000,
+        }));
+        assert!(should_retry_commit_worker(&Error::Broker {
+            code: 14,
+            context: "coordinator loading".to_owned(),
+        }));
+        assert!(should_retry_commit_worker(&Error::Broker {
+            code: 15,
+            context: "coordinator unavailable".to_owned(),
+        }));
+        assert!(should_retry_commit_worker(&Error::Broker {
+            code: 16,
+            context: "not coordinator".to_owned(),
+        }));
+        assert!(!should_retry_commit_worker(&Error::Broker {
+            code: 22,
+            context: "illegal generation".to_owned(),
+        }));
+    }
+
+    #[test]
+    fn rejects_zero_commit_worker_interval() {
+        assert!(matches!(
+            validate_commit_worker_interval(Duration::ZERO),
+            Err(Error::Unsupported(
+                "commit worker interval must be greater than zero"
+            ))
+        ));
+        assert!(validate_commit_worker_interval(Duration::from_millis(1)).is_ok());
     }
 
     #[test]

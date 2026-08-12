@@ -190,6 +190,8 @@ Scope:
   each classic or KIP-848 join/rejoin
 - explicit per-record offset commit queue with per-partition coalescing and
   current-generation flush
+- bounded opt-in background commit worker with interval flush, retry, shutdown,
+  and rejoin membership synchronization
 - rebalance handling (poll-triggered rejoin for coordinator, generation, member, and rebalance heartbeat errors)
 
 Known limits:
@@ -209,8 +211,13 @@ Known limits:
   offset through `commit_record`, and flushed it with
   `commit_queued_offsets`. Classic Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plus
   KIP-848 Kafka 4.3.1 passed this live path in
-  [`Live Kafka Smoke`, run `31561944247`](https://github.com/TaeeunKil/kafrust/actions/runs/31561944247); a detached
-  background commit worker and partition queue splitting remain open.
+  [`Live Kafka Smoke`, run `31561944247`](https://github.com/TaeeunKil/kafrust/actions/runs/31561944247).
+- `ConsumerGroup::spawn_commit_worker` now provides a bounded, interval-based
+  queued-offset worker. It coalesces by partition, retries transport and
+  coordinator-transition failures, synchronizes generation/member/assignment
+  state across explicit rejoin, and waits for shutdown before LeaveGroup. The
+  worker's focused unit coverage is complete; broker qualification is pending
+  in the next live smoke run. Partition queue splitting remains open.
 - `ConsumerGroup::rejoin` is public and refreshes regex topic discovery before
   joining again. The classic matrix and Kafka 4.3.1 KIP-848 regex paths passed
   initial and explicit rejoin assignment checks in [`Live Kafka Smoke`, run

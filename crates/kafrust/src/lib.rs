@@ -56,9 +56,9 @@ pub use consumer::{
 };
 pub use error::{BrokerErrorKind, Error, Result};
 pub use group::{
-    ConsumerGroup, ConsumerGroupAssignmentStrategy, ConsumerGroupConfig, ConsumerGroupHeartbeat,
-    ConsumerGroupMetadata, ConsumerGroupProtocol, OffsetResetPolicy, RebalanceEvent,
-    RebalanceListener, RebalancePhase,
+    ConsumerGroup, ConsumerGroupAssignmentStrategy, ConsumerGroupCommitWorker, ConsumerGroupConfig,
+    ConsumerGroupHeartbeat, ConsumerGroupMetadata, ConsumerGroupProtocol, OffsetResetPolicy,
+    RebalanceEvent, RebalanceListener, RebalancePhase,
 };
 pub use kafrust_protocol as protocol;
 pub use metrics::{ClientMetrics, ClientMetricsSnapshot};

@@ -186,6 +186,8 @@ jobs:
 
       - name: Run regex consumer group example
         env:
+          KAFRUST_COMMIT_WORKER: "1"
+          KAFRUST_COMMIT_WORKER_INTERVAL_MS: "100"
           KAFRUST_GROUP_ID: kafrust-regex-${{ matrix.kafka-version }}-${{ github.run_id }}
           KAFRUST_TOPIC_PATTERN: '^kafrust-regex-(orders|payments)$'
           KAFRUST_REGEX_EXPECTED_TOPICS: kafrust-regex-orders,kafrust-regex-payments
@@ -194,6 +196,8 @@ jobs:
       - name: Run KIP-848 regex consumer group example
         if: matrix.kafka-version == '4.3.1'
         env:
+          KAFRUST_COMMIT_WORKER: "1"
+          KAFRUST_COMMIT_WORKER_INTERVAL_MS: "100"
           KAFRUST_GROUP_ID: kafrust-regex-kip848-${{ github.run_id }}
           KAFRUST_GROUP_PROTOCOL: consumer
           KAFRUST_TOPIC_PATTERN: '^kafrust-regex-(orders|payments)$'

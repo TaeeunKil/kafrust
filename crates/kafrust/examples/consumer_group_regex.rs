@@ -1,6 +1,7 @@
 mod common;
 
 use std::collections::BTreeSet;
+use std::time::{Duration, Instant};
 
 use kafrust::{ConsumerGroupConfig, Error};
 
@@ -36,6 +37,20 @@ async fn main() -> kafrust::Result<()> {
         ));
     }
 
+    let mut commit_worker = if std::env::var_os("KAFRUST_COMMIT_WORKER").is_some() {
+        let interval_ms = std::env::var("KAFRUST_COMMIT_WORKER_INTERVAL_MS")
+            .ok()
+            .and_then(|value| value.parse::<u64>().ok())
+            .unwrap_or(100);
+        Some(
+            group
+                .spawn_commit_worker(Duration::from_millis(interval_ms))
+                .await?,
+        )
+    } else {
+        None
+    };
+
     let records = group.poll().await?;
     if records.is_empty() {
         return Err(Error::Unsupported(
@@ -45,7 +60,28 @@ async fn main() -> kafrust::Result<()> {
     for record in &records {
         group.commit_record(record)?;
     }
-    group.commit_queued_offsets().await?;
+    if let Some(worker) = &mut commit_worker {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            if group.pending_commit_count() == 0 {
+                break;
+            }
+            if worker.try_wait().await?.is_some() {
+                return Err(Error::Unsupported(
+                    "background commit worker stopped before flushing offsets",
+                ));
+            }
+            if Instant::now() >= deadline {
+                return Err(Error::Unsupported(
+                    "background commit worker did not flush offsets",
+                ));
+            }
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+        group.commit_queued_offsets().await?;
+    } else {
+        group.commit_queued_offsets().await?;
+    }
     if group.pending_commit_count() != 0 {
         return Err(Error::Unsupported(
             "regex subscription left queued offsets after commit",
@@ -67,6 +103,10 @@ async fn main() -> kafrust::Result<()> {
         return Err(Error::Unsupported(
             "regex subscription rejoin produced no assignments",
         ));
+    }
+
+    if let Some(worker) = commit_worker {
+        worker.stop().await?;
     }
 
     println!(
