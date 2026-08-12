@@ -79,6 +79,9 @@ async fn main() -> kafrust::Result<()> {
         })
         .collect::<BTreeMap<_, _>>();
     if expected_positions != observed_positions {
+        eprintln!(
+            "automatic commit positions differ: expected={expected_positions:?} observed={observed_positions:?}"
+        );
         return Err(Error::Unsupported(
             "automatic consumer group commit position was not restored",
         ));
