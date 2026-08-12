@@ -426,6 +426,7 @@ jobs:
 
       - name: Run KIP-848 coordinator failover
         run: |
+          KAFRUST_PARTITION_QUEUE=1 \
           KAFRUST_FAILOVER_PAUSE_MS=30000 \
           cargo run -p kafrust --example consumer_group_failover \
             >/tmp/kafrust-kip848-failover.log 2>&1 &
@@ -866,6 +867,7 @@ jobs:
       - name: Run multi-broker consumer group after broker stop
         env:
           KAFRUST_GROUP_ID: kafrust-smoke-multi-after-stop
+          KAFRUST_PARTITION_QUEUE: "1"
         run: cargo run -p kafrust --example consumer_group_poll
 
       - name: Dump multi-broker Kafka logs
@@ -1042,6 +1044,7 @@ jobs:
       - name: Run SASL consumer group coordinator failover
         run: |
           KAFRUST_GROUP_ID="kafrust-sasl-group-failover-${GITHUB_RUN_ID}" \
+          KAFRUST_PARTITION_QUEUE=1 \
           KAFRUST_FAILOVER_PAUSE_MS=30000 \
           cargo run -p kafrust --example consumer_group_failover \
             >/tmp/kafrust-sasl-group-failover.log 2>&1 &

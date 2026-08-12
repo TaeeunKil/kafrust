@@ -26,6 +26,8 @@ async fn main() -> kafrust::Result<()> {
     .connect()
     .await?;
     let coordinator = find_group_coordinator_with_retry(&mut bootstrap, &group_id).await?;
+    let use_partition_queue = std::env::var("KAFRUST_PARTITION_QUEUE")
+        .is_ok_and(|value| value == "1" || value.eq_ignore_ascii_case("true"));
 
     let config = common::apply_security(
         ConsumerGroupConfig::new(bootstrap_servers, group_id)
@@ -38,6 +40,17 @@ async fn main() -> kafrust::Result<()> {
             .subscribe(topic),
     )?;
     let mut group = config.join().await?;
+    let mut partition_queue = if use_partition_queue {
+        let assignment = group
+            .assignments()
+            .first()
+            .ok_or(Error::Unsupported("consumer group has no assignment"))?;
+        let assigned_topic = assignment.topic().to_owned();
+        let assigned_partition = assignment.partition();
+        Some(group.split_partition_queue(assigned_topic, assigned_partition)?)
+    } else {
+        None
+    };
     println!(
         "consumer group failover joined member {} generation {} coordinator node {}",
         group.member_id(),
@@ -46,9 +59,11 @@ async fn main() -> kafrust::Result<()> {
     );
 
     let before = group.poll().await?;
+    let before_queued = drain_partition_queue(&mut partition_queue);
     println!(
-        "consumer group failover before polled count={}",
-        before.len()
+        "consumer group failover before polled count={} queued count={}",
+        before.len(),
+        before_queued
     );
     flush_stdout()?;
 
@@ -59,10 +74,28 @@ async fn main() -> kafrust::Result<()> {
     }
 
     let after = group.poll().await?;
-    println!("consumer group failover after polled count={}", after.len());
+    let after_queued = drain_partition_queue(&mut partition_queue);
+    println!(
+        "consumer group failover after polled count={} queued count={}",
+        after.len(),
+        after_queued
+    );
     group.leave().await?;
     println!("consumer group failover left group");
     Ok(())
+}
+
+fn drain_partition_queue(queue: &mut Option<kafrust::ConsumerPartitionQueue>) -> usize {
+    queue
+        .as_mut()
+        .map(|queue| {
+            let mut count = 0;
+            while queue.try_recv().is_some() {
+                count += 1;
+            }
+            count
+        })
+        .unwrap_or(0)
 }
 
 fn group_protocol_from_env() -> kafrust::Result<ConsumerGroupProtocol> {
