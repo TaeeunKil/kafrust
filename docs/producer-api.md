@@ -270,7 +270,7 @@ Current implementation status:
   fetch-back on a three-broker Kafka 3.7.2 cluster.
 - `Producer::send` performs metadata lookup, connects to the partition leader,
   negotiates Produce API support with flexible `ApiVersions v3`, and prefers
-  flexible Produce v9 for RecordBatch features. It falls back to Produce v7,
+  flexible Produce v11, then v9, for RecordBatch features. It falls back to Produce v7,
   Produce v3, or Produce v2 MessageSet when the broker advertises only an older
   path.
 - `ProducerConfig::request_timeout_ms` controls the request timeout used for metadata and produce roundtrips.
@@ -284,7 +284,7 @@ Current implementation status:
   compression policy. `Compression::None` is the default.
   `Compression::Gzip`, `Compression::Snappy`, `Compression::Lz4`, and
   `Compression::Zstd` encode compressed RecordBatch payloads. Gzip, Snappy, and
-  LZ4 and Zstd use Produce v9 when available and require Produce API v3 or
+  LZ4 and Zstd use Produce v11/v9 when available and require Produce API v3 or
   newer. Missing broker support returns `Unsupported`. Snappy output uses Kafka-compatible Xerial
   framing; LZ4 and Zstd output use their standard frames as expected by
   RecordBatch v2.

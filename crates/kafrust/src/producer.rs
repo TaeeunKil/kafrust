@@ -2056,9 +2056,10 @@ impl Producer {
                 )?;
                 if self.config.acks == Acks::None {
                     match produce_version {
-                        ProduceVersion::V9 => {
+                        ProduceVersion::V9 | ProduceVersion::V11 => {
                             leader_client
-                                .produce_v9_no_response(
+                                .produce_flexible_no_response(
+                                    produce_version.api_version(),
                                     transactional_id.clone(),
                                     self.config.acks.as_i16(),
                                     30_000,
@@ -2172,9 +2173,10 @@ impl Producer {
                     continue;
                 }
                 let response = match produce_version {
-                    ProduceVersion::V9 => ProduceResponse::V9(
+                    ProduceVersion::V9 | ProduceVersion::V11 => ProduceResponse::V9(
                         leader_client
-                            .produce_v9(
+                            .produce_flexible(
+                                produce_version.api_version(),
                                 transactional_id.clone(),
                                 self.config.acks.as_i16(),
                                 30_000,
@@ -2402,9 +2404,10 @@ impl Producer {
 
             if self.config.acks == Acks::None {
                 match produce_version {
-                    ProduceVersion::V9 => {
+                    ProduceVersion::V9 | ProduceVersion::V11 => {
                         leader_client
-                            .produce_v9_no_response(
+                            .produce_flexible_no_response(
+                                produce_version.api_version(),
                                 transactional_id.clone(),
                                 self.config.acks.as_i16(),
                                 30_000,
@@ -2491,9 +2494,10 @@ impl Producer {
             }
 
             let response = match produce_version {
-                ProduceVersion::V9 => ProduceResponse::V9(
+                ProduceVersion::V9 | ProduceVersion::V11 => ProduceResponse::V9(
                     leader_client
-                        .produce_v9(
+                        .produce_flexible(
+                            produce_version.api_version(),
                             transactional_id,
                             self.config.acks.as_i16(),
                             30_000,
@@ -3961,6 +3965,19 @@ enum ProduceVersion {
     V3,
     V7,
     V9,
+    V11,
+}
+
+impl ProduceVersion {
+    fn api_version(self) -> i16 {
+        match self {
+            Self::V2 => 2,
+            Self::V3 => 3,
+            Self::V7 => 7,
+            Self::V9 => 9,
+            Self::V11 => 11,
+        }
+    }
 }
 
 fn select_produce_version(
@@ -3968,11 +3985,8 @@ fn select_produce_version(
     record: &ProducerRecord,
     compression: Compression,
 ) -> Result<ProduceVersion> {
-    if api_versions
-        .highest_supported_version(PRODUCE_API_KEY, 9)
-        .is_some_and(|version| version >= 9)
-    {
-        return Ok(ProduceVersion::V9);
+    if let Some(version) = select_flexible_produce_version(api_versions) {
+        return Ok(version);
     }
 
     if compression == Compression::Zstd {
@@ -4015,11 +4029,8 @@ fn select_produce_batch_version(
     records: &[PreparedBatchRecord<'_>],
     compression: Compression,
 ) -> Result<ProduceVersion> {
-    if api_versions
-        .highest_supported_version(PRODUCE_API_KEY, 9)
-        .is_some_and(|version| version >= 9)
-    {
-        return Ok(ProduceVersion::V9);
+    if let Some(version) = select_flexible_produce_version(api_versions) {
+        return Ok(version);
     }
 
     if compression == Compression::Zstd {
@@ -4058,6 +4069,16 @@ fn select_produce_batch_version(
     }
 
     Err(Error::Unsupported("Produce API v2 or newer"))
+}
+
+fn select_flexible_produce_version(
+    api_versions: &impl ApiVersionsLookup,
+) -> Option<ProduceVersion> {
+    match api_versions.highest_supported_version(PRODUCE_API_KEY, 11) {
+        Some(version) if version >= 11 => Some(ProduceVersion::V11),
+        Some(version) if version >= 9 => Some(ProduceVersion::V9),
+        _ => None,
+    }
 }
 
 enum ProduceResponse {
@@ -4274,7 +4295,7 @@ fn batch_records_encoded_len(
     compression: Compression,
 ) -> Result<usize> {
     match produce_version {
-        ProduceVersion::V3 | ProduceVersion::V7 | ProduceVersion::V9 => {
+        ProduceVersion::V3 | ProduceVersion::V7 | ProduceVersion::V9 | ProduceVersion::V11 => {
             let records = records
                 .iter()
                 .map(|record| {
@@ -4750,6 +4771,17 @@ mod tests {
     }
 
     #[test]
+    fn selects_flexible_produce_v11_when_available() {
+        let versions = api_versions(11);
+        let record = ProducerRecord::to("orders").header("source", "checkout");
+
+        assert_eq!(
+            select_produce_version(&versions, &record, Compression::None).unwrap(),
+            ProduceVersion::V11
+        );
+    }
+
+    #[test]
     fn falls_back_to_message_set_without_headers_when_only_produce_v2_is_available() {
         let versions = api_versions(2);
         let record = ProducerRecord::to("orders");
@@ -4861,6 +4893,19 @@ mod tests {
         assert_eq!(
             select_produce_batch_version(&versions, &records, Compression::None).unwrap(),
             ProduceVersion::V9
+        );
+    }
+
+    #[test]
+    fn selects_flexible_produce_v11_for_batch_when_available() {
+        let versions = api_versions(11);
+        let first = BatchRecord::new(ProducerRecord::to("orders").header("source", "checkout"));
+        let batch = [first];
+        let records = prepared_records(&batch);
+
+        assert_eq!(
+            select_produce_batch_version(&versions, &records, Compression::None).unwrap(),
+            ProduceVersion::V11
         );
     }
 

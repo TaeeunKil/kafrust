@@ -165,8 +165,8 @@ async fn main() -> kafrust::Result<()> {
 ```
 
 `Compression::Gzip`, `Compression::Snappy`, `Compression::Lz4`, and
-`Compression::Zstd` prefer flexible Produce API v9 RecordBatch encoding when
-available, then fall back to Produce API v7 or v3. Brokers without the required
+`Compression::Zstd` prefer flexible Produce API v11, then v9, RecordBatch
+encoding when available, then fall back to Produce API v7 or v3. Brokers without the required
 Produce API version return an explicit `Unsupported` error when compression is
 enabled.
 Snappy output uses Kafka-compatible Xerial framing; LZ4 and Zstd output use

@@ -1535,13 +1535,14 @@ Implemented evidence:
 - Direct consumer fetch and watermark paths reuse a successful partition-leader
   `Client` by broker address and evict it on request failure. A focused
   injected-broker test verifies two sequential Fetch requests on one socket.
-- Producer capability negotiation now prefers flexible Produce v9 for
-  RecordBatch sends, including transactional and no-ack paths, while retaining
-  Produce v7, v3, and v2 fallbacks. Focused request/response fixtures and
-  producer selection tests cover the new path. The complete 17-job live matrix
-  passed the explicit v9 negotiation gate on Kafka 3.7.2, 3.8.1, 3.9.1, and
-  4.3.1 in
-  [`31640494509`](https://github.com/TaeeunKil/kafrust/actions/runs/31640494509).
+- Producer capability negotiation now prefers flexible Produce v11, then v9,
+  for RecordBatch sends, including transactional and no-ack paths, while
+  retaining Produce v7, v3, and v2 fallbacks. Focused request/response fixtures
+  and producer selection tests cover both flexible versions. The existing
+  17-job live matrix passed the v9 negotiation gate on Kafka 3.7.2, 3.8.1,
+  3.9.1, and 4.3.1 in
+  [`31640494509`](https://github.com/TaeeunKil/kafrust/actions/runs/31640494509);
+  the v11 negotiation path is the next live qualification gate.
 - Request-level observability records structured terminal fields for successful,
   failed, fire-and-forget, and cancelled broker requests without recording
   request payloads or credential material. The span-lifecycle guard is covered

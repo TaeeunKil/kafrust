@@ -44,6 +44,20 @@ pub struct ProduceRequestV9 {
     pub topics: Vec<ProduceTopicV3>,
 }
 
+/// Flexible Produce request used by Kafka API versions 11 and newer.
+///
+/// Kafka keeps the v9 flexible RecordBatch schema for these versions; the
+/// request header carries the negotiated API version.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProduceRequestV11 {
+    pub correlation_id: i32,
+    pub client_id: Option<String>,
+    pub transactional_id: Option<String>,
+    pub acks: i16,
+    pub timeout_ms: i32,
+    pub topics: Vec<ProduceTopicV3>,
+}
+
 impl ProduceRequestV3 {
     pub fn encode(&self) -> Result<Vec<u8>> {
         encode_record_batch_request(
@@ -74,23 +88,57 @@ impl ProduceRequestV7 {
 
 impl ProduceRequestV9 {
     pub fn encode(&self) -> Result<Vec<u8>> {
-        let mut encoder = Encoder::new();
-        RequestHeader {
-            api_key: API_KEY,
-            api_version: 9,
-            correlation_id: self.correlation_id,
-            client_id: self.client_id.clone(),
-        }
-        .encode_v2(&mut encoder)?;
-        encoder.write_compact_nullable_string(self.transactional_id.as_deref())?;
-        encoder.write_i16(self.acks);
-        encoder.write_i32(self.timeout_ms);
-        encoder.write_compact_array(Some(self.topics.as_slice()), |encoder, topic| {
-            topic.encode_v9(encoder, self.transactional_id.is_some())
-        })?;
-        encoder.write_empty_tagged_fields();
-        Ok(encoder.into_bytes())
+        encode_flexible_produce_request(
+            9,
+            self.correlation_id,
+            self.client_id.clone(),
+            self.transactional_id.as_deref(),
+            self.acks,
+            self.timeout_ms,
+            &self.topics,
+        )
     }
+}
+
+impl ProduceRequestV11 {
+    pub fn encode(&self) -> Result<Vec<u8>> {
+        encode_flexible_produce_request(
+            11,
+            self.correlation_id,
+            self.client_id.clone(),
+            self.transactional_id.as_deref(),
+            self.acks,
+            self.timeout_ms,
+            &self.topics,
+        )
+    }
+}
+
+fn encode_flexible_produce_request(
+    api_version: i16,
+    correlation_id: i32,
+    client_id: Option<String>,
+    transactional_id: Option<&str>,
+    acks: i16,
+    timeout_ms: i32,
+    topics: &[ProduceTopicV3],
+) -> Result<Vec<u8>> {
+    let mut encoder = Encoder::new();
+    RequestHeader {
+        api_key: API_KEY,
+        api_version,
+        correlation_id,
+        client_id,
+    }
+    .encode_v2(&mut encoder)?;
+    encoder.write_compact_nullable_string(transactional_id)?;
+    encoder.write_i16(acks);
+    encoder.write_i32(timeout_ms);
+    encoder.write_compact_array(Some(topics), |encoder, topic| {
+        topic.encode_v9(encoder, transactional_id.is_some())
+    })?;
+    encoder.write_empty_tagged_fields();
+    Ok(encoder.into_bytes())
 }
 
 fn encode_record_batch_request(
@@ -396,6 +444,9 @@ pub struct ProduceResponseV9 {
     pub responses: Vec<ProduceTopicResponseV9>,
     pub throttle_time_ms: i32,
 }
+
+/// Flexible Produce response used by Kafka API versions 11 and newer.
+pub type ProduceResponseV11 = ProduceResponseV9;
 
 impl ProduceResponseV9 {
     pub fn decode_body(decoder: &mut Decoder<'_>) -> Result<Self> {
@@ -720,9 +771,9 @@ mod tests {
         encode_record_batch_set_with_compression_and_identity,
         encode_record_batch_set_with_compression_identity_and_transaction, encoded_message_set_len,
         encoded_record_batch_set_len, MessageSetMessage, ProducePartitionV2, ProducePartitionV3,
-        ProduceRequestV2, ProduceRequestV3, ProduceRequestV7, ProduceRequestV9, ProduceResponseV2,
-        ProduceResponseV7, ProduceResponseV9, ProduceTopicV2, ProduceTopicV3, RecordBatchIdentity,
-        RecordBatchMessage,
+        ProduceRequestV11, ProduceRequestV2, ProduceRequestV3, ProduceRequestV7, ProduceRequestV9,
+        ProduceResponseV2, ProduceResponseV7, ProduceResponseV9, ProduceTopicV2, ProduceTopicV3,
+        RecordBatchIdentity, RecordBatchMessage,
     };
     use crate::codec::{DecodeLimits, Decoder};
     use crate::record_batch::RecordBatchCompression;
@@ -1038,6 +1089,24 @@ mod tests {
             .windows(7)
             .any(|window| window == [10, b'o', b'r', b'd', b'e', b'r', b's']));
         assert!(bytes.len() > 80);
+    }
+
+    #[test]
+    fn encodes_produce_request_v11_with_flexible_record_batch_schema() {
+        let request = ProduceRequestV11 {
+            correlation_id: 5,
+            client_id: Some("kafrust".to_owned()),
+            transactional_id: None,
+            acks: 1,
+            timeout_ms: 30_000,
+            topics: Vec::new(),
+        };
+
+        let bytes = request.encode().unwrap();
+
+        assert_eq!(&bytes[0..4], &[0, 0, 0, 11]);
+        assert_eq!(&bytes[4..8], &[0, 0, 0, 5]);
+        assert!(bytes.len() > 20);
     }
 
     #[test]
