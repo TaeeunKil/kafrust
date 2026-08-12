@@ -647,6 +647,13 @@ Evidence:
   operations before and after the stop through the remaining brokers. The
   workflow first builds both failover examples serially so the result is not
   contaminated by concurrent Rust toolchain initialization.
+- Manual `Live Kafka Smoke` run
+  [`31554396594`](https://github.com/TaeeunKil/kafrust/actions/runs/31554396594)
+  passed all jobs on 2026-08-12. Its Kafka 3.7.2 three-broker
+  `SASL_PLAINTEXT` job stopped the active transaction coordinator and group
+  coordinator, then verified transactional commit/read-committed recovery,
+  consumer-group recovery, and producer/direct-consumer recovery through the
+  remaining authenticated brokers.
 
 ## M15 Compression Compatibility
 
@@ -1019,11 +1026,16 @@ Evidence:
   `EndTxn` commit and read-committed fetch-back through the remaining brokers.
   The stopped broker was restored before the existing broker-stop failover
   sequence, and all eight jobs passed.
+- Manual `Live Kafka Smoke` run
+  [`31554396594`](https://github.com/TaeeunKil/kafrust/actions/runs/31554396594)
+  stopped the active Kafka 3.7.2 `SASL_PLAINTEXT` transaction coordinator,
+  verified commit and `read_committed` recovery, then stopped the group
+  coordinator and verified consumer-group recovery with SASL/PLAIN.
 
 Known limits:
 
 - Broader live transaction failure-injection beyond the verified coordinator
-  broker-stop commit path is not yet claimed.
+  broker-stop commit paths is not yet claimed.
 
 ## M19 Observability, Limits, And Performance
 
@@ -1297,6 +1309,10 @@ Implemented evidence:
   leave. Follow-up run
   [`31493385844`](https://github.com/TaeeunKil/kafrust/actions/runs/31493385844)
   reruns the same group to verify committed-offset recovery.
+- The Kafka 3.7.2 three-broker `SASL_PLAINTEXT` profile stopped the active
+  group coordinator and recovered a classic consumer group through the
+  remaining authenticated brokers in
+  [`Live Kafka Smoke` run `31554396594`](https://github.com/TaeeunKil/kafrust/actions/runs/31554396594).
 - Broader failure-injection coverage across secured and multi-broker KIP-848
   deployments remains open.
 - Dynamic and static members can explicitly leave through LeaveGroup v3,
@@ -1358,10 +1374,11 @@ Implemented evidence:
   MSRV Rust 1.81 toolchain. The current live qualification is
   [`31500606310`](https://github.com/TaeeunKil/kafrust/actions/runs/31500606310)
   on the merged `main` branch.
-- Secured multi-broker failure injection is now partially qualified: the
-  `SASL_PLAINTEXT` three-broker profile in
-  [`31502322974`](https://github.com/TaeeunKil/kafrust/actions/runs/31502322974)
-  verified authenticated producer and direct-consumer recovery across a
-  stopped partition leader. Secured consumer-group and transaction failover,
-  production OAuth/OIDC provider compatibility, and broader workload-specific
-  canary evidence remain before a 1.0 replacement claim.
+- Secured multi-broker failure injection is now qualified for the tested
+  `SASL_PLAINTEXT` paths: the three-broker profile in
+  [`31554396594`](https://github.com/TaeeunKil/kafrust/actions/runs/31554396594)
+  verified transaction coordinator, consumer-group coordinator, producer,
+  and direct-consumer recovery after broker stops. Production OAuth/OIDC
+  provider compatibility, broader KIP-848 and transaction failure injection,
+  and workload-specific canary evidence remain before a 1.0 replacement
+  claim.
