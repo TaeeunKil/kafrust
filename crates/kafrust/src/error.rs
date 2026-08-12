@@ -230,6 +230,13 @@ pub enum Error {
     },
     /// A static consumer group instance ID was configured as an empty string.
     InvalidGroupInstanceId,
+    /// A consumer-group topic subscription pattern failed local validation.
+    InvalidTopicPattern {
+        /// The configured regular expression.
+        pattern: String,
+        /// The regular-expression compiler's diagnostic.
+        reason: String,
+    },
     /// A SCRAM credential request failed local validation before reaching Kafka.
     InvalidScramCredential {
         /// Redacted validation failure reason.
@@ -312,6 +319,12 @@ impl fmt::Display for Error {
             Self::InvalidGroupInstanceId => {
                 f.write_str("consumer group instance ID must not be empty")
             }
+            Self::InvalidTopicPattern { pattern, reason } => {
+                write!(
+                    f,
+                    "invalid consumer group topic pattern {pattern:?}: {reason}"
+                )
+            }
             Self::InvalidScramCredential { reason } => {
                 write!(f, "invalid SCRAM credential: {reason}")
             }
@@ -346,6 +359,7 @@ impl std::error::Error for Error {
             | Self::TlsConfig { .. }
             | Self::InvalidTlsServerName { .. }
             | Self::InvalidGroupInstanceId
+            | Self::InvalidTopicPattern { .. }
             | Self::InvalidScramCredential { .. }
             | Self::Unsupported(_) => None,
         }

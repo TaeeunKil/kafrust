@@ -161,12 +161,15 @@ group.commit_offsets().await?;
 
 The semantic difference matters: kafrust currently returns a bounded batch and
 commits the current next offsets for its assignments. It does not expose
-rust-rdkafka's asynchronous per-message commit queue, partition queue splitting,
-or regex subscription. A synchronous `RebalanceListener` now covers the initial
-join after-snapshot, before/after rejoin snapshots, and KIP-848 assignment
-changes from foreground or background heartbeats. The current group
-implementation supports the classic protocol with range or round-robin
-assignment and an explicitly selected KIP-848 consumer protocol path.
+rust-rdkafka's asynchronous per-message commit queue or partition queue
+splitting. `ConsumerGroupConfig::subscribe_pattern` provides client-side regex
+topic subscription by resolving the broker's Metadata v1 topic list before each
+join or rejoin; it is not a broker-side subscription protocol. A synchronous
+`RebalanceListener` now covers the initial join after-snapshot, before/after
+rejoin snapshots, and KIP-848 assignment changes from foreground or background
+heartbeats. The current group implementation supports the classic protocol
+with range or round-robin assignment and an explicitly selected KIP-848
+consumer protocol path.
 
 For processing that can approach the session timeout, use
 `spawn_heartbeat_task` with `poll_with_heartbeat`. The task is explicit and
@@ -270,6 +273,7 @@ See [Admin API](admin-api.md) for typed request and response examples.
 | Idempotent producer | Candidate; broker-stop recovery is live-verified on the documented three-broker profile, but qualify target-specific ambiguous, fencing, and throughput failures |
 | Direct assigned-partition consumer | Candidate |
 | Classic range-assigned consumer group | Candidate with rebalance testing |
+| Regex topic subscription | Candidate; client-side Metadata v1 resolution is implemented, but qualify topic-discovery permissions and rejoin behavior on the target broker |
 | TLS, SASL/PLAIN, or SASL/SCRAM-SHA-256 | Candidate on documented profiles |
 | SASL/OAUTHBEARER | Candidate only for the documented Kafka 3.7.2 unsecured-validator smoke; async token-provider callbacks exist, but qualify the production OAuth/OIDC provider, token policy, and authorization behavior |
 | Transactions and read-committed consumption | Alpha candidate; transaction coordinator broker-stop recovery is verified on the documented Kafka 3.7.2 three-broker SASL/PLAIN profile, but broader target-specific failure and throughput qualification remains |

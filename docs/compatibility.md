@@ -195,6 +195,11 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
   tests and by the plaintext single-node and multi-broker live smoke profiles.
 - Direct consumer fetch from an assigned topic partition using Fetch v4 response decoding. The v4 path is required because Kafka 4.x no longer accepts Fetch v2.
 - Consumer group join, sync, heartbeat, poll, and offset commit through the alpha classic consumer group path with range assignment.
+- Client-side regex topic subscription resolves Metadata v1 topic names before
+  classic or KIP-848 joins and is covered by focused ordering, filtering, and
+  no-match tests. The live smoke workflow now includes two-topic assignment
+  coverage; record its first successful run before promoting this capability to
+  a broker-qualified claim.
 - KIP-848 consumer groups through `ConsumerGroupHeartbeat v0`, Metadata v12
   topic UUID assignment, member-epoch foreground/background heartbeats,
   OffsetFetch v9, OffsetCommit v9, rejoin after concurrent membership, and

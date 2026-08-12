@@ -931,6 +931,7 @@ fn can_retry_fetch(error: &Error) -> bool {
         | Error::TlsConfig { .. }
         | Error::InvalidTlsServerName { .. }
         | Error::InvalidGroupInstanceId
+        | Error::InvalidTopicPattern { .. }
         | Error::InvalidScramCredential { .. }
         | Error::Unsupported(_)
         | Error::TaskJoin(_)

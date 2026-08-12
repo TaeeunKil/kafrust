@@ -25,6 +25,36 @@ heartbeat.stop().await?;
 
 Offset fetches and commits are coordinator-scoped Kafka requests. The lower-level `Client` methods remain available for protocol-focused experiments, but the alpha user path is `ConsumerGroupConfig`.
 
+## Regex Topic Subscription
+
+Use `subscribe_pattern` when a group should follow a family of topic names:
+
+```rust
+use kafrust::ConsumerGroupConfig;
+
+# async fn example() -> kafrust::Result<()> {
+let mut group = ConsumerGroupConfig::new(["localhost:9092"], "orders-group")
+    .subscribe_pattern(r"^orders-[0-9]+$")
+    .join()
+    .await?;
+
+let records = group.poll().await?;
+# let _ = records;
+# Ok(())
+# }
+```
+
+This is client-side regular-expression matching. Before every classic or
+KIP-848 join/rejoin, kafrust requests the broker's Metadata v1 topic list,
+filters successful topic entries with the Rust `regex` engine, sorts and
+deduplicates the result, and sends the concrete topic names in the group
+subscription. A rejoin therefore sees topics created after the previous join.
+The configured pattern must match at least one visible topic, and the client
+must have permission to discover those topics. `subscribe_pattern` replaces
+concrete subscriptions; calling `subscribe` afterwards replaces the pattern.
+Use `topic_pattern_ref` when inspecting a configured pattern and `topics()`
+when inspecting concrete topic names.
+
 ## Static Membership
 
 Set `ConsumerGroupConfig::group_instance_id` to give a process a stable

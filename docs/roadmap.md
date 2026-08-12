@@ -186,6 +186,8 @@ Scope:
 - OffsetFetch (implemented as protocol + client roundtrip)
 - OffsetCommit (implemented as protocol + client roundtrip)
 - ConsumerGroup alpha API with join, sync, heartbeat, background heartbeat, poll, rejoin, and commit
+- client-side regex topic subscription through Metadata v1 resolution before
+  each classic or KIP-848 join/rejoin
 - rebalance handling (poll-triggered rejoin for coordinator, generation, member, and rebalance heartbeat errors)
 
 Known limits:
@@ -196,6 +198,8 @@ Known limits:
   `poll_with_heartbeat` triggers poll-time rejoin and replaces completed or
   stale same-group heartbeat tasks for the current generation.
 - Live group validation runs through the scheduled/manual `Live Kafka Smoke` workflow.
+- Regex subscription has focused unit coverage and is included in the live smoke
+  workflow; the first successful run is still required for broker qualification.
 
 ## M6 Production Behavior
 

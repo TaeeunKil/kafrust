@@ -37,6 +37,7 @@ use crate::consumer::{
 };
 use crate::error::{BrokerErrorKind, Error, Result};
 use crate::metrics::ClientMetrics;
+use regex::Regex;
 use tokio::sync::{oneshot, Mutex};
 use tokio::task::JoinHandle;
 use tokio::time::{self, MissedTickBehavior};
@@ -196,6 +197,7 @@ pub struct ConsumerGroupConfig {
     group_id: String,
     group_instance_id: Option<String>,
     topics: Vec<String>,
+    topic_pattern: Option<String>,
     session_timeout_ms: i32,
     rebalance_timeout_ms: i32,
     retention_time_ms: i64,
@@ -240,6 +242,7 @@ impl ConsumerGroupConfig {
             group_id: group_id.into(),
             group_instance_id: None,
             topics: Vec::new(),
+            topic_pattern: None,
             session_timeout_ms: 10_000,
             rebalance_timeout_ms: 30_000,
             retention_time_ms: 86_400_000,
@@ -380,7 +383,20 @@ impl ConsumerGroupConfig {
 
     /// Subscribes this group member to a Kafka topic.
     pub fn subscribe(mut self, topic: impl Into<String>) -> Self {
+        self.topic_pattern = None;
         self.topics.push(topic.into());
+        self
+    }
+
+    /// Subscribes this group member to topics matching a regular expression.
+    ///
+    /// The pattern is resolved against the broker's current Metadata v1 topic
+    /// list immediately before each group join or rejoin. Calling this method
+    /// replaces any concrete topic subscriptions; calling [`Self::subscribe`]
+    /// afterwards replaces the pattern with concrete topics.
+    pub fn subscribe_pattern(mut self, pattern: impl Into<String>) -> Self {
+        self.topics.clear();
+        self.topic_pattern = Some(pattern.into());
         self
     }
 
@@ -540,9 +556,34 @@ impl ConsumerGroupConfig {
         &self.group_id
     }
 
-    /// Returns the subscribed topic names.
+    /// Returns concrete subscribed topic names.
+    ///
+    /// This is empty when [`Self::subscribe_pattern`] is configured; use
+    /// [`Self::topic_pattern_ref`] to inspect that subscription.
     pub fn topics(&self) -> &[String] {
         &self.topics
+    }
+
+    /// Returns the configured topic subscription pattern, if any.
+    pub fn topic_pattern_ref(&self) -> Option<&str> {
+        self.topic_pattern.as_deref()
+    }
+
+    fn has_subscription(&self) -> bool {
+        !self.topics.is_empty() || self.topic_pattern.is_some()
+    }
+
+    async fn resolve_subscription_topics(&self, bootstrap: &mut Client) -> Result<Vec<String>> {
+        if !self.topics.is_empty() {
+            return Ok(self.topics.clone());
+        }
+
+        let pattern = self
+            .topic_pattern
+            .as_deref()
+            .ok_or(Error::Unsupported("consumer group without subscriptions"))?;
+        let metadata = bootstrap.metadata(None).await?;
+        resolve_topic_pattern(pattern, &metadata)
     }
 
     fn consumer_config(&self) -> ConsumerConfig {
@@ -587,7 +628,7 @@ impl ConsumerGroupConfig {
         owned_partitions: Vec<ConsumerProtocolTopicAssignment>,
         member_id: Option<String>,
     ) -> Result<ConsumerGroup> {
-        if self.topics.is_empty() {
+        if !self.has_subscription() {
             return Err(Error::Unsupported("consumer group without subscriptions"));
         }
         if self.group_instance_id.as_deref() == Some("") {
@@ -606,6 +647,7 @@ impl ConsumerGroupConfig {
             let config = self.clone();
 
             let mut bootstrap = self.client.clone().connect().await?;
+            let topics = self.resolve_subscription_topics(&mut bootstrap).await?;
             let coordinator = find_group_coordinator_with_retry(
                 &mut bootstrap,
                 &self.client,
@@ -619,7 +661,7 @@ impl ConsumerGroupConfig {
             let subscription = match self.assignment_strategy {
                 ConsumerGroupAssignmentStrategy::CooperativeSticky => {
                     ConsumerProtocolSubscriptionV1 {
-                        topics: self.topics.clone(),
+                        topics: topics.clone(),
                         user_data: None,
                         owned_partitions: owned_partitions.clone(),
                     }
@@ -627,7 +669,7 @@ impl ConsumerGroupConfig {
                 }
                 ConsumerGroupAssignmentStrategy::Range
                 | ConsumerGroupAssignmentStrategy::RoundRobin => ConsumerProtocolSubscriptionV0 {
-                    topics: self.topics.clone(),
+                    topics: topics.clone(),
                     user_data: None,
                 }
                 .encode()?,
@@ -706,7 +748,7 @@ impl ConsumerGroupConfig {
             }
 
             let assignments = if joined.member_id == joined.leader {
-                let metadata = bootstrap.metadata(Some(self.topics.clone())).await?;
+                let metadata = bootstrap.metadata(Some(topics.clone())).await?;
                 assignments_for_strategy(&joined.protocol_name, &joined.members, &metadata)?
             } else {
                 Vec::new()
@@ -845,7 +887,7 @@ impl ConsumerGroupConfig {
         member_epoch: i32,
         owned_partitions: Option<Vec<ConsumerGroupHeartbeatTopicPartitions>>,
     ) -> Result<ConsumerGroup> {
-        if self.topics.is_empty() {
+        if !self.has_subscription() {
             return Err(Error::Unsupported("consumer group without subscriptions"));
         }
         if self.group_instance_id.as_deref() == Some("") {
@@ -854,6 +896,7 @@ impl ConsumerGroupConfig {
 
         let config = self.clone();
         let mut bootstrap = self.client.clone().connect().await?;
+        let topics = self.resolve_subscription_topics(&mut bootstrap).await?;
         let topic_partitions = match owned_partitions {
             Some(owned_partitions) => Some(owned_partitions),
             None if member_epoch == 0 => Some(Vec::new()),
@@ -869,7 +912,7 @@ impl ConsumerGroupConfig {
 
         let metadata = bootstrap
             .metadata_v12(Some(
-                self.topics
+                topics
                     .iter()
                     .map(|name| MetadataRequestTopicV12 {
                         topic_id: [0; 16],
@@ -878,11 +921,10 @@ impl ConsumerGroupConfig {
                     .collect(),
             ))
             .await?;
-        let topic_ids =
-            topic_ids_for_names(&metadata, &self.topics).map_err(|error| match error {
-                Error::Broker { code, context } => self.client.broker_error(code, context),
-                error => error,
-            })?;
+        let topic_ids = topic_ids_for_names(&metadata, &topics).map_err(|error| match error {
+            Error::Broker { code, context } => self.client.broker_error(code, context),
+            error => error,
+        })?;
         let requested_member_id = member_id.clone().unwrap_or_default();
         let mut heartbeat_retry_attempt = 0;
         let (mut coordinator_client, response) = loop {
@@ -898,7 +940,7 @@ impl ConsumerGroupConfig {
                     self.group_instance_id.clone(),
                     None,
                     self.rebalance_timeout_ms,
-                    Some(self.topics.clone()),
+                    Some(topics.clone()),
                     self.server_assignor.clone(),
                     topic_partitions.clone(),
                 )
@@ -980,6 +1022,31 @@ impl ConsumerGroupConfig {
     }
 }
 
+fn compile_topic_pattern(pattern: &str) -> Result<Regex> {
+    Regex::new(pattern).map_err(|error| Error::InvalidTopicPattern {
+        pattern: pattern.to_owned(),
+        reason: error.to_string(),
+    })
+}
+
+fn resolve_topic_pattern(pattern: &str, metadata: &MetadataResponseV1) -> Result<Vec<String>> {
+    let regex = compile_topic_pattern(pattern)?;
+    let mut topics = metadata
+        .topics
+        .iter()
+        .filter(|topic| topic.error_code == 0 && regex.is_match(&topic.name))
+        .map(|topic| topic.name.clone())
+        .collect::<Vec<_>>();
+    topics.sort();
+    topics.dedup();
+    if topics.is_empty() {
+        return Err(Error::Unsupported(
+            "consumer group topic pattern matched no topics",
+        ));
+    }
+    Ok(topics)
+}
+
 impl fmt::Debug for ConsumerGroupConfig {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
@@ -988,6 +1055,7 @@ impl fmt::Debug for ConsumerGroupConfig {
             .field("group_id", &self.group_id)
             .field("group_instance_id", &self.group_instance_id)
             .field("topics", &self.topics)
+            .field("topic_pattern", &self.topic_pattern)
             .field("session_timeout_ms", &self.session_timeout_ms)
             .field("rebalance_timeout_ms", &self.rebalance_timeout_ms)
             .field("retention_time_ms", &self.retention_time_ms)
@@ -1012,6 +1080,7 @@ impl PartialEq for ConsumerGroupConfig {
             && self.group_id == other.group_id
             && self.group_instance_id == other.group_instance_id
             && self.topics == other.topics
+            && self.topic_pattern == other.topic_pattern
             && self.session_timeout_ms == other.session_timeout_ms
             && self.rebalance_timeout_ms == other.rebalance_timeout_ms
             && self.retention_time_ms == other.retention_time_ms
@@ -3330,6 +3399,53 @@ mod tests {
             config.offset_reset_policy_ref(),
             OffsetResetPolicy::Offset(5)
         );
+    }
+
+    #[test]
+    fn configures_regex_topic_subscription_and_validates_pattern() {
+        let config = ConsumerGroupConfig::new(["localhost:9092"], "orders-group")
+            .subscribe_pattern(r"^orders-[0-9]+$");
+
+        assert!(config.has_subscription());
+        assert!(config.topics().is_empty());
+        assert_eq!(config.topic_pattern_ref(), Some(r"^orders-[0-9]+$"));
+
+        let error = super::compile_topic_pattern("[").err();
+        assert!(matches!(error, Some(Error::InvalidTopicPattern { .. })));
+    }
+
+    #[test]
+    fn resolves_regex_topics_from_metadata_in_sorted_order() {
+        let mut inaccessible = topic_metadata("orders-3", &[0]);
+        inaccessible.error_code = 29;
+        let metadata = MetadataResponseV1 {
+            brokers: Vec::new(),
+            controller_id: 1,
+            topics: vec![
+                topic_metadata("orders-2", &[0]),
+                topic_metadata("payments", &[0]),
+                topic_metadata("orders-1", &[0]),
+                inaccessible,
+            ],
+        };
+
+        let topics = super::resolve_topic_pattern(r"^orders-[0-9]+$", &metadata).ok();
+        assert_eq!(
+            topics,
+            Some(vec!["orders-1".to_owned(), "orders-2".to_owned()])
+        );
+    }
+
+    #[test]
+    fn rejects_regex_subscription_without_matching_topics() {
+        let metadata = metadata_fixture("payments", &[0]);
+        let error = super::resolve_topic_pattern(r"^orders-", &metadata).err();
+        assert!(matches!(
+            error,
+            Some(Error::Unsupported(
+                "consumer group topic pattern matched no topics"
+            ))
+        ));
     }
 
     #[test]

@@ -1438,6 +1438,10 @@ fn delivery_error_from_request_error(error: &Error) -> Error {
             server: server.clone(),
         },
         Error::InvalidGroupInstanceId => Error::InvalidGroupInstanceId,
+        Error::InvalidTopicPattern { pattern, reason } => Error::InvalidTopicPattern {
+            pattern: pattern.clone(),
+            reason: reason.clone(),
+        },
         Error::InvalidScramCredential { reason } => Error::InvalidScramCredential { reason },
         Error::Unsupported(feature) => Error::Unsupported(feature),
         Error::Io(error) => Error::Io(std::io::Error::new(error.kind(), error.to_string())),
@@ -4058,6 +4062,7 @@ fn can_retry_send(error: &Error) -> bool {
         | Error::TlsConfig { .. }
         | Error::InvalidTlsServerName { .. }
         | Error::InvalidGroupInstanceId
+        | Error::InvalidTopicPattern { .. }
         | Error::InvalidScramCredential { .. }
         | Error::Unsupported(_)
         | Error::TaskJoin(_)

@@ -29,6 +29,7 @@ hmac = "0.12"
 kafrust-protocol = { version = "0.2.5", path = "../kafrust-protocol" }
 pbkdf2 = "0.12"
 rand = "0.8"
+regex = "1"
 rustls = { version = "0.23.35", default-features = false, features = ["std", "ring", "tls12"], optional = true }
 rustls-platform-verifier = { version = "=0.6.2", optional = true }
 sha2 = "0.10"
