@@ -984,8 +984,16 @@ Implemented evidence:
   live-verified both examples on the supported single-node plaintext matrix,
   DescribeProducers on the Kafka 3.7.2 three-broker profile, and
   DescribeTransactions through the Kafka 3.7.2 three-broker SASL_SSL SCRAM
-  failover profile. Target authorization policy and broader fault-injection
-  qualification remain workload-specific release gates.
+  failover profile. Both read-only paths now retry transient leader/coordinator
+  movement, metadata convergence, transport disconnects, request timeouts,
+  and transient routed response errors through fresh discovery within the
+  configurable `AdminClient::max_retries` budget. Focused mock-broker tests
+  cover dropped and transient responses, while the latest 17-job live matrix
+  at commit `65b607e` passed the current single-node, secured, multi-broker,
+  and KIP-848 examples in
+  [`31601732149`](https://github.com/TaeeunKil/kafrust/actions/runs/31601732149).
+  Target authorization policy and an Admin-request broker-stop injection
+  remain workload-specific release gates.
 - Manual `Live Kafka Smoke` run `30059517473` passed CreateTopics v2 and its
   follow-up Metadata v1 description on 2026-07-24 against Kafka 3.7.2 and
   4.3.1 single-node brokers and the Kafka 3.7.2 three-broker cluster.

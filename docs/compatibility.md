@@ -41,6 +41,17 @@ documented leader/coordinator routing and successful authorization paths; target
 permissions, destructive operational policy, and broader fault-injection
 behavior still require workload-specific qualification.
 
+The latest complete `Live Kafka Smoke` matrix in
+[`31601732149`](https://github.com/TaeeunKil/kafrust/actions/runs/31601732149)
+passed all 17 jobs at commit `65b607e`. It reran the supported Kafka 3.7.2,
+3.8.1, 3.9.1, and 4.3.1 plaintext profiles, TLS, SASL_PLAINTEXT,
+SASL_SSL/SCRAM, OAUTHBEARER, ACL administration, multi-broker failover, and
+KIP-848 paths. The matrix also passed the current `DescribeProducers` and
+`DescribeTransactions` examples on single-node and multi-broker profiles,
+including the secured failover profiles. This qualifies the new client-side
+retry implementation against the supported live matrix; an injected broker
+stop during the Admin request itself remains a separate qualification item.
+
 The complete `Live Kafka Smoke` matrix in
 [`31593984640`](https://github.com/TaeeunKil/kafrust/actions/runs/31593984640)
 also passed the opt-in automatic consumer-group commit example across the
