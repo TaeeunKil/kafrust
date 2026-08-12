@@ -901,8 +901,10 @@ Implemented evidence:
   test covers `CoordinatorLoadInProgress`, bootstrap reconnect, and the
   follow-up OffsetFetch request. The read-only admin `OffsetFetch v2` path also
   reconnects and retries after a coordinator disconnect or request timeout;
-  administrative write retry semantics remain deliberately conservative while
-  ambiguous outcomes are not yet modeled.
+  the exact-offset administrative `OffsetCommit v2` path now retries the same
+  state-idempotent commit after a coordinator disconnect. Other administrative
+  write retry semantics remain deliberately conservative while ambiguous
+  outcomes are not yet modeled.
 - DescribeAcls v1, CreateAcls v1, and DeleteAcls v1 expose typed ACL bindings
   and filters through `AdminClient`, preserving top-level, per-entry,
   per-filter, and matching-ACL outcomes. Wire and mock-broker tests cover the

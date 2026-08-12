@@ -779,7 +779,6 @@ impl AdminClient {
         group_id: &str,
         offsets: &[ConsumerGroupOffset],
     ) -> Result<AlterConsumerGroupOffsetsResult> {
-        let mut coordinator = self.group_coordinator_client(group_id).await?;
         let mut topics = BTreeMap::<String, Vec<OffsetCommitPartition>>::new();
         for offset in offsets {
             topics
@@ -791,18 +790,29 @@ impl AdminClient {
                     committed_metadata: offset.metadata.clone(),
                 });
         }
-        let response = coordinator
-            .offset_commit_v2(
-                group_id,
-                -1,
-                "",
-                -1,
-                topics
-                    .into_iter()
-                    .map(|(name, partitions)| OffsetCommitTopic { name, partitions })
-                    .collect(),
-            )
-            .await?;
+        let topics = topics
+            .into_iter()
+            .map(|(name, partitions)| OffsetCommitTopic { name, partitions })
+            .collect::<Vec<_>>();
+        let mut retry = 0;
+        let response = loop {
+            let mut coordinator = self.group_coordinator_client(group_id).await?;
+            match coordinator
+                .offset_commit_v2(group_id, -1, "", -1, topics.clone())
+                .await
+            {
+                Ok(response) => break response,
+                Err(error)
+                    if retry < ADMIN_COORDINATOR_MAX_RETRIES
+                        && is_retryable_admin_coordinator_error(&error) =>
+                {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(ADMIN_COORDINATOR_RETRY_BACKOFF).await;
+                }
+                Err(error) => return Err(error),
+            }
+        };
 
         for topic in &response.topics {
             for partition in &topic.partitions {
@@ -6792,6 +6802,64 @@ mod tests {
             .unwrap();
         assert_eq!(listed.error_code(), 0);
         assert_eq!(listed.topics().len(), 1);
+        assert_eq!(metrics.snapshot().retries, 1);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn retries_consumer_group_offset_commit_after_coordinator_disconnect() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let coordinator_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&coordinator_request[0..4], &[0, 10, 0, 1]);
+            write_frame(
+                &mut bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let (mut coordinator, _) = listener.accept().await.unwrap();
+            let commit_request = read_frame(&mut coordinator).await;
+            assert_eq!(&commit_request[0..4], &[0, 8, 0, 2]);
+            assert!(commit_request
+                .windows(4)
+                .any(|bytes| bytes == [0xff, 0xff, 0xff, 0xff]));
+            drop(coordinator);
+
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let coordinator_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&coordinator_request[0..4], &[0, 10, 0, 1]);
+            write_frame(
+                &mut bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let (mut coordinator, _) = listener.accept().await.unwrap();
+            let commit_request = read_frame(&mut coordinator).await;
+            assert_eq!(&commit_request[0..4], &[0, 8, 0, 2]);
+            assert!(commit_request
+                .windows(4)
+                .any(|bytes| bytes == [0xff, 0xff, 0xff, 0xff]));
+            write_frame(&mut coordinator, &offset_commit_response()).await;
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        );
+
+        let altered = admin
+            .alter_consumer_group_offsets(
+                "orders-group",
+                &[ConsumerGroupOffset::new("orders", 0, 42)],
+            )
+            .await
+            .unwrap();
+        assert!(altered.is_success());
         assert_eq!(metrics.snapshot().retries, 1);
         server.await.unwrap();
     }

@@ -76,8 +76,11 @@ The read-only `OffsetFetch v2` admin path additionally reconnects and retries
 after a coordinator connection drops or a request times out. Its focused
 injected-broker test verifies that the first request receives no response, the
 coordinator is rediscovered, and the same offset query succeeds. Administrative
-write retries remain conservative because a timeout can leave the broker-side
-outcome ambiguous.
+`OffsetCommit v2` retries use the same bounded reconnect path because repeating
+the exact committed offsets is state-idempotent; its focused test covers a
+commit request that loses the response before succeeding on the rediscovered
+coordinator. Other administrative writes remain conservative because a timeout
+can leave their broker-side outcome ambiguous.
 
 | Broker | Mode | Security | Verification | Status |
 | --- | --- | --- | --- | --- |
