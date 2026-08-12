@@ -895,9 +895,8 @@ Implemented evidence:
   [`31595485915`](https://github.com/TaeeunKil/kafrust/actions/runs/31595485915).
   Multi-broker, TLS, SASL_PLAINTEXT, and SASL_SSL/SCRAM routing are qualified
   in [`31597505667`](https://github.com/TaeeunKil/kafrust/actions/runs/31597505667);
-  coordinator-stop injection during the admin request remains open. Admin
-  coordinator discovery also retries transient coordinator errors and discovery
-  transport failures with bounded exponential backoff; the focused mock-broker regression
+  Admin coordinator discovery also retries transient coordinator errors and
+  discovery transport failures with bounded exponential backoff; the focused mock-broker regression
   test covers `CoordinatorLoadInProgress`, bootstrap reconnect, and the
   follow-up OffsetFetch request. The read-only admin `OffsetFetch v2` path also
   reconnects and retries after a coordinator disconnect, request timeout, or
@@ -919,6 +918,10 @@ Implemented evidence:
   DescribeTransactions v0 before transmission, stops their current
   coordinators, and verifies `retries=1` after rediscovery in
   [`31612533778`](https://github.com/TaeeunKil/kafrust/actions/runs/31612533778).
+  The same three-broker profile now also holds DescribeConfigs v1 before
+  transmission, stops the bootstrap broker, and verifies `retries=1` after
+  reconnecting through the bootstrap set in
+  [`31613935963`](https://github.com/TaeeunKil/kafrust/actions/runs/31613935963).
 - KIP-848 member-aware administrative offsets now use OffsetFetch v9 and
   OffsetCommit v9 with the joined member ID, member epoch, optional static
   instance ID, `require_stable`, and committed leader epoch. The APIs reuse
@@ -930,9 +933,9 @@ Implemented evidence:
   [`31607006237`](https://github.com/TaeeunKil/kafrust/actions/runs/31607006237).
   Target authorization and broader member-failure workloads remain release
   gates. The live DeleteRecords, DescribeProducers, DescribeTransactions,
-  DescribeGroups, OffsetFetch, and exact-offset OffsetCommit broker-stop gates
-  are covered by
-  [`31612533778`](https://github.com/TaeeunKil/kafrust/actions/runs/31612533778);
+  DescribeGroups, OffsetFetch, exact-offset OffsetCommit, and DescribeConfigs
+  broker-stop gates are covered by
+  [`31613935963`](https://github.com/TaeeunKil/kafrust/actions/runs/31613935963);
   other coordinator-routed Admin writes remain separate workload-specific
   release gates.
 - DescribeAcls v1, CreateAcls v1, and DeleteAcls v1 expose typed ACL bindings
