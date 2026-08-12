@@ -149,6 +149,10 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
   KIP-848 consumer-group poll on Kafka 4.3.1; the direct, classic group, and
   KIP-848 queue examples all passed in
   [`31566898432`](https://github.com/TaeeunKil/kafrust/actions/runs/31566898432).
+- Partition queue handles also survived the documented multi-broker
+  coordinator and broker-stop workflows, including Kafka 3.7.2
+  `SASL_PLAINTEXT` and Kafka 4.3.1 KIP-848 failover, in
+  [`31567226615`](https://github.com/TaeeunKil/kafrust/actions/runs/31567226615).
 - Current `main` performance and recovery evidence includes benchmark run
   [`31562321010`](https://github.com/TaeeunKil/kafrust/actions/runs/31562321010)
   and 120-second broker-restart soak run

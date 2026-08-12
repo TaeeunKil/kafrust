@@ -228,6 +228,9 @@ Known limits:
   4.3.1 in [`Live Kafka Smoke`, run `31566523106`](https://github.com/TaeeunKil/kafrust/actions/runs/31566523106).
   The same matrix also passed the KIP-848 consumer-group queue path on Kafka
   4.3.1 in [`31566898432`](https://github.com/TaeeunKil/kafrust/actions/runs/31566898432).
+  Queue-enabled group failover examples also passed the standard three-broker,
+  SASL_PLAINTEXT, and KIP-848 coordinator-stop profiles in
+  [`31567226615`](https://github.com/TaeeunKil/kafrust/actions/runs/31567226615).
 - `ConsumerGroup::rejoin` is public and refreshes regex topic discovery before
   joining again. The classic matrix and Kafka 4.3.1 KIP-848 regex paths passed
   initial and explicit rejoin assignment checks in [`Live Kafka Smoke`, run
