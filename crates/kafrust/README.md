@@ -346,7 +346,9 @@ broker-advertised `session_lifetime_ms` for an application-owned refresh
 schedule. Provider-backed OAUTHBEARER connections also re-authenticate on the
 existing connection before requests after half of that lifetime; detached
 refresh workers, production OAuth/OIDC provider integration, and signed
-JWT/JWKS policy remain unclaimed.
+JWT/JWKS policy remain unclaimed. Provider callbacks are bounded by
+`ClientConfig::request_timeout_ms`; an expired callback returns
+`Error::OAuthBearerTokenTimeout` without including token material.
 
 The default build does not include TLS dependencies. The current `tls` feature
 uses the `rustls` ring crypto provider, which can require native build tooling

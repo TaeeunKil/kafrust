@@ -342,7 +342,9 @@ impl Client {
 
         self.sasl_authentication_in_progress = true;
         let result = async {
-            let token = credentials.oauthbearer_token_for_auth().await?;
+            let token = credentials
+                .oauthbearer_token_for_auth(self.request_timeout)
+                .await?;
             let response = self
                 .sasl_authenticate_v1(sasl_oauthbearer_auth_bytes_with_token(
                     &credentials,

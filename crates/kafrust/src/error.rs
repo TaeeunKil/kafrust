@@ -208,6 +208,11 @@ pub enum Error {
         /// Redacted validation failure reason.
         reason: &'static str,
     },
+    /// An asynchronous OAUTHBEARER token provider exceeded the client timeout.
+    OAuthBearerTokenTimeout {
+        /// Timeout applied to the provider call in milliseconds.
+        timeout_ms: u64,
+    },
     /// Kafka returned a non-zero broker error code.
     Broker {
         /// Raw Kafka broker error code.
@@ -319,6 +324,10 @@ impl fmt::Display for Error {
             Self::InvalidSaslResponse { mechanism, reason } => {
                 write!(f, "invalid SASL {mechanism} response: {reason}")
             }
+            Self::OAuthBearerTokenTimeout { timeout_ms } => write!(
+                f,
+                "SASL/OAUTHBEARER token provider timed out after {timeout_ms}ms"
+            ),
             Self::Broker { code, context } => write!(f, "Kafka broker error {code}: {context}"),
             Self::RequestTimedOut { timeout_ms } => {
                 write!(f, "Kafka request timed out after {timeout_ms}ms")
@@ -371,6 +380,7 @@ impl std::error::Error for Error {
             | Self::ResponseCountMismatch { .. }
             | Self::MissingSaslCredentials
             | Self::InvalidSaslResponse { .. }
+            | Self::OAuthBearerTokenTimeout { .. }
             | Self::Broker { .. }
             | Self::RequestTimedOut { .. }
             | Self::ResponseTooLarge { .. }

@@ -1169,6 +1169,7 @@ fn can_retry_fetch(error: &Error) -> bool {
         | Error::ResponseCountMismatch { .. }
         | Error::MissingSaslCredentials
         | Error::InvalidSaslResponse { .. }
+        | Error::OAuthBearerTokenTimeout { .. }
         | Error::ResponseTooLarge { .. }
         | Error::TlsConfig { .. }
         | Error::InvalidTlsServerName { .. }

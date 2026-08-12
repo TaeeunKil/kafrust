@@ -1434,6 +1434,9 @@ fn delivery_error_from_request_error(error: &Error) -> Error {
         Error::InvalidSaslResponse { mechanism, reason } => {
             Error::InvalidSaslResponse { mechanism, reason }
         }
+        Error::OAuthBearerTokenTimeout { timeout_ms } => Error::OAuthBearerTokenTimeout {
+            timeout_ms: *timeout_ms,
+        },
         Error::Broker { code, context } => Error::Broker {
             code: *code,
             context: context.clone(),
@@ -4087,6 +4090,7 @@ fn can_retry_send(error: &Error) -> bool {
         | Error::ResponseCountMismatch { .. }
         | Error::MissingSaslCredentials
         | Error::InvalidSaslResponse { .. }
+        | Error::OAuthBearerTokenTimeout { .. }
         | Error::ResponseTooLarge { .. }
         | Error::TlsConfig { .. }
         | Error::InvalidTlsServerName { .. }

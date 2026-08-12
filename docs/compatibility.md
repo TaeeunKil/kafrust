@@ -442,9 +442,10 @@ The current compatibility claim does not cover:
 - SASL workflows beyond the listed SASL_PLAINTEXT and SASL_SSL smoke examples.
 - Production SASL/OAUTHBEARER provider compatibility, including signed
   JWT/JWKS validation, issuer/audience policy, and provider-specific failure
-  behavior. The async token-provider callback is implemented, but the Kafka
-  3.7.2 built-in unsecured-validator smoke is test-only evidence, not an
-  identity provider qualification.
+  behavior. The async token-provider callback is implemented and bounded by
+  `ClientConfig::request_timeout_ms`, but the Kafka 3.7.2 built-in
+  unsecured-validator smoke is test-only evidence, not an identity provider
+  qualification.
 - Production OAuth/OIDC provider compatibility or rack-aware client routing.
   The SCRAM multi-broker group-coordinator, partition-leader, and safe
   transactional producer reinitialization paths are claimed above. This does

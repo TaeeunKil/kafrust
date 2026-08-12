@@ -71,6 +71,8 @@ pub type OAuthBearerTokenFuture = Pin<Box<dyn Future<Output = Result<String>> + 
 /// The provider is called whenever kafrust authenticates a new broker
 /// connection. Implementations can therefore refresh an expiring token before
 /// a bootstrap, metadata, coordinator, or failover connection is used.
+/// The call is bounded by [`ClientConfig::request_timeout_ms`]; a provider that
+/// exceeds that limit returns [`Error::OAuthBearerTokenTimeout`].
 pub trait OAuthBearerTokenProvider: Send + Sync {
     /// Fetches a token without exposing it to tracing or debug output.
     fn fetch_token(&self) -> OAuthBearerTokenFuture;
@@ -203,15 +205,26 @@ impl SaslCredentials {
         self.oauthbearer_token.as_deref()
     }
 
-    pub(crate) async fn oauthbearer_token_for_auth(&self) -> Result<String> {
+    pub(crate) async fn oauthbearer_token_for_auth(
+        &self,
+        timeout: Option<Duration>,
+    ) -> Result<String> {
         if let Some(token) = &self.oauthbearer_token {
             return Ok(token.clone());
         }
-        self.oauthbearer_token_provider
+        let provider = self
+            .oauthbearer_token_provider
             .as_ref()
-            .ok_or(Error::Unsupported("SASL/OAUTHBEARER token is missing"))?
-            .fetch_token()
-            .await
+            .ok_or(Error::Unsupported("SASL/OAUTHBEARER token is missing"))?;
+        let future = provider.fetch_token();
+        match timeout {
+            Some(timeout) => tokio::time::timeout(timeout, future).await.map_err(|_| {
+                Error::OAuthBearerTokenTimeout {
+                    timeout_ms: timeout.as_millis().min(u128::from(u64::MAX)) as u64,
+                }
+            })?,
+            None => future.await,
+        }
     }
 
     pub(crate) fn supports_oauthbearer_reauthentication(&self) -> bool {
@@ -545,7 +558,7 @@ impl ClientConfig {
             self.metrics.clone(),
         )
         .await?;
-        authenticate_sasl(&mut client, credentials).await?;
+        authenticate_sasl(&mut client, credentials, Some(self.request_timeout)).await?;
         client.enable_sasl_reauthentication(credentials.clone());
         Ok(client)
     }
@@ -556,7 +569,7 @@ impl ClientConfig {
             .as_ref()
             .ok_or(Error::MissingSaslCredentials)?;
         let mut client = self.connect_tls_broker(server).await?;
-        authenticate_sasl(&mut client, credentials).await?;
+        authenticate_sasl(&mut client, credentials, Some(self.request_timeout)).await?;
         client.enable_sasl_reauthentication(credentials.clone());
         Ok(client)
     }
@@ -648,7 +661,11 @@ impl ClientConfig {
     }
 }
 
-async fn authenticate_sasl(client: &mut Client, credentials: &SaslCredentials) -> Result<()> {
+async fn authenticate_sasl(
+    client: &mut Client,
+    credentials: &SaslCredentials,
+    token_timeout: Option<Duration>,
+) -> Result<()> {
     let mechanism = credentials.mechanism().as_str();
     let handshake = client.sasl_handshake_v1(mechanism).await?;
     if handshake.error_code != 0 {
@@ -661,7 +678,7 @@ async fn authenticate_sasl(client: &mut Client, credentials: &SaslCredentials) -
         return authenticate_sasl_scram(client, credentials, mechanism, hash).await;
     }
     if credentials.mechanism() == SaslMechanism::OAuthBearer {
-        return authenticate_sasl_oauthbearer(client, credentials, mechanism).await;
+        return authenticate_sasl_oauthbearer(client, credentials, mechanism, token_timeout).await;
     }
 
     authenticate_sasl_plain(client, credentials, mechanism).await
@@ -671,8 +688,11 @@ async fn authenticate_sasl_oauthbearer(
     client: &mut Client,
     credentials: &SaslCredentials,
     mechanism: &'static str,
+    token_timeout: Option<Duration>,
 ) -> Result<()> {
-    let token = credentials.oauthbearer_token_for_auth().await?;
+    let token = credentials
+        .oauthbearer_token_for_auth(token_timeout)
+        .await?;
     let response = client
         .sasl_authenticate_v1(sasl_oauthbearer_auth_bytes_with_token(credentials, &token)?)
         .await?;
@@ -1000,11 +1020,17 @@ mod tests {
 
         assert_eq!(credentials.oauthbearer_token(), None);
         assert_eq!(
-            credentials.oauthbearer_token_for_auth().await.unwrap(),
+            credentials
+                .oauthbearer_token_for_auth(Some(Duration::from_secs(1)))
+                .await
+                .unwrap(),
             "fresh-jwt-token"
         );
         assert_eq!(
-            credentials.oauthbearer_token_for_auth().await.unwrap(),
+            credentials
+                .oauthbearer_token_for_auth(Some(Duration::from_secs(1)))
+                .await
+                .unwrap(),
             "fresh-jwt-token"
         );
         assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 2);
@@ -1018,13 +1044,35 @@ mod tests {
             Err(Error::Unsupported("oauth token provider failed"))
         });
 
-        let error = credentials.oauthbearer_token_for_auth().await.unwrap_err();
+        let error = credentials
+            .oauthbearer_token_for_auth(Some(Duration::from_secs(1)))
+            .await
+            .unwrap_err();
 
         assert!(matches!(
             error,
             Error::Unsupported("oauth token provider failed")
         ));
         assert!(!format!("{error}").contains("Bearer"));
+    }
+
+    #[tokio::test]
+    async fn times_out_oauthbearer_provider_without_exposing_token_material() {
+        let credentials = SaslCredentials::oauthbearer_with_provider(|| async {
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            Ok("late-token".to_owned())
+        });
+
+        let error = credentials
+            .oauthbearer_token_for_auth(Some(Duration::from_millis(1)))
+            .await
+            .unwrap_err();
+
+        assert!(matches!(
+            error,
+            Error::OAuthBearerTokenTimeout { timeout_ms: 1 }
+        ));
+        assert!(!format!("{error}").contains("late-token"));
     }
 
     #[test]

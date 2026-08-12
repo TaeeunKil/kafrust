@@ -579,7 +579,9 @@ Evidence:
   broker's built-in unsecured validator.
 - `OAuthBearerTokenProvider` and the matching `*_provider` builders allow an
   application to retrieve a fresh token for each new broker connection without
-  exposing it through `Debug` output.
+  exposing it through `Debug` output. Provider calls are bounded by
+  `ClientConfig::request_timeout_ms` and return the typed
+  `Error::OAuthBearerTokenTimeout` when the callback exceeds that limit.
 - Provider-backed OAUTHBEARER connections also refresh the token and send
   `SaslAuthenticate v1` again on the existing connection before requests after
   half of the broker-advertised session lifetime has elapsed; the focused
