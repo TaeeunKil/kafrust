@@ -1568,6 +1568,25 @@ impl ConsumerGroup {
         Ok(())
     }
 
+    fn synchronize_commit_worker_membership(&self) -> Result<()> {
+        let Some(worker) = &self.commit_worker else {
+            return Ok(());
+        };
+        let pending_commit_offsets = worker.snapshot_pending()?;
+        worker.update_membership(
+            CommitWorkerMembership {
+                group_id: self.group_id.clone(),
+                generation_id: self.generation_id,
+                member_id: self.member_id.clone(),
+                group_instance_id: self.config.group_instance_id.clone(),
+                protocol: self.protocol,
+                retention_time_ms: self.retention_time_ms,
+                assignments: self.consumer.assignments().to_vec(),
+            },
+            pending_commit_offsets,
+        )
+    }
+
     /// Splits one currently assigned topic partition into a bounded receive
     /// queue. The queue is fed by [`Self::poll`] and is closed when a rejoin
     /// removes the partition from this member's assignment.
@@ -1956,6 +1975,7 @@ impl ConsumerGroup {
 
         heartbeat.member_id = member_id;
         heartbeat.generation_id = member_epoch;
+        self.synchronize_commit_worker_membership()?;
         Ok(())
     }
 
@@ -2436,6 +2456,7 @@ impl ConsumerGroup {
             let current_assignments = self.consumer.assignments().to_vec();
             self.notify_rebalance(RebalancePhase::After, &current_assignments);
         }
+        self.synchronize_commit_worker_membership()?;
         debug!(
             group_id = self.group_id.as_str(),
             member_id = self.member_id.as_str(),
