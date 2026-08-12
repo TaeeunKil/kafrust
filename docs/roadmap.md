@@ -1386,6 +1386,11 @@ Implemented evidence:
   MSRV Rust 1.81 toolchain. The current live qualification is
   [`31500606310`](https://github.com/TaeeunKil/kafrust/actions/runs/31500606310)
   on the merged `main` branch.
+- Release `v0.2.5` published `kafrust-protocol` before `kafrust`; package
+  dry-runs, uploads, docs.rs HTTP 200 checks, and fresh default/tls projects on
+  Rust 1.81 all passed. The release includes the custom partitioner and
+  synchronous rebalance listener surfaces, with live qualification in
+  [`31557534371`](https://github.com/TaeeunKil/kafrust/actions/runs/31557534371).
 - Secured multi-broker failure injection is now qualified for the tested
   `SASL_PLAINTEXT` paths: the three-broker profile in
   [`31554396594`](https://github.com/TaeeunKil/kafrust/actions/runs/31554396594)
