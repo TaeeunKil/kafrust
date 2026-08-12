@@ -949,9 +949,10 @@ Implemented evidence:
   dropped-request coverage; live credential-policy and broker-stop
   qualification remain separate release gates.
 - Controller-routed Admin writes now retry only pre-transmission controller
-  discovery failures with the bounded budget. CreateTopics has focused
-  bootstrap-disconnect coverage; request transport failures after a mutation
-  is sent remain single-attempt because the broker-side outcome is ambiguous.
+  discovery failures, including transient Metadata responses, with the bounded
+  budget. CreateTopics has focused bootstrap-disconnect and retryable-metadata
+  coverage; request transport failures after a mutation is sent remain
+  single-attempt because the broker-side outcome is ambiguous.
 - Non-controller Admin writes for ACLs, client quotas, and incremental topic
   configs now also retry bootstrap connection failures before their request is
   transmitted. The retry helper has deterministic coverage for the retry

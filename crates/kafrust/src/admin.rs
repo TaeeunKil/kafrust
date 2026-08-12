@@ -1316,8 +1316,7 @@ impl AdminClient {
     }
 
     async fn controller_client(&self) -> Result<Client> {
-        let mut bootstrap = self.config.clone().connect().await?;
-        let metadata = bootstrap.metadata(Some(Vec::new())).await?;
+        let metadata = self.metadata_with_admin_retries(Some(Vec::new())).await?;
         let controller = metadata
             .brokers
             .iter()
@@ -8677,6 +8676,49 @@ mod tests {
         assert!(result.has_errors());
         assert_eq!(result.topics()[0].error_code(), 36);
         assert_eq!(metrics.snapshot().retries, 1);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn retries_create_topics_after_retryable_controller_metadata_response() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut first_bootstrap, _) = listener.accept().await.unwrap();
+            let metadata_request = read_frame(&mut first_bootstrap).await;
+            assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+            write_frame(
+                &mut first_bootstrap,
+                &topic_metadata_retryable_response(addr.port()),
+            )
+            .await;
+
+            let (mut second_bootstrap, _) = listener.accept().await.unwrap();
+            let metadata_request = read_frame(&mut second_bootstrap).await;
+            assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+            write_frame(&mut second_bootstrap, &metadata_response(addr.port())).await;
+
+            let (mut controller, _) = listener.accept().await.unwrap();
+            let create_request = read_frame(&mut controller).await;
+            assert_eq!(&create_request[0..4], &[0, 19, 0, 2]);
+            write_frame(&mut controller, &create_topics_response()).await;
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        );
+
+        let result = admin
+            .create_topics(&[NewTopic::new("orders", 3, 1)], CreateTopicsOptions::new())
+            .await
+            .unwrap();
+
+        assert!(result.has_errors());
+        assert_eq!(result.topics()[0].error_code(), 36);
+        assert_eq!(metrics.snapshot().retries, 1);
+        assert_eq!(metrics.snapshot().broker_errors, 2);
         server.await.unwrap();
     }
 
