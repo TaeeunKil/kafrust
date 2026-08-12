@@ -204,6 +204,11 @@ Known limits:
   qualification across Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1, including the
   corrected KIP-848 path on 4.3.1 in live run `31559409300`; secured permission
   and rejoin qualification remain.
+- The regex record path also fetched a produced record, coalesced its next
+  offset through `commit_record`, and flushed it with
+  `commit_queued_offsets`. Classic Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plus
+  KIP-848 Kafka 4.3.1 passed this live path in run `31560143467`; a detached
+  background commit worker and partition queue splitting remain open.
 
 ## M6 Production Behavior
 
@@ -1306,6 +1311,10 @@ Implemented evidence:
   JoinGroup requests, preventing a rejoining member from being treated as a
   new member during cooperative or classic rebalances. Focused tests cover
   staged non-leader rejoin decisions and member-loss assignment recovery.
+- The explicit per-record commit queue coalesces offsets by topic-partition and
+  flushes them under the current generation. Its record-fetch plus OffsetCommit
+  behavior passed the classic Kafka 3.7.2 through 4.3.1 matrix and KIP-848 on
+  Kafka 4.3.1 in [`Live Kafka Smoke`, run `31560143467`](https://github.com/TaeeunKil/kafrust/actions/runs/31560143467).
 - `RebalanceListener` exposes synchronous assignment snapshots for initial join,
   classic and KIP-848 rejoin, and broker-assigned KIP-848 assignment changes
   from foreground or background heartbeats. Callback lifecycle behavior is

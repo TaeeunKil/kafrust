@@ -203,6 +203,13 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
   KIP-848 path in [`Live Kafka Smoke`, run `31559409300`](https://github.com/TaeeunKil/kafrust/actions/runs/31559409300).
   Rejoin topic discovery and secured-broker permission behavior still require
   targeted qualification.
+- The regex consumer smoke also fetched a produced record, queued its next
+  offset with `commit_record`, and flushed the queue through
+  `commit_queued_offsets`. The classic path passed across Kafka 3.7.2, 3.8.1,
+  3.9.1, and 4.3.1, and the KIP-848 path passed on Kafka 4.3.1 in
+  [`Live Kafka Smoke`, run `31560143467`](https://github.com/TaeeunKil/kafrust/actions/runs/31560143467).
+  Detached background commit workers, partition queue splitting, and rejoin
+  topic discovery remain open compatibility work.
 - KIP-848 consumer groups through `ConsumerGroupHeartbeat v0`, Metadata v12
   topic UUID assignment, member-epoch foreground/background heartbeats,
   OffsetFetch v9, OffsetCommit v9, rejoin after concurrent membership, and
