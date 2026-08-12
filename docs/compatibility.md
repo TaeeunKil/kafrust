@@ -145,6 +145,10 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
   [`31566231208`](https://github.com/TaeeunKil/kafrust/actions/runs/31566231208),
   and the post-release live matrix passed in
   [`31565059236`](https://github.com/TaeeunKil/kafrust/actions/runs/31565059236).
+- The follow-up live matrix also exercised the bounded partition queue from a
+  KIP-848 consumer-group poll on Kafka 4.3.1; the direct, classic group, and
+  KIP-848 queue examples all passed in
+  [`31566898432`](https://github.com/TaeeunKil/kafrust/actions/runs/31566898432).
 - Current `main` performance and recovery evidence includes benchmark run
   [`31562321010`](https://github.com/TaeeunKil/kafrust/actions/runs/31562321010)
   and 120-second broker-restart soak run

@@ -226,6 +226,8 @@ Known limits:
   offset; assignment replacement closes queues for partitions no longer owned.
   Direct and group live examples passed across Kafka 3.7.2, 3.8.1, 3.9.1, and
   4.3.1 in [`Live Kafka Smoke`, run `31566523106`](https://github.com/TaeeunKil/kafrust/actions/runs/31566523106).
+  The same matrix also passed the KIP-848 consumer-group queue path on Kafka
+  4.3.1 in [`31566898432`](https://github.com/TaeeunKil/kafrust/actions/runs/31566898432).
 - `ConsumerGroup::rejoin` is public and refreshes regex topic discovery before
   joining again. The classic matrix and Kafka 4.3.1 KIP-848 regex paths passed
   initial and explicit rejoin assignment checks in [`Live Kafka Smoke`, run
