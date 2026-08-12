@@ -893,6 +893,9 @@ Implemented evidence:
   coordinator-routing tests pass, and the Kafka 3.7.2, 3.8.1, 3.9.1, and
   4.3.1 live smoke paths are qualified in
   [`31595485915`](https://github.com/TaeeunKil/kafrust/actions/runs/31595485915).
+  Multi-broker, TLS, SASL_PLAINTEXT, and SASL_SSL/SCRAM routing are qualified
+  in [`31597505667`](https://github.com/TaeeunKil/kafrust/actions/runs/31597505667);
+  coordinator-stop injection during the admin request remains open.
 - DescribeAcls v1, CreateAcls v1, and DeleteAcls v1 expose typed ACL bindings
   and filters through `AdminClient`, preserving top-level, per-entry,
   per-filter, and matching-ACL outcomes. Wire and mock-broker tests cover the
