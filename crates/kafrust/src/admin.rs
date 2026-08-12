@@ -53,6 +53,7 @@ use kafrust_protocol::api::incremental_alter_configs::{
 };
 use kafrust_protocol::api::list_groups::ListedGroupV1;
 use kafrust_protocol::api::list_partition_reassignments::ListPartitionReassignmentsTopicV0;
+use kafrust_protocol::api::list_transactions::ListedTransactionV0;
 use kafrust_protocol::api::metadata::{BrokerMetadata, MetadataResponseV1, TopicMetadata};
 use kafrust_protocol::api::offset_commit::{
     OffsetCommitPartition, OffsetCommitPartitionV9, OffsetCommitTopic, OffsetCommitTopicResponse,
@@ -1868,6 +1869,134 @@ impl AdminClient {
         Ok(DescribeTransactionsResult::from_protocol_responses(
             responses,
         ))
+    }
+
+    /// Lists active transactions across all transaction-coordinator shards.
+    ///
+    /// Kafka stores transaction state in partitions spread across the cluster,
+    /// so this operation queries every broker returned by metadata and
+    /// aggregates the broker-local results. The duration filter uses
+    /// ListTransactions v1 when the broker advertises it; brokers limited to
+    /// v0 still support state and producer-ID filters.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.list_transactions",
+        skip_all,
+        fields(
+            state_filter_count = options.state_filters.len(),
+            producer_id_filter_count = options.producer_id_filters.len(),
+            has_duration_filter = options.duration_filter.is_some()
+        ),
+        err
+    )]
+    pub async fn list_transactions(
+        &self,
+        options: ListTransactionsOptions,
+    ) -> Result<ListTransactionsResult> {
+        let mut retry = 0;
+        let responses = 'attempt: loop {
+            let metadata = self.metadata_with_admin_retries(None).await?;
+            let mut responses = Vec::with_capacity(metadata.brokers.len());
+            for broker in metadata.brokers {
+                let broker_addr = format!("{}:{}", broker.host, broker.port);
+                let mut client = match self.config.connect_broker(broker_addr).await {
+                    Ok(client) => client,
+                    Err(error)
+                        if retry < self.max_retries && is_retryable_admin_read_error(&error) =>
+                    {
+                        retry += 1;
+                        self.config.record_retry();
+                        tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                        continue 'attempt;
+                    }
+                    Err(error) => return Err(error),
+                };
+                let api_versions = match client
+                    .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
+                    .await
+                {
+                    Ok(response) => response,
+                    Err(error)
+                        if retry < self.max_retries && is_retryable_admin_read_error(&error) =>
+                    {
+                        retry += 1;
+                        self.config.record_retry();
+                        tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                        continue 'attempt;
+                    }
+                    Err(error) => return Err(error),
+                };
+                let Some(version) = api_versions.highest_supported_version(66, 1) else {
+                    return Err(Error::Unsupported(
+                        "ListTransactions API is not advertised by broker",
+                    ));
+                };
+                let response = match options.duration_filter {
+                    Some(duration) if version >= 1 => {
+                        client
+                            .list_transactions_v1(
+                                options.state_filters.clone(),
+                                options.producer_id_filters.clone(),
+                                duration_millis_i64(duration),
+                            )
+                            .await
+                    }
+                    Some(_) => {
+                        return Err(Error::Unsupported(
+                            "ListTransactions duration filters require API v1",
+                        ));
+                    }
+                    None if version >= 1 => {
+                        client
+                            .list_transactions_v1(
+                                options.state_filters.clone(),
+                                options.producer_id_filters.clone(),
+                                -1,
+                            )
+                            .await
+                    }
+                    None => {
+                        client
+                            .list_transactions_v0(
+                                options.state_filters.clone(),
+                                options.producer_id_filters.clone(),
+                            )
+                            .await
+                    }
+                };
+                let response = match response {
+                    Ok(response) => response,
+                    Err(error)
+                        if retry < self.max_retries
+                            && is_retryable_admin_coordinator_error(&error) =>
+                    {
+                        retry += 1;
+                        self.config.record_retry();
+                        tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                        continue 'attempt;
+                    }
+                    Err(error) => return Err(error),
+                };
+                if retry < self.max_retries
+                    && is_retryable_list_transactions_code(response.error_code)
+                {
+                    self.config.record_broker_error();
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    continue 'attempt;
+                }
+                responses.push(response);
+            }
+            break responses;
+        };
+
+        for response in &responses {
+            if response.error_code != 0 {
+                self.config.record_broker_error();
+            }
+        }
+        Ok(ListTransactionsResult::from_protocol_responses(responses))
     }
 }
 
@@ -4846,6 +4975,10 @@ fn is_retryable_admin_coordinator_code(code: i16) -> bool {
     )
 }
 
+fn is_retryable_list_transactions_code(code: i16) -> bool {
+    is_retryable_admin_coordinator_code(code) || is_retryable_admin_read_code(code)
+}
+
 fn is_retryable_offset_fetch_v9(
     response: &kafrust_protocol::api::offset_fetch::OffsetFetchResponseV9,
 ) -> bool {
@@ -6161,6 +6294,165 @@ impl DescribeTransactionsResult {
     }
 }
 
+/// Filters for [`AdminClient::list_transactions`].
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ListTransactionsOptions {
+    state_filters: Vec<String>,
+    producer_id_filters: Vec<i64>,
+    duration_filter: Option<Duration>,
+}
+
+impl ListTransactionsOptions {
+    /// Creates an unfiltered transaction listing.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Adds a Kafka transaction-state filter such as `Ongoing` or `PrepareCommit`.
+    pub fn state(mut self, state: impl Into<String>) -> Self {
+        self.state_filters.push(state.into());
+        self
+    }
+
+    /// Adds a producer ID filter.
+    pub fn producer_id(mut self, producer_id: i64) -> Self {
+        self.producer_id_filters.push(producer_id);
+        self
+    }
+
+    /// Filters transactions running longer than the given duration.
+    ///
+    /// This requires ListTransactions v1. The call returns a typed
+    /// [`Error::Unsupported`] if any target broker only advertises v0.
+    pub fn duration_filter(mut self, duration: Duration) -> Self {
+        self.duration_filter = Some(duration);
+        self
+    }
+
+    /// Returns the configured transaction-state filters.
+    pub fn state_filters(&self) -> &[String] {
+        &self.state_filters
+    }
+
+    /// Returns the configured producer ID filters.
+    pub fn producer_id_filters(&self) -> &[i64] {
+        &self.producer_id_filters
+    }
+
+    /// Returns the configured duration filter.
+    pub fn duration_filter_ref(&self) -> Option<Duration> {
+        self.duration_filter
+    }
+}
+
+/// Complete response aggregated from all ListTransactions broker shards.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ListTransactionsResult {
+    throttle_time: Duration,
+    error_code: i16,
+    unknown_state_filters: Vec<String>,
+    transactions: Vec<ListedTransaction>,
+}
+
+impl ListTransactionsResult {
+    /// Returns the maximum broker throttle time observed across shards.
+    pub fn throttle_time(&self) -> Duration {
+        self.throttle_time
+    }
+
+    /// Returns the first non-zero top-level Kafka error code, or zero.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns whether all broker shards completed without a top-level error.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+    }
+
+    /// Returns kafrust's classification for the top-level broker error.
+    pub fn broker_error_kind(&self) -> Option<BrokerErrorKind> {
+        (self.error_code != 0).then(|| BrokerErrorKind::from_code(self.error_code))
+    }
+
+    /// Returns state filters not recognized by at least one broker.
+    pub fn unknown_state_filters(&self) -> &[String] {
+        &self.unknown_state_filters
+    }
+
+    /// Returns active transactions aggregated across broker shards.
+    pub fn transactions(&self) -> &[ListedTransaction] {
+        &self.transactions
+    }
+
+    /// Consumes this response and returns the aggregated transactions.
+    pub fn into_transactions(self) -> Vec<ListedTransaction> {
+        self.transactions
+    }
+
+    fn from_protocol_responses(
+        responses: Vec<kafrust_protocol::api::list_transactions::ListTransactionsResponseV0>,
+    ) -> Self {
+        let error_code = responses
+            .iter()
+            .map(|response| response.error_code)
+            .find(|code| *code != 0)
+            .unwrap_or(0);
+        Self {
+            throttle_time: Duration::from_millis(
+                responses
+                    .iter()
+                    .map(|response| nonnegative_i32_to_u64(response.throttle_time_ms))
+                    .max()
+                    .unwrap_or(0),
+            ),
+            error_code,
+            unknown_state_filters: responses
+                .iter()
+                .flat_map(|response| response.unknown_state_filters.iter().cloned())
+                .collect(),
+            transactions: responses
+                .into_iter()
+                .flat_map(|response| response.transaction_states)
+                .map(ListedTransaction::from_protocol)
+                .collect(),
+        }
+    }
+}
+
+/// One active transaction returned by ListTransactions.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ListedTransaction {
+    transactional_id: String,
+    producer_id: i64,
+    transaction_state: String,
+}
+
+impl ListedTransaction {
+    /// Returns the transactional ID.
+    pub fn transactional_id(&self) -> &str {
+        &self.transactional_id
+    }
+
+    /// Returns the producer ID.
+    pub fn producer_id(&self) -> i64 {
+        self.producer_id
+    }
+
+    /// Returns Kafka's transaction state string.
+    pub fn state(&self) -> &str {
+        &self.transaction_state
+    }
+
+    fn from_protocol(result: ListedTransactionV0) -> Self {
+        Self {
+            transactional_id: result.transactional_id,
+            producer_id: result.producer_id,
+            transaction_state: result.transaction_state,
+        }
+    }
+}
+
 /// State of one transactional ID returned by Kafka.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TransactionDescription {
@@ -6751,6 +7043,10 @@ fn duration_millis_i32(duration: Duration) -> i32 {
     i32::try_from(duration.as_millis()).unwrap_or(i32::MAX)
 }
 
+fn duration_millis_i64(duration: Duration) -> i64 {
+    i64::try_from(duration.as_millis()).unwrap_or(i64::MAX)
+}
+
 fn nonnegative_i32_to_u64(value: i32) -> u64 {
     u64::try_from(value).unwrap_or(0)
 }
@@ -6764,10 +7060,11 @@ mod tests {
         ClientQuotaFilterComponent, ClientQuotaMatchType, ConfigAlterOperationKind, ConfigSource,
         ConsumerGroupOffset, ConsumerGroupOffsetDelete, ConsumerGroupOffsetQuery,
         CreatePartitionsOptions, CreateTopicsOptions, DeleteRecordsOptions, DeleteRecordsTopic,
-        DeleteTopicsOptions, DescribeConfigsOptions, DescribeProducersTopic, NewPartitions,
-        NewTopic, PartitionReassignment, PartitionReassignmentOptions, PartitionReassignmentQuery,
-        ScramCredentialDeletion, ScramCredentialMechanism, ScramCredentialUpsertion,
-        TopicConfigAlteration, TopicConfigResource,
+        DeleteTopicsOptions, DescribeConfigsOptions, DescribeProducersTopic,
+        ListTransactionsOptions, NewPartitions, NewTopic, PartitionReassignment,
+        PartitionReassignmentOptions, PartitionReassignmentQuery, ScramCredentialDeletion,
+        ScramCredentialMechanism, ScramCredentialUpsertion, TopicConfigAlteration,
+        TopicConfigResource,
     };
     use crate::{BrokerErrorKind, ClientConfig, ClientMetrics, Error};
     use kafrust_protocol::codec::Encoder;
@@ -9182,6 +9479,47 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn lists_transactions_from_all_broker_shards_with_v1() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            read_frame(&mut bootstrap).await;
+            write_frame(&mut bootstrap, &metadata_response(addr.port())).await;
+            drop(bootstrap);
+
+            let (mut broker, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut broker).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut broker, &api_versions_with_list_transactions()).await;
+            let list_request = read_frame(&mut broker).await;
+            assert_eq!(&list_request[0..4], &[0, 66, 0, 1]);
+            write_frame(&mut broker, &list_transactions_response()).await;
+        });
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .client_id("kafrust-admin-test")
+                .request_timeout_ms(1_000),
+        );
+
+        let result = admin
+            .list_transactions(
+                ListTransactionsOptions::new()
+                    .state("Ongoing")
+                    .producer_id(99),
+            )
+            .await
+            .unwrap();
+
+        assert!(result.is_success());
+        assert_eq!(result.transactions().len(), 1);
+        assert_eq!(result.transactions()[0].transactional_id(), "payments-tx");
+        assert_eq!(result.transactions()[0].state(), "Ongoing");
+        assert_eq!(result.transactions()[0].producer_id(), 99);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn retries_describe_transactions_after_coordinator_disconnect() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -9531,6 +9869,36 @@ mod tests {
                 Ok(())
             })
             .unwrap();
+        encoder.write_empty_tagged_fields();
+        encoder.into_bytes()
+    }
+
+    fn api_versions_with_list_transactions() -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_i16(0); // success
+        encoder.write_unsigned_varint(2); // one API key
+        encoder.write_i16(66);
+        encoder.write_i16(0);
+        encoder.write_i16(1);
+        encoder.write_empty_tagged_fields();
+        encoder.write_i32(0); // throttle time
+        encoder.write_empty_tagged_fields();
+        encoder.into_bytes()
+    }
+
+    fn list_transactions_response() -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_empty_tagged_fields(); // response header tags
+        encoder.write_i32(5); // throttle time
+        encoder.write_i16(0); // success
+        encoder.write_unsigned_varint(1); // no unknown state filters
+        encoder.write_unsigned_varint(2); // one transaction
+        encoder.write_compact_string("payments-tx").unwrap();
+        encoder.write_i64(99);
+        encoder.write_compact_string("Ongoing").unwrap();
+        encoder.write_empty_tagged_fields();
         encoder.write_empty_tagged_fields();
         encoder.into_bytes()
     }

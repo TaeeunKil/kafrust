@@ -30,6 +30,7 @@ pub mod leave_group;
 pub mod list_groups;
 pub mod list_offsets;
 pub mod list_partition_reassignments;
+pub mod list_transactions;
 pub mod metadata;
 pub mod offset_commit;
 pub mod offset_delete;

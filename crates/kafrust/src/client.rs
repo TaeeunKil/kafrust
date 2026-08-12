@@ -81,6 +81,10 @@ use kafrust_protocol::api::list_offsets::{
 use kafrust_protocol::api::list_partition_reassignments::{
     ListPartitionReassignmentsRequestV0, ListPartitionReassignmentsResponseV0,
 };
+use kafrust_protocol::api::list_transactions::{
+    ListTransactionsRequestV0, ListTransactionsRequestV1, ListTransactionsResponseV0,
+    ListTransactionsResponseV1,
+};
 use kafrust_protocol::api::metadata::{
     MetadataRequestTopicV12, MetadataRequestV1, MetadataRequestV12, MetadataResponseV1,
     MetadataResponseV12,
@@ -657,6 +661,52 @@ impl Client {
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v1(&mut decoder)?;
         Ok(DescribeTransactionsResponseV0::decode_body(&mut decoder)?)
+    }
+
+    /// Sends ListTransactions v0 to the broker represented by this connection.
+    ///
+    /// The broker returns the transactions for the coordinator shard it owns.
+    /// High-level callers should prefer [`crate::AdminClient`], which queries
+    /// all metadata brokers and aggregates the shards.
+    pub async fn list_transactions_v0(
+        &mut self,
+        state_filters: Vec<String>,
+        producer_id_filters: Vec<i64>,
+    ) -> Result<ListTransactionsResponseV0> {
+        let request = ListTransactionsRequestV0 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            state_filters,
+            producer_id_filters,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(ListTransactionsResponseV0::decode_body(&mut decoder)?)
+    }
+
+    /// Sends ListTransactions v1 with a broker-side duration filter.
+    ///
+    /// The response schema is shared with ListTransactions v0. Callers should
+    /// negotiate API support through [`Self::api_versions_v3_cached`] before
+    /// selecting this method.
+    pub async fn list_transactions_v1(
+        &mut self,
+        state_filters: Vec<String>,
+        producer_id_filters: Vec<i64>,
+        duration_filter_ms: i64,
+    ) -> Result<ListTransactionsResponseV1> {
+        let request = ListTransactionsRequestV1 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            state_filters,
+            producer_id_filters,
+            duration_filter_ms,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(ListTransactionsResponseV1::decode_body(&mut decoder)?)
     }
 
     /// Sends DescribeConfigs v1 to the broker represented by this connection.

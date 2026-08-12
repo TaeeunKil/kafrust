@@ -452,6 +452,42 @@ typed response. Coordinator movement, transport disconnects, request timeouts,
 and transient coordinator responses are retried through fresh discovery using
 the same bounded `max_retries` budget.
 
+## List Transactions
+
+```rust
+use std::time::Duration;
+use kafrust::{AdminClient, ClientConfig, ListTransactionsOptions};
+
+# async fn example() -> kafrust::Result<()> {
+let admin = AdminClient::new(ClientConfig::new(["localhost:19092"]));
+let result = admin
+    .list_transactions(
+        ListTransactionsOptions::new()
+            .state("Ongoing")
+            .duration_filter(Duration::from_secs(30)),
+    )
+    .await?;
+
+for transaction in result.transactions() {
+    println!(
+        "{} state={} producer={}",
+        transaction.transactional_id(),
+        transaction.state(),
+        transaction.producer_id(),
+    );
+}
+# Ok(())
+# }
+```
+
+`AdminClient::list_transactions` queries every broker returned by metadata,
+because each broker owns a shard of the transaction-state topic, and merges
+the results. State and producer-ID filters work with ListTransactions v0. A
+duration filter selects v1 when advertised; it returns `Unsupported` rather
+than silently dropping the filter if a broker only supports v0. Coordinator
+movement, transport disconnects, request timeouts, and transient coordinator
+responses use the bounded `max_retries` budget.
+
 ## Reassign Partitions
 
 Partition reassignment requests are routed to the active controller. A target

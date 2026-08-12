@@ -187,6 +187,9 @@ jobs:
           KAFRUST_TRANSACTIONAL_ID: kafrust-transactional-smoke-${{ matrix.kafka-version }}
         run: cargo run -p kafrust --example admin_describe_transactions
 
+      - name: Run admin ListTransactions example
+        run: cargo run -p kafrust --example admin_list_transactions
+
       - name: Run direct consumer example
         env:
           KAFRUST_PARTITION: "0"
@@ -1245,6 +1248,9 @@ jobs:
         env:
           KAFRUST_TRANSACTIONAL_ID: kafrust-transaction-failover-${{ github.run_id }}
         run: cargo run -p kafrust --example admin_describe_transactions
+
+      - name: Run multi-broker admin ListTransactions example
+        run: cargo run -p kafrust --example admin_list_transactions
 
       - name: Run multi-broker Admin DescribeTransactions during coordinator stop
         run: |
