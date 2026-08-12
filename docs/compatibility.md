@@ -215,6 +215,11 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
 - SCRAM credential upsert, describe, and delete through `AdminClient` using
   flexible API v0 request/response encoding. The SASL_SSL SCRAM profile passed
   this roundtrip against Kafka 3.7.2 in manual run `31461980967`.
+- The read-only `DescribeUserScramCredentials v0` path retries transport,
+  timeout, and retryable top-level broker failures within the bounded
+  `AdminClient` budget; focused mock-broker coverage verifies a dropped request
+  is re-sent with the typed user filter. Live credential-policy and
+  broker-stop qualification remains separate.
 - Controller-routed `AlterPartitionReassignments v0` accepts replica targets or
   cancellation requests, while `ListPartitionReassignments v0` exposes the
   current, adding, and removing replica sets. The three-broker Kafka 3.7.2

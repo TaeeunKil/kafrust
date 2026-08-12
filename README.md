@@ -149,7 +149,9 @@ filters, and per-entry authorization outcomes; qualify them against an
 authorizer-enabled broker before production rollout.
 `describe_user_scram_credentials` and `alter_user_scram_credentials` expose
 typed SCRAM credential administration, including controller routing and
-per-user outcomes; the Kafka 3.7.2 SASL_SSL roundtrip is live-verified.
+per-user outcomes; the read-only describe path retries transient transport and
+broker failures within the bounded AdminClient budget, and the Kafka 3.7.2
+SASL_SSL roundtrip is live-verified.
 `alter_partition_reassignments` and `list_partition_reassignments` expose
 controller-routed replica target changes, cancellation, and bounded ongoing
 status inspection; the Kafka 3.7.2 three-broker path is live-verified.

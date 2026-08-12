@@ -933,6 +933,10 @@ Implemented evidence:
   DescribeClientQuotas v0 now applies the same retry policy to its typed filter
   and top-level response, with focused coverage for a dropped request and
   successful quota result. StandardAuthorizer permission and broker-stop
+  qualification remain separate release gates. The read-only
+  DescribeUserScramCredentials v0 path now applies the same bounded retry
+  policy to its nullable user filter and top-level response, with focused
+  dropped-request coverage; live credential-policy and broker-stop
   qualification remain separate release gates.
 - KIP-848 member-aware administrative offsets now use OffsetFetch v9 and
   OffsetCommit v9 with the joined member ID, member epoch, optional static

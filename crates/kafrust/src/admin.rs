@@ -394,10 +394,41 @@ impl AdminClient {
         &self,
         users: Option<&[String]>,
     ) -> Result<DescribeUserScramCredentialsResult> {
-        let mut client = self.config.clone().connect().await?;
-        let response = client
-            .describe_user_scram_credentials_v0(users.map(ToOwned::to_owned))
-            .await?;
+        let users = users.map(ToOwned::to_owned);
+        let mut retry = 0;
+        let response = loop {
+            let mut client = match self.config.clone().connect().await {
+                Ok(client) => client,
+                Err(error) if retry < self.max_retries && is_retryable_admin_read_error(&error) => {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
+            match client
+                .describe_user_scram_credentials_v0(users.clone())
+                .await
+            {
+                Ok(response)
+                    if retry < self.max_retries
+                        && is_retryable_admin_read_code(response.error_code) =>
+                {
+                    self.config.record_broker_error();
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                }
+                Ok(response) => break response,
+                Err(error) if retry < self.max_retries && is_retryable_admin_read_error(&error) => {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                }
+                Err(error) => return Err(error),
+            }
+        };
         if response.error_code != 0 {
             self.config.record_broker_error();
         }
@@ -7103,6 +7134,41 @@ mod tests {
         assert!(altered.is_success());
         assert_eq!(altered.results().len(), 1);
         assert_eq!(altered.results()[0].username(), "alice");
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn retries_describe_user_scram_credentials_after_connection_drop() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut first, _) = listener.accept().await.unwrap();
+            let request = read_frame(&mut first).await;
+            assert_eq!(&request[0..4], &[0, 50, 0, 0]);
+            drop(first);
+
+            let (mut second, _) = listener.accept().await.unwrap();
+            let request = read_frame(&mut second).await;
+            assert_eq!(&request[0..4], &[0, 50, 0, 0]);
+            write_frame(&mut second, &describe_user_scram_credentials_response()).await;
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        );
+        let users = ["alice".to_owned()];
+
+        let result = admin
+            .describe_user_scram_credentials(Some(&users))
+            .await
+            .unwrap();
+
+        assert!(result.is_success());
+        assert_eq!(result.users().len(), 1);
+        assert_eq!(result.users()[0].username(), "alice");
+        assert_eq!(metrics.snapshot().retries, 1);
         server.await.unwrap();
     }
 
