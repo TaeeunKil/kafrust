@@ -716,18 +716,33 @@ impl AdminClient {
         group_id: &str,
         topics: Option<&[ConsumerGroupOffsetQuery]>,
     ) -> Result<ListConsumerGroupOffsetsResult> {
-        let mut coordinator = self.group_coordinator_client(group_id).await?;
-        let response = coordinator
-            .offset_fetch_v2(
-                group_id,
-                topics.map(|topics| {
-                    topics
-                        .iter()
-                        .map(ConsumerGroupOffsetQuery::as_protocol)
-                        .collect()
-                }),
-            )
-            .await?;
+        let mut retry = 0;
+        let response = loop {
+            let mut coordinator = self.group_coordinator_client(group_id).await?;
+            match coordinator
+                .offset_fetch_v2(
+                    group_id,
+                    topics.map(|topics| {
+                        topics
+                            .iter()
+                            .map(ConsumerGroupOffsetQuery::as_protocol)
+                            .collect()
+                    }),
+                )
+                .await
+            {
+                Ok(response) => break response,
+                Err(error)
+                    if retry < ADMIN_COORDINATOR_MAX_RETRIES
+                        && is_retryable_admin_coordinator_error(&error) =>
+                {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(ADMIN_COORDINATOR_RETRY_BACKOFF).await;
+                }
+                Err(error) => return Err(error),
+            }
+        };
 
         if response.error_code != 0 {
             self.config.record_broker_error();
@@ -6727,6 +6742,56 @@ mod tests {
         assert_eq!(listed.error_code(), 0);
         assert_eq!(listed.topics().len(), 1);
         assert_eq!(metrics.snapshot().broker_errors, 2);
+        assert_eq!(metrics.snapshot().retries, 1);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn retries_consumer_group_offset_fetch_after_coordinator_disconnect() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let coordinator_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&coordinator_request[0..4], &[0, 10, 0, 1]);
+            write_frame(
+                &mut bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let (mut coordinator, _) = listener.accept().await.unwrap();
+            let fetch_request = read_frame(&mut coordinator).await;
+            assert_eq!(&fetch_request[0..4], &[0, 9, 0, 2]);
+            drop(coordinator);
+
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let coordinator_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&coordinator_request[0..4], &[0, 10, 0, 1]);
+            write_frame(
+                &mut bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let (mut coordinator, _) = listener.accept().await.unwrap();
+            let fetch_request = read_frame(&mut coordinator).await;
+            assert_eq!(&fetch_request[0..4], &[0, 9, 0, 2]);
+            write_frame(&mut coordinator, &offset_fetch_response()).await;
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        );
+
+        let listed = admin
+            .list_consumer_group_offsets("orders-group", None)
+            .await
+            .unwrap();
+        assert_eq!(listed.error_code(), 0);
+        assert_eq!(listed.topics().len(), 1);
         assert_eq!(metrics.snapshot().retries, 1);
         server.await.unwrap();
     }

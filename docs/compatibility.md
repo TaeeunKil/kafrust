@@ -72,6 +72,13 @@ rediscovery, and the subsequent `OffsetFetch v2` request. This is request
 discovery coverage only; a coordinator stop after the admin connection has been
 established still requires live failure-injection evidence.
 
+The read-only `OffsetFetch v2` admin path additionally reconnects and retries
+after a coordinator connection drops or a request times out. Its focused
+injected-broker test verifies that the first request receives no response, the
+coordinator is rediscovered, and the same offset query succeeds. Administrative
+write retries remain conservative because a timeout can leave the broker-side
+outcome ambiguous.
+
 | Broker | Mode | Security | Verification | Status |
 | --- | --- | --- | --- | --- |
 | Apache Kafka 3.7.2 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, manual run `30067372344` on 2026-07-24 | Passing |

@@ -899,7 +899,10 @@ Implemented evidence:
   coordinator discovery also retries transient coordinator errors and discovery
   transport failures with a bounded budget; the focused mock-broker regression
   test covers `CoordinatorLoadInProgress`, bootstrap reconnect, and the
-  follow-up OffsetFetch request.
+  follow-up OffsetFetch request. The read-only admin `OffsetFetch v2` path also
+  reconnects and retries after a coordinator disconnect or request timeout;
+  administrative write retry semantics remain deliberately conservative while
+  ambiguous outcomes are not yet modeled.
 - DescribeAcls v1, CreateAcls v1, and DeleteAcls v1 expose typed ACL bindings
   and filters through `AdminClient`, preserving top-level, per-entry,
   per-filter, and matching-ACL outcomes. Wire and mock-broker tests cover the
