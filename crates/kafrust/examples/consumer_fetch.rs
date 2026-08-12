@@ -1,6 +1,7 @@
 mod common;
 
 use kafrust::{ConsumerConfig, Error};
+use std::time::Duration;
 
 #[tokio::main]
 async fn main() -> kafrust::Result<()> {
@@ -42,7 +43,17 @@ async fn main() -> kafrust::Result<()> {
     );
 
     consumer.assign(&topic, partition, offset);
-    let records = consumer.poll().await?;
+    let mut records = consumer.poll().await?;
+    if rack_aware && require_rack_record && records.is_empty() {
+        // A rack-aware fetch can race follower replication immediately after a write.
+        for _ in 0..20 {
+            tokio::time::sleep(Duration::from_millis(250)).await;
+            records = consumer.fetch(&topic, partition, offset).await?;
+            if !records.is_empty() {
+                break;
+            }
+        }
+    }
     for record in &records {
         println!(
             "fetched {}-{}@{} key={:?} value={:?}",
