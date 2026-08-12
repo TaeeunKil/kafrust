@@ -2940,6 +2940,7 @@ jobs:
             -e KAFKA_SASL_OAUTHBEARER_EXPECTED_AUDIENCE=kafrust-client \
             -e KAFKA_SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS=2 \
             -e KAFKA_SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS=1000 \
+            -e KAFKA_LOG4J_LOGGERS=org.apache.kafka.common.security.oauthbearer=DEBUG,org.apache.kafka.common.security.authenticator=DEBUG \
             -e KAFKA_SSL_KEYSTORE_FILENAME=kafka.server.keystore.p12 \
             -e KAFKA_SSL_KEYSTORE_CREDENTIALS=keystore-password \
             -e KAFKA_SSL_KEY_CREDENTIALS=key-password \
@@ -2971,8 +2972,33 @@ jobs:
             --partitions 1 \
             --replication-factor 1
 
+      - name: Inspect signed token claims
+        run: |
+          python3 - <<'PY'
+          import base64
+          import json
+
+          token = open("sasl-ssl-oauth-oidc/oidc/oauth-token", encoding="utf-8").read().strip()
+          header, payload, signature = token.split(".")
+
+          def decode(value):
+              return json.loads(base64.urlsafe_b64decode(value + "=" * (-len(value) % 4)))
+
+          print("header=", decode(header))
+          print("payload=", decode(payload))
+          print("signature_bytes=", len(base64.urlsafe_b64decode(signature + "=" * (-len(signature) % 4))))
+          PY
+
+      - name: Run signed OAUTHBEARER with static token
+        run: |
+          export KAFRUST_SASL_TOKEN="$(cat sasl-ssl-oauth-oidc/oidc/oauth-token)"
+          unset KAFRUST_SASL_TOKEN_PATH
+          cargo run -p kafrust --features tls --example broker_roundtrip
+
       - name: Run provider-backed signed OAUTHBEARER paths
         run: |
+          export KAFRUST_SASL_TOKEN_PATH="$GITHUB_WORKSPACE/sasl-ssl-oauth-oidc/oidc/oauth-token"
+          unset KAFRUST_SASL_TOKEN
           cargo run -p kafrust --features tls --example broker_roundtrip
           cargo run -p kafrust --features tls --example producer_send
           KAFRUST_PARTITION=0 KAFRUST_OFFSET=0 \
