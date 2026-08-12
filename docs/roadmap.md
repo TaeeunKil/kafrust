@@ -895,7 +895,11 @@ Implemented evidence:
   [`31595485915`](https://github.com/TaeeunKil/kafrust/actions/runs/31595485915).
   Multi-broker, TLS, SASL_PLAINTEXT, and SASL_SSL/SCRAM routing are qualified
   in [`31597505667`](https://github.com/TaeeunKil/kafrust/actions/runs/31597505667);
-  coordinator-stop injection during the admin request remains open.
+  coordinator-stop injection during the admin request remains open. Admin
+  coordinator discovery also retries transient coordinator errors and discovery
+  transport failures with a bounded budget; the focused mock-broker regression
+  test covers `CoordinatorLoadInProgress`, bootstrap reconnect, and the
+  follow-up OffsetFetch request.
 - DescribeAcls v1, CreateAcls v1, and DeleteAcls v1 expose typed ACL bindings
   and filters through `AdminClient`, preserving top-level, per-entry,
   per-filter, and matching-ACL outcomes. Wire and mock-broker tests cover the

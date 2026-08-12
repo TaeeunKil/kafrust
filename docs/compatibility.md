@@ -63,6 +63,15 @@ SASL_PLAINTEXT, and SASL_SSL/SCRAM profiles. These checks cover coordinator
 routing through the configured security transports; they do not yet inject a
 coordinator stop during the admin request itself.
 
+Admin coordinator discovery now retries transient `CoordinatorLoadInProgress`,
+`CoordinatorNotAvailable`, and `NotCoordinator` responses, as well as discovery
+transport timeouts and I/O failures, with a bounded retry budget. The focused
+mock-broker test `retries_group_coordinator_discovery_after_transient_error`
+verifies a failed `FindCoordinator v1`, bootstrap reconnect, successful
+rediscovery, and the subsequent `OffsetFetch v2` request. This is request
+discovery coverage only; a coordinator stop after the admin connection has been
+established still requires live failure-injection evidence.
+
 | Broker | Mode | Security | Verification | Status |
 | --- | --- | --- | --- | --- |
 | Apache Kafka 3.7.2 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, manual run `30067372344` on 2026-07-24 | Passing |

@@ -69,6 +69,9 @@ use crate::metrics::ClientMetrics;
 use crate::scram::{derive_salted_password, ScramHash};
 use rand::RngCore;
 
+const ADMIN_COORDINATOR_MAX_RETRIES: u32 = 5;
+const ADMIN_COORDINATOR_RETRY_BACKOFF: Duration = Duration::from_millis(50);
+
 /// Kafka administration client.
 ///
 /// Each controller-scoped operation discovers the active controller through
@@ -801,6 +804,24 @@ impl AdminClient {
     }
 
     async fn group_coordinator_client(&self, group_id: &str) -> Result<Client> {
+        let mut retry = 0;
+        loop {
+            match self.group_coordinator_client_once(group_id).await {
+                Ok(client) => return Ok(client),
+                Err(error)
+                    if retry < ADMIN_COORDINATOR_MAX_RETRIES
+                        && is_retryable_admin_coordinator_error(&error) =>
+                {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(ADMIN_COORDINATOR_RETRY_BACKOFF).await;
+                }
+                Err(error) => return Err(error),
+            }
+        }
+    }
+
+    async fn group_coordinator_client_once(&self, group_id: &str) -> Result<Client> {
         let mut bootstrap = self.config.clone().connect().await?;
         let coordinator = bootstrap.find_group_coordinator(group_id).await?;
         if coordinator.error_code != 0 {
@@ -4014,6 +4035,19 @@ impl ConsumerGroupMember {
     }
 }
 
+fn is_retryable_admin_coordinator_error(error: &Error) -> bool {
+    match error {
+        Error::Broker { code, .. } => matches!(
+            BrokerErrorKind::from_code(*code),
+            BrokerErrorKind::CoordinatorLoadInProgress
+                | BrokerErrorKind::CoordinatorNotAvailable
+                | BrokerErrorKind::NotCoordinator
+        ),
+        Error::Io(_) | Error::RequestTimedOut { .. } => true,
+        _ => false,
+    }
+}
+
 /// A topic and partition filter for consumer-group offset inspection.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConsumerGroupOffsetQuery {
@@ -6656,6 +6690,48 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn retries_group_coordinator_discovery_after_transient_error() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let coordinator_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&coordinator_request[0..4], &[0, 10, 0, 1]);
+            write_frame(&mut bootstrap, &find_group_coordinator_error_response(14)).await;
+
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let coordinator_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&coordinator_request[0..4], &[0, 10, 0, 1]);
+            write_frame(
+                &mut bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let (mut coordinator, _) = listener.accept().await.unwrap();
+            let fetch_request = read_frame(&mut coordinator).await;
+            assert_eq!(&fetch_request[0..4], &[0, 9, 0, 2]);
+            write_frame(&mut coordinator, &offset_fetch_response()).await;
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        );
+
+        let listed = admin
+            .list_consumer_group_offsets("orders-group", None)
+            .await
+            .unwrap();
+        assert_eq!(listed.error_code(), 0);
+        assert_eq!(listed.topics().len(), 1);
+        assert_eq!(metrics.snapshot().broker_errors, 2);
+        assert_eq!(metrics.snapshot().retries, 1);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn routes_create_topics_to_controller_and_preserves_partial_result() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -7392,6 +7468,12 @@ mod tests {
             0, 9, b'1', b'2', b'7', b'.', b'0', b'.', b'0', b'.', b'1', // host
         ];
         response.extend_from_slice(&i32::from(port).to_be_bytes());
+        response
+    }
+
+    fn find_group_coordinator_error_response(error_code: i16) -> Vec<u8> {
+        let mut response = find_group_coordinator_response(0);
+        response[8..10].copy_from_slice(&error_code.to_be_bytes());
         response
     }
 
