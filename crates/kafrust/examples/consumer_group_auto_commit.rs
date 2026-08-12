@@ -69,13 +69,13 @@ async fn main() -> kafrust::Result<()> {
         .join()
         .await?;
     if second_group.group_protocol() == ConsumerGroupProtocol::Consumer {
-        for _ in 0..10 {
+        for _ in 0..60 {
             if !second_group.assignments().is_empty() {
                 break;
             }
             second_group.heartbeat().await?;
             if second_group.assignments().is_empty() {
-                tokio::time::sleep(Duration::from_millis(50)).await;
+                tokio::time::sleep(Duration::from_millis(100)).await;
             }
         }
     }
