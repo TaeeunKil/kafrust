@@ -97,14 +97,14 @@ jobs:
       - name: Run producer example
         run: cargo run -p kafrust --example producer_send
 
-      - name: Verify flexible Produce v11/v9 negotiation
+      - name: Verify flexible Produce v12/v11/v9 negotiation
         env:
           RUST_LOG: kafrust=debug
         run: |
           cargo run -p kafrust --example producer_send 2>&1 | tee /tmp/kafrust-produce-flexible.log
-          if ! sed -E 's/\x1B\[[0-9;]*m//g' /tmp/kafrust-produce-flexible.log | grep -Eq 'produce_version=V(11|9)'; then
+          if ! sed -E 's/\x1B\[[0-9;]*m//g' /tmp/kafrust-produce-flexible.log | grep -Eq 'produce_version=V(12|11|9)'; then
             cat /tmp/kafrust-produce-flexible.log
-            echo "producer did not negotiate flexible Produce v11 or v9"
+            echo "producer did not negotiate flexible Produce v12, v11, or v9"
             exit 1
           fi
 

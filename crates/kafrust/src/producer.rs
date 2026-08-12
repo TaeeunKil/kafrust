@@ -2056,7 +2056,7 @@ impl Producer {
                 )?;
                 if self.config.acks == Acks::None {
                     match produce_version {
-                        ProduceVersion::V9 | ProduceVersion::V11 => {
+                        ProduceVersion::V9 | ProduceVersion::V11 | ProduceVersion::V12 => {
                             leader_client
                                 .produce_flexible_no_response(
                                     produce_version.api_version(),
@@ -2173,36 +2173,38 @@ impl Producer {
                     continue;
                 }
                 let response = match produce_version {
-                    ProduceVersion::V9 | ProduceVersion::V11 => ProduceResponse::V9(
-                        leader_client
-                            .produce_flexible(
-                                produce_version.api_version(),
-                                transactional_id.clone(),
-                                self.config.acks.as_i16(),
-                                30_000,
-                                vec![ProduceTopicV3 {
-                                    name: key.topic.clone(),
-                                    partitions: vec![ProducePartitionV3 {
-                                        partition_index: key.partition,
-                                        compression: self
-                                            .config
-                                            .compression
-                                            .as_record_batch_compression(),
-                                        identity,
-                                        records: records
-                                            .iter()
-                                            .map(|record| {
-                                                record_batch_message(
-                                                    &record.record.record,
-                                                    record.record.timestamp_ms,
-                                                )
-                                            })
-                                            .collect(),
+                    ProduceVersion::V9 | ProduceVersion::V11 | ProduceVersion::V12 => {
+                        ProduceResponse::V9(
+                            leader_client
+                                .produce_flexible(
+                                    produce_version.api_version(),
+                                    transactional_id.clone(),
+                                    self.config.acks.as_i16(),
+                                    30_000,
+                                    vec![ProduceTopicV3 {
+                                        name: key.topic.clone(),
+                                        partitions: vec![ProducePartitionV3 {
+                                            partition_index: key.partition,
+                                            compression: self
+                                                .config
+                                                .compression
+                                                .as_record_batch_compression(),
+                                            identity,
+                                            records: records
+                                                .iter()
+                                                .map(|record| {
+                                                    record_batch_message(
+                                                        &record.record.record,
+                                                        record.record.timestamp_ms,
+                                                    )
+                                                })
+                                                .collect(),
+                                        }],
                                     }],
-                                }],
-                            )
-                            .await?,
-                    ),
+                                )
+                                .await?,
+                        )
+                    }
                     ProduceVersion::V7 => ProduceResponse::V7(
                         leader_client
                             .produce_v7(
@@ -2404,7 +2406,7 @@ impl Producer {
 
             if self.config.acks == Acks::None {
                 match produce_version {
-                    ProduceVersion::V9 | ProduceVersion::V11 => {
+                    ProduceVersion::V9 | ProduceVersion::V11 | ProduceVersion::V12 => {
                         leader_client
                             .produce_flexible_no_response(
                                 produce_version.api_version(),
@@ -2494,28 +2496,30 @@ impl Producer {
             }
 
             let response = match produce_version {
-                ProduceVersion::V9 | ProduceVersion::V11 => ProduceResponse::V9(
-                    leader_client
-                        .produce_flexible(
-                            produce_version.api_version(),
-                            transactional_id,
-                            self.config.acks.as_i16(),
-                            30_000,
-                            vec![ProduceTopicV3 {
-                                name: record.topic().to_owned(),
-                                partitions: vec![ProducePartitionV3 {
-                                    partition_index: partition,
-                                    compression: self
-                                        .config
-                                        .compression
-                                        .as_record_batch_compression(),
-                                    identity,
-                                    records: vec![record_batch_message(record, timestamp_ms)],
+                ProduceVersion::V9 | ProduceVersion::V11 | ProduceVersion::V12 => {
+                    ProduceResponse::V9(
+                        leader_client
+                            .produce_flexible(
+                                produce_version.api_version(),
+                                transactional_id,
+                                self.config.acks.as_i16(),
+                                30_000,
+                                vec![ProduceTopicV3 {
+                                    name: record.topic().to_owned(),
+                                    partitions: vec![ProducePartitionV3 {
+                                        partition_index: partition,
+                                        compression: self
+                                            .config
+                                            .compression
+                                            .as_record_batch_compression(),
+                                        identity,
+                                        records: vec![record_batch_message(record, timestamp_ms)],
+                                    }],
                                 }],
-                            }],
-                        )
-                        .await?,
-                ),
+                            )
+                            .await?,
+                    )
+                }
                 ProduceVersion::V7 => ProduceResponse::V7(
                     leader_client
                         .produce_v7(
@@ -3966,6 +3970,7 @@ enum ProduceVersion {
     V7,
     V9,
     V11,
+    V12,
 }
 
 impl ProduceVersion {
@@ -3976,6 +3981,7 @@ impl ProduceVersion {
             Self::V7 => 7,
             Self::V9 => 9,
             Self::V11 => 11,
+            Self::V12 => 12,
         }
     }
 }
@@ -4074,7 +4080,8 @@ fn select_produce_batch_version(
 fn select_flexible_produce_version(
     api_versions: &impl ApiVersionsLookup,
 ) -> Option<ProduceVersion> {
-    match api_versions.highest_supported_version(PRODUCE_API_KEY, 11) {
+    match api_versions.highest_supported_version(PRODUCE_API_KEY, 12) {
+        Some(version) if version >= 12 => Some(ProduceVersion::V12),
         Some(version) if version >= 11 => Some(ProduceVersion::V11),
         Some(version) if version >= 9 => Some(ProduceVersion::V9),
         _ => None,
@@ -4295,7 +4302,11 @@ fn batch_records_encoded_len(
     compression: Compression,
 ) -> Result<usize> {
     match produce_version {
-        ProduceVersion::V3 | ProduceVersion::V7 | ProduceVersion::V9 | ProduceVersion::V11 => {
+        ProduceVersion::V3
+        | ProduceVersion::V7
+        | ProduceVersion::V9
+        | ProduceVersion::V11
+        | ProduceVersion::V12 => {
             let records = records
                 .iter()
                 .map(|record| {
@@ -4782,6 +4793,17 @@ mod tests {
     }
 
     #[test]
+    fn selects_flexible_produce_v12_when_available() {
+        let versions = api_versions(12);
+        let record = ProducerRecord::to("orders").header("source", "checkout");
+
+        assert_eq!(
+            select_produce_version(&versions, &record, Compression::None).unwrap(),
+            ProduceVersion::V12
+        );
+    }
+
+    #[test]
     fn falls_back_to_message_set_without_headers_when_only_produce_v2_is_available() {
         let versions = api_versions(2);
         let record = ProducerRecord::to("orders");
@@ -4906,6 +4928,19 @@ mod tests {
         assert_eq!(
             select_produce_batch_version(&versions, &records, Compression::None).unwrap(),
             ProduceVersion::V11
+        );
+    }
+
+    #[test]
+    fn selects_flexible_produce_v12_for_batch_when_available() {
+        let versions = api_versions(12);
+        let first = BatchRecord::new(ProducerRecord::to("orders").header("source", "checkout"));
+        let batch = [first];
+        let records = prepared_records(&batch);
+
+        assert_eq!(
+            select_produce_batch_version(&versions, &records, Compression::None).unwrap(),
+            ProduceVersion::V12
         );
     }
 

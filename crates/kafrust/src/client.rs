@@ -102,10 +102,10 @@ use kafrust_protocol::api::offset_fetch::{
     OffsetFetchTopic, OffsetFetchTopicV9,
 };
 use kafrust_protocol::api::produce::{
-    MessageSetMessage, ProducePartitionV2, ProducePartitionV3, ProduceRequestV11, ProduceRequestV2,
-    ProduceRequestV3, ProduceRequestV7, ProduceRequestV9, ProduceResponseV11, ProduceResponseV2,
-    ProduceResponseV7, ProduceResponseV9, ProduceTopicV2, ProduceTopicV3, RecordBatchIdentity,
-    RecordBatchMessage,
+    MessageSetMessage, ProducePartitionV2, ProducePartitionV3, ProduceRequestV11,
+    ProduceRequestV12, ProduceRequestV2, ProduceRequestV3, ProduceRequestV7, ProduceRequestV9,
+    ProduceResponseV11, ProduceResponseV12, ProduceResponseV2, ProduceResponseV7,
+    ProduceResponseV9, ProduceTopicV2, ProduceTopicV3, RecordBatchIdentity, RecordBatchMessage,
 };
 use kafrust_protocol::api::sasl::{
     SaslAuthenticateRequestV1, SaslAuthenticateRequestV2, SaslAuthenticateResponseV1,
@@ -1817,6 +1817,30 @@ impl Client {
             .await
     }
 
+    /// Sends flexible Produce v12 for pre-built record batch topic partitions.
+    pub async fn produce_v12(
+        &mut self,
+        transactional_id: Option<String>,
+        acks: i16,
+        timeout_ms: i32,
+        topics: Vec<ProduceTopicV3>,
+    ) -> Result<ProduceResponseV12> {
+        self.produce_flexible(12, transactional_id, acks, timeout_ms, topics)
+            .await
+    }
+
+    /// Sends flexible Produce v12 without waiting for a broker response.
+    pub async fn produce_v12_no_response(
+        &mut self,
+        transactional_id: Option<String>,
+        acks: i16,
+        timeout_ms: i32,
+        topics: Vec<ProduceTopicV3>,
+    ) -> Result<()> {
+        self.produce_flexible_no_response(12, transactional_id, acks, timeout_ms, topics)
+            .await
+    }
+
     pub(crate) async fn produce_flexible(
         &mut self,
         api_version: i16,
@@ -1825,7 +1849,17 @@ impl Client {
         timeout_ms: i32,
         topics: Vec<ProduceTopicV3>,
     ) -> Result<ProduceResponseV9> {
-        let request = if api_version >= 11 {
+        let request = if api_version >= 12 {
+            ProduceRequestV12 {
+                correlation_id: self.next_correlation_id(),
+                client_id: self.client_id.clone(),
+                transactional_id,
+                acks,
+                timeout_ms,
+                topics,
+            }
+            .encode()?
+        } else if api_version >= 11 {
             ProduceRequestV11 {
                 correlation_id: self.next_correlation_id(),
                 client_id: self.client_id.clone(),
@@ -1860,7 +1894,17 @@ impl Client {
         timeout_ms: i32,
         topics: Vec<ProduceTopicV3>,
     ) -> Result<()> {
-        let request = if api_version >= 11 {
+        let request = if api_version >= 12 {
+            ProduceRequestV12 {
+                correlation_id: self.next_correlation_id(),
+                client_id: self.client_id.clone(),
+                transactional_id,
+                acks,
+                timeout_ms,
+                topics,
+            }
+            .encode()?
+        } else if api_version >= 11 {
             ProduceRequestV11 {
                 correlation_id: self.next_correlation_id(),
                 client_id: self.client_id.clone(),
