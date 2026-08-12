@@ -1460,7 +1460,7 @@ impl ConsumerGroup {
         let owned_partitions = self.consumer_owned_partitions.clone();
         let mut retry_attempt = 0;
         let response = loop {
-            let response = self
+            let response = match self
                 .coordinator
                 .consumer_group_heartbeat_v0(
                     self.group_id.clone(),
@@ -1473,7 +1473,33 @@ impl ConsumerGroup {
                     self.config.server_assignor.clone(),
                     owned_partitions.clone(),
                 )
-                .await?;
+                .await
+            {
+                Ok(response) => response,
+                Err(error)
+                    if retry_attempt < self.config.max_retries && should_rejoin_group(&error) =>
+                {
+                    retry_attempt += 1;
+                    self.config.client.record_retry();
+                    debug!(
+                        group_id = self.group_id.as_str(),
+                        member_id = self.member_id.as_str(),
+                        member_epoch = self.generation_id,
+                        retry_attempt,
+                        error = %error,
+                        "retrying kafka KIP-848 consumer heartbeat after transport failure"
+                    );
+                    time::sleep(GROUP_JOIN_RETRY_BACKOFF).await;
+                    self.coordinator = connect_group_coordinator_with_retry(
+                        &self.config.client,
+                        &self.group_id,
+                        self.config.max_retries.saturating_sub(retry_attempt),
+                    )
+                    .await?;
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
             if response.error_code == 0 {
                 break response;
             }
@@ -1494,19 +1520,12 @@ impl ConsumerGroup {
                 "retrying kafka KIP-848 consumer group heartbeat"
             );
             time::sleep(GROUP_JOIN_RETRY_BACKOFF).await;
-            let mut bootstrap = self.config.client.clone().connect().await?;
-            let coordinator = find_group_coordinator_with_retry(
-                &mut bootstrap,
+            self.coordinator = connect_group_coordinator_with_retry(
                 &self.config.client,
                 &self.group_id,
-                self.config.max_retries,
+                self.config.max_retries.saturating_sub(retry_attempt),
             )
             .await?;
-            self.coordinator = self
-                .config
-                .client
-                .connect_broker(coordinator_addr(&coordinator))
-                .await?;
         };
         if let Some(member_id) = response.member_id.clone() {
             self.member_id = member_id;
@@ -2790,6 +2809,44 @@ async fn record_consumer_heartbeat_response(
 
 fn coordinator_addr(coordinator: &FindCoordinatorResponseV1) -> String {
     format!("{}:{}", coordinator.host, coordinator.port)
+}
+
+async fn connect_group_coordinator_with_retry(
+    client: &ClientConfig,
+    group_id: &str,
+    max_retries: u32,
+) -> Result<Client> {
+    let mut retry_attempt = 0;
+    loop {
+        let mut bootstrap = match client.clone().connect().await {
+            Ok(bootstrap) => bootstrap,
+            Err(error) if retry_attempt < max_retries && should_rejoin_group(&error) => {
+                retry_attempt += 1;
+                client.record_retry();
+                time::sleep(GROUP_JOIN_RETRY_BACKOFF).await;
+                continue;
+            }
+            Err(error) => return Err(error),
+        };
+        let coordinator =
+            find_group_coordinator_with_retry(&mut bootstrap, client, group_id, max_retries)
+                .await?;
+        match client.connect_broker(coordinator_addr(&coordinator)).await {
+            Ok(coordinator) => return Ok(coordinator),
+            Err(error) if retry_attempt < max_retries && should_rejoin_group(&error) => {
+                retry_attempt += 1;
+                client.record_retry();
+                debug!(
+                    group_id,
+                    retry_attempt,
+                    error = %error,
+                    "retrying kafka consumer group coordinator connection"
+                );
+                time::sleep(GROUP_JOIN_RETRY_BACKOFF).await;
+            }
+            Err(error) => return Err(error),
+        }
+    }
 }
 
 async fn find_group_coordinator_with_retry(
