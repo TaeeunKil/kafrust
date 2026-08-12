@@ -364,7 +364,8 @@ Verified paths currently include:
 - Direct topic-partition fetch with Fetch v4 response decoding.
 - Classic consumer group join, sync, heartbeat, poll, and offset commit.
 - KIP-848 consumer group assignment, member-epoch heartbeat, OffsetFetch v9,
-  OffsetCommit v9, background rejoin, and explicit leave against Kafka `4.3.1`.
+  OffsetCommit v9, member-aware administrative offset listing/alteration,
+  background rejoin, and explicit leave against Kafka `4.3.1`.
 
 See [Compatibility](docs/compatibility.md) and
 [Broker Roundtrip](docs/broker-roundtrip.md) for the current evidence.

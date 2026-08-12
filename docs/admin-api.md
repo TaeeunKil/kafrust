@@ -283,9 +283,53 @@ topics known to the group. `alter_consumer_group_offsets` routes an
 administrative OffsetCommit v2 using generation `-1`, an empty member ID, and
 no retention override. Both APIs preserve top-level and partition-level Kafka
 errors instead of collapsing partial results. These admin methods use classic
-consumer-group offset semantics; member-aware KIP-848 offset operations remain
-part of the joined `ConsumerGroup` workflow and have separate compatibility
-qualification.
+consumer-group offset semantics. The results expose broker throttle time; the
+classic v2 path reports zero because that schema has no throttle field.
+
+For a joined KIP-848 member, pass a fresh `ConsumerGroup::metadata()` snapshot
+to the member-aware methods. The snapshot must be refreshed after every rejoin
+because both the member ID and member epoch can change:
+
+```rust
+use kafrust::{
+    AdminClient, ConsumerGroupOffset, ConsumerGroupOffsetQuery, ConsumerGroupMetadata,
+};
+
+# async fn example(
+#     admin: AdminClient,
+#     metadata: ConsumerGroupMetadata,
+# ) -> kafrust::Result<()> {
+let query = [ConsumerGroupOffsetQuery::new("orders", [0])];
+let offsets = admin
+    .list_consumer_group_offsets_with_member(
+        metadata.group_id(),
+        Some(metadata.member_id()),
+        metadata.generation_id(),
+        Some(&query),
+        true,
+    )
+    .await?;
+
+let altered = admin
+    .alter_consumer_group_offsets_with_member(
+        metadata.group_id(),
+        metadata.member_id(),
+        metadata.generation_id(),
+        metadata.group_instance_id(),
+        &[ConsumerGroupOffset::new("orders", 0, 42).leader_epoch(-1)],
+    )
+    .await?;
+assert!(offsets.is_success() && altered.is_success());
+# Ok(())
+# }
+```
+
+`list_consumer_group_offsets_with_member` sends OffsetFetch v9 with the
+member ID, member epoch, and optional `require_stable` flag. The alteration
+method sends OffsetCommit v9, including optional static-member identity and
+the committed leader epoch. Transient coordinator movement is retried within
+`AdminClient::max_retries`; a stale member epoch is returned to the caller and
+is never silently retried with an invalid membership identity.
 
 ## Delete Records
 

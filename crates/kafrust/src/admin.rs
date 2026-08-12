@@ -54,13 +54,16 @@ use kafrust_protocol::api::list_groups::ListedGroupV1;
 use kafrust_protocol::api::list_partition_reassignments::ListPartitionReassignmentsTopicV0;
 use kafrust_protocol::api::metadata::{BrokerMetadata, MetadataResponseV1, TopicMetadata};
 use kafrust_protocol::api::offset_commit::{
-    OffsetCommitPartition, OffsetCommitTopic, OffsetCommitTopicResponse,
+    OffsetCommitPartition, OffsetCommitPartitionV9, OffsetCommitTopic, OffsetCommitTopicResponse,
+    OffsetCommitTopicV9,
 };
 use kafrust_protocol::api::offset_delete::{
     OffsetDeleteRequestPartitionV0, OffsetDeleteRequestTopicV0, OffsetDeleteResponsePartitionV0,
     OffsetDeleteResponseTopicV0,
 };
-use kafrust_protocol::api::offset_fetch::{OffsetFetchTopic, OffsetFetchTopicResponse};
+use kafrust_protocol::api::offset_fetch::{
+    OffsetFetchGroupResponse, OffsetFetchTopic, OffsetFetchTopicResponse, OffsetFetchTopicV9,
+};
 
 use crate::client::Client;
 use crate::config::ClientConfig;
@@ -812,6 +815,84 @@ impl AdminClient {
         ))
     }
 
+    /// Lists committed offsets through the KIP-848 member-aware OffsetFetch v9 API.
+    ///
+    /// The member ID may be omitted for an unjoined consumer-protocol request;
+    /// joined members should pass the current ID and member epoch from
+    /// [`ConsumerGroup::metadata`](crate::ConsumerGroup::metadata). A fresh
+    /// metadata snapshot is required after every rejoin. `require_stable`
+    /// requests that Kafka wait for unstable transactional offsets.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.list_consumer_group_offsets_with_member",
+        skip_all,
+        fields(group_id, member_epoch, has_topic_filter = topics.is_some(), require_stable),
+        err
+    )]
+    pub async fn list_consumer_group_offsets_with_member(
+        &self,
+        group_id: &str,
+        member_id: Option<&str>,
+        member_epoch: i32,
+        topics: Option<&[ConsumerGroupOffsetQuery]>,
+        require_stable: bool,
+    ) -> Result<ListConsumerGroupOffsetsResult> {
+        let request_topics = topics.map(|topics| {
+            topics
+                .iter()
+                .map(ConsumerGroupOffsetQuery::as_protocol_v9)
+                .collect::<Vec<_>>()
+        });
+        let member_id = member_id.map(str::to_owned);
+        let mut retry = 0;
+        let response = loop {
+            let mut coordinator = self.group_coordinator_client(group_id).await?;
+            match coordinator
+                .offset_fetch_v9_with_require_stable(
+                    group_id,
+                    member_id.clone(),
+                    member_epoch,
+                    request_topics.clone(),
+                    require_stable,
+                )
+                .await
+            {
+                Ok(response)
+                    if retry < self.max_retries && is_retryable_offset_fetch_v9(&response) =>
+                {
+                    record_offset_fetch_v9_errors(&self.config, &response);
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                }
+                Ok(response) => break response,
+                Err(error)
+                    if retry < self.max_retries && is_retryable_admin_coordinator_error(&error) =>
+                {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                }
+                Err(error) => return Err(error),
+            }
+        };
+
+        record_offset_fetch_v9_errors(&self.config, &response);
+        let throttle_time_ms = response.throttle_time_ms;
+        let group = response
+            .groups
+            .into_iter()
+            .find(|group| group.group_id == group_id)
+            .ok_or_else(|| Error::MissingGroupDescription {
+                group_id: group_id.to_owned(),
+            })?;
+        Ok(ListConsumerGroupOffsetsResult::from_protocol_v9(
+            group_id,
+            throttle_time_ms,
+            group,
+        ))
+    }
+
     /// Alters committed offsets for a consumer group through OffsetCommit v2.
     ///
     /// This is an administrative commit with generation `-1`, an empty member
@@ -893,6 +974,93 @@ impl AdminClient {
 
         Ok(AlterConsumerGroupOffsetsResult::from_protocol(
             group_id,
+            response.topics,
+        ))
+    }
+
+    /// Alters committed offsets through the KIP-848 member-aware
+    /// OffsetCommit v9 API.
+    ///
+    /// `member_id`, `member_epoch`, and `group_instance_id` must describe the
+    /// current joined member when the broker enforces consumer-protocol
+    /// membership. The exact offset and metadata values are repeated on a
+    /// transient coordinator failure; a stale member epoch is returned rather
+    /// than retried with an identity that may no longer be valid.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.alter_consumer_group_offsets_with_member",
+        skip_all,
+        fields(group_id, member_epoch, offset_count = offsets.len()),
+        err
+    )]
+    pub async fn alter_consumer_group_offsets_with_member(
+        &self,
+        group_id: &str,
+        member_id: &str,
+        member_epoch: i32,
+        group_instance_id: Option<&str>,
+        offsets: &[ConsumerGroupOffset],
+    ) -> Result<AlterConsumerGroupOffsetsResult> {
+        let mut topics = BTreeMap::<String, Vec<OffsetCommitPartitionV9>>::new();
+        for offset in offsets {
+            topics
+                .entry(offset.topic.clone())
+                .or_default()
+                .push(OffsetCommitPartitionV9 {
+                    partition_index: offset.partition,
+                    committed_offset: offset.offset,
+                    committed_leader_epoch: offset.leader_epoch,
+                    committed_metadata: offset.metadata.clone(),
+                });
+        }
+        let topics = topics
+            .into_iter()
+            .map(|(name, partitions)| OffsetCommitTopicV9 { name, partitions })
+            .collect::<Vec<_>>();
+        let group_instance_id = group_instance_id.map(str::to_owned);
+        let mut retry = 0;
+        let response = loop {
+            let mut coordinator = self.group_coordinator_client(group_id).await?;
+            match coordinator
+                .offset_commit_v9(
+                    group_id,
+                    member_epoch,
+                    member_id,
+                    group_instance_id.clone(),
+                    topics.clone(),
+                )
+                .await
+            {
+                Ok(response) => {
+                    let retryable = response.topics.iter().any(|topic| {
+                        topic.partitions.iter().any(|partition| {
+                            is_retryable_admin_coordinator_code(partition.error_code)
+                        })
+                    });
+                    if retry < self.max_retries && retryable {
+                        record_offset_commit_v9_errors(&self.config, &response);
+                        retry += 1;
+                        self.config.record_retry();
+                        tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    } else {
+                        break response;
+                    }
+                }
+                Err(error)
+                    if retry < self.max_retries && is_retryable_admin_coordinator_error(&error) =>
+                {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                }
+                Err(error) => return Err(error),
+            }
+        };
+
+        record_offset_commit_v9_errors(&self.config, &response);
+        Ok(AlterConsumerGroupOffsetsResult::from_protocol_v9(
+            group_id,
+            response.throttle_time_ms,
             response.topics,
         ))
     }
@@ -4315,6 +4483,51 @@ fn is_retryable_admin_coordinator_code(code: i16) -> bool {
     )
 }
 
+fn is_retryable_offset_fetch_v9(
+    response: &kafrust_protocol::api::offset_fetch::OffsetFetchResponseV9,
+) -> bool {
+    response.groups.iter().any(|group| {
+        is_retryable_admin_coordinator_code(group.error_code)
+            || group.topics.iter().any(|topic| {
+                topic
+                    .partitions
+                    .iter()
+                    .any(|partition| is_retryable_admin_coordinator_code(partition.error_code))
+            })
+    })
+}
+
+fn record_offset_fetch_v9_errors(
+    config: &ClientConfig,
+    response: &kafrust_protocol::api::offset_fetch::OffsetFetchResponseV9,
+) {
+    for group in &response.groups {
+        if group.error_code != 0 {
+            config.record_broker_error();
+        }
+        for topic in &group.topics {
+            for partition in &topic.partitions {
+                if partition.error_code != 0 {
+                    config.record_broker_error();
+                }
+            }
+        }
+    }
+}
+
+fn record_offset_commit_v9_errors(
+    config: &ClientConfig,
+    response: &kafrust_protocol::api::offset_commit::OffsetCommitResponseV9,
+) {
+    for topic in &response.topics {
+        for partition in &topic.partitions {
+            if partition.error_code != 0 {
+                config.record_broker_error();
+            }
+        }
+    }
+}
+
 fn is_retryable_admin_leader_error(error: &Error) -> bool {
     match error {
         Error::Broker { code, .. } => is_retryable_admin_leader_code(*code),
@@ -4370,6 +4583,13 @@ impl ConsumerGroupOffsetQuery {
             partition_indexes: self.partitions.clone(),
         }
     }
+
+    fn as_protocol_v9(&self) -> OffsetFetchTopicV9 {
+        OffsetFetchTopicV9 {
+            name: self.topic.clone(),
+            partition_indexes: self.partitions.clone(),
+        }
+    }
 }
 
 /// One committed consumer-group offset to set administratively.
@@ -4378,6 +4598,7 @@ pub struct ConsumerGroupOffset {
     topic: String,
     partition: i32,
     offset: i64,
+    leader_epoch: i32,
     metadata: Option<String>,
 }
 
@@ -4388,8 +4609,19 @@ impl ConsumerGroupOffset {
             topic: topic.into(),
             partition,
             offset,
+            leader_epoch: -1,
             metadata: None,
         }
+    }
+
+    /// Sets the broker leader epoch associated with this committed offset.
+    ///
+    /// The default `-1` sentinel preserves Kafka's standard behavior when the
+    /// caller does not have a leader epoch. KIP-848 OffsetCommit v9 carries
+    /// this field; classic OffsetCommit v2 ignores it.
+    pub fn leader_epoch(mut self, leader_epoch: i32) -> Self {
+        self.leader_epoch = leader_epoch;
+        self
     }
 
     /// Sets optional group-offset metadata.
@@ -4413,6 +4645,11 @@ impl ConsumerGroupOffset {
         self.offset
     }
 
+    /// Returns the leader epoch to send with OffsetCommit v9.
+    pub fn leader_epoch_ref(&self) -> i32 {
+        self.leader_epoch
+    }
+
     /// Returns optional group-offset metadata.
     pub fn metadata_ref(&self) -> Option<&str> {
         self.metadata.as_deref()
@@ -4424,6 +4661,7 @@ impl ConsumerGroupOffset {
 pub struct ListConsumerGroupOffsetsResult {
     group_id: String,
     error_code: i16,
+    throttle_time: Duration,
     topics: Vec<ConsumerGroupOffsetTopicResult>,
 }
 
@@ -4447,6 +4685,11 @@ impl ListConsumerGroupOffsetsResult {
         self.error_code
     }
 
+    /// Returns the broker throttle time for this offset query.
+    pub fn throttle_time(&self) -> Duration {
+        self.throttle_time
+    }
+
     /// Returns kafrust's classification for a top-level group error.
     pub fn broker_error_kind(&self) -> Option<BrokerErrorKind> {
         (self.error_code != 0).then(|| BrokerErrorKind::from_code(self.error_code))
@@ -4465,7 +4708,25 @@ impl ListConsumerGroupOffsetsResult {
         Self {
             group_id: group_id.to_owned(),
             error_code,
+            throttle_time: Duration::ZERO,
             topics: topics
+                .into_iter()
+                .map(ConsumerGroupOffsetTopicResult::from_fetch_protocol)
+                .collect(),
+        }
+    }
+
+    fn from_protocol_v9(
+        group_id: &str,
+        throttle_time_ms: i32,
+        group: OffsetFetchGroupResponse,
+    ) -> Self {
+        Self {
+            group_id: group_id.to_owned(),
+            error_code: group.error_code,
+            throttle_time: Duration::from_millis(nonnegative_i32_to_u64(throttle_time_ms)),
+            topics: group
+                .topics
                 .into_iter()
                 .map(ConsumerGroupOffsetTopicResult::from_fetch_protocol)
                 .collect(),
@@ -4566,6 +4827,7 @@ impl ConsumerGroupOffsetPartitionResult {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AlterConsumerGroupOffsetsResult {
     group_id: String,
+    throttle_time: Duration,
     topics: Vec<AlterConsumerGroupOffsetsTopicResult>,
 }
 
@@ -4573,6 +4835,11 @@ impl AlterConsumerGroupOffsetsResult {
     /// Returns the consumer group ID.
     pub fn group_id(&self) -> &str {
         &self.group_id
+    }
+
+    /// Returns the broker throttle time for this offset commit.
+    pub fn throttle_time(&self) -> Duration {
+        self.throttle_time
     }
 
     /// Returns whether every requested partition commit succeeded.
@@ -4590,6 +4857,22 @@ impl AlterConsumerGroupOffsetsResult {
     fn from_protocol(group_id: &str, topics: Vec<OffsetCommitTopicResponse>) -> Self {
         Self {
             group_id: group_id.to_owned(),
+            throttle_time: Duration::ZERO,
+            topics: topics
+                .into_iter()
+                .map(AlterConsumerGroupOffsetsTopicResult::from_protocol)
+                .collect(),
+        }
+    }
+
+    fn from_protocol_v9(
+        group_id: &str,
+        throttle_time_ms: i32,
+        topics: Vec<OffsetCommitTopicResponse>,
+    ) -> Self {
+        Self {
+            group_id: group_id.to_owned(),
+            throttle_time: Duration::from_millis(nonnegative_i32_to_u64(throttle_time_ms)),
             topics: topics
                 .into_iter()
                 .map(AlterConsumerGroupOffsetsTopicResult::from_protocol)
@@ -7059,6 +7342,145 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn lists_and_alters_member_aware_consumer_group_offsets() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            read_frame(&mut bootstrap).await;
+            write_frame(
+                &mut bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let (mut coordinator, _) = listener.accept().await.unwrap();
+            let fetch_request = read_frame(&mut coordinator).await;
+            assert_eq!(&fetch_request[0..4], &[0, 9, 0, 9]);
+            assert!(fetch_request
+                .windows(9)
+                .any(|bytes| bytes[0] == 9 && &bytes[1..] == b"member-a"));
+            assert!(fetch_request.windows(4).any(|bytes| bytes == [0, 0, 0, 7]));
+            assert_eq!(fetch_request[fetch_request.len() - 2], 1);
+            write_frame(&mut coordinator, &offset_fetch_v9_response(0)).await;
+
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            read_frame(&mut bootstrap).await;
+            write_frame(
+                &mut bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let (mut coordinator, _) = listener.accept().await.unwrap();
+            let commit_request = read_frame(&mut coordinator).await;
+            assert_eq!(&commit_request[0..4], &[0, 8, 0, 9]);
+            assert!(commit_request
+                .windows(9)
+                .any(|bytes| bytes[0] == 9 && &bytes[1..] == b"member-a"));
+            assert!(commit_request.windows(4).any(|bytes| bytes == [0, 0, 0, 7]));
+            assert!(commit_request.windows(4).any(|bytes| bytes == [0, 0, 0, 5]));
+            write_frame(&mut coordinator, &offset_commit_v9_response()).await;
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        );
+        let query = [ConsumerGroupOffsetQuery::new("orders", [0])];
+
+        let listed = admin
+            .list_consumer_group_offsets_with_member(
+                "orders-group",
+                Some("member-a"),
+                7,
+                Some(&query),
+                true,
+            )
+            .await
+            .unwrap();
+        assert_eq!(listed.group_id(), "orders-group");
+        assert!(listed.is_success());
+        assert_eq!(listed.throttle_time(), Duration::from_millis(12));
+        assert_eq!(listed.topics()[0].partitions()[0].committed_offset(), 42);
+        assert_eq!(
+            listed.topics()[0].partitions()[0].metadata(),
+            Some("processed")
+        );
+
+        let altered = admin
+            .alter_consumer_group_offsets_with_member(
+                "orders-group",
+                "member-a",
+                7,
+                None,
+                &[ConsumerGroupOffset::new("orders", 0, 43)
+                    .leader_epoch(5)
+                    .metadata("member-aware")],
+            )
+            .await
+            .unwrap();
+        assert!(altered.is_success());
+        assert_eq!(altered.throttle_time(), Duration::from_millis(12));
+        assert_eq!(altered.topics()[0].partitions()[0].partition_index(), 0);
+        assert_eq!(metrics.snapshot().broker_errors, 0);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn retries_member_aware_offset_fetch_after_transient_error() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            read_frame(&mut bootstrap).await;
+            write_frame(
+                &mut bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let (mut coordinator, _) = listener.accept().await.unwrap();
+            read_frame(&mut coordinator).await;
+            write_frame(&mut coordinator, &offset_fetch_v9_response(14)).await;
+
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            read_frame(&mut bootstrap).await;
+            write_frame(
+                &mut bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let (mut coordinator, _) = listener.accept().await.unwrap();
+            read_frame(&mut coordinator).await;
+            write_frame(&mut coordinator, &offset_fetch_v9_response(0)).await;
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        );
+        let listed = admin
+            .list_consumer_group_offsets_with_member(
+                "orders-group",
+                Some("member-a"),
+                7,
+                None,
+                false,
+            )
+            .await
+            .unwrap();
+
+        assert!(listed.is_success());
+        assert_eq!(metrics.snapshot().retries, 1);
+        assert_eq!(metrics.snapshot().broker_errors, 1);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn retries_group_coordinator_discovery_after_transient_error() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -8360,6 +8782,37 @@ mod tests {
         response
     }
 
+    fn offset_fetch_v9_response(group_error_code: i16) -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // response correlation ID
+        encoder.write_empty_tagged_fields(); // flexible response header
+        encoder.write_i32(12); // throttle time
+        encoder
+            .write_compact_array(Some(&[()]), |encoder, ()| {
+                encoder.write_compact_string("orders-group")?;
+                encoder.write_compact_array(Some(&[()]), |encoder, ()| {
+                    encoder.write_compact_string("orders")?;
+                    encoder.write_compact_array(Some(&[()]), |encoder, ()| {
+                        encoder.write_i32(0);
+                        encoder.write_i64(42);
+                        encoder.write_i32(-1);
+                        encoder.write_compact_nullable_string(Some("processed"))?;
+                        encoder.write_i16(0);
+                        encoder.write_empty_tagged_fields();
+                        Ok(())
+                    })?;
+                    encoder.write_empty_tagged_fields();
+                    Ok(())
+                })?;
+                encoder.write_i16(group_error_code);
+                encoder.write_empty_tagged_fields();
+                Ok(())
+            })
+            .unwrap();
+        encoder.write_empty_tagged_fields();
+        encoder.into_bytes()
+    }
+
     fn offset_commit_response() -> Vec<u8> {
         vec![
             0, 0, 0, 1, // correlation ID
@@ -8376,5 +8829,27 @@ mod tests {
         let last = response.len();
         response[last - 2..].copy_from_slice(&error_code.to_be_bytes());
         response
+    }
+
+    fn offset_commit_v9_response() -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // response correlation ID
+        encoder.write_empty_tagged_fields(); // flexible response header
+        encoder.write_i32(12); // throttle time
+        encoder
+            .write_compact_array(Some(&[()]), |encoder, ()| {
+                encoder.write_compact_string("orders")?;
+                encoder.write_compact_array(Some(&[()]), |encoder, ()| {
+                    encoder.write_i32(0);
+                    encoder.write_i16(0);
+                    encoder.write_empty_tagged_fields();
+                    Ok(())
+                })?;
+                encoder.write_empty_tagged_fields();
+                Ok(())
+            })
+            .unwrap();
+        encoder.write_empty_tagged_fields();
+        encoder.into_bytes()
     }
 }

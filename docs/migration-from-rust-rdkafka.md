@@ -291,9 +291,11 @@ For the rust-rdkafka `AdminClient::fetch_offsets` and
 `AdminClient::alter_consumer_group_offsets` workflows, use
 `list_consumer_group_offsets` and `alter_consumer_group_offsets`. The kafrust
 methods preserve per-topic and per-partition outcomes and use classic
-OffsetFetch v2 and OffsetCommit v2 semantics. KIP-848 member-aware offset
-operations are intentionally documented separately from these administrative
-classic-group methods.
+OffsetFetch v2 and OffsetCommit v2 semantics. For a joined KIP-848 member,
+pass `ConsumerGroup::metadata()` to
+`list_consumer_group_offsets_with_member` and
+`alter_consumer_group_offsets_with_member`; these use OffsetFetch v9 and
+OffsetCommit v9 with the current member epoch and preserve stale-epoch errors.
 
 ## Capability Gate
 
@@ -319,7 +321,7 @@ classic-group methods.
 | ACL describe/create/delete with an authorizer-enabled broker | Verified on Kafka 3.7.2; qualify target permissions and policy |
 | Client quota describe/alter | Verified on Kafka 3.7.2 StandardAuthorizer; qualify target permissions and quota policy |
 | SCRAM credential administration | Verified on Kafka 3.7.2 SASL_SSL; qualify target permissions and credential policy |
-| Consumer-group offset listing and administrative alteration | Candidate; classic OffsetFetch v2 and OffsetCommit v2 are live-verified on Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 in [`Live Kafka Smoke` run `31595485915`](https://github.com/TaeeunKil/kafrust/actions/runs/31595485915), with multi-broker, TLS, SASL_PLAINTEXT, and SASL_SSL/SCRAM coverage in [`31597505667`](https://github.com/TaeeunKil/kafrust/actions/runs/31597505667); qualify target authorization and KIP-848 member-aware workflows separately |
+| Consumer-group offset listing and administrative alteration | Candidate; classic OffsetFetch v2 and OffsetCommit v2 are live-verified on Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 in [`Live Kafka Smoke` run `31595485915`](https://github.com/TaeeunKil/kafrust/actions/runs/31595485915), with multi-broker, TLS, SASL_PLAINTEXT, and SASL_SSL/SCRAM coverage in [`31597505667`](https://github.com/TaeeunKil/kafrust/actions/runs/31597505667). KIP-848 member-aware OffsetFetch v9 and OffsetCommit v9 are implemented with focused wire/mock coverage and are being live-qualified on Kafka 4.3.1; qualify target authorization and broader member-failure workloads |
 | Record deletion | Candidate; DeleteRecords v1 is leader-routed and preserves low watermarks and per-partition errors; qualify retention policy and destructive-operation controls on the target broker |
 | Active producer inspection | Candidate; DescribeProducers v0 is leader-routed and preserves producer IDs, epochs, sequences, transaction offsets, and per-partition errors; live-verified on the supported plaintext matrix and Kafka 3.7.2 three-broker profile in [`Live Kafka Smoke` run `31589394777`](https://github.com/TaeeunKil/kafrust/actions/runs/31589394777); qualify target authorization and operational alerting |
 | Transaction inspection | Candidate; DescribeTransactions v0 discovers and groups IDs by transaction coordinator and preserves state, producer identity, timeout, and topic partitions; live-verified on the supported plaintext matrix and Kafka 3.7.2 three-broker plaintext/SASL_SSL SCRAM profiles in [`Live Kafka Smoke` run `31589394777`](https://github.com/TaeeunKil/kafrust/actions/runs/31589394777); qualify target authorization and coordinator-failure behavior |

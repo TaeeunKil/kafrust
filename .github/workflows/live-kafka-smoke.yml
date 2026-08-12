@@ -372,6 +372,12 @@ jobs:
       - name: Run KIP-848 committed offset fetch path
         run: cargo run -p kafrust --example consumer_group_poll
 
+      - name: Run KIP-848 member-aware admin offset path
+        env:
+          KAFRUST_GROUP_ID: kafrust-kip848-admin-offsets-${{ github.run_id }}
+          KAFRUST_ADMIN_OFFSET: "0"
+        run: cargo run -p kafrust --example admin_consumer_group_offsets_member
+
       - name: Run KIP-848 background heartbeat rejoin path
         run: cargo run -p kafrust --example consumer_group_heartbeat_rejoin
 
@@ -514,6 +520,12 @@ jobs:
             docker logs "$coordinator_container"
             exit 1
           fi
+
+      - name: Run KIP-848 member-aware admin offset path
+        env:
+          KAFRUST_GROUP_ID: kafrust-kip848-admin-offsets-${{ github.run_id }}
+          KAFRUST_ADMIN_OFFSET: "0"
+        run: cargo run -p kafrust --example admin_consumer_group_offsets_member
 
       - name: Dump KIP-848 multi-broker Kafka logs
         if: failure()

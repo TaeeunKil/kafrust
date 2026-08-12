@@ -1093,6 +1093,22 @@ impl Client {
         member_epoch: i32,
         topics: Option<Vec<OffsetFetchTopicV9>>,
     ) -> Result<OffsetFetchResponseV9> {
+        self.offset_fetch_v9_with_require_stable(group_id, member_id, member_epoch, topics, false)
+            .await
+    }
+
+    /// Sends OffsetFetch v9 with an explicit stable-offset requirement.
+    ///
+    /// `require_stable` asks Kafka to wait for unstable transactional offsets
+    /// before returning them, as defined by the OffsetFetch protocol.
+    pub async fn offset_fetch_v9_with_require_stable(
+        &mut self,
+        group_id: impl Into<String>,
+        member_id: Option<String>,
+        member_epoch: i32,
+        topics: Option<Vec<OffsetFetchTopicV9>>,
+        require_stable: bool,
+    ) -> Result<OffsetFetchResponseV9> {
         let request = OffsetFetchRequestV9 {
             correlation_id: self.next_correlation_id(),
             client_id: self.client_id.clone(),
@@ -1100,7 +1116,7 @@ impl Client {
             member_id,
             member_epoch,
             topics,
-            require_stable: false,
+            require_stable,
         };
         let response = self.send_request(&request.encode()?).await?;
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);

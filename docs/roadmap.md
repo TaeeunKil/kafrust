@@ -916,6 +916,14 @@ Implemented evidence:
   and transient per-ID coordinator responses. Focused mock-broker tests cover
   dropped requests and transient responses for both APIs; live broker-stop
   injection during these requests remains open.
+- KIP-848 member-aware administrative offsets now use OffsetFetch v9 and
+  OffsetCommit v9 with the joined member ID, member epoch, optional static
+  instance ID, `require_stable`, and committed leader epoch. The APIs reuse
+  the typed classic offset results while preserving v9 throttle and group
+  errors. Focused wire/mock tests and the
+  `admin_consumer_group_offsets_member` example cover the active-member path;
+  Kafka 4.3.1 single-node and multi-broker live qualification is the next
+  release gate.
 - DescribeAcls v1, CreateAcls v1, and DeleteAcls v1 expose typed ACL bindings
   and filters through `AdminClient`, preserving top-level, per-entry,
   per-filter, and matching-ACL outcomes. Wire and mock-broker tests cover the
