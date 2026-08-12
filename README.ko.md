@@ -266,8 +266,8 @@ kafrust의 호환성 주장은 실제 broker로 검증된 동작으로 제한합
 
 생성된 API 문서:
 
-- [`kafrust`](https://docs.rs/kafrust/0.2.5/kafrust/)
-- [`kafrust-protocol`](https://docs.rs/kafrust-protocol/0.2.5/kafrust_protocol/)
+- [`kafrust`](https://docs.rs/kafrust/0.2.6/kafrust/)
+- [`kafrust-protocol`](https://docs.rs/kafrust-protocol/0.2.6/kafrust_protocol/)
 
 ## 문서
 
