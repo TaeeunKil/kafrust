@@ -24,15 +24,15 @@ use tracing_subscriber::{
 pub(crate) fn init_request_gate(api_key: i16) -> kafrust::Result<()> {
     let filter = EnvFilter::from_default_env();
     match (
-        std::env::var_os("KAFRUST_REQUEST_SENT_FILE"),
+        std::env::var_os("KAFRUST_REQUEST_WRITTEN_FILE"),
         std::env::var_os("KAFRUST_REQUEST_RELEASE_FILE"),
     ) {
-        (Some(sent_file), Some(release_file)) => tracing_subscriber::registry()
+        (Some(written_file), Some(release_file)) => tracing_subscriber::registry()
             .with(filter)
             .with(tracing_subscriber::fmt::layer())
             .with(RequestGateLayer::new(
                 api_key,
-                sent_file.into(),
+                written_file.into(),
                 release_file.into(),
             ))
             .try_init()
@@ -47,17 +47,17 @@ pub(crate) fn init_request_gate(api_key: i16) -> kafrust::Result<()> {
 #[allow(dead_code)]
 struct RequestGateLayer {
     api_key: i16,
-    sent_file: PathBuf,
+    written_file: PathBuf,
     release_file: PathBuf,
     entered: AtomicBool,
 }
 
 #[allow(dead_code)]
 impl RequestGateLayer {
-    fn new(api_key: i16, sent_file: PathBuf, release_file: PathBuf) -> Self {
+    fn new(api_key: i16, written_file: PathBuf, release_file: PathBuf) -> Self {
         Self {
             api_key,
-            sent_file,
+            written_file,
             release_file,
             entered: AtomicBool::new(false),
         }
@@ -76,13 +76,13 @@ where
             || !visitor
                 .message
                 .as_deref()
-                .is_some_and(|message| message.contains("kafka request sent"))
+                .is_some_and(|message| message.contains("kafka request written"))
             || self.entered.swap(true, Ordering::AcqRel)
         {
             return;
         }
 
-        if let Err(error) = std::fs::write(&self.sent_file, b"kafka-request-sent\n") {
+        if let Err(error) = std::fs::write(&self.written_file, b"kafka-request-written\n") {
             eprintln!("failed to write request gate file: {error}");
             return;
         }

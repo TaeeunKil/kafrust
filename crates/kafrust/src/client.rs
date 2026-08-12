@@ -1679,6 +1679,7 @@ impl Client {
     async fn send_request_no_response_unbounded(&mut self, request: &[u8]) -> Result<()> {
         let frame = encode_frame(request)?;
         self.stream.write_all(&frame).await?;
+        RequestTrace::log_written(RequestTrace::from_request(request));
         self.stream.flush().await?;
         RequestTrace::log_sent(RequestTrace::from_request(request));
         Ok(())
@@ -1687,6 +1688,7 @@ impl Client {
     async fn send_request_unbounded(&mut self, request: &[u8]) -> Result<Vec<u8>> {
         let frame = encode_frame(request)?;
         self.stream.write_all(&frame).await?;
+        RequestTrace::log_written(RequestTrace::from_request(request));
         self.stream.flush().await?;
         RequestTrace::log_sent(RequestTrace::from_request(request));
 
@@ -1794,6 +1796,18 @@ impl RequestTrace {
                 correlation_id = trace.correlation_id,
                 request_bytes = trace.request_bytes,
                 "kafka request sent"
+            );
+        }
+    }
+
+    fn log_written(trace: Option<Self>) {
+        if let Some(trace) = trace {
+            debug!(
+                api_key = trace.api_key,
+                api_version = trace.api_version,
+                correlation_id = trace.correlation_id,
+                request_bytes = trace.request_bytes,
+                "kafka request written"
             );
         }
     }

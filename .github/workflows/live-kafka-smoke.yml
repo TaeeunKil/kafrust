@@ -1501,13 +1501,13 @@ jobs:
             exit 1
           fi
 
-          sent_file=/tmp/kafrust-admin-delete-records-sent
+          written_file=/tmp/kafrust-admin-delete-records-written
           release_file=/tmp/kafrust-admin-delete-records-release
           request_log=/tmp/kafrust-admin-delete-records.log
-          rm -f "$sent_file" "$release_file" "$request_log"
+          rm -f "$written_file" "$release_file" "$request_log"
           KAFRUST_PARTITION="$KAFRUST_FAILOVER_PARTITION" \
           KAFRUST_ADMIN_OFFSET=1 \
-          KAFRUST_REQUEST_SENT_FILE="$sent_file" \
+          KAFRUST_REQUEST_WRITTEN_FILE="$written_file" \
           KAFRUST_REQUEST_RELEASE_FILE="$release_file" \
           RUST_LOG=kafrust=debug \
           cargo run -p kafrust --example admin_delete_records_failover \
@@ -1516,7 +1516,7 @@ jobs:
 
           request_sent=""
           for attempt in {1..600}; do
-            if [ -f "$sent_file" ]; then
+            if [ -f "$written_file" ]; then
               request_sent=1
               break
             fi
@@ -1528,7 +1528,7 @@ jobs:
           done
           if [ -z "$request_sent" ] || ! kill -0 "$admin_pid" 2>/dev/null; then
             cat "$request_log" || true
-            echo "DeleteRecords request was not held after the request frame was sent"
+            echo "DeleteRecords request was not held after the request frame was written"
             kill "$admin_pid" 2>/dev/null || true
             wait "$admin_pid" || true
             exit 1
@@ -1580,12 +1580,12 @@ jobs:
             exit 1
           fi
 
-          sent_file=/tmp/kafrust-admin-describe-producers-sent
+          written_file=/tmp/kafrust-admin-describe-producers-written
           release_file=/tmp/kafrust-admin-describe-producers-release
           request_log=/tmp/kafrust-admin-describe-producers.log
-          rm -f "$sent_file" "$release_file" "$request_log"
+          rm -f "$written_file" "$release_file" "$request_log"
           KAFRUST_PARTITION="$KAFRUST_FAILOVER_PARTITION" \
-          KAFRUST_REQUEST_SENT_FILE="$sent_file" \
+          KAFRUST_REQUEST_WRITTEN_FILE="$written_file" \
           KAFRUST_REQUEST_RELEASE_FILE="$release_file" \
           RUST_LOG=kafrust=debug \
           cargo run -p kafrust --example admin_describe_producers_failover \
@@ -1594,7 +1594,7 @@ jobs:
 
           request_sent=""
           for attempt in {1..600}; do
-            if [ -f "$sent_file" ]; then
+            if [ -f "$written_file" ]; then
               request_sent=1
               break
             fi
@@ -1606,7 +1606,7 @@ jobs:
           done
           if [ -z "$request_sent" ] || ! kill -0 "$describe_pid" 2>/dev/null; then
             cat "$request_log" || true
-            echo "DescribeProducers request was not held after the request frame was sent"
+            echo "DescribeProducers request was not held after the request frame was written"
             kill "$describe_pid" 2>/dev/null || true
             wait "$describe_pid" || true
             exit 1
