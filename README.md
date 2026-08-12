@@ -416,13 +416,13 @@ Verified paths currently include:
 - The complete 17-job matrix also passed at commit `25d614a` in
   [`31627790408`](https://github.com/TaeeunKil/kafrust/actions/runs/31627790408)
   after the ACL authorizer example added bounded post-create visibility polling.
-- The latest complete 17-job matrix passed at commit `be78225` in
-  [`31640494509`](https://github.com/TaeeunKil/kafrust/actions/runs/31640494509).
-  It included the Kafka 3.7.2 multi-broker rack-aware Fetch v12
-  replica-selection gate, the flexible Produce v9 negotiation gate on Kafka
-  3.7.2, 3.8.1, 3.9.1, and 4.3.1, DeleteRecords and DescribeProducers
-  leader-stop recovery gates, and the supported security, ACL, failover, and
-  KIP-848 profiles.
+- The latest complete 17-job matrix passed at commit `9149d8f` in
+  [`31643246432`](https://github.com/TaeeunKil/kafrust/actions/runs/31643246432).
+  It included flexible Produce v11/v9 negotiation: Kafka 4.3.1 selected v11,
+  while Kafka 3.7.2, 3.8.1, and 3.9.1 selected v9. It also included the Kafka
+  3.7.2 multi-broker rack-aware Fetch v12 replica-selection gate,
+  DeleteRecords and DescribeProducers leader-stop recovery gates, and the
+  supported security, ACL, failover, and KIP-848 profiles.
 
 See [Compatibility](docs/compatibility.md) and
 [Broker Roundtrip](docs/broker-roundtrip.md) for the current evidence.

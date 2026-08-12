@@ -54,14 +54,15 @@ OAUTHBEARER, ACL administration, multi-broker failover, and KIP-848. The
 Kafka 3.7.2 multi-broker job also passed the in-flight DeleteRecords and
 DescribeProducers leader-stop recovery gates.
 
-The latest complete matrix and rack-aware/Produce v9 qualification in
-[`31640494509`](https://github.com/TaeeunKil/kafrust/actions/runs/31640494509)
-passed at commit `be78225`. Its Kafka 3.7.2 three-broker profile configured
+The latest complete matrix and rack-aware/flexible Produce qualification in
+[`31643246432`](https://github.com/TaeeunKil/kafrust/actions/runs/31643246432)
+passed at commit `9149d8f`. Its Kafka 3.7.2 three-broker profile configured
 broker racks and Kafka's `RackAwareReplicaSelector`; the direct consumer sent
 Fetch v12 with `client_rack`, fetched records, and observed a preferred replica
-route. The single-node profiles also passed the flexible Produce v9
-negotiation gate on Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1. The v11
-negotiation path is implemented and its live qualification is the next gate.
+route. The single-node profiles also passed the flexible Produce negotiation
+gate: Kafka 4.3.1 selected Produce v11, while Kafka 3.7.2, 3.8.1, and 3.9.1
+selected Produce v9. This qualifies the v11-first/v9-fallback path on the
+documented single-node matrix.
 The same consumer
 retains Fetch v11 and Fetch v4 fallback paths.
 This qualifies the documented rack-aware replica-selection path, not every
@@ -338,9 +339,9 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
   send with `acks=1`. The current path prefers flexible Produce v11, then v9,
   RecordBatch on brokers that advertise it, then falls back to Produce v7, v3,
   or v2. The focused v9/v11 request fixtures pass locally, and the complete
-  live matrix passed the explicit v9 negotiation gate on Kafka 3.7.2, 3.8.1,
-  3.9.1, and 4.3.1 in
-  [`31640494509`](https://github.com/TaeeunKil/kafrust/actions/runs/31640494509).
+  live matrix passed the explicit flexible-version negotiation gate in
+  [`31643246432`](https://github.com/TaeeunKil/kafrust/actions/runs/31643246432):
+  Kafka 4.3.1 selected v11 and Kafka 3.7.2, 3.8.1, and 3.9.1 selected v9.
 - Sequential producer sends to the same leader reuse one authenticated broker
   connection and its negotiated capability response; a focused injected-broker
   test verifies one ApiVersions exchange followed by two Produce requests on
@@ -456,7 +457,8 @@ with zero in-flight requests and buffered records.
   fetch-back before restoring the broker. The existing broker-stop failover
   sequence and all seven other broker/security profiles also passed.
 - Gzip Produce v11/v9/v3 RecordBatch encoding and Fetch v4 RecordBatch decoding are
-  covered by focused tests and the plaintext live smoke profile.
+  covered by focused tests and the plaintext live smoke profile; flexible
+  Produce v11/v9 negotiation is live-qualified in the latest matrix.
 - Snappy Produce v11/v9/v3 RecordBatch encoding and Fetch v4 RecordBatch decoding are
   covered by focused tests using Kafka-compatible Xerial framing and by the
   plaintext single-node and multi-broker live smoke profiles.

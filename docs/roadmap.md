@@ -1538,11 +1538,10 @@ Implemented evidence:
 - Producer capability negotiation now prefers flexible Produce v11, then v9,
   for RecordBatch sends, including transactional and no-ack paths, while
   retaining Produce v7, v3, and v2 fallbacks. Focused request/response fixtures
-  and producer selection tests cover both flexible versions. The existing
-  17-job live matrix passed the v9 negotiation gate on Kafka 3.7.2, 3.8.1,
-  3.9.1, and 4.3.1 in
-  [`31640494509`](https://github.com/TaeeunKil/kafrust/actions/runs/31640494509);
-  the v11 negotiation path is the next live qualification gate.
+  and producer selection tests cover both flexible versions. The complete
+  17-job live matrix passed the flexible-version negotiation gate in
+  [`31643246432`](https://github.com/TaeeunKil/kafrust/actions/runs/31643246432):
+  Kafka 4.3.1 selected v11 and Kafka 3.7.2, 3.8.1, and 3.9.1 selected v9.
 - Request-level observability records structured terminal fields for successful,
   failed, fire-and-forget, and cancelled broker requests without recording
   request payloads or credential material. The span-lifecycle guard is covered
@@ -1802,3 +1801,7 @@ Implemented evidence:
   [`31640494509`](https://github.com/TaeeunKil/kafrust/actions/runs/31640494509)
   after adding the flexible Produce v9 negotiation gate while retaining the
   rack-aware Fetch v12 and multi-broker recovery gates.
+- The latest complete 17-job matrix passed at commit `9149d8f` in
+  [`31643246432`](https://github.com/TaeeunKil/kafrust/actions/runs/31643246432)
+  after adding flexible Produce v11 preference with v9 fallback. Kafka 4.3.1
+  selected v11, while Kafka 3.7.2, 3.8.1, and 3.9.1 selected v9.
