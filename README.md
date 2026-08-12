@@ -403,9 +403,11 @@ Verified paths currently include:
 - The complete 17-job matrix also passed at commit `25d614a` in
   [`31627790408`](https://github.com/TaeeunKil/kafrust/actions/runs/31627790408)
   after the ACL authorizer example added bounded post-create visibility polling.
-- The latest complete 17-job matrix passed at commit `562dccd` in
-  [`31629022740`](https://github.com/TaeeunKil/kafrust/actions/runs/31629022740)
-  after controller Metadata discovery also retried transient responses.
+- The latest complete 17-job matrix passed at commit `43969e0` in
+  [`31630339333`](https://github.com/TaeeunKil/kafrust/actions/runs/31630339333).
+  It included the Kafka 3.7.2 multi-broker DeleteRecords and DescribeProducers
+  leader-stop recovery gates, alongside the supported version, security, ACL,
+  failover, and KIP-848 profiles.
 
 See [Compatibility](docs/compatibility.md) and
 [Broker Roundtrip](docs/broker-roundtrip.md) for the current evidence.
