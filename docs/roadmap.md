@@ -266,7 +266,10 @@ Known limits:
 
 - Reconnects happen through operation retries, not long-lived connection recovery.
 - Metadata caching currently exists on the producer and direct consumer paths.
-- Tracing emits request lifecycle and high-level operation metadata, but does not yet use structured spans across complete workflows.
+- Tracing emits request lifecycle and high-level operation metadata through
+  structured spans. `kafka.request` spans include API identity, correlation ID,
+  request and response byte counts, terminal outcome, and elapsed time; dropped
+  request futures are recorded as cancelled.
 - Backpressure is limited to per-poll record count, not socket or memory pressure.
 
 ## M7 Public Alpha
@@ -1539,6 +1542,10 @@ Implemented evidence:
   passed the explicit v9 negotiation gate on Kafka 3.7.2, 3.8.1, 3.9.1, and
   4.3.1 in
   [`31640494509`](https://github.com/TaeeunKil/kafrust/actions/runs/31640494509).
+- Request-level observability records structured terminal fields for successful,
+  failed, fire-and-forget, and cancelled broker requests without recording
+  request payloads or credential material. The span-lifecycle guard is covered
+  by the full workspace validation.
 - Rack-aware direct and group fetches now expose `client_rack` through their
   builders. Connections prefer flexible Fetch v12 through ApiVersions, encode
   the compact/tagged rack-aware request, decode `preferred_read_replica`, and

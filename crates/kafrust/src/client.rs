@@ -117,7 +117,7 @@ use kafrust_protocol::codec::{DecodeLimits, Decoder};
 use kafrust_protocol::frame::encode_frame;
 use kafrust_protocol::header::ResponseHeader;
 use std::fmt;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tracing::{debug, debug_span, Instrument, Span};
@@ -1767,6 +1767,7 @@ impl Client {
     async fn send_request_no_response_traced(&mut self, request: &[u8]) -> Result<()> {
         let trace = RequestTrace::from_request(request);
         let span = RequestTrace::span(trace);
+        let mut span_guard = RequestSpanGuard::new(span.clone());
         let metrics = self.metrics.start_request(request.len());
 
         async {
@@ -1788,6 +1789,7 @@ impl Client {
             };
 
             RequestTrace::log_finish_no_response(trace, &result);
+            span_guard.finish_no_response(&result);
             match &result {
                 Ok(()) => metrics.succeed(0),
                 Err(error) => metrics.fail(matches!(error, Error::RequestTimedOut { .. })),
@@ -1806,6 +1808,7 @@ impl Client {
     async fn send_request_traced(&mut self, request: &[u8]) -> Result<Vec<u8>> {
         let trace = RequestTrace::from_request(request);
         let span = RequestTrace::span(trace);
+        let mut span_guard = RequestSpanGuard::new(span.clone());
         let metrics = self.metrics.start_request(request.len());
 
         async {
@@ -1822,6 +1825,7 @@ impl Client {
             };
 
             RequestTrace::log_finish(trace, &result);
+            span_guard.finish(&result);
             match &result {
                 Ok(response) => metrics.succeed(response.len()),
                 Err(error) => metrics.fail(matches!(error, Error::RequestTimedOut { .. })),
@@ -1927,6 +1931,9 @@ impl RequestTrace {
                 api_version = trace.api_version,
                 correlation_id = trace.correlation_id,
                 request_bytes = trace.request_bytes,
+                outcome = tracing::field::Empty,
+                response_bytes = tracing::field::Empty,
+                elapsed_ms = tracing::field::Empty,
             ),
             None => Span::none(),
         }
@@ -2013,6 +2020,69 @@ impl RequestTrace {
             }
             (None, _) => {}
         }
+    }
+
+    fn record_finish(span: &Span, started_at: Instant, result: &Result<Vec<u8>>) {
+        span.record("elapsed_ms", duration_millis(started_at.elapsed()));
+        match result {
+            Ok(response) => {
+                span.record("outcome", "success");
+                span.record("response_bytes", response.len());
+            }
+            Err(_) => {
+                span.record("outcome", "error");
+            }
+        }
+    }
+
+    fn record_finish_no_response(span: &Span, started_at: Instant, result: &Result<()>) {
+        span.record("elapsed_ms", duration_millis(started_at.elapsed()));
+        match result {
+            Ok(()) => {
+                span.record("outcome", "sent");
+                span.record("response_bytes", 0usize);
+            }
+            Err(_) => {
+                span.record("outcome", "error");
+            }
+        }
+    }
+}
+
+struct RequestSpanGuard {
+    span: Span,
+    started_at: Instant,
+    completed: bool,
+}
+
+impl RequestSpanGuard {
+    fn new(span: Span) -> Self {
+        Self {
+            span,
+            started_at: Instant::now(),
+            completed: false,
+        }
+    }
+
+    fn finish(&mut self, result: &Result<Vec<u8>>) {
+        RequestTrace::record_finish(&self.span, self.started_at, result);
+        self.completed = true;
+    }
+
+    fn finish_no_response(&mut self, result: &Result<()>) {
+        RequestTrace::record_finish_no_response(&self.span, self.started_at, result);
+        self.completed = true;
+    }
+}
+
+impl Drop for RequestSpanGuard {
+    fn drop(&mut self) {
+        if self.completed {
+            return;
+        }
+        self.span
+            .record("elapsed_ms", duration_millis(self.started_at.elapsed()));
+        self.span.record("outcome", "cancelled");
     }
 }
 
