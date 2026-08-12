@@ -945,6 +945,10 @@ Implemented evidence:
   policy to its nullable user filter and top-level response, with focused
   dropped-request coverage; live credential-policy and broker-stop
   qualification remain separate release gates.
+- Controller-routed Admin writes now retry only pre-transmission controller
+  discovery failures with the bounded budget. CreateTopics has focused
+  bootstrap-disconnect coverage; request transport failures after a mutation
+  is sent remain single-attempt because the broker-side outcome is ambiguous.
 - KIP-848 member-aware administrative offsets now use OffsetFetch v9 and
   OffsetCommit v9 with the joined member ID, member epoch, optional static
   instance ID, `require_stable`, and committed leader epoch. The APIs reuse

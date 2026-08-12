@@ -490,7 +490,7 @@ impl AdminClient {
         deletions: &[ScramCredentialDeletion],
         upsertions: &[ScramCredentialUpsertion],
     ) -> Result<AlterUserScramCredentialsResult> {
-        let mut client = self.controller_client().await?;
+        let mut client = self.controller_client_with_retries().await?;
         let response = client
             .alter_user_scram_credentials_v0(
                 deletions
@@ -528,7 +528,7 @@ impl AdminClient {
         reassignments: &[PartitionReassignment],
         options: PartitionReassignmentOptions,
     ) -> Result<AlterPartitionReassignmentsResult> {
-        let mut controller_client = self.controller_client().await?;
+        let mut controller_client = self.controller_client_with_retries().await?;
         let response = controller_client
             .alter_partition_reassignments_v0(
                 duration_millis_i32(options.timeout),
@@ -1330,6 +1330,27 @@ impl AdminClient {
             .await
     }
 
+    // Discovery is safe to retry because no controller-scoped request has been
+    // transmitted yet. The write itself remains single-attempt to avoid
+    // duplicating an ambiguous broker-side mutation.
+    async fn controller_client_with_retries(&self) -> Result<Client> {
+        let mut retry = 0;
+        loop {
+            match self.controller_client().await {
+                Ok(client) => return Ok(client),
+                Err(error)
+                    if retry < self.max_retries
+                        && is_retryable_admin_controller_read_error(&error) =>
+                {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                }
+                Err(error) => return Err(error),
+            }
+        }
+    }
+
     /// Creates Kafka topics on the active controller using CreateTopics v2.
     ///
     /// Kafka can accept some topics and reject others in the same request.
@@ -1348,7 +1369,7 @@ impl AdminClient {
         topics: &[NewTopic],
         options: CreateTopicsOptions,
     ) -> Result<CreateTopicsResult> {
-        let mut controller_client = self.controller_client().await?;
+        let mut controller_client = self.controller_client_with_retries().await?;
         let response = controller_client
             .create_topics_v2(
                 topics.iter().map(NewTopic::as_protocol).collect(),
@@ -1390,7 +1411,7 @@ impl AdminClient {
         topics: &[NewPartitions],
         options: CreatePartitionsOptions,
     ) -> Result<CreatePartitionsResult> {
-        let mut controller_client = self.controller_client().await?;
+        let mut controller_client = self.controller_client_with_retries().await?;
         let response = controller_client
             .create_partitions_v0(
                 topics.iter().map(NewPartitions::as_protocol).collect(),
@@ -1431,7 +1452,7 @@ impl AdminClient {
         topic_names: &[String],
         options: DeleteTopicsOptions,
     ) -> Result<DeleteTopicsResult> {
-        let mut controller_client = self.controller_client().await?;
+        let mut controller_client = self.controller_client_with_retries().await?;
         let response = controller_client
             .delete_topics_v3(topic_names.to_vec(), duration_millis_i32(options.timeout))
             .await?;
@@ -8515,6 +8536,44 @@ mod tests {
             Some(BrokerErrorKind::TopicAlreadyExists)
         );
         assert_eq!(metrics.snapshot().broker_errors, 1);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn retries_create_topics_after_controller_discovery_disconnect() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut first_bootstrap, _) = listener.accept().await.unwrap();
+            let metadata_request = read_frame(&mut first_bootstrap).await;
+            assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+            drop(first_bootstrap);
+
+            let (mut second_bootstrap, _) = listener.accept().await.unwrap();
+            let metadata_request = read_frame(&mut second_bootstrap).await;
+            assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+            write_frame(&mut second_bootstrap, &metadata_response(addr.port())).await;
+
+            let (mut controller, _) = listener.accept().await.unwrap();
+            let create_request = read_frame(&mut controller).await;
+            assert_eq!(&create_request[0..4], &[0, 19, 0, 2]);
+            write_frame(&mut controller, &create_topics_response()).await;
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        );
+
+        let result = admin
+            .create_topics(&[NewTopic::new("orders", 3, 1)], CreateTopicsOptions::new())
+            .await
+            .unwrap();
+
+        assert!(result.has_errors());
+        assert_eq!(result.topics()[0].error_code(), 36);
+        assert_eq!(metrics.snapshot().retries, 1);
         server.await.unwrap();
     }
 

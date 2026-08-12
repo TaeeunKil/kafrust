@@ -118,6 +118,13 @@ committed offsets is state-idempotent; focused tests cover both a lost response
 and a transient coordinator partition error. Other administrative writes remain
 conservative because a timeout can leave their broker-side outcome ambiguous.
 
+Controller-routed administrative writes now retry only the pre-transmission
+controller discovery after bootstrap or metadata transport failure. The
+controller request itself remains single-attempt, so a timeout or connection
+drop after a mutation was sent is surfaced instead of blindly duplicating the
+operation. Focused CreateTopics coverage verifies discovery recovery and the
+existing live write paths retain their partial-result semantics.
+
 The read-only `DescribeGroups v1` admin path also reconnects and retries after
 an established coordinator connection drops. Its focused mock-broker test
 verifies the failed request, coordinator rediscovery, and successful group
