@@ -1680,6 +1680,7 @@ impl Client {
         let frame = encode_frame(request)?;
         self.stream.write_all(&frame).await?;
         self.stream.flush().await?;
+        RequestTrace::log_sent(RequestTrace::from_request(request));
         Ok(())
     }
 
@@ -1687,6 +1688,7 @@ impl Client {
         let frame = encode_frame(request)?;
         self.stream.write_all(&frame).await?;
         self.stream.flush().await?;
+        RequestTrace::log_sent(RequestTrace::from_request(request));
 
         let mut size = [0u8; 4];
         self.stream.read_exact(&mut size).await?;
@@ -1780,6 +1782,18 @@ impl RequestTrace {
                 correlation_id = trace.correlation_id,
                 request_bytes = trace.request_bytes,
                 "sending kafka request"
+            );
+        }
+    }
+
+    fn log_sent(trace: Option<Self>) {
+        if let Some(trace) = trace {
+            debug!(
+                api_key = trace.api_key,
+                api_version = trace.api_version,
+                correlation_id = trace.correlation_id,
+                request_bytes = trace.request_bytes,
+                "kafka request sent"
             );
         }
     }

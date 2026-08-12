@@ -1483,6 +1483,85 @@ jobs:
           KAFRUST_PARTITION_QUEUE: "1"
         run: cargo run -p kafrust --example consumer_group_poll
 
+      - name: Run multi-broker Admin DeleteRecords during leader stop
+        run: |
+          docker exec kafrust-kafka-multi-2 /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server kafrust-kafka-multi-2:29092 \
+            --describe \
+            --topic "$KAFRUST_TOPIC" \
+            >/tmp/kafrust-admin-delete-records-topic.log 2>&1
+          admin_leader_node="$(
+            awk -v target="$KAFRUST_FAILOVER_PARTITION" \
+              '$0 ~ ("Partition: " target " ") { for (i = 1; i <= NF; i++) if ($i == "Leader:") { print $(i + 1); exit } }' \
+              /tmp/kafrust-admin-delete-records-topic.log
+          )"
+          if ! [[ "$admin_leader_node" =~ ^[123]$ ]]; then
+            cat /tmp/kafrust-admin-delete-records-topic.log
+            echo "could not identify the current Admin DeleteRecords leader"
+            exit 1
+          fi
+
+          sent_file=/tmp/kafrust-admin-delete-records-sent
+          release_file=/tmp/kafrust-admin-delete-records-release
+          request_log=/tmp/kafrust-admin-delete-records.log
+          rm -f "$sent_file" "$release_file" "$request_log"
+          KAFRUST_PARTITION="$KAFRUST_FAILOVER_PARTITION" \
+          KAFRUST_ADMIN_OFFSET=1 \
+          KAFRUST_REQUEST_SENT_FILE="$sent_file" \
+          KAFRUST_REQUEST_RELEASE_FILE="$release_file" \
+          RUST_LOG=kafrust=debug \
+          cargo run -p kafrust --example admin_delete_records_failover \
+            >"$request_log" 2>&1 &
+          admin_pid=$!
+
+          request_sent=""
+          for attempt in {1..600}; do
+            if [ -f "$sent_file" ]; then
+              request_sent=1
+              break
+            fi
+            if ! kill -0 "$admin_pid" 2>/dev/null; then
+              cat "$request_log" || true
+              wait "$admin_pid"
+            fi
+            sleep 0.1
+          done
+          if [ -z "$request_sent" ] || ! kill -0 "$admin_pid" 2>/dev/null; then
+            cat "$request_log" || true
+            echo "DeleteRecords request was not held after the request frame was sent"
+            kill "$admin_pid" 2>/dev/null || true
+            wait "$admin_pid" || true
+            exit 1
+          fi
+
+          docker stop "kafrust-kafka-multi-${admin_leader_node}"
+          touch "$release_file"
+
+          admin_status=0
+          wait "$admin_pid" || admin_status=$?
+          cat "$request_log"
+
+          docker start "kafrust-kafka-multi-${admin_leader_node}"
+          admin_leader_ready=""
+          for attempt in {1..120}; do
+            if docker exec "kafrust-kafka-multi-${admin_leader_node}" \
+              /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server "kafrust-kafka-multi-${admin_leader_node}:29092" \
+              >/tmp/kafrust-admin-delete-records-recovery.log 2>&1; then
+              admin_leader_ready=1
+              break
+            fi
+            sleep 2
+          done
+
+          if [ "$admin_status" -ne 0 ] || [ -z "$admin_leader_ready" ] || \
+             ! grep -Eq "retries=[1-9][0-9]*" "$request_log"; then
+            cat /tmp/kafrust-admin-delete-records-recovery.log || true
+            docker logs "kafrust-kafka-multi-${admin_leader_node}"
+            echo "Admin DeleteRecords did not prove retry recovery"
+            exit 1
+          fi
+
       - name: Dump multi-broker Kafka logs
         if: failure()
         run: |
