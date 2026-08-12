@@ -278,7 +278,10 @@ the service principal's actual broker permissions.
 
 Partition reassignment is implemented through typed `AdminClient` APIs and its
 submission plus completion polling are live-verified on the Kafka 3.7.2
-three-broker profile in `Live Kafka Smoke` run `31462962605`. SCRAM credential
+three-broker profile in `Live Kafka Smoke` run `31462962605`. The read-only
+listing path also re-discovers the controller after a dropped request with
+focused mock-broker coverage; qualify target permissions and broker-stop
+behavior before production migration. SCRAM credential
 administration is implemented and live-verified over Kafka 3.7.2 SASL_SSL in
 `Live Kafka Smoke` run `31461980967`. Client quota describe/alter is implemented and live-verified
 against Kafka 3.7.2 StandardAuthorizer in `Live Kafka Smoke` run

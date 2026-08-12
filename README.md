@@ -154,7 +154,8 @@ broker failures within the bounded AdminClient budget, and the Kafka 3.7.2
 SASL_SSL roundtrip is live-verified.
 `alter_partition_reassignments` and `list_partition_reassignments` expose
 controller-routed replica target changes, cancellation, and bounded ongoing
-status inspection; the Kafka 3.7.2 three-broker path is live-verified.
+status inspection; the read-only listing path re-discovers the controller after
+transient failures, and the Kafka 3.7.2 three-broker path is live-verified.
 `delete_records` routes DeleteRecords v1 to each current partition leader and
 preserves per-partition low watermarks and broker errors for partial deletion;
 fixed-offset deletions retry transient leader and transport failures through

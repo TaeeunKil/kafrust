@@ -222,9 +222,12 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
   broker-stop qualification remains separate.
 - Controller-routed `AlterPartitionReassignments v0` accepts replica targets or
   cancellation requests, while `ListPartitionReassignments v0` exposes the
-  current, adding, and removing replica sets. The three-broker Kafka 3.7.2
-  profile passed submission followed by bounded completion polling in manual
-  run `31462962605`.
+  current, adding, and removing replica sets. The read-only listing path
+  re-discovers the controller after transport, timeout, or retryable broker
+  failures, with focused mock-broker coverage for a dropped request. The
+  three-broker Kafka 3.7.2 profile passed submission followed by bounded
+  completion polling in manual run `31462962605`; live listing broker-stop
+  recovery remains a separate release gate.
 - The `cooperative-sticky` consumer strategy encodes Kafka consumer protocol
   Subscription v1 owned partitions, preserves valid ownership, and stages
   transfers across rejoin cycles. Focused tests cover ownership preservation,

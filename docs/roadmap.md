@@ -982,6 +982,9 @@ Implemented evidence:
   routing. Focused wire tests and a controller-routing mock test cover the
   flexible schemas. The Kafka 3.7.2 three-broker profile passed reassignment
   submission and completion polling in live run `31462962605` on 2026-08-11.
+  The read-only listing path now re-discovers the controller after transient
+  transport, timeout, or retryable broker failures, with focused dropped-request
+  coverage; live broker-stop recovery remains a separate release gate.
 - The `admin_describe_group` example runs after the consumer-group smoke path
   across plaintext, multi-broker, TLS, SASL_PLAINTEXT, and SASL_SSL profiles.
 - The admin lifecycle example waits for asynchronous metadata propagation in

@@ -535,18 +535,52 @@ impl AdminClient {
         topics: Option<&[PartitionReassignmentQuery]>,
         options: PartitionReassignmentOptions,
     ) -> Result<ListPartitionReassignmentsResult> {
-        let mut controller_client = self.controller_client().await?;
-        let response = controller_client
-            .list_partition_reassignments_v0(
-                duration_millis_i32(options.timeout),
-                topics.map(|topics| {
-                    topics
-                        .iter()
-                        .map(PartitionReassignmentQuery::as_protocol)
-                        .collect()
-                }),
-            )
-            .await?;
+        let request_topics = topics.map(|topics| {
+            topics
+                .iter()
+                .map(PartitionReassignmentQuery::as_protocol)
+                .collect::<Vec<ListPartitionReassignmentsTopicV0>>()
+        });
+        let mut retry = 0;
+        let response = loop {
+            let mut controller_client = match self.controller_client().await {
+                Ok(client) => client,
+                Err(error)
+                    if retry < self.max_retries
+                        && is_retryable_admin_controller_read_error(&error) =>
+                {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
+            match controller_client
+                .list_partition_reassignments_v0(
+                    duration_millis_i32(options.timeout),
+                    request_topics.clone(),
+                )
+                .await
+            {
+                Ok(response)
+                    if retry < self.max_retries
+                        && is_retryable_admin_read_code(response.error_code) =>
+                {
+                    self.config.record_broker_error();
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                }
+                Ok(response) => break response,
+                Err(error) if retry < self.max_retries && is_retryable_admin_read_error(&error) => {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                }
+                Err(error) => return Err(error),
+            }
+        };
 
         if response.error_code != 0 {
             self.config.record_broker_error();
@@ -4717,6 +4751,10 @@ fn is_retryable_admin_read_error(error: &Error) -> bool {
     }
 }
 
+fn is_retryable_admin_controller_read_error(error: &Error) -> bool {
+    is_retryable_admin_read_error(error) || matches!(error, Error::MissingBroker { .. })
+}
+
 fn is_retryable_admin_read_code(code: i16) -> bool {
     matches!(
         BrokerErrorKind::from_code(code),
@@ -7201,6 +7239,58 @@ mod tests {
 
         assert!(result.is_success());
         assert_eq!(result.entries().len(), 1);
+        assert_eq!(metrics.snapshot().retries, 1);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn retries_list_partition_reassignments_after_controller_disconnect() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut first_bootstrap, _) = listener.accept().await.unwrap();
+            let metadata_request = read_frame(&mut first_bootstrap).await;
+            assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+            write_frame(&mut first_bootstrap, &metadata_response(addr.port())).await;
+
+            let (mut first_controller, _) = listener.accept().await.unwrap();
+            let request = read_frame(&mut first_controller).await;
+            assert_eq!(&request[0..4], &[0, 46, 0, 0]);
+            drop(first_controller);
+
+            let (mut second_bootstrap, _) = listener.accept().await.unwrap();
+            let metadata_request = read_frame(&mut second_bootstrap).await;
+            assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+            write_frame(&mut second_bootstrap, &metadata_response(addr.port())).await;
+
+            let (mut second_controller, _) = listener.accept().await.unwrap();
+            let request = read_frame(&mut second_controller).await;
+            assert_eq!(&request[0..4], &[0, 46, 0, 0]);
+            write_frame(
+                &mut second_controller,
+                &list_partition_reassignments_response(),
+            )
+            .await;
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        );
+        let query = [PartitionReassignmentQuery::new("orders").partition(0)];
+
+        let result = admin
+            .list_partition_reassignments(
+                Some(&query),
+                PartitionReassignmentOptions::new().timeout(Duration::from_secs(5)),
+            )
+            .await
+            .unwrap();
+
+        assert!(result.is_success());
+        assert_eq!(result.topics().len(), 1);
+        assert_eq!(result.topics()[0].name(), "orders");
         assert_eq!(metrics.snapshot().retries, 1);
         server.await.unwrap();
     }
