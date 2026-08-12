@@ -373,11 +373,12 @@ Verified paths currently include:
   including SASL_PLAINTEXT and SASL_SSL/SCRAM profiles).
 - In-flight leader-routed DeleteRecords and DescribeProducers plus
   coordinator-routed DescribeTransactions, DescribeGroups, OffsetFetch, and
-  exact-offset OffsetCommit, plus broker-routed DescribeConfigs recovery after
-  deterministic pre-transmission gates and broker stops on the Kafka `3.7.2`
-  three-broker profile in
-  [`31613935963`](https://github.com/TaeeunKil/kafrust/actions/runs/31613935963);
-  all seven requests recorded a fresh discovery retry.
+  exact-offset OffsetCommit, plus broker-routed DescribeConfigs and ListGroups
+  recovery after deterministic pre-transmission gates and broker stops on the
+  Kafka `3.7.2` three-broker profile in
+  [`31616181960`](https://github.com/TaeeunKil/kafrust/actions/runs/31616181960)
+  at commit `17cae6e`; all eight gates passed, with ListGroups recording
+  `retries=7` while its broker restarted.
 
 See [Compatibility](docs/compatibility.md) and
 [Broker Roundtrip](docs/broker-roundtrip.md) for the current evidence.

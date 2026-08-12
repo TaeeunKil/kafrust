@@ -922,6 +922,10 @@ Implemented evidence:
   transmission, stops the bootstrap broker, and verifies `retries=1` after
   reconnecting through the bootstrap set in
   [`31613935963`](https://github.com/TaeeunKil/kafrust/actions/runs/31613935963).
+  It now also queries ListGroups v1 across the advertised brokers, stops broker
+  1 after the request gate opens, restarts it while the bounded reconnect loop
+  is active, and records `retries=7` before completing the full group listing
+  in [`31616181960`](https://github.com/TaeeunKil/kafrust/actions/runs/31616181960).
 - KIP-848 member-aware administrative offsets now use OffsetFetch v9 and
   OffsetCommit v9 with the joined member ID, member epoch, optional static
   instance ID, `require_stable`, and committed leader epoch. The APIs reuse
@@ -933,9 +937,10 @@ Implemented evidence:
   [`31607006237`](https://github.com/TaeeunKil/kafrust/actions/runs/31607006237).
   Target authorization and broader member-failure workloads remain release
   gates. The live DeleteRecords, DescribeProducers, DescribeTransactions,
-  DescribeGroups, OffsetFetch, exact-offset OffsetCommit, and DescribeConfigs
+  DescribeGroups, OffsetFetch, exact-offset OffsetCommit, DescribeConfigs, and
+  ListGroups
   broker-stop gates are covered by
-  [`31613935963`](https://github.com/TaeeunKil/kafrust/actions/runs/31613935963);
+  [`31616181960`](https://github.com/TaeeunKil/kafrust/actions/runs/31616181960);
   other coordinator-routed Admin writes remain separate workload-specific
   release gates.
 - DescribeAcls v1, CreateAcls v1, and DeleteAcls v1 expose typed ACL bindings
