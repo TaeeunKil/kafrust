@@ -1492,7 +1492,7 @@ jobs:
             >/tmp/kafrust-admin-delete-records-topic.log 2>&1
           admin_leader_node="$(
             awk -v target="$KAFRUST_FAILOVER_PARTITION" \
-              '$0 ~ ("Partition: " target " ") { for (i = 1; i <= NF; i++) if ($i == "Leader:") { print $(i + 1); exit } }' \
+              '{ for (i = 1; i <= NF; i++) if ($i == "Partition:" && $(i + 1) == target) { for (j = 1; j <= NF; j++) if ($j == "Leader:") { print $(j + 1); exit } } }' \
               /tmp/kafrust-admin-delete-records-topic.log
           )"
           if ! [[ "$admin_leader_node" =~ ^[123]$ ]]; then
