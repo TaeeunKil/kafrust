@@ -346,6 +346,14 @@ This profile uses Kafka's built-in unsecured validator for deterministic
 compatibility testing. The public API also supports an async token provider for
 new broker authentications, but signed JWT/JWKS validation, issuer and audience
 policy, and production OAuth/OIDC provider integration remain unclaimed.
+- After the high-level PLAIN, SCRAM, and OAUTHBEARER paths were moved to
+  `SaslAuthenticate v1`, the complete live matrix passed again, including
+  Kafka 3.7.2 SASL_PLAINTEXT, SASL_SSL SCRAM/OAUTHBEARER, secured multi-broker
+  failover, and Kafka 4.3.1 KIP-848 in [`Live Kafka Smoke`, run
+  `31560914663`](https://github.com/TaeeunKil/kafrust/actions/runs/31560914663).
+  The low-level `Client` records the broker-advertised SASL session lifetime;
+  automatic re-authentication and production OAuth/OIDC qualification remain
+  unclaimed.
 
 ## Not Yet Claimed
 

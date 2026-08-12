@@ -574,6 +574,12 @@ Evidence:
   `codex/live-oauth-smoke`; the dedicated Kafka 3.7.2 SASL_SSL OAUTHBEARER
   job passed with the built-in unsecured validator. This does not qualify a
   production OAuth/OIDC provider.
+- After switching the high-level PLAIN, SCRAM, and OAUTHBEARER exchanges to
+  `SaslAuthenticate v1`, [`Live Kafka Smoke`, run
+  `31560914663`](https://github.com/TaeeunKil/kafrust/actions/runs/31560914663)
+  passed the full plaintext, TLS, SASL, secured failover, ACL, and KIP-848
+  matrix. Automatic re-authentication and production OAuth/OIDC qualification
+  remain open.
 
 Strategic role:
 
