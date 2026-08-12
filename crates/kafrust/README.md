@@ -11,7 +11,7 @@ Tokio-based admin, producer, direct consumer, and alpha classic/KIP-848
 consumer group APIs on top of the companion
 [`kafrust-protocol`](https://docs.rs/kafrust-protocol) wire-format crate.
 
-Current release: `0.2.7`.
+Current release: `0.2.8`.
 
 This crate is alpha. Use it for experiments, local broker checks, simple
 internal tools, and API evaluation. For broad production Kafka workloads that
@@ -65,8 +65,9 @@ bindings and partial authorization results; qualify them against an
 authorizer-enabled broker before production rollout. Client quota
 describe/alter operations preserve typed entities, floating-point values, and
 per-entity results; both paths are live-verified in the documented Kafka
-3.7.2 StandardAuthorizer profile. See the repository's `docs/admin-api.md`
-for details.
+3.7.2 StandardAuthorizer profile. Consumer-group offset listing and
+administrative alteration use typed classic OffsetFetch v2 and OffsetCommit v2
+results. See the repository's `docs/admin-api.md` for details.
 
 ## Install
 

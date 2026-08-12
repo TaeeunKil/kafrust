@@ -15,7 +15,7 @@ visible in public APIs: bootstrap servers, client IDs, topics, partitions,
 offsets, acknowledgements, metadata refresh, consumer groups, heartbeats, and
 commits.
 
-Current release: `0.2.7`.
+Current release: `0.2.8`.
 
 Use kafrust today for experiments, local broker checks, simple internal tools,
 and API evaluation. For broad production Kafka workloads that need mature
@@ -139,6 +139,9 @@ routes each group to its coordinator and retains per-group errors.
 or explicit topic expansion. `delete_consumer_group_offsets` routes
 OffsetDelete v0 to the coordinator and
 preserves top-level and per-partition Kafka errors.
+`list_consumer_group_offsets` and `alter_consumer_group_offsets` expose typed
+classic consumer-group offset inspection and administrative reset through the
+group coordinator, preserving partition-level outcomes.
 CreateTopics v2 and DeleteTopics v3 discover the active controller and preserve
 per-topic partial success and error responses. See [Admin API](docs/admin-api.md).
 `describe_acls`, `create_acls`, and `delete_acls` expose typed ACL bindings,
@@ -452,8 +455,8 @@ Primary public entry points:
 
 Generated API documentation:
 
-- [`kafrust`](https://docs.rs/kafrust/0.2.7/kafrust/)
-- [`kafrust-protocol`](https://docs.rs/kafrust-protocol/0.2.7/kafrust_protocol/)
+- [`kafrust`](https://docs.rs/kafrust/0.2.8/kafrust/)
+- [`kafrust-protocol`](https://docs.rs/kafrust-protocol/0.2.8/kafrust_protocol/)
 
 ## Documentation
 

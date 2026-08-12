@@ -14,7 +14,7 @@ kafrust는 `librdkafka` 래핑 없이 Kafka 프로토콜 호환성이 필요한 
 server, client ID, topic, partition, offset, acknowledgement, metadata refresh,
 consumer group, heartbeat, commit 같은 Kafka 개념을 그대로 드러냅니다.
 
-현재 릴리즈: `0.2.1`.
+현재 릴리즈: `0.2.8`.
 
 지금 kafrust는 실험, 로컬 브로커 확인, 단순 내부 도구, API 평가에 적합합니다.
 넓은 범위의 성숙한 production Kafka 기능이 즉시 필요하다면 Rust에서는 여전히
@@ -48,13 +48,13 @@ kafrust는 Kafka 클라이언트입니다. Kafka 브로커나 Kafka 호환 서�
 것입니다. 이 프로젝트는 의도적으로 `librdkafka`를 래핑하지 않으며, Kafka의
 운영 모델을 일반 큐 추상화 뒤에 숨기지 않습니다.
 
-가까운 로드맵의 우선순위는 다음과 같습니다.
+현재 구현과 검증 범위는 다음과 같습니다.
 
-- TLS와 SASL을 통한 보안 클라이언트 연결
-- multi-broker metadata, leader, failover 동작
-- consumer group 안정화
-- compression 지원
-- observability, limit, benchmark, compatibility evidence
+- TLS, SASL/PLAIN, SASL/SCRAM, OAUTHBEARER 연결 경로
+- Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1 compatibility matrix
+- multi-broker metadata, leader, coordinator failover
+- compression, idempotent producer, transactions, `read_committed`
+- typed Admin API, consumer-group 운영, metrics, limits, benchmark, soak 검증
 
 대체 목표, non-goal, 기존 대안, completion tier는
 [Project Strategy](docs/project-strategy.md)를 참고하세요.
@@ -224,10 +224,13 @@ kafrust의 호환성 주장은 실제 broker로 검증된 동작으로 제한합
 
 현재 검증된 경로는 다음과 같습니다.
 
-- `ApiVersions v0`와 `Metadata v1` roundtrip.
-- high-level producer single-record, batch, buffered send.
-- Fetch v2 response decoding을 사용하는 direct topic-partition fetch.
-- classic consumer group join, sync, heartbeat, poll, offset commit.
+- Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1 single-node plaintext smoke.
+- Kafka 3.7.2 multi-broker, TLS, SASL_PLAINTEXT, SASL_SSL/SCRAM 프로필.
+- producer, batch/buffered delivery, 네 가지 compression, idempotence,
+  transactions, `read_committed` consumer.
+- classic consumer group, cooperative rebalance, KIP-848 consumer protocol,
+  explicit/automatic commit, position and queue controls.
+- typed topic/config/group/ACL/quota/SCRAM/reassignment/offset Admin API.
 
 현재 근거는 [Compatibility](docs/compatibility.md)와
 [Broker Roundtrip](docs/broker-roundtrip.md)를 참고하세요.
@@ -235,29 +238,27 @@ kafrust의 호환성 주장은 실제 broker로 검증된 동작으로 제한합
 ## 현재 한계
 
 - 공개 API는 pre-`1.0`이며 minor release 사이에 변경될 수 있습니다.
-- plaintext TCP는 기본 networking path로 유지됩니다.
-- TLS transport는 non-default `tls` crate feature 뒤에서 사용할 수 있으며,
-  Kafka `3.7.2` broker roundtrip, producer, direct consumer, consumer group
-  smoke path에 대해 검증되었습니다.
-- SASL/PLAIN 인증은 Kafka `3.7.2` `SaslPlaintext`에서 broker roundtrip,
-  producer, direct consumer, consumer group smoke path로 검증되었습니다.
-  `SaslTls`와 더 넓은 SASL workflow는 아직 지원 범위로 주장하지 않습니다.
-- broker compatibility는 Kafka `3.7.2`에 대해서만 검증되었습니다.
-- multi-broker cluster, leader failover, rack awareness, partition expansion은 아직
-  지원 범위로 주장하지 않습니다.
-- Gzip, Snappy, LZ4 RecordBatch 압축은 Produce v3을 사용하고, Zstd는 Produce
-  v7을 요구하고 협상합니다. 네 코덱 모두 Kafka `3.7.2` plaintext single-node
-  및 multi-broker 환경에서 검증되었습니다.
-- idempotent producer, transaction, admin API, 넓은 observability는 아직
-  구현되지 않았습니다.
-- 현재 request loop는 broker response를 기대하므로 `acks=0`은 아직 지원하지
-  않습니다.
+- 공개 API는 pre-`1.0`이며 minor release 사이에 변경될 수 있습니다.
+- 기본 networking path는 plaintext이고 TLS는 non-default `tls` feature입니다.
+  TLS와 SASL 경로의 지원 범위는 [Compatibility](docs/compatibility.md)의
+  실제 broker 증거를 기준으로 판단해야 합니다.
+- OAUTHBEARER는 Kafka 내장 validator와 서명된 로컬 OIDC/JWKS fixture로
+  검증되었지만, 외부 provider별 정책과 운영 credential rotation은 별도
+  qualification이 필요합니다.
+- transactions의 broker 응답을 관찰할 수 없는 경우 결과는 의도적으로
+  `TransactionOutcomeUnknown`으로 보고되며 producer를 폐기해야 합니다.
+- KIP-848 member-aware offset semantics, 더 넓은 fault-injection, target
+  broker 권한/정책, 실제 서비스 canary는 아직 1.0 release gate입니다.
+- `rust-rdkafka`의 전체 config passthrough와 non-Tokio/synchronous API는
+  현재 설계 범위에 포함하지 않습니다.
 
 ## API
 
 주요 공개 진입점:
 
 - low-level Kafka request roundtrip용 `Client`.
+- cluster, topic, config, consumer-group, ACL, quota, SCRAM, reassignment,
+  producer/transaction inspection, committed offset 관리를 위한 `AdminClient`.
 - `ProducerConfig`, `Producer`, `BufferedProducer`, `ProducerRecord`.
 - `ConsumerConfig`, `Consumer`, `ConsumerAssignment`, `ConsumerRecord`, 그리고
   bounded per-partition delivery를 위한 `ConsumerPartitionQueue`.
@@ -267,8 +268,8 @@ kafrust의 호환성 주장은 실제 broker로 검증된 동작으로 제한합
 
 생성된 API 문서:
 
-- [`kafrust`](https://docs.rs/kafrust/0.2.7/kafrust/)
-- [`kafrust-protocol`](https://docs.rs/kafrust-protocol/0.2.7/kafrust_protocol/)
+- [`kafrust`](https://docs.rs/kafrust/0.2.8/kafrust/)
+- [`kafrust-protocol`](https://docs.rs/kafrust-protocol/0.2.8/kafrust_protocol/)
 
 ## 문서
 
