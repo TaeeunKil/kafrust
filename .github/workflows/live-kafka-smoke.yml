@@ -1191,6 +1191,389 @@ jobs:
           path: /tmp/kafrust-sasl-*.log
           if-no-files-found: ignore
 
+  kafka-sasl-ssl-scram-multi-failover:
+    name: Kafka 3.7.2 multi-broker SASL_SSL SCRAM failover
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      KAFRUST_BOOTSTRAP_SERVERS: localhost:19205,localhost:19206,localhost:19207
+      KAFRUST_SECURITY_PROTOCOL: sasl_tls
+      KAFRUST_SASL_MECHANISM: scram-sha-256
+      KAFRUST_SASL_USERNAME: kafrust
+      KAFRUST_SASL_PASSWORD: kafrust-secret
+      KAFRUST_TLS_ROOT_CERT_DER_PATH: ${{ github.workspace }}/sasl-ssl-multi/ca.der
+      KAFRUST_TOPIC: kafrust-sasl-ssl-multi-${{ github.run_id }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.81.0"
+
+      - name: Generate shared TLS certificates
+        run: |
+          mkdir -p sasl-ssl-multi
+          openssl req -x509 -newkey rsa:2048 -days 1 -nodes \
+            -subj "/CN=kafrust-test-ca" \
+            -keyout sasl-ssl-multi/ca.key \
+            -out sasl-ssl-multi/ca.crt
+          openssl x509 \
+            -in sasl-ssl-multi/ca.crt \
+            -outform DER \
+            -out sasl-ssl-multi/ca.der
+          openssl req -newkey rsa:2048 -nodes \
+            -subj "/CN=localhost" \
+            -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" \
+            -keyout sasl-ssl-multi/server.key \
+            -out sasl-ssl-multi/server.csr
+          openssl x509 -req \
+            -in sasl-ssl-multi/server.csr \
+            -CA sasl-ssl-multi/ca.crt \
+            -CAkey sasl-ssl-multi/ca.key \
+            -CAcreateserial \
+            -days 1 \
+            -sha256 \
+            -copy_extensions copy \
+            -out sasl-ssl-multi/server.crt
+          openssl pkcs12 -export \
+            -in sasl-ssl-multi/server.crt \
+            -inkey sasl-ssl-multi/server.key \
+            -certfile sasl-ssl-multi/ca.crt \
+            -name localhost \
+            -out sasl-ssl-multi/kafka.server.keystore.p12 \
+            -password pass:kafrust
+          keytool -importcert \
+            -noprompt \
+            -alias kafrust-test-ca \
+            -file sasl-ssl-multi/ca.crt \
+            -keystore sasl-ssl-multi/kafka.client.truststore.p12 \
+            -storetype PKCS12 \
+            -storepass kafrust
+          printf kafrust > sasl-ssl-multi/keystore-password
+          printf kafrust > sasl-ssl-multi/key-password
+          chmod 644 sasl-ssl-multi/*
+
+      - name: Write SCRAM broker and client config
+        run: |
+          cat > sasl-ssl-multi/kafka_server_jaas.conf <<'EOF'
+          KafkaServer {
+            org.apache.kafka.common.security.scram.ScramLoginModule required
+            username="broker"
+            password="broker-secret";
+          };
+          EOF
+          cat > sasl-ssl-multi/client.properties <<'EOF'
+          security.protocol=SASL_SSL
+          sasl.mechanism=SCRAM-SHA-256
+          sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required username="kafrust" password="kafrust-secret";
+          ssl.truststore.location=/etc/kafka/secrets/kafka.client.truststore.p12
+          ssl.truststore.password=kafrust
+          ssl.truststore.type=PKCS12
+          EOF
+          chmod 644 sasl-ssl-multi/*
+
+      - name: Start multi-broker SASL_SSL SCRAM Kafka
+        run: |
+          docker network create kafrust-sasl-ssl-multi
+          KAFKA_CLUSTER_ID="$(docker run --rm apache/kafka:3.7.2 /opt/kafka/bin/kafka-storage.sh random-uuid)"
+          for node in 1 2 3; do
+            external_port=$((19204 + node))
+            docker run -d --name "kafrust-kafka-sasl-ssl-multi-${node}" \
+              --network kafrust-sasl-ssl-multi \
+              -p "${external_port}:9095" \
+              -v "$PWD/sasl-ssl-multi:/etc/kafka/secrets:ro" \
+              -e KAFKA_OPTS="-Djava.security.auth.login.config=/etc/kafka/secrets/kafka_server_jaas.conf" \
+              -e KAFKA_CLUSTER_ID="${KAFKA_CLUSTER_ID}" \
+              -e KAFKA_NODE_ID="${node}" \
+              -e KAFKA_PROCESS_ROLES=broker,controller \
+              -e KAFKA_LISTENERS=INTERNAL://:29092,EXTERNAL://:9095,CONTROLLER://:9093 \
+              -e KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafrust-kafka-sasl-ssl-multi-${node}:29092,EXTERNAL://localhost:${external_port} \
+              -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+              -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:SASL_SSL \
+              -e KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL \
+              -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafrust-kafka-sasl-ssl-multi-1:9093,2@kafrust-kafka-sasl-ssl-multi-2:9093,3@kafrust-kafka-sasl-ssl-multi-3:9093 \
+              -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=3 \
+              -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=3 \
+              -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=2 \
+              -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 \
+              -e KAFKA_SASL_ENABLED_MECHANISMS=SCRAM-SHA-256,SCRAM-SHA-512 \
+              -e KAFKA_SSL_KEYSTORE_FILENAME=kafka.server.keystore.p12 \
+              -e KAFKA_SSL_KEYSTORE_CREDENTIALS=keystore-password \
+              -e KAFKA_SSL_KEY_CREDENTIALS=key-password \
+              -e KAFKA_SSL_KEYSTORE_TYPE=PKCS12 \
+              -e KAFKA_SSL_CLIENT_AUTH=none \
+              apache/kafka:3.7.2
+          done
+
+      - name: Wait for multi-broker Kafka
+        run: |
+          for attempt in {1..120}; do
+            if docker exec kafrust-kafka-sasl-ssl-multi-1 /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server kafrust-kafka-sasl-ssl-multi-1:29092 \
+              >/tmp/kafrust-sasl-ssl-multi-startup.log 2>&1; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/kafrust-sasl-ssl-multi-startup.log || true
+          docker logs kafrust-kafka-sasl-ssl-multi-1
+          docker logs kafrust-kafka-sasl-ssl-multi-2
+          docker logs kafrust-kafka-sasl-ssl-multi-3
+          exit 1
+
+      - name: Create SCRAM users and replicated topic
+        run: |
+          docker exec kafrust-kafka-sasl-ssl-multi-1 /opt/kafka/bin/kafka-configs.sh \
+            --bootstrap-server kafrust-kafka-sasl-ssl-multi-1:29092 \
+            --alter \
+            --add-config 'SCRAM-SHA-256=[iterations=4096,password=kafrust-secret]' \
+            --entity-type users \
+            --entity-name kafrust
+          docker exec kafrust-kafka-sasl-ssl-multi-1 /opt/kafka/bin/kafka-configs.sh \
+            --bootstrap-server kafrust-kafka-sasl-ssl-multi-1:29092 \
+            --alter \
+            --add-config 'SCRAM-SHA-512=[iterations=4096,password=kafrust-secret]' \
+            --entity-type users \
+            --entity-name kafrust
+          docker exec kafrust-kafka-sasl-ssl-multi-1 /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server kafrust-kafka-sasl-ssl-multi-1:29092 \
+            --create \
+            --topic "$KAFRUST_TOPIC" \
+            --partitions 6 \
+            --replication-factor 3
+          docker exec kafrust-kafka-sasl-ssl-multi-1 /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server kafrust-kafka-sasl-ssl-multi-1:29092 \
+            --describe \
+            --topic "$KAFRUST_TOPIC" \
+            | tee /tmp/kafrust-sasl-ssl-multi-topic.log
+          failover_partition="$(awk '/Partition:/ && /Leader: 1/ { for (i = 1; i <= NF; i++) if ($i == "Partition:") { print $(i + 1); exit } }' /tmp/kafrust-sasl-ssl-multi-topic.log)"
+          if [ -z "$failover_partition" ]; then
+            echo "could not find a partition led by broker 1"
+            cat /tmp/kafrust-sasl-ssl-multi-topic.log
+            exit 1
+          fi
+          echo "KAFRUST_FAILOVER_PARTITION=${failover_partition}" >> "$GITHUB_ENV"
+
+      - name: Build secured failover examples
+        run: >-
+          cargo build -p kafrust --features tls
+          --example producer_failover --example consumer_failover
+          --example consumer_group_failover
+          --example producer_transaction_failover
+
+      - name: Run SCRAM consumer group coordinator failover
+        run: |
+          KAFRUST_GROUP_ID="kafrust-scram-group-failover-${GITHUB_RUN_ID}" \
+          KAFRUST_PARTITION_QUEUE=1 \
+          KAFRUST_FAILOVER_PAUSE_MS=30000 \
+          cargo run -p kafrust --features tls --example consumer_group_failover \
+            >/tmp/kafrust-scram-group-failover.log 2>&1 &
+          group_pid=$!
+
+          coordinator_node=""
+          before_seen=""
+          for attempt in {1..120}; do
+            coordinator_node="$(
+              sed -n 's/.*coordinator node \([0-9][0-9]*\)$/\1/p' \
+                /tmp/kafrust-scram-group-failover.log \
+                | tail -n 1
+            )"
+            if grep -q "consumer group failover before polled" /tmp/kafrust-scram-group-failover.log; then
+              before_seen=1
+            fi
+            if [ -n "$coordinator_node" ] && [ -n "$before_seen" ]; then
+              break
+            fi
+            if ! kill -0 "$group_pid" 2>/dev/null; then
+              cat /tmp/kafrust-scram-group-failover.log || true
+              wait "$group_pid"
+            fi
+            sleep 1
+          done
+
+          if ! [[ "$coordinator_node" =~ ^[123]$ ]] || [ -z "$before_seen" ]; then
+            echo "SCRAM consumer group failover did not reach its first poll"
+            cat /tmp/kafrust-scram-group-failover.log || true
+            kill "$group_pid" 2>/dev/null || true
+            wait "$group_pid" || true
+            exit 1
+          fi
+
+          coordinator_container="kafrust-kafka-sasl-ssl-multi-${coordinator_node}"
+          docker stop "$coordinator_container"
+
+          group_status=0
+          wait "$group_pid" || group_status=$?
+          cat /tmp/kafrust-scram-group-failover.log
+
+          docker start "$coordinator_container"
+          coordinator_ready=""
+          for attempt in {1..120}; do
+            if docker exec "$coordinator_container" \
+              /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server "${coordinator_container}:29092" \
+              >/tmp/kafrust-scram-group-recovery.log 2>&1; then
+              coordinator_ready=1
+              break
+            fi
+            sleep 2
+          done
+
+          if [ "$group_status" -ne 0 ] || [ -z "$coordinator_ready" ]; then
+            cat /tmp/kafrust-scram-group-recovery.log || true
+            docker logs "$coordinator_container"
+            exit 1
+          fi
+
+      - name: Run SCRAM producer and consumer leader failover
+        run: |
+          KAFRUST_PARTITION="$KAFRUST_FAILOVER_PARTITION" \
+          KAFRUST_FAILOVER_PAUSE_MS=30000 \
+          cargo run -p kafrust --features tls --example producer_failover \
+            >/tmp/kafrust-scram-producer-failover.log 2>&1 &
+          producer_pid=$!
+          KAFRUST_PARTITION="$KAFRUST_FAILOVER_PARTITION" \
+          KAFRUST_OFFSET=0 \
+          KAFRUST_FAILOVER_PAUSE_MS=30000 \
+          cargo run -p kafrust --features tls --example consumer_failover \
+            >/tmp/kafrust-scram-consumer-failover.log 2>&1 &
+          consumer_pid=$!
+
+          first_send_seen=""
+          first_fetch_seen=""
+          for attempt in {1..60}; do
+            if grep -q "failover before produced" /tmp/kafrust-scram-producer-failover.log; then
+              first_send_seen=1
+            fi
+            if grep -q "failover before fetched" /tmp/kafrust-scram-consumer-failover.log; then
+              first_fetch_seen=1
+            fi
+            if [ -n "$first_send_seen" ] && [ -n "$first_fetch_seen" ]; then
+              break
+            fi
+            sleep 1
+          done
+
+          if [ -z "$first_send_seen" ] || [ -z "$first_fetch_seen" ]; then
+            cat /tmp/kafrust-scram-producer-failover.log || true
+            cat /tmp/kafrust-scram-consumer-failover.log || true
+            kill "$producer_pid" 2>/dev/null || true
+            kill "$consumer_pid" 2>/dev/null || true
+            wait "$producer_pid" || true
+            wait "$consumer_pid" || true
+            exit 1
+          fi
+
+          docker stop kafrust-kafka-sasl-ssl-multi-1
+
+          cluster_ready=""
+          for attempt in {1..120}; do
+            if docker exec kafrust-kafka-sasl-ssl-multi-2 /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server kafrust-kafka-sasl-ssl-multi-2:29092 \
+              >/tmp/kafrust-scram-failover-probe.log 2>&1; then
+              docker exec kafrust-kafka-sasl-ssl-multi-2 /opt/kafka/bin/kafka-topics.sh \
+                --bootstrap-server kafrust-kafka-sasl-ssl-multi-2:29092 \
+                --describe \
+                --topic "$KAFRUST_TOPIC" \
+                >/tmp/kafrust-scram-failover-topic.log 2>&1
+              if ! grep -Eq "Leader: -1|Leader: none" /tmp/kafrust-scram-failover-topic.log && \
+                grep -q "Leader:" /tmp/kafrust-scram-failover-topic.log; then
+                cluster_ready=1
+                break
+              fi
+            fi
+            sleep 2
+          done
+
+          producer_status=0
+          wait "$producer_pid" || producer_status=$?
+          consumer_status=0
+          wait "$consumer_pid" || consumer_status=$?
+          cat /tmp/kafrust-scram-producer-failover.log
+          cat /tmp/kafrust-scram-consumer-failover.log
+          if [ "$producer_status" -ne 0 ] || [ "$consumer_status" -ne 0 ] || [ -z "$cluster_ready" ]; then
+            cat /tmp/kafrust-scram-failover-probe.log || true
+            cat /tmp/kafrust-scram-failover-topic.log || true
+            exit 1
+          fi
+
+      - name: Run SCRAM transaction coordinator failover
+        run: |
+          KAFRUST_TRANSACTIONAL_ID="kafrust-scram-transaction-failover-${GITHUB_RUN_ID}" \
+          KAFRUST_FAILOVER_PAUSE_MS=30000 \
+          cargo run -p kafrust --features tls --example producer_transaction_failover \
+            >/tmp/kafrust-scram-transaction-failover.log 2>&1 &
+          transaction_pid=$!
+
+          coordinator_node=""
+          for attempt in {1..90}; do
+            coordinator_node="$(
+              sed -n 's/.*coordinator node \([0-9][0-9]*\)$/\1/p' \
+                /tmp/kafrust-scram-transaction-failover.log \
+                | tail -n 1
+            )"
+            if [ -n "$coordinator_node" ]; then
+              break
+            fi
+            if ! kill -0 "$transaction_pid" 2>/dev/null; then
+              cat /tmp/kafrust-scram-transaction-failover.log || true
+              wait "$transaction_pid"
+            fi
+            sleep 1
+          done
+
+          if ! [[ "$coordinator_node" =~ ^[123]$ ]]; then
+            echo "SCRAM transaction failover did not report a valid coordinator"
+            cat /tmp/kafrust-scram-transaction-failover.log || true
+            kill "$transaction_pid" 2>/dev/null || true
+            wait "$transaction_pid" || true
+            exit 1
+          fi
+
+          coordinator_container="kafrust-kafka-sasl-ssl-multi-${coordinator_node}"
+          docker stop "$coordinator_container"
+
+          transaction_status=0
+          wait "$transaction_pid" || transaction_status=$?
+          cat /tmp/kafrust-scram-transaction-failover.log
+
+          docker start "$coordinator_container"
+          coordinator_ready=""
+          for attempt in {1..120}; do
+            if docker exec "$coordinator_container" \
+              /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server "${coordinator_container}:29092" \
+              >/tmp/kafrust-scram-transaction-recovery.log 2>&1; then
+              coordinator_ready=1
+              break
+            fi
+            sleep 2
+          done
+
+          if [ "$transaction_status" -ne 0 ] || [ -z "$coordinator_ready" ]; then
+            cat /tmp/kafrust-scram-transaction-recovery.log || true
+            docker logs "$coordinator_container"
+            exit 1
+          fi
+
+      - name: Dump multi-broker SASL_SSL SCRAM Kafka logs
+        if: failure()
+        run: |
+          docker logs kafrust-kafka-sasl-ssl-multi-1 2>&1 | tee /tmp/kafrust-scram-ssl-multi-1.log || true
+          docker logs kafrust-kafka-sasl-ssl-multi-2 2>&1 | tee /tmp/kafrust-scram-ssl-multi-2.log || true
+          docker logs kafrust-kafka-sasl-ssl-multi-3 2>&1 | tee /tmp/kafrust-scram-ssl-multi-3.log || true
+
+      - name: Upload SCRAM failover diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scram-ssl-failover-diagnostics-${{ github.run_id }}
+          path: /tmp/kafrust-scram-*.log
+          if-no-files-found: ignore
+
   kafka-tls:
     name: Kafka 3.7.2 TLS
     runs-on: ubuntu-latest
