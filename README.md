@@ -380,10 +380,13 @@ See [Compatibility](docs/compatibility.md) and
   available through the corresponding `*_provider` builders and are called for
   each new broker authentication. It is covered by injected handshake tests
   and a Kafka 3.7.2 SASL_SSL smoke using the broker's built-in unsecured
-  validator (`Live Kafka Smoke` run `31478375106`). The live workflow also
-  contains a signed JWT/JWKS OIDC fixture path that exercises provider-backed
-  token loading; external provider-specific behavior remains separately
-  qualified.
+  validator (`Live Kafka Smoke` run `31478375106`). OAUTHBEARER initial
+  authentication and provider re-authentication use flexible
+  `SaslAuthenticate v2`; PLAIN and SCRAM continue to use `v1`. A signed
+  JWT/JWKS OIDC fixture also passes Kafka's validator, the Java Kafka client,
+  and kafrust static and provider-backed paths in the
+  [`Live Kafka Smoke` OIDC job](https://github.com/TaeeunKil/kafrust/actions/runs/31584760474/job/94075906934).
+  External provider-specific behavior remains separately qualified.
 - Single-node plaintext compatibility is verified against Kafka `3.7.2`,
   `3.8.1`, `3.9.1`, and `4.3.1`. Secured and multi-broker profiles remain
   verified against `3.7.2`.

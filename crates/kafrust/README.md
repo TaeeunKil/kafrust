@@ -348,14 +348,16 @@ available through `sasl_oauthbearer_provider` and
 broker authentication. The RFC 7628 initial response and secret redaction are
 covered by injected handshake tests, and Kafka 3.7.2 SASL_SSL is covered by a
 dedicated smoke using the broker's built-in unsecured validator (`Live Kafka
-Smoke` run `31478375106`). SASL authentication uses Kafka's
-`SaslAuthenticate v1` wire response, and the low-level `Client` exposes the
+Smoke` run `31478375106`). OAUTHBEARER initial authentication and provider
+re-authentication use Kafka's flexible `SaslAuthenticate v2` wire response;
+PLAIN and SCRAM continue to use `v1`. The low-level `Client` exposes the
 broker-advertised `session_lifetime_ms` for an application-owned refresh
 schedule. Provider-backed OAUTHBEARER connections also re-authenticate on the
-existing connection before requests after half of that lifetime; the signed
-JWT/JWKS policy is exercised by the signed OIDC/JWKS fixture in the live smoke
-workflow, while external provider-specific behavior and detached refresh
-workers remain unclaimed. Provider callbacks are bounded by
+existing connection before requests after half of that lifetime. A signed
+JWT/JWKS policy passes the Kafka 3.7.2 OIDC fixture, Java client, static-token,
+and provider-backed paths in the [`Live Kafka Smoke` OIDC job](https://github.com/TaeeunKil/kafrust/actions/runs/31584760474/job/94075906934),
+while external provider-specific behavior and detached refresh workers remain
+unclaimed. Provider callbacks are bounded by
 `ClientConfig::request_timeout_ms`; an expired callback returns
 `Error::OAuthBearerTokenTimeout` without including token material.
 
@@ -466,11 +468,11 @@ Verified high-level paths include:
   paths.
 - SASL/OAUTHBEARER is implemented with token-only and authorization-identity
   builders plus async token-provider builders, and live-verified against Kafka
-  3.7.2's built-in unsecured validator. SASL Authenticate v1 session lifetime
-  metadata is exposed by the low-level client, and provider-backed connections
-  re-authenticate before requests as the session expires. Detached refresh
-  workers and production OAuth/OIDC provider behavior and signed JWT/JWKS
-  policy remain unclaimed.
+  3.7.2's built-in validator and a signed local OIDC/JWKS fixture. Flexible
+  SASL Authenticate v2 session-lifetime metadata is exposed by the low-level
+  client, and provider-backed connections re-authenticate before requests as
+  the session expires. External provider-specific behavior and detached
+  refresh workers remain unclaimed.
 - Broker compatibility is verified against Kafka `3.7.2`, `3.8.1`, `3.9.1`,
   and `4.3.1` for the single-node plaintext profile. Secured and multi-broker
   profiles are verified against `3.7.2`.
