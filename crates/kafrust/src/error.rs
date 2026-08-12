@@ -213,6 +213,13 @@ pub enum Error {
         /// Timeout applied to the provider call in milliseconds.
         timeout_ms: u64,
     },
+    /// The broker outcome of an EndTxn request could not be observed.
+    TransactionOutcomeUnknown {
+        /// Transaction operation whose outcome is unknown.
+        operation: &'static str,
+    },
+    /// A transactional producer can no longer safely issue transaction commands.
+    TransactionProducerDefunct,
     /// Kafka returned a non-zero broker error code.
     Broker {
         /// Raw Kafka broker error code.
@@ -328,6 +335,13 @@ impl fmt::Display for Error {
                 f,
                 "SASL/OAUTHBEARER token provider timed out after {timeout_ms}ms"
             ),
+            Self::TransactionOutcomeUnknown { operation } => write!(
+                f,
+                "transaction {operation} outcome is unknown; discard the producer"
+            ),
+            Self::TransactionProducerDefunct => {
+                f.write_str("transactional producer is defunct; discard the producer")
+            }
             Self::Broker { code, context } => write!(f, "Kafka broker error {code}: {context}"),
             Self::RequestTimedOut { timeout_ms } => {
                 write!(f, "Kafka request timed out after {timeout_ms}ms")
@@ -381,6 +395,8 @@ impl std::error::Error for Error {
             | Self::MissingSaslCredentials
             | Self::InvalidSaslResponse { .. }
             | Self::OAuthBearerTokenTimeout { .. }
+            | Self::TransactionOutcomeUnknown { .. }
+            | Self::TransactionProducerDefunct
             | Self::Broker { .. }
             | Self::RequestTimedOut { .. }
             | Self::ResponseTooLarge { .. }

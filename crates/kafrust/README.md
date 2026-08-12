@@ -195,6 +195,14 @@ async fn main() -> kafrust::Result<()> {
 
 The high-level commit, abort, read-committed isolation, and transactional
 consumer group offset paths are verified against Kafka `3.7.2` and `4.3.1`.
+`Producer::transaction_status()` and the matching buffered-producer method
+expose `Ready`, `InTransaction`, and terminal `Defunct` states. If an `EndTxn`
+response is lost,
+`commit_transaction` or `abort_transaction` returns
+`Error::TransactionOutcomeUnknown`; discard that producer because Kafka may
+have applied the requested outcome, and create a new producer with the same
+transactional ID for recovery. The old transaction is never reported as
+successfully committed or aborted from a lost response.
 
 ## Buffered Producer
 

@@ -1067,7 +1067,11 @@ Evidence:
 - `ProducerConfig::transactional_id` initializes a transactional producer ID
   and enforces idempotent producer settings. `Producer::begin_transaction`,
   `commit_transaction`, and `abort_transaction` expose explicit state
-  transitions; sends outside an active transaction are rejected.
+  transitions; sends outside an active transaction are rejected. A lost
+  `EndTxn` response returns `Error::TransactionOutcomeUnknown`, transitions
+  the producer to terminal `TransactionStatus::Defunct`, and rejects further
+  transaction commands so callers cannot assume an abort or retry on the old
+  producer.
 - Transactional sends register each topic partition through
   `AddPartitionsToTxn v0`, pass the transactional ID to Produce v3/v7, and
   complete through `EndTxn v0`. Transactional Produce requests set the
@@ -1118,6 +1122,9 @@ Evidence:
   stopped the active Kafka 3.7.2 `SASL_PLAINTEXT` transaction coordinator,
   verified commit and `read_committed` recovery, then stopped the group
   coordinator and verified consumer-group recovery with SASL/PLAIN.
+- A deterministic injected-broker test drops the connection after receiving
+  `EndTxn`, verifies `TransactionOutcomeUnknown`, and verifies that the
+  producer is terminally `Defunct` and cannot begin another transaction.
 
 Known limits:
 

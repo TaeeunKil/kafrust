@@ -673,6 +673,7 @@ pub struct BufferedProducer {
     state: BufferedProducerState,
     transactional: bool,
     in_transaction: bool,
+    defunct: bool,
 }
 
 impl BufferedProducer {
@@ -689,6 +690,9 @@ impl BufferedProducer {
     )]
     pub async fn send(&mut self, record: ProducerRecord) -> Result<ProducerDelivery> {
         self.state.ensure_open()?;
+        if self.defunct {
+            return Err(Error::TransactionProducerDefunct);
+        }
         if self.transactional && !self.in_transaction {
             return Err(Error::Unsupported("transaction has not been started"));
         }
@@ -707,6 +711,9 @@ impl BufferedProducer {
         if !self.transactional {
             return Err(Error::Unsupported("producer is not transactional"));
         }
+        if self.defunct {
+            return Err(Error::TransactionProducerDefunct);
+        }
         if self.in_transaction {
             return Err(Error::Unsupported("transaction is already active"));
         }
@@ -716,9 +723,17 @@ impl BufferedProducer {
             BufferedProducerCommand::BeginTransaction { result_sender },
         )
         .await?;
-        receive_buffered_result(result_receiver).await?;
-        self.in_transaction = true;
-        Ok(())
+        let result = receive_buffered_result(result_receiver).await;
+        match result {
+            Ok(()) => {
+                self.in_transaction = true;
+                Ok(())
+            }
+            Err(error) => {
+                self.mark_defunct_from_transaction_error(&error);
+                Err(error)
+            }
+        }
     }
 
     /// Adds consumer group offsets to the active buffered transaction.
@@ -749,7 +764,11 @@ impl BufferedProducer {
             },
         )
         .await?;
-        receive_buffered_result(result_receiver).await
+        let result = receive_buffered_result(result_receiver).await;
+        if let Err(error) = &result {
+            self.mark_defunct_from_transaction_error(error);
+        }
+        result
     }
 
     /// Flushes all accepted records and commits the active transaction.
@@ -771,9 +790,17 @@ impl BufferedProducer {
             BufferedProducerCommand::CommitTransaction { result_sender },
         )
         .await?;
-        receive_buffered_result(result_receiver).await?;
-        self.in_transaction = false;
-        Ok(())
+        let result = receive_buffered_result(result_receiver).await;
+        match result {
+            Ok(()) => {
+                self.in_transaction = false;
+                Ok(())
+            }
+            Err(error) => {
+                self.mark_defunct_from_transaction_error(&error);
+                Err(error)
+            }
+        }
     }
 
     /// Flushes accepted records and aborts the active transaction.
@@ -792,14 +819,38 @@ impl BufferedProducer {
             BufferedProducerCommand::AbortTransaction { result_sender },
         )
         .await?;
-        receive_buffered_result(result_receiver).await?;
-        self.in_transaction = false;
-        Ok(())
+        let result = receive_buffered_result(result_receiver).await;
+        match result {
+            Ok(()) => {
+                self.in_transaction = false;
+                Ok(())
+            }
+            Err(error) => {
+                self.mark_defunct_from_transaction_error(&error);
+                Err(error)
+            }
+        }
     }
 
     /// Returns whether this buffered producer currently has an active transaction.
     pub fn in_transaction(&self) -> bool {
         self.in_transaction
+    }
+
+    /// Returns the buffered transactional producer lifecycle state.
+    ///
+    /// `None` means this buffered producer is non-transactional. A `Defunct`
+    /// producer must be discarded after fencing or an unknown EndTxn outcome.
+    pub fn transaction_status(&self) -> Option<TransactionStatus> {
+        if !self.transactional {
+            None
+        } else if self.defunct {
+            Some(TransactionStatus::Defunct)
+        } else if self.in_transaction {
+            Some(TransactionStatus::InTransaction)
+        } else {
+            Some(TransactionStatus::Ready)
+        }
     }
 
     /// Flushes accepted buffered records.
@@ -854,10 +905,28 @@ impl BufferedProducer {
         if !self.transactional {
             return Err(Error::Unsupported("producer is not transactional"));
         }
+        if self.defunct {
+            return Err(Error::TransactionProducerDefunct);
+        }
         if !self.in_transaction {
             return Err(Error::Unsupported("transaction has not been started"));
         }
         Ok(())
+    }
+
+    fn mark_defunct_from_transaction_error(&mut self, error: &Error) {
+        if matches!(
+            error,
+            Error::TransactionOutcomeUnknown { .. } | Error::TransactionProducerDefunct
+        ) || matches!(
+            error,
+            Error::Broker { code, .. }
+                if idempotent_produce_error_disposition(*code)
+                    == IdempotentProduceErrorDisposition::Fatal
+        ) {
+            self.defunct = true;
+            self.in_transaction = false;
+        }
     }
 }
 
@@ -1437,6 +1506,10 @@ fn delivery_error_from_request_error(error: &Error) -> Error {
         Error::OAuthBearerTokenTimeout { timeout_ms } => Error::OAuthBearerTokenTimeout {
             timeout_ms: *timeout_ms,
         },
+        Error::TransactionOutcomeUnknown { operation } => {
+            Error::TransactionOutcomeUnknown { operation }
+        }
+        Error::TransactionProducerDefunct => Error::TransactionProducerDefunct,
         Error::Broker { code, context } => Error::Broker {
             code: *code,
             context: context.clone(),
@@ -1477,6 +1550,9 @@ impl Producer {
             .ok_or(Error::Unsupported("producer is not transactional"))?;
         if state.status == TransactionStatus::InTransaction {
             return Err(Error::Unsupported("transaction is already active"));
+        }
+        if state.status == TransactionStatus::Defunct {
+            return Err(Error::TransactionProducerDefunct);
         }
         state.status = TransactionStatus::InTransaction;
         state.registered_partitions.clear();
@@ -1623,9 +1699,9 @@ impl Producer {
     /// Returns the transactional producer lifecycle state.
     ///
     /// `None` means this producer is non-transactional. `Defunct` means the
-    /// producer must be discarded; if it was reached from an active
-    /// transaction, Kafka does not expose whether that transaction committed
-    /// or aborted successfully.
+    /// producer must be discarded. It can mean that Kafka fenced the producer,
+    /// or that an EndTxn response was lost and the old transaction outcome is
+    /// unknown.
     pub fn transaction_status(&self) -> Option<TransactionStatus> {
         self.transaction_state.as_ref().map(|state| state.status)
     }
@@ -2442,6 +2518,10 @@ impl Producer {
         if let Some(state) = &mut self.idempotent_state {
             state.record_fatal_error(code);
         }
+        self.mark_transaction_defunct();
+    }
+
+    fn mark_transaction_defunct(&mut self) {
         if let Some(state) = &mut self.transaction_state {
             state.status = TransactionStatus::Defunct;
             state.registered_partitions.clear();
@@ -2460,9 +2540,11 @@ impl Producer {
 
     fn ensure_transaction_active(&self) -> Result<()> {
         match &self.transaction_state {
-            Some(state) if state.status != TransactionStatus::InTransaction => {
-                Err(Error::Unsupported("transaction has not been started"))
+            Some(state) if state.status == TransactionStatus::InTransaction => Ok(()),
+            Some(state) if state.status == TransactionStatus::Defunct => {
+                Err(Error::TransactionProducerDefunct)
             }
+            Some(_) => Err(Error::Unsupported("transaction has not been started")),
             _ => Ok(()),
         }
     }
@@ -2888,18 +2970,51 @@ impl Producer {
                     .client
                     .connect_broker(format!("{}:{}", coordinator.host, coordinator.port))
             );
-            let response = transaction_transport_or_retry!(
-                self.client,
-                &self.config.client,
-                &mut attempt,
-                self.config.max_retries,
-                client.end_txn_v0(
+            let response = match client
+                .end_txn_v0(
                     transactional_id.clone(),
                     identity.producer_id,
                     identity.producer_epoch,
                     committed,
                 )
-            );
+                .await
+            {
+                Ok(response) => response,
+                Err(error) => {
+                    if is_retryable_transaction_transport_error(&error)
+                        && attempt < self.config.max_retries
+                    {
+                        attempt += 1;
+                        time::sleep(IDEMPOTENT_INIT_RETRY_BACKOFF).await;
+                        self.config.client.record_retry();
+                        match reconnect_transaction_client(
+                            &self.config.client,
+                            &mut attempt,
+                            self.config.max_retries,
+                        )
+                        .await
+                        {
+                            Ok(reconnected) => {
+                                self.client = reconnected;
+                                continue;
+                            }
+                            Err(_) => {
+                                self.mark_transaction_defunct();
+                                return Err(Error::TransactionOutcomeUnknown {
+                                    operation: if committed { "commit" } else { "abort" },
+                                });
+                            }
+                        }
+                    }
+                    if is_transaction_outcome_unknown_error(&error) {
+                        self.mark_transaction_defunct();
+                        return Err(Error::TransactionOutcomeUnknown {
+                            operation: if committed { "commit" } else { "abort" },
+                        });
+                    }
+                    return Err(error);
+                }
+            };
             if response.error_code == 0 {
                 break;
             }
@@ -3348,6 +3463,7 @@ impl ProducerConfig {
             state: BufferedProducerState::Open,
             transactional,
             in_transaction: false,
+            defunct: false,
         })
     }
 }
@@ -3503,6 +3619,16 @@ fn is_retryable_transaction_transport_error(error: &Error) -> bool {
     matches!(
         error,
         Error::Io(_) | Error::RequestTimedOut { .. } | Error::MissingBroker { .. }
+    )
+}
+
+fn is_transaction_outcome_unknown_error(error: &Error) -> bool {
+    matches!(
+        error,
+        Error::Io(_)
+            | Error::RequestTimedOut { .. }
+            | Error::MissingBroker { .. }
+            | Error::Protocol(_)
     )
 }
 
@@ -4091,6 +4217,8 @@ fn can_retry_send(error: &Error) -> bool {
         | Error::MissingSaslCredentials
         | Error::InvalidSaslResponse { .. }
         | Error::OAuthBearerTokenTimeout { .. }
+        | Error::TransactionOutcomeUnknown { .. }
+        | Error::TransactionProducerDefunct
         | Error::ResponseTooLarge { .. }
         | Error::TlsConfig { .. }
         | Error::InvalidTlsServerName { .. }
@@ -4995,6 +5123,63 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn marks_transactional_producer_defunct_when_end_transaction_outcome_is_unknown() {
+        let bootstrap_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let bootstrap_addr = bootstrap_listener.local_addr().unwrap();
+        let coordinator_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let coordinator_addr = coordinator_listener.local_addr().unwrap();
+
+        let server = tokio::spawn(async move {
+            let (mut bootstrap_socket, _) = bootstrap_listener.accept().await.unwrap();
+            let request = read_frame(&mut bootstrap_socket).await;
+            assert_eq!(&request[0..4], &[0, 10, 0, 1]);
+            write_frame(
+                &mut bootstrap_socket,
+                &find_coordinator_response_frame(&request, 2, coordinator_addr),
+            )
+            .await;
+
+            let (mut coordinator_socket, _) = coordinator_listener.accept().await.unwrap();
+            let end_txn = read_frame(&mut coordinator_socket).await;
+            assert_eq!(&end_txn[0..4], &[0, 26, 0, 0]);
+            drop(coordinator_socket);
+        });
+
+        let config = ProducerConfig::new([bootstrap_addr.to_string()])
+            .transactional_id("orders-tx")
+            .max_retries(0);
+        let client = config.client.clone().connect().await.unwrap();
+        let mut transaction_state = TransactionState::new("orders-tx".to_owned());
+        transaction_state.status = TransactionStatus::InTransaction;
+        let mut producer = Producer {
+            client,
+            config,
+            metadata_cache: BTreeMap::new(),
+            keyless_partition_indexes: BTreeMap::new(),
+            broker_clients: BTreeMap::new(),
+            idempotent_state: Some(IdempotentProducerState::new(42, 3)),
+            transaction_state: Some(transaction_state),
+        };
+
+        assert!(matches!(
+            producer.commit_transaction().await,
+            Err(Error::TransactionOutcomeUnknown {
+                operation: "commit"
+            })
+        ));
+        assert_eq!(
+            producer.transaction_status(),
+            Some(TransactionStatus::Defunct)
+        );
+        assert!(matches!(
+            producer.begin_transaction(),
+            Err(Error::TransactionProducerDefunct)
+        ));
+
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn retries_idempotent_initialization_while_coordinator_loads() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -5188,6 +5373,7 @@ mod tests {
             state: BufferedProducerState::Open,
             transactional: true,
             in_transaction: false,
+            defunct: false,
         };
 
         assert!(matches!(
@@ -5212,6 +5398,56 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn propagates_unknown_buffered_transaction_outcome_to_handle_state() {
+        let (commands, mut receiver) = mpsc::channel(4);
+        let command_worker = tokio::spawn(async move {
+            if let BufferedProducerCommand::BeginTransaction { result_sender } =
+                receiver.recv().await.unwrap()
+            {
+                result_sender.send(Ok(())).unwrap();
+            } else {
+                return;
+            }
+            if let BufferedProducerCommand::CommitTransaction { result_sender } =
+                receiver.recv().await.unwrap()
+            {
+                result_sender
+                    .send(Err(Error::TransactionOutcomeUnknown {
+                        operation: "commit",
+                    }))
+                    .unwrap();
+            }
+        });
+        let mut producer = BufferedProducer {
+            commands,
+            metrics: ClientMetrics::new(),
+            worker: Some(command_worker),
+            state: BufferedProducerState::Open,
+            transactional: true,
+            in_transaction: false,
+            defunct: false,
+        };
+
+        producer.begin_transaction().await.unwrap();
+        assert!(matches!(
+            producer.commit_transaction().await,
+            Err(Error::TransactionOutcomeUnknown {
+                operation: "commit"
+            })
+        ));
+        assert_eq!(
+            producer.transaction_status(),
+            Some(TransactionStatus::Defunct)
+        );
+        assert!(!producer.in_transaction());
+        assert!(matches!(
+            producer.send(ProducerRecord::to("orders")).await,
+            Err(Error::TransactionProducerDefunct)
+        ));
+        producer.worker.take().unwrap().await.unwrap();
+    }
+
+    #[tokio::test]
     async fn rejects_transaction_commands_for_non_transactional_buffered_producer() {
         let (commands, _receiver) = mpsc::channel(1);
         let mut producer = BufferedProducer {
@@ -5221,6 +5457,7 @@ mod tests {
             state: BufferedProducerState::Open,
             transactional: false,
             in_transaction: false,
+            defunct: false,
         };
 
         assert!(matches!(

@@ -237,7 +237,11 @@ EndTxn and refuses to commit after a delivery failure. Transaction coordinator
 broker-stop recovery with `read_committed` verification is qualified on the
 Kafka 3.7.2 three-broker SASL/PLAIN profile in
 [`Live Kafka Smoke` run `31554396594`](https://github.com/TaeeunKil/kafrust/actions/runs/31554396594).
-Broader transaction failure-injection matrices are not yet qualified.
+If the EndTxn response is lost, kafrust returns the typed
+`Error::TransactionOutcomeUnknown` and marks the producer `Defunct`; the caller
+must discard it and reinitialize a producer with the same transactional ID
+instead of assuming that the transaction aborted. Broader transaction
+failure-injection matrices are not yet qualified.
 
 ## Admin
 
