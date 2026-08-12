@@ -137,11 +137,12 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
   [`31557534371`](https://github.com/TaeeunKil/kafrust/actions/runs/31557534371),
   including the cooperative multi-member rebalance listener lifecycle check.
 - Current `main` performance and recovery evidence includes benchmark run
-  [`31501263160`](https://github.com/TaeeunKil/kafrust/actions/runs/31501263160)
+  [`31562321010`](https://github.com/TaeeunKil/kafrust/actions/runs/31562321010)
   and 120-second broker-restart soak run
-  [`31501263268`](https://github.com/TaeeunKil/kafrust/actions/runs/31501263268).
-  The soak processed 6,138,200 records and ended with zero in-flight and
-  buffered records after recovery.
+  [`31562320726`](https://github.com/TaeeunKil/kafrust/actions/runs/31562320726).
+  The benchmark covered 100-byte, 1-KiB, 10-KiB, and 1-KiB Zstd profiles. The
+  soak processed 6,019,400 records across a ten-second outage and ended with
+  zero in-flight and buffered records after recovery.
 - Kafka-compatible Murmur2 routing for keyed records without an explicit
   partition. Manual run `30066328105` verified key-derived routing and
   fetch-back by partition and offset across the three-broker Kafka 3.7.2

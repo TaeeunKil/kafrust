@@ -1161,15 +1161,18 @@ Implemented evidence:
   completed in 60 seconds across a ten-second broker outage, 145 high-level
   operation errors and 1,011 internal retries were observed, recovery
   completed, and both final resource gauges were zero.
-- Merged `main` rerun `31501263268` passed a 120-second Kafka 4.3.1 broker
-  restart soak with 6,138,200 records, 137 operation errors, 693 failed
-  requests, and 957 retries. Recovery completed and the final in-flight and
-  buffered-record gauges were both zero.
-- Merged `main` benchmark run `31501263160` published fresh Kafka 4.3.1
-  release-profile baselines: 115,983 records/s for 100-byte payloads, 54,679
-  records/s for 1-KiB payloads, 3,019 records/s for 10-KiB payloads, and
-  67,883 records/s for 1-KiB Zstd payloads. All four profiles completed with
-  zero retries.
+- Merged `main` soak run
+  [`31562320726`](https://github.com/TaeeunKil/kafrust/actions/runs/31562320726)
+  passed a 120-second Kafka 4.3.1 broker restart profile with 6,019,400
+  records, 135 operation errors, 678 failed requests, and 944 retries.
+  Recovery completed and the final in-flight and buffered-record gauges were
+  both zero.
+- Merged `main` benchmark run
+  [`31562321010`](https://github.com/TaeeunKil/kafrust/actions/runs/31562321010)
+  published fresh Kafka 4.3.1 release-profile baselines: 104,277 records/s
+  for 100-byte payloads, 54,649 records/s for 1-KiB payloads, 3,249 records/s
+  for 10-KiB payloads, and 59,488 records/s for 1-KiB Zstd payloads. All four
+  profiles completed with zero retries.
 - Shared metrics count non-zero Kafka error codes handled by authentication,
   producer, transaction, consumer, and consumer-group operations, including
   retry attempts and partial batch failures. This separates protocol-level
