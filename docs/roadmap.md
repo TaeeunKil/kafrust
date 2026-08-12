@@ -1303,18 +1303,18 @@ Implemented evidence:
   session token stops stale tasks from sending requests for a new member epoch.
   Focused tests cover state updates and nullable assignment preservation.
 - Kafka 4.3.1 KIP-848 live qualification passed in
-  [`Live Kafka Smoke` run `31492612082`](https://github.com/TaeeunKil/kafrust/actions/runs/31492612082),
+  [`Live Kafka Smoke` run `31555896968`](https://github.com/TaeeunKil/kafrust/actions/runs/31555896968),
   including foreground and background heartbeat, concurrent-member rejoin,
   OffsetFetch v9, OffsetCommit v9, transient coordinator retry, and explicit
-  leave. Follow-up run
-  [`31493385844`](https://github.com/TaeeunKil/kafrust/actions/runs/31493385844)
-  reruns the same group to verify committed-offset recovery.
+  leave. The same run also passed a three-broker Kafka 4.3.1 coordinator
+  broker-stop recovery path for the foreground group poll process.
 - The Kafka 3.7.2 three-broker `SASL_PLAINTEXT` profile stopped the active
   group coordinator and recovered a classic consumer group through the
   remaining authenticated brokers in
   [`Live Kafka Smoke` run `31554396594`](https://github.com/TaeeunKil/kafrust/actions/runs/31554396594).
 - Broader failure-injection coverage across secured and multi-broker KIP-848
-  deployments remains open.
+  deployments remains open beyond the verified three-broker coordinator
+  broker-stop path.
 - Dynamic and static members can explicitly leave through LeaveGroup v3,
   avoiding session-timeout cleanup after graceful shutdown.
 - Manual `Live Kafka Smoke` run `30065025169` passed graceful LeaveGroup v3 on
@@ -1381,4 +1381,7 @@ Implemented evidence:
   and direct-consumer recovery after broker stops. Production OAuth/OIDC
   provider compatibility, broader KIP-848 and transaction failure injection,
   and workload-specific canary evidence remain before a 1.0 replacement
-  claim.
+  claim. Kafka 4.3.1 KIP-848 coordinator broker-stop recovery is also
+  qualified in the three-broker profile by
+  [`31555896968`](https://github.com/TaeeunKil/kafrust/actions/runs/31555896968),
+  while the broader KIP-848 fault matrix remains open.

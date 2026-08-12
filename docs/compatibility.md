@@ -7,7 +7,9 @@ mapping, and high-level foreground group path are implemented and covered by
 focused tests. The classic and KIP-848 paths are separate selections through
 `ConsumerGroupProtocol`. The dedicated Kafka 4.3.1 KIP-848 live profile also
 passes join, assignment, foreground/background heartbeat, v9 offset commit,
-v9 offset fetch, rejoin, and graceful leave behavior.
+v9 offset fetch, rejoin, and graceful leave behavior. The Kafka 4.3.1
+three-broker profile additionally verifies coordinator broker-stop recovery for
+the foreground group poll path.
 
 ## Current Compatibility Claim
 
@@ -26,6 +28,7 @@ The `0.2.x` alpha line is verified against Apache Kafka 3.7.2, 3.8.1, 3.9.1, and
 | Apache Kafka 3.9.1 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, manual run `30067372344` on 2026-07-24 | Passing |
 | Apache Kafka 4.3.1 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, manual run `30067372344` on 2026-07-24 | Passing |
 | Apache Kafka 4.3.1 | single-node KRaft | KIP-848 consumer protocol over PLAINTEXT | [`Live Kafka Smoke`, run `31492612082`](https://github.com/TaeeunKil/kafrust/actions/runs/31492612082) on 2026-08-11 | Passing |
+| Apache Kafka 4.3.1 | three-broker KRaft | KIP-848 consumer protocol; coordinator broker-stop recovery | [`Live Kafka Smoke`, run `31555896968`](https://github.com/TaeeunKil/kafrust/actions/runs/31555896968) on 2026-08-12 | Passing |
 | Apache Kafka 3.7.2 | single-node KRaft with StandardAuthorizer | PLAINTEXT ACL and client-quota admin | `Live Kafka Smoke` ACL authorizer job, manual run `31459874329` on 2026-08-11 | Passing |
 | Apache Kafka 3.7.2 | single-node KRaft | SASL_SSL SCRAM credential administration | `Live Kafka Smoke` SASL_SSL SCRAM job, manual run `31461980967` on 2026-08-11 | Passing |
 | Apache Kafka 3.7.2 | three-broker KRaft | controller-routed partition reassignment | `Live Kafka Smoke` multi-broker job, manual run `31462962605` on 2026-08-11 | Passing |
@@ -192,7 +195,12 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
   explicit leave. The same group is run twice to exercise committed-offset
   recovery.
   The dedicated Kafka 4.3.1 profile passed this path in
-  [`Live Kafka Smoke` run `31492612082`](https://github.com/TaeeunKil/kafrust/actions/runs/31492612082).
+  [`Live Kafka Smoke` run `31555896968`](https://github.com/TaeeunKil/kafrust/actions/runs/31555896968).
+- Kafka 4.3.1 three-broker KIP-848 coordinator recovery: the active
+  coordinator is stopped after the first poll, and the foreground group
+  process completes through the remaining brokers before the stopped broker is
+  restarted. This path passed in
+  [`Live Kafka Smoke` run `31555896968`](https://github.com/TaeeunKil/kafrust/actions/runs/31555896968).
 - Consumer group assignments without committed offsets resolve
   `OffsetResetPolicy::Earliest` or `Latest` from the partition leader. Manual
   `Live Kafka Smoke` run `30229718813` passed both policies on Kafka 3.7.2,
@@ -334,7 +342,8 @@ The current compatibility claim does not cover:
   broker-stop paths are claimed above, but these broader secured cluster paths
   remain open.
 - Broader transaction and KIP-848 failure-injection profiles beyond the
-  verified coordinator broker-stop paths.
+  verified coordinator broker-stop paths, including secured KIP-848 and
+  repeated or partition-leader fault matrices.
 - Idempotent failure-injection profiles beyond the verified three-broker
   leader-stop recovery path. The ambiguous-response duplicate path is covered
   by a deterministic injected broker test.

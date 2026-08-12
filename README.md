@@ -364,7 +364,8 @@ See [Compatibility](docs/compatibility.md) and
   `3.8.1`, `3.9.1`, and `4.3.1`. Secured and multi-broker profiles remain
   verified against `3.7.2`.
 - Three-broker coordinator and leader failover is verified for the documented
-  producer, direct consumer, consumer group, and transaction paths. Topic
+  producer, direct consumer, classic consumer group, KIP-848 consumer group,
+  and transaction paths. Topic
   partition expansion is verified through CreatePartitions v0 and Metadata v1;
   rack-aware client routing is not yet claimed.
 - Gzip, Snappy, and LZ4 compression use Produce v3 RecordBatch encoding; Zstd
