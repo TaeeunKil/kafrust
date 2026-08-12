@@ -144,6 +144,10 @@ classic consumer-group offset inspection and administrative reset through the
 group coordinator, preserving partition-level outcomes.
 CreateTopics v2 and DeleteTopics v3 discover the active controller and preserve
 per-topic partial success and error responses. See [Admin API](docs/admin-api.md).
+ACL, client-quota, and incremental topic-config mutations retry bootstrap
+connection failures before transmitting a request. Once a mutation request is
+sent, transport failures remain single-attempt because the broker-side outcome
+is ambiguous and must be reconciled explicitly.
 `describe_acls`, `create_acls`, and `delete_acls` expose typed ACL bindings,
 filters, and per-entry authorization outcomes; qualify them against an
 authorizer-enabled broker before production rollout.

@@ -643,6 +643,10 @@ The current compatibility claim does not cover:
 - Idempotent failure-injection profiles beyond the verified three-broker
   leader-stop recovery path. The ambiguous-response duplicate path is covered
   by a deterministic injected broker test.
+- Transparent retry of an Admin mutation after its request has been
+  transmitted. Bootstrap connection failures before transmission are retried
+  within the bounded AdminClient budget; ambiguous post-transmission outcomes
+  remain returned to the caller for explicit reconciliation.
 - Kafka APIs that are not listed in the verified paths.
 
 ## Updating Compatibility

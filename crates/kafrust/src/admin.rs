@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::fmt;
+use std::future::Future;
 use std::time::Duration;
 
 use kafrust_protocol::api::alter_client_quotas::{
@@ -259,7 +260,7 @@ impl AdminClient {
         err
     )]
     pub async fn create_acls(&self, bindings: &[AclBinding]) -> Result<CreateAclsResult> {
-        let mut client = self.config.clone().connect().await?;
+        let mut client = self.bootstrap_client_with_retries().await?;
         let response = client
             .create_acls_v1(bindings.iter().map(AclBinding::as_protocol).collect())
             .await?;
@@ -292,7 +293,7 @@ impl AdminClient {
         err
     )]
     pub async fn delete_acls(&self, filters: &[AclFilter]) -> Result<DeleteAclsResult> {
-        let mut client = self.config.clone().connect().await?;
+        let mut client = self.bootstrap_client_with_retries().await?;
         let response = client
             .delete_acls_v1(filters.iter().map(AclFilter::as_protocol).collect())
             .await?;
@@ -384,7 +385,7 @@ impl AdminClient {
         alterations: &[ClientQuotaAlteration],
         validate_only: bool,
     ) -> Result<AlterClientQuotasResult> {
-        let mut client = self.config.clone().connect().await?;
+        let mut client = self.bootstrap_client_with_retries().await?;
         let response = client
             .alter_client_quotas_v0(
                 alterations
@@ -711,7 +712,7 @@ impl AdminClient {
         resources: &[TopicConfigAlteration],
         options: AlterConfigsOptions,
     ) -> Result<AlterConfigsResult> {
-        let mut client = self.config.clone().connect().await?;
+        let mut client = self.bootstrap_client_with_retries().await?;
         let response = client
             .incremental_alter_configs_v0(
                 resources
@@ -1349,6 +1350,18 @@ impl AdminClient {
                 Err(error) => return Err(error),
             }
         }
+    }
+
+    // Bootstrap connection retries are safe because no admin request has been
+    // transmitted yet. Mutation requests remain single-attempt below so an
+    // ambiguous transport failure cannot duplicate a broker-side change.
+    async fn bootstrap_client_with_retries(&self) -> Result<Client> {
+        retry_admin_connection(
+            self.max_retries,
+            || self.config.clone().connect(),
+            || self.config.record_retry(),
+        )
+        .await
     }
 
     /// Creates Kafka topics on the active controller using CreateTopics v2.
@@ -4798,6 +4811,34 @@ fn is_retryable_admin_coordinator_error(error: &Error) -> bool {
     }
 }
 
+async fn retry_admin_connection<T, Connect, ConnectFuture, OnRetry>(
+    max_retries: u32,
+    mut connect: Connect,
+    mut on_retry: OnRetry,
+) -> Result<T>
+where
+    Connect: FnMut() -> ConnectFuture,
+    ConnectFuture: Future<Output = Result<T>>,
+    OnRetry: FnMut(),
+{
+    let mut retry = 0;
+    loop {
+        match connect().await {
+            Ok(value) => return Ok(value),
+            Err(error) if retry < max_retries && is_retryable_admin_connection_error(&error) => {
+                retry += 1;
+                on_retry();
+                tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+            }
+            Err(error) => return Err(error),
+        }
+    }
+}
+
+fn is_retryable_admin_connection_error(error: &Error) -> bool {
+    matches!(error, Error::Io(_) | Error::RequestTimedOut { .. })
+}
+
 fn is_retryable_admin_read_error(error: &Error) -> bool {
     match error {
         Error::Broker { code, .. } => is_retryable_admin_read_code(*code),
@@ -6763,7 +6804,7 @@ mod tests {
         ScramCredentialDeletion, ScramCredentialMechanism, ScramCredentialUpsertion,
         TopicConfigAlteration, TopicConfigResource,
     };
-    use crate::{BrokerErrorKind, ClientConfig, ClientMetrics};
+    use crate::{BrokerErrorKind, ClientConfig, ClientMetrics, Error};
     use kafrust_protocol::codec::Encoder;
     use std::time::Duration;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -6796,6 +6837,34 @@ mod tests {
 
         let admin = AdminClient::new(ClientConfig::new(["127.0.0.1:9092"])).max_retries(9);
         assert_eq!(admin.max_retries_ref(), 9);
+    }
+
+    #[tokio::test]
+    async fn retries_retryable_admin_bootstrap_connection_before_request() {
+        let mut attempts = 0;
+        let mut retries = 0;
+        let result = super::retry_admin_connection(
+            1,
+            || {
+                attempts += 1;
+                let result = if attempts == 1 {
+                    Err(Error::Io(std::io::Error::new(
+                        std::io::ErrorKind::ConnectionRefused,
+                        "bootstrap unavailable",
+                    )))
+                } else {
+                    Ok(42)
+                };
+                std::future::ready(result)
+            },
+            || retries += 1,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(result, 42);
+        assert_eq!(attempts, 2);
+        assert_eq!(retries, 1);
     }
 
     #[test]

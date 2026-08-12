@@ -949,6 +949,11 @@ Implemented evidence:
   discovery failures with the bounded budget. CreateTopics has focused
   bootstrap-disconnect coverage; request transport failures after a mutation
   is sent remain single-attempt because the broker-side outcome is ambiguous.
+- Non-controller Admin writes for ACLs, client quotas, and incremental topic
+  configs now also retry bootstrap connection failures before their request is
+  transmitted. The retry helper has deterministic coverage for the retry
+  budget; transport failures after the mutation request remain single-attempt
+  for the same ambiguous-outcome reason.
 - KIP-848 member-aware administrative offsets now use OffsetFetch v9 and
   OffsetCommit v9 with the joined member ID, member epoch, optional static
   instance ID, `require_stable`, and committed leader epoch. The APIs reuse
