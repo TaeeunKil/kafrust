@@ -168,6 +168,14 @@ jobs:
           KAFRUST_TRANSACTIONAL_ID: kafrust-transactional-smoke-${{ matrix.kafka-version }}
         run: cargo run -p kafrust --example producer_transactional
 
+      - name: Run admin DescribeProducers example
+        run: cargo run -p kafrust --example admin_describe_producers
+
+      - name: Run admin DescribeTransactions example
+        env:
+          KAFRUST_TRANSACTIONAL_ID: kafrust-transactional-smoke-${{ matrix.kafka-version }}
+        run: cargo run -p kafrust --example admin_describe_transactions
+
       - name: Run direct consumer example
         env:
           KAFRUST_PARTITION: "0"
@@ -1070,6 +1078,11 @@ jobs:
       - name: Run multi-broker admin describe group example
         run: cargo run -p kafrust --example admin_describe_group
 
+      - name: Run multi-broker admin DescribeProducers example
+        env:
+          KAFRUST_PARTITIONS: 0,1,2
+        run: cargo run -p kafrust --example admin_describe_producers
+
       - name: Run multi-broker admin delete group offsets example
         run: cargo run -p kafrust --example admin_delete_group_offsets
 
@@ -1137,6 +1150,11 @@ jobs:
             docker logs "$coordinator_container"
             exit 1
           fi
+
+      - name: Run multi-broker admin DescribeTransactions example
+        env:
+          KAFRUST_TRANSACTIONAL_ID: kafrust-transaction-failover-${{ github.run_id }}
+        run: cargo run -p kafrust --example admin_describe_transactions
 
       - name: Run multi-broker producer and consumer failover through broker stop
         run: |
