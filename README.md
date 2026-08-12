@@ -365,7 +365,9 @@ Verified paths currently include:
 - Classic consumer group join, sync, heartbeat, poll, and offset commit.
 - KIP-848 consumer group assignment, member-epoch heartbeat, OffsetFetch v9,
   OffsetCommit v9, member-aware administrative offset listing/alteration,
-  background rejoin, and explicit leave against Kafka `4.3.1`.
+  background rejoin, and explicit leave against Kafka `4.3.1` (including the
+  PLAINTEXT single-node and three-broker Admin offset smoke in
+  [`31603195530`](https://github.com/TaeeunKil/kafrust/actions/runs/31603195530)).
 
 See [Compatibility](docs/compatibility.md) and
 [Broker Roundtrip](docs/broker-roundtrip.md) for the current evidence.

@@ -922,8 +922,10 @@ Implemented evidence:
   the typed classic offset results while preserving v9 throttle and group
   errors. Focused wire/mock tests and the
   `admin_consumer_group_offsets_member` example cover the active-member path;
-  Kafka 4.3.1 single-node and multi-broker live qualification is the next
-  release gate.
+  Kafka 4.3.1 single-node and multi-broker PLAINTEXT live qualification passed
+  in [`31603195530`](https://github.com/TaeeunKil/kafrust/actions/runs/31603195530).
+  Secured KIP-848 Admin offsets and broker-stop injection during the Admin
+  request remain release gates.
 - DescribeAcls v1, CreateAcls v1, and DeleteAcls v1 expose typed ACL bindings
   and filters through `AdminClient`, preserving top-level, per-entry,
   per-filter, and matching-ACL outcomes. Wire and mock-broker tests cover the
