@@ -1755,3 +1755,7 @@ Implemented evidence:
   after the ACL authorizer example added bounded polling for asynchronous
   post-create visibility. All supported broker, security, failover, ACL, and
   KIP-848 profiles remained green.
+- The latest complete 17-job matrix passed at commit `562dccd` in
+  [`31629022740`](https://github.com/TaeeunKil/kafrust/actions/runs/31629022740)
+  after controller Metadata discovery also retried transient responses before
+  controller-routed mutations. All supported profiles remained green.
