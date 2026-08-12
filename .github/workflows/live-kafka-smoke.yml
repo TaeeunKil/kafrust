@@ -1201,6 +1201,7 @@ jobs:
       KAFRUST_SASL_MECHANISM: scram-sha-256
       KAFRUST_SASL_USERNAME: kafrust
       KAFRUST_SASL_PASSWORD: kafrust-secret
+      KAFRUST_TLS_SERVER_NAME: localhost
       KAFRUST_TLS_ROOT_CERT_DER_PATH: ${{ github.workspace }}/sasl-ssl-multi/ca.der
       KAFRUST_TOPIC: kafrust-sasl-ssl-multi-${{ github.run_id }}
 
@@ -1356,6 +1357,17 @@ jobs:
             exit 1
           fi
           echo "KAFRUST_FAILOVER_PARTITION=${failover_partition}" >> "$GITHUB_ENV"
+
+      - name: Verify external TLS listeners
+        run: |
+          for port in 19205 19206 19207; do
+            openssl s_client \
+              -connect "127.0.0.1:${port}" \
+              -servername localhost \
+              -CAfile sasl-ssl-multi/ca.crt \
+              -verify_return_error \
+              </dev/null >/tmp/kafrust-scram-ssl-listener-${port}.log 2>&1
+          done
 
       - name: Build secured failover examples
         run: >-
