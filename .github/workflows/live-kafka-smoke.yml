@@ -751,7 +751,8 @@ jobs:
           KAFKA_CLUSTER_ID="$(docker run --rm apache/kafka:4.3.1 /opt/kafka/bin/kafka-storage.sh random-uuid)"
           for node in 1 2 3; do
             external_port=$((19404 + node))
-            docker run -d --name "kafrust-kafka-kip848-scram-${node}" \
+            docker run -d --name "kafrust-kip848-scram-${node}" \
+              --hostname "kafrust-kip848-scram-${node}" \
               --network kafrust-kip848-sasl-ssl \
               -p "${external_port}:9095" \
               -v "$PWD/sasl-ssl-kip848:/etc/kafka/secrets:ro" \
@@ -760,11 +761,11 @@ jobs:
               -e KAFKA_NODE_ID="${node}" \
               -e KAFKA_PROCESS_ROLES=broker,controller \
               -e KAFKA_LISTENERS=INTERNAL://:29092,SASL_SSL://:9095,CONTROLLER://:9093 \
-              -e KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafrust-kafka-kip848-scram-${node}:29092,SASL_SSL://localhost:${external_port} \
+              -e KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafrust-kip848-scram-${node}:29092,SASL_SSL://localhost:${external_port} \
               -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
               -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,SASL_SSL:SASL_SSL \
               -e KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL \
-              -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafrust-kafka-kip848-scram-1:9093,2@kafrust-kip848-scram-2:9093,3@kafrust-kip848-scram-3:9093 \
+              -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafrust-kip848-scram-1:9093,2@kafrust-kip848-scram-2:9093,3@kafrust-kip848-scram-3:9093 \
               -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=3 \
               -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=3 \
               -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=2 \
@@ -781,29 +782,29 @@ jobs:
       - name: Wait for multi-broker Kafka
         run: |
           for attempt in {1..120}; do
-            if docker exec kafrust-kafka-kip848-scram-1 /opt/kafka/bin/kafka-broker-api-versions.sh \
-              --bootstrap-server kafrust-kafka-kip848-scram-1:29092 \
+            if docker exec kafrust-kip848-scram-1 /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server kafrust-kip848-scram-1:29092 \
               >/tmp/kafrust-kip848-scram-startup.log 2>&1; then
               exit 0
             fi
             sleep 2
           done
           cat /tmp/kafrust-kip848-scram-startup.log || true
-          docker logs kafrust-kafka-kip848-scram-1
-          docker logs kafrust-kafka-kip848-scram-2
-          docker logs kafrust-kafka-kip848-scram-3
+          docker logs kafrust-kip848-scram-1
+          docker logs kafrust-kip848-scram-2
+          docker logs kafrust-kip848-scram-3
           exit 1
 
       - name: Create SCRAM user and replicated topic
         run: |
-          docker exec kafrust-kafka-kip848-scram-1 /opt/kafka/bin/kafka-configs.sh \
-            --bootstrap-server kafrust-kafka-kip848-scram-1:29092 \
+          docker exec kafrust-kip848-scram-1 /opt/kafka/bin/kafka-configs.sh \
+            --bootstrap-server kafrust-kip848-scram-1:29092 \
             --alter \
             --add-config 'SCRAM-SHA-256=[iterations=4096,password=kafrust-secret]' \
             --entity-type users \
             --entity-name kafrust
-          docker exec kafrust-kafka-kip848-scram-1 /opt/kafka/bin/kafka-topics.sh \
-            --bootstrap-server kafrust-kafka-kip848-scram-1:29092 \
+          docker exec kafrust-kip848-scram-1 /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server kafrust-kip848-scram-1:29092 \
             --create \
             --topic "$KAFRUST_TOPIC" \
             --partitions 3 \
@@ -859,7 +860,7 @@ jobs:
             exit 1
           fi
 
-          coordinator_container="kafrust-kafka-kip848-scram-${coordinator_node}"
+          coordinator_container="kafrust-kip848-scram-${coordinator_node}"
           docker stop "$coordinator_container"
 
           group_status=0
@@ -889,9 +890,9 @@ jobs:
         if: failure()
         run: |
           cat /tmp/kafrust-kip848-scram-failover.log || true
-          docker logs kafrust-kafka-kip848-scram-1
-          docker logs kafrust-kafka-kip848-scram-2
-          docker logs kafrust-kafka-kip848-scram-3
+          docker logs kafrust-kip848-scram-1
+          docker logs kafrust-kip848-scram-2
+          docker logs kafrust-kip848-scram-3
 
       - name: Upload KIP-848 SCRAM diagnostics
         if: failure()
