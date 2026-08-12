@@ -981,6 +981,11 @@ jobs:
           KAFKA_CLUSTER_ID="$(docker run --rm apache/kafka:3.7.2 /opt/kafka/bin/kafka-storage.sh random-uuid)"
           for node in 1 2 3; do
             external_port=$((19091 + node))
+            case "$node" in
+              1) broker_rack=rack-a ;;
+              2) broker_rack=rack-b ;;
+              3) broker_rack=rack-c ;;
+            esac
             docker run -d --name "kafrust-kafka-multi-${node}" \
               --network kafrust-multi \
               -p "${external_port}:9092" \
@@ -993,6 +998,8 @@ jobs:
               -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT \
               -e KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL \
               -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafrust-kafka-multi-1:9093,2@kafrust-kafka-multi-2:9093,3@kafrust-kafka-multi-3:9093 \
+              -e KAFKA_BROKER_RACK="${broker_rack}" \
+              -e KAFKA_REPLICA_SELECTOR_CLASS=org.apache.kafka.common.replica.RackAwareReplicaSelector \
               -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=3 \
               -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=3 \
               -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=2 \
@@ -1037,6 +1044,13 @@ jobs:
             exit 1
           fi
           echo "KAFRUST_FAILOVER_PARTITION=${failover_partition}" >> "$GITHUB_ENV"
+          rack_partition="$(awk '/Partition:/ && !/Leader: 1/ { for (i = 1; i <= NF; i++) if ($i == "Partition:") { print $(i + 1); exit } }' /tmp/kafrust-multi-topic.log)"
+          if [ -z "$rack_partition" ]; then
+            echo "could not find a partition led by a non-rack-a broker"
+            cat /tmp/kafrust-multi-topic.log
+            exit 1
+          fi
+          echo "KAFRUST_RACK_PARTITION=${rack_partition}" >> "$GITHUB_ENV"
 
       - name: Run multi-broker roundtrip
         run: cargo test -p kafrust --test broker_roundtrip -- --nocapture
@@ -1105,6 +1119,21 @@ jobs:
           KAFRUST_PARTITION: "0"
           KAFRUST_OFFSET: "0"
         run: cargo run -p kafrust --example consumer_fetch
+
+      - name: Run rack-aware direct consumer preferred-replica example
+        env:
+          KAFRUST_CLIENT_RACK: rack-a
+          KAFRUST_PARTITION: ${{ env.KAFRUST_RACK_PARTITION }}
+          KAFRUST_OFFSET: "0"
+          KAFRUST_RACK_REQUIRE_RECORD: "1"
+          RUST_LOG: kafrust=debug
+        run: |
+          cargo run -p kafrust --example consumer_fetch 2>&1 | tee /tmp/kafrust-rack-aware.log
+          if ! grep -Eq 'selected_broker=1' /tmp/kafrust-rack-aware.log; then
+            cat /tmp/kafrust-rack-aware.log
+            echo "rack-aware fetch did not route a follow-up request to broker 1"
+            exit 1
+          fi
 
       - name: Run multi-broker consumer group example
         run: cargo run -p kafrust --example consumer_group_poll

@@ -15,11 +15,17 @@ async fn main() -> kafrust::Result<()> {
         .and_then(|value| value.parse::<i64>().ok())
         .unwrap_or(0);
 
-    let mut consumer = common::apply_security(
-        ConsumerConfig::new(bootstrap_servers).client_id("kafrust-consumer-example"),
-    )?
-    .build()
-    .await?;
+    let mut config = ConsumerConfig::new(bootstrap_servers).client_id("kafrust-consumer-example");
+    let rack_aware = std::env::var("KAFRUST_CLIENT_RACK").is_ok();
+    if let Ok(client_rack) = std::env::var("KAFRUST_CLIENT_RACK") {
+        config = config.client_rack(client_rack);
+    }
+    let require_rack_record = std::env::var("KAFRUST_RACK_REQUIRE_RECORD")
+        .is_ok_and(|value| value == "1" || value.eq_ignore_ascii_case("true"));
+    if rack_aware {
+        common::init_request_gate(kafrust::protocol::api::fetch::API_KEY)?;
+    }
+    let mut consumer = common::apply_security(config)?.build().await?;
 
     let watermarks = consumer.fetch_watermarks(&topic, partition).await?;
     if watermarks.high() < watermarks.low() {
@@ -35,9 +41,9 @@ async fn main() -> kafrust::Result<()> {
         watermarks.high()
     );
 
-    consumer.assign(topic, partition, offset);
+    consumer.assign(&topic, partition, offset);
     let records = consumer.poll().await?;
-    for record in records {
+    for record in &records {
         println!(
             "fetched {}-{}@{} key={:?} value={:?}",
             record.topic(),
@@ -46,6 +52,21 @@ async fn main() -> kafrust::Result<()> {
             record.key().map(String::from_utf8_lossy),
             record.value().map(String::from_utf8_lossy)
         );
+    }
+    if require_rack_record && records.is_empty() {
+        return Err(Error::Unsupported(
+            "rack-aware consumer smoke expected at least one record",
+        ));
+    }
+
+    if rack_aware {
+        let follow_up = consumer.fetch(&topic, partition, offset).await?;
+        println!("rack-aware follow-up fetched {} records", follow_up.len());
+        if require_rack_record && follow_up.is_empty() {
+            return Err(Error::Unsupported(
+                "rack-aware follow-up expected at least one record",
+            ));
+        }
     }
 
     Ok(())
