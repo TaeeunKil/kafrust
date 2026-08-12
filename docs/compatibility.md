@@ -31,6 +31,16 @@ The signed local OIDC/JWKS fixture also passes Kafka's validator, the Java Kafka
 client, and kafrust static and provider-backed paths in the [`31584760474` OIDC
 job](https://github.com/TaeeunKil/kafrust/actions/runs/31584760474/job/94075906934).
 
+The complete `Live Kafka Smoke` matrix in [`31589394777`](https://github.com/TaeeunKil/kafrust/actions/runs/31589394777)
+passed after adding the DescribeProducers and DescribeTransactions examples.
+The run exercised DescribeProducers v0 against the Kafka 3.7.2, 3.8.1, 3.9.1,
+and 4.3.1 single-node plaintext profiles plus the Kafka 3.7.2 three-broker
+profile. DescribeTransactions v0 also passed on those profiles and through the
+Kafka 3.7.2 three-broker SASL_SSL SCRAM failover profile. This verifies the
+documented leader/coordinator routing and successful authorization paths; target
+permissions, destructive operational policy, and broader fault-injection
+behavior still require workload-specific qualification.
+
 | Broker | Mode | Security | Verification | Status |
 | --- | --- | --- | --- | --- |
 | Apache Kafka 3.7.2 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, manual run `30067372344` on 2026-07-24 | Passing |
@@ -56,6 +66,8 @@ job](https://github.com/TaeeunKil/kafrust/actions/runs/31584760474/job/940759069
 | Apache Kafka 3.7.2 | three-broker KRaft | SASL_SSL with SCRAM-SHA-256; group-coordinator and partition-leader broker-stop recovery | [`Live Kafka Smoke`, run `31568412595`](https://github.com/TaeeunKil/kafrust/actions/runs/31568412595) on 2026-08-12 | Passing |
 | Apache Kafka 3.7.2 | three-broker KRaft | SASL_SSL with SCRAM-SHA-256; safe transactional producer reinitialization after transaction-coordinator broker stop | [`Live Kafka Smoke`, run `31572745537`](https://github.com/TaeeunKil/kafrust/actions/runs/31572745537) on 2026-08-12 | Passing; old producer outcome remains explicitly unknown |
 | Apache Kafka 3.7.2 | three-broker KRaft | PLAINTEXT; repeated partition-leader broker-stop recovery for producer and direct consumer | [`Live Kafka Smoke`, run `31573662135`](https://github.com/TaeeunKil/kafrust/actions/runs/31573662135) on 2026-08-12 | Passing |
+| Apache Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1 | single-node KRaft | DescribeProducers v0 leader routing and DescribeTransactions v0 coordinator routing | [`Live Kafka Smoke`, run `31589394777`](https://github.com/TaeeunKil/kafrust/actions/runs/31589394777) on 2026-08-12 | Passing |
+| Apache Kafka 3.7.2 | three-broker KRaft; PLAINTEXT and SASL_SSL SCRAM failover profiles | DescribeProducers v0 leader routing; DescribeTransactions v0 coordinator routing | [`Live Kafka Smoke`, run `31589394777`](https://github.com/TaeeunKil/kafrust/actions/runs/31589394777) on 2026-08-12 | Passing |
 | Apache Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1 | single-node KRaft | Produce `acks=0` immediate and batch dispatch | `Live Kafka Smoke`, manual run `31464933145` on 2026-08-11 | Passing; broker acceptance is intentionally unconfirmed |
 
 ## Verified Paths

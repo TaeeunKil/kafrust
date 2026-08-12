@@ -938,8 +938,14 @@ Implemented evidence:
   sequence state, transaction offsets, and per-partition errors. The paired
   `describe_transactions` API discovers transaction coordinators, groups IDs
   per coordinator, and preserves transaction state, producer identity, and
-  topic membership. Focused wire and injected routing tests cover both paths;
-  live authorization and coordinator/leader fault qualification remain open.
+  topic membership. Focused wire and injected routing tests cover both paths.
+  The complete 17-job `Live Kafka Smoke` run
+  [`31589394777`](https://github.com/TaeeunKil/kafrust/actions/runs/31589394777)
+  live-verified both examples on the supported single-node plaintext matrix,
+  DescribeProducers on the Kafka 3.7.2 three-broker profile, and
+  DescribeTransactions through the Kafka 3.7.2 three-broker SASL_SSL SCRAM
+  failover profile. Target authorization policy and broader fault-injection
+  qualification remain workload-specific release gates.
 - Manual `Live Kafka Smoke` run `30059517473` passed CreateTopics v2 and its
   follow-up Metadata v1 description on 2026-07-24 against Kafka 3.7.2 and
   4.3.1 single-node brokers and the Kafka 3.7.2 three-broker cluster.

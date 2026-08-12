@@ -302,8 +302,8 @@ See [Admin API](admin-api.md) for typed request and response examples.
 | Client quota describe/alter | Verified on Kafka 3.7.2 StandardAuthorizer; qualify target permissions and quota policy |
 | SCRAM credential administration | Verified on Kafka 3.7.2 SASL_SSL; qualify target permissions and credential policy |
 | Record deletion | Candidate; DeleteRecords v1 is leader-routed and preserves low watermarks and per-partition errors; qualify retention policy and destructive-operation controls on the target broker |
-| Active producer inspection | Candidate; DescribeProducers v0 is leader-routed and preserves producer IDs, epochs, sequences, transaction offsets, and per-partition errors; qualify target authorization and operational alerting |
-| Transaction inspection | Candidate; DescribeTransactions v0 discovers and groups IDs by transaction coordinator and preserves state, producer identity, timeout, and topic partitions; qualify target authorization and coordinator-failure behavior |
+| Active producer inspection | Candidate; DescribeProducers v0 is leader-routed and preserves producer IDs, epochs, sequences, transaction offsets, and per-partition errors; live-verified on the supported plaintext matrix and Kafka 3.7.2 three-broker profile in [`Live Kafka Smoke` run `31589394777`](https://github.com/TaeeunKil/kafrust/actions/runs/31589394777); qualify target authorization and operational alerting |
+| Transaction inspection | Candidate; DescribeTransactions v0 discovers and groups IDs by transaction coordinator and preserves state, producer identity, timeout, and topic partitions; live-verified on the supported plaintext matrix and Kafka 3.7.2 three-broker plaintext/SASL_SSL SCRAM profiles in [`Live Kafka Smoke` run `31589394777`](https://github.com/TaeeunKil/kafrust/actions/runs/31589394777); qualify target authorization and coordinator-failure behavior |
 | Replica reassignment | Verified on Kafka 3.7.2 three-broker smoke; qualify target broker permissions and failure behavior |
 
 "Candidate" means the API exists and relevant project tests pass. It does not
