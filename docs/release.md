@@ -98,9 +98,10 @@ cargo doc --manifest-path target/package/kafrust-protocol-<version>/Cargo.toml -
 cargo doc --manifest-path target/package/kafrust-<version>/Cargo.toml --all-features --no-deps
 ```
 
-The current unpublished `0.2.8` package passed both package verification and
-both all-feature package-documentation builds on commit `4c03b90`. External
-docs.rs and fresh published-crate verification remain release gates.
+The current working-tree `0.2.8` package contents passed both package
+verification and both all-feature package-documentation builds on commit
+`4c03b90`. This does not replace post-change external docs.rs and fresh
+published-crate verification.
 
 ## Optional Broker Checks
 
