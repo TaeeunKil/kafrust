@@ -3179,7 +3179,17 @@ impl ProducerConfig {
     /// partition IDs. Returning a partition not present in that slice fails the
     /// send with [`Error::InvalidPartition`]. Explicitly partitioned records do
     /// not invoke the callback.
-    pub fn partitioner<P>(mut self, partitioner: P) -> Self
+    pub fn partitioner<F>(mut self, partitioner: F) -> Self
+    where
+        F: Fn(&str, Option<&[u8]>, &[i32]) -> i32 + Send + Sync + 'static,
+    {
+        self.partitioner = Some(Arc::new(partitioner));
+        self
+    }
+
+    /// Sets a custom [`Partitioner`] implementation for records without an
+    /// explicit partition.
+    pub fn partitioner_handler<P>(mut self, partitioner: P) -> Self
     where
         P: Partitioner + 'static,
     {
@@ -4349,6 +4359,14 @@ mod tests {
         assert_eq!(record.value_ref().unwrap(), b"created");
         assert_eq!(record.headers()[0].key(), "source");
         assert_eq!(record.headers()[0].value(), b"checkout");
+    }
+
+    #[test]
+    fn configures_custom_partitioner_closure_without_type_annotations() {
+        let config =
+            ProducerConfig::new(["localhost:9092"]).partitioner(|_, _, partitions| partitions[0]);
+
+        assert!(config.has_custom_partitioner());
     }
 
     #[test]
