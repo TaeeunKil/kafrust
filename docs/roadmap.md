@@ -1447,6 +1447,10 @@ Evidence:
 - `docs/release.md` requires CI-equivalent checks, package dry runs,
   docs.rs verification, a fresh published-crate compile, a GitHub release,
   and the relevant live broker workflow.
+- On current main commit `4c03b90`, both unpublished `0.2.8` packages passed
+  `cargo package` verification and all-feature documentation builds from their
+  staged package directories. This is local package evidence only; external
+  docs.rs and fresh published-crate verification remain release gates.
 
 ## M21 Broad Kafka Client Replacement
 

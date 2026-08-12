@@ -85,6 +85,23 @@ The `kafrust` package cannot be fully prepared until the matching `kafrust-proto
 cargo package -p kafrust
 ```
 
+## Local Package Qualification
+
+Before claiming a release candidate, verify both packages from their staged
+package directories with all features enabled. This approximates the docs.rs
+build without claiming that the external docs.rs service has completed:
+
+```sh
+cargo package -p kafrust-protocol --allow-dirty
+cargo package -p kafrust --allow-dirty
+cargo doc --manifest-path target/package/kafrust-protocol-<version>/Cargo.toml --all-features --no-deps
+cargo doc --manifest-path target/package/kafrust-<version>/Cargo.toml --all-features --no-deps
+```
+
+The current unpublished `0.2.8` package passed both package verification and
+both all-feature package-documentation builds on commit `4c03b90`. External
+docs.rs and fresh published-crate verification remain release gates.
+
 ## Optional Broker Checks
 
 The default test suite does not require a Kafka broker. Before an alpha tag, run the opt-in examples or tests against a local broker when practical:
