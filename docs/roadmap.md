@@ -1301,8 +1301,10 @@ Implemented evidence:
 - `RebalanceListener` exposes synchronous assignment snapshots for initial join,
   classic and KIP-848 rejoin, and broker-assigned KIP-848 assignment changes
   from foreground or background heartbeats. Callback lifecycle behavior is
-  covered by focused API tests; target-workload timing and cancellation
-  qualification remain open.
+  covered by focused API tests and the three-broker cooperative multi-member
+  live example, which asserts Before/After callbacks in
+  [`Live Kafka Smoke` run `31557534371`](https://github.com/TaeeunKil/kafrust/actions/runs/31557534371);
+  target-workload timing and cancellation qualification remain open.
 - KIP-848 `ConsumerGroupHeartbeat v0` protocol types, Metadata v12 UUID
   mappings, and a selectable high-level foreground group path are implemented
   with assignment application, member-epoch heartbeats/rejoin, OffsetFetch v9,
@@ -1313,7 +1315,7 @@ Implemented evidence:
   session token stops stale tasks from sending requests for a new member epoch.
   Focused tests cover state updates and nullable assignment preservation.
 - Kafka 4.3.1 KIP-848 live qualification passed in
-  [`Live Kafka Smoke` run `31555896968`](https://github.com/TaeeunKil/kafrust/actions/runs/31555896968),
+  [`Live Kafka Smoke` run `31557534371`](https://github.com/TaeeunKil/kafrust/actions/runs/31557534371),
   including foreground and background heartbeat, concurrent-member rejoin,
   OffsetFetch v9, OffsetCommit v9, transient coordinator retry, and explicit
   leave. The same run also passed a three-broker Kafka 4.3.1 coordinator
@@ -1393,5 +1395,5 @@ Implemented evidence:
   and workload-specific canary evidence remain before a 1.0 replacement
   claim. Kafka 4.3.1 KIP-848 coordinator broker-stop recovery is also
   qualified in the three-broker profile by
-  [`31555896968`](https://github.com/TaeeunKil/kafrust/actions/runs/31555896968),
+  [`31557534371`](https://github.com/TaeeunKil/kafrust/actions/runs/31557534371),
   while the broader KIP-848 fault matrix remains open.

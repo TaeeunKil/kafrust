@@ -28,11 +28,11 @@ The `0.2.x` alpha line is verified against Apache Kafka 3.7.2, 3.8.1, 3.9.1, and
 | Apache Kafka 3.9.1 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, manual run `30067372344` on 2026-07-24 | Passing |
 | Apache Kafka 4.3.1 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, manual run `30067372344` on 2026-07-24 | Passing |
 | Apache Kafka 4.3.1 | single-node KRaft | KIP-848 consumer protocol over PLAINTEXT | [`Live Kafka Smoke`, run `31492612082`](https://github.com/TaeeunKil/kafrust/actions/runs/31492612082) on 2026-08-11 | Passing |
-| Apache Kafka 4.3.1 | three-broker KRaft | KIP-848 consumer protocol; coordinator broker-stop recovery | [`Live Kafka Smoke`, run `31555896968`](https://github.com/TaeeunKil/kafrust/actions/runs/31555896968) on 2026-08-12 | Passing |
+| Apache Kafka 4.3.1 | three-broker KRaft | KIP-848 consumer protocol; coordinator broker-stop recovery | [`Live Kafka Smoke`, run `31557534371`](https://github.com/TaeeunKil/kafrust/actions/runs/31557534371) on 2026-08-12 | Passing |
 | Apache Kafka 3.7.2 | single-node KRaft with StandardAuthorizer | PLAINTEXT ACL and client-quota admin | `Live Kafka Smoke` ACL authorizer job, manual run `31459874329` on 2026-08-11 | Passing |
 | Apache Kafka 3.7.2 | single-node KRaft | SASL_SSL SCRAM credential administration | `Live Kafka Smoke` SASL_SSL SCRAM job, manual run `31461980967` on 2026-08-11 | Passing |
 | Apache Kafka 3.7.2 | three-broker KRaft | controller-routed partition reassignment | `Live Kafka Smoke` multi-broker job, manual run `31462962605` on 2026-08-11 | Passing |
-| Apache Kafka 3.7.2 | three-broker KRaft | cooperative-sticky consumer protocol, multi-member transfer, transient-member rollback, and member-loss recovery | `Live Kafka Smoke` multi-broker job, main run `31474626799` on 2026-08-11 | Passing |
+| Apache Kafka 3.7.2 | three-broker KRaft | cooperative-sticky consumer protocol, multi-member transfer, transient-member rollback, member-loss recovery, and rebalance listener lifecycle | [`Live Kafka Smoke`, run `31557534371`](https://github.com/TaeeunKil/kafrust/actions/runs/31557534371) on 2026-08-12 | Passing |
 | Apache Kafka 3.7.2 | three-broker KRaft | SASL_PLAINTEXT with SASL/PLAIN; transaction/group coordinator, producer, and direct-consumer broker-stop recovery | [`Live Kafka Smoke`, run `31554396594`](https://github.com/TaeeunKil/kafrust/actions/runs/31554396594) on 2026-08-12 | Passing |
 | Apache Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1 | single-node KRaft | Produce `acks=0` immediate and batch dispatch | `Live Kafka Smoke`, manual run `31464933145` on 2026-08-11 | Passing; broker acceptance is intentionally unconfirmed |
 
@@ -195,12 +195,12 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
   explicit leave. The same group is run twice to exercise committed-offset
   recovery.
   The dedicated Kafka 4.3.1 profile passed this path in
-  [`Live Kafka Smoke` run `31555896968`](https://github.com/TaeeunKil/kafrust/actions/runs/31555896968).
+  [`Live Kafka Smoke` run `31557534371`](https://github.com/TaeeunKil/kafrust/actions/runs/31557534371).
 - Kafka 4.3.1 three-broker KIP-848 coordinator recovery: the active
   coordinator is stopped after the first poll, and the foreground group
   process completes through the remaining brokers before the stopped broker is
   restarted. This path passed in
-  [`Live Kafka Smoke` run `31555896968`](https://github.com/TaeeunKil/kafrust/actions/runs/31555896968).
+  [`Live Kafka Smoke` run `31557534371`](https://github.com/TaeeunKil/kafrust/actions/runs/31557534371).
 - Consumer group assignments without committed offsets resolve
   `OffsetResetPolicy::Earliest` or `Latest` from the partition leader. Manual
   `Live Kafka Smoke` run `30229718813` passed both policies on Kafka 3.7.2,
