@@ -92,8 +92,8 @@ use kafrust_protocol::api::produce::{
     RecordBatchIdentity, RecordBatchMessage,
 };
 use kafrust_protocol::api::sasl::{
-    SaslAuthenticateRequestV1, SaslAuthenticateResponseV1, SaslHandshakeRequestV1,
-    SaslHandshakeResponseV1,
+    SaslAuthenticateRequestV1, SaslAuthenticateRequestV2, SaslAuthenticateResponseV1,
+    SaslAuthenticateResponseV2, SaslHandshakeRequestV1, SaslHandshakeResponseV1,
 };
 use kafrust_protocol::api::sync_group::{
     SyncGroupAssignment, SyncGroupRequestV2, SyncGroupRequestV3, SyncGroupResponseV2,
@@ -346,7 +346,7 @@ impl Client {
                 .oauthbearer_token_for_auth(self.request_timeout)
                 .await?;
             let response = self
-                .sasl_authenticate_v1(sasl_oauthbearer_auth_bytes_with_token(
+                .sasl_authenticate_v2(sasl_oauthbearer_auth_bytes_with_token(
                     &credentials,
                     &token,
                 )?)
@@ -398,6 +398,26 @@ impl Client {
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         let response = SaslAuthenticateResponseV1::decode_body(&mut decoder)?;
+        if response.error_code == 0 && response.auth_bytes.is_empty() {
+            self.sasl_session_lifetime_ms = Some(response.session_lifetime_ms);
+            self.sasl_authenticated_at = Some(std::time::Instant::now());
+        }
+        Ok(response)
+    }
+
+    pub(crate) async fn sasl_authenticate_v2(
+        &mut self,
+        auth_bytes: Vec<u8>,
+    ) -> Result<SaslAuthenticateResponseV2> {
+        let request = SaslAuthenticateRequestV2 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            auth_bytes,
+        };
+        let response = self.send_request_traced(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        let response = SaslAuthenticateResponseV2::decode_body(&mut decoder)?;
         if response.error_code == 0 && response.auth_bytes.is_empty() {
             self.sasl_session_lifetime_ms = Some(response.session_lifetime_ms);
             self.sasl_authenticated_at = Some(std::time::Instant::now());
@@ -2014,16 +2034,22 @@ mod tests {
         let (client_stream, mut broker_stream) = tokio::io::duplex(1024);
         let broker = tokio::spawn(async move {
             let request = read_test_frame(&mut broker_stream).await;
-            assert_eq!(&request[0..4], &[0, 36, 0, 1]);
+            assert_eq!(&request[0..4], &[0, 36, 0, 2]);
             assert_eq!(&request[4..8], &[0, 0, 0, 1]);
-            assert_eq!(&request[14..], b"n,,\x01auth=Bearer fresh-token\x01\x01");
+            assert_eq!(&request[8..10], &[0xff, 0xff]);
+            assert_eq!(request[10], 0); // request header tagged fields
+            assert_eq!(request[11], 30); // compact auth bytes length plus one
+            assert_eq!(&request[12..41], b"n,,\x01auth=Bearer fresh-token\x01\x01");
+            assert_eq!(request[41], 0); // request tagged fields
 
             let response = [
                 0, 0, 0, 1, // correlation id
+                0, // response header tagged fields
                 0, 0, // error code
-                0xff, 0xff, // null error message
-                0, 0, 0, 0, // auth bytes
+                0, // null compact error message
+                1, // empty compact auth bytes
                 0, 0, 0, 0, 0, 0, 3, 0xe8, // session lifetime ms: 1000
+                0,    // response tagged fields
             ];
             broker_stream
                 .write_all(&(response.len() as i32).to_be_bytes())

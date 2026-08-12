@@ -694,7 +694,7 @@ async fn authenticate_sasl_oauthbearer(
         .oauthbearer_token_for_auth(token_timeout)
         .await?;
     let response = client
-        .sasl_authenticate_v1(sasl_oauthbearer_auth_bytes_with_token(credentials, &token)?)
+        .sasl_authenticate_v2(sasl_oauthbearer_auth_bytes_with_token(credentials, &token)?)
         .await?;
     if response.error_code != 0 {
         return Err(client.broker_error(
@@ -1272,10 +1272,10 @@ mod tests {
 
             let authenticate = read_frame(&mut socket).await;
             assert_eq!(
-                sasl_authenticate_auth_bytes(&authenticate, 2),
+                sasl_authenticate_v2_auth_bytes(&authenticate, 2),
                 b"n,a=alice,\x01auth=Bearer jwt-token\x01\x01"
             );
-            write_sasl_authenticate_response(&mut socket, 2, &[]).await;
+            write_sasl_authenticate_v2_response(&mut socket, 2, &[]).await;
         });
 
         let client = ClientConfig::new([addr.to_string()])
@@ -1312,7 +1312,7 @@ mod tests {
             .await;
 
             let _authenticate = read_frame(&mut socket).await;
-            write_sasl_authenticate_response(&mut socket, 2, br#"{"status":"invalid_token"}"#)
+            write_sasl_authenticate_v2_response(&mut socket, 2, br#"{"status":"invalid_token"}"#)
                 .await;
         });
 
@@ -1608,6 +1608,18 @@ mod tests {
         &frame[14..]
     }
 
+    fn sasl_authenticate_v2_auth_bytes(frame: &[u8], correlation_id: i32) -> &[u8] {
+        assert_eq!(&frame[0..2], &[0, 36]);
+        assert_eq!(&frame[2..4], &[0, 2]);
+        assert_eq!(&frame[4..8], &correlation_id.to_be_bytes());
+        assert_eq!(&frame[8..10], &[0xff, 0xff]);
+        assert_eq!(frame[10], 0); // request header tagged fields
+        let auth_len = usize::from(frame[11]) - 1;
+        assert_eq!(frame.len(), 12 + auth_len + 1);
+        assert_eq!(frame[12 + auth_len], 0); // request tagged fields
+        &frame[12..12 + auth_len]
+    }
+
     async fn write_sasl_authenticate_response(
         socket: &mut tokio::net::TcpStream,
         correlation_id: i32,
@@ -1620,6 +1632,23 @@ mod tests {
         frame.extend_from_slice(&(auth_bytes.len() as i32).to_be_bytes());
         frame.extend_from_slice(auth_bytes);
         frame.extend_from_slice(&0i64.to_be_bytes());
+        write_frame(socket, &frame).await;
+    }
+
+    async fn write_sasl_authenticate_v2_response(
+        socket: &mut tokio::net::TcpStream,
+        correlation_id: i32,
+        auth_bytes: &[u8],
+    ) {
+        let mut frame = Vec::with_capacity(14 + auth_bytes.len());
+        frame.extend_from_slice(&correlation_id.to_be_bytes());
+        frame.push(0); // response header tagged fields
+        frame.extend_from_slice(&0i16.to_be_bytes());
+        frame.push(0); // null compact error message
+        frame.push((auth_bytes.len() + 1) as u8);
+        frame.extend_from_slice(auth_bytes);
+        frame.extend_from_slice(&0i64.to_be_bytes());
+        frame.push(0); // response tagged fields
         write_frame(socket, &frame).await;
     }
 
