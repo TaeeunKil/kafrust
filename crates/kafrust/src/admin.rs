@@ -1252,22 +1252,107 @@ impl AdminClient {
         topics: &[DeleteRecordsTopic],
         options: DeleteRecordsOptions,
     ) -> Result<DeleteRecordsResult> {
-        let mut bootstrap = self.config.clone().connect().await?;
-        let metadata = bootstrap
-            .metadata(Some(
-                topics.iter().map(|topic| topic.name.clone()).collect(),
-            ))
-            .await?;
-        let requests = delete_records_requests(&metadata, topics)?;
-        let mut responses = Vec::with_capacity(requests.len());
-        for (broker_addr, topics) in requests {
-            let mut client = self.config.connect_broker(broker_addr).await?;
-            responses.push(
-                client
-                    .delete_records_v1(topics, duration_millis_i32(options.timeout))
-                    .await?,
-            );
-        }
+        // DeleteRecords is idempotent for a fixed topic/partition/offset, so a
+        // dropped request or a moved leader can safely restart the full route.
+        let mut retry = 0;
+        let responses = 'attempt: loop {
+            let mut bootstrap = match self.config.clone().connect().await {
+                Ok(client) => client,
+                Err(error)
+                    if retry < self.max_retries && is_retryable_admin_leader_error(&error) =>
+                {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    continue 'attempt;
+                }
+                Err(error) => return Err(error),
+            };
+            let metadata = match bootstrap
+                .metadata(Some(
+                    topics.iter().map(|topic| topic.name.clone()).collect(),
+                ))
+                .await
+            {
+                Ok(metadata) => metadata,
+                Err(error)
+                    if retry < self.max_retries && is_retryable_admin_leader_error(&error) =>
+                {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    continue 'attempt;
+                }
+                Err(error) => return Err(error),
+            };
+            let requests = match delete_records_requests(&metadata, topics) {
+                Ok(requests) => requests,
+                Err(error)
+                    if retry < self.max_retries && is_retryable_admin_leader_error(&error) =>
+                {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    continue 'attempt;
+                }
+                Err(error) => return Err(error),
+            };
+            let mut responses = Vec::with_capacity(requests.len());
+            for (broker_addr, request_topics) in requests {
+                let mut client = match self.config.connect_broker(broker_addr).await {
+                    Ok(client) => client,
+                    Err(error)
+                        if retry < self.max_retries && is_retryable_admin_leader_error(&error) =>
+                    {
+                        retry += 1;
+                        self.config.record_retry();
+                        tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                        continue 'attempt;
+                    }
+                    Err(error) => return Err(error),
+                };
+                match client
+                    .delete_records_v1(request_topics, duration_millis_i32(options.timeout))
+                    .await
+                {
+                    Ok(response) => responses.push(response),
+                    Err(error)
+                        if retry < self.max_retries && is_retryable_admin_leader_error(&error) =>
+                    {
+                        retry += 1;
+                        self.config.record_retry();
+                        tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                        continue 'attempt;
+                    }
+                    Err(error) => return Err(error),
+                }
+            }
+
+            let retryable = responses.iter().any(|response| {
+                response.topics.iter().any(|topic| {
+                    topic
+                        .partitions
+                        .iter()
+                        .any(|partition| is_retryable_admin_leader_code(partition.error_code))
+                })
+            });
+            if retry < self.max_retries && retryable {
+                for response in &responses {
+                    for topic in &response.topics {
+                        for partition in &topic.partitions {
+                            if partition.error_code != 0 {
+                                self.config.record_broker_error();
+                            }
+                        }
+                    }
+                }
+                retry += 1;
+                self.config.record_retry();
+                tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                continue 'attempt;
+            }
+            break responses;
+        };
 
         let mut returned_partitions = 0usize;
         for response in &responses {
@@ -7917,6 +8002,66 @@ mod tests {
         assert_eq!(result.topics()[1].partitions()[0].partition_index(), 2);
         assert_eq!(metrics.snapshot().broker_errors, 1);
         assert_eq!(result.clone().into_topics().len(), 2);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn retries_delete_records_after_dropped_leader_request() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let metadata_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+            write_frame(
+                &mut bootstrap,
+                &delete_records_metadata_response(addr.port()),
+            )
+            .await;
+
+            let (mut dropped_leader, _) = listener.accept().await.unwrap();
+            let request = read_frame(&mut dropped_leader).await;
+            assert_eq!(&request[0..4], &[0, 21, 0, 1]);
+            drop(dropped_leader);
+
+            let (mut retry_bootstrap, _) = listener.accept().await.unwrap();
+            let metadata_request = read_frame(&mut retry_bootstrap).await;
+            assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+            write_frame(
+                &mut retry_bootstrap,
+                &delete_records_metadata_response(addr.port()),
+            )
+            .await;
+
+            let (mut retry_leader, _) = listener.accept().await.unwrap();
+            let request = read_frame(&mut retry_leader).await;
+            assert_eq!(&request[0..4], &[0, 21, 0, 1]);
+            write_frame(&mut retry_leader, &delete_records_response()).await;
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        )
+        .max_retries(1);
+
+        let result = admin
+            .delete_records(
+                &[
+                    DeleteRecordsTopic::new("orders")
+                        .partition(0, 100)
+                        .partition(1, -1),
+                    DeleteRecordsTopic::new("payments").partition(2, 40),
+                ],
+                DeleteRecordsOptions::new(),
+            )
+            .await
+            .unwrap();
+
+        assert!(result.has_errors());
+        assert_eq!(result.topics()[0].partitions()[0].low_watermark(), 100);
+        assert_eq!(metrics.snapshot().retries, 1);
         server.await.unwrap();
     }
 

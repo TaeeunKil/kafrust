@@ -981,9 +981,12 @@ Implemented evidence:
   Kafka 3.7.2 three-broker profile.
 - `AdminClient::delete_records` implements DeleteRecords v1 with metadata-based
   partition-leader routing, groups requests per broker, and preserves each
-  partition's low watermark and error code. Focused protocol and injected
-  multi-broker routing tests cover partial success and broker error metrics;
-  live destructive-retention qualification remains a separate opt-in workflow.
+  partition's low watermark and error code. Fixed-offset deletion is retried
+  after transient transport, leader-movement, or retryable partition errors
+  through fresh metadata within the Admin retry budget. Focused protocol and
+  injected multi-broker routing tests cover partial success, broker error
+  metrics, and a dropped leader request; live destructive-retention
+  qualification remains a separate opt-in workflow.
 - `AdminClient::describe_producers` implements DescribeProducers v0 with
   metadata-based partition-leader routing and preserves producer IDs, epochs,
   sequence state, transaction offsets, and per-partition errors. The paired

@@ -373,6 +373,9 @@ partitions by their current leaders, and sends DeleteRecords v1 to each leader.
 This matters in multi-broker clusters because a bootstrap broker is not
 necessarily the leader for every requested partition. The result preserves
 each partition's low watermark and broker error, including partial success.
+Because deleting through a fixed offset is idempotent, transient transport,
+leader-movement, and retryable partition errors are retried through fresh
+metadata within the configured Admin retry budget.
 An offset of `-1` asks Kafka to delete through the current high watermark.
 
 ## Describe Producers
