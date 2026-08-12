@@ -1696,7 +1696,12 @@ impl ConsumerGroup {
         })
     }
 
-    async fn rejoin(&mut self) -> Result<()> {
+    /// Explicitly rejoins the consumer group and refreshes its assignment.
+    ///
+    /// For regex subscriptions this resolves the broker topic list again
+    /// before the join. Pending per-record commit offsets are retained only
+    /// for partitions that remain assigned after the rejoin.
+    pub async fn rejoin(&mut self) -> Result<()> {
         let previous_assignments = self.consumer.assignments().to_vec();
         self.notify_rebalance(RebalancePhase::Before, &previous_assignments);
         let paused = self

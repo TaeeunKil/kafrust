@@ -52,9 +52,27 @@ async fn main() -> kafrust::Result<()> {
         ));
     }
 
+    group.rejoin().await?;
+    let rejoined_topics = group
+        .assignments()
+        .iter()
+        .map(|assignment| assignment.topic().to_owned())
+        .collect::<BTreeSet<_>>();
+    if !expected_topics.is_empty() && !expected_topics.is_subset(&rejoined_topics) {
+        return Err(Error::Unsupported(
+            "regex subscription rejoin did not assign every expected topic",
+        ));
+    }
+    if rejoined_topics.is_empty() {
+        return Err(Error::Unsupported(
+            "regex subscription rejoin produced no assignments",
+        ));
+    }
+
     println!(
-        "regex subscription {pattern:?} assigned topics: {}",
-        assigned_topics.into_iter().collect::<Vec<_>>().join(",")
+        "regex subscription {pattern:?} assigned topics: {} then {}",
+        assigned_topics.into_iter().collect::<Vec<_>>().join(","),
+        rejoined_topics.into_iter().collect::<Vec<_>>().join(",")
     );
     println!("polled {} records", records.len());
     group.leave().await?;
