@@ -56,14 +56,15 @@ DescribeProducers leader-stop recovery gates.
 
 The latest complete matrix, ListTransactions, rack-aware, and flexible Produce
 qualification in
-[`31644710449`](https://github.com/TaeeunKil/kafrust/actions/runs/31644710449)
-passed at commit `4ab3226`. Its Kafka 3.7.2 three-broker profile configured
+[`31645842282`](https://github.com/TaeeunKil/kafrust/actions/runs/31645842282)
+passed at commit `3536376`. Its Kafka 3.7.2 three-broker profile configured
 broker racks and Kafka's `RackAwareReplicaSelector`; the direct consumer sent
 Fetch v12 with `client_rack`, fetched records, and observed a preferred replica
 route. The single-node profiles also passed the flexible Produce negotiation
-gate: Kafka 4.3.1 selected Produce v11, while Kafka 3.7.2, 3.8.1, and 3.9.1
-selected Produce v9. This qualifies the v11-first/v9-fallback path on the
-documented single-node matrix. ListTransactions returned broker-sharded
+gate: Kafka 4.3.1 selected Produce v12, Kafka 3.8.1 and 3.9.1 selected Produce
+v11, and Kafka 3.7.2 selected Produce v9. This qualifies the
+v12-first/v11-second/v9-fallback path on the documented single-node matrix.
+ListTransactions returned broker-sharded
 transaction listings on the same single-node profiles and the Kafka 3.7.2
 three-broker profile.
 The same consumer
@@ -245,7 +246,7 @@ other coordinator-routed writes remain separate qualification items.
 | Apache Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1 | single-node KRaft | classic consumer-group offset listing and administrative alteration | [`Live Kafka Smoke`, run `31595485915`](https://github.com/TaeeunKil/kafrust/actions/runs/31595485915) on 2026-08-12 | Passing |
 | Apache Kafka 3.7.2 | three-broker KRaft; TLS; SASL_PLAINTEXT; SASL_SSL with SCRAM-SHA-256 | classic consumer-group offset listing and administrative alteration | [`Live Kafka Smoke`, run `31597505667`](https://github.com/TaeeunKil/kafrust/actions/runs/31597505667) on 2026-08-12 | Passing |
 | Apache Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1 | complete 17-job KRaft matrix; plaintext, TLS, SASL, OAUTHBEARER, ACL, multi-broker, and KIP-848 profiles | Full smoke plus Kafka 3.7.2 multi-broker DeleteRecords and DescribeProducers leader-stop recovery | [`Live Kafka Smoke`, run `31630339333`](https://github.com/TaeeunKil/kafrust/actions/runs/31630339333) on 2026-08-13 | Passing |
-| Apache Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1 | complete 17-job KRaft matrix; plaintext, TLS, SASL, OAUTHBEARER, ACL, multi-broker, and KIP-848 profiles | ListTransactions broker-shard aggregation, flexible Produce v11/v9 negotiation, rack-aware Fetch v12, and existing failover gates | [`Live Kafka Smoke`, run `31644710449`](https://github.com/TaeeunKil/kafrust/actions/runs/31644710449) on 2026-08-13 | Passing; ListTransactions examples returned records on single-node and 3.7.2 multi-broker profiles |
+| Apache Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1 | complete 17-job KRaft matrix; plaintext, TLS, SASL, OAUTHBEARER, ACL, multi-broker, and KIP-848 profiles | ListTransactions broker-shard aggregation, flexible Produce v12/v11/v9 negotiation, rack-aware Fetch v12, and existing failover gates | [`Live Kafka Smoke`, run `31645842282`](https://github.com/TaeeunKil/kafrust/actions/runs/31645842282) on 2026-08-13 | Passing; Produce selected v12 on Kafka 4.3.1, v11 on 3.8.1/3.9.1, and v9 on 3.7.2; ListTransactions examples returned records on single-node and 3.7.2 multi-broker profiles |
 
 ## Verified Paths
 
@@ -340,17 +341,18 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
 - High-level producer metadata lookup, leader routing, flexible `ApiVersions v3`
   capability negotiation, negotiated Produce API selection, single-record send,
   batch send, gzip-, Snappy-, LZ4-, and Zstd-compressed batch send, and buffered
-  send with `acks=1`. The current path prefers flexible Produce v11, then v9,
-  RecordBatch on brokers that advertise it, then falls back to Produce v7, v3,
-  or v2. The focused v9/v11 request fixtures pass locally, and the complete
-  live matrix passed the explicit flexible-version negotiation gate in
-  [`31643246432`](https://github.com/TaeeunKil/kafrust/actions/runs/31643246432):
-  Kafka 4.3.1 selected v11 and Kafka 3.7.2, 3.8.1, and 3.9.1 selected v9.
+  send with `acks=1`. The current path prefers flexible Produce v12, then v11,
+  then v9, RecordBatch on brokers that advertise it, then falls back to Produce
+  v7, v3, or v2. The focused v9/v11/v12 request fixtures pass locally, and the
+  complete live matrix passed the explicit flexible-version negotiation gate in
+  [`31645842282`](https://github.com/TaeeunKil/kafrust/actions/runs/31645842282):
+  Kafka 4.3.1 selected v12, Kafka 3.8.1 and 3.9.1 selected v11, and Kafka
+  3.7.2 selected v9.
 - `AdminClient::list_transactions` queries every metadata broker, negotiates
   ListTransactions v1 when available, falls back to v0, and aggregates the
   broker-local transaction-state shards. The complete 17-job matrix passed the
   unfiltered listing example in
-  [`31644710449`](https://github.com/TaeeunKil/kafrust/actions/runs/31644710449).
+  [`31645842282`](https://github.com/TaeeunKil/kafrust/actions/runs/31645842282).
 - Sequential producer sends to the same leader reuse one authenticated broker
   connection and its negotiated capability response; a focused injected-broker
   test verifies one ApiVersions exchange followed by two Produce requests on
@@ -437,7 +439,7 @@ with zero in-flight requests and buffered records.
   identity and sequence metadata. Manual run `29991254722` passed these paths
   against Kafka 3.7.2 and Kafka 4.3.1.
 - Opt-in alpha transactional produce using transaction coordinator discovery,
-  transactional `InitProducerId v0`, `AddPartitionsToTxn v0`, Produce v11/v9/v7/v3,
+  transactional `InitProducerId v0`, `AddPartitionsToTxn v0`, Produce v12/v11/v9/v7/v3,
   and `EndTxn v0`. Manual run `29994041530` passed a committed transaction
   followed by an aborted transaction against Kafka 3.7.2 and Kafka 4.3.1.
 - Direct and group consumer `ReadCommitted` isolation through Fetch v4.
@@ -465,16 +467,16 @@ with zero in-flight requests and buffered records.
   three-broker profile, then passed `EndTxn` commit and read-committed
   fetch-back before restoring the broker. The existing broker-stop failover
   sequence and all seven other broker/security profiles also passed.
-- Gzip Produce v11/v9/v3 RecordBatch encoding and Fetch v4 RecordBatch decoding are
+- Gzip Produce v12/v11/v9/v3 RecordBatch encoding and Fetch v4 RecordBatch decoding are
   covered by focused tests and the plaintext live smoke profile; flexible
-  Produce v11/v9 negotiation is live-qualified in the latest matrix.
-- Snappy Produce v11/v9/v3 RecordBatch encoding and Fetch v4 RecordBatch decoding are
+  Produce v12/v11/v9 negotiation is live-qualified in the latest matrix.
+- Snappy Produce v12/v11/v9/v3 RecordBatch encoding and Fetch v4 RecordBatch decoding are
   covered by focused tests using Kafka-compatible Xerial framing and by the
   plaintext single-node and multi-broker live smoke profiles.
-- LZ4 Produce v11/v9/v3 RecordBatch encoding and Fetch v4 RecordBatch decoding are
+- LZ4 Produce v12/v11/v9/v3 RecordBatch encoding and Fetch v4 RecordBatch decoding are
   covered by focused standard-frame and decompression-limit tests and by the
   plaintext single-node and multi-broker live smoke profiles.
-- Zstd Produce v11/v9/v7 RecordBatch encoding and Fetch v4 RecordBatch decoding are
+- Zstd Produce v12/v11/v9/v7 RecordBatch encoding and Fetch v4 RecordBatch decoding are
   covered by focused standard-frame, declared-window, and decompression-limit
   tests and by the plaintext single-node and multi-broker live smoke profiles.
 - Direct consumer fetch from an assigned topic partition using Fetch v4 response

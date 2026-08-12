@@ -416,13 +416,14 @@ Verified paths currently include:
 - The complete 17-job matrix also passed at commit `25d614a` in
   [`31627790408`](https://github.com/TaeeunKil/kafrust/actions/runs/31627790408)
   after the ACL authorizer example added bounded post-create visibility polling.
-- The latest complete 17-job matrix passed at commit `4ab3226` in
-  [`31644710449`](https://github.com/TaeeunKil/kafrust/actions/runs/31644710449).
+- The latest complete 17-job matrix passed at commit `3536376` in
+  [`31645842282`](https://github.com/TaeeunKil/kafrust/actions/runs/31645842282).
   It included ListTransactions across the Kafka 3.7.2, 3.8.1, 3.9.1, and
   4.3.1 single-node profiles plus the 3.7.2 multi-broker profile. It also
-  included flexible Produce v11/v9 negotiation, rack-aware Fetch v12,
-  DeleteRecords and DescribeProducers leader-stop recovery, and the supported
-  security, ACL, failover, and KIP-848 profiles.
+  included flexible Produce v12/v11/v9 negotiation (Kafka 4.3.1 selected v12;
+  Kafka 3.8.1 and 3.9.1 selected v11; Kafka 3.7.2 selected v9), rack-aware
+  Fetch v12, DeleteRecords and DescribeProducers leader-stop recovery, and
+  the supported security, ACL, failover, and KIP-848 profiles.
 
 See [Compatibility](docs/compatibility.md) and
 [Broker Roundtrip](docs/broker-roundtrip.md) for the current evidence.
@@ -470,9 +471,9 @@ See [Compatibility](docs/compatibility.md) and
   this covers replica selection, not every possible rack or security topology.
 - `ProducerConfig::partitioner` supports thread-safe custom routing for records
   without explicit partitions across immediate, batch, and buffered sends.
-- Gzip, Snappy, LZ4, and Zstd compression prefer flexible Produce v11, then v9,
-  RecordBatch encoding when the broker advertises it, with Produce v7/v3
-  fallbacks. Fetch v4
+- Gzip, Snappy, LZ4, and Zstd compression prefer flexible Produce v12, then
+  v11, then v9, RecordBatch encoding when the broker advertises it, with
+  Produce v7/v3 fallbacks. Fetch v4
   decodes all four codecs. They are
   verified against Kafka `3.7.2` plaintext single-node and multi-broker smoke
   profiles and the single-node TLS profile. Snappy uses Kafka-compatible Xerial

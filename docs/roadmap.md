@@ -1535,18 +1535,19 @@ Implemented evidence:
 - Direct consumer fetch and watermark paths reuse a successful partition-leader
   `Client` by broker address and evict it on request failure. A focused
   injected-broker test verifies two sequential Fetch requests on one socket.
-- Producer capability negotiation now prefers flexible Produce v11, then v9,
-  for RecordBatch sends, including transactional and no-ack paths, while
-  retaining Produce v7, v3, and v2 fallbacks. Focused request/response fixtures
-  and producer selection tests cover both flexible versions. The complete
-  17-job live matrix passed the flexible-version negotiation gate in
-  [`31643246432`](https://github.com/TaeeunKil/kafrust/actions/runs/31643246432):
-  Kafka 4.3.1 selected v11 and Kafka 3.7.2, 3.8.1, and 3.9.1 selected v9.
+- Producer capability negotiation now prefers flexible Produce v12, then v11,
+  then v9, for RecordBatch sends, including transactional and no-ack paths,
+  while retaining Produce v7, v3, and v2 fallbacks. Focused request/response
+  fixtures and producer selection tests cover all three flexible versions. The
+  complete 17-job live matrix passed the flexible-version negotiation gate in
+  [`31645842282`](https://github.com/TaeeunKil/kafrust/actions/runs/31645842282):
+  Kafka 4.3.1 selected v12, Kafka 3.8.1 and 3.9.1 selected v11, and Kafka
+  3.7.2 selected v9.
 - `AdminClient::list_transactions` now queries every metadata broker, uses
   ListTransactions v1 when advertised, falls back to v0, and aggregates
   broker-local transaction-state shards. Focused protocol and injected-broker
   tests pass, and the complete 17-job live matrix passed the listing example
-  in [`31644710449`](https://github.com/TaeeunKil/kafrust/actions/runs/31644710449).
+  in [`31645842282`](https://github.com/TaeeunKil/kafrust/actions/runs/31645842282).
 - Request-level observability records structured terminal fields for successful,
   failed, fire-and-forget, and cancelled broker requests without recording
   request payloads or credential material. The span-lifecycle guard is covered
@@ -1806,11 +1807,17 @@ Implemented evidence:
   [`31640494509`](https://github.com/TaeeunKil/kafrust/actions/runs/31640494509)
   after adding the flexible Produce v9 negotiation gate while retaining the
   rack-aware Fetch v12 and multi-broker recovery gates.
-- The latest complete 17-job matrix passed at commit `9149d8f` in
+- A complete 17-job matrix passed at commit `9149d8f` in
   [`31643246432`](https://github.com/TaeeunKil/kafrust/actions/runs/31643246432)
   after adding flexible Produce v11 preference with v9 fallback. Kafka 4.3.1
   selected v11, while Kafka 3.7.2, 3.8.1, and 3.9.1 selected v9.
-- The latest complete 17-job matrix passed at commit `4ab3226` in
+- A complete 17-job matrix passed at commit `4ab3226` in
   [`31644710449`](https://github.com/TaeeunKil/kafrust/actions/runs/31644710449)
   after adding ListTransactions v0/v1 protocol support, broker-shard
   aggregation, and a live admin example.
+- The latest complete 17-job matrix passed at commit `3536376` in
+  [`31645842282`](https://github.com/TaeeunKil/kafrust/actions/runs/31645842282)
+  after adding flexible Produce v12 preference. Kafka 4.3.1 selected v12,
+  Kafka 3.8.1 and 3.9.1 selected v11, and Kafka 3.7.2 selected v9; all
+  existing security, failover, Admin, compression, transaction, and KIP-848
+  gates remained green.
