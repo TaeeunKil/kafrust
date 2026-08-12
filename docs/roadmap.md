@@ -918,7 +918,7 @@ Implemented evidence:
   three-broker live profile also gates DescribeGroups v1 and
   DescribeTransactions v0 before transmission, stops their current
   coordinators, and verifies `retries=1` after rediscovery in
-  [`31610758163`](https://github.com/TaeeunKil/kafrust/actions/runs/31610758163).
+  [`31611596314`](https://github.com/TaeeunKil/kafrust/actions/runs/31611596314).
 - KIP-848 member-aware administrative offsets now use OffsetFetch v9 and
   OffsetCommit v9 with the joined member ID, member epoch, optional static
   instance ID, `require_stable`, and committed leader epoch. The APIs reuse
@@ -929,9 +929,9 @@ Implemented evidence:
   SASL_SSL/SCRAM live qualification passed in
   [`31607006237`](https://github.com/TaeeunKil/kafrust/actions/runs/31607006237).
   Target authorization and broader member-failure workloads remain release
-  gates. The live DeleteRecords, DescribeProducers, DescribeTransactions, and
-  DescribeGroups broker-stop gates are covered by
-  [`31610758163`](https://github.com/TaeeunKil/kafrust/actions/runs/31610758163);
+  gates. The live DeleteRecords, DescribeProducers, DescribeTransactions,
+  DescribeGroups, and OffsetFetch broker-stop gates are covered by
+  [`31611596314`](https://github.com/TaeeunKil/kafrust/actions/runs/31611596314);
   other coordinator-routed Admin writes remain separate workload-specific
   release gates.
 - DescribeAcls v1, CreateAcls v1, and DeleteAcls v1 expose typed ACL bindings
@@ -996,7 +996,7 @@ Implemented evidence:
   qualification remains a separate opt-in workflow. The live three-broker
   profile now gates the request before TCP transmission, stops its current
   leader, and verifies fresh-metadata recovery with `retries=1` in
-  [`31610758163`](https://github.com/TaeeunKil/kafrust/actions/runs/31610758163).
+  [`31611596314`](https://github.com/TaeeunKil/kafrust/actions/runs/31611596314).
 - `AdminClient::describe_producers` implements DescribeProducers v0 with
   metadata-based partition-leader routing and preserves producer IDs, epochs,
   sequence state, transaction offsets, and per-partition errors. The paired
@@ -1020,7 +1020,7 @@ Implemented evidence:
   injection remain workload-specific release gates. The same live profile now
   also gates DescribeProducers v0 before transmission, stops its current
   leader, and verifies `retries=1` after fresh-metadata recovery in
-  [`31610758163`](https://github.com/TaeeunKil/kafrust/actions/runs/31610758163).
+  [`31611596314`](https://github.com/TaeeunKil/kafrust/actions/runs/31611596314).
 - Manual `Live Kafka Smoke` run `30059517473` passed CreateTopics v2 and its
   follow-up Metadata v1 description on 2026-07-24 against Kafka 3.7.2 and
   4.3.1 single-node brokers and the Kafka 3.7.2 three-broker cluster.
