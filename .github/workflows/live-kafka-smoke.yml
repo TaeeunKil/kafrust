@@ -223,6 +223,8 @@ jobs:
         env:
           KAFRUST_GROUP_ID: kafrust-consumer-protocol-${{ matrix.kafka-version }}-${{ github.run_id }}
           KAFRUST_GROUP_PROTOCOL: consumer
+          KAFRUST_PARTITION_QUEUE: "1"
+          KAFRUST_PARTITION_QUEUE_REQUIRE_RECORD: "1"
         run: cargo run -p kafrust --example consumer_group_poll
 
       - name: Run KIP-848 background heartbeat rejoin example
