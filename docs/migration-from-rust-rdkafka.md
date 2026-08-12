@@ -45,7 +45,7 @@ the currently supported settings through typed builders.
 | `enable.idempotence` | `.enable_idempotence(true)` | Initializes producer identity and partition sequences. |
 | `transactional.id` | `.transactional_id(...)` | Enables the alpha transactional path. |
 | `group.id` | `ConsumerGroupConfig::new(brokers, group_id)` | Group ID is a required typed argument. |
-| `enable.auto.commit=true` | `.enable_auto_commit(true).auto_commit_interval_ms(...)` | Queues current assignment positions after successful polls and flushes them through a bounded background worker; defaults to `false` for explicit-commit compatibility. |
+| `enable.auto.commit=true` | `.enable_auto_commit(true).auto_commit_interval_ms(...)` | Queues current assignment positions after successful polls and flushes them through a bounded background worker; defaults to `false` for explicit-commit compatibility. Classic and Kafka 4.3.1 KIP-848 paths are live-verified in [`31593984640`](https://github.com/TaeeunKil/kafrust/actions/runs/31593984640). |
 | `enable.auto.commit=false` | omit `.enable_auto_commit(true)` | Use `commit_offsets` or `commit_record` plus `commit_queued_offsets` explicitly. |
 | `auto.offset.reset=earliest` | `.offset_reset_policy(OffsetResetPolicy::Earliest)` | Used only when an assigned partition has no committed offset. |
 | `auto.offset.reset=latest` | `.offset_reset_policy(OffsetResetPolicy::Latest)` | Resolves the current log end from the partition leader during group join. |

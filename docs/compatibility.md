@@ -41,6 +41,14 @@ documented leader/coordinator routing and successful authorization paths; target
 permissions, destructive operational policy, and broader fault-injection
 behavior still require workload-specific qualification.
 
+The complete `Live Kafka Smoke` matrix in
+[`31593984640`](https://github.com/TaeeunKil/kafrust/actions/runs/31593984640)
+also passed the opt-in automatic consumer-group commit example across the
+classic protocol on Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1, plus the KIP-848
+consumer protocol on Kafka 4.3.1. The qualification covers assignment-position
+queueing, bounded interval flush, leave, rejoin, and restored committed
+positions; it does not claim exactly-once processing semantics.
+
 | Broker | Mode | Security | Verification | Status |
 | --- | --- | --- | --- | --- |
 | Apache Kafka 3.7.2 | single-node KRaft | PLAINTEXT | `Live Kafka Smoke`, manual run `30067372344` on 2026-07-24 | Passing |
@@ -69,6 +77,7 @@ behavior still require workload-specific qualification.
 | Apache Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1 | single-node KRaft | DescribeProducers v0 leader routing and DescribeTransactions v0 coordinator routing | [`Live Kafka Smoke`, run `31589394777`](https://github.com/TaeeunKil/kafrust/actions/runs/31589394777) on 2026-08-12 | Passing |
 | Apache Kafka 3.7.2 | three-broker KRaft; PLAINTEXT and SASL_SSL SCRAM failover profiles | DescribeProducers v0 leader routing; DescribeTransactions v0 coordinator routing | [`Live Kafka Smoke`, run `31589394777`](https://github.com/TaeeunKil/kafrust/actions/runs/31589394777) on 2026-08-12 | Passing |
 | Apache Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1 | single-node KRaft | Produce `acks=0` immediate and batch dispatch | `Live Kafka Smoke`, manual run `31464933145` on 2026-08-11 | Passing; broker acceptance is intentionally unconfirmed |
+| Apache Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1; Kafka 4.3.1 KIP-848 | single-node KRaft | opt-in automatic consumer-group commit and restored positions | [`Live Kafka Smoke`, run `31593984640`](https://github.com/TaeeunKil/kafrust/actions/runs/31593984640) on 2026-08-12 | Passing; at-least-once tradeoff |
 
 ## Verified Paths
 

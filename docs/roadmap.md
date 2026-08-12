@@ -225,7 +225,9 @@ Known limits:
   lifetime of a joined group, queues current assignment positions after each
   successful classic or KIP-848 poll, preserves the worker through rejoin, and
   surfaces a terminal worker failure on a later poll. The default remains
-  explicit commit mode for backward-compatible alpha behavior.
+  explicit commit mode for backward-compatible alpha behavior. The full
+  classic and KIP-848 automatic-commit smoke paths passed in
+  [`Live Kafka Smoke`, run `31593984640`](https://github.com/TaeeunKil/kafrust/actions/runs/31593984640).
 - `Consumer::split_partition_queue` and
   `ConsumerGroup::split_partition_queue` provide bounded per-partition
   delivery through `ConsumerPartitionQueue`. Focused tests cover independent
