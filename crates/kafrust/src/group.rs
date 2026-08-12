@@ -2638,7 +2638,8 @@ fn should_rejoin_group(error: &Error) -> bool {
     matches!(
         error.broker_error_kind(),
         Some(
-            BrokerErrorKind::CoordinatorNotAvailable
+            BrokerErrorKind::CoordinatorLoadInProgress
+                | BrokerErrorKind::CoordinatorNotAvailable
                 | BrokerErrorKind::NotCoordinator
                 | BrokerErrorKind::IllegalGeneration
                 | BrokerErrorKind::UnknownMemberId
@@ -3576,7 +3577,7 @@ mod tests {
 
     #[test]
     fn classifies_group_errors_that_require_rejoin() {
-        for code in [15, 16, 22, 25, 27] {
+        for code in [14, 15, 16, 22, 25, 27] {
             assert!(should_rejoin_group(&Error::Broker {
                 code,
                 context: "heartbeat group orders-group".to_owned(),

@@ -3,7 +3,10 @@ mod common;
 use std::io::{self, Write};
 use std::time::Duration;
 
-use kafrust::{ClientConfig, ConsumerGroupConfig, Error};
+use kafrust::{BrokerErrorKind, Client, ClientConfig, ConsumerGroupConfig, Error};
+
+const COORDINATOR_LOOKUP_MAX_RETRIES: u32 = 120;
+const COORDINATOR_LOOKUP_BACKOFF: Duration = Duration::from_millis(250);
 
 #[tokio::main]
 async fn main() -> kafrust::Result<()> {
@@ -19,13 +22,7 @@ async fn main() -> kafrust::Result<()> {
     )?
     .connect()
     .await?;
-    let coordinator = bootstrap.find_group_coordinator(group_id.clone()).await?;
-    if coordinator.error_code != 0 {
-        return Err(Error::Broker {
-            code: coordinator.error_code,
-            context: "find group failover coordinator".to_owned(),
-        });
-    }
+    let coordinator = find_group_coordinator_with_retry(&mut bootstrap, &group_id).await?;
 
     let config = common::apply_security(
         ConsumerGroupConfig::new(bootstrap_servers, group_id)
@@ -80,6 +77,39 @@ fn parse_pause(value: &str) -> kafrust::Result<Duration> {
 
 fn flush_stdout() -> kafrust::Result<()> {
     io::stdout().flush().map_err(Error::from)
+}
+
+async fn find_group_coordinator_with_retry(
+    bootstrap: &mut Client,
+    group_id: &str,
+) -> kafrust::Result<kafrust::protocol::api::find_coordinator::FindCoordinatorResponseV1> {
+    let mut retry_attempt = 0;
+    loop {
+        let response = bootstrap.find_group_coordinator(group_id).await?;
+        if response.error_code == 0 {
+            return Ok(response);
+        }
+
+        let retryable = matches!(
+            BrokerErrorKind::from_code(response.error_code),
+            BrokerErrorKind::CoordinatorLoadInProgress
+                | BrokerErrorKind::CoordinatorNotAvailable
+                | BrokerErrorKind::NotCoordinator
+        );
+        if !retryable || retry_attempt >= COORDINATOR_LOOKUP_MAX_RETRIES {
+            return Err(Error::Broker {
+                code: response.error_code,
+                context: "find group failover coordinator".to_owned(),
+            });
+        }
+
+        retry_attempt += 1;
+        eprintln!(
+            "waiting for group coordinator retry {} after broker error {}",
+            retry_attempt, response.error_code
+        );
+        tokio::time::sleep(COORDINATOR_LOOKUP_BACKOFF).await;
+    }
 }
 
 #[cfg(test)]
