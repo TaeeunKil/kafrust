@@ -1413,9 +1413,15 @@ Implemented evidence:
   group coordinator and recovered a classic consumer group through the
   remaining authenticated brokers in
   [`Live Kafka Smoke` run `31554396594`](https://github.com/TaeeunKil/kafrust/actions/runs/31554396594).
+- Kafka 4.3.1 KIP-848 coordinator recovery over `SASL_PLAINTEXT` is now
+  qualified in a three-broker KRaft profile. The active coordinator is stopped
+  after the first poll, the consumer-protocol group completes through the
+  remaining authenticated brokers, and the stopped broker is restarted in
+  [`Live Kafka Smoke` run `31569709189`](https://github.com/TaeeunKil/kafrust/actions/runs/31569709189).
 - Broader failure-injection coverage across secured and multi-broker KIP-848
-  deployments remains open beyond the verified three-broker coordinator
-  broker-stop path.
+  deployments remains open beyond the verified Kafka 4.3.1
+  `SASL_PLAINTEXT` coordinator broker-stop path, including SASL_SSL, repeated
+  failures, and partition-leader faults.
 - Dynamic and static members can explicitly leave through LeaveGroup v3,
   avoiding session-timeout cleanup after graceful shutdown.
 - Manual `Live Kafka Smoke` run `30065025169` passed graceful LeaveGroup v3 on
@@ -1500,6 +1506,8 @@ Implemented evidence:
   SCRAM transaction-coordinator failure injection, broader KIP-848 and
   transaction fault matrices, and workload-specific canary evidence remain
   before a 1.0 replacement claim. Kafka 4.3.1 KIP-848 coordinator broker-stop
-  recovery is also qualified in the three-broker profile by
+  recovery is qualified over both PLAINTEXT and SASL_PLAINTEXT in the
+  three-broker profiles by
   [`31557534371`](https://github.com/TaeeunKil/kafrust/actions/runs/31557534371),
-  while the broader KIP-848 fault matrix remains open.
+  [`31569709189`](https://github.com/TaeeunKil/kafrust/actions/runs/31569709189),
+  while SASL_SSL and the broader KIP-848 fault matrix remain open.
