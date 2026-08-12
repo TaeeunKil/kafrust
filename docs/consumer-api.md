@@ -131,7 +131,11 @@ Current implementation status:
   assignment control.
 - `Consumer::fetch_watermarks` exposes leader-routed earliest and latest
   partition offsets.
-- Fetch uses metadata lookup and partition leader routing.
+- Fetch uses metadata lookup and partition leader routing. Set
+  `ConsumerConfig::client_rack("rack-a")` to enable rack-aware Fetch v11
+  negotiation. When the broker advertises Fetch v11, the rack ID is sent and
+  the next request follows `preferred_read_replica`; brokers without Fetch v11
+  use the existing Fetch v4 leader route.
 - `ConsumerConfig::request_timeout_ms` controls the request timeout used for metadata and fetch roundtrips.
 - `ConsumerConfig::security_protocol` stores the Kafka security protocol for consumer broker connections. `Plaintext` is the default transport; TLS requires the non-default `tls` crate feature; `tls_server_name(name)` overrides the certificate validation name when the bootstrap host differs from the broker certificate; `tls_root_certificate_der(bytes)` adds DER-encoded root certificates while keeping platform roots enabled; `sasl_plain(username, password)`, `sasl_scram_sha_256(username, password)`, and `sasl_scram_sha_512(username, password)` provide SASL credentials for `SaslPlaintext` or `SaslTls`.
 - `ConsumerConfig::max_retries` controls retry attempts for stale metadata, unknown topic-partition entries in cached metadata, missing leader or broker metadata, transient fetch broker errors, request timeouts, and connection I/O failures.
@@ -140,7 +144,7 @@ Current implementation status:
   group consumers configure the same limit with
   `ConsumerGroupConfig::partition_queue_capacity`.
 - `ConsumerConfig::isolation_level` selects `ReadUncommitted` (the default) or
-  `ReadCommitted`. Read-committed Fetch v4 responses hide control records and
+  `ReadCommitted`. Read-committed Fetch v4 and v11 responses hide control records and
   records belonging to aborted transaction ranges. Poll assignment offsets
   still advance past records hidden by isolation filtering.
 - Consumer metadata is cached by topic and refreshed when a retriable fetch failure invalidates that topic cache entry.

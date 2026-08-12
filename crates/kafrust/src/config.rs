@@ -277,6 +277,7 @@ impl fmt::Debug for SaslCredentials {
 pub struct ClientConfig {
     bootstrap_servers: Vec<String>,
     client_id: Option<String>,
+    client_rack: Option<String>,
     request_timeout: Duration,
     max_response_bytes: usize,
     decode_limits: DecodeLimits,
@@ -293,6 +294,7 @@ impl ClientConfig {
         Self {
             bootstrap_servers: bootstrap_servers.into_iter().map(Into::into).collect(),
             client_id: None,
+            client_rack: None,
             request_timeout: Duration::from_millis(DEFAULT_REQUEST_TIMEOUT_MS),
             max_response_bytes: DEFAULT_MAX_RESPONSE_BYTES,
             decode_limits: DecodeLimits::default(),
@@ -307,6 +309,17 @@ impl ClientConfig {
     /// Sets the Kafka client ID sent in request headers.
     pub fn client_id(mut self, client_id: impl Into<String>) -> Self {
         self.client_id = Some(client_id.into());
+        self
+    }
+
+    /// Sets the rack ID advertised by rack-aware consumer Fetch requests.
+    ///
+    /// When configured, consumers negotiate Fetch v11 or newer-compatible
+    /// broker support and include this value so Kafka can select a preferred
+    /// replica in the same rack. Brokers that do not advertise Fetch v11 use
+    /// the existing leader Fetch path instead.
+    pub fn client_rack(mut self, client_rack: impl Into<String>) -> Self {
+        self.client_rack = Some(client_rack.into());
         self
     }
 
@@ -445,6 +458,11 @@ impl ClientConfig {
     /// Returns the configured Kafka client ID.
     pub fn client_id_ref(&self) -> Option<&str> {
         self.client_id.as_deref()
+    }
+
+    /// Returns the configured rack ID, when rack-aware consumer fetching is enabled.
+    pub fn client_rack_ref(&self) -> Option<&str> {
+        self.client_rack.as_deref()
     }
 
     /// Returns the configured request timeout.
@@ -891,6 +909,7 @@ mod tests {
     fn stores_bootstrap_servers_and_client_id() {
         let config = ClientConfig::new(["localhost:9092"])
             .client_id("kafrust-test")
+            .client_rack("rack-a")
             .request_timeout_ms(5_000)
             .max_response_bytes(8 * 1024 * 1024)
             .max_decode_array_elements(12_345)
@@ -898,6 +917,7 @@ mod tests {
 
         assert_eq!(config.bootstrap_servers(), &["localhost:9092".to_owned()]);
         assert_eq!(config.client_id_ref(), Some("kafrust-test"));
+        assert_eq!(config.client_rack_ref(), Some("rack-a"));
         assert_eq!(config.request_timeout(), Duration::from_millis(5_000));
         assert_eq!(config.max_response_bytes_ref(), 8 * 1024 * 1024);
         assert_eq!(config.decode_limits().max_array_elements(), 12_345);

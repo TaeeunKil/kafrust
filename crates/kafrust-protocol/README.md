@@ -46,8 +46,9 @@ client paths:
 - `IncrementalAlterConfigs v0`
 - `FindCoordinator v1`
 - `Produce v2` MessageSet and `Produce v3` RecordBatch paths
-- `Fetch v2` and `Fetch v4` request/response decoding for MessageSet and
-  RecordBatch records
+- `Fetch v2`, `Fetch v4`, and non-flexible `Fetch v11` request/response
+  decoding for MessageSet and RecordBatch records, including rack IDs and
+  preferred read replicas in v11
 - `JoinGroup v2` and `JoinGroup v5`
 - `SyncGroup v2` and `SyncGroup v3`
 - `Heartbeat v2` and `Heartbeat v3`

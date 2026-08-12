@@ -273,6 +273,12 @@ impl ConsumerGroupConfig {
         self
     }
 
+    /// Sets the rack ID used by rack-aware group-member Fetch requests.
+    pub fn client_rack(mut self, client_rack: impl Into<String>) -> Self {
+        self.client = self.client.client_rack(client_rack);
+        self
+    }
+
     /// Sets the request timeout in milliseconds.
     pub fn request_timeout_ms(mut self, request_timeout_ms: u64) -> Self {
         self.client = self.client.request_timeout_ms(request_timeout_ms);

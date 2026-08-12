@@ -1,13 +1,16 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use kafrust_protocol::api::fetch::{FetchPartitionResponseV4, FetchResponseV4, MessageSetRecord};
+use kafrust_protocol::api::fetch::{
+    FetchPartitionResponseV11, FetchPartitionResponseV4, FetchResponseV11, FetchResponseV4,
+    MessageSetRecord,
+};
 use kafrust_protocol::api::list_offsets::{
     ListOffsetsPartitionResponseV1, ListOffsetsPartitionV1, ListOffsetsTopicResponseV1,
     ListOffsetsTopicV1, EARLIEST_TIMESTAMP, LATEST_TIMESTAMP,
 };
 use kafrust_protocol::api::metadata::{BrokerMetadata, MetadataResponseV1};
 
-use crate::client::{Client, FetchOneRequestV4};
+use crate::client::{Client, FetchOneRequestV11, FetchOneRequestV4};
 use crate::config::{ClientConfig, OAuthBearerTokenProvider, SecurityProtocol};
 use crate::error::{BrokerErrorKind, Error, Result};
 use crate::metrics::ClientMetrics;
@@ -178,6 +181,7 @@ pub struct Consumer {
     partition_queues: BTreeMap<(String, i32), mpsc::Sender<ConsumerRecord>>,
     metadata_cache: BTreeMap<String, MetadataResponseV1>,
     broker_clients: BTreeMap<String, Client>,
+    preferred_read_replicas: BTreeMap<(String, i32), i32>,
 }
 
 impl Consumer {
@@ -193,6 +197,7 @@ impl Consumer {
             partition_queues: BTreeMap::new(),
             metadata_cache: BTreeMap::new(),
             broker_clients: BTreeMap::new(),
+            preferred_read_replicas: BTreeMap::new(),
         }
     }
 
@@ -575,6 +580,10 @@ impl Consumer {
 
         loop {
             let result = self.fetch_once(topic, partition, offset).await;
+            if result.is_err() {
+                self.preferred_read_replicas
+                    .remove(&(topic.to_owned(), partition));
+            }
             match result {
                 Err(error) if attempt < self.config.max_retries && can_retry_fetch(&error) => {
                     invalidate_metadata_cache(&mut self.metadata_cache, topic);
@@ -604,42 +613,126 @@ impl Consumer {
     ) -> Result<FetchedPartition> {
         let metadata = self.metadata_for_topic(topic).await?;
         let leader = leader_for(&metadata, topic, partition)?;
-        let broker_addr = broker_addr_for(&metadata, leader)?;
+        let selected_broker = self
+            .preferred_read_replicas
+            .get(&(topic.to_owned(), partition))
+            .copied()
+            .filter(|broker| broker_addr_for(&metadata, *broker).is_ok())
+            .unwrap_or(leader);
+        let broker_addr = broker_addr_for(&metadata, selected_broker)?;
         debug!(
             topic = topic,
             partition,
             leader,
+            selected_broker,
             broker_addr = broker_addr.as_str(),
-            "resolved fetch leader"
+            "resolved fetch broker"
         );
         let mut leader_client = self.connect_or_reuse_broker(&broker_addr).await?;
-        let response = leader_client
-            .fetch_one_v4(FetchOneRequestV4 {
-                replica_id: -1,
-                max_wait_ms: self.config.max_wait_ms,
-                min_bytes: self.config.min_bytes,
-                max_bytes: self.config.max_partition_bytes,
-                isolation_level: self.config.isolation_level.as_i8(),
-                topic: topic.to_owned(),
-                partition_index: partition,
-                fetch_offset: offset,
-                max_partition_bytes: self.config.max_partition_bytes,
-            })
-            .await?;
-        let partition_response = fetch_partition_response(&response, topic, partition)?;
-        if partition_response.error_code != 0 {
-            return Err(self.config.client.broker_error(
-                partition_response.error_code,
-                format!("fetch {topic}-{partition}@{offset}"),
-            ));
+        let rack_id = self
+            .config
+            .client_config()
+            .client_rack_ref()
+            .map(str::to_owned);
+        let (error_code, preferred_read_replica, aborted_transactions, records) =
+            if let Some(rack_id) = rack_id {
+                if leader_client.supports_fetch_v11().await? {
+                    let response = leader_client
+                        .fetch_one_v11(FetchOneRequestV11 {
+                            replica_id: -1,
+                            max_wait_ms: self.config.max_wait_ms,
+                            min_bytes: self.config.min_bytes,
+                            max_bytes: self.config.max_partition_bytes,
+                            isolation_level: self.config.isolation_level.as_i8(),
+                            topic: topic.to_owned(),
+                            partition_index: partition,
+                            fetch_offset: offset,
+                            max_partition_bytes: self.config.max_partition_bytes,
+                            rack_id,
+                        })
+                        .await?;
+                    if response.error_code != 0 {
+                        return Err(self.config.client.broker_error(
+                            response.error_code,
+                            format!("fetch {topic}-{partition}@{offset}"),
+                        ));
+                    }
+                    let partition_response =
+                        fetch_partition_response_v11(&response, topic, partition)?;
+                    (
+                        partition_response.error_code,
+                        Some(partition_response.preferred_read_replica),
+                        partition_response.aborted_transactions.clone(),
+                        partition_response.records.clone(),
+                    )
+                } else {
+                    let response = leader_client
+                        .fetch_one_v4(FetchOneRequestV4 {
+                            replica_id: -1,
+                            max_wait_ms: self.config.max_wait_ms,
+                            min_bytes: self.config.min_bytes,
+                            max_bytes: self.config.max_partition_bytes,
+                            isolation_level: self.config.isolation_level.as_i8(),
+                            topic: topic.to_owned(),
+                            partition_index: partition,
+                            fetch_offset: offset,
+                            max_partition_bytes: self.config.max_partition_bytes,
+                        })
+                        .await?;
+                    let partition_response = fetch_partition_response(&response, topic, partition)?;
+                    (
+                        partition_response.error_code,
+                        Some(-1),
+                        partition_response.aborted_transactions.clone(),
+                        partition_response.records.clone(),
+                    )
+                }
+            } else {
+                let response = leader_client
+                    .fetch_one_v4(FetchOneRequestV4 {
+                        replica_id: -1,
+                        max_wait_ms: self.config.max_wait_ms,
+                        min_bytes: self.config.min_bytes,
+                        max_bytes: self.config.max_partition_bytes,
+                        isolation_level: self.config.isolation_level.as_i8(),
+                        topic: topic.to_owned(),
+                        partition_index: partition,
+                        fetch_offset: offset,
+                        max_partition_bytes: self.config.max_partition_bytes,
+                    })
+                    .await?;
+                let partition_response = fetch_partition_response(&response, topic, partition)?;
+                (
+                    partition_response.error_code,
+                    None,
+                    partition_response.aborted_transactions.clone(),
+                    partition_response.records.clone(),
+                )
+            };
+        if error_code != 0 {
+            return Err(self
+                .config
+                .client
+                .broker_error(error_code, format!("fetch {topic}-{partition}@{offset}")));
         }
 
-        let next_offset = partition_response
-            .records
+        if let Some(preferred_read_replica) = preferred_read_replica {
+            if preferred_read_replica >= 0
+                && broker_addr_for(&metadata, preferred_read_replica).is_ok()
+            {
+                self.preferred_read_replicas
+                    .insert((topic.to_owned(), partition), preferred_read_replica);
+            } else {
+                self.preferred_read_replicas
+                    .remove(&(topic.to_owned(), partition));
+            }
+        }
+
+        let next_offset = records
             .last()
             .map(|record| record.offset.saturating_add(1))
             .unwrap_or(offset);
-        let records = visible_partition_records(partition_response, self.config.isolation_level)
+        let records = visible_records(&aborted_transactions, &records, self.config.isolation_level)
             .into_iter()
             .map(|record| ConsumerRecord::from_message_set(topic, partition, record))
             .collect();
@@ -825,6 +918,12 @@ impl ConsumerConfig {
     /// Sets the Kafka client ID used by consumer requests.
     pub fn client_id(mut self, client_id: impl Into<String>) -> Self {
         self.client = self.client.client_id(client_id);
+        self
+    }
+
+    /// Sets the rack ID used by rack-aware consumer Fetch requests.
+    pub fn client_rack(mut self, client_rack: impl Into<String>) -> Self {
+        self.client = self.client.client_rack(client_rack);
         self
     }
 
@@ -1022,6 +1121,7 @@ impl ConsumerConfig {
             partition_queues: BTreeMap::new(),
             metadata_cache: BTreeMap::new(),
             broker_clients: BTreeMap::new(),
+            preferred_read_replicas: BTreeMap::new(),
         })
     }
 }
@@ -1089,6 +1189,27 @@ fn fetch_partition_response<'a>(
         })
 }
 
+fn fetch_partition_response_v11<'a>(
+    response: &'a FetchResponseV11,
+    topic_name: &str,
+    partition_index: i32,
+) -> Result<&'a FetchPartitionResponseV11> {
+    response
+        .responses
+        .iter()
+        .find(|topic| topic.name == topic_name)
+        .and_then(|topic| {
+            topic
+                .partitions
+                .iter()
+                .find(|partition| partition.partition_index == partition_index)
+        })
+        .ok_or_else(|| Error::UnknownTopicOrPartition {
+            topic: topic_name.to_owned(),
+            partition: partition_index,
+        })
+}
+
 fn list_offset_partition_response<'a>(
     topics: &'a [ListOffsetsTopicResponseV1],
     topic_name: &str,
@@ -1109,14 +1230,15 @@ fn list_offset_partition_response<'a>(
         })
 }
 
-fn visible_partition_records(
-    partition: &FetchPartitionResponseV4,
+fn visible_records(
+    aborted_transactions: &[kafrust_protocol::api::fetch::AbortedTransactionV4],
+    input_records: &[MessageSetRecord],
     isolation_level: IsolationLevel,
 ) -> Vec<MessageSetRecord> {
-    let mut aborted_transactions = partition.aborted_transactions.clone();
-    let mut records = Vec::new();
+    let mut aborted_transactions = aborted_transactions.to_vec();
+    let mut visible = Vec::new();
 
-    for record in &partition.records {
+    for record in input_records {
         if record.control {
             if let Some(producer_id) = record.producer_id {
                 if let Some(index) = aborted_transactions.iter().position(|transaction| {
@@ -1138,11 +1260,11 @@ fn visible_partition_records(
                 })
             });
         if !aborted {
-            records.push(record.clone());
+            visible.push(record.clone());
         }
     }
 
-    records
+    visible
 }
 
 fn can_retry_fetch(error: &Error) -> bool {
@@ -1205,8 +1327,8 @@ fn invalidate_metadata_cache(
 mod tests {
     use super::{
         assign_partition, can_retry_fetch, invalidate_metadata_cache, leader_for,
-        limit_fetched_records, visible_partition_records, Consumer, ConsumerAssignment,
-        ConsumerConfig, ConsumerRecord, IsolationLevel, PartitionWatermarks, SecurityProtocol,
+        limit_fetched_records, visible_records, Consumer, ConsumerAssignment, ConsumerConfig,
+        ConsumerRecord, IsolationLevel, PartitionWatermarks, SecurityProtocol,
     };
     use crate::{Client, ClientMetrics, Error};
     use kafrust_protocol::api::fetch::{
@@ -1224,6 +1346,7 @@ mod tests {
     fn builds_consumer_config() {
         let config = ConsumerConfig::new(["localhost:9092"])
             .client_id("orders-reader")
+            .client_rack("rack-a")
             .request_timeout_ms(5_000)
             .security_protocol(SecurityProtocol::Tls)
             .tls_server_name("broker.example.com")
@@ -1241,6 +1364,7 @@ mod tests {
             config.client_config().client_id_ref(),
             Some("orders-reader")
         );
+        assert_eq!(config.client_config().client_rack_ref(), Some("rack-a"));
         assert_eq!(
             config.client_config().security_protocol_ref(),
             SecurityProtocol::Tls
@@ -1503,8 +1627,16 @@ mod tests {
             ],
         };
 
-        let committed = visible_partition_records(&partition, IsolationLevel::ReadCommitted);
-        let uncommitted = visible_partition_records(&partition, IsolationLevel::ReadUncommitted);
+        let committed = visible_records(
+            &partition.aborted_transactions,
+            &partition.records,
+            IsolationLevel::ReadCommitted,
+        );
+        let uncommitted = visible_records(
+            &partition.aborted_transactions,
+            &partition.records,
+            IsolationLevel::ReadUncommitted,
+        );
 
         assert_eq!(
             committed
@@ -1720,6 +1852,117 @@ mod tests {
         server.await.unwrap();
     }
 
+    #[tokio::test]
+    async fn negotiates_rack_aware_fetch_and_routes_to_preferred_replica() {
+        let leader_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let leader_addr = leader_listener.local_addr().unwrap();
+        let preferred_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let preferred_addr = preferred_listener.local_addr().unwrap();
+
+        let leader_server = tokio::spawn(async move {
+            let (mut socket, _) = leader_listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut socket).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut socket, &api_versions_v3_fetch_v11_response(1)).await;
+
+            let fetch_request = read_frame(&mut socket).await;
+            assert_eq!(&fetch_request[0..4], &[0, 1, 0, 11]);
+            assert_eq!(&fetch_request[fetch_request.len() - 6..], b"rack-a");
+            write_frame(&mut socket, &fetch_v11_response_frame(2, 2)).await;
+        });
+        let preferred_server = tokio::spawn(async move {
+            let (mut socket, _) = preferred_listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut socket).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut socket, &api_versions_v3_fetch_v11_response(1)).await;
+
+            let fetch_request = read_frame(&mut socket).await;
+            assert_eq!(&fetch_request[0..4], &[0, 1, 0, 11]);
+            assert_eq!(&fetch_request[fetch_request.len() - 6..], b"rack-a");
+            write_frame(&mut socket, &fetch_v11_response_frame(2, -1)).await;
+        });
+
+        let (client_stream, broker_stream) = tokio::io::duplex(64);
+        let _broker_stream = broker_stream;
+        let client = Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-rack-routing-test".to_owned()),
+            Some(std::time::Duration::from_millis(500)),
+        );
+        let config = ConsumerConfig::new([leader_addr.to_string()])
+            .request_timeout_ms(500)
+            .client_rack("rack-a");
+        let mut consumer = Consumer::from_assignments(client, config, Vec::new());
+        let mut metadata = metadata_fixture();
+        metadata.brokers[0].host = leader_addr.ip().to_string();
+        metadata.brokers[0].port = i32::from(leader_addr.port());
+        metadata.brokers.push(BrokerMetadata {
+            node_id: 2,
+            host: preferred_addr.ip().to_string(),
+            port: i32::from(preferred_addr.port()),
+            rack: Some("rack-a".to_owned()),
+        });
+        consumer
+            .metadata_cache
+            .insert("orders".to_owned(), metadata);
+
+        assert!(consumer.fetch("orders", 0, 42).await.unwrap().is_empty());
+        assert_eq!(
+            consumer
+                .preferred_read_replicas
+                .get(&("orders".to_owned(), 0)),
+            Some(&2)
+        );
+        assert!(consumer.fetch("orders", 0, 42).await.unwrap().is_empty());
+        assert!(!consumer
+            .preferred_read_replicas
+            .contains_key(&("orders".to_owned(), 0)));
+
+        leader_server.await.unwrap();
+        preferred_server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn clears_preferred_replica_after_exhausted_fetch_failure() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let _api_versions_request = read_frame(&mut socket).await;
+            write_frame(&mut socket, &api_versions_v3_fetch_v11_response(1)).await;
+            let _fetch_request = read_frame(&mut socket).await;
+            write_frame(&mut socket, &fetch_v11_error_response_frame(2, 6)).await;
+        });
+
+        let (client_stream, broker_stream) = tokio::io::duplex(64);
+        let _broker_stream = broker_stream;
+        let client = Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-rack-failure-test".to_owned()),
+            Some(std::time::Duration::from_millis(500)),
+        );
+        let config = ConsumerConfig::new([addr.to_string()])
+            .request_timeout_ms(500)
+            .max_retries(0)
+            .client_rack("rack-a");
+        let mut consumer = Consumer::from_assignments(client, config, Vec::new());
+        let mut metadata = metadata_fixture();
+        metadata.brokers[0].host = addr.ip().to_string();
+        metadata.brokers[0].port = i32::from(addr.port());
+        consumer
+            .metadata_cache
+            .insert("orders".to_owned(), metadata);
+        consumer
+            .preferred_read_replicas
+            .insert(("orders".to_owned(), 0), 1);
+
+        assert!(consumer.fetch("orders", 0, 42).await.is_err());
+        assert!(!consumer
+            .preferred_read_replicas
+            .contains_key(&("orders".to_owned(), 0)));
+        server.await.unwrap();
+    }
+
     fn message(offset: i64) -> MessageSetRecord {
         MessageSetRecord {
             offset,
@@ -1844,6 +2087,52 @@ mod tests {
         response.write_i64(43);
         response.write_i32(0);
         response.write_bytes(&records).unwrap();
+        response.into_bytes()
+    }
+
+    fn api_versions_v3_fetch_v11_response(correlation_id: i32) -> Vec<u8> {
+        let mut response = Encoder::new();
+        response.write_i32(correlation_id);
+        response.write_i16(0);
+        response.write_i8(2); // one compact API key entry
+        response.write_i16(1);
+        response.write_i16(0);
+        response.write_i16(11);
+        response.write_i8(0); // API key entry tags
+        response.write_i32(0);
+        response.write_i8(0); // response tags
+        response.into_bytes()
+    }
+
+    fn fetch_v11_response_frame(correlation_id: i32, preferred_read_replica: i32) -> Vec<u8> {
+        fetch_v11_response_frame_with_error(correlation_id, 0, preferred_read_replica)
+    }
+
+    fn fetch_v11_error_response_frame(correlation_id: i32, error_code: i16) -> Vec<u8> {
+        fetch_v11_response_frame_with_error(correlation_id, error_code, -1)
+    }
+
+    fn fetch_v11_response_frame_with_error(
+        correlation_id: i32,
+        error_code: i16,
+        preferred_read_replica: i32,
+    ) -> Vec<u8> {
+        let mut response = Encoder::new();
+        response.write_i32(correlation_id);
+        response.write_i32(0);
+        response.write_i16(0);
+        response.write_i32(0);
+        response.write_i32(1);
+        response.write_string("orders").unwrap();
+        response.write_i32(1);
+        response.write_i32(0);
+        response.write_i16(error_code);
+        response.write_i64(43);
+        response.write_i64(43);
+        response.write_i64(42);
+        response.write_i32(0);
+        response.write_i32(preferred_read_replica);
+        response.write_bytes(&[]).unwrap();
         response.into_bytes()
     }
 

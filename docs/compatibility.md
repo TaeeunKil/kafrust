@@ -451,7 +451,11 @@ with zero in-flight requests and buffered records.
 - Zstd Produce v7 RecordBatch encoding and Fetch v4 RecordBatch decoding are
   covered by focused standard-frame, declared-window, and decompression-limit
   tests and by the plaintext single-node and multi-broker live smoke profiles.
-- Direct consumer fetch from an assigned topic partition using Fetch v4 response decoding. The v4 path is required because Kafka 4.x no longer accepts Fetch v2.
+- Direct consumer fetch from an assigned topic partition using Fetch v4 response
+  decoding. When `client_rack` is configured and the broker advertises Fetch
+  v11, the consumer uses the rack field and follows `preferred_read_replica`;
+  focused wire and injected multi-broker routing tests cover this path. The
+  live rack-aware broker profile remains unqualified.
 - Consumer group join, sync, heartbeat, poll, and offset commit through the alpha classic consumer group path with range assignment.
 - Client-side regex topic subscription resolves Metadata v1 topic names before
   classic or KIP-848 joins and is covered by focused ordering, filtering, and
@@ -666,8 +670,12 @@ The current compatibility claim does not cover:
   provider-specific failure behavior, and operational outage semantics. The
   async token-provider callback is implemented and bounded by
   `ClientConfig::request_timeout_ms`.
-- Production OAuth/OIDC provider compatibility or rack-aware client routing.
-  The SCRAM multi-broker group-coordinator, partition-leader, and safe
+- Production OAuth/OIDC provider compatibility beyond the local signed
+  OIDC/JWKS fixture.
+- Rack-aware client routing against a live broker deployment with broker racks
+  and replica selection configured. The Fetch v11 implementation and focused
+  routing tests are complete, but live qualification is still required.
+- The SCRAM multi-broker group-coordinator, partition-leader, and safe
   transactional producer reinitialization paths are claimed above. This does
   not claim transparent continuation of the old producer or the outcome of a
   transaction whose commit returned `INVALID_PRODUCER_EPOCH`.

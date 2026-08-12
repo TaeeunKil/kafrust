@@ -269,6 +269,12 @@ async fn main() -> kafrust::Result<()> {
 }
 ```
 
+For rack-aware reads, set `ConsumerConfig::client_rack("rack-a")` (or the
+matching `ConsumerGroupConfig` builder). Fetch v11 negotiation carries the
+rack ID and follows Kafka's `preferred_read_replica` response when supported;
+older brokers use the existing Fetch v4 leader path. The protocol and injected
+routing tests pass, while a live rack-aware broker profile remains unqualified.
+
 ## Consumer Group
 
 The consumer group API is an alpha classic or KIP-848 consumer group path with
@@ -479,7 +485,8 @@ Verified high-level paths include:
   profiles are verified against `3.7.2`.
 - Multi-broker clusters, coordinator and leader failover, and partition
   expansion are verified in the documented `3.7.2` profiles. Rack-aware client
-  routing is not yet claimed.
+  routing is implemented with Fetch v11 negotiation and preferred-replica
+  follow-up, but a live rack-aware broker profile is not yet claimed.
 - Idempotent single-record, batch, and buffered sends are available through
   `ProducerConfig::enable_idempotence(true)`. Transactional immediate and batch
   sends support explicit begin, commit, and abort.

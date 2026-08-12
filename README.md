@@ -299,6 +299,14 @@ async fn main() -> kafrust::Result<()> {
 }
 ```
 
+For rack-aware reads, set `ConsumerConfig::client_rack("rack-a")` (or the
+matching `ConsumerGroupConfig` builder). When the selected broker advertises
+Fetch v11, kafrust sends the rack ID and follows Kafka's
+`preferred_read_replica` response on the next fetch. It falls back to the
+existing Fetch v4 leader path when Fetch v11 is unavailable. Wire-level and
+injected multi-broker routing tests cover this path; a live broker profile with
+rack-aware replica selection is still a release qualification item.
+
 ### Consumer Group
 
 The current consumer group API is an alpha classic or KIP-848 consumer group
@@ -377,7 +385,8 @@ Verified paths currently include:
 - `ApiVersions v0` and flexible `ApiVersions v3` capability roundtrips, plus
   `Metadata v1` roundtrips.
 - High-level producer single-record, batch, and buffered sends.
-- Direct topic-partition fetch with Fetch v4 response decoding.
+- Direct topic-partition fetch with Fetch v4 response decoding, plus focused
+  rack-aware Fetch v11 negotiation and preferred-replica routing tests.
 - Classic consumer group join, sync, heartbeat, poll, and offset commit.
 - KIP-848 consumer group assignment, member-epoch heartbeat, OffsetFetch v9,
   OffsetCommit v9, member-aware administrative offset listing/alteration,
@@ -447,8 +456,10 @@ See [Compatibility](docs/compatibility.md) and
 - Three-broker coordinator and leader failover is verified for the documented
   producer, direct consumer, classic consumer group, KIP-848 consumer group,
   and transaction paths. Topic
-  partition expansion is verified through CreatePartitions v0 and Metadata v1;
-  rack-aware client routing is not yet claimed.
+  partition expansion is verified through CreatePartitions v0 and Metadata v1.
+  Rack-aware client routing is implemented through Fetch v11 negotiation and
+  preferred-replica follow-up, but its live broker qualification is not yet
+  claimed.
 - `ProducerConfig::partitioner` supports thread-safe custom routing for records
   without explicit partitions across immediate, batch, and buffered sends.
 - Gzip, Snappy, and LZ4 compression use Produce v3 RecordBatch encoding; Zstd

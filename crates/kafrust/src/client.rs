@@ -52,7 +52,8 @@ use kafrust_protocol::api::describe_user_scram_credentials::{
 };
 use kafrust_protocol::api::end_txn::{EndTxnRequestV0, EndTxnResponseV0};
 use kafrust_protocol::api::fetch::{
-    FetchPartitionV2, FetchRequestV4, FetchResponseV4, FetchTopicV2,
+    FetchPartitionV11, FetchPartitionV2, FetchRequestV11, FetchRequestV4, FetchResponseV11,
+    FetchResponseV4, FetchTopicV11, FetchTopicV2, API_KEY as FETCH_API_KEY,
 };
 use kafrust_protocol::api::find_coordinator::{
     CoordinatorType, FindCoordinatorRequestV1, FindCoordinatorResponseV1,
@@ -157,6 +158,20 @@ pub(crate) struct FetchOneRequestV4 {
     pub partition_index: i32,
     pub fetch_offset: i64,
     pub max_partition_bytes: i32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct FetchOneRequestV11 {
+    pub replica_id: i32,
+    pub max_wait_ms: i32,
+    pub min_bytes: i32,
+    pub max_bytes: i32,
+    pub isolation_level: i8,
+    pub topic: String,
+    pub partition_index: i32,
+    pub fetch_offset: i64,
+    pub max_partition_bytes: i32,
+    pub rack_id: String,
 }
 
 impl Client {
@@ -303,6 +318,15 @@ impl Client {
     /// Clears the cached ApiVersions v3 response so the next cached lookup refreshes it.
     pub fn clear_api_versions_v3_cache(&mut self) {
         self.api_versions_v3_cache = None;
+    }
+
+    pub(crate) async fn supports_fetch_v11(&mut self) -> Result<bool> {
+        let response = self
+            .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
+            .await?;
+        Ok(response
+            .highest_supported_version(FETCH_API_KEY, 11)
+            .is_some())
     }
 
     /// Returns the broker-advertised SASL session lifetime in milliseconds.
@@ -1432,6 +1456,39 @@ impl Client {
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(FetchResponseV4::decode_body(&mut decoder)?)
+    }
+
+    pub(crate) async fn fetch_one_v11(
+        &mut self,
+        request: FetchOneRequestV11,
+    ) -> Result<FetchResponseV11> {
+        let request = FetchRequestV11 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            replica_id: request.replica_id,
+            max_wait_ms: request.max_wait_ms,
+            min_bytes: request.min_bytes,
+            max_bytes: request.max_bytes,
+            isolation_level: request.isolation_level,
+            session_id: 0,
+            session_epoch: 0,
+            topics: vec![FetchTopicV11 {
+                name: request.topic,
+                partitions: vec![FetchPartitionV11 {
+                    partition_index: request.partition_index,
+                    current_leader_epoch: -1,
+                    fetch_offset: request.fetch_offset,
+                    log_start_offset: -1,
+                    max_bytes: request.max_partition_bytes,
+                }],
+            }],
+            forgotten_topics: Vec::new(),
+            rack_id: request.rack_id,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(FetchResponseV11::decode_body(&mut decoder)?)
     }
 
     /// Sends Produce v2 for pre-built topic partition payloads.

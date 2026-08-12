@@ -27,6 +27,105 @@ pub struct FetchRequestV4 {
     pub topics: Vec<FetchTopicV2>,
 }
 
+/// Fetch request version 11 with rack-aware read selection.
+///
+/// Version 11 keeps the non-flexible wire format used by the existing direct
+/// consumer while adding fetch-session fields and the consumer rack ID.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FetchRequestV11 {
+    pub correlation_id: i32,
+    pub client_id: Option<String>,
+    pub replica_id: i32,
+    pub max_wait_ms: i32,
+    pub min_bytes: i32,
+    pub max_bytes: i32,
+    pub isolation_level: i8,
+    pub session_id: i32,
+    pub session_epoch: i32,
+    pub topics: Vec<FetchTopicV11>,
+    pub forgotten_topics: Vec<FetchForgottenTopicV11>,
+    pub rack_id: String,
+}
+
+impl FetchRequestV11 {
+    pub fn encode(&self) -> Result<Vec<u8>> {
+        let mut encoder = Encoder::new();
+        RequestHeader {
+            api_key: API_KEY,
+            api_version: 11,
+            correlation_id: self.correlation_id,
+            client_id: self.client_id.clone(),
+        }
+        .encode_v1(&mut encoder)?;
+        encoder.write_i32(self.replica_id);
+        encoder.write_i32(self.max_wait_ms);
+        encoder.write_i32(self.min_bytes);
+        encoder.write_i32(self.max_bytes);
+        encoder.write_i8(self.isolation_level);
+        encoder.write_i32(self.session_id);
+        encoder.write_i32(self.session_epoch);
+        encoder.write_array(Some(self.topics.as_slice()), |encoder, topic| {
+            topic.encode(encoder)
+        })?;
+        encoder.write_array(Some(self.forgotten_topics.as_slice()), |encoder, topic| {
+            topic.encode(encoder)
+        })?;
+        encoder.write_string(&self.rack_id)?;
+        Ok(encoder.into_bytes())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FetchTopicV11 {
+    pub name: String,
+    pub partitions: Vec<FetchPartitionV11>,
+}
+
+impl FetchTopicV11 {
+    fn encode(&self, encoder: &mut Encoder) -> Result<()> {
+        encoder.write_string(&self.name)?;
+        encoder.write_array(Some(self.partitions.as_slice()), |encoder, partition| {
+            partition.encode(encoder)
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FetchPartitionV11 {
+    pub partition_index: i32,
+    pub current_leader_epoch: i32,
+    pub fetch_offset: i64,
+    pub log_start_offset: i64,
+    pub max_bytes: i32,
+}
+
+impl FetchPartitionV11 {
+    fn encode(&self, encoder: &mut Encoder) -> Result<()> {
+        encoder.write_i32(self.partition_index);
+        encoder.write_i32(self.current_leader_epoch);
+        encoder.write_i64(self.fetch_offset);
+        encoder.write_i64(self.log_start_offset);
+        encoder.write_i32(self.max_bytes);
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FetchForgottenTopicV11 {
+    pub name: String,
+    pub partitions: Vec<i32>,
+}
+
+impl FetchForgottenTopicV11 {
+    fn encode(&self, encoder: &mut Encoder) -> Result<()> {
+        encoder.write_string(&self.name)?;
+        encoder.write_array(Some(self.partitions.as_slice()), |encoder, partition| {
+            encoder.write_i32(*partition);
+            Ok(())
+        })
+    }
+}
+
 impl FetchRequestV4 {
     pub fn encode(&self) -> Result<Vec<u8>> {
         let mut encoder = Encoder::new();
@@ -110,6 +209,78 @@ pub struct FetchResponseV2 {
 pub struct FetchResponseV4 {
     pub throttle_time_ms: i32,
     pub responses: Vec<FetchTopicResponseV4>,
+}
+
+/// Fetch response version 11 with broker-selected read replicas.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FetchResponseV11 {
+    pub throttle_time_ms: i32,
+    pub error_code: i16,
+    pub session_id: i32,
+    pub responses: Vec<FetchTopicResponseV11>,
+}
+
+impl FetchResponseV11 {
+    pub fn decode_body(decoder: &mut Decoder<'_>) -> Result<Self> {
+        Ok(Self {
+            throttle_time_ms: decoder.read_i32()?,
+            error_code: decoder.read_i16()?,
+            session_id: decoder.read_i32()?,
+            responses: decoder
+                .read_array("fetch responses", FetchTopicResponseV11::decode)?
+                .unwrap_or_default(),
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FetchTopicResponseV11 {
+    pub name: String,
+    pub partitions: Vec<FetchPartitionResponseV11>,
+}
+
+impl FetchTopicResponseV11 {
+    fn decode(decoder: &mut Decoder<'_>) -> Result<Self> {
+        Ok(Self {
+            name: decoder.read_string()?,
+            partitions: decoder
+                .read_array(
+                    "fetch partition responses",
+                    FetchPartitionResponseV11::decode,
+                )?
+                .unwrap_or_default(),
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FetchPartitionResponseV11 {
+    pub partition_index: i32,
+    pub error_code: i16,
+    pub high_watermark: i64,
+    pub last_stable_offset: i64,
+    pub log_start_offset: i64,
+    pub aborted_transactions: Vec<AbortedTransactionV4>,
+    pub preferred_read_replica: i32,
+    pub records: Vec<MessageSetRecord>,
+}
+
+impl FetchPartitionResponseV11 {
+    fn decode(decoder: &mut Decoder<'_>) -> Result<Self> {
+        let limits = decoder.limits();
+        Ok(Self {
+            partition_index: decoder.read_i32()?,
+            error_code: decoder.read_i16()?,
+            high_watermark: decoder.read_i64()?,
+            last_stable_offset: decoder.read_i64()?,
+            log_start_offset: decoder.read_i64()?,
+            aborted_transactions: decoder
+                .read_array("aborted transactions", AbortedTransactionV4::decode)?
+                .unwrap_or_default(),
+            preferred_read_replica: decoder.read_i32()?,
+            records: decode_message_set(&decoder.read_bytes()?, limits)?,
+        })
+    }
 }
 
 impl FetchResponseV4 {
@@ -439,8 +610,9 @@ fn decode_record(
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::{
-        FetchPartitionV2, FetchRequestV2, FetchRequestV4, FetchResponseV2, FetchResponseV4,
-        FetchTopicV2, MessageSetRecord,
+        FetchPartitionV11, FetchPartitionV2, FetchRequestV11, FetchRequestV2, FetchRequestV4,
+        FetchResponseV11, FetchResponseV2, FetchResponseV4, FetchTopicV11, FetchTopicV2,
+        MessageSetRecord,
     };
     use crate::codec::{Decoder, Encoder};
 
@@ -491,6 +663,92 @@ mod tests {
         assert_eq!(&bytes[0..4], &[0, 1, 0, 4]);
         assert_eq!(&bytes[4..8], &[0, 0, 0, 8]);
         assert!(bytes.len() > 45);
+    }
+
+    #[test]
+    fn encodes_fetch_request_v11_with_rack_and_fetch_session_fields() {
+        let request = FetchRequestV11 {
+            correlation_id: 9,
+            client_id: Some("kafrust".to_owned()),
+            replica_id: -1,
+            max_wait_ms: 500,
+            min_bytes: 1,
+            max_bytes: 1_048_576,
+            isolation_level: 1,
+            session_id: 0,
+            session_epoch: 0,
+            topics: vec![FetchTopicV11 {
+                name: "orders".to_owned(),
+                partitions: vec![FetchPartitionV11 {
+                    partition_index: 0,
+                    current_leader_epoch: -1,
+                    fetch_offset: 42,
+                    log_start_offset: -1,
+                    max_bytes: 1_048_576,
+                }],
+            }],
+            forgotten_topics: Vec::new(),
+            rack_id: "rack-a".to_owned(),
+        };
+
+        let bytes = request.encode().unwrap();
+        let mut decoder = Decoder::new(&bytes);
+        assert_eq!(decoder.read_i16().unwrap(), 1);
+        assert_eq!(decoder.read_i16().unwrap(), 11);
+        assert_eq!(decoder.read_i32().unwrap(), 9);
+        assert_eq!(
+            decoder.read_nullable_string().unwrap().as_deref(),
+            Some("kafrust")
+        );
+        assert_eq!(decoder.read_i32().unwrap(), -1);
+        assert_eq!(decoder.read_i32().unwrap(), 500);
+        assert_eq!(decoder.read_i32().unwrap(), 1);
+        assert_eq!(decoder.read_i32().unwrap(), 1_048_576);
+        assert_eq!(decoder.read_i8().unwrap(), 1);
+        assert_eq!(decoder.read_i32().unwrap(), 0);
+        assert_eq!(decoder.read_i32().unwrap(), 0);
+        assert_eq!(decoder.read_i32().unwrap(), 1);
+        assert_eq!(decoder.read_string().unwrap(), "orders");
+        assert_eq!(decoder.read_i32().unwrap(), 1);
+        assert_eq!(decoder.read_i32().unwrap(), 0);
+        assert_eq!(decoder.read_i32().unwrap(), -1);
+        assert_eq!(decoder.read_i64().unwrap(), 42);
+        assert_eq!(decoder.read_i64().unwrap(), -1);
+        assert_eq!(decoder.read_i32().unwrap(), 1_048_576);
+        assert_eq!(decoder.read_i32().unwrap(), 0);
+        assert_eq!(decoder.read_string().unwrap(), "rack-a");
+        assert!(decoder.is_empty());
+    }
+
+    #[test]
+    fn decodes_fetch_response_v11_with_preferred_read_replica() {
+        let mut bytes = Encoder::new();
+        bytes.write_i32(3);
+        bytes.write_i16(0);
+        bytes.write_i32(17);
+        bytes.write_i32(1);
+        bytes.write_string("orders").unwrap();
+        bytes.write_i32(1);
+        bytes.write_i32(0);
+        bytes.write_i16(0);
+        bytes.write_i64(43);
+        bytes.write_i64(42);
+        bytes.write_i64(40);
+        bytes.write_i32(0);
+        bytes.write_i32(2);
+        bytes.write_bytes(&[]).unwrap();
+
+        let bytes = bytes.into_bytes();
+        let mut decoder = Decoder::new(&bytes);
+        let response = FetchResponseV11::decode_body(&mut decoder).unwrap();
+        let partition = &response.responses[0].partitions[0];
+
+        assert_eq!(response.throttle_time_ms, 3);
+        assert_eq!(response.session_id, 17);
+        assert_eq!(partition.log_start_offset, 40);
+        assert_eq!(partition.preferred_read_replica, 2);
+        assert!(partition.records.is_empty());
+        assert!(decoder.is_empty());
     }
 
     #[test]
