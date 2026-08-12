@@ -731,6 +731,15 @@ impl AdminClient {
                 )
                 .await
             {
+                Ok(response)
+                    if retry < ADMIN_COORDINATOR_MAX_RETRIES
+                        && is_retryable_admin_coordinator_code(response.error_code) =>
+                {
+                    self.config.record_broker_error();
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(ADMIN_COORDINATOR_RETRY_BACKOFF).await;
+                }
                 Ok(response) => break response,
                 Err(error)
                     if retry < ADMIN_COORDINATOR_MAX_RETRIES
@@ -801,7 +810,27 @@ impl AdminClient {
                 .offset_commit_v2(group_id, -1, "", -1, topics.clone())
                 .await
             {
-                Ok(response) => break response,
+                Ok(response) => {
+                    let retryable = response.topics.iter().any(|topic| {
+                        topic.partitions.iter().any(|partition| {
+                            is_retryable_admin_coordinator_code(partition.error_code)
+                        })
+                    });
+                    if retry < ADMIN_COORDINATOR_MAX_RETRIES && retryable {
+                        for topic in &response.topics {
+                            for partition in &topic.partitions {
+                                if partition.error_code != 0 {
+                                    self.config.record_broker_error();
+                                }
+                            }
+                        }
+                        retry += 1;
+                        self.config.record_retry();
+                        tokio::time::sleep(ADMIN_COORDINATOR_RETRY_BACKOFF).await;
+                    } else {
+                        break response;
+                    }
+                }
                 Err(error)
                     if retry < ADMIN_COORDINATOR_MAX_RETRIES
                         && is_retryable_admin_coordinator_error(&error) =>
@@ -4062,15 +4091,19 @@ impl ConsumerGroupMember {
 
 fn is_retryable_admin_coordinator_error(error: &Error) -> bool {
     match error {
-        Error::Broker { code, .. } => matches!(
-            BrokerErrorKind::from_code(*code),
-            BrokerErrorKind::CoordinatorLoadInProgress
-                | BrokerErrorKind::CoordinatorNotAvailable
-                | BrokerErrorKind::NotCoordinator
-        ),
+        Error::Broker { code, .. } => is_retryable_admin_coordinator_code(*code),
         Error::Io(_) | Error::RequestTimedOut { .. } => true,
         _ => false,
     }
+}
+
+fn is_retryable_admin_coordinator_code(code: i16) -> bool {
+    matches!(
+        BrokerErrorKind::from_code(code),
+        BrokerErrorKind::CoordinatorLoadInProgress
+            | BrokerErrorKind::CoordinatorNotAvailable
+            | BrokerErrorKind::NotCoordinator
+    )
 }
 
 /// A topic and partition filter for consumer-group offset inspection.
@@ -6807,6 +6840,56 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn retries_consumer_group_offset_fetch_after_transient_broker_error() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let coordinator_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&coordinator_request[0..4], &[0, 10, 0, 1]);
+            write_frame(
+                &mut bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let (mut coordinator, _) = listener.accept().await.unwrap();
+            let fetch_request = read_frame(&mut coordinator).await;
+            assert_eq!(&fetch_request[0..4], &[0, 9, 0, 2]);
+            write_frame(&mut coordinator, &offset_fetch_error_response(14)).await;
+
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let coordinator_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&coordinator_request[0..4], &[0, 10, 0, 1]);
+            write_frame(
+                &mut bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let (mut coordinator, _) = listener.accept().await.unwrap();
+            let fetch_request = read_frame(&mut coordinator).await;
+            assert_eq!(&fetch_request[0..4], &[0, 9, 0, 2]);
+            write_frame(&mut coordinator, &offset_fetch_response()).await;
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        );
+
+        let listed = admin
+            .list_consumer_group_offsets("orders-group", None)
+            .await
+            .unwrap();
+        assert_eq!(listed.error_code(), 0);
+        assert_eq!(listed.topics().len(), 1);
+        assert_eq!(metrics.snapshot().retries, 1);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn retries_consumer_group_offset_commit_after_coordinator_disconnect() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -6843,6 +6926,58 @@ mod tests {
             assert!(commit_request
                 .windows(4)
                 .any(|bytes| bytes == [0xff, 0xff, 0xff, 0xff]));
+            write_frame(&mut coordinator, &offset_commit_response()).await;
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        );
+
+        let altered = admin
+            .alter_consumer_group_offsets(
+                "orders-group",
+                &[ConsumerGroupOffset::new("orders", 0, 42)],
+            )
+            .await
+            .unwrap();
+        assert!(altered.is_success());
+        assert_eq!(metrics.snapshot().retries, 1);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn retries_consumer_group_offset_commit_after_transient_broker_error() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let coordinator_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&coordinator_request[0..4], &[0, 10, 0, 1]);
+            write_frame(
+                &mut bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let (mut coordinator, _) = listener.accept().await.unwrap();
+            let commit_request = read_frame(&mut coordinator).await;
+            assert_eq!(&commit_request[0..4], &[0, 8, 0, 2]);
+            write_frame(&mut coordinator, &offset_commit_error_response(14)).await;
+
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let coordinator_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&coordinator_request[0..4], &[0, 10, 0, 1]);
+            write_frame(
+                &mut bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let (mut coordinator, _) = listener.accept().await.unwrap();
+            let commit_request = read_frame(&mut coordinator).await;
+            assert_eq!(&commit_request[0..4], &[0, 8, 0, 2]);
             write_frame(&mut coordinator, &offset_commit_response()).await;
         });
         let metrics = ClientMetrics::new();
@@ -7686,6 +7821,13 @@ mod tests {
         ]
     }
 
+    fn offset_fetch_error_response(error_code: i16) -> Vec<u8> {
+        let mut response = offset_fetch_response();
+        let last = response.len();
+        response[last - 2..].copy_from_slice(&error_code.to_be_bytes());
+        response
+    }
+
     fn offset_commit_response() -> Vec<u8> {
         vec![
             0, 0, 0, 1, // correlation ID
@@ -7695,5 +7837,12 @@ mod tests {
             0, 0, 0, 0, 0, 0, // partition 0, success
             0, 0, 0, 2, 0, 0, // partition 2, success
         ]
+    }
+
+    fn offset_commit_error_response(error_code: i16) -> Vec<u8> {
+        let mut response = offset_commit_response();
+        let last = response.len();
+        response[last - 2..].copy_from_slice(&error_code.to_be_bytes());
+        response
     }
 }

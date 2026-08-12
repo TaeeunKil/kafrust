@@ -73,14 +73,14 @@ discovery coverage only; a coordinator stop after the admin connection has been
 established still requires live failure-injection evidence.
 
 The read-only `OffsetFetch v2` admin path additionally reconnects and retries
-after a coordinator connection drops or a request times out. Its focused
-injected-broker test verifies that the first request receives no response, the
-coordinator is rediscovered, and the same offset query succeeds. Administrative
-`OffsetCommit v2` retries use the same bounded reconnect path because repeating
-the exact committed offsets is state-idempotent; its focused test covers a
-commit request that loses the response before succeeding on the rediscovered
-coordinator. Other administrative writes remain conservative because a timeout
-can leave their broker-side outcome ambiguous.
+after a coordinator connection drops, a request timeout, or a transient
+coordinator broker error. Its focused injected-broker tests verify both a lost
+response and a `CoordinatorLoadInProgress` response before the coordinator is
+rediscovered and the same offset query succeeds. Administrative `OffsetCommit
+v2` retries use the same bounded reconnect path because repeating the exact
+committed offsets is state-idempotent; focused tests cover both a lost response
+and a transient coordinator partition error. Other administrative writes remain
+conservative because a timeout can leave their broker-side outcome ambiguous.
 
 | Broker | Mode | Security | Verification | Status |
 | --- | --- | --- | --- | --- |
