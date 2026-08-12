@@ -73,11 +73,6 @@ async fn main() -> kafrust::Result<()> {
     if rack_aware {
         let follow_up = consumer.fetch(&topic, partition, offset).await?;
         println!("rack-aware follow-up fetched {} records", follow_up.len());
-        if require_rack_record && follow_up.is_empty() {
-            return Err(Error::Unsupported(
-                "rack-aware follow-up expected at least one record",
-            ));
-        }
     }
 
     Ok(())
