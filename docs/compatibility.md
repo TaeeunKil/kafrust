@@ -199,8 +199,9 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
   classic or KIP-848 joins and is covered by focused ordering, filtering, and
   no-match tests. The two-topic initial assignment path passed on Kafka 3.7.2,
   3.8.1, 3.9.1, and 4.3.1 in [`Live Kafka Smoke`, run `31558990231`](https://github.com/TaeeunKil/kafrust/actions/runs/31558990231).
-  Rejoin topic discovery and secured-broker permission behavior still require
-  targeted qualification.
+  The workflow now also includes a dedicated Kafka 4.3.1 KIP-848 path for the
+  corrected resolved-topic retention; rejoin topic discovery and secured-broker
+  permission behavior still require targeted qualification.
 - KIP-848 consumer groups through `ConsumerGroupHeartbeat v0`, Metadata v12
   topic UUID assignment, member-epoch foreground/background heartbeats,
   OffsetFetch v9, OffsetCommit v9, rejoin after concurrent membership, and

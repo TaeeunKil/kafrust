@@ -200,7 +200,8 @@ Known limits:
 - Live group validation runs through the scheduled/manual `Live Kafka Smoke` workflow.
 - Regex subscription has focused unit coverage and initial two-topic assignment
   qualification across Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 in the live smoke
-  workflow; secured permission and rejoin qualification remain.
+  workflow. The corrected KIP-848 path is queued in the next live run; secured
+  permission and rejoin qualification remain.
 
 ## M6 Production Behavior
 

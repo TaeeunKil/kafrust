@@ -832,6 +832,7 @@ impl ConsumerGroupConfig {
                 coordinator: coordinator_client,
                 cooperative_rejoin_required,
                 protocol: ConsumerGroupProtocol::Classic,
+                resolved_topics: topics,
                 consumer_topic_ids: BTreeMap::new(),
                 consumer_session: None,
                 consumer_heartbeat_state: None,
@@ -1006,6 +1007,7 @@ impl ConsumerGroupConfig {
             coordinator: coordinator_client,
             cooperative_rejoin_required: false,
             protocol: ConsumerGroupProtocol::Consumer,
+            resolved_topics: topics,
             consumer_topic_ids: topic_ids,
             consumer_session: Some(Arc::new(())),
             consumer_heartbeat_state: None,
@@ -1115,6 +1117,7 @@ pub struct ConsumerGroup {
     coordinator: Client,
     cooperative_rejoin_required: bool,
     protocol: ConsumerGroupProtocol,
+    resolved_topics: Vec<String>,
     consumer_topic_ids: BTreeMap<String, [u8; 16]>,
     consumer_session: Option<Arc<()>>,
     consumer_heartbeat_state: Option<Arc<Mutex<ConsumerProtocolHeartbeatState>>>,
@@ -1570,7 +1573,7 @@ impl ConsumerGroup {
             }))
         });
         let consumer_state_for_task = consumer_state.clone();
-        let topics = self.config.topics.clone();
+        let topics = self.resolved_topics.clone();
         let server_assignor = self.config.server_assignor.clone();
         let rebalance_timeout_ms = self.config.rebalance_timeout_ms;
         let (shutdown, shutdown_rx) = oneshot::channel();
@@ -1753,7 +1756,7 @@ impl ConsumerGroup {
                     self.config.group_instance_id.clone(),
                     None,
                     self.config.rebalance_timeout_ms,
-                    Some(self.config.topics.clone()),
+                    Some(self.resolved_topics.clone()),
                     self.config.server_assignor.clone(),
                     owned_partitions.clone(),
                 )

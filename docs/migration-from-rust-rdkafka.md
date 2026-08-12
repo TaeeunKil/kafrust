@@ -273,7 +273,7 @@ See [Admin API](admin-api.md) for typed request and response examples.
 | Idempotent producer | Candidate; broker-stop recovery is live-verified on the documented three-broker profile, but qualify target-specific ambiguous, fencing, and throughput failures |
 | Direct assigned-partition consumer | Candidate |
 | Classic range-assigned consumer group | Candidate with rebalance testing |
-| Regex topic subscription | Verified for initial two-topic assignment on Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke; qualify topic-discovery permissions and rejoin behavior on the target broker |
+| Regex topic subscription | Verified for initial two-topic assignment on Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke; the corrected KIP-848 path is queued in the next live run, and topic-discovery permissions/rejoin behavior still require qualification |
 | TLS, SASL/PLAIN, or SASL/SCRAM-SHA-256 | Candidate on documented profiles |
 | SASL/OAUTHBEARER | Candidate only for the documented Kafka 3.7.2 unsecured-validator smoke; async token-provider callbacks exist, but qualify the production OAuth/OIDC provider, token policy, and authorization behavior |
 | Transactions and read-committed consumption | Alpha candidate; transaction coordinator broker-stop recovery is verified on the documented Kafka 3.7.2 three-broker SASL/PLAIN profile, but broader target-specific failure and throughput qualification remains |
