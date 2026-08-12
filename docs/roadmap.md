@@ -1532,6 +1532,11 @@ Implemented evidence:
 - Direct consumer fetch and watermark paths reuse a successful partition-leader
   `Client` by broker address and evict it on request failure. A focused
   injected-broker test verifies two sequential Fetch requests on one socket.
+- Producer capability negotiation now prefers flexible Produce v9 for
+  RecordBatch sends, including transactional and no-ack paths, while retaining
+  Produce v7, v3, and v2 fallbacks. Focused request/response fixtures and
+  producer selection tests cover the new path; live broker qualification is the
+  next release gate.
 - Rack-aware direct and group fetches now expose `client_rack` through their
   builders. Connections prefer flexible Fetch v12 through ApiVersions, encode
   the compact/tagged rack-aware request, decode `preferred_read_replica`, and

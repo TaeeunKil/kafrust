@@ -99,8 +99,8 @@ use kafrust_protocol::api::offset_fetch::{
 };
 use kafrust_protocol::api::produce::{
     MessageSetMessage, ProducePartitionV2, ProducePartitionV3, ProduceRequestV2, ProduceRequestV3,
-    ProduceRequestV7, ProduceResponseV2, ProduceResponseV7, ProduceTopicV2, ProduceTopicV3,
-    RecordBatchIdentity, RecordBatchMessage,
+    ProduceRequestV7, ProduceRequestV9, ProduceResponseV2, ProduceResponseV7, ProduceResponseV9,
+    ProduceTopicV2, ProduceTopicV3, RecordBatchIdentity, RecordBatchMessage,
 };
 use kafrust_protocol::api::sasl::{
     SaslAuthenticateRequestV1, SaslAuthenticateRequestV2, SaslAuthenticateResponseV1,
@@ -1708,6 +1708,47 @@ impl Client {
         topics: Vec<ProduceTopicV3>,
     ) -> Result<()> {
         let request = ProduceRequestV7 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            transactional_id,
+            acks,
+            timeout_ms,
+            topics,
+        };
+        self.send_request_no_response(&request.encode()?).await
+    }
+
+    /// Sends flexible Produce v9 for pre-built record batch topic partitions.
+    pub async fn produce_v9(
+        &mut self,
+        transactional_id: Option<String>,
+        acks: i16,
+        timeout_ms: i32,
+        topics: Vec<ProduceTopicV3>,
+    ) -> Result<ProduceResponseV9> {
+        let request = ProduceRequestV9 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            transactional_id,
+            acks,
+            timeout_ms,
+            topics,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(ProduceResponseV9::decode_body(&mut decoder)?)
+    }
+
+    /// Sends flexible Produce v9 without waiting for a broker response.
+    pub async fn produce_v9_no_response(
+        &mut self,
+        transactional_id: Option<String>,
+        acks: i16,
+        timeout_ms: i32,
+        topics: Vec<ProduceTopicV3>,
+    ) -> Result<()> {
+        let request = ProduceRequestV9 {
             correlation_id: self.next_correlation_id(),
             client_id: self.client_id.clone(),
             transactional_id,

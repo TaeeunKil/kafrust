@@ -331,10 +331,10 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
 - High-level producer metadata lookup, leader routing, flexible `ApiVersions v3`
   capability negotiation, negotiated Produce API selection, single-record send,
   batch send, gzip-, Snappy-, LZ4-, and Zstd-compressed batch send, and buffered
-  send with `acks=1`. Against Kafka 3.7.2, the current path selects Produce v3
-  RecordBatch for Gzip, Snappy, and LZ4, and Produce v7 for Zstd. Live run
-  `31494820868` passed this producer path across the supported plaintext,
-  secured, and three-broker profiles.
+  send with `acks=1`. The current path prefers flexible Produce v9 RecordBatch
+  on brokers that advertise it, then falls back to Produce v7, v3, or v2.
+  The focused v9 request/response fixtures pass locally; a new live matrix is
+  required before this version-selection path becomes a release qualification.
 - Sequential producer sends to the same leader reuse one authenticated broker
   connection and its negotiated capability response; a focused injected-broker
   test verifies one ApiVersions exchange followed by two Produce requests on
@@ -421,7 +421,7 @@ with zero in-flight requests and buffered records.
   identity and sequence metadata. Manual run `29991254722` passed these paths
   against Kafka 3.7.2 and Kafka 4.3.1.
 - Opt-in alpha transactional produce using transaction coordinator discovery,
-  transactional `InitProducerId v0`, `AddPartitionsToTxn v0`, Produce v3/v7,
+  transactional `InitProducerId v0`, `AddPartitionsToTxn v0`, Produce v9/v7/v3,
   and `EndTxn v0`. Manual run `29994041530` passed a committed transaction
   followed by an aborted transaction against Kafka 3.7.2 and Kafka 4.3.1.
 - Direct and group consumer `ReadCommitted` isolation through Fetch v4.
@@ -449,15 +449,15 @@ with zero in-flight requests and buffered records.
   three-broker profile, then passed `EndTxn` commit and read-committed
   fetch-back before restoring the broker. The existing broker-stop failover
   sequence and all seven other broker/security profiles also passed.
-- Gzip Produce v3 RecordBatch encoding and Fetch v4 RecordBatch decoding are
+- Gzip Produce v9/v3 RecordBatch encoding and Fetch v4 RecordBatch decoding are
   covered by focused tests and the plaintext live smoke profile.
-- Snappy Produce v3 RecordBatch encoding and Fetch v4 RecordBatch decoding are
+- Snappy Produce v9/v3 RecordBatch encoding and Fetch v4 RecordBatch decoding are
   covered by focused tests using Kafka-compatible Xerial framing and by the
   plaintext single-node and multi-broker live smoke profiles.
-- LZ4 Produce v3 RecordBatch encoding and Fetch v4 RecordBatch decoding are
+- LZ4 Produce v9/v3 RecordBatch encoding and Fetch v4 RecordBatch decoding are
   covered by focused standard-frame and decompression-limit tests and by the
   plaintext single-node and multi-broker live smoke profiles.
-- Zstd Produce v7 RecordBatch encoding and Fetch v4 RecordBatch decoding are
+- Zstd Produce v9/v7 RecordBatch encoding and Fetch v4 RecordBatch decoding are
   covered by focused standard-frame, declared-window, and decompression-limit
   tests and by the plaintext single-node and multi-broker live smoke profiles.
 - Direct consumer fetch from an assigned topic partition using Fetch v4 response

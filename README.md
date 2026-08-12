@@ -469,8 +469,9 @@ See [Compatibility](docs/compatibility.md) and
   this covers replica selection, not every possible rack or security topology.
 - `ProducerConfig::partitioner` supports thread-safe custom routing for records
   without explicit partitions across immediate, batch, and buffered sends.
-- Gzip, Snappy, and LZ4 compression use Produce v3 RecordBatch encoding; Zstd
-  requires and negotiates Produce v7. Fetch v4 decodes all four codecs. They are
+- Gzip, Snappy, LZ4, and Zstd compression prefer flexible Produce v9 RecordBatch
+  encoding when the broker advertises it, with Produce v7/v3 fallbacks. Fetch v4
+  decodes all four codecs. They are
   verified against Kafka `3.7.2` plaintext single-node and multi-broker smoke
   profiles and the single-node TLS profile. Snappy uses Kafka-compatible Xerial
   framing and accepts raw Snappy blocks when decoding.

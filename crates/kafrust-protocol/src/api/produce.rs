@@ -34,6 +34,16 @@ pub struct ProduceRequestV7 {
     pub topics: Vec<ProduceTopicV3>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProduceRequestV9 {
+    pub correlation_id: i32,
+    pub client_id: Option<String>,
+    pub transactional_id: Option<String>,
+    pub acks: i16,
+    pub timeout_ms: i32,
+    pub topics: Vec<ProduceTopicV3>,
+}
+
 impl ProduceRequestV3 {
     pub fn encode(&self) -> Result<Vec<u8>> {
         encode_record_batch_request(
@@ -59,6 +69,27 @@ impl ProduceRequestV7 {
             self.timeout_ms,
             &self.topics,
         )
+    }
+}
+
+impl ProduceRequestV9 {
+    pub fn encode(&self) -> Result<Vec<u8>> {
+        let mut encoder = Encoder::new();
+        RequestHeader {
+            api_key: API_KEY,
+            api_version: 9,
+            correlation_id: self.correlation_id,
+            client_id: self.client_id.clone(),
+        }
+        .encode_v2(&mut encoder)?;
+        encoder.write_compact_nullable_string(self.transactional_id.as_deref())?;
+        encoder.write_i16(self.acks);
+        encoder.write_i32(self.timeout_ms);
+        encoder.write_compact_array(Some(self.topics.as_slice()), |encoder, topic| {
+            topic.encode_v9(encoder, self.transactional_id.is_some())
+        })?;
+        encoder.write_empty_tagged_fields();
+        Ok(encoder.into_bytes())
     }
 }
 
@@ -126,6 +157,15 @@ impl ProduceTopicV3 {
             partition.encode(encoder, transactional)
         })
     }
+
+    fn encode_v9(&self, encoder: &mut Encoder, transactional: bool) -> Result<()> {
+        encoder.write_compact_string(&self.name)?;
+        encoder.write_compact_array(Some(self.partitions.as_slice()), |encoder, partition| {
+            partition.encode_v9(encoder, transactional)
+        })?;
+        encoder.write_empty_tagged_fields();
+        Ok(())
+    }
 }
 
 impl ProduceTopicV2 {
@@ -176,6 +216,19 @@ impl ProducePartitionV3 {
             transactional,
         )?;
         encoder.write_bytes(&record_set)
+    }
+
+    fn encode_v9(&self, encoder: &mut Encoder, transactional: bool) -> Result<()> {
+        encoder.write_i32(self.partition_index);
+        let record_set = encode_record_batch_set_with_compression_identity_and_transaction(
+            &self.records,
+            self.compression,
+            self.identity,
+            transactional,
+        )?;
+        encoder.write_compact_nullable_bytes(Some(&record_set))?;
+        encoder.write_empty_tagged_fields();
+        Ok(())
     }
 }
 
@@ -336,6 +389,99 @@ impl ProducePartitionResponseV2 {
 pub struct ProduceResponseV7 {
     pub responses: Vec<ProduceTopicResponseV7>,
     pub throttle_time_ms: i32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProduceResponseV9 {
+    pub responses: Vec<ProduceTopicResponseV9>,
+    pub throttle_time_ms: i32,
+}
+
+impl ProduceResponseV9 {
+    pub fn decode_body(decoder: &mut Decoder<'_>) -> Result<Self> {
+        let responses = decoder
+            .read_compact_array("produce responses", ProduceTopicResponseV9::decode)?
+            .unwrap_or_default();
+        let throttle_time_ms = decoder.read_i32()?;
+        decoder.read_tagged_fields()?;
+        Ok(Self {
+            responses,
+            throttle_time_ms,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProduceTopicResponseV9 {
+    pub name: String,
+    pub partitions: Vec<ProducePartitionResponseV9>,
+}
+
+impl ProduceTopicResponseV9 {
+    fn decode(decoder: &mut Decoder<'_>) -> Result<Self> {
+        let name = decoder.read_compact_string()?;
+        let partitions = decoder
+            .read_compact_array(
+                "produce partition responses",
+                ProducePartitionResponseV9::decode,
+            )?
+            .unwrap_or_default();
+        decoder.read_tagged_fields()?;
+        Ok(Self { name, partitions })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProducePartitionResponseV9 {
+    pub partition_index: i32,
+    pub error_code: i16,
+    pub base_offset: i64,
+    pub log_append_time_ms: i64,
+    pub log_start_offset: i64,
+    pub record_errors: Vec<ProduceRecordErrorV9>,
+    pub error_message: Option<String>,
+}
+
+impl ProducePartitionResponseV9 {
+    fn decode(decoder: &mut Decoder<'_>) -> Result<Self> {
+        let partition_index = decoder.read_i32()?;
+        let error_code = decoder.read_i16()?;
+        let base_offset = decoder.read_i64()?;
+        let log_append_time_ms = decoder.read_i64()?;
+        let log_start_offset = decoder.read_i64()?;
+        let record_errors = decoder
+            .read_compact_array("produce record errors", ProduceRecordErrorV9::decode)?
+            .unwrap_or_default();
+        let error_message = decoder.read_compact_nullable_string()?;
+        decoder.read_tagged_fields()?;
+        Ok(Self {
+            partition_index,
+            error_code,
+            base_offset,
+            log_append_time_ms,
+            log_start_offset,
+            record_errors,
+            error_message,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProduceRecordErrorV9 {
+    pub batch_index: i32,
+    pub error_message: Option<String>,
+}
+
+impl ProduceRecordErrorV9 {
+    fn decode(decoder: &mut Decoder<'_>) -> Result<Self> {
+        let batch_index = decoder.read_i32()?;
+        let error_message = decoder.read_compact_nullable_string()?;
+        decoder.read_tagged_fields()?;
+        Ok(Self {
+            batch_index,
+            error_message,
+        })
+    }
 }
 
 impl ProduceResponseV7 {
@@ -574,8 +720,9 @@ mod tests {
         encode_record_batch_set_with_compression_and_identity,
         encode_record_batch_set_with_compression_identity_and_transaction, encoded_message_set_len,
         encoded_record_batch_set_len, MessageSetMessage, ProducePartitionV2, ProducePartitionV3,
-        ProduceRequestV2, ProduceRequestV3, ProduceRequestV7, ProduceResponseV2, ProduceResponseV7,
-        ProduceTopicV2, ProduceTopicV3, RecordBatchIdentity, RecordBatchMessage,
+        ProduceRequestV2, ProduceRequestV3, ProduceRequestV7, ProduceRequestV9, ProduceResponseV2,
+        ProduceResponseV7, ProduceResponseV9, ProduceTopicV2, ProduceTopicV3, RecordBatchIdentity,
+        RecordBatchMessage,
     };
     use crate::codec::{DecodeLimits, Decoder};
     use crate::record_batch::RecordBatchCompression;
@@ -858,6 +1005,42 @@ mod tests {
     }
 
     #[test]
+    fn encodes_produce_request_v9_with_flexible_record_batch() {
+        let request = ProduceRequestV9 {
+            correlation_id: 5,
+            client_id: Some("kafrust".to_owned()),
+            transactional_id: Some("orders-tx".to_owned()),
+            acks: -1,
+            timeout_ms: 30_000,
+            topics: vec![ProduceTopicV3 {
+                name: "orders".to_owned(),
+                partitions: vec![ProducePartitionV3 {
+                    partition_index: 0,
+                    compression: RecordBatchCompression::None,
+                    identity: RecordBatchIdentity {
+                        producer_id: 42,
+                        producer_epoch: 3,
+                        base_sequence: 7,
+                    },
+                    records: vec![RecordBatchMessage::new(
+                        Some(b"order-1".to_vec()),
+                        Some(b"created".to_vec()),
+                        1_000,
+                    )],
+                }],
+            }],
+        };
+
+        let bytes = request.encode().unwrap();
+
+        assert_eq!(&bytes[0..4], &[0, 0, 0, 9]);
+        assert!(bytes
+            .windows(7)
+            .any(|window| window == [10, b'o', b'r', b'd', b'e', b'r', b's']));
+        assert!(bytes.len() > 80);
+    }
+
+    #[test]
     fn zstd_record_batch_encoding_roundtrips_through_fetch_decoder() {
         let record_set =
             encode_record_batch_set_with_compression(
@@ -1003,6 +1186,52 @@ mod tests {
         assert_eq!(response.responses[0].name, "orders");
         assert_eq!(response.responses[0].partitions[0].base_offset, 42);
         assert_eq!(response.responses[0].partitions[0].log_start_offset, 7);
+        assert!(decoder.is_empty());
+    }
+
+    #[test]
+    fn decodes_produce_response_v9_with_record_error_fields() {
+        let mut bytes = Encoder::new();
+        bytes
+            .write_compact_array(Some(&[()]), |encoder, _| {
+                encoder.write_compact_string("orders")?;
+                encoder.write_compact_array(Some(&[()]), |encoder, _| {
+                    encoder.write_i32(0);
+                    encoder.write_i16(0);
+                    encoder.write_i64(42);
+                    encoder.write_i64(-1);
+                    encoder.write_i64(7);
+                    encoder.write_compact_array(Some(&[()]), |encoder, _| {
+                        encoder.write_i32(3);
+                        encoder.write_compact_nullable_string(Some("bad record"))?;
+                        encoder.write_empty_tagged_fields();
+                        Ok(())
+                    })?;
+                    encoder.write_compact_nullable_string(Some("batch rejected"))?;
+                    encoder.write_empty_tagged_fields();
+                    Ok(())
+                })?;
+                encoder.write_empty_tagged_fields();
+                Ok(())
+            })
+            .unwrap();
+        bytes.write_i32(0);
+        bytes.write_empty_tagged_fields();
+
+        let bytes = bytes.into_bytes();
+        let mut decoder = Decoder::new(&bytes);
+        let response = ProduceResponseV9::decode_body(&mut decoder).unwrap();
+
+        assert_eq!(response.responses[0].name, "orders");
+        let partition = &response.responses[0].partitions[0];
+        assert_eq!(partition.base_offset, 42);
+        assert_eq!(partition.log_start_offset, 7);
+        assert_eq!(partition.record_errors[0].batch_index, 3);
+        assert_eq!(
+            partition.record_errors[0].error_message.as_deref(),
+            Some("bad record")
+        );
+        assert_eq!(partition.error_message.as_deref(), Some("batch rejected"));
         assert!(decoder.is_empty());
     }
 }

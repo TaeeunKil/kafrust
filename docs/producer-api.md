@@ -269,9 +269,10 @@ Current implementation status:
   active coordinator after Produce and passed commit plus read-committed
   fetch-back on a three-broker Kafka 3.7.2 cluster.
 - `Producer::send` performs metadata lookup, connects to the partition leader,
-  negotiates Produce API support with flexible `ApiVersions v3`, and chooses
-  Produce v7 for Zstd, Produce v3 RecordBatch for other RecordBatch features,
-  or Produce v2 MessageSet when the broker advertises only the legacy path.
+  negotiates Produce API support with flexible `ApiVersions v3`, and prefers
+  flexible Produce v9 for RecordBatch features. It falls back to Produce v7,
+  Produce v3, or Produce v2 MessageSet when the broker advertises only an older
+  path.
 - `ProducerConfig::request_timeout_ms` controls the request timeout used for metadata and produce roundtrips.
 - `ProducerConfig::security_protocol` stores the Kafka security protocol for producer broker connections. `Plaintext` is the default transport; TLS requires the non-default `tls` crate feature; `tls_server_name(name)` overrides the certificate validation name when the bootstrap host differs from the broker certificate; `tls_root_certificate_der(bytes)` adds DER-encoded root certificates while keeping platform roots enabled; `sasl_plain(username, password)`, `sasl_scram_sha_256(username, password)`, and `sasl_scram_sha_512(username, password)` provide SASL credentials for `SaslPlaintext` or `SaslTls`.
 - `ProducerConfig::max_retries` controls retry attempts for stale metadata, unknown topic-partition entries in cached metadata, missing leader or broker metadata, transient leader errors classified by `BrokerErrorKind`, request timeouts, and connection I/O failures.
@@ -283,8 +284,8 @@ Current implementation status:
   compression policy. `Compression::None` is the default.
   `Compression::Gzip`, `Compression::Snappy`, `Compression::Lz4`, and
   `Compression::Zstd` encode compressed RecordBatch payloads. Gzip, Snappy, and
-  LZ4 require Produce API v3; Zstd requires Produce API v7. Missing broker
-  support returns `Unsupported`. Snappy output uses Kafka-compatible Xerial
+  LZ4 and Zstd use Produce v9 when available and require Produce API v3 or
+  newer. Missing broker support returns `Unsupported`. Snappy output uses Kafka-compatible Xerial
   framing; LZ4 and Zstd output use their standard frames as expected by
   RecordBatch v2.
 - `ProducerConfig::build_buffered` creates a `BufferedProducer` with configurable bounded enqueue, per-record `ProducerDelivery` handles, `flush`, `close`, and `is_closed`.
