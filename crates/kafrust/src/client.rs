@@ -41,6 +41,12 @@ use kafrust_protocol::api::describe_configs::{
     DescribeConfigsRequestV1, DescribeConfigsResourceV1, DescribeConfigsResponseV1,
 };
 use kafrust_protocol::api::describe_groups::{DescribeGroupsRequestV1, DescribeGroupsResponseV1};
+use kafrust_protocol::api::describe_producers::{
+    DescribeProducersRequestV0, DescribeProducersResponseV0, DescribeProducersTopicV0,
+};
+use kafrust_protocol::api::describe_transactions::{
+    DescribeTransactionsRequestV0, DescribeTransactionsResponseV0,
+};
 use kafrust_protocol::api::describe_user_scram_credentials::{
     DescribeUserScramCredentialsRequestV0, DescribeUserScramCredentialsResponseV0,
 };
@@ -563,6 +569,45 @@ impl Client {
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(DeleteRecordsResponseV1::decode_body(&mut decoder)?)
+    }
+
+    /// Sends DescribeProducers v0 to the broker represented by this connection.
+    ///
+    /// Kafka expects each requested partition on its current leader. High-level
+    /// callers should prefer [`crate::AdminClient`], which performs metadata
+    /// discovery and groups requests by leader.
+    pub async fn describe_producers_v0(
+        &mut self,
+        topics: Vec<DescribeProducersTopicV0>,
+    ) -> Result<DescribeProducersResponseV0> {
+        let request = DescribeProducersRequestV0 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            topics,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(DescribeProducersResponseV0::decode_body(&mut decoder)?)
+    }
+
+    /// Sends DescribeTransactions v0 to the broker represented by this connection.
+    ///
+    /// The connection must be the transaction coordinator for the requested
+    /// transactional IDs. High-level callers should prefer [`crate::AdminClient`].
+    pub async fn describe_transactions_v0(
+        &mut self,
+        transactional_ids: Vec<String>,
+    ) -> Result<DescribeTransactionsResponseV0> {
+        let request = DescribeTransactionsRequestV0 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            transactional_ids,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(DescribeTransactionsResponseV0::decode_body(&mut decoder)?)
     }
 
     /// Sends DescribeConfigs v1 to the broker represented by this connection.

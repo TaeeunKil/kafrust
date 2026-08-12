@@ -36,6 +36,13 @@ use kafrust_protocol::api::describe_configs::{
     DescribeConfigsSynonymV1,
 };
 use kafrust_protocol::api::describe_groups::{DescribeGroupsGroupV1, DescribeGroupsMemberV1};
+use kafrust_protocol::api::describe_producers::{
+    DescribeProducersActiveProducerV0, DescribeProducersPartitionResponseV0,
+    DescribeProducersTopicResponseV0,
+};
+use kafrust_protocol::api::describe_transactions::{
+    DescribeTransactionsStateV0, DescribeTransactionsTopicV0,
+};
 use kafrust_protocol::api::describe_user_scram_credentials::{
     DescribeUserScramCredentialsResponseV0, ScramCredentialInfoV0,
 };
@@ -891,6 +898,112 @@ impl AdminClient {
         }
 
         Ok(DeleteRecordsResult::from_protocol_responses(responses))
+    }
+
+    /// Describes active producers for selected topic partitions.
+    ///
+    /// Metadata is resolved first and requests are grouped by current
+    /// partition leader. Per-partition broker errors and producer sequence
+    /// state remain available in the typed result.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.describe_producers",
+        skip_all,
+        fields(topic_count = topics.len()),
+        err
+    )]
+    pub async fn describe_producers(
+        &self,
+        topics: &[DescribeProducersTopic],
+    ) -> Result<DescribeProducersResult> {
+        let mut bootstrap = self.config.clone().connect().await?;
+        let metadata = bootstrap
+            .metadata(Some(
+                topics.iter().map(|topic| topic.name.clone()).collect(),
+            ))
+            .await?;
+        let requests = describe_producers_requests(&metadata, topics)?;
+        let mut responses = Vec::with_capacity(requests.len());
+        for (broker_addr, topics) in requests {
+            let mut client = self.config.connect_broker(broker_addr).await?;
+            responses.push(client.describe_producers_v0(topics).await?);
+        }
+
+        let requested_partitions = topics.iter().map(|topic| topic.partitions.len()).sum();
+        let returned_partitions = responses
+            .iter()
+            .flat_map(|response| &response.topics)
+            .map(|topic| topic.partitions.len())
+            .sum();
+        if returned_partitions != requested_partitions {
+            return Err(Error::ResponseCountMismatch {
+                operation: "DescribeProducers",
+                expected: requested_partitions,
+                actual: returned_partitions,
+            });
+        }
+
+        for response in &responses {
+            for topic in &response.topics {
+                for partition in &topic.partitions {
+                    if partition.error_code != 0 {
+                        self.config.record_broker_error();
+                    }
+                }
+            }
+        }
+        Ok(DescribeProducersResult::from_protocol_responses(responses))
+    }
+
+    /// Describes transactional IDs through their active transaction
+    /// coordinators. IDs are grouped by coordinator so a request never goes
+    /// to a broker that does not own the transaction state.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.describe_transactions",
+        skip_all,
+        fields(transactional_id_count = transactional_ids.len()),
+        err
+    )]
+    pub async fn describe_transactions(
+        &self,
+        transactional_ids: &[String],
+    ) -> Result<DescribeTransactionsResult> {
+        let mut coordinator_ids: BTreeMap<String, Vec<String>> = BTreeMap::new();
+        let mut bootstrap = self.config.clone().connect().await?;
+        for transactional_id in transactional_ids {
+            let coordinator = bootstrap
+                .find_transaction_coordinator(transactional_id)
+                .await?;
+            if coordinator.error_code != 0 {
+                self.config.record_broker_error();
+                return Err(Error::Broker {
+                    code: coordinator.error_code,
+                    context: format!("find coordinator for transactional ID {transactional_id}"),
+                });
+            }
+            coordinator_ids
+                .entry(format!("{}:{}", coordinator.host, coordinator.port))
+                .or_default()
+                .push(transactional_id.clone());
+        }
+
+        let mut responses = Vec::with_capacity(coordinator_ids.len());
+        for (broker_addr, transactional_ids) in coordinator_ids {
+            let mut client = self.config.connect_broker(broker_addr).await?;
+            responses.push(client.describe_transactions_v0(transactional_ids).await?);
+        }
+
+        for response in &responses {
+            for state in &response.transaction_states {
+                if state.error_code != 0 {
+                    self.config.record_broker_error();
+                }
+            }
+        }
+        Ok(DescribeTransactionsResult::from_protocol_responses(
+            responses,
+        ))
     }
 }
 
@@ -4353,6 +4466,396 @@ impl CreatePartitionsTopicResult {
     }
 }
 
+/// Topic and partition targets for one DescribeProducers operation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DescribeProducersTopic {
+    name: String,
+    partitions: Vec<i32>,
+}
+
+impl DescribeProducersTopic {
+    /// Creates an empty topic target.
+    pub fn new(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            partitions: Vec::new(),
+        }
+    }
+
+    /// Adds a partition to the producer-state query.
+    pub fn partition(mut self, partition_index: i32) -> Self {
+        self.partitions.push(partition_index);
+        self
+    }
+
+    /// Returns the topic name.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Returns requested partition indexes.
+    pub fn partitions(&self) -> &[i32] {
+        &self.partitions
+    }
+}
+
+/// Complete response from one DescribeProducers operation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DescribeProducersResult {
+    throttle_time: Duration,
+    topics: Vec<DescribeProducersTopicResult>,
+}
+
+impl DescribeProducersResult {
+    /// Returns the maximum broker throttle time observed across leader requests.
+    pub fn throttle_time(&self) -> Duration {
+        self.throttle_time
+    }
+
+    /// Returns per-topic producer-state results.
+    pub fn topics(&self) -> &[DescribeProducersTopicResult] {
+        &self.topics
+    }
+
+    /// Consumes this response and returns per-topic results.
+    pub fn into_topics(self) -> Vec<DescribeProducersTopicResult> {
+        self.topics
+    }
+
+    /// Returns whether at least one partition query failed.
+    pub fn has_errors(&self) -> bool {
+        self.topics
+            .iter()
+            .any(DescribeProducersTopicResult::has_errors)
+    }
+
+    fn from_protocol_responses(
+        responses: Vec<kafrust_protocol::api::describe_producers::DescribeProducersResponseV0>,
+    ) -> Self {
+        Self {
+            throttle_time: Duration::from_millis(
+                responses
+                    .iter()
+                    .map(|response| nonnegative_i32_to_u64(response.throttle_time_ms))
+                    .max()
+                    .unwrap_or(0),
+            ),
+            topics: responses
+                .into_iter()
+                .flat_map(|response| response.topics)
+                .map(DescribeProducersTopicResult::from_protocol)
+                .collect(),
+        }
+    }
+}
+
+/// Outcome for one topic in a DescribeProducers response.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DescribeProducersTopicResult {
+    name: String,
+    partitions: Vec<DescribeProducersPartitionResult>,
+}
+
+impl DescribeProducersTopicResult {
+    /// Returns the topic name.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Returns per-partition producer-state results.
+    pub fn partitions(&self) -> &[DescribeProducersPartitionResult] {
+        &self.partitions
+    }
+
+    /// Returns whether at least one partition query failed.
+    pub fn has_errors(&self) -> bool {
+        self.partitions
+            .iter()
+            .any(|partition| !partition.is_success())
+    }
+
+    fn from_protocol(result: DescribeProducersTopicResponseV0) -> Self {
+        Self {
+            name: result.name,
+            partitions: result
+                .partitions
+                .into_iter()
+                .map(DescribeProducersPartitionResult::from_protocol)
+                .collect(),
+        }
+    }
+}
+
+/// Producer state for one partition in a DescribeProducers response.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DescribeProducersPartitionResult {
+    partition_index: i32,
+    error_code: i16,
+    error_message: Option<String>,
+    active_producers: Vec<DescribeProducersActiveProducer>,
+}
+
+impl DescribeProducersPartitionResult {
+    /// Returns the partition index.
+    pub fn partition_index(&self) -> i32 {
+        self.partition_index
+    }
+
+    /// Returns whether Kafka returned producer state successfully.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+    }
+
+    /// Returns Kafka's raw partition error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns Kafka's optional partition error message.
+    pub fn error_message(&self) -> Option<&str> {
+        self.error_message.as_deref()
+    }
+
+    /// Returns kafrust's classification for a non-zero Kafka error code.
+    pub fn broker_error_kind(&self) -> Option<BrokerErrorKind> {
+        (self.error_code != 0).then(|| BrokerErrorKind::from_code(self.error_code))
+    }
+
+    /// Returns active producer state entries.
+    pub fn active_producers(&self) -> &[DescribeProducersActiveProducer] {
+        &self.active_producers
+    }
+
+    fn from_protocol(result: DescribeProducersPartitionResponseV0) -> Self {
+        Self {
+            partition_index: result.partition_index,
+            error_code: result.error_code,
+            error_message: result.error_message,
+            active_producers: result
+                .active_producers
+                .into_iter()
+                .map(DescribeProducersActiveProducer::from_protocol)
+                .collect(),
+        }
+    }
+}
+
+/// Active producer sequence state returned by Kafka.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DescribeProducersActiveProducer {
+    producer_id: i64,
+    producer_epoch: i32,
+    last_sequence: i32,
+    last_timestamp: i64,
+    coordinator_epoch: i32,
+    current_txn_start_offset: i64,
+}
+
+impl DescribeProducersActiveProducer {
+    /// Returns the producer ID.
+    pub fn producer_id(&self) -> i64 {
+        self.producer_id
+    }
+
+    /// Returns the producer epoch.
+    pub fn producer_epoch(&self) -> i32 {
+        self.producer_epoch
+    }
+
+    /// Returns the last accepted sequence.
+    pub fn last_sequence(&self) -> i32 {
+        self.last_sequence
+    }
+
+    /// Returns the broker timestamp of the last append.
+    pub fn last_timestamp(&self) -> i64 {
+        self.last_timestamp
+    }
+
+    /// Returns the transaction coordinator epoch.
+    pub fn coordinator_epoch(&self) -> i32 {
+        self.coordinator_epoch
+    }
+
+    /// Returns the current transaction start offset, or Kafka's sentinel.
+    pub fn current_txn_start_offset(&self) -> i64 {
+        self.current_txn_start_offset
+    }
+
+    fn from_protocol(result: DescribeProducersActiveProducerV0) -> Self {
+        Self {
+            producer_id: result.producer_id,
+            producer_epoch: result.producer_epoch,
+            last_sequence: result.last_sequence,
+            last_timestamp: result.last_timestamp,
+            coordinator_epoch: result.coordinator_epoch,
+            current_txn_start_offset: result.current_txn_start_offset,
+        }
+    }
+}
+
+/// Complete response from one DescribeTransactions operation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DescribeTransactionsResult {
+    throttle_time: Duration,
+    transactions: Vec<TransactionDescription>,
+}
+
+impl DescribeTransactionsResult {
+    /// Returns the maximum broker throttle time observed across coordinators.
+    pub fn throttle_time(&self) -> Duration {
+        self.throttle_time
+    }
+
+    /// Returns transaction descriptions in broker response order.
+    pub fn transactions(&self) -> &[TransactionDescription] {
+        &self.transactions
+    }
+
+    /// Consumes this response and returns transaction descriptions.
+    pub fn into_transactions(self) -> Vec<TransactionDescription> {
+        self.transactions
+    }
+
+    /// Returns whether at least one transactional ID was rejected.
+    pub fn has_errors(&self) -> bool {
+        self.transactions
+            .iter()
+            .any(|transaction| !transaction.is_success())
+    }
+
+    fn from_protocol_responses(
+        responses: Vec<
+            kafrust_protocol::api::describe_transactions::DescribeTransactionsResponseV0,
+        >,
+    ) -> Self {
+        Self {
+            throttle_time: Duration::from_millis(
+                responses
+                    .iter()
+                    .map(|response| nonnegative_i32_to_u64(response.throttle_time_ms))
+                    .max()
+                    .unwrap_or(0),
+            ),
+            transactions: responses
+                .into_iter()
+                .flat_map(|response| response.transaction_states)
+                .map(TransactionDescription::from_protocol)
+                .collect(),
+        }
+    }
+}
+
+/// State of one transactional ID returned by Kafka.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TransactionDescription {
+    error_code: i16,
+    transactional_id: String,
+    transaction_state: String,
+    transaction_timeout: Duration,
+    transaction_start_time_ms: i64,
+    producer_id: i64,
+    producer_epoch: i16,
+    topics: Vec<TransactionDescriptionTopic>,
+}
+
+impl TransactionDescription {
+    /// Returns whether Kafka described this transactional ID successfully.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+    }
+
+    /// Returns Kafka's raw transaction error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns the transactional ID.
+    pub fn transactional_id(&self) -> &str {
+        &self.transactional_id
+    }
+
+    /// Returns Kafka's transaction state string.
+    pub fn state(&self) -> &str {
+        &self.transaction_state
+    }
+
+    /// Returns the configured transaction timeout.
+    pub fn transaction_timeout(&self) -> Duration {
+        self.transaction_timeout
+    }
+
+    /// Returns the transaction start timestamp in milliseconds, or Kafka's sentinel.
+    pub fn transaction_start_time_ms(&self) -> i64 {
+        self.transaction_start_time_ms
+    }
+
+    /// Returns the producer ID.
+    pub fn producer_id(&self) -> i64 {
+        self.producer_id
+    }
+
+    /// Returns the producer epoch.
+    pub fn producer_epoch(&self) -> i16 {
+        self.producer_epoch
+    }
+
+    /// Returns topic partitions currently associated with the transaction.
+    pub fn topics(&self) -> &[TransactionDescriptionTopic] {
+        &self.topics
+    }
+
+    /// Returns kafrust's classification for a non-zero Kafka error code.
+    pub fn broker_error_kind(&self) -> Option<BrokerErrorKind> {
+        (self.error_code != 0).then(|| BrokerErrorKind::from_code(self.error_code))
+    }
+
+    fn from_protocol(result: DescribeTransactionsStateV0) -> Self {
+        Self {
+            error_code: result.error_code,
+            transactional_id: result.transactional_id,
+            transaction_state: result.transaction_state,
+            transaction_timeout: Duration::from_millis(nonnegative_i32_to_u64(
+                result.transaction_timeout_ms,
+            )),
+            transaction_start_time_ms: result.transaction_start_time_ms,
+            producer_id: result.producer_id,
+            producer_epoch: result.producer_epoch,
+            topics: result
+                .topics
+                .into_iter()
+                .map(TransactionDescriptionTopic::from_protocol)
+                .collect(),
+        }
+    }
+}
+
+/// Topic partitions currently associated with one transaction.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TransactionDescriptionTopic {
+    topic: String,
+    partitions: Vec<i32>,
+}
+
+impl TransactionDescriptionTopic {
+    /// Returns the topic name.
+    pub fn topic(&self) -> &str {
+        &self.topic
+    }
+
+    /// Returns the partition indexes.
+    pub fn partitions(&self) -> &[i32] {
+        &self.partitions
+    }
+
+    fn from_protocol(result: DescribeTransactionsTopicV0) -> Self {
+        Self {
+            topic: result.topic,
+            partitions: result.partitions,
+        }
+    }
+}
+
 /// Partition offset target for one DeleteRecords operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DeleteRecordsPartition {
@@ -4749,6 +5252,86 @@ fn delete_records_requests(
         .collect())
 }
 
+fn describe_producers_requests(
+    metadata: &MetadataResponseV1,
+    topics: &[DescribeProducersTopic],
+) -> Result<
+    BTreeMap<String, Vec<kafrust_protocol::api::describe_producers::DescribeProducersTopicV0>>,
+> {
+    let mut requests: BTreeMap<String, BTreeMap<String, Vec<i32>>> = BTreeMap::new();
+
+    for topic in topics {
+        for &partition_index in &topic.partitions {
+            let topic_metadata = metadata
+                .topics
+                .iter()
+                .find(|candidate| candidate.name == topic.name)
+                .ok_or_else(|| Error::UnknownTopicOrPartition {
+                    topic: topic.name.clone(),
+                    partition: partition_index,
+                })?;
+            if topic_metadata.error_code != 0 {
+                return Err(Error::Broker {
+                    code: topic_metadata.error_code,
+                    context: format!("metadata for topic {}", topic.name),
+                });
+            }
+
+            let partition_metadata = topic_metadata
+                .partitions
+                .iter()
+                .find(|candidate| candidate.partition_index == partition_index)
+                .ok_or_else(|| Error::UnknownTopicOrPartition {
+                    topic: topic.name.clone(),
+                    partition: partition_index,
+                })?;
+            if partition_metadata.error_code != 0 {
+                return Err(Error::Broker {
+                    code: partition_metadata.error_code,
+                    context: format!("metadata for {}-{}", topic.name, partition_index),
+                });
+            }
+            let leader_id = partition_metadata.leader_id;
+            if leader_id < 0 {
+                return Err(Error::MissingLeader {
+                    topic: topic.name.clone(),
+                    partition: partition_index,
+                });
+            }
+            let broker = metadata
+                .brokers
+                .iter()
+                .find(|broker| broker.node_id == leader_id)
+                .ok_or(Error::MissingBroker { node_id: leader_id })?;
+            let broker_address = format!("{}:{}", broker.host, broker.port);
+            requests
+                .entry(broker_address)
+                .or_default()
+                .entry(topic.name.clone())
+                .or_default()
+                .push(partition_index);
+        }
+    }
+
+    Ok(requests
+        .into_iter()
+        .map(|(broker_address, topics)| {
+            (
+                broker_address,
+                topics
+                    .into_iter()
+                    .map(|(name, partition_indexes)| {
+                        kafrust_protocol::api::describe_producers::DescribeProducersTopicV0 {
+                            name,
+                            partition_indexes,
+                        }
+                    })
+                    .collect(),
+            )
+        })
+        .collect())
+}
+
 fn duration_millis_i32(duration: Duration) -> i32 {
     i32::try_from(duration.as_millis()).unwrap_or(i32::MAX)
 }
@@ -4766,9 +5349,10 @@ mod tests {
         ClientQuotaFilterComponent, ClientQuotaMatchType, ConfigAlterOperationKind, ConfigSource,
         ConsumerGroupOffsetDelete, CreatePartitionsOptions, CreateTopicsOptions,
         DeleteRecordsOptions, DeleteRecordsTopic, DeleteTopicsOptions, DescribeConfigsOptions,
-        NewPartitions, NewTopic, PartitionReassignment, PartitionReassignmentOptions,
-        PartitionReassignmentQuery, ScramCredentialDeletion, ScramCredentialMechanism,
-        ScramCredentialUpsertion, TopicConfigAlteration, TopicConfigResource,
+        DescribeProducersTopic, NewPartitions, NewTopic, PartitionReassignment,
+        PartitionReassignmentOptions, PartitionReassignmentQuery, ScramCredentialDeletion,
+        ScramCredentialMechanism, ScramCredentialUpsertion, TopicConfigAlteration,
+        TopicConfigResource,
     };
     use crate::{BrokerErrorKind, ClientConfig, ClientMetrics};
     use kafrust_protocol::codec::Encoder;
@@ -4850,6 +5434,16 @@ mod tests {
                 .timeout_ref(),
             Duration::from_secs(5)
         );
+    }
+
+    #[test]
+    fn builds_describe_producer_targets() {
+        let topic = DescribeProducersTopic::new("orders")
+            .partition(0)
+            .partition(2);
+
+        assert_eq!(topic.name(), "orders");
+        assert_eq!(topic.partitions(), &[0, 2]);
     }
 
     #[test]
@@ -5722,6 +6316,101 @@ mod tests {
         server.await.unwrap();
     }
 
+    #[tokio::test]
+    async fn routes_describe_producers_to_partition_leader() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let metadata_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+            write_frame(
+                &mut bootstrap,
+                &describe_producers_metadata_response(addr.port()),
+            )
+            .await;
+
+            let (mut leader, _) = listener.accept().await.unwrap();
+            let request = read_frame(&mut leader).await;
+            assert_eq!(&request[0..4], &[0, 61, 0, 0]);
+            assert_eq!(request.last(), Some(&0));
+            write_frame(&mut leader, &describe_producers_response()).await;
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        );
+
+        let result = admin
+            .describe_producers(&[DescribeProducersTopic::new("orders")
+                .partition(0)
+                .partition(1)])
+            .await
+            .unwrap();
+
+        assert_eq!(result.throttle_time(), Duration::from_millis(6));
+        assert!(result.has_errors());
+        assert_eq!(result.topics()[0].name(), "orders");
+        assert_eq!(
+            result.topics()[0].partitions()[0].active_producers()[0].producer_id(),
+            42
+        );
+        assert_eq!(
+            result.topics()[0].partitions()[0].active_producers()[0].last_sequence(),
+            17
+        );
+        assert_eq!(result.topics()[0].partitions()[1].error_code(), 29);
+        assert_eq!(
+            result.topics()[0].partitions()[1].error_message(),
+            Some("denied")
+        );
+        assert_eq!(metrics.snapshot().broker_errors, 1);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn routes_describe_transactions_to_transaction_coordinator() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let coordinator_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&coordinator_request[0..4], &[0, 10, 0, 1]);
+            assert_eq!(coordinator_request.last(), Some(&1));
+            write_frame(
+                &mut bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let (mut coordinator, _) = listener.accept().await.unwrap();
+            let request = read_frame(&mut coordinator).await;
+            assert_eq!(&request[0..4], &[0, 65, 0, 0]);
+            assert_eq!(request.last(), Some(&0));
+            write_frame(&mut coordinator, &describe_transactions_response()).await;
+        });
+        let admin =
+            AdminClient::new(ClientConfig::new([addr.to_string()]).request_timeout_ms(1_000));
+
+        let result = admin
+            .describe_transactions(&["payments-tx".to_owned()])
+            .await
+            .unwrap();
+
+        assert_eq!(result.throttle_time(), Duration::from_millis(7));
+        assert_eq!(result.transactions().len(), 1);
+        let transaction = &result.transactions()[0];
+        assert_eq!(transaction.transactional_id(), "payments-tx");
+        assert_eq!(transaction.state(), "Ongoing");
+        assert_eq!(transaction.producer_id(), 99);
+        assert_eq!(transaction.producer_epoch(), 4);
+        assert_eq!(transaction.topics()[0].topic(), "orders");
+        assert_eq!(transaction.topics()[0].partitions(), &[0, 2]);
+        server.await.unwrap();
+    }
+
     async fn read_frame(stream: &mut tokio::net::TcpStream) -> Vec<u8> {
         let length = stream.read_i32().await.unwrap();
         let mut frame = vec![0; usize::try_from(length).unwrap()];
@@ -5843,6 +6532,90 @@ mod tests {
         encoder.write_i32(2); // topic count
         write_topic_metadata(&mut encoder, "orders", &[0, 1]);
         write_topic_metadata(&mut encoder, "payments", &[2]);
+        encoder.into_bytes()
+    }
+
+    fn describe_producers_metadata_response(port: u16) -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_i32(1); // broker count
+        encoder.write_i32(1); // broker node ID
+        encoder.write_string("127.0.0.1").unwrap();
+        encoder.write_i32(i32::from(port));
+        encoder.write_nullable_string(None).unwrap();
+        encoder.write_i32(1); // controller ID
+        encoder.write_i32(1); // topic count
+        write_topic_metadata(&mut encoder, "orders", &[0, 1]);
+        encoder.into_bytes()
+    }
+
+    fn describe_producers_response() -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_empty_tagged_fields(); // response header tags
+        encoder.write_i32(6); // throttle time
+        encoder
+            .write_compact_array(Some(&[()]), |encoder, ()| {
+                encoder.write_compact_string("orders")?;
+                encoder.write_compact_array(Some(&[0_i32, 1_i32]), |encoder, partition| {
+                    encoder.write_i32(*partition);
+                    if *partition == 0 {
+                        encoder.write_i16(0);
+                        encoder.write_compact_nullable_string(None)?;
+                        encoder.write_compact_array(Some(&[()]), |encoder, ()| {
+                            encoder.write_i64(42);
+                            encoder.write_i32(3);
+                            encoder.write_i32(17);
+                            encoder.write_i64(1_700_000_000_000);
+                            encoder.write_i32(9);
+                            encoder.write_i64(-1);
+                            encoder.write_empty_tagged_fields();
+                            Ok(())
+                        })?;
+                    } else {
+                        encoder.write_i16(29);
+                        encoder.write_compact_nullable_string(Some("denied"))?;
+                        encoder.write_compact_array(Some(&[]), |_, ()| Ok(()))?;
+                    }
+                    encoder.write_empty_tagged_fields();
+                    Ok(())
+                })?;
+                encoder.write_empty_tagged_fields();
+                Ok(())
+            })
+            .unwrap();
+        encoder.write_empty_tagged_fields();
+        encoder.into_bytes()
+    }
+
+    fn describe_transactions_response() -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_empty_tagged_fields(); // response header tags
+        encoder.write_i32(7); // throttle time
+        encoder
+            .write_compact_array(Some(&[()]), |encoder, ()| {
+                encoder.write_i16(0);
+                encoder.write_compact_string("payments-tx")?;
+                encoder.write_compact_string("Ongoing")?;
+                encoder.write_i32(60_000);
+                encoder.write_i64(1_700_000_000_000);
+                encoder.write_i64(99);
+                encoder.write_i16(4);
+                encoder.write_compact_array(Some(&[()]), |encoder, ()| {
+                    encoder.write_compact_string("orders")?;
+                    encoder.write_array(Some(&[0_i32, 2_i32]), |encoder, partition| {
+                        encoder.write_i32(*partition);
+                        Ok(())
+                    })?;
+                    encoder.write_empty_tagged_fields();
+                    Ok(())
+                })?;
+                encoder.write_empty_tagged_fields();
+                Ok(())
+            })
+            .unwrap();
+        encoder.write_empty_tagged_fields();
         encoder.into_bytes()
     }
 

@@ -16,6 +16,8 @@ pub mod describe_acls;
 pub mod describe_client_quotas;
 pub mod describe_configs;
 pub mod describe_groups;
+pub mod describe_producers;
+pub mod describe_transactions;
 pub mod describe_user_scram_credentials;
 pub mod end_txn;
 pub mod fetch;

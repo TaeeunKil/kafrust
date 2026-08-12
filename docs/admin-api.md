@@ -283,6 +283,75 @@ necessarily the leader for every requested partition. The result preserves
 each partition's low watermark and broker error, including partial success.
 An offset of `-1` asks Kafka to delete through the current high watermark.
 
+## Describe Producers
+
+```rust
+use kafrust::{AdminClient, ClientConfig, DescribeProducersTopic};
+
+# async fn example() -> kafrust::Result<()> {
+let admin = AdminClient::new(ClientConfig::new(["localhost:19092"]));
+let result = admin
+    .describe_producers(&[
+        DescribeProducersTopic::new("orders")
+            .partition(0)
+            .partition(1),
+    ])
+    .await?;
+
+for topic in result.topics() {
+    for partition in topic.partitions() {
+        for producer in partition.active_producers() {
+            println!(
+                "{}-{} producer={} epoch={} sequence={}",
+                topic.name(),
+                partition.partition_index(),
+                producer.producer_id(),
+                producer.producer_epoch(),
+                producer.last_sequence(),
+            );
+        }
+    }
+}
+# Ok(())
+# }
+```
+
+`AdminClient::describe_producers` resolves Metadata v1 first and groups
+DescribeProducers v0 requests by current partition leader. Each partition
+retains its error code/message and active producer sequence state, so a
+leader-specific authorization or availability failure does not erase results
+for other partitions.
+
+## Describe Transactions
+
+```rust
+use kafrust::{AdminClient, ClientConfig};
+
+# async fn example() -> kafrust::Result<()> {
+let admin = AdminClient::new(ClientConfig::new(["localhost:19092"]));
+let result = admin
+    .describe_transactions(&["payments-tx".to_owned()])
+    .await?;
+
+for transaction in result.transactions() {
+    println!(
+        "{} state={} producer={} epoch={}",
+        transaction.transactional_id(),
+        transaction.state(),
+        transaction.producer_id(),
+        transaction.producer_epoch(),
+    );
+}
+# Ok(())
+# }
+```
+
+`AdminClient::describe_transactions` discovers the transaction coordinator
+for each transactional ID, groups IDs by coordinator, and sends
+DescribeTransactions v0. Transaction state, timeout, producer identity, and
+the topic partitions currently in the transaction remain available in the
+typed response.
+
 ## Reassign Partitions
 
 Partition reassignment requests are routed to the active controller. A target

@@ -933,6 +933,13 @@ Implemented evidence:
   partition's low watermark and error code. Focused protocol and injected
   multi-broker routing tests cover partial success and broker error metrics;
   live destructive-retention qualification remains a separate opt-in workflow.
+- `AdminClient::describe_producers` implements DescribeProducers v0 with
+  metadata-based partition-leader routing and preserves producer IDs, epochs,
+  sequence state, transaction offsets, and per-partition errors. The paired
+  `describe_transactions` API discovers transaction coordinators, groups IDs
+  per coordinator, and preserves transaction state, producer identity, and
+  topic membership. Focused wire and injected routing tests cover both paths;
+  live authorization and coordinator/leader fault qualification remain open.
 - Manual `Live Kafka Smoke` run `30059517473` passed CreateTopics v2 and its
   follow-up Metadata v1 description on 2026-07-24 against Kafka 3.7.2 and
   4.3.1 single-node brokers and the Kafka 3.7.2 three-broker cluster.

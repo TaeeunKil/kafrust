@@ -39,12 +39,15 @@ pub use admin::{
     DeleteRecordsPartition, DeleteRecordsPartitionResult, DeleteRecordsResult, DeleteRecordsTopic,
     DeleteRecordsTopicResult, DeleteTopicResult, DeleteTopicsOptions, DeleteTopicsResult,
     DeletedAclResult, DescribeAclsResult, DescribeClientQuotasResult, DescribeConfigsOptions,
-    DescribeConfigsResult, DescribeUserScramCredentialsResult, GroupListing,
+    DescribeConfigsResult, DescribeProducersActiveProducer, DescribeProducersPartitionResult,
+    DescribeProducersResult, DescribeProducersTopic, DescribeProducersTopicResult,
+    DescribeTransactionsResult, DescribeUserScramCredentialsResult, GroupListing,
     ListPartitionReassignmentsResult, NewPartitions, NewTopic, OngoingPartitionReassignment,
     OngoingPartitionReassignmentTopic, PartitionReassignment, PartitionReassignmentOptions,
     PartitionReassignmentPartition, PartitionReassignmentQuery, ScramCredentialDeletion,
     ScramCredentialInfo, ScramCredentialMechanism, ScramCredentialUpsertion, ScramUserCredentials,
-    TopicConfigAlteration, TopicConfigResource, TopicListing,
+    TopicConfigAlteration, TopicConfigResource, TopicListing, TransactionDescription,
+    TransactionDescriptionTopic,
 };
 pub use client::Client;
 pub use config::{
