@@ -54,16 +54,16 @@ claims.
 ## Published Baseline
 
 The latest merged-main benchmark run
-[`31562321010`](https://github.com/TaeeunKil/kafrust/actions/runs/31562321010)
+[`31574062876`](https://github.com/TaeeunKil/kafrust/actions/runs/31574062876)
 completed on 2026-08-12 with the same Kafka 4.3.1 single-broker profile,
 20,000 records, batches of 200, and a 900-KiB encoded chunk limit.
 
 | Payload | Compression | Produce records/s | Produce MiB/s | Batch p50 | Batch p95 | Batch p99 | Fetch records/s |
 | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| 100 B | none | 104,277 | 9.94 | 1.829 ms | 2.750 ms | 3.311 ms | 613,144 |
-| 1 KiB | none | 54,649 | 53.37 | 3.488 ms | 4.257 ms | 5.295 ms | 565,418 |
-| 10 KiB | none | 3,249 | 31.73 | 61.182 ms | 63.768 ms | 65.429 ms | 111,954 |
-| 1 KiB | Zstd | 59,488 | 58.09 | 2.951 ms | 5.532 ms | 6.008 ms | 451,166 |
+| 100 B | none | 115,388 | 11.00 | 1.682 ms | 2.527 ms | 3.042 ms | 782,220 |
+| 1 KiB | none | 55,938 | 54.63 | 3.260 ms | 5.043 ms | 5.886 ms | 468,429 |
+| 10 KiB | none | 3,292 | 32.15 | 60.528 ms | 62.515 ms | 64.186 ms | 120,303 |
+| 1 KiB | Zstd | 64,355 | 62.85 | 2.961 ms | 3.995 ms | 4.928 ms | 462,430 |
 
 These measurements supersede the older selected-profile table below for
 current-main tracking. They are still diagnostic baselines, not claims of
@@ -114,9 +114,9 @@ recovered after the broker restart, and finished with both in-flight request
 and buffered-record gauges at zero.
 
 The latest merged-main 120-second run
-[`31562320726`](https://github.com/TaeeunKil/kafrust/actions/runs/31562320726)
-roundtripped 6,019,400 records across a ten-second broker outage, observed 135
-high-level operation errors, 678 failed requests, and 944 retries, recovered
+[`31574065286`](https://github.com/TaeeunKil/kafrust/actions/runs/31574065286)
+roundtripped 6,223,500 records across a ten-second broker outage, observed 136
+high-level operation errors, 685 failed requests, and 950 retries, recovered
 successfully, and finished with zero in-flight requests and buffered records.
 
 The scheduled five-minute run
@@ -128,8 +128,8 @@ buffered records. The result artifact measured approximately 56.7k records/s
 over the full window.
 
 The latest 20,000-record benchmark run
-[`31569180500`](https://github.com/TaeeunKil/kafrust/actions/runs/31569180500)
-against Kafka 4.3.1 measured 109,368 records/s for 100-byte payloads, 58,135
-records/s for 1-KiB payloads, 3,295 records/s for 10-KiB payloads, and 55,226
+[`31574062876`](https://github.com/TaeeunKil/kafrust/actions/runs/31574062876)
+against Kafka 4.3.1 measured 115,388 records/s for 100-byte payloads, 55,938
+records/s for 1-KiB payloads, 3,292 records/s for 10-KiB payloads, and 64,355
 records/s for 1-KiB Zstd payloads. Each profile completed with zero retries;
 these are hosted-runner baselines, not cross-client parity claims.

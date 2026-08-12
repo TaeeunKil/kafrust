@@ -159,11 +159,11 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
   `SASL_PLAINTEXT` and Kafka 4.3.1 KIP-848 failover, in
   [`31567226615`](https://github.com/TaeeunKil/kafrust/actions/runs/31567226615).
 - Current `main` performance and recovery evidence includes benchmark run
-  [`31562321010`](https://github.com/TaeeunKil/kafrust/actions/runs/31562321010)
+  [`31574062876`](https://github.com/TaeeunKil/kafrust/actions/runs/31574062876)
   and 120-second broker-restart soak run
-  [`31562320726`](https://github.com/TaeeunKil/kafrust/actions/runs/31562320726).
+  [`31574065286`](https://github.com/TaeeunKil/kafrust/actions/runs/31574065286).
   The benchmark covered 100-byte, 1-KiB, 10-KiB, and 1-KiB Zstd profiles. The
-  soak processed 6,019,400 records across a ten-second outage and ended with
+  soak processed 6,223,500 records across a ten-second outage and ended with
   zero in-flight and buffered records after recovery.
 - The scheduled five-minute broker-restart soak run
   [`31568595989`](https://github.com/TaeeunKil/kafrust/actions/runs/31568595989)
