@@ -1,9 +1,13 @@
 mod common;
 
 use std::collections::BTreeSet;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
-use kafrust::{ConsumerGroup, ConsumerGroupAssignmentStrategy, ConsumerGroupConfig, Error};
+use kafrust::{
+    ConsumerGroup, ConsumerGroupAssignmentStrategy, ConsumerGroupConfig, Error, RebalancePhase,
+};
 
 const POLL_ATTEMPTS: usize = 80;
 
@@ -19,6 +23,10 @@ async fn run_scenario() -> kafrust::Result<()> {
     let group_id = std::env::var("KAFRUST_GROUP_ID")
         .unwrap_or_else(|_| "kafrust-cooperative-multi-member".to_owned());
     let topic = std::env::var("KAFRUST_TOPIC").unwrap_or_else(|_| "kafrust-smoke".to_owned());
+    let before_rebalances = Arc::new(AtomicUsize::new(0));
+    let after_rebalances = Arc::new(AtomicUsize::new(0));
+    let before_callback = before_rebalances.clone();
+    let after_callback = after_rebalances.clone();
     let config = common::apply_security(
         ConsumerGroupConfig::new(bootstrap_servers, group_id)
             .client_id("kafrust-cooperative-multi-member")
@@ -26,6 +34,23 @@ async fn run_scenario() -> kafrust::Result<()> {
             .rebalance_timeout_ms(10_000)
             .max_wait_ms(100)
             .assignment_strategy(ConsumerGroupAssignmentStrategy::CooperativeSticky)
+            .rebalance_listener(move |event| {
+                match event.phase() {
+                    RebalancePhase::Before => {
+                        before_callback.fetch_add(1, Ordering::SeqCst);
+                    }
+                    RebalancePhase::After => {
+                        after_callback.fetch_add(1, Ordering::SeqCst);
+                    }
+                }
+                println!(
+                    "rebalance {:?} member={} generation={} assignments={}",
+                    event.phase(),
+                    event.member_id(),
+                    event.generation_id(),
+                    event.assignments().len()
+                );
+            })
             .subscribe(topic),
     )?;
 
@@ -99,6 +124,13 @@ async fn run_scenario() -> kafrust::Result<()> {
         expected_partitions,
         first.member_id()
     );
+
+    if before_rebalances.load(Ordering::SeqCst) == 0 || after_rebalances.load(Ordering::SeqCst) < 2
+    {
+        return Err(Error::Unsupported(
+            "cooperative scenario did not observe rebalance listener lifecycle callbacks",
+        ));
+    }
 
     first.leave().await?;
     Ok(())
