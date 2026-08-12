@@ -926,10 +926,11 @@ Implemented evidence:
   SASL_SSL/SCRAM live qualification passed in
   [`31607006237`](https://github.com/TaeeunKil/kafrust/actions/runs/31607006237).
   Target authorization and broader member-failure workloads remain release
-  gates. The live DeleteRecords leader-stop gate is covered by
-  [`31607006237`](https://github.com/TaeeunKil/kafrust/actions/runs/31607006237);
-  equivalent in-flight injection for read-only DescribeProducers,
-  DescribeTransactions, and coordinator-routed Admin requests remains open.
+  gates. The live DeleteRecords and DescribeProducers leader-stop gates are
+  covered by
+  [`31609878450`](https://github.com/TaeeunKil/kafrust/actions/runs/31609878450);
+  equivalent in-flight injection for DescribeTransactions and
+  coordinator-routed Admin requests remains open.
 - DescribeAcls v1, CreateAcls v1, and DeleteAcls v1 expose typed ACL bindings
   and filters through `AdminClient`, preserving top-level, per-entry,
   per-filter, and matching-ACL outcomes. Wire and mock-broker tests cover the
@@ -990,9 +991,9 @@ Implemented evidence:
   injected multi-broker routing tests cover partial success, broker error
   metrics, and a dropped leader request; live destructive-retention
   qualification remains a separate opt-in workflow. The live three-broker
-  profile now holds the flushed request, stops its current leader, and verifies
-  fresh-metadata recovery with a recorded retry in
-  [`31607006237`](https://github.com/TaeeunKil/kafrust/actions/runs/31607006237).
+  profile now gates the request before TCP transmission, stops its current
+  leader, and verifies fresh-metadata recovery with `retries=1` in
+  [`31609878450`](https://github.com/TaeeunKil/kafrust/actions/runs/31609878450).
 - `AdminClient::describe_producers` implements DescribeProducers v0 with
   metadata-based partition-leader routing and preserves producer IDs, epochs,
   sequence state, transaction offsets, and per-partition errors. The paired
@@ -1012,8 +1013,11 @@ Implemented evidence:
   at commit `65b607e` passed the current single-node, secured, multi-broker,
   and KIP-848 examples in
   [`31601732149`](https://github.com/TaeeunKil/kafrust/actions/runs/31601732149).
-  Target authorization policy and an Admin-request broker-stop injection
-  remain workload-specific release gates.
+  Target authorization policy and coordinator-routed Admin broker-stop
+  injection remain workload-specific release gates. The same live profile now
+  also gates DescribeProducers v0 before transmission, stops its current
+  leader, and verifies `retries=1` after fresh-metadata recovery in
+  [`31609878450`](https://github.com/TaeeunKil/kafrust/actions/runs/31609878450).
 - Manual `Live Kafka Smoke` run `30059517473` passed CreateTopics v2 and its
   follow-up Metadata v1 description on 2026-07-24 against Kafka 3.7.2 and
   4.3.1 single-node brokers and the Kafka 3.7.2 three-broker cluster.
