@@ -2936,6 +2936,8 @@ jobs:
             -e KAFKA_SASL_ENABLED_MECHANISMS=OAUTHBEARER \
             -e KAFKA_SASL_SERVER_CALLBACK_HANDLER_CLASS=org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallbackHandler \
             -e KAFKA_SASL_OAUTHBEARER_JWKS_ENDPOINT_URL=http://host.docker.internal:8089/jwks.json \
+            -e KAFKA_SASL_OAUTHBEARER_EXPECTED_ISSUER=http://host.docker.internal:8089/issuer \
+            -e KAFKA_SASL_OAUTHBEARER_EXPECTED_AUDIENCE=kafrust-client \
             -e KAFKA_SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS=2 \
             -e KAFKA_SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS=1000 \
             -e KAFKA_LOG4J_ROOT_LOGLEVEL=DEBUG \

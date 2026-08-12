@@ -357,6 +357,12 @@ impl Client {
                     "sasl re-authenticate OAUTHBEARER".to_owned(),
                 ));
             }
+            if !response.auth_bytes.is_empty() {
+                return Err(Error::InvalidSaslResponse {
+                    mechanism: "OAUTHBEARER",
+                    reason: "broker rejected the OAUTHBEARER token",
+                });
+            }
             Ok(())
         }
         .await;
@@ -392,7 +398,7 @@ impl Client {
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         let response = SaslAuthenticateResponseV1::decode_body(&mut decoder)?;
-        if response.error_code == 0 {
+        if response.error_code == 0 && response.auth_bytes.is_empty() {
             self.sasl_session_lifetime_ms = Some(response.session_lifetime_ms);
             self.sasl_authenticated_at = Some(std::time::Instant::now());
         }

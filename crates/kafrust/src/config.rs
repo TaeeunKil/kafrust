@@ -702,6 +702,12 @@ async fn authenticate_sasl_oauthbearer(
             format!("sasl authenticate {mechanism}"),
         ));
     }
+    if !response.auth_bytes.is_empty() {
+        return Err(Error::InvalidSaslResponse {
+            mechanism,
+            reason: "broker rejected the OAUTHBEARER token",
+        });
+    }
 
     Ok(())
 }
@@ -1282,6 +1288,49 @@ mod tests {
             .await;
 
         assert!(client.is_ok());
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn sasl_oauthbearer_rejects_broker_error_challenge() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+
+            let _handshake = read_frame(&mut socket).await;
+            write_frame(
+                &mut socket,
+                &[
+                    0, 0, 0, 1, // correlation id
+                    0, 0, // error code
+                    0, 0, 0, 1, // mechanism count
+                    0, 11, b'O', b'A', b'U', b'T', b'H', b'B', b'E', b'A', b'R', b'E',
+                    b'R', // mechanism
+                ],
+            )
+            .await;
+
+            let _authenticate = read_frame(&mut socket).await;
+            write_sasl_authenticate_response(&mut socket, 2, br#"{"status":"invalid_token"}"#)
+                .await;
+        });
+
+        let error = ClientConfig::new([addr.to_string()])
+            .security_protocol(SecurityProtocol::SaslPlaintext)
+            .sasl_oauthbearer("jwt-token")
+            .request_timeout_ms(1_000)
+            .connect()
+            .await
+            .unwrap_err();
+
+        assert!(matches!(
+            error,
+            Error::InvalidSaslResponse {
+                mechanism: "OAUTHBEARER",
+                reason: "broker rejected the OAUTHBEARER token"
+            }
+        ));
         server.await.unwrap();
     }
 
