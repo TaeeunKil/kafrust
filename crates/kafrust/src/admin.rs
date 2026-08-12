@@ -112,11 +112,38 @@ impl AdminClient {
         self.config.metrics_ref()
     }
 
+    async fn metadata_with_admin_retries(
+        &self,
+        topics: Option<Vec<String>>,
+    ) -> Result<MetadataResponseV1> {
+        let mut retry = 0;
+        loop {
+            let mut client = match self.config.clone().connect().await {
+                Ok(client) => client,
+                Err(error) if retry < self.max_retries && is_retryable_admin_read_error(&error) => {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
+            match client.metadata(topics.clone()).await {
+                Ok(metadata) => return Ok(metadata),
+                Err(error) if retry < self.max_retries && is_retryable_admin_read_error(&error) => {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                }
+                Err(error) => return Err(error),
+            }
+        }
+    }
+
     /// Describes the Kafka cluster brokers and active controller.
     #[tracing::instrument(level = "debug", name = "kafka.admin.describe_cluster", skip_all, err)]
     pub async fn describe_cluster(&self) -> Result<ClusterDescription> {
-        let mut client = self.config.clone().connect().await?;
-        let metadata = client.metadata(Some(Vec::new())).await?;
+        let metadata = self.metadata_with_admin_retries(Some(Vec::new())).await?;
 
         Ok(ClusterDescription {
             controller_id: metadata.controller_id,
@@ -134,8 +161,7 @@ impl AdminClient {
     /// failing the entire operation.
     #[tracing::instrument(level = "debug", name = "kafka.admin.list_topics", skip_all, err)]
     pub async fn list_topics(&self) -> Result<Vec<TopicListing>> {
-        let mut client = self.config.clone().connect().await?;
-        let metadata = client.metadata(None).await?;
+        let metadata = self.metadata_with_admin_retries(None).await?;
 
         for topic in &metadata.topics {
             if topic.error_code != 0 {
@@ -6895,6 +6921,36 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn retries_describe_cluster_after_metadata_disconnect() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut first, _) = listener.accept().await.unwrap();
+            let request = read_frame(&mut first).await;
+            assert_eq!(&request[0..4], &[0, 3, 0, 1]);
+            drop(first);
+
+            let (mut second, _) = listener.accept().await.unwrap();
+            let request = read_frame(&mut second).await;
+            assert_eq!(&request[0..4], &[0, 3, 0, 1]);
+            write_frame(&mut second, &metadata_response(addr.port())).await;
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        );
+
+        let result = admin.describe_cluster().await.unwrap();
+
+        assert_eq!(result.controller_id(), 1);
+        assert_eq!(result.brokers().len(), 1);
+        assert_eq!(metrics.snapshot().retries, 1);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn lists_topics_and_preserves_metadata_errors() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -6928,6 +6984,40 @@ mod tests {
             topics[1].broker_error_kind(),
             Some(BrokerErrorKind::UnknownTopicOrPartition)
         );
+        assert_eq!(metrics.snapshot().broker_errors, 1);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn retries_list_topics_after_metadata_disconnect() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut first, _) = listener.accept().await.unwrap();
+            let request = read_frame(&mut first).await;
+            assert_eq!(&request[0..4], &[0, 3, 0, 1]);
+            assert_eq!(&request[request.len() - 4..], &[0xff, 0xff, 0xff, 0xff]);
+            drop(first);
+
+            let (mut second, _) = listener.accept().await.unwrap();
+            let request = read_frame(&mut second).await;
+            assert_eq!(&request[0..4], &[0, 3, 0, 1]);
+            assert_eq!(&request[request.len() - 4..], &[0xff, 0xff, 0xff, 0xff]);
+            write_frame(&mut second, &topic_metadata_response(addr.port())).await;
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        );
+
+        let result = admin.list_topics().await.unwrap();
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].name(), "orders");
+        assert_eq!(result[1].error_code(), 3);
+        assert_eq!(metrics.snapshot().retries, 1);
         assert_eq!(metrics.snapshot().broker_errors, 1);
         server.await.unwrap();
     }

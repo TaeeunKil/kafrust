@@ -290,6 +290,11 @@ actual broker permissions and quota policy.
 
 See [Admin API](admin-api.md) for typed request and response examples.
 
+`AdminClient::describe_cluster` and `AdminClient::list_topics` retry metadata
+transport and timeout failures within the bounded retry budget. `list_topics`
+still returns topic-level metadata errors as typed partial results rather than
+turning them into a whole-operation failure.
+
 For the rust-rdkafka `AdminClient::fetch_offsets` and
 `AdminClient::alter_consumer_group_offsets` workflows, use
 `list_consumer_group_offsets` and `alter_consumer_group_offsets`. The kafrust

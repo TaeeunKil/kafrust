@@ -866,7 +866,9 @@ Implemented evidence:
 - `AdminClient::describe_cluster` exposes typed broker IDs, advertised
   endpoints, rack IDs, and the active controller. `AdminClient::list_topics`
   exposes names, internal-topic flags, partition counts, and topic-level Kafka
-  error classifications.
+  error classifications. Both read-only metadata paths retry transport and
+  timeout failures within the bounded AdminClient budget while preserving
+  topic-level partial errors.
 - Injected broker tests distinguish Metadata v1's empty topic array for
   cluster-only inspection from its null array for all-topic listing and verify
   broker error metrics for partial metadata failures.
