@@ -398,6 +398,9 @@ Verified paths currently include:
 - After adding safe pre-transmission controller discovery retries for Admin
   writes, the complete 17-job matrix passed at commit `256847f` in
   [`31624278107`](https://github.com/TaeeunKil/kafrust/actions/runs/31624278107).
+- The complete 17-job matrix also passed at commit `25d614a` in
+  [`31627790408`](https://github.com/TaeeunKil/kafrust/actions/runs/31627790408)
+  after the ACL authorizer example added bounded post-create visibility polling.
 
 See [Compatibility](docs/compatibility.md) and
 [Broker Roundtrip](docs/broker-roundtrip.md) for the current evidence.

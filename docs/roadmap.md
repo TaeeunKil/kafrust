@@ -1749,3 +1749,8 @@ Implemented evidence:
   after adding bounded pre-transmission controller discovery retries for
   controller-routed Admin writes. Existing topic, partition, SCRAM, and
   reassignment workflows remained green across all supported profiles.
+- The follow-up complete 17-job matrix passed at commit `25d614a` in
+  [`31627790408`](https://github.com/TaeeunKil/kafrust/actions/runs/31627790408)
+  after the ACL authorizer example added bounded polling for asynchronous
+  post-create visibility. All supported broker, security, failover, ACL, and
+  KIP-848 profiles remained green.
