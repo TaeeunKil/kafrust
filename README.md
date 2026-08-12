@@ -371,11 +371,12 @@ Verified paths currently include:
   PLAINTEXT single-node and three-broker Admin offset smoke in
   [`31607006237`](https://github.com/TaeeunKil/kafrust/actions/runs/31607006237),
   including SASL_PLAINTEXT and SASL_SSL/SCRAM profiles).
-- In-flight leader-routed DeleteRecords and DescribeProducers recovery after
-  a deterministic pre-transmission gate and broker stop on the Kafka `3.7.2`
+- In-flight leader-routed DeleteRecords and DescribeProducers plus
+  coordinator-routed DescribeTransactions and DescribeGroups recovery after
+  deterministic pre-transmission gates and broker stops on the Kafka `3.7.2`
   three-broker profile in
-  [`31609878450`](https://github.com/TaeeunKil/kafrust/actions/runs/31609878450);
-  both requests recorded a fresh-metadata retry.
+  [`31610758163`](https://github.com/TaeeunKil/kafrust/actions/runs/31610758163);
+  all four requests recorded a fresh-metadata retry.
 
 See [Compatibility](docs/compatibility.md) and
 [Broker Roundtrip](docs/broker-roundtrip.md) for the current evidence.
