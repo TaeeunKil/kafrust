@@ -1542,6 +1542,11 @@ Implemented evidence:
   17-job live matrix passed the flexible-version negotiation gate in
   [`31643246432`](https://github.com/TaeeunKil/kafrust/actions/runs/31643246432):
   Kafka 4.3.1 selected v11 and Kafka 3.7.2, 3.8.1, and 3.9.1 selected v9.
+- `AdminClient::list_transactions` now queries every metadata broker, uses
+  ListTransactions v1 when advertised, falls back to v0, and aggregates
+  broker-local transaction-state shards. Focused protocol and injected-broker
+  tests pass, and the complete 17-job live matrix passed the listing example
+  in [`31644710449`](https://github.com/TaeeunKil/kafrust/actions/runs/31644710449).
 - Request-level observability records structured terminal fields for successful,
   failed, fire-and-forget, and cancelled broker requests without recording
   request payloads or credential material. The span-lifecycle guard is covered
@@ -1805,3 +1810,7 @@ Implemented evidence:
   [`31643246432`](https://github.com/TaeeunKil/kafrust/actions/runs/31643246432)
   after adding flexible Produce v11 preference with v9 fallback. Kafka 4.3.1
   selected v11, while Kafka 3.7.2, 3.8.1, and 3.9.1 selected v9.
+- The latest complete 17-job matrix passed at commit `4ab3226` in
+  [`31644710449`](https://github.com/TaeeunKil/kafrust/actions/runs/31644710449)
+  after adding ListTransactions v0/v1 protocol support, broker-shard
+  aggregation, and a live admin example.
