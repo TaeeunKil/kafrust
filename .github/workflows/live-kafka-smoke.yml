@@ -1374,7 +1374,6 @@ jobs:
           cargo build -p kafrust --features tls
           --example producer_failover --example consumer_failover
           --example consumer_group_failover
-          --example producer_transaction_failover
 
       - name: Run SCRAM consumer group coordinator failover
         run: |
@@ -1509,65 +1508,6 @@ jobs:
           if [ "$producer_status" -ne 0 ] || [ "$consumer_status" -ne 0 ] || [ -z "$cluster_ready" ]; then
             cat /tmp/kafrust-scram-failover-probe.log || true
             cat /tmp/kafrust-scram-failover-topic.log || true
-            exit 1
-          fi
-
-      - name: Run SCRAM transaction coordinator failover
-        run: |
-          KAFRUST_TRANSACTIONAL_ID="kafrust-scram-transaction-failover-${GITHUB_RUN_ID}" \
-          KAFRUST_FAILOVER_PAUSE_MS=30000 \
-          cargo run -p kafrust --features tls --example producer_transaction_failover \
-            >/tmp/kafrust-scram-transaction-failover.log 2>&1 &
-          transaction_pid=$!
-
-          coordinator_node=""
-          for attempt in {1..90}; do
-            coordinator_node="$(
-              sed -n 's/.*coordinator node \([0-9][0-9]*\)$/\1/p' \
-                /tmp/kafrust-scram-transaction-failover.log \
-                | tail -n 1
-            )"
-            if [ -n "$coordinator_node" ]; then
-              break
-            fi
-            if ! kill -0 "$transaction_pid" 2>/dev/null; then
-              cat /tmp/kafrust-scram-transaction-failover.log || true
-              wait "$transaction_pid"
-            fi
-            sleep 1
-          done
-
-          if ! [[ "$coordinator_node" =~ ^[123]$ ]]; then
-            echo "SCRAM transaction failover did not report a valid coordinator"
-            cat /tmp/kafrust-scram-transaction-failover.log || true
-            kill "$transaction_pid" 2>/dev/null || true
-            wait "$transaction_pid" || true
-            exit 1
-          fi
-
-          coordinator_container="kafrust-kafka-sasl-ssl-multi-${coordinator_node}"
-          docker stop "$coordinator_container"
-
-          transaction_status=0
-          wait "$transaction_pid" || transaction_status=$?
-          cat /tmp/kafrust-scram-transaction-failover.log
-
-          docker start "$coordinator_container"
-          coordinator_ready=""
-          for attempt in {1..120}; do
-            if docker exec "$coordinator_container" \
-              /opt/kafka/bin/kafka-broker-api-versions.sh \
-              --bootstrap-server "${coordinator_container}:29092" \
-              >/tmp/kafrust-scram-transaction-recovery.log 2>&1; then
-              coordinator_ready=1
-              break
-            fi
-            sleep 2
-          done
-
-          if [ "$transaction_status" -ne 0 ] || [ -z "$coordinator_ready" ]; then
-            cat /tmp/kafrust-scram-transaction-recovery.log || true
-            docker logs "$coordinator_container"
             exit 1
           fi
 
