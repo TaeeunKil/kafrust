@@ -33,6 +33,7 @@ use tracing::debug;
 
 const BUFFERED_PRODUCER_CHANNEL_CAPACITY: usize = 1024;
 const IDEMPOTENT_INIT_RETRY_BACKOFF: Duration = Duration::from_millis(100);
+const IDEMPOTENT_INIT_RETRY_BACKOFF_MAX: Duration = Duration::from_secs(1);
 
 /// Selects a Kafka partition for records without an explicit partition.
 ///
@@ -3534,7 +3535,7 @@ async fn initialize_idempotent_producer(
                     && is_retryable_transaction_coordinator_error(coordinator.error_code)
                 {
                     attempt += 1;
-                    time::sleep(IDEMPOTENT_INIT_RETRY_BACKOFF).await;
+                    time::sleep(idempotent_init_retry_backoff(attempt)).await;
                     client_config.record_retry();
                     continue;
                 }
@@ -3573,7 +3574,7 @@ async fn initialize_idempotent_producer(
         if attempt < max_retries && is_retryable_transaction_coordinator_error(response.error_code)
         {
             attempt += 1;
-            time::sleep(IDEMPOTENT_INIT_RETRY_BACKOFF).await;
+            time::sleep(idempotent_init_retry_backoff(attempt)).await;
             client_config.record_retry();
             continue;
         }
@@ -3595,8 +3596,18 @@ async fn retry_transaction_transport_error(
     }
     *attempt += 1;
     client_config.record_retry();
-    time::sleep(IDEMPOTENT_INIT_RETRY_BACKOFF).await;
+    time::sleep(idempotent_init_retry_backoff(*attempt)).await;
     Ok(())
+}
+
+fn idempotent_init_retry_backoff(attempt: u32) -> Duration {
+    let exponent = attempt.saturating_sub(1).min(4);
+    let multiplier = 1u64 << exponent;
+    Duration::from_millis(
+        (IDEMPOTENT_INIT_RETRY_BACKOFF.as_millis() as u64)
+            .saturating_mul(multiplier)
+            .min(IDEMPOTENT_INIT_RETRY_BACKOFF_MAX.as_millis() as u64),
+    )
 }
 
 async fn reconnect_transaction_client(
@@ -4261,17 +4272,18 @@ mod tests {
         choose_partition_with_partitioner, complete_buffered_deliveries,
         delivery_error_from_request_error, enqueue_buffered_record,
         ensure_buffered_transaction_deliveries_succeeded, fail_buffered_deliveries,
-        idempotent_produce_error_disposition, invalidate_metadata_cache,
-        invalidate_metadata_cache_for_record_indexes, is_retryable_transaction_coordinator_error,
-        is_retryable_transaction_transport_error, kafka_murmur2, largest_fitting_prefix,
-        leader_for, message_set_message, record_batch_attempt_outcomes, record_batch_message,
-        select_produce_batch_version, select_produce_version, transaction_offset_topics, Acks,
-        BatchRecord, BufferedFlushReason, BufferedProduceRequest, BufferedProducer,
-        BufferedProducerCommand, BufferedProducerState, Compression,
-        IdempotentBatchSequenceTracker, IdempotentProduceErrorDisposition, IdempotentProducerState,
-        PreparedBatchRecord, ProduceBatchKey, ProduceVersion, Producer, ProducerBatchFailure,
-        ProducerBatchRecordOutcome, ProducerBatchReport, ProducerConfig, ProducerDelivery,
-        ProducerRecord, RecordMetadata, SecurityProtocol, TransactionState, TransactionStatus,
+        idempotent_init_retry_backoff, idempotent_produce_error_disposition,
+        invalidate_metadata_cache, invalidate_metadata_cache_for_record_indexes,
+        is_retryable_transaction_coordinator_error, is_retryable_transaction_transport_error,
+        kafka_murmur2, largest_fitting_prefix, leader_for, message_set_message,
+        record_batch_attempt_outcomes, record_batch_message, select_produce_batch_version,
+        select_produce_version, transaction_offset_topics, Acks, BatchRecord, BufferedFlushReason,
+        BufferedProduceRequest, BufferedProducer, BufferedProducerCommand, BufferedProducerState,
+        Compression, IdempotentBatchSequenceTracker, IdempotentProduceErrorDisposition,
+        IdempotentProducerState, PreparedBatchRecord, ProduceBatchKey, ProduceVersion, Producer,
+        ProducerBatchFailure, ProducerBatchRecordOutcome, ProducerBatchReport, ProducerConfig,
+        ProducerDelivery, ProducerRecord, RecordMetadata, SecurityProtocol, TransactionState,
+        TransactionStatus,
     };
     use crate::consumer::ConsumerAssignment;
     use crate::{BrokerErrorKind, Client, ClientMetrics, Error};
@@ -4292,6 +4304,26 @@ mod tests {
         assert_eq!(Acks::None.as_i16(), 0);
         assert_eq!(Acks::Leader.as_i16(), 1);
         assert_eq!(Acks::All.as_i16(), -1);
+    }
+
+    #[test]
+    fn idempotent_initialization_backoff_is_bounded_and_exponential() {
+        assert_eq!(
+            idempotent_init_retry_backoff(1),
+            std::time::Duration::from_millis(100)
+        );
+        assert_eq!(
+            idempotent_init_retry_backoff(2),
+            std::time::Duration::from_millis(200)
+        );
+        assert_eq!(
+            idempotent_init_retry_backoff(5),
+            std::time::Duration::from_millis(1_000)
+        );
+        assert_eq!(
+            idempotent_init_retry_backoff(30),
+            std::time::Duration::from_millis(1_000)
+        );
     }
 
     #[test]
