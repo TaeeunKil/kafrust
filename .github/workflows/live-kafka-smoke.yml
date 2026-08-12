@@ -97,14 +97,20 @@ jobs:
       - name: Run producer example
         run: cargo run -p kafrust --example producer_send
 
-      - name: Verify flexible Produce v12/v11/v9 negotiation
+      - name: Verify topic-ID and flexible Produce negotiation
         env:
           RUST_LOG: kafrust=debug
         run: |
           cargo run -p kafrust --example producer_send 2>&1 | tee /tmp/kafrust-produce-flexible.log
-          if ! sed -E 's/\x1B\[[0-9;]*m//g' /tmp/kafrust-produce-flexible.log | grep -Eq 'produce_version=V(12|11|9)'; then
+          produce_log="$(sed -E 's/\x1B\[[0-9;]*m//g' /tmp/kafrust-produce-flexible.log)"
+          if [[ "${{ matrix.kafka-version }}" == "4.3.1" ]]; then
+            expected_versions='produce_version=V13'
+          else
+            expected_versions='produce_version=V(12|11|9)'
+          fi
+          if ! grep -Eq "${expected_versions}" <<<"${produce_log}"; then
             cat /tmp/kafrust-produce-flexible.log
-            echo "producer did not negotiate flexible Produce v12, v11, or v9"
+            echo "producer did not negotiate the expected Produce version: ${expected_versions}"
             exit 1
           fi
 

@@ -8,12 +8,14 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use kafrust_protocol::api::add_partitions_to_txn::AddPartitionsToTxnTopic;
 use kafrust_protocol::api::api_versions::ApiVersionsLookup;
-use kafrust_protocol::api::metadata::{BrokerMetadata, MetadataResponseV1};
+use kafrust_protocol::api::metadata::{
+    BrokerMetadata, MetadataRequestTopicV12, MetadataResponseV1,
+};
 use kafrust_protocol::api::produce::{
     encoded_message_set_len, encoded_record_batch_set_len_with_compression, MessageSetMessage,
     ProducePartitionV2, ProducePartitionV3, ProduceResponseV2, ProduceResponseV7,
-    ProduceResponseV9, ProduceTopicV2, ProduceTopicV3, RecordBatchIdentity, RecordBatchMessage,
-    API_KEY as PRODUCE_API_KEY,
+    ProduceResponseV9, ProduceTopicV13, ProduceTopicV2, ProduceTopicV3, RecordBatchIdentity,
+    RecordBatchMessage, API_KEY as PRODUCE_API_KEY,
 };
 use kafrust_protocol::api::txn_offset_commit::{
     TxnOffsetCommitPartition, TxnOffsetCommitPartitionV3, TxnOffsetCommitTopic,
@@ -409,6 +411,7 @@ pub struct Producer {
     client: Client,
     config: ProducerConfig,
     metadata_cache: BTreeMap<String, MetadataResponseV1>,
+    topic_id_cache: BTreeMap<String, [u8; 16]>,
     keyless_partition_indexes: BTreeMap<String, usize>,
     broker_clients: BTreeMap<String, Client>,
     idempotent_state: Option<IdempotentProducerState>,
@@ -1745,6 +1748,7 @@ impl Producer {
             match result {
                 Err(error) if attempt < self.config.max_retries && can_retry_send(&error) => {
                     invalidate_metadata_cache(&mut self.metadata_cache, &topic);
+                    self.topic_id_cache.remove(&topic);
                     self.config.client.record_retry();
                     attempt += 1;
                 }
@@ -1845,6 +1849,11 @@ impl Producer {
                         &records,
                         &pending_indexes,
                     );
+                    for &index in &pending_indexes {
+                        if let Some(record) = records.get(index) {
+                            self.topic_id_cache.remove(record.record.topic());
+                        }
+                    }
                     self.config.client.record_retry();
                     attempt += 1;
                 }
@@ -1861,6 +1870,11 @@ impl Producer {
                             &records,
                             &retry_indexes,
                         );
+                        for &index in &retry_indexes {
+                            if let Some(record) = records.get(index) {
+                                self.topic_id_cache.remove(record.record.topic());
+                            }
+                        }
                         pending_indexes = retry_indexes;
                         self.config.client.record_retry();
                         attempt += 1;
@@ -1892,6 +1906,38 @@ impl Producer {
         self.metadata_cache
             .insert(topic.to_owned(), metadata.clone());
         Ok(metadata)
+    }
+
+    async fn topic_id_for_topic(&mut self, topic: &str) -> Option<[u8; 16]> {
+        if let Some(topic_id) = self.topic_id_cache.get(topic) {
+            return Some(*topic_id);
+        }
+
+        let request = MetadataRequestTopicV12 {
+            topic_id: [0; 16],
+            name: Some(topic.to_owned()),
+        };
+        let response = match self.client.metadata_v12(Some(vec![request])).await {
+            Ok(response) => response,
+            Err(error) => {
+                debug!(
+                    topic,
+                    error = %error,
+                    "topic UUID lookup unavailable; using name-based Produce"
+                );
+                return None;
+            }
+        };
+        let topic_id = response
+            .topics
+            .into_iter()
+            .find(|metadata| metadata.name.as_deref() == Some(topic) && metadata.error_code == 0)
+            .map(|metadata| metadata.topic_id)
+            .filter(|topic_id| *topic_id != [0; 16]);
+        if let Some(topic_id) = topic_id {
+            self.topic_id_cache.insert(topic.to_owned(), topic_id);
+        }
+        topic_id
     }
 
     fn choose_partition(
@@ -2020,9 +2066,21 @@ impl Producer {
                     format!("api versions for produce {}-{}", key.topic, key.partition),
                 ));
             }
+            let topic_id = if api_versions
+                .highest_supported_version(PRODUCE_API_KEY, 13)
+                .is_some_and(|version| version >= 13)
+            {
+                self.topic_id_for_topic(&key.topic).await
+            } else {
+                None
+            };
 
-            let produce_version =
-                select_produce_batch_version(&api_versions, records, self.config.compression)?;
+            let produce_version = select_produce_batch_version_with_topic_id(
+                &api_versions,
+                records,
+                self.config.compression,
+                topic_id,
+            )?;
             if self.idempotent_state.is_some() && produce_version == ProduceVersion::V2 {
                 return Err(Error::Unsupported(
                     "idempotent producer requires Produce API v3 or newer",
@@ -2065,6 +2123,37 @@ impl Producer {
                                     30_000,
                                     vec![ProduceTopicV3 {
                                         name: key.topic.clone(),
+                                        partitions: vec![ProducePartitionV3 {
+                                            partition_index: key.partition,
+                                            compression: self
+                                                .config
+                                                .compression
+                                                .as_record_batch_compression(),
+                                            identity,
+                                            records: records
+                                                .iter()
+                                                .map(|record| {
+                                                    record_batch_message(
+                                                        &record.record.record,
+                                                        record.record.timestamp_ms,
+                                                    )
+                                                })
+                                                .collect(),
+                                        }],
+                                    }],
+                                )
+                                .await?;
+                        }
+                        ProduceVersion::V13 => {
+                            let topic_id = topic_id
+                                .ok_or(Error::Unsupported("Produce v13 requires a topic UUID"))?;
+                            leader_client
+                                .produce_v13_no_response(
+                                    transactional_id.clone(),
+                                    self.config.acks.as_i16(),
+                                    30_000,
+                                    vec![ProduceTopicV13 {
+                                        topic_id,
                                         partitions: vec![ProducePartitionV3 {
                                             partition_index: key.partition,
                                             compression: self
@@ -2183,6 +2272,39 @@ impl Producer {
                                     30_000,
                                     vec![ProduceTopicV3 {
                                         name: key.topic.clone(),
+                                        partitions: vec![ProducePartitionV3 {
+                                            partition_index: key.partition,
+                                            compression: self
+                                                .config
+                                                .compression
+                                                .as_record_batch_compression(),
+                                            identity,
+                                            records: records
+                                                .iter()
+                                                .map(|record| {
+                                                    record_batch_message(
+                                                        &record.record.record,
+                                                        record.record.timestamp_ms,
+                                                    )
+                                                })
+                                                .collect(),
+                                        }],
+                                    }],
+                                )
+                                .await?,
+                        )
+                    }
+                    ProduceVersion::V13 => {
+                        let topic_id = topic_id
+                            .ok_or(Error::Unsupported("Produce v13 requires a topic UUID"))?;
+                        ProduceResponse::V9(
+                            leader_client
+                                .produce_v13(
+                                    transactional_id.clone(),
+                                    self.config.acks.as_i16(),
+                                    30_000,
+                                    vec![ProduceTopicV13 {
+                                        topic_id,
                                         partitions: vec![ProducePartitionV3 {
                                             partition_index: key.partition,
                                             compression: self
@@ -2381,8 +2503,20 @@ impl Producer {
                 ));
             }
 
-            let produce_version =
-                select_produce_version(&api_versions, record, self.config.compression)?;
+            let topic_id = if api_versions
+                .highest_supported_version(PRODUCE_API_KEY, 13)
+                .is_some_and(|version| version >= 13)
+            {
+                self.topic_id_for_topic(record.topic()).await
+            } else {
+                None
+            };
+            let produce_version = select_produce_version_with_topic_id(
+                &api_versions,
+                record,
+                self.config.compression,
+                topic_id,
+            )?;
             if self.idempotent_state.is_some() && produce_version == ProduceVersion::V2 {
                 return Err(Error::Unsupported(
                     "idempotent producer requires Produce API v3 or newer",
@@ -2415,6 +2549,29 @@ impl Producer {
                                 30_000,
                                 vec![ProduceTopicV3 {
                                     name: record.topic().to_owned(),
+                                    partitions: vec![ProducePartitionV3 {
+                                        partition_index: partition,
+                                        compression: self
+                                            .config
+                                            .compression
+                                            .as_record_batch_compression(),
+                                        identity,
+                                        records: vec![record_batch_message(record, timestamp_ms)],
+                                    }],
+                                }],
+                            )
+                            .await?;
+                    }
+                    ProduceVersion::V13 => {
+                        let topic_id = topic_id
+                            .ok_or(Error::Unsupported("Produce v13 requires a topic UUID"))?;
+                        leader_client
+                            .produce_v13_no_response(
+                                transactional_id.clone(),
+                                self.config.acks.as_i16(),
+                                30_000,
+                                vec![ProduceTopicV13 {
+                                    topic_id,
                                     partitions: vec![ProducePartitionV3 {
                                         partition_index: partition,
                                         compression: self
@@ -2506,6 +2663,31 @@ impl Producer {
                                 30_000,
                                 vec![ProduceTopicV3 {
                                     name: record.topic().to_owned(),
+                                    partitions: vec![ProducePartitionV3 {
+                                        partition_index: partition,
+                                        compression: self
+                                            .config
+                                            .compression
+                                            .as_record_batch_compression(),
+                                        identity,
+                                        records: vec![record_batch_message(record, timestamp_ms)],
+                                    }],
+                                }],
+                            )
+                            .await?,
+                    )
+                }
+                ProduceVersion::V13 => {
+                    let topic_id =
+                        topic_id.ok_or(Error::Unsupported("Produce v13 requires a topic UUID"))?;
+                    ProduceResponse::V9(
+                        leader_client
+                            .produce_v13(
+                                transactional_id,
+                                self.config.acks.as_i16(),
+                                30_000,
+                                vec![ProduceTopicV13 {
+                                    topic_id,
                                     partitions: vec![ProducePartitionV3 {
                                         partition_index: partition,
                                         compression: self
@@ -3552,6 +3734,7 @@ impl ProducerConfig {
             client,
             config: self,
             metadata_cache: BTreeMap::new(),
+            topic_id_cache: BTreeMap::new(),
             keyless_partition_indexes: BTreeMap::new(),
             broker_clients: BTreeMap::new(),
             idempotent_state,
@@ -3971,6 +4154,7 @@ enum ProduceVersion {
     V9,
     V11,
     V12,
+    V13,
 }
 
 impl ProduceVersion {
@@ -3982,15 +4166,33 @@ impl ProduceVersion {
             Self::V9 => 9,
             Self::V11 => 11,
             Self::V12 => 12,
+            Self::V13 => 13,
         }
     }
 }
 
+#[cfg(test)]
 fn select_produce_version(
     api_versions: &impl ApiVersionsLookup,
     record: &ProducerRecord,
     compression: Compression,
 ) -> Result<ProduceVersion> {
+    select_produce_version_with_topic_id(api_versions, record, compression, None)
+}
+
+fn select_produce_version_with_topic_id(
+    api_versions: &impl ApiVersionsLookup,
+    record: &ProducerRecord,
+    compression: Compression,
+    topic_id: Option<[u8; 16]>,
+) -> Result<ProduceVersion> {
+    if topic_id.is_some()
+        && api_versions
+            .highest_supported_version(PRODUCE_API_KEY, 13)
+            .is_some_and(|version| version >= 13)
+    {
+        return Ok(ProduceVersion::V13);
+    }
     if let Some(version) = select_flexible_produce_version(api_versions) {
         return Ok(version);
     }
@@ -4030,11 +4232,28 @@ fn select_produce_version(
     Err(Error::Unsupported("Produce API v2 or newer"))
 }
 
+#[cfg(test)]
 fn select_produce_batch_version(
     api_versions: &impl ApiVersionsLookup,
     records: &[PreparedBatchRecord<'_>],
     compression: Compression,
 ) -> Result<ProduceVersion> {
+    select_produce_batch_version_with_topic_id(api_versions, records, compression, None)
+}
+
+fn select_produce_batch_version_with_topic_id(
+    api_versions: &impl ApiVersionsLookup,
+    records: &[PreparedBatchRecord<'_>],
+    compression: Compression,
+    topic_id: Option<[u8; 16]>,
+) -> Result<ProduceVersion> {
+    if topic_id.is_some()
+        && api_versions
+            .highest_supported_version(PRODUCE_API_KEY, 13)
+            .is_some_and(|version| version >= 13)
+    {
+        return Ok(ProduceVersion::V13);
+    }
     if let Some(version) = select_flexible_produce_version(api_versions) {
         return Ok(version);
     }
@@ -4306,7 +4525,8 @@ fn batch_records_encoded_len(
         | ProduceVersion::V7
         | ProduceVersion::V9
         | ProduceVersion::V11
-        | ProduceVersion::V12 => {
+        | ProduceVersion::V12
+        | ProduceVersion::V13 => {
             let records = records
                 .iter()
                 .map(|record| {
@@ -4440,13 +4660,14 @@ mod tests {
         is_retryable_transaction_coordinator_error, is_retryable_transaction_transport_error,
         kafka_murmur2, largest_fitting_prefix, leader_for, message_set_message,
         record_batch_attempt_outcomes, record_batch_message, select_produce_batch_version,
-        select_produce_version, transaction_offset_topics, Acks, BatchRecord, BufferedFlushReason,
-        BufferedProduceRequest, BufferedProducer, BufferedProducerCommand, BufferedProducerState,
-        Compression, IdempotentBatchSequenceTracker, IdempotentProduceErrorDisposition,
-        IdempotentProducerState, PreparedBatchRecord, ProduceBatchKey, ProduceVersion, Producer,
-        ProducerBatchFailure, ProducerBatchRecordOutcome, ProducerBatchReport, ProducerConfig,
-        ProducerDelivery, ProducerRecord, RecordMetadata, SecurityProtocol, TransactionState,
-        TransactionStatus,
+        select_produce_batch_version_with_topic_id, select_produce_version,
+        select_produce_version_with_topic_id, transaction_offset_topics, Acks, BatchRecord,
+        BufferedFlushReason, BufferedProduceRequest, BufferedProducer, BufferedProducerCommand,
+        BufferedProducerState, Compression, IdempotentBatchSequenceTracker,
+        IdempotentProduceErrorDisposition, IdempotentProducerState, PreparedBatchRecord,
+        ProduceBatchKey, ProduceVersion, Producer, ProducerBatchFailure,
+        ProducerBatchRecordOutcome, ProducerBatchReport, ProducerConfig, ProducerDelivery,
+        ProducerRecord, RecordMetadata, SecurityProtocol, TransactionState, TransactionStatus,
     };
     use crate::consumer::ConsumerAssignment;
     use crate::{BrokerErrorKind, Client, ClientMetrics, Error};
@@ -4804,6 +5025,35 @@ mod tests {
     }
 
     #[test]
+    fn selects_topic_id_produce_v13_when_topic_uuid_is_available() {
+        let versions = api_versions(13);
+        let record = ProducerRecord::to("orders").header("source", "checkout");
+
+        assert_eq!(
+            select_produce_version_with_topic_id(
+                &versions,
+                &record,
+                Compression::None,
+                Some([7; 16]),
+            )
+            .unwrap(),
+            ProduceVersion::V13
+        );
+    }
+
+    #[test]
+    fn falls_back_to_name_based_produce_without_topic_uuid() {
+        let versions = api_versions(13);
+        let record = ProducerRecord::to("orders").header("source", "checkout");
+
+        assert_eq!(
+            select_produce_version_with_topic_id(&versions, &record, Compression::None, None)
+                .unwrap(),
+            ProduceVersion::V12
+        );
+    }
+
+    #[test]
     fn falls_back_to_message_set_without_headers_when_only_produce_v2_is_available() {
         let versions = api_versions(2);
         let record = ProducerRecord::to("orders");
@@ -4941,6 +5191,25 @@ mod tests {
         assert_eq!(
             select_produce_batch_version(&versions, &records, Compression::None).unwrap(),
             ProduceVersion::V12
+        );
+    }
+
+    #[test]
+    fn selects_topic_id_produce_v13_for_batch_when_topic_uuid_is_available() {
+        let versions = api_versions(13);
+        let first = BatchRecord::new(ProducerRecord::to("orders").header("source", "checkout"));
+        let batch = [first];
+        let records = prepared_records(&batch);
+
+        assert_eq!(
+            select_produce_batch_version_with_topic_id(
+                &versions,
+                &records,
+                Compression::None,
+                Some([7; 16]),
+            )
+            .unwrap(),
+            ProduceVersion::V13
         );
     }
 
@@ -5312,6 +5581,7 @@ mod tests {
             client,
             config,
             metadata_cache: BTreeMap::new(),
+            topic_id_cache: BTreeMap::new(),
             keyless_partition_indexes: BTreeMap::new(),
             broker_clients: BTreeMap::new(),
             idempotent_state: Some(IdempotentProducerState::new(42, 3)),
@@ -5366,6 +5636,7 @@ mod tests {
             client,
             config,
             metadata_cache: BTreeMap::new(),
+            topic_id_cache: BTreeMap::new(),
             keyless_partition_indexes: BTreeMap::new(),
             broker_clients: BTreeMap::new(),
             idempotent_state: Some(IdempotentProducerState::new(42, 3)),
@@ -5422,6 +5693,7 @@ mod tests {
             client,
             config,
             metadata_cache: BTreeMap::new(),
+            topic_id_cache: BTreeMap::new(),
             keyless_partition_indexes: BTreeMap::new(),
             broker_clients: BTreeMap::new(),
             idempotent_state: Some(IdempotentProducerState::new(42, 3)),
@@ -6338,6 +6610,7 @@ mod tests {
             client,
             config,
             metadata_cache: BTreeMap::new(),
+            topic_id_cache: BTreeMap::new(),
             keyless_partition_indexes: BTreeMap::new(),
             broker_clients: BTreeMap::new(),
             idempotent_state: None,
@@ -6387,6 +6660,7 @@ mod tests {
             client,
             config,
             metadata_cache,
+            topic_id_cache: BTreeMap::new(),
             keyless_partition_indexes: BTreeMap::new(),
             broker_clients: BTreeMap::new(),
             idempotent_state: None,
@@ -6459,6 +6733,7 @@ mod tests {
             client,
             config,
             metadata_cache,
+            topic_id_cache: BTreeMap::new(),
             keyless_partition_indexes: BTreeMap::new(),
             broker_clients: BTreeMap::new(),
             idempotent_state: Some(IdempotentProducerState::new(42, 3)),

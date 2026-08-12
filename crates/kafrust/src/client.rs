@@ -103,9 +103,10 @@ use kafrust_protocol::api::offset_fetch::{
 };
 use kafrust_protocol::api::produce::{
     MessageSetMessage, ProducePartitionV2, ProducePartitionV3, ProduceRequestV11,
-    ProduceRequestV12, ProduceRequestV2, ProduceRequestV3, ProduceRequestV7, ProduceRequestV9,
-    ProduceResponseV11, ProduceResponseV12, ProduceResponseV2, ProduceResponseV7,
-    ProduceResponseV9, ProduceTopicV2, ProduceTopicV3, RecordBatchIdentity, RecordBatchMessage,
+    ProduceRequestV12, ProduceRequestV13, ProduceRequestV2, ProduceRequestV3, ProduceRequestV7,
+    ProduceRequestV9, ProduceResponseV11, ProduceResponseV12, ProduceResponseV13,
+    ProduceResponseV2, ProduceResponseV7, ProduceResponseV9, ProduceTopicV13, ProduceTopicV2,
+    ProduceTopicV3, RecordBatchIdentity, RecordBatchMessage,
 };
 use kafrust_protocol::api::sasl::{
     SaslAuthenticateRequestV1, SaslAuthenticateRequestV2, SaslAuthenticateResponseV1,
@@ -1841,6 +1842,30 @@ impl Client {
             .await
     }
 
+    /// Sends topic-ID based flexible Produce v13 for pre-built record batches.
+    pub async fn produce_v13(
+        &mut self,
+        transactional_id: Option<String>,
+        acks: i16,
+        timeout_ms: i32,
+        topics: Vec<ProduceTopicV13>,
+    ) -> Result<ProduceResponseV13> {
+        self.produce_topic_id_flexible(transactional_id, acks, timeout_ms, topics)
+            .await
+    }
+
+    /// Sends topic-ID based flexible Produce v13 without waiting for a response.
+    pub async fn produce_v13_no_response(
+        &mut self,
+        transactional_id: Option<String>,
+        acks: i16,
+        timeout_ms: i32,
+        topics: Vec<ProduceTopicV13>,
+    ) -> Result<()> {
+        self.produce_topic_id_flexible_no_response(transactional_id, acks, timeout_ms, topics)
+            .await
+    }
+
     pub(crate) async fn produce_flexible(
         &mut self,
         api_version: i16,
@@ -1926,6 +1951,45 @@ impl Client {
             .encode()?
         };
         self.send_request_no_response(&request).await
+    }
+
+    async fn produce_topic_id_flexible(
+        &mut self,
+        transactional_id: Option<String>,
+        acks: i16,
+        timeout_ms: i32,
+        topics: Vec<ProduceTopicV13>,
+    ) -> Result<ProduceResponseV13> {
+        let request = ProduceRequestV13 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            transactional_id,
+            acks,
+            timeout_ms,
+            topics,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(ProduceResponseV13::decode_body(&mut decoder)?)
+    }
+
+    async fn produce_topic_id_flexible_no_response(
+        &mut self,
+        transactional_id: Option<String>,
+        acks: i16,
+        timeout_ms: i32,
+        topics: Vec<ProduceTopicV13>,
+    ) -> Result<()> {
+        let request = ProduceRequestV13 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            transactional_id,
+            acks,
+            timeout_ms,
+            topics,
+        };
+        self.send_request_no_response(&request.encode()?).await
     }
 
     async fn send_request_no_response(&mut self, request: &[u8]) -> Result<()> {

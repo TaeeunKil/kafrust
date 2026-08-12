@@ -72,6 +72,20 @@ pub struct ProduceRequestV12 {
     pub topics: Vec<ProduceTopicV3>,
 }
 
+/// Flexible Produce request for Kafka API version 13.
+///
+/// Kafka v13 replaces the topic name with the stable topic UUID while keeping
+/// the flexible RecordBatch partition schema from v9-v12.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProduceRequestV13 {
+    pub correlation_id: i32,
+    pub client_id: Option<String>,
+    pub transactional_id: Option<String>,
+    pub acks: i16,
+    pub timeout_ms: i32,
+    pub topics: Vec<ProduceTopicV13>,
+}
+
 impl ProduceRequestV3 {
     pub fn encode(&self) -> Result<Vec<u8>> {
         encode_record_batch_request(
@@ -139,6 +153,27 @@ impl ProduceRequestV12 {
             self.timeout_ms,
             &self.topics,
         )
+    }
+}
+
+impl ProduceRequestV13 {
+    pub fn encode(&self) -> Result<Vec<u8>> {
+        let mut encoder = Encoder::new();
+        RequestHeader {
+            api_key: API_KEY,
+            api_version: 13,
+            correlation_id: self.correlation_id,
+            client_id: self.client_id.clone(),
+        }
+        .encode_v2(&mut encoder)?;
+        encoder.write_compact_nullable_string(self.transactional_id.as_deref())?;
+        encoder.write_i16(self.acks);
+        encoder.write_i32(self.timeout_ms);
+        encoder.write_compact_array(Some(self.topics.as_slice()), |encoder, topic| {
+            topic.encode(encoder, self.transactional_id.is_some())
+        })?;
+        encoder.write_empty_tagged_fields();
+        Ok(encoder.into_bytes())
     }
 }
 
@@ -224,6 +259,24 @@ pub struct ProduceTopicV2 {
 pub struct ProduceTopicV3 {
     pub name: String,
     pub partitions: Vec<ProducePartitionV3>,
+}
+
+/// Produce topic payload for Kafka API version 13.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProduceTopicV13 {
+    pub topic_id: [u8; 16],
+    pub partitions: Vec<ProducePartitionV3>,
+}
+
+impl ProduceTopicV13 {
+    fn encode(&self, encoder: &mut Encoder, transactional: bool) -> Result<()> {
+        encoder.write_uuid(&self.topic_id);
+        encoder.write_compact_array(Some(self.partitions.as_slice()), |encoder, partition| {
+            partition.encode_v9(encoder, transactional)
+        })?;
+        encoder.write_empty_tagged_fields();
+        Ok(())
+    }
 }
 
 impl ProduceTopicV3 {
@@ -478,6 +531,9 @@ pub type ProduceResponseV11 = ProduceResponseV9;
 
 /// Flexible Produce response for Kafka API version 12.
 pub type ProduceResponseV12 = ProduceResponseV9;
+
+/// Flexible Produce response for Kafka API version 13.
+pub type ProduceResponseV13 = ProduceResponseV9;
 
 impl ProduceResponseV9 {
     pub fn decode_body(decoder: &mut Decoder<'_>) -> Result<Self> {
@@ -802,9 +858,10 @@ mod tests {
         encode_record_batch_set_with_compression_and_identity,
         encode_record_batch_set_with_compression_identity_and_transaction, encoded_message_set_len,
         encoded_record_batch_set_len, MessageSetMessage, ProducePartitionV2, ProducePartitionV3,
-        ProduceRequestV11, ProduceRequestV12, ProduceRequestV2, ProduceRequestV3, ProduceRequestV7,
-        ProduceRequestV9, ProduceResponseV2, ProduceResponseV7, ProduceResponseV9, ProduceTopicV2,
-        ProduceTopicV3, RecordBatchIdentity, RecordBatchMessage,
+        ProduceRequestV11, ProduceRequestV12, ProduceRequestV13, ProduceRequestV2,
+        ProduceRequestV3, ProduceRequestV7, ProduceRequestV9, ProduceResponseV2, ProduceResponseV7,
+        ProduceResponseV9, ProduceTopicV13, ProduceTopicV2, ProduceTopicV3, RecordBatchIdentity,
+        RecordBatchMessage,
     };
     use crate::codec::{DecodeLimits, Decoder};
     use crate::record_batch::RecordBatchCompression;
@@ -1156,6 +1213,28 @@ mod tests {
         assert_eq!(&bytes[0..4], &[0, 0, 0, 12]);
         assert_eq!(&bytes[4..8], &[0, 0, 0, 5]);
         assert!(bytes.len() > 20);
+    }
+
+    #[test]
+    fn encodes_produce_request_v13_with_topic_uuid() {
+        let request = ProduceRequestV13 {
+            correlation_id: 5,
+            client_id: Some("kafrust".to_owned()),
+            transactional_id: None,
+            acks: 1,
+            timeout_ms: 30_000,
+            topics: vec![ProduceTopicV13 {
+                topic_id: [7; 16],
+                partitions: Vec::new(),
+            }],
+        };
+
+        let bytes = request.encode().unwrap();
+
+        assert_eq!(&bytes[0..4], &[0, 0, 0, 13]);
+        assert_eq!(&bytes[4..8], &[0, 0, 0, 5]);
+        assert!(bytes.windows(16).any(|window| window == [7; 16]));
+        assert!(bytes.len() > 35);
     }
 
     #[test]
