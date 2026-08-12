@@ -1834,6 +1834,72 @@ jobs:
             exit 1
           fi
 
+      - name: Run multi-broker Admin OffsetCommit during coordinator stop
+        run: |
+          ready_file=/tmp/kafrust-admin-offset-commit-ready
+          release_file=/tmp/kafrust-admin-offset-commit-release
+          request_log=/tmp/kafrust-admin-offset-commit.log
+          rm -f "$ready_file" "$release_file" "$request_log"
+          KAFRUST_PARTITION="$KAFRUST_FAILOVER_PARTITION" \
+          KAFRUST_ADMIN_OFFSET="0" \
+          KAFRUST_REQUEST_READY_FILE="$ready_file" \
+          KAFRUST_REQUEST_RELEASE_FILE="$release_file" \
+          RUST_LOG=kafrust=debug \
+          cargo run -p kafrust --example admin_consumer_group_offsets_commit_failover \
+            >"$request_log" 2>&1 &
+          offset_commit_pid=$!
+
+          coordinator_node=""
+          request_ready=""
+          for attempt in {1..600}; do
+            coordinator_node="$(sed -n 's/.*group coordinator node \([0-9][0-9]*\)$/\1/p' "$request_log" | tail -n 1)"
+            if [ -f "$ready_file" ]; then
+              request_ready=1
+              break
+            fi
+            if ! kill -0 "$offset_commit_pid" 2>/dev/null; then
+              cat "$request_log" || true
+              wait "$offset_commit_pid"
+            fi
+            sleep 0.1
+          done
+          if ! [[ "$coordinator_node" =~ ^[123]$ ]] || [ -z "$request_ready" ] || \
+             ! kill -0 "$offset_commit_pid" 2>/dev/null; then
+            cat "$request_log" || true
+            echo "OffsetCommit request was not held before transmission"
+            kill "$offset_commit_pid" 2>/dev/null || true
+            wait "$offset_commit_pid" || true
+            exit 1
+          fi
+
+          docker stop "kafrust-kafka-multi-${coordinator_node}"
+          touch "$release_file"
+
+          offset_commit_status=0
+          wait "$offset_commit_pid" || offset_commit_status=$?
+          cat "$request_log"
+
+          docker start "kafrust-kafka-multi-${coordinator_node}"
+          coordinator_ready=""
+          for attempt in {1..120}; do
+            if docker exec "kafrust-kafka-multi-${coordinator_node}" \
+              /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server "kafrust-kafka-multi-${coordinator_node}:29092" \
+              >/tmp/kafrust-admin-offset-commit-recovery.log 2>&1; then
+              coordinator_ready=1
+              break
+            fi
+            sleep 2
+          done
+
+          if [ "$offset_commit_status" -ne 0 ] || [ -z "$coordinator_ready" ] || \
+             ! grep -Eq "retries=[1-9][0-9]*" "$request_log"; then
+            cat /tmp/kafrust-admin-offset-commit-recovery.log || true
+            docker logs "kafrust-kafka-multi-${coordinator_node}"
+            echo "Admin OffsetCommit did not prove retry recovery"
+            exit 1
+          fi
+
       - name: Dump multi-broker Kafka logs
         if: failure()
         run: |
