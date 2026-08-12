@@ -424,6 +424,8 @@ struct TransactionState {
 enum TransactionStatus {
     Ready,
     InTransaction,
+    /// The producer was fenced or otherwise made unusable by a fatal broker error.
+    Defunct,
 }
 
 impl TransactionState {
@@ -2423,6 +2425,10 @@ impl Producer {
     fn record_idempotent_fatal_error(&mut self, code: i16) {
         if let Some(state) = &mut self.idempotent_state {
             state.record_fatal_error(code);
+        }
+        if let Some(state) = &mut self.transaction_state {
+            state.status = TransactionStatus::Defunct;
+            state.registered_partitions.clear();
         }
     }
 
@@ -4896,6 +4902,66 @@ mod tests {
 
         assert!(!producer.in_transaction());
         assert_eq!(metrics.snapshot().retries, 1);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn marks_transactional_producer_defunct_after_fatal_end_transaction_error() {
+        let bootstrap_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let bootstrap_addr = bootstrap_listener.local_addr().unwrap();
+        let coordinator_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let coordinator_addr = coordinator_listener.local_addr().unwrap();
+
+        let server = tokio::spawn(async move {
+            let (mut bootstrap_socket, _) = bootstrap_listener.accept().await.unwrap();
+            let request = read_frame(&mut bootstrap_socket).await;
+            assert_eq!(&request[0..4], &[0, 10, 0, 1]);
+            write_frame(
+                &mut bootstrap_socket,
+                &find_coordinator_response_frame(&request, 2, coordinator_addr),
+            )
+            .await;
+
+            let (mut coordinator_socket, _) = coordinator_listener.accept().await.unwrap();
+            let end_txn = read_frame(&mut coordinator_socket).await;
+            assert_eq!(&end_txn[0..4], &[0, 26, 0, 0]);
+            write_frame(
+                &mut coordinator_socket,
+                &[
+                    0, 0, 0, 1, // correlation id
+                    0, 0, 0, 0, // throttle time
+                    0, 47, // invalid producer epoch
+                ],
+            )
+            .await;
+        });
+
+        let config = ProducerConfig::new([bootstrap_addr.to_string()])
+            .transactional_id("orders-tx")
+            .max_retries(0);
+        let client = config.client.clone().connect().await.unwrap();
+        let mut transaction_state = TransactionState::new("orders-tx".to_owned());
+        transaction_state.status = TransactionStatus::InTransaction;
+        let mut producer = Producer {
+            client,
+            config,
+            metadata_cache: BTreeMap::new(),
+            keyless_partition_indexes: BTreeMap::new(),
+            broker_clients: BTreeMap::new(),
+            idempotent_state: Some(IdempotentProducerState::new(42, 3)),
+            transaction_state: Some(transaction_state),
+        };
+
+        assert!(matches!(
+            producer.commit_transaction().await,
+            Err(Error::Broker { code: 47, .. })
+        ));
+        assert!(!producer.in_transaction());
+        assert!(matches!(
+            producer.begin_transaction(),
+            Err(Error::Broker { code: 47, .. })
+        ));
+
         server.await.unwrap();
     }
 

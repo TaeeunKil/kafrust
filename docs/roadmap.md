@@ -981,6 +981,13 @@ Evidence:
   unknown offset and timestamp metadata. `OUT_OF_ORDER_SEQUENCE_NUMBER`,
   `INVALID_PRODUCER_EPOCH`, and `PRODUCER_FENCED` are classified as fatal and
   leave the producer instance defunct for subsequent sends.
+- A fatal idempotent error during an active transaction transitions the
+  transaction state to terminal `Defunct`, clears registered partitions, and
+  makes `in_transaction()` return false without claiming a commit or abort
+  outcome. A focused injected `EndTxn` regression verifies
+  `INVALID_PRODUCER_EPOCH` and repeated-command behavior after fencing; the
+  application must discard that producer and determine any prior outcome
+  separately.
 - A deterministic injected-broker test drops the connection after receiving
   the first Produce request, verifies that the retry frame is byte-for-byte
   identical, returns `DUPLICATE_SEQUENCE_NUMBER`, and verifies one sequence

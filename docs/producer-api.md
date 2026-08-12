@@ -229,6 +229,15 @@ Current implementation status:
   defunct; the failing call and future send calls return the fatal broker code.
   An injected-broker regression test covers an ambiguous connection loss,
   byte-identical retry, duplicate response, and single sequence advancement.
+- A fatal idempotent error during an active transaction also moves the
+  transaction state to a terminal defunct state and clears registered
+  partitions. `in_transaction()` then returns `false`, but this does not claim
+  that the transaction committed or aborted successfully. The application
+  must discard the producer, create a new transactional producer, and use a
+  read-committed check or an application-level result record when it needs to
+  determine the old transaction's outcome. An injected `EndTxn` regression
+  covers `INVALID_PRODUCER_EPOCH` and confirms that later transaction commands
+  keep returning the fatal code.
 - `ProducerConfig::transactional_id` enables idempotence and initializes the
   producer through the Kafka transaction coordinator. `begin_transaction`,
   `commit_transaction`, and `abort_transaction` expose the transaction
