@@ -930,6 +930,10 @@ Implemented evidence:
   retryable top-level broker failures; a focused mock-broker regression test
   verifies the dropped request and typed ACL response. Authorizer-specific
   broker-stop qualification remains a separate release gate.
+  DescribeClientQuotas v0 now applies the same retry policy to its typed filter
+  and top-level response, with focused coverage for a dropped request and
+  successful quota result. StandardAuthorizer permission and broker-stop
+  qualification remain separate release gates.
 - KIP-848 member-aware administrative offsets now use OffsetFetch v9 and
   OffsetCommit v9 with the joined member ID, member epoch, optional static
   instance ID, `require_stable`, and committed leader epoch. The APIs reuse

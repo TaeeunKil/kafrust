@@ -129,6 +129,12 @@ same bounded budget. The focused mock-broker regression test verifies a dropped
 request and a successful typed ACL response on the replacement connection;
 authorizer-specific broker-stop qualification remains separate.
 
+The read-only `DescribeClientQuotas v0` path applies the same bounded retry
+policy to transport failures, request timeouts, and retryable top-level broker
+responses. Its focused mock-broker regression test verifies that the typed
+filter is resent after a dropped request and the quota result is preserved;
+StandardAuthorizer permission and broker-stop qualification remain separate.
+
 The read-only `DescribeProducers v0` path retries leader movement, metadata
 convergence failures, transport disconnects, and request timeouts through a
 fresh Metadata v1 lookup. A transient per-partition leader error causes the

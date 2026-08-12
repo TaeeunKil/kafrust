@@ -292,17 +292,45 @@ impl AdminClient {
         &self,
         filter: &ClientQuotaFilter,
     ) -> Result<DescribeClientQuotasResult> {
-        let mut client = self.config.clone().connect().await?;
-        let response = client
-            .describe_client_quotas_v0(
-                filter
-                    .components
-                    .iter()
-                    .map(ClientQuotaFilterComponent::as_protocol)
-                    .collect(),
-                filter.strict,
-            )
-            .await?;
+        let components = filter
+            .components
+            .iter()
+            .map(ClientQuotaFilterComponent::as_protocol)
+            .collect::<Vec<_>>();
+        let mut retry = 0;
+        let response = loop {
+            let mut client = match self.config.clone().connect().await {
+                Ok(client) => client,
+                Err(error) if retry < self.max_retries && is_retryable_admin_read_error(&error) => {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
+            match client
+                .describe_client_quotas_v0(components.clone(), filter.strict)
+                .await
+            {
+                Ok(response)
+                    if retry < self.max_retries
+                        && is_retryable_admin_read_code(response.error_code) =>
+                {
+                    self.config.record_broker_error();
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                }
+                Ok(response) => break response,
+                Err(error) if retry < self.max_retries && is_retryable_admin_read_error(&error) => {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                }
+                Err(error) => return Err(error),
+            }
+        };
         if response.error_code != 0 {
             self.config.record_broker_error();
         }
@@ -7075,6 +7103,39 @@ mod tests {
         assert!(altered.is_success());
         assert_eq!(altered.results().len(), 1);
         assert_eq!(altered.results()[0].username(), "alice");
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn retries_describe_client_quotas_after_connection_drop() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut first, _) = listener.accept().await.unwrap();
+            let request = read_frame(&mut first).await;
+            assert_eq!(&request[0..4], &[0, 48, 0, 0]);
+            drop(first);
+
+            let (mut second, _) = listener.accept().await.unwrap();
+            let request = read_frame(&mut second).await;
+            assert_eq!(&request[0..4], &[0, 48, 0, 0]);
+            write_frame(&mut second, &describe_client_quotas_response()).await;
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        );
+
+        let result = admin
+            .describe_client_quotas(&ClientQuotaFilter::any())
+            .await
+            .unwrap();
+
+        assert!(result.is_success());
+        assert_eq!(result.entries().len(), 1);
+        assert_eq!(metrics.snapshot().retries, 1);
         server.await.unwrap();
     }
 
