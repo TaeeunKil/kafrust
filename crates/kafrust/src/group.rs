@@ -958,11 +958,7 @@ impl ConsumerGroupConfig {
         let config = self.clone();
         let mut bootstrap = self.client.clone().connect().await?;
         let topics = self.resolve_subscription_topics(&mut bootstrap).await?;
-        let topic_partitions = match owned_partitions {
-            Some(owned_partitions) => Some(owned_partitions),
-            None if member_epoch == 0 => Some(Vec::new()),
-            None => None,
-        };
+        let topic_partitions = owned_partitions;
         let mut coordinator = find_group_coordinator_with_retry(
             &mut bootstrap,
             &self.client,
