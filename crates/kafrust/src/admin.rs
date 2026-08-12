@@ -7301,6 +7301,41 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn retries_describe_user_scram_credentials_after_retryable_response() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut first, _) = listener.accept().await.unwrap();
+            let request = read_frame(&mut first).await;
+            assert_eq!(&request[0..4], &[0, 50, 0, 0]);
+            write_frame(
+                &mut first,
+                &describe_user_scram_credentials_retryable_response(),
+            )
+            .await;
+
+            let (mut second, _) = listener.accept().await.unwrap();
+            let request = read_frame(&mut second).await;
+            assert_eq!(&request[0..4], &[0, 50, 0, 0]);
+            write_frame(&mut second, &describe_user_scram_credentials_response()).await;
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        );
+
+        let result = admin.describe_user_scram_credentials(None).await.unwrap();
+
+        assert!(result.is_success());
+        assert_eq!(result.users().len(), 1);
+        assert_eq!(metrics.snapshot().retries, 1);
+        assert_eq!(metrics.snapshot().broker_errors, 1);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn retries_describe_client_quotas_after_connection_drop() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -7382,6 +7417,58 @@ mod tests {
         assert_eq!(result.topics().len(), 1);
         assert_eq!(result.topics()[0].name(), "orders");
         assert_eq!(metrics.snapshot().retries, 1);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn retries_list_partition_reassignments_after_retryable_response() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut first_bootstrap, _) = listener.accept().await.unwrap();
+            let metadata_request = read_frame(&mut first_bootstrap).await;
+            assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+            write_frame(&mut first_bootstrap, &metadata_response(addr.port())).await;
+
+            let (mut first_controller, _) = listener.accept().await.unwrap();
+            let request = read_frame(&mut first_controller).await;
+            assert_eq!(&request[0..4], &[0, 46, 0, 0]);
+            write_frame(
+                &mut first_controller,
+                &list_partition_reassignments_retryable_response(),
+            )
+            .await;
+
+            let (mut second_bootstrap, _) = listener.accept().await.unwrap();
+            let metadata_request = read_frame(&mut second_bootstrap).await;
+            assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+            write_frame(&mut second_bootstrap, &metadata_response(addr.port())).await;
+
+            let (mut second_controller, _) = listener.accept().await.unwrap();
+            let request = read_frame(&mut second_controller).await;
+            assert_eq!(&request[0..4], &[0, 46, 0, 0]);
+            write_frame(
+                &mut second_controller,
+                &list_partition_reassignments_response(),
+            )
+            .await;
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        );
+
+        let result = admin
+            .list_partition_reassignments(None, PartitionReassignmentOptions::new())
+            .await
+            .unwrap();
+
+        assert!(result.is_success());
+        assert_eq!(result.topics().len(), 1);
+        assert_eq!(metrics.snapshot().retries, 1);
+        assert_eq!(metrics.snapshot().broker_errors, 1);
         server.await.unwrap();
     }
 
@@ -9258,6 +9345,18 @@ mod tests {
         encoder.into_bytes()
     }
 
+    fn describe_user_scram_credentials_retryable_response() -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_empty_tagged_fields(); // response header tags
+        encoder.write_i32(0); // throttle time
+        encoder.write_i16(41); // not controller
+        encoder.write_compact_nullable_string(None).unwrap();
+        encoder.write_unsigned_varint(1); // no user results
+        encoder.write_empty_tagged_fields(); // response tags
+        encoder.into_bytes()
+    }
+
     fn alter_user_scram_credentials_response() -> Vec<u8> {
         let mut encoder = Encoder::new();
         encoder.write_i32(1); // correlation ID
@@ -9322,6 +9421,18 @@ mod tests {
             .unwrap();
         encoder.write_empty_tagged_fields(); // partition tags
         encoder.write_empty_tagged_fields(); // topic tags
+        encoder.write_empty_tagged_fields(); // response tags
+        encoder.into_bytes()
+    }
+
+    fn list_partition_reassignments_retryable_response() -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_empty_tagged_fields(); // response header tags
+        encoder.write_i32(0); // throttle time
+        encoder.write_i16(41); // not controller
+        encoder.write_compact_nullable_string(None).unwrap();
+        encoder.write_unsigned_varint(1); // no topic results
         encoder.write_empty_tagged_fields(); // response tags
         encoder.into_bytes()
     }
