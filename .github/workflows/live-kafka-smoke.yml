@@ -1501,23 +1501,23 @@ jobs:
             exit 1
           fi
 
-          written_file=/tmp/kafrust-admin-delete-records-written
+          ready_file=/tmp/kafrust-admin-delete-records-ready
           release_file=/tmp/kafrust-admin-delete-records-release
           request_log=/tmp/kafrust-admin-delete-records.log
-          rm -f "$written_file" "$release_file" "$request_log"
+          rm -f "$ready_file" "$release_file" "$request_log"
           KAFRUST_PARTITION="$KAFRUST_FAILOVER_PARTITION" \
           KAFRUST_ADMIN_OFFSET=1 \
-          KAFRUST_REQUEST_WRITTEN_FILE="$written_file" \
+          KAFRUST_REQUEST_READY_FILE="$ready_file" \
           KAFRUST_REQUEST_RELEASE_FILE="$release_file" \
           RUST_LOG=kafrust=debug \
           cargo run -p kafrust --example admin_delete_records_failover \
             >"$request_log" 2>&1 &
           admin_pid=$!
 
-          request_sent=""
+          request_ready=""
           for attempt in {1..600}; do
-            if [ -f "$written_file" ]; then
-              request_sent=1
+            if [ -f "$ready_file" ]; then
+              request_ready=1
               break
             fi
             if ! kill -0 "$admin_pid" 2>/dev/null; then
@@ -1526,9 +1526,9 @@ jobs:
             fi
             sleep 0.1
           done
-          if [ -z "$request_sent" ] || ! kill -0 "$admin_pid" 2>/dev/null; then
+          if [ -z "$request_ready" ] || ! kill -0 "$admin_pid" 2>/dev/null; then
             cat "$request_log" || true
-            echo "DeleteRecords request was not held after the request frame was written"
+            echo "DeleteRecords request was not held before transmission"
             kill "$admin_pid" 2>/dev/null || true
             wait "$admin_pid" || true
             exit 1
@@ -1580,22 +1580,22 @@ jobs:
             exit 1
           fi
 
-          written_file=/tmp/kafrust-admin-describe-producers-written
+          ready_file=/tmp/kafrust-admin-describe-producers-ready
           release_file=/tmp/kafrust-admin-describe-producers-release
           request_log=/tmp/kafrust-admin-describe-producers.log
-          rm -f "$written_file" "$release_file" "$request_log"
+          rm -f "$ready_file" "$release_file" "$request_log"
           KAFRUST_PARTITION="$KAFRUST_FAILOVER_PARTITION" \
-          KAFRUST_REQUEST_WRITTEN_FILE="$written_file" \
+          KAFRUST_REQUEST_READY_FILE="$ready_file" \
           KAFRUST_REQUEST_RELEASE_FILE="$release_file" \
           RUST_LOG=kafrust=debug \
           cargo run -p kafrust --example admin_describe_producers_failover \
             >"$request_log" 2>&1 &
           describe_pid=$!
 
-          request_sent=""
+          request_ready=""
           for attempt in {1..600}; do
-            if [ -f "$written_file" ]; then
-              request_sent=1
+            if [ -f "$ready_file" ]; then
+              request_ready=1
               break
             fi
             if ! kill -0 "$describe_pid" 2>/dev/null; then
@@ -1604,9 +1604,9 @@ jobs:
             fi
             sleep 0.1
           done
-          if [ -z "$request_sent" ] || ! kill -0 "$describe_pid" 2>/dev/null; then
+          if [ -z "$request_ready" ] || ! kill -0 "$describe_pid" 2>/dev/null; then
             cat "$request_log" || true
-            echo "DescribeProducers request was not held after the request frame was written"
+            echo "DescribeProducers request was not held before transmission"
             kill "$describe_pid" 2>/dev/null || true
             wait "$describe_pid" || true
             exit 1
