@@ -113,7 +113,9 @@ async fn main() -> kafrust::Result<()> {
 ```
 
 When no partition is specified, keyed records use Kafka-compatible Murmur2
-partitioning. Keyless records currently select the first partition.
+partitioning and keyless records use the producer's batch-sticky routing. A
+custom `ProducerConfig::partitioner` callback can override routing for records
+without explicit partitions; explicit partitions always take precedence.
 
 ## Batch Producer
 

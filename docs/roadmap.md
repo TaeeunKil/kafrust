@@ -1254,6 +1254,11 @@ Implemented evidence:
 - Keyless producer records use per-topic batch-sticky round-robin routing.
   Single sends rotate after completion, records in the same batch or buffered
   flush stay together, and retries keep the original sticky partition.
+- `ProducerConfig::partitioner` accepts a thread-safe custom callback for
+  records without explicit partitions. Immediate, batch, and buffered sends
+  share the callback, explicit partitions bypass it, and metadata validation
+  rejects a callback result that is not a current partition. Focused tests cover
+  callback context, explicit-partition precedence, and invalid results.
 - Manual `Live Kafka Smoke` run `30066831820` passed the exact
   `0,1,2,3,4,5,0` keyless rotation sequence against a six-partition,
   three-broker Kafka 3.7.2 topic while all seven regression profiles remained

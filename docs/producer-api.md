@@ -55,6 +55,31 @@ for outcome in batch_report.records() {
 }
 ```
 
+Records without an explicit partition use Kafka-compatible Murmur2 for keyed
+records and the producer's batch-sticky routing for keyless records. Workloads
+that need application-specific routing can install a thread-safe callback:
+
+```rust
+use kafrust::{ProducerConfig, ProducerRecord};
+
+let mut producer = ProducerConfig::new(["localhost:9092"])
+    .partitioner(|topic, key, partitions| {
+        let _ = (topic, key);
+        partitions[0]
+    })
+    .build()
+    .await?;
+
+producer
+    .send(ProducerRecord::to("orders").value("created"))
+    .await?;
+```
+
+The callback receives sorted current partition IDs and must return one of them.
+Explicit `ProducerRecord::partition` values bypass the callback. The same
+partitioning policy is used by immediate, batch, and buffered producer paths;
+an invalid callback result is returned as `Error::InvalidPartition`.
+
 Enable duplicate-safe retries for the current single-record producer path:
 
 ```rust
@@ -185,6 +210,10 @@ Current implementation status:
 
 - `ProducerConfig`, `ProducerRecord`, `Acks`, `Compression`, and `RecordMetadata` are public API types.
 - `ProducerConfig::build` creates a producer backed by a Kafka broker connection.
+- `Partitioner` and `ProducerConfig::partitioner` provide a thread-safe custom
+  partition callback for records without explicit partitions. Explicit
+  partitions bypass it, and immediate, batch, and buffered sends share the same
+  callback behavior.
 - `ProducerConfig::enable_idempotence(true)` selects `acks=all`, requires at
   least one retry, initializes a producer ID through `InitProducerId v0`, and
   tracks the next sequence independently per topic partition. The current

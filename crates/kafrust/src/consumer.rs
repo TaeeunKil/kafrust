@@ -920,6 +920,7 @@ fn can_retry_fetch(error: &Error) -> bool {
         | Error::MissingLeader { .. }
         | Error::MissingBroker { .. } => true,
         Error::MissingBootstrapServer
+        | Error::InvalidPartition { .. }
         | Error::UnassignedTopicPartition { .. }
         | Error::MissingGroupDescription { .. }
         | Error::MissingDeleteGroupResult { .. }

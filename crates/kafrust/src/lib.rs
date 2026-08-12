@@ -62,8 +62,9 @@ pub use group::{
 pub use kafrust_protocol as protocol;
 pub use metrics::{ClientMetrics, ClientMetricsSnapshot};
 pub use producer::{
-    Acks, BufferedProducer, Compression, Header, ProducerBatchFailure, ProducerBatchRecordOutcome,
-    ProducerBatchReport, ProducerConfig, ProducerDelivery, ProducerRecord, RecordMetadata,
+    Acks, BufferedProducer, Compression, Header, Partitioner, ProducerBatchFailure,
+    ProducerBatchRecordOutcome, ProducerBatchReport, ProducerConfig, ProducerDelivery,
+    ProducerRecord, RecordMetadata,
 };
 
 /// Returns the crate version compiled into this build.

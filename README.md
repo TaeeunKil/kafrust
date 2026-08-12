@@ -368,6 +368,8 @@ See [Compatibility](docs/compatibility.md) and
   and transaction paths. Topic
   partition expansion is verified through CreatePartitions v0 and Metadata v1;
   rack-aware client routing is not yet claimed.
+- `ProducerConfig::partitioner` supports thread-safe custom routing for records
+  without explicit partitions across immediate, batch, and buffered sends.
 - Gzip, Snappy, and LZ4 compression use Produce v3 RecordBatch encoding; Zstd
   requires and negotiates Produce v7. Fetch v4 decodes all four codecs. They are
   verified against Kafka `3.7.2` plaintext single-node and multi-broker smoke

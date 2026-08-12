@@ -145,6 +145,13 @@ pub enum Error {
         /// Kafka partition index.
         partition: i32,
     },
+    /// A custom producer partitioner selected a partition absent from metadata.
+    InvalidPartition {
+        /// Kafka topic name.
+        topic: String,
+        /// Partition index selected by the custom partitioner.
+        partition: i32,
+    },
     /// A position operation targeted a topic partition that is not assigned.
     UnassignedTopicPartition {
         /// Kafka topic name.
@@ -255,6 +262,12 @@ impl fmt::Display for Error {
             Self::UnknownTopicOrPartition { topic, partition } => {
                 write!(f, "unknown topic or partition {topic}-{partition}")
             }
+            Self::InvalidPartition { topic, partition } => {
+                write!(
+                    f,
+                    "custom partitioner selected invalid topic partition {topic}-{partition}"
+                )
+            }
             Self::UnassignedTopicPartition { topic, partition } => {
                 write!(f, "unassigned topic partition {topic}-{partition}")
             }
@@ -318,6 +331,7 @@ impl std::error::Error for Error {
             Self::Protocol(error) => Some(error),
             Self::MissingBootstrapServer
             | Self::UnknownTopicOrPartition { .. }
+            | Self::InvalidPartition { .. }
             | Self::UnassignedTopicPartition { .. }
             | Self::MissingLeader { .. }
             | Self::MissingBroker { .. }

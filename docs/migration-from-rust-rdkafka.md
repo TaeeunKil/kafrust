@@ -273,7 +273,8 @@ See [Admin API](admin-api.md) for typed request and response examples.
 | Transactions and read-committed consumption | Alpha candidate; transaction coordinator broker-stop recovery is verified on the documented Kafka 3.7.2 three-broker SASL/PLAIN profile, but broader target-specific failure and throughput qualification remains |
 | `acks=0` fire-and-forget | Verified on Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 single-node plaintext smoke; qualify workload loss/error semantics |
 | Non-Tokio runtime or synchronous client | Blocked |
-| Custom partitioner or rebalance callback | Blocked |
+| Custom partitioner | Candidate; `ProducerConfig::partitioner` covers records without an explicit partition across immediate, batch, and buffered paths |
+| Rebalance callback | Blocked; use explicit poll/rejoin lifecycle until callback ordering and cancellation semantics are stabilized |
 | `cooperative-sticky` assignor and consumer group protocol selection | Candidate on the verified Kafka 3.7.2 three-broker transfer and failure profiles; qualify target workload callbacks and timing |
 | KIP-848 consumer group protocol (`ConsumerGroupHeartbeat`) | Candidate on the verified Kafka 4.3.1 PLAINTEXT profiles, including assignment, foreground/background heartbeat, rejoin, OffsetFetch v9, OffsetCommit v9, leave, and three-broker coordinator broker-stop recovery in [`Live Kafka Smoke` run `31555896968`](https://github.com/TaeeunKil/kafrust/actions/runs/31555896968); qualify target broker and broader failure workloads before production migration |
 | Full librdkafka config passthrough | Blocked by design |

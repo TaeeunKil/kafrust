@@ -1,6 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt;
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -31,6 +33,24 @@ use tracing::debug;
 
 const BUFFERED_PRODUCER_CHANNEL_CAPACITY: usize = 1024;
 const IDEMPOTENT_INIT_RETRY_BACKOFF: Duration = Duration::from_millis(100);
+
+/// Selects a Kafka partition for records without an explicit partition.
+///
+/// The callback must return one of the partition IDs supplied by the current
+/// metadata response. Explicitly partitioned records bypass the callback.
+pub trait Partitioner: Send + Sync {
+    /// Returns the partition ID for a topic, optional key, and current metadata.
+    fn partition(&self, topic: &str, key: Option<&[u8]>, partitions: &[i32]) -> i32;
+}
+
+impl<F> Partitioner for F
+where
+    F: Fn(&str, Option<&[u8]>, &[i32]) -> i32 + Send + Sync,
+{
+    fn partition(&self, topic: &str, key: Option<&[u8]>, partitions: &[i32]) -> i32 {
+        self(topic, key, partitions)
+    }
+}
 
 macro_rules! transaction_transport_or_retry {
     ($bootstrap_client:expr, $client_config:expr, $attempt:expr, $max_retries:expr, $request:expr) => {
@@ -1368,6 +1388,10 @@ fn delivery_error_from_request_error(error: &Error) -> Error {
             topic: topic.clone(),
             partition: *partition,
         },
+        Error::InvalidPartition { topic, partition } => Error::InvalidPartition {
+            topic: topic.clone(),
+            partition: *partition,
+        },
         Error::UnassignedTopicPartition { topic, partition } => Error::UnassignedTopicPartition {
             topic: topic.clone(),
             partition: *partition,
@@ -1616,7 +1640,9 @@ impl Producer {
                     attempt += 1;
                 }
                 Ok(metadata) => {
-                    self.advance_keyless_partition(&record);
+                    if self.config.partitioner.is_none() {
+                        self.advance_keyless_partition(&record);
+                    }
                     debug!(
                         topic = metadata.topic(),
                         partition = metadata.partition(),
@@ -1733,7 +1759,9 @@ impl Producer {
                     }
 
                     let report = batch_report_from_outcomes(outcomes)?;
-                    self.advance_keyless_partitions(&records);
+                    if self.config.partitioner.is_none() {
+                        self.advance_keyless_partitions(&records);
+                    }
                     debug!(
                         record_count = report.records().len(),
                         has_failures = report.has_failures(),
@@ -1767,7 +1795,12 @@ impl Producer {
             .get(record.topic())
             .copied()
             .unwrap_or(0);
-        choose_partition(record, metadata, keyless_index)
+        choose_partition_with_partitioner(
+            record,
+            metadata,
+            keyless_index,
+            self.config.partitioner.as_deref(),
+        )
     }
 
     fn advance_keyless_partition(&mut self, record: &ProducerRecord) {
@@ -2899,7 +2932,7 @@ struct ProduceBatchKey {
     partition: i32,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone)]
 /// Configuration builder for [`Producer`].
 pub struct ProducerConfig {
     client: ClientConfig,
@@ -2913,6 +2946,7 @@ pub struct ProducerConfig {
     idempotence: bool,
     transactional_id: Option<String>,
     transaction_timeout_ms: i32,
+    partitioner: Option<Arc<dyn Partitioner>>,
 }
 
 impl ProducerConfig {
@@ -2930,6 +2964,7 @@ impl ProducerConfig {
             idempotence: false,
             transactional_id: None,
             transaction_timeout_ms: 60_000,
+            partitioner: None,
         }
     }
 
@@ -3138,6 +3173,20 @@ impl ProducerConfig {
         self
     }
 
+    /// Sets a custom partitioner for records without an explicit partition.
+    ///
+    /// The callback is invoked with the topic, optional key, and sorted current
+    /// partition IDs. Returning a partition not present in that slice fails the
+    /// send with [`Error::InvalidPartition`]. Explicitly partitioned records do
+    /// not invoke the callback.
+    pub fn partitioner<P>(mut self, partitioner: P) -> Self
+    where
+        P: Partitioner + 'static,
+    {
+        self.partitioner = Some(Arc::new(partitioner));
+        self
+    }
+
     /// Returns the configured acknowledgement policy.
     pub fn acks_ref(&self) -> Acks {
         self.acks
@@ -3186,6 +3235,11 @@ impl ProducerConfig {
     /// Returns the configured transaction timeout in milliseconds.
     pub fn transaction_timeout_ms_ref(&self) -> i32 {
         self.transaction_timeout_ms
+    }
+
+    /// Returns whether a custom partitioner is configured.
+    pub fn has_custom_partitioner(&self) -> bool {
+        self.partitioner.is_some()
     }
 
     /// Returns the shared client configuration.
@@ -3252,6 +3306,49 @@ impl ProducerConfig {
         })
     }
 }
+
+impl fmt::Debug for ProducerConfig {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ProducerConfig")
+            .field("client", &self.client)
+            .field("acks", &self.acks)
+            .field("max_retries", &self.max_retries)
+            .field("max_records_per_batch", &self.max_records_per_batch)
+            .field("max_batch_bytes", &self.max_batch_bytes)
+            .field("linger", &self.linger)
+            .field("buffer_capacity", &self.buffer_capacity)
+            .field("compression", &self.compression)
+            .field("idempotence", &self.idempotence)
+            .field("transactional_id", &self.transactional_id)
+            .field("transaction_timeout_ms", &self.transaction_timeout_ms)
+            .field("has_custom_partitioner", &self.has_custom_partitioner())
+            .finish()
+    }
+}
+
+impl PartialEq for ProducerConfig {
+    fn eq(&self, other: &Self) -> bool {
+        self.client == other.client
+            && self.acks == other.acks
+            && self.max_retries == other.max_retries
+            && self.max_records_per_batch == other.max_records_per_batch
+            && self.max_batch_bytes == other.max_batch_bytes
+            && self.linger == other.linger
+            && self.buffer_capacity == other.buffer_capacity
+            && self.compression == other.compression
+            && self.idempotence == other.idempotence
+            && self.transactional_id == other.transactional_id
+            && self.transaction_timeout_ms == other.transaction_timeout_ms
+            && match (&self.partitioner, &other.partitioner) {
+                (None, None) => true,
+                (Some(left), Some(right)) => Arc::ptr_eq(left, right),
+                _ => false,
+            }
+    }
+}
+
+impl Eq for ProducerConfig {}
 
 async fn initialize_idempotent_producer(
     client: &mut Client,
@@ -3411,10 +3508,20 @@ fn transaction_offset_topics_v3(assignments: &[ConsumerAssignment]) -> Vec<TxnOf
         .collect()
 }
 
+#[cfg(test)]
 fn choose_partition(
     record: &ProducerRecord,
     metadata: &MetadataResponseV1,
     keyless_index: usize,
+) -> Result<i32> {
+    choose_partition_with_partitioner(record, metadata, keyless_index, None)
+}
+
+fn choose_partition_with_partitioner(
+    record: &ProducerRecord,
+    metadata: &MetadataResponseV1,
+    keyless_index: usize,
+    partitioner: Option<&dyn Partitioner>,
 ) -> Result<i32> {
     if let Some(partition) = record.partition_ref() {
         return Ok(partition);
@@ -3444,10 +3551,21 @@ fn choose_partition(
         });
     }
 
-    let index = record.key_ref().map_or(keyless_index, |key| {
-        usize::try_from(kafka_murmur2(key) & 0x7fff_ffff).unwrap_or(0) % partitions.len()
-    }) % partitions.len();
-    Ok(partitions[index])
+    let partition = if let Some(partitioner) = partitioner {
+        partitioner.partition(record.topic(), record.key_ref(), &partitions)
+    } else {
+        let index = record.key_ref().map_or(keyless_index, |key| {
+            usize::try_from(kafka_murmur2(key) & 0x7fff_ffff).unwrap_or(0) % partitions.len()
+        }) % partitions.len();
+        partitions[index]
+    };
+    if partitions.binary_search(&partition).is_err() {
+        return Err(Error::InvalidPartition {
+            topic: record.topic().to_owned(),
+            partition,
+        });
+    }
+    Ok(partition)
 }
 
 fn kafka_murmur2(data: &[u8]) -> u32 {
@@ -3919,6 +4037,7 @@ fn can_retry_send(error: &Error) -> bool {
         | Error::MissingLeader { .. }
         | Error::MissingBroker { .. } => true,
         Error::MissingBootstrapServer
+        | Error::InvalidPartition { .. }
         | Error::UnassignedTopicPartition { .. }
         | Error::MissingGroupDescription { .. }
         | Error::MissingDeleteGroupResult { .. }
@@ -3962,7 +4081,8 @@ mod tests {
         advance_producer_sequence, batch_duplicate_outcomes, batch_failure_outcomes,
         batch_record_chunks, batch_records_encoded_len, batch_report_from_outcomes,
         batch_success_outcomes, buffered_delivery_canceled_error, buffered_enqueue_flush_reason,
-        buffered_linger_deadline, can_retry_send, choose_partition, complete_buffered_deliveries,
+        buffered_linger_deadline, can_retry_send, choose_partition,
+        choose_partition_with_partitioner, complete_buffered_deliveries,
         delivery_error_from_request_error, enqueue_buffered_record,
         ensure_buffered_transaction_deliveries_succeeded, fail_buffered_deliveries,
         idempotent_produce_error_disposition, invalidate_metadata_cache,
@@ -5445,6 +5565,50 @@ mod tests {
 
         assert_eq!(choose_partition(&record, &metadata, 0).unwrap(), 1);
         assert_eq!(choose_partition(&record, &metadata, 1).unwrap(), 1);
+    }
+
+    #[test]
+    fn custom_partitioner_receives_record_context_and_metadata() {
+        let metadata = metadata_fixture();
+        let record = ProducerRecord::to("orders").key("order-123");
+        let partitioner = |topic: &str, key: Option<&[u8]>, partitions: &[i32]| {
+            assert_eq!(topic, "orders");
+            assert_eq!(key, Some(b"order-123".as_slice()));
+            assert_eq!(partitions, &[0, 1]);
+            partitions[1]
+        };
+
+        assert_eq!(
+            choose_partition_with_partitioner(&record, &metadata, 0, Some(&partitioner)).unwrap(),
+            1
+        );
+    }
+
+    #[test]
+    fn custom_partitioner_does_not_override_explicit_partition() {
+        let metadata = metadata_fixture();
+        let record = ProducerRecord::to("orders").partition(1);
+        let partitioner = |_: &str, _: Option<&[u8]>, _: &[i32]| 0;
+
+        assert_eq!(
+            choose_partition_with_partitioner(&record, &metadata, 0, Some(&partitioner)).unwrap(),
+            1
+        );
+    }
+
+    #[test]
+    fn rejects_custom_partitioner_partition_outside_metadata() {
+        let metadata = metadata_fixture();
+        let record = ProducerRecord::to("orders");
+        let partitioner = |_: &str, _: Option<&[u8]>, _: &[i32]| 7;
+
+        assert!(matches!(
+            choose_partition_with_partitioner(&record, &metadata, 0, Some(&partitioner)),
+            Err(Error::InvalidPartition {
+                topic,
+                partition: 7
+            }) if topic == "orders"
+        ));
     }
 
     #[test]
