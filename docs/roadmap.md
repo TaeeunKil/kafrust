@@ -1298,6 +1298,11 @@ Implemented evidence:
   JoinGroup requests, preventing a rejoining member from being treated as a
   new member during cooperative or classic rebalances. Focused tests cover
   staged non-leader rejoin decisions and member-loss assignment recovery.
+- `RebalanceListener` exposes synchronous assignment snapshots for initial join,
+  classic and KIP-848 rejoin, and broker-assigned KIP-848 assignment changes
+  from foreground or background heartbeats. Callback lifecycle behavior is
+  covered by focused API tests; target-workload timing and cancellation
+  qualification remain open.
 - KIP-848 `ConsumerGroupHeartbeat v0` protocol types, Metadata v12 UUID
   mappings, and a selectable high-level foreground group path are implemented
   with assignment application, member-epoch heartbeats/rejoin, OffsetFetch v9,

@@ -161,8 +161,10 @@ group.commit_offsets().await?;
 
 The semantic difference matters: kafrust currently returns a bounded batch and
 commits the current next offsets for its assignments. It does not expose
-rust-rdkafka's asynchronous per-message commit queue, rebalance callbacks,
-partition queue splitting, or regex subscription. The current group
+rust-rdkafka's asynchronous per-message commit queue, partition queue splitting,
+or regex subscription. A synchronous `RebalanceListener` now covers the initial
+join after-snapshot, before/after rejoin snapshots, and KIP-848 assignment
+changes from foreground or background heartbeats. The current group
 implementation supports the classic protocol with range or round-robin
 assignment and an explicitly selected KIP-848 consumer protocol path.
 
@@ -274,7 +276,7 @@ See [Admin API](admin-api.md) for typed request and response examples.
 | `acks=0` fire-and-forget | Verified on Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 single-node plaintext smoke; qualify workload loss/error semantics |
 | Non-Tokio runtime or synchronous client | Blocked |
 | Custom partitioner | Candidate; `ProducerConfig::partitioner` covers records without an explicit partition across immediate, batch, and buffered paths |
-| Rebalance callback | Blocked; use explicit poll/rejoin lifecycle until callback ordering and cancellation semantics are stabilized |
+| Rebalance callback | Candidate; `RebalanceListener` exposes synchronous initial-join, before/after rejoin, and foreground/background KIP-848 assignment snapshots; qualify target callback timing and cancellation behavior |
 | `cooperative-sticky` assignor and consumer group protocol selection | Candidate on the verified Kafka 3.7.2 three-broker transfer and failure profiles; qualify target workload callbacks and timing |
 | KIP-848 consumer group protocol (`ConsumerGroupHeartbeat`) | Candidate on the verified Kafka 4.3.1 PLAINTEXT profiles, including assignment, foreground/background heartbeat, rejoin, OffsetFetch v9, OffsetCommit v9, leave, and three-broker coordinator broker-stop recovery in [`Live Kafka Smoke` run `31555896968`](https://github.com/TaeeunKil/kafrust/actions/runs/31555896968); qualify target broker and broader failure workloads before production migration |
 | Full librdkafka config passthrough | Blocked by design |

@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -59,6 +60,77 @@ pub enum ConsumerGroupProtocol {
     Consumer,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Phase of a consumer-group rebalance callback.
+pub enum RebalancePhase {
+    /// The current assignment is about to be replaced by a new group assignment.
+    Before,
+    /// A new assignment has been applied to the consumer group.
+    After,
+}
+
+#[derive(Debug, Clone, Copy)]
+/// Snapshot delivered to a consumer-group rebalance listener.
+pub struct RebalanceEvent<'a> {
+    phase: RebalancePhase,
+    group_id: &'a str,
+    member_id: &'a str,
+    generation_id: i32,
+    protocol: ConsumerGroupProtocol,
+    assignments: &'a [ConsumerAssignment],
+}
+
+impl RebalanceEvent<'_> {
+    /// Returns whether this event occurs before or after assignment replacement.
+    pub fn phase(&self) -> RebalancePhase {
+        self.phase
+    }
+
+    /// Returns the Kafka consumer group ID.
+    pub fn group_id(&self) -> &str {
+        self.group_id
+    }
+
+    /// Returns the current broker-assigned member ID.
+    pub fn member_id(&self) -> &str {
+        self.member_id
+    }
+
+    /// Returns the current classic generation ID or KIP-848 member epoch.
+    pub fn generation_id(&self) -> i32 {
+        self.generation_id
+    }
+
+    /// Returns the group membership protocol used by this event.
+    pub fn protocol(&self) -> ConsumerGroupProtocol {
+        self.protocol
+    }
+
+    /// Returns an assignment snapshot valid for the callback invocation.
+    pub fn assignments(&self) -> &[ConsumerAssignment] {
+        self.assignments
+    }
+}
+
+/// Receives synchronous notifications when a consumer-group assignment changes.
+///
+/// The listener is invoked on the task calling `join`, `poll`, or
+/// `poll_with_heartbeat`; it must not block on unbounded work or attempt to
+/// re-enter the same consumer group handle.
+pub trait RebalanceListener: Send + Sync {
+    /// Handles one before- or after-rebalance event.
+    fn on_rebalance(&self, event: RebalanceEvent<'_>);
+}
+
+impl<F> RebalanceListener for F
+where
+    F: for<'a> Fn(RebalanceEvent<'a>) + Send + Sync,
+{
+    fn on_rebalance(&self, event: RebalanceEvent<'_>) {
+        self(event);
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 /// Partition assignment strategy advertised by a classic consumer group member.
 pub enum ConsumerGroupAssignmentStrategy {
@@ -117,7 +189,7 @@ struct JoinedGroup {
     members: Vec<JoinGroupMember>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone)]
 /// Configuration builder for the classic Kafka consumer group alpha API.
 pub struct ConsumerGroupConfig {
     client: ClientConfig,
@@ -137,6 +209,7 @@ pub struct ConsumerGroupConfig {
     assignment_strategy: ConsumerGroupAssignmentStrategy,
     group_protocol: ConsumerGroupProtocol,
     server_assignor: Option<String>,
+    rebalance_listener: Option<Arc<dyn RebalanceListener>>,
 }
 
 #[derive(Debug, Clone)]
@@ -180,6 +253,7 @@ impl ConsumerGroupConfig {
             assignment_strategy: ConsumerGroupAssignmentStrategy::Range,
             group_protocol: ConsumerGroupProtocol::Classic,
             server_assignor: None,
+            rebalance_listener: None,
         }
     }
 
@@ -426,6 +500,29 @@ impl ConsumerGroupConfig {
     /// Returns the configured KIP-848 server-side assignor, if any.
     pub fn server_assignor_ref(&self) -> Option<&str> {
         self.server_assignor.as_deref()
+    }
+
+    /// Sets a synchronous listener for consumer-group assignment changes.
+    pub fn rebalance_listener<F>(mut self, listener: F) -> Self
+    where
+        F: for<'a> Fn(RebalanceEvent<'a>) + Send + Sync + 'static,
+    {
+        self.rebalance_listener = Some(Arc::new(listener));
+        self
+    }
+
+    /// Sets a custom [`RebalanceListener`] implementation.
+    pub fn rebalance_listener_handler<L>(mut self, listener: L) -> Self
+    where
+        L: RebalanceListener + 'static,
+    {
+        self.rebalance_listener = Some(Arc::new(listener));
+        self
+    }
+
+    /// Returns whether a rebalance listener is configured.
+    pub fn has_rebalance_listener(&self) -> bool {
+        self.rebalance_listener.is_some()
     }
 
     /// Returns the policy used for partitions without committed offsets.
@@ -684,7 +781,7 @@ impl ConsumerGroupConfig {
                 "joined kafka consumer group"
             );
 
-            return Ok(ConsumerGroup {
+            let group = ConsumerGroup {
                 config,
                 group_id: self.group_id,
                 generation_id: joined.generation_id,
@@ -703,7 +800,9 @@ impl ConsumerGroupConfig {
                     consumer_config,
                     consumer_assignments,
                 ),
-            });
+            };
+            group.notify_rebalance(RebalancePhase::After, group.consumer.assignments());
+            return Ok(group);
         }
     }
 
@@ -856,7 +955,7 @@ impl ConsumerGroupConfig {
             "joined kafka KIP-848 consumer group"
         );
 
-        Ok(ConsumerGroup {
+        let group = ConsumerGroup {
             config,
             group_id: self.group_id,
             generation_id: response.member_epoch,
@@ -875,9 +974,66 @@ impl ConsumerGroupConfig {
                 consumer_config,
                 consumer_assignments,
             ),
-        })
+        };
+        group.notify_rebalance(RebalancePhase::After, group.consumer.assignments());
+        Ok(group)
     }
 }
+
+impl fmt::Debug for ConsumerGroupConfig {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ConsumerGroupConfig")
+            .field("client", &self.client)
+            .field("group_id", &self.group_id)
+            .field("group_instance_id", &self.group_instance_id)
+            .field("topics", &self.topics)
+            .field("session_timeout_ms", &self.session_timeout_ms)
+            .field("rebalance_timeout_ms", &self.rebalance_timeout_ms)
+            .field("retention_time_ms", &self.retention_time_ms)
+            .field("offset_reset_policy", &self.offset_reset_policy)
+            .field("max_wait_ms", &self.max_wait_ms)
+            .field("min_bytes", &self.min_bytes)
+            .field("max_partition_bytes", &self.max_partition_bytes)
+            .field("max_retries", &self.max_retries)
+            .field("max_poll_records", &self.max_poll_records)
+            .field("isolation_level", &self.isolation_level)
+            .field("assignment_strategy", &self.assignment_strategy)
+            .field("group_protocol", &self.group_protocol)
+            .field("server_assignor", &self.server_assignor)
+            .field("has_rebalance_listener", &self.has_rebalance_listener())
+            .finish()
+    }
+}
+
+impl PartialEq for ConsumerGroupConfig {
+    fn eq(&self, other: &Self) -> bool {
+        self.client == other.client
+            && self.group_id == other.group_id
+            && self.group_instance_id == other.group_instance_id
+            && self.topics == other.topics
+            && self.session_timeout_ms == other.session_timeout_ms
+            && self.rebalance_timeout_ms == other.rebalance_timeout_ms
+            && self.retention_time_ms == other.retention_time_ms
+            && self.offset_reset_policy == other.offset_reset_policy
+            && self.max_wait_ms == other.max_wait_ms
+            && self.min_bytes == other.min_bytes
+            && self.max_partition_bytes == other.max_partition_bytes
+            && self.max_retries == other.max_retries
+            && self.max_poll_records == other.max_poll_records
+            && self.isolation_level == other.isolation_level
+            && self.assignment_strategy == other.assignment_strategy
+            && self.group_protocol == other.group_protocol
+            && self.server_assignor == other.server_assignor
+            && match (&self.rebalance_listener, &other.rebalance_listener) {
+                (None, None) => true,
+                (Some(left), Some(right)) => Arc::ptr_eq(left, right),
+                _ => false,
+            }
+    }
+}
+
+impl Eq for ConsumerGroupConfig {}
 
 #[derive(Debug)]
 /// Joined Kafka consumer group member.
@@ -1261,12 +1417,18 @@ impl ConsumerGroup {
         let Some(state) = heartbeat.consumer_state_snapshot().await else {
             return Ok(());
         };
+        let member_id = state.member_id.clone();
+        let member_epoch = state.member_epoch;
+        self.member_id = member_id.clone();
+        self.generation_id = member_epoch;
 
         if let Some(assignment) = state
             .owned_partitions
             .clone()
             .filter(|_| state.assignment_version > self.consumer_heartbeat_assignment_version)
         {
+            let previous_assignments = self.consumer.assignments().to_vec();
+            self.notify_rebalance(RebalancePhase::Before, &previous_assignments);
             let protocol_assignment =
                 consumer_protocol_assignment(&assignment, &self.consumer_topic_ids)?;
             let mut bootstrap = self.config.client.clone().connect().await?;
@@ -1277,18 +1439,18 @@ impl ConsumerGroup {
                 &self.group_id,
                 self.config.offset_reset_policy,
                 &protocol_assignment,
-                Some((state.member_id.as_str(), state.member_epoch)),
+                Some((member_id.as_str(), member_epoch)),
             )
             .await?;
             self.consumer.replace_assignments(assignments);
             self.consumer_owned_partitions = Some(assignment);
             self.consumer_heartbeat_assignment_version = state.assignment_version;
+            let current_assignments = self.consumer.assignments().to_vec();
+            self.notify_rebalance(RebalancePhase::After, &current_assignments);
         }
 
-        self.member_id = state.member_id.clone();
-        self.generation_id = state.member_epoch;
-        heartbeat.member_id = state.member_id;
-        heartbeat.generation_id = state.member_epoch;
+        heartbeat.member_id = member_id;
+        heartbeat.generation_id = member_epoch;
         Ok(())
     }
 
@@ -1395,6 +1557,8 @@ impl ConsumerGroup {
     }
 
     async fn rejoin(&mut self) -> Result<()> {
+        let previous_assignments = self.consumer.assignments().to_vec();
+        self.notify_rebalance(RebalancePhase::Before, &previous_assignments);
         let paused = self
             .consumer
             .assignments()
@@ -1422,7 +1586,9 @@ impl ConsumerGroup {
                     joined.consumer.pause(&topic, partition)?;
                 }
             }
+            let current_assignments = joined.consumer.assignments().to_vec();
             *self = joined;
+            self.notify_rebalance(RebalancePhase::After, &current_assignments);
             return Ok(());
         }
         let mut joined = self
@@ -1435,8 +1601,23 @@ impl ConsumerGroup {
                 joined.consumer.pause(&topic, partition)?;
             }
         }
+        let current_assignments = joined.consumer.assignments().to_vec();
         *self = joined;
+        self.notify_rebalance(RebalancePhase::After, &current_assignments);
         Ok(())
+    }
+
+    fn notify_rebalance(&self, phase: RebalancePhase, assignments: &[ConsumerAssignment]) {
+        if let Some(listener) = &self.config.rebalance_listener {
+            listener.on_rebalance(RebalanceEvent {
+                phase,
+                group_id: &self.group_id,
+                member_id: &self.member_id,
+                generation_id: self.generation_id,
+                protocol: self.protocol,
+                assignments,
+            });
+        }
     }
 
     /// Sends an explicit heartbeat for this group member.
@@ -1567,6 +1748,8 @@ impl ConsumerGroup {
         self.generation_id = response.member_epoch;
 
         if let Some(assignment) = response.assignment {
+            let previous_assignments = self.consumer.assignments().to_vec();
+            self.notify_rebalance(RebalancePhase::Before, &previous_assignments);
             let protocol_assignment =
                 consumer_protocol_assignment(&assignment, &self.consumer_topic_ids)?;
             let mut bootstrap = self.config.client.clone().connect().await?;
@@ -1582,6 +1765,8 @@ impl ConsumerGroup {
             .await?;
             self.consumer.replace_assignments(assignments);
             self.consumer_owned_partitions = Some(assignment);
+            let current_assignments = self.consumer.assignments().to_vec();
+            self.notify_rebalance(RebalancePhase::After, &current_assignments);
         }
         debug!(
             group_id = self.group_id.as_str(),
@@ -3072,8 +3257,8 @@ mod tests {
         ConsumerGroupAssignmentStrategy, ConsumerGroupConfig, ConsumerGroupHeartbeat,
         ConsumerGroupHeartbeatTopicPartitions, ConsumerGroupProtocol,
         ConsumerProtocolHeartbeatState as ConsumerGroupHeartbeatState, HeartbeatHandleState,
-        IsolationLevel, OffsetResetPolicy, SecurityProtocol, DEFAULT_GROUP_MAX_RETRIES,
-        GROUP_JOIN_MAX_RETRY_BACKOFF,
+        IsolationLevel, OffsetResetPolicy, RebalanceEvent, RebalancePhase, SecurityProtocol,
+        DEFAULT_GROUP_MAX_RETRIES, GROUP_JOIN_MAX_RETRY_BACKOFF,
     };
     use crate::consumer::ConsumerAssignment;
     use crate::Error;
@@ -3095,6 +3280,7 @@ mod tests {
         ConsumerProtocolAssignmentV0, ConsumerProtocolSubscriptionV0,
         ConsumerProtocolSubscriptionV1, ConsumerProtocolTopicAssignment,
     };
+    use std::sync::Arc;
 
     #[test]
     fn builds_consumer_group_config() {
@@ -3155,6 +3341,39 @@ mod tests {
 
         assert_eq!(config.group_protocol_ref(), ConsumerGroupProtocol::Consumer);
         assert_eq!(config.server_assignor_ref(), Some("uniform"));
+    }
+
+    #[test]
+    fn configures_and_invokes_rebalance_listener() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let calls = Arc::new(AtomicUsize::new(0));
+        let callback_calls = calls.clone();
+        let config = ConsumerGroupConfig::new(["localhost:9092"], "orders-group")
+            .rebalance_listener(move |event| {
+                assert_eq!(event.phase(), RebalancePhase::After);
+                assert_eq!(event.group_id(), "orders-group");
+                assert_eq!(event.member_id(), "member-a");
+                assert_eq!(event.generation_id(), 4);
+                assert_eq!(event.protocol(), ConsumerGroupProtocol::Classic);
+                assert!(event.assignments().is_empty());
+                callback_calls.fetch_add(1, Ordering::SeqCst);
+            });
+
+        assert!(config.has_rebalance_listener());
+        config
+            .rebalance_listener
+            .as_ref()
+            .unwrap()
+            .on_rebalance(RebalanceEvent {
+                phase: RebalancePhase::After,
+                group_id: "orders-group",
+                member_id: "member-a",
+                generation_id: 4,
+                protocol: ConsumerGroupProtocol::Classic,
+                assignments: &[],
+            });
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
     }
 
     #[test]

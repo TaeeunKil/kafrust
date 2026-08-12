@@ -66,11 +66,33 @@ the default; `ConsumerGroupConfig::assignment_strategy` can select
 `ConsumerGroupAssignmentStrategy::RoundRobin` or
 `ConsumerGroupAssignmentStrategy::CooperativeSticky`. Cooperative sticky
 members advertise Subscription v1 owned partitions and preserve valid
-ownership across staged transfers. The current implementation has focused
-and single-member live coverage; multi-member transfer, member-loss, and
-rollback behavior still require live qualification before production use.
+ownership across staged transfers. Multi-member transfer, member-loss, and
+rollback behavior are live-qualified in the documented three-broker profile,
+while target-workload callback timing still requires qualification.
 Assignment state keeps Kafka group ID, member ID, generation ID, topic,
 partition, and next offset visible through the public API.
+
+## Rebalance Listener
+
+Applications that need an explicit assignment lifecycle can register a
+synchronous listener:
+
+```rust
+use kafrust::{ConsumerGroupConfig, RebalancePhase};
+
+let group = ConsumerGroupConfig::new(["localhost:9092"], "orders-group")
+    .rebalance_listener(|event| match event.phase() {
+        RebalancePhase::Before => println!("leaving {} assignments", event.assignments().len()),
+        RebalancePhase::After => println!("received {} assignments", event.assignments().len()),
+    })
+    .subscribe("orders");
+```
+
+`RebalanceListener` receives an `After` snapshot for initial join and
+`Before`/`After` snapshots for classic and KIP-848 rejoin plus broker-assigned
+KIP-848 assignment changes. Callbacks run synchronously on the task invoking
+`join`, `heartbeat`, `poll`, or `poll_with_heartbeat`; keep them bounded and do
+not re-enter the same group handle from the callback.
 
 ## KIP-848 Consumer Protocol
 
