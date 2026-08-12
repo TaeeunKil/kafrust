@@ -123,6 +123,12 @@ an established coordinator connection drops. Its focused mock-broker test
 verifies the failed request, coordinator rediscovery, and successful group
 description on the replacement connection.
 
+The read-only `DescribeAcls v1` admin path now retries broker transport
+failures, request timeouts, and retryable top-level broker responses within the
+same bounded budget. The focused mock-broker regression test verifies a dropped
+request and a successful typed ACL response on the replacement connection;
+authorizer-specific broker-stop qualification remains separate.
+
 The read-only `DescribeProducers v0` path retries leader movement, metadata
 convergence failures, transport disconnects, and request timeouts through a
 fresh Metadata v1 lookup. A transient per-partition leader error causes the

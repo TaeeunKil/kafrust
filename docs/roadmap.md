@@ -926,6 +926,10 @@ Implemented evidence:
   1 after the request gate opens, restarts it while the bounded reconnect loop
   is active, and records `retries=7` before completing the full group listing
   in [`31616181960`](https://github.com/TaeeunKil/kafrust/actions/runs/31616181960).
+  The read-only DescribeAcls v1 path also retries transport, timeout, and
+  retryable top-level broker failures; a focused mock-broker regression test
+  verifies the dropped request and typed ACL response. Authorizer-specific
+  broker-stop qualification remains a separate release gate.
 - KIP-848 member-aware administrative offsets now use OffsetFetch v9 and
   OffsetCommit v9 with the joined member ID, member epoch, optional static
   instance ID, `require_stable`, and committed leader epoch. The APIs reuse

@@ -164,18 +164,48 @@ impl AdminClient {
         err
     )]
     pub async fn describe_acls(&self, filter: &AclFilter) -> Result<DescribeAclsResult> {
-        let mut client = self.config.clone().connect().await?;
-        let response = client
-            .describe_acls_v1(
-                filter.resource_type.code(),
-                filter.resource_name.clone(),
-                filter.pattern_type.code(),
-                filter.principal.clone(),
-                filter.host.clone(),
-                filter.operation.code(),
-                filter.permission_type.code(),
-            )
-            .await?;
+        let mut retry = 0;
+        let response = loop {
+            let mut client = match self.config.clone().connect().await {
+                Ok(client) => client,
+                Err(error) if retry < self.max_retries && is_retryable_admin_read_error(&error) => {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
+            match client
+                .describe_acls_v1(
+                    filter.resource_type.code(),
+                    filter.resource_name.clone(),
+                    filter.pattern_type.code(),
+                    filter.principal.clone(),
+                    filter.host.clone(),
+                    filter.operation.code(),
+                    filter.permission_type.code(),
+                )
+                .await
+            {
+                Ok(response)
+                    if retry < self.max_retries
+                        && is_retryable_admin_read_code(response.error_code) =>
+                {
+                    self.config.record_broker_error();
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                }
+                Ok(response) => break response,
+                Err(error) if retry < self.max_retries && is_retryable_admin_read_error(&error) => {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                }
+                Err(error) => return Err(error),
+            }
+        };
         if response.error_code != 0 {
             self.config.record_broker_error();
         }
@@ -6840,6 +6870,36 @@ mod tests {
         assert_eq!(binding.principal(), "User:alice");
         assert_eq!(binding.operation(), AclOperation::Read);
         assert_eq!(binding.permission_type(), AclPermissionType::Allow);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn retries_describe_acls_after_connection_drop() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut first, _) = listener.accept().await.unwrap();
+            let request = read_frame(&mut first).await;
+            assert_eq!(&request[0..4], &[0, 29, 0, 1]);
+            drop(first);
+
+            let (mut second, _) = listener.accept().await.unwrap();
+            let request = read_frame(&mut second).await;
+            assert_eq!(&request[0..4], &[0, 29, 0, 1]);
+            write_frame(&mut second, &describe_acls_response()).await;
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        );
+
+        let result = admin.describe_acls(&AclFilter::any()).await.unwrap();
+
+        assert!(result.is_success());
+        assert_eq!(result.bindings().len(), 1);
+        assert_eq!(metrics.snapshot().retries, 1);
         server.await.unwrap();
     }
 
