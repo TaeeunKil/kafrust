@@ -73,6 +73,12 @@ retains Fetch v11 and Fetch v4 fallback paths.
 This qualifies the documented rack-aware replica-selection path, not every
 possible rack topology or security combination.
 
+Release `v0.2.19` additionally qualifies Fetch v12 forwarding of the last
+fetched partition leader epoch and consumer-group `Earliest`/`Latest` recovery
+when a committed offset is no longer retained. The dedicated offset-reset
+topic and the complete 17-job matrix passed for Kafka 3.7.2, 3.8.1, 3.9.1,
+and 4.3.1 in [`31663188419`](https://github.com/TaeeunKil/kafrust/actions/runs/31663188419).
+
 The `0.2.x` alpha line is verified against Apache Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 KRaft brokers over plaintext TCP in the single-node profile. Kafka 3.7.2 is also verified in a three-broker plaintext profile. TLS, SASL/PLAIN over SASL_PLAINTEXT, and SASL/SCRAM-SHA-256 and SCRAM-SHA-512 over SASL_SSL are verified against Kafka 3.7.2 for the documented single-node smoke paths. The Kafka 3.7.2 three-broker SASL_PLAINTEXT profile verifies authenticated transaction coordinator, consumer-group coordinator, producer, and direct-consumer recovery after broker stops in [`31554396594`](https://github.com/TaeeunKil/kafrust/actions/runs/31554396594). Kafka 4.3.1 KIP-848 coordinator recovery over SASL_PLAINTEXT is verified in a three-broker profile in [`31569709189`](https://github.com/TaeeunKil/kafrust/actions/runs/31569709189), and the SASL_SSL SCRAM-SHA-256 profile is verified in [`31570924845`](https://github.com/TaeeunKil/kafrust/actions/runs/31570924845). A Kafka 3.7.2 SASL_SSL OAUTHBEARER path is also live-verified against Kafka's built-in unsecured test validator; this does not claim production OAuth/OIDC provider integration. The SHA-512 profile covers broker roundtrip, producer, batch producer, buffered producer, direct consumer, and consumer group poll paths. ACL create, describe, and delete plus client quota set, describe, and remove are live-verified against a Kafka 3.7.2 KRaft broker with StandardAuthorizer enabled. SCRAM credential upsert, describe, and delete are live-verified over the SASL_SSL profile. Controller-routed partition reassignment submission and completion polling are live-verified in the Kafka 3.7.2 three-broker profile. The cooperative-sticky consumer protocol path, multi-member ownership transfer, transient-member rollback, and member-loss recovery are live-verified in the three-broker profile by main run `31474626799`. Acks=0 immediate and batch Produce dispatch is live-verified against Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 single-node plaintext profiles; this verifies request completion, not broker acceptance. The high-level producer uses flexible `ApiVersions v3` capability negotiation across all supported plaintext, TLS, SASL, and multi-broker profiles in live run `31494820868`. Idempotent producer recovery through the three-broker broker-stop window is live-verified in run `31495298593`. The Kafka 3.7.2 three-broker SASL_SSL SCRAM profile also qualifies safe transactional producer recovery after coordinator failure in [`31572745537`](https://github.com/TaeeunKil/kafrust/actions/runs/31572745537): the old producer terminates on `INVALID_PRODUCER_EPOCH`, and a new producer with the same transactional ID reinitializes, completes recovery, and commits a new transaction verified with `read_committed`.
 
 The signed local OIDC/JWKS fixture also passes Kafka's validator, the Java Kafka
@@ -248,6 +254,7 @@ other coordinator-routed writes remain separate qualification items.
 | Apache Kafka 3.7.2 | three-broker KRaft; TLS; SASL_PLAINTEXT; SASL_SSL with SCRAM-SHA-256 | classic consumer-group offset listing and administrative alteration | [`Live Kafka Smoke`, run `31597505667`](https://github.com/TaeeunKil/kafrust/actions/runs/31597505667) on 2026-08-12 | Passing |
 | Apache Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1 | complete 17-job KRaft matrix; plaintext, TLS, SASL, OAUTHBEARER, ACL, multi-broker, and KIP-848 profiles | Full smoke plus Kafka 3.7.2 multi-broker DeleteRecords and DescribeProducers leader-stop recovery | [`Live Kafka Smoke`, run `31630339333`](https://github.com/TaeeunKil/kafrust/actions/runs/31630339333) on 2026-08-13 | Passing |
 | Apache Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1 | complete 17-job KRaft matrix; plaintext, TLS, SASL, OAUTHBEARER, ACL, multi-broker, and KIP-848 profiles | ListTransactions broker-shard aggregation, topic-ID Produce v13 with name-based v12/v11/v9 fallback, rack-aware Fetch v12, and existing failover gates | [`Live Kafka Smoke`, run `31648660947`](https://github.com/TaeeunKil/kafrust/actions/runs/31648660947) on 2026-08-13 | Passing; Produce selected v13 on Kafka 4.3.1, v11 on 3.8.1/3.9.1, and v9 on 3.7.2; ListTransactions examples returned records on single-node and 3.7.2 multi-broker profiles |
+| Apache Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1 | complete 17-job KRaft matrix; dedicated offset-reset topic | Fetch v12 last-fetched leader epoch; group `Earliest`/`Latest` reset with committed out-of-range recovery | [`Live Kafka Smoke`, run `31663188419`](https://github.com/TaeeunKil/kafrust/actions/runs/31663188419) on 2026-08-13 | Passing |
 
 ## Verified Paths
 
@@ -536,9 +543,12 @@ with zero in-flight requests and buffered records.
   the stopped broker is restarted afterward. This path passed in
   [`Live Kafka Smoke` run `31570924845`](https://github.com/TaeeunKil/kafrust/actions/runs/31570924845).
 - Consumer group assignments without committed offsets resolve
-  `OffsetResetPolicy::Earliest` or `Latest` from the partition leader. Manual
-  `Live Kafka Smoke` run `30229718813` passed both policies on Kafka 3.7.2,
-  3.8.1, 3.9.1, and 4.3.1.
+  `OffsetResetPolicy::Earliest` or `Latest` from the partition leader. The same
+  policies recover a committed assignment whose offset is below the retained
+  low watermark, while explicit absolute offsets preserve the broker error.
+  The complete 17-job `Live Kafka Smoke` run
+  [`31663188419`](https://github.com/TaeeunKil/kafrust/actions/runs/31663188419)
+  passed this path on Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1.
 - Direct and group consumers expose in-memory `position`, `seek`, `pause`, and
   `resume` controls for assigned topic partitions. Manual `Live Kafka Smoke`
   run `30230885629` verified that paused consumers return no records, resumed
