@@ -44,6 +44,9 @@ use kafrust_protocol::api::describe_configs::{
     DescribeConfigsRequestV1, DescribeConfigsResourceV1, DescribeConfigsResponseV1,
 };
 use kafrust_protocol::api::describe_groups::{DescribeGroupsRequestV1, DescribeGroupsResponseV1};
+use kafrust_protocol::api::describe_log_dirs::{
+    DescribeLogDirsRequest, DescribeLogDirsResponse, DescribeLogDirsTopic,
+};
 use kafrust_protocol::api::describe_producers::{
     DescribeProducersRequestV0, DescribeProducersResponseV0, DescribeProducersTopicV0,
 };
@@ -821,6 +824,79 @@ impl Client {
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(DescribeConfigsResponseV1::decode_body(&mut decoder)?)
+    }
+
+    /// Sends DescribeLogDirs v1 to this broker.
+    ///
+    /// Kafka 4.0 removed v0, so high-level callers should negotiate a
+    /// supported version before selecting this low-level method.
+    pub async fn describe_log_dirs_v1(
+        &mut self,
+        topics: Option<Vec<DescribeLogDirsTopic>>,
+    ) -> Result<DescribeLogDirsResponse> {
+        let request = DescribeLogDirsRequest {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            topics,
+        };
+        let response = self.send_request(&request.encode_v1()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(DescribeLogDirsResponse::decode_body_v1(&mut decoder)?)
+    }
+
+    /// Sends DescribeLogDirs v2 to this broker using flexible encoding.
+    pub async fn describe_log_dirs_v2(
+        &mut self,
+        topics: Option<Vec<DescribeLogDirsTopic>>,
+    ) -> Result<DescribeLogDirsResponse> {
+        self.describe_log_dirs_flexible(2, topics).await
+    }
+
+    /// Sends DescribeLogDirs v3 to this broker using flexible encoding.
+    pub async fn describe_log_dirs_v3(
+        &mut self,
+        topics: Option<Vec<DescribeLogDirsTopic>>,
+    ) -> Result<DescribeLogDirsResponse> {
+        self.describe_log_dirs_flexible(3, topics).await
+    }
+
+    /// Sends DescribeLogDirs v4 to this broker using flexible encoding.
+    pub async fn describe_log_dirs_v4(
+        &mut self,
+        topics: Option<Vec<DescribeLogDirsTopic>>,
+    ) -> Result<DescribeLogDirsResponse> {
+        self.describe_log_dirs_flexible(4, topics).await
+    }
+
+    /// Sends DescribeLogDirs v5 to this broker using flexible encoding.
+    pub async fn describe_log_dirs_v5(
+        &mut self,
+        topics: Option<Vec<DescribeLogDirsTopic>>,
+    ) -> Result<DescribeLogDirsResponse> {
+        self.describe_log_dirs_flexible(5, topics).await
+    }
+
+    async fn describe_log_dirs_flexible(
+        &mut self,
+        api_version: i16,
+        topics: Option<Vec<DescribeLogDirsTopic>>,
+    ) -> Result<DescribeLogDirsResponse> {
+        let request = DescribeLogDirsRequest {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            topics,
+        };
+        let response = self.send_request(&request.encode_v2(api_version)?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(match api_version {
+            2 => DescribeLogDirsResponse::decode_body_v2(&mut decoder)?,
+            3 => DescribeLogDirsResponse::decode_body_v3(&mut decoder)?,
+            4 => DescribeLogDirsResponse::decode_body_v4(&mut decoder)?,
+            5 => DescribeLogDirsResponse::decode_body_v5(&mut decoder)?,
+            _ => return Err(Error::Unsupported("unsupported DescribeLogDirs version")),
+        })
     }
 
     /// Sends DescribeAcls v1 to the broker represented by this connection.

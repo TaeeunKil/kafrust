@@ -539,6 +539,9 @@ Verified high-level paths include:
   available through `AdminClient::elect_leaders`; unclean election is an
   explicit data-loss-sensitive operation and should be used only with a
   recovery policy.
+  Broker-local storage inspection is available through
+  `AdminClient::describe_log_dirs`, including replica size, offset lag, future
+  logs, and negotiated volume capacity fields.
   Shared request, retry, broker-error, producer, consumer, batch, and
   buffered-queue metrics are available together with high-level operation and
   request spans.
@@ -583,6 +586,7 @@ Available examples include:
 - `consumer_group_poll`
 - `admin_reassign_partitions`
 - `admin_elect_leaders`
+- `admin_describe_log_dirs`
 
 ## Project Docs
 

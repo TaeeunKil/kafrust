@@ -171,6 +171,10 @@ elections with negotiated ElectLeaders v0-v2 responses; preferred no-op error
 choice. The Kafka 3.7.2 three-broker preferred-election path is live-qualified;
 secured routing remains a separate gate. See [Admin API](docs/admin-api.md) for
 the recovery warning and example.
+`describe_log_dirs` exposes broker-local replica size, offset lag, future-log,
+cordoned, and volume-capacity state through negotiated DescribeLogDirs v1-v5;
+the API preserves broker-specific results instead of flattening them into
+cluster metadata.
 `describe_cluster` and `list_topics` likewise retry transport and timeout
 failures, and `list_topics` retries transient topic/partition metadata errors
 while preserving final topic-level metadata errors.

@@ -134,6 +134,13 @@ Secured controller routing and unclean election remain separate claims; unclean
 election remains an explicit, data-loss-sensitive operation and is not part of
 the default smoke gate.
 
+The current development line also implements broker-local DescribeLogDirs v1-v5
+negotiation with typed replica size, offset lag, future-log, volume-capacity,
+and cordoned-state fields. Focused wire and injected-broker tests pass, and the
+multi-broker workflow includes the filtered example. This remains an
+implementation-level claim until the new live run completes; secured broker
+coverage is a separate qualification.
+
 Release `v0.2.19` additionally qualifies Fetch v12 forwarding of the last
 fetched partition leader epoch and consumer-group `Earliest`/`Latest` recovery
 when a committed offset is no longer retained. The dedicated offset-reset

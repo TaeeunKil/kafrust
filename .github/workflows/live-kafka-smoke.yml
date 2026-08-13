@@ -1212,6 +1212,12 @@ jobs:
           KAFRUST_ELECTION_TYPE: preferred
         run: cargo run -p kafrust --example admin_elect_leaders
 
+      - name: Run multi-broker admin log directory example
+        env:
+          KAFRUST_LOG_DIR_TOPIC: ${{ env.KAFRUST_TOPIC }}
+          KAFRUST_LOG_DIR_PARTITION: "0"
+        run: cargo run -p kafrust --example admin_describe_log_dirs
+
       - name: Run transaction coordinator failover through broker stop
         run: |
           KAFRUST_TRANSACTIONAL_ID="kafrust-transaction-failover-${GITHUB_RUN_ID}" \

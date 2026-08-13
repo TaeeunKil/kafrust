@@ -652,6 +652,57 @@ silently downgrading that request. The `admin_elect_leaders` example accepts
 `KAFRUST_ELECTION_TYPE=preferred|unclean`, `KAFRUST_ELECTION_TOPIC`,
 `KAFRUST_ELECTION_PARTITION`, and `KAFRUST_ELECTION_ALL`.
 
+## Describe Log Directories
+
+`AdminClient::describe_log_dirs` queries broker-local storage state. Pass
+`None` for `broker_ids` to query every broker discovered from Metadata, and
+pass `None` for `topics` to query every topic. An empty partition list on a
+`LogDirTopic` means all partitions of that topic. The client negotiates
+DescribeLogDirs v1-v5, preserving log-directory errors, replica sizes, offset
+lag, future-log state, and v4+ volume capacity fields.
+
+```rust
+use kafrust::{AdminClient, ClientConfig, LogDirTopic};
+
+# async fn example() -> kafrust::Result<()> {
+let admin = AdminClient::new(ClientConfig::new([
+    "localhost:19092",
+    "localhost:19093",
+    "localhost:19094",
+]));
+let topics = [LogDirTopic::new("orders").partition(0)];
+let brokers = admin.describe_log_dirs(None, Some(&topics)).await?;
+for broker in brokers {
+    println!(
+        "broker={} usable_bytes={}",
+        broker.broker_id(),
+        broker.usable_bytes(),
+    );
+    for log_dir in broker.log_dirs() {
+        for topic in log_dir.topics() {
+            for partition in topic.partitions() {
+                println!(
+                    "{}-{} size={} lag={} future={}",
+                    topic.name(),
+                    partition.partition_index(),
+                    partition.partition_size(),
+                    partition.offset_lag(),
+                    partition.is_future(),
+                );
+            }
+        }
+    }
+}
+# Ok(())
+# }
+```
+
+The `admin_describe_log_dirs` example accepts `KAFRUST_LOG_DIR_BROKERS` as a
+comma-separated broker ID list, plus `KAFRUST_LOG_DIR_TOPIC` and the optional
+`KAFRUST_LOG_DIR_PARTITION` filter. Broker-local paths and capacity values are
+operational metadata; they should not be treated as portable filesystem
+locations across clusters.
+
 ## Create Topics
 
 ```rust

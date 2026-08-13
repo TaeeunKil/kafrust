@@ -1032,6 +1032,11 @@ Implemented evidence:
   [`31681439569`](https://github.com/TaeeunKil/kafrust/actions/runs/31681439569).
   Secured controller routing remains a separate gate, and unclean election is
   deliberately outside the default gate because it can lose records.
+- DescribeLogDirs v1-v5 now exposes broker-selected log-directory results,
+  replica size, offset lag, future-log state, v4+ volume capacity, and v5
+  cordoned state. Focused wire and broker-routing tests pass, and the
+  multi-broker workflow includes the filtered example. Live result and secured
+  broker coverage remain pending until a workflow run qualifies them.
 - The `admin_describe_group` example runs after the consumer-group smoke path
   across plaintext, multi-broker, TLS, SASL_PLAINTEXT, and SASL_SSL profiles.
 - The admin lifecycle example waits for asynchronous metadata propagation in
@@ -2053,3 +2058,6 @@ Implemented evidence:
   [`31681439569`](https://github.com/TaeeunKil/kafrust/actions/runs/31681439569);
   secured controller routing remains the next release gate. This does not make
   unclean election a default-safe operation.
+- The current development line also adds broker-local DescribeLogDirs v1-v5
+  negotiation. The release gate is a live multi-broker filtered query with
+  capacity and replica-lag decoding, followed by secured broker coverage.

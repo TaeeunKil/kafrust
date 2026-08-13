@@ -40,6 +40,7 @@ use kafrust_protocol::api::describe_configs::{
     DescribeConfigsSynonymV1,
 };
 use kafrust_protocol::api::describe_groups::{DescribeGroupsGroupV1, DescribeGroupsMemberV1};
+use kafrust_protocol::api::describe_log_dirs::{DescribeLogDirsResponse, DescribeLogDirsTopic};
 use kafrust_protocol::api::describe_producers::{
     DescribeProducersActiveProducerV0, DescribeProducersPartitionResponseV0,
     DescribeProducersTopicResponseV0,
@@ -1025,6 +1026,139 @@ impl AdminClient {
         }
 
         Ok(groups.into_values().collect())
+    }
+
+    /// Describes broker-local log directories and replica storage state.
+    ///
+    /// Pass `None` for `broker_ids` or `topics` to query every advertised
+    /// broker or every topic, respectively. A selected topic with an empty
+    /// partition list asks Kafka for all of that topic's partitions. Results
+    /// remain grouped by broker because log-directory paths and capacity are
+    /// local to each broker.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.describe_log_dirs",
+        skip_all,
+        fields(
+            broker_count = broker_ids.map_or(0, <[i32]>::len),
+            topic_count = topics.map_or(0, <[LogDirTopic]>::len)
+        ),
+        err
+    )]
+    pub async fn describe_log_dirs(
+        &self,
+        broker_ids: Option<&[i32]>,
+        topics: Option<&[LogDirTopic]>,
+    ) -> Result<Vec<DescribeLogDirsBrokerResult>> {
+        let metadata = self.metadata_with_admin_retries(Some(Vec::new())).await?;
+        if let Some(broker_ids) = broker_ids {
+            for broker_id in broker_ids {
+                if !metadata
+                    .brokers
+                    .iter()
+                    .any(|broker| broker.node_id == *broker_id)
+                {
+                    return Err(Error::MissingBroker {
+                        node_id: *broker_id,
+                    });
+                }
+            }
+        }
+
+        let selected_brokers = metadata
+            .brokers
+            .iter()
+            .filter(|broker| broker_ids.map_or(true, |ids| ids.contains(&broker.node_id)))
+            .cloned()
+            .collect::<Vec<_>>();
+        let request_topics = topics.map(|topics| {
+            topics
+                .iter()
+                .map(LogDirTopic::as_protocol)
+                .collect::<Vec<DescribeLogDirsTopic>>()
+        });
+        let mut results = Vec::with_capacity(selected_brokers.len());
+
+        for broker in selected_brokers {
+            let endpoint = format!("{}:{}", broker.host, broker.port);
+            let mut retry = 0;
+            let response = loop {
+                let mut client = match self.config.connect_broker(endpoint.clone()).await {
+                    Ok(client) => client,
+                    Err(error)
+                        if retry < self.max_retries && is_retryable_admin_read_error(&error) =>
+                    {
+                        retry += 1;
+                        self.config.record_retry();
+                        tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                        continue;
+                    }
+                    Err(error) => return Err(error),
+                };
+                let api_versions = match client
+                    .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
+                    .await
+                {
+                    Ok(api_versions) => api_versions,
+                    Err(error)
+                        if retry < self.max_retries && is_retryable_admin_read_error(&error) =>
+                    {
+                        retry += 1;
+                        self.config.record_retry();
+                        tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                        continue;
+                    }
+                    Err(error) => return Err(error),
+                };
+                let Some(version) = api_versions.highest_supported_version(35, 5) else {
+                    return Err(Error::Unsupported(
+                        "broker does not advertise DescribeLogDirs v1 or newer",
+                    ));
+                };
+                let response = match version {
+                    1 => client.describe_log_dirs_v1(request_topics.clone()).await,
+                    2 => client.describe_log_dirs_v2(request_topics.clone()).await,
+                    3 => client.describe_log_dirs_v3(request_topics.clone()).await,
+                    4 => client.describe_log_dirs_v4(request_topics.clone()).await,
+                    _ => client.describe_log_dirs_v5(request_topics.clone()).await,
+                };
+                match response {
+                    Ok(response)
+                        if retry < self.max_retries
+                            && is_retryable_admin_read_code(response.error_code) =>
+                    {
+                        self.config.record_broker_error();
+                        retry += 1;
+                        self.config.record_retry();
+                        tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    }
+                    Ok(response) => break response,
+                    Err(error)
+                        if retry < self.max_retries && is_retryable_admin_read_error(&error) =>
+                    {
+                        retry += 1;
+                        self.config.record_retry();
+                        tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    }
+                    Err(error) => return Err(error),
+                }
+            };
+
+            if response.error_code != 0 {
+                self.config.record_broker_error();
+            }
+            for log_dir in &response.results {
+                if log_dir.error_code != 0 {
+                    self.config.record_broker_error();
+                }
+            }
+            results.push(DescribeLogDirsBrokerResult::from_protocol(
+                broker.node_id,
+                response,
+            ));
+        }
+
+        Ok(results)
     }
 
     /// Deletes consumer groups through their active coordinators.
@@ -4014,6 +4148,251 @@ impl ElectLeadersResult {
                         .collect(),
                 })
                 .collect(),
+        }
+    }
+}
+
+/// A topic and optional partition filter submitted to DescribeLogDirs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LogDirTopic {
+    name: String,
+    partition_indexes: Vec<i32>,
+}
+
+impl LogDirTopic {
+    /// Creates a topic filter. An empty partition list means all partitions.
+    pub fn new(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            partition_indexes: Vec::new(),
+        }
+    }
+
+    /// Adds a partition to this topic filter.
+    pub fn partition(mut self, partition_index: i32) -> Self {
+        self.partition_indexes.push(partition_index);
+        self
+    }
+
+    /// Returns the topic name.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Returns the selected partitions. Empty means all partitions.
+    pub fn partition_indexes(&self) -> &[i32] {
+        &self.partition_indexes
+    }
+
+    fn as_protocol(&self) -> DescribeLogDirsTopic {
+        DescribeLogDirsTopic {
+            name: self.name.clone(),
+            partition_indexes: self.partition_indexes.clone(),
+        }
+    }
+}
+
+/// One broker's DescribeLogDirs response.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DescribeLogDirsBrokerResult {
+    broker_id: i32,
+    throttle_time: Duration,
+    error_code: i16,
+    log_dirs: Vec<LogDirectoryResult>,
+    total_bytes: i64,
+    usable_bytes: i64,
+    is_cordoned: bool,
+}
+
+impl DescribeLogDirsBrokerResult {
+    /// Returns the broker node ID.
+    pub fn broker_id(&self) -> i32 {
+        self.broker_id
+    }
+
+    /// Returns the broker throttle duration.
+    pub fn throttle_time(&self) -> Duration {
+        self.throttle_time
+    }
+
+    /// Returns Kafka's top-level error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns kafrust's top-level broker error classification, when present.
+    pub fn broker_error_kind(&self) -> Option<BrokerErrorKind> {
+        (self.error_code != 0).then(|| BrokerErrorKind::from_code(self.error_code))
+    }
+
+    /// Returns one result for each broker log directory.
+    pub fn log_dirs(&self) -> &[LogDirectoryResult] {
+        &self.log_dirs
+    }
+
+    /// Returns total bytes on the broker's log volume, or `-1` when the
+    /// negotiated broker version does not expose volume capacity.
+    pub fn total_bytes(&self) -> i64 {
+        self.total_bytes
+    }
+
+    /// Returns usable bytes on the broker's log volume, or `-1` when
+    /// unavailable.
+    pub fn usable_bytes(&self) -> i64 {
+        self.usable_bytes
+    }
+
+    /// Returns whether the broker has cordoned the log volume.
+    pub fn is_cordoned(&self) -> bool {
+        self.is_cordoned
+    }
+
+    /// Returns whether the broker and every returned log directory succeeded.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0 && self.log_dirs.iter().all(LogDirectoryResult::is_success)
+    }
+
+    fn from_protocol(broker_id: i32, response: DescribeLogDirsResponse) -> Self {
+        let total_bytes = response.total_bytes;
+        let usable_bytes = response.usable_bytes;
+        let is_cordoned = response.is_cordoned;
+        Self {
+            broker_id,
+            throttle_time: Duration::from_millis(nonnegative_i32_to_u64(response.throttle_time_ms)),
+            error_code: response.error_code,
+            log_dirs: response
+                .results
+                .into_iter()
+                .map(LogDirectoryResult::from_protocol)
+                .collect(),
+            total_bytes,
+            usable_bytes,
+            is_cordoned,
+        }
+    }
+}
+
+/// One broker log directory returned by DescribeLogDirs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LogDirectoryResult {
+    error_code: i16,
+    path: String,
+    topics: Vec<LogDirectoryTopicResult>,
+}
+
+impl LogDirectoryResult {
+    /// Returns the log-directory error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns the absolute log-directory path.
+    pub fn path(&self) -> &str {
+        &self.path
+    }
+
+    /// Returns topic storage results in broker response order.
+    pub fn topics(&self) -> &[LogDirectoryTopicResult] {
+        &self.topics
+    }
+
+    /// Returns whether Kafka accepted this log-directory query.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+    }
+
+    /// Returns kafrust's log-directory error classification, when present.
+    pub fn broker_error_kind(&self) -> Option<BrokerErrorKind> {
+        (self.error_code != 0).then(|| BrokerErrorKind::from_code(self.error_code))
+    }
+
+    fn from_protocol(
+        result: kafrust_protocol::api::describe_log_dirs::DescribeLogDirsResult,
+    ) -> Self {
+        Self {
+            error_code: result.error_code,
+            path: result.log_dir,
+            topics: result
+                .topics
+                .into_iter()
+                .map(LogDirectoryTopicResult::from_protocol)
+                .collect(),
+        }
+    }
+}
+
+/// Topic storage results returned for one broker log directory.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LogDirectoryTopicResult {
+    name: String,
+    partitions: Vec<LogDirectoryPartitionResult>,
+}
+
+impl LogDirectoryTopicResult {
+    /// Returns the topic name.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Returns partition storage results.
+    pub fn partitions(&self) -> &[LogDirectoryPartitionResult] {
+        &self.partitions
+    }
+
+    fn from_protocol(
+        result: kafrust_protocol::api::describe_log_dirs::DescribeLogDirsTopicResult,
+    ) -> Self {
+        Self {
+            name: result.name,
+            partitions: result
+                .partitions
+                .into_iter()
+                .map(LogDirectoryPartitionResult::from_protocol)
+                .collect(),
+        }
+    }
+}
+
+/// Partition storage state returned by DescribeLogDirs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LogDirectoryPartitionResult {
+    partition_index: i32,
+    partition_size: i64,
+    offset_lag: i64,
+    is_future: bool,
+}
+
+impl LogDirectoryPartitionResult {
+    /// Returns the Kafka partition index.
+    pub fn partition_index(&self) -> i32 {
+        self.partition_index
+    }
+
+    /// Returns the partition's log size in bytes.
+    pub fn partition_size(&self) -> i64 {
+        self.partition_size
+    }
+
+    /// Returns the log end offset lag relative to the high watermark/current
+    /// replica log end offset.
+    pub fn offset_lag(&self) -> i64 {
+        self.offset_lag
+    }
+
+    /// Returns whether this is a future log created by replica-directory
+    /// movement.
+    pub fn is_future(&self) -> bool {
+        self.is_future
+    }
+
+    fn from_protocol(
+        result: kafrust_protocol::api::describe_log_dirs::DescribeLogDirsPartitionResult,
+    ) -> Self {
+        Self {
+            partition_index: result.partition_index,
+            partition_size: result.partition_size,
+            offset_lag: result.offset_lag,
+            is_future: result.is_future,
         }
     }
 }
@@ -7584,8 +7963,8 @@ mod tests {
         ConsumerGroupOffset, ConsumerGroupOffsetDelete, ConsumerGroupOffsetQuery,
         CreatePartitionsOptions, CreateTopicsOptions, DeleteRecordsOptions, DeleteRecordsTopic,
         DeleteTopicsOptions, DescribeConfigsOptions, DescribeProducersTopic, ElectLeadersOptions,
-        ElectionType, LeaderElection, ListTransactionsOptions, NewPartitions, NewTopic,
-        PartitionReassignment, PartitionReassignmentOptions, PartitionReassignmentQuery,
+        ElectionType, LeaderElection, ListTransactionsOptions, LogDirTopic, NewPartitions,
+        NewTopic, PartitionReassignment, PartitionReassignmentOptions, PartitionReassignmentQuery,
         ScramCredentialDeletion, ScramCredentialMechanism, ScramCredentialUpsertion,
         TopicConfigAlteration, TopicConfigResource, TopicConfigUpdate,
     };
@@ -9827,6 +10206,52 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn describes_log_dirs_on_selected_broker_with_negotiated_v5() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let metadata_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+            write_frame(&mut bootstrap, &metadata_response(addr.port())).await;
+
+            let (mut broker, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut broker).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut broker, &api_versions_with_describe_log_dirs(5)).await;
+
+            let request = read_frame(&mut broker).await;
+            assert_eq!(&request[0..4], &[0, 35, 0, 5]);
+            assert!(request
+                .windows(7)
+                .any(|bytes| { bytes == [7, b'o', b'r', b'd', b'e', b'r', b's'] }));
+            write_frame(&mut broker, &describe_log_dirs_v5_response()).await;
+        });
+        let admin =
+            AdminClient::new(ClientConfig::new([addr.to_string()]).request_timeout_ms(1_000));
+        let topics = [LogDirTopic::new("orders").partition(0)];
+
+        let results = admin
+            .describe_log_dirs(Some(&[1]), Some(&topics))
+            .await
+            .unwrap();
+
+        assert_eq!(results.len(), 1);
+        assert!(results[0].is_success());
+        assert_eq!(results[0].broker_id(), 1);
+        assert_eq!(results[0].total_bytes(), 100_000);
+        assert_eq!(results[0].usable_bytes(), 90_000);
+        assert!(!results[0].is_cordoned());
+        assert_eq!(results[0].log_dirs()[0].path(), "/var/lib/kafka");
+        assert_eq!(results[0].log_dirs()[0].topics()[0].name(), "orders");
+        assert_eq!(
+            results[0].log_dirs()[0].topics()[0].partitions()[0].partition_size(),
+            4096
+        );
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn routes_delete_topics_to_controller_and_preserves_partial_result() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -10697,6 +11122,20 @@ mod tests {
         encoder.into_bytes()
     }
 
+    fn api_versions_with_describe_log_dirs(max_version: i16) -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_i16(0); // success
+        encoder.write_unsigned_varint(2); // one API key
+        encoder.write_i16(35);
+        encoder.write_i16(1);
+        encoder.write_i16(max_version);
+        encoder.write_empty_tagged_fields();
+        encoder.write_i32(0); // throttle time
+        encoder.write_empty_tagged_fields();
+        encoder.into_bytes()
+    }
+
     fn elect_leaders_v2_response() -> Vec<u8> {
         let mut encoder = Encoder::new();
         encoder.write_i32(1); // correlation ID
@@ -10711,6 +11150,32 @@ mod tests {
         encoder.write_compact_nullable_string(None).unwrap();
         encoder.write_empty_tagged_fields(); // partition tags
         encoder.write_empty_tagged_fields(); // topic tags
+        encoder.write_empty_tagged_fields(); // response tags
+        encoder.into_bytes()
+    }
+
+    fn describe_log_dirs_v5_response() -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_empty_tagged_fields(); // response header tags
+        encoder.write_i32(4); // throttle time
+        encoder.write_i16(0); // top-level success
+        encoder.write_unsigned_varint(2); // one log directory
+        encoder.write_i16(0); // log-directory success
+        encoder.write_compact_string("/var/lib/kafka").unwrap();
+        encoder.write_unsigned_varint(2); // one topic
+        encoder.write_compact_string("orders").unwrap();
+        encoder.write_unsigned_varint(2); // one partition
+        encoder.write_i32(0);
+        encoder.write_i64(4096);
+        encoder.write_i64(0);
+        encoder.write_bool(false);
+        encoder.write_empty_tagged_fields(); // partition tags
+        encoder.write_empty_tagged_fields(); // topic tags
+        encoder.write_empty_tagged_fields(); // result tags
+        encoder.write_i64(100_000);
+        encoder.write_i64(90_000);
+        encoder.write_bool(false);
         encoder.write_empty_tagged_fields(); // response tags
         encoder.into_bytes()
     }
