@@ -459,6 +459,16 @@ and ended with `recovered=true` plus zero final in-flight or buffered records.
 This is a published secured recovery profile, not simultaneous-loss or
 production SLO evidence.
 
+The published simultaneous broker-loss workflow
+[`31748293446`](https://github.com/TaeeunKil/kafrust/actions/runs/31748293446)
+passed a fresh external `kafrust 0.2.28` project against Kafka 4.3.1. The
+three-broker, three-replicated-partition, 120-second workload stopped brokers 1
+and 2 simultaneously after one third of the run, waited ten seconds, restarted
+both, and reconciled 4,423,200 records. It observed one failed request and 999
+retries with no high-level operation errors, then reported `recovered=true` and
+zero final in-flight or buffered records. This is a published plaintext
+simultaneous-loss profile, not secured or production SLO evidence.
+
 The following current-main live run
 [`31719615947`](https://github.com/TaeeunKil/kafrust/actions/runs/31719615947)
 also passed the controlled classic consumer-group combined-fault gate in the

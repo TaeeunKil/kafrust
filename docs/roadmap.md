@@ -1565,6 +1565,16 @@ completed and both final resource gauges were zero.
   and ended with `recovered=true` plus zero final queue gauges. This closes the
   published secured multi-broker soak gate; simultaneous broker loss, direct
   rust-rdkafka comparison, production SLO, and canary evidence remain open.
+- Published `kafrust 0.2.28` simultaneous broker-loss soak run
+  [`31748293446`](https://github.com/TaeeunKil/kafrust/actions/runs/31748293446)
+  passed Kafka 4.3.1 three-broker KRaft with three replicated partitions. The
+  fresh external project stopped brokers 1 and 2 simultaneously for ten
+  seconds during a 120-second run, reconciled 4,423,200 records, observed one
+  failed request and 999 retries with zero high-level operation errors, and
+  ended with `recovered=true` plus zero final queue gauges. This closes the
+  published plaintext simultaneous-loss gate; secured simultaneous loss,
+  direct rust-rdkafka comparison, production SLO, and canary evidence remain
+  open.
 - Shared metrics count non-zero Kafka error codes handled by authentication,
   producer, transaction, consumer, and consumer-group operations, including
   retry attempts and partial batch failures. This separates protocol-level
@@ -2347,6 +2357,14 @@ Implemented evidence:
   with `recovered=true` plus zero in-flight and buffered records. The remaining
   claim is deliberately narrow: this does not establish multi-broker soak,
   direct rust-rdkafka parity, production SLOs, or service canary readiness.
+- The published simultaneous-loss gate then passed in
+  [`31748293446`](https://github.com/TaeeunKil/kafrust/actions/runs/31748293446).
+  A fresh external `0.2.28` project survived simultaneous ten-second outages
+  of brokers 1 and 2 in a three-broker Kafka 4.3.1 cluster, reconciled
+  4,423,200 records across three replicated partitions, and ended with zero
+  in-flight and buffered records. Secured simultaneous loss, direct
+  rust-rdkafka comparison, production SLOs, and service canary readiness remain
+  open.
 - The published multi-broker soak gate then passed in
   [`31746182158`](https://github.com/TaeeunKil/kafrust/actions/runs/31746182158).
   A fresh external `0.2.28` project survived a ten-second broker outage in a
