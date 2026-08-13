@@ -22,7 +22,7 @@ async fn main() -> kafrust::Result<()> {
     let metrics = ClientMetrics::new();
     let payload = vec![b'x'; payload_bytes];
 
-    let mut producer = ProducerConfig::new(vec![bootstrap_servers.clone()])
+    let mut producer = ProducerConfig::new(bootstrap_servers.split(',').map(str::to_owned))
         .client_id("kafrust-published-multi-soak-producer")
         .metrics(metrics.clone())
         .acks(Acks::Leader)
@@ -31,7 +31,7 @@ async fn main() -> kafrust::Result<()> {
         .max_batch_bytes(900 * 1024)
         .build()
         .await?;
-    let mut consumer = ConsumerConfig::new(vec![bootstrap_servers])
+    let mut consumer = ConsumerConfig::new(bootstrap_servers.split(',').map(str::to_owned))
         .client_id("kafrust-published-multi-soak-consumer")
         .metrics(metrics.clone())
         .max_wait_ms(100)
