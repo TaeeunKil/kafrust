@@ -380,6 +380,18 @@ replacement, and verified the result with an authenticated `ReadCommitted`
 consumer. This qualifies secured coordinator-stop recovery, not every
 ambiguous outcome, fencing, repeated-fault, or throughput workload.
 
+The published restricted Admin authorization workflow passed for Kafka 3.7.2
+in [`31741997691`](https://github.com/TaeeunKil/kafrust/actions/runs/31741997691)
+and Kafka 4.3.1 in
+[`31742115305`](https://github.com/TaeeunKil/kafrust/actions/runs/31742115305).
+Fresh external projects resolved `kafrust 0.2.28` with `tls`, authenticated as a
+non-superuser through SASL_SSL/SCRAM-SHA-256, and verified cluster describe,
+allowed topic configuration, idempotent production, direct consumption, and
+classic group consumption. The same user received typed denied results for
+topic configuration on an unauthorized topic and unauthorized topic create and
+delete operations. This qualifies one published StandardAuthorizer policy,
+not every ACL pattern, Admin API, security provider, or mutation-failure mode.
+
 The following current-main live run
 [`31719615947`](https://github.com/TaeeunKil/kafrust/actions/runs/31719615947)
 also passed the controlled classic consumer-group combined-fault gate in the

@@ -2276,6 +2276,16 @@ Implemented evidence:
   Both fresh external projects opened and committed through SASL_SSL/SCRAM-
   SHA-256 after stopping the discovered coordinator. Ambiguous outcomes,
   fencing, repeated faults, and throughput remain separate 1.0 gates.
+- The published restricted Admin authorization workflow passed for Kafka 3.7.2
+  in [`31741997691`](https://github.com/TaeeunKil/kafrust/actions/runs/31741997691)
+  and Kafka 4.3.1 in
+  [`31742115305`](https://github.com/TaeeunKil/kafrust/actions/runs/31742115305).
+  Fresh external `0.2.28` projects authenticated as a non-superuser over
+  SASL_SSL/SCRAM-SHA-256, completed allowed cluster/topic/producer/consumer/group
+  operations, and preserved denied topic-config, create-topic, and delete-topic
+  outcomes. This closes the representative published StandardAuthorizer
+  permission gate; every ACL pattern, Admin API, provider, and mutation-failure
+  workload remains outside the 1.0 claim.
 - The published secured multi-broker workflow passed both representative
   security and group-protocol combinations. Kafka 3.7.2 classic passed in
   [`31738997447`](https://github.com/TaeeunKil/kafrust/actions/runs/31738997447),
