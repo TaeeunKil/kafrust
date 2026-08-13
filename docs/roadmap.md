@@ -2180,6 +2180,14 @@ Implemented evidence:
   idempotent producer, a direct consumer, and a classic consumer group against
   Kafka 3.7.2. This qualifies the published public entry points at runtime;
   it does not replace the broader multi-broker, security, and workload gates.
+- The published-crate runtime gate was expanded to a two-profile matrix in
+  [`Published Crate Smoke`, run `31729003352`](https://github.com/TaeeunKil/kafrust/actions/runs/31729003352).
+  Fresh external projects resolved `kafrust 0.2.27` and its matching protocol
+  crate from crates.io, then completed the Admin, idempotent-producer,
+  direct-consumer, and group poll/leave paths against Kafka 3.7.2 classic and
+  Kafka 4.3.1 KIP-848. Both profiles passed without a workspace path
+  dependency. This strengthens the published-artifact gate but does not
+  replace the broader multi-broker, security, failure, and workload gates.
 - The complete 17-job run [`31719615947`](https://github.com/TaeeunKil/kafrust/actions/runs/31719615947)
   adds a controlled combined-fault gate in the Kafka 3.7.2 three-broker
   plaintext profile. It deliberately colocates the classic group coordinator

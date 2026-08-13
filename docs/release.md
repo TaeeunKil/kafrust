@@ -234,6 +234,16 @@ Kafka 3.7.2. It resolved both `0.2.27` crates from crates.io and passed without
 a workspace path dependency. This is runtime coverage for representative
 published APIs, not a replacement for the multi-broker and security matrices.
 
+The published runtime smoke was expanded again in
+[`31729003352`](https://github.com/TaeeunKil/kafrust/actions/runs/31729003352)
+with two matrix profiles. Fresh projects outside the repository resolved the
+published `kafrust 0.2.27` and matching protocol crate from crates.io, then
+completed the same Admin, idempotent-producer, direct-consumer, and group
+poll/leave paths against Kafka 3.7.2 with the classic protocol and Kafka 4.3.1
+with KIP-848. Both profiles passed without a workspace path dependency. This
+extends published-artifact runtime evidence; it does not replace the broader
+multi-broker, security, failure, and workload matrices.
+
 The following current-main live run
 [`31719615947`](https://github.com/TaeeunKil/kafrust/actions/runs/31719615947)
 also passed the controlled classic consumer-group combined-fault gate in the
@@ -332,11 +342,11 @@ After both crates are published:
    ```
 
 3. Run the manually dispatched `Published Crate Smoke` workflow with the same
-   version. It creates an external project under `$RUNNER_TEMP`, resolves the
+   version. It creates external projects under `$RUNNER_TEMP`, resolves the
    dependency from crates.io, and executes representative Admin, idempotent
-   producer, direct-consumer, and classic consumer-group paths against Kafka
-   3.7.2. This is stronger than a workspace compile because the smoke project
-   has no path dependency on the repository.
+   producer, direct-consumer, and consumer-group paths against Kafka 3.7.2
+   classic and Kafka 4.3.1 KIP-848 profiles. This is stronger than a workspace
+   compile because the smoke projects have no path dependency on the repository.
 4. Confirm docs.rs builds the published documentation for both crates.
 5. Push an annotated release tag and create a GitHub release.
 6. Run the `Live Kafka Smoke` workflow from GitHub Actions against `main`.
