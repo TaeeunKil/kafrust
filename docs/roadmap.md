@@ -2188,6 +2188,14 @@ Implemented evidence:
   Kafka 4.3.1 KIP-848. Both profiles passed without a workspace path
   dependency. This strengthens the published-artifact gate but does not
   replace the broader multi-broker, security, failure, and workload gates.
+- The published-crate matrix then added Kafka 3.7.2 `SASL_SSL` with
+  SCRAM-SHA-256 and the published `tls` feature in
+  [`Published Crate Smoke`, run `31729868783`](https://github.com/TaeeunKil/kafrust/actions/runs/31729868783).
+  A fresh external project resolved both published crates from crates.io,
+  configured the public TLS/SCRAM builders, and completed Admin,
+  idempotent-producer, direct-consumer, and classic group paths. This qualifies
+  the tested published security profile, not every security provider,
+  topology, or failure mode.
 - The complete 17-job run [`31719615947`](https://github.com/TaeeunKil/kafrust/actions/runs/31719615947)
   adds a controlled combined-fault gate in the Kafka 3.7.2 three-broker
   plaintext profile. It deliberately colocates the classic group coordinator

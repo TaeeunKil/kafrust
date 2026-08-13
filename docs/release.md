@@ -244,6 +244,15 @@ with KIP-848. Both profiles passed without a workspace path dependency. This
 extends published-artifact runtime evidence; it does not replace the broader
 multi-broker, security, failure, and workload matrices.
 
+The same published runtime smoke now also passes a Kafka 3.7.2
+`SASL_SSL`/SCRAM-SHA-256 profile with the published `tls` feature in
+[`31729868783`](https://github.com/TaeeunKil/kafrust/actions/runs/31729868783).
+That profile generated a fresh broker CA, resolved the published crates from
+crates.io in an external project, configured the public TLS/SCRAM builders, and
+completed the Admin, idempotent-producer, direct-consumer, and classic group
+paths. This is published security runtime evidence for the tested profile; it
+does not claim all security providers, broker topologies, or failure modes.
+
 The following current-main live run
 [`31719615947`](https://github.com/TaeeunKil/kafrust/actions/runs/31719615947)
 also passed the controlled classic consumer-group combined-fault gate in the
@@ -345,8 +354,10 @@ After both crates are published:
    version. It creates external projects under `$RUNNER_TEMP`, resolves the
    dependency from crates.io, and executes representative Admin, idempotent
    producer, direct-consumer, and consumer-group paths against Kafka 3.7.2
-   classic and Kafka 4.3.1 KIP-848 profiles. This is stronger than a workspace
-   compile because the smoke projects have no path dependency on the repository.
+   classic, Kafka 4.3.1 KIP-848, and Kafka 3.7.2 SASL_SSL/SCRAM profiles. The
+   last profile uses the published `tls` feature. This is stronger than a
+   workspace compile because the smoke projects have no path dependency on the
+   repository.
 4. Confirm docs.rs builds the published documentation for both crates.
 5. Push an annotated release tag and create a GitHub release.
 6. Run the `Live Kafka Smoke` workflow from GitHub Actions against `main`.
