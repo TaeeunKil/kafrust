@@ -2233,6 +2233,13 @@ Implemented evidence:
   waited for replacement-leader metadata, and verified a same-group rejoin
   consumed a post-failover record. This is one published classic failover
   workload, not complete multi-broker or failure parity.
+- The same published multi-broker fixture was parameterized for Kafka 4.3.1
+  and the KIP-848 `consumer` group protocol. Run
+  [`31735762087`](https://github.com/TaeeunKil/kafrust/actions/runs/31735762087)
+  resolved `kafrust 0.2.28` from crates.io, committed before the broker stop,
+  followed replacement leadership, and consumed a post-failover record after
+  KIP-848 rejoin. Published multi-member, secured, and broader fault workloads
+  remain separate 1.0 gates.
 - The complete 17-job run [`31719615947`](https://github.com/TaeeunKil/kafrust/actions/runs/31719615947)
   adds a controlled combined-fault gate in the Kafka 3.7.2 three-broker
   plaintext profile. It deliberately colocates the classic group coordinator

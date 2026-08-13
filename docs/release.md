@@ -301,6 +301,14 @@ and then produced and consumed a post-failover record after rejoining with the
 same group ID. This qualifies one published classic group and leader-failover
 workload; it does not claim every multi-broker topology or failure mode.
 
+The same published multi-broker workflow was then parameterized for Kafka 4.3.1
+and the KIP-848 `consumer` group protocol. Run
+[`31735762087`](https://github.com/TaeeunKil/kafrust/actions/runs/31735762087)
+passed with `kafrust 0.2.28`: the external project committed before the broker
+stop, followed the replacement partition leader, and consumed a post-failover
+record after KIP-848 group rejoin. This is published-artifact evidence for one
+KIP-848 failover workload, not complete multi-member or failure parity.
+
 The following current-main live run
 [`31719615947`](https://github.com/TaeeunKil/kafrust/actions/runs/31719615947)
 also passed the controlled classic consumer-group combined-fault gate in the
