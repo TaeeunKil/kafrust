@@ -1895,3 +1895,10 @@ Implemented evidence:
   responses from both docs.rs pages. The complete 17-job live matrix passed on
   the release commit in
   [`31657464035`](https://github.com/TaeeunKil/kafrust/actions/runs/31657464035).
+- OffsetForLeaderEpoch v3 is now available as a pure-Rust protocol primitive,
+  low-level `Client` call, and high-level `Consumer::offset_for_leader_epoch`
+  method. The path preserves current and target epochs, broker error codes,
+  returned leader epochs, and end offsets with focused byte-level and
+  injected-broker coverage. It is an explicit recovery primitive; automatic
+  fetch truncation correction, group rebalance integration, and live
+  failure-injection qualification remain future work.

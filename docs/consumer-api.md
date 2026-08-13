@@ -107,6 +107,25 @@ next offset after the current log end. The partition does not need to be
 assigned. Retriable metadata, leader, connection, timeout, and broker errors
 use the same bounded retry policy as fetch operations.
 
+For log recovery and truncation checks, resolve a partition's end offset at a
+specific leader epoch:
+
+```rust
+let epoch_offset = consumer
+    .offset_for_leader_epoch("orders", 0, current_leader_epoch, target_epoch)
+    .await?;
+println!(
+    "epoch {} ends at {}",
+    epoch_offset.leader_epoch(),
+    epoch_offset.end_offset()
+);
+```
+
+The request is routed to the current partition leader. Pass `-1` for
+`current_leader_epoch` when the consumer has no current epoch metadata. The
+result preserves the broker-reported epoch and end offset; broker errors and
+stale leader metadata follow the consumer's bounded retry policy.
+
 ## Automatic Group Commits
 
 Consumer groups keep explicit commits as the default. Applications that want
@@ -147,6 +166,8 @@ Current implementation status:
   assignment control.
 - `Consumer::fetch_watermarks` exposes leader-routed earliest and latest
   partition offsets.
+- `Consumer::offset_for_leader_epoch` exposes leader-routed end offsets for a
+  requested partition leader epoch.
 - Fetch uses metadata lookup and partition leader routing. Set
   `ConsumerConfig::client_rack("rack-a")` to enable rack-aware Fetch
   negotiation. When the broker advertises Fetch v12, the rack ID is sent using

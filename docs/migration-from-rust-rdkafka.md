@@ -52,6 +52,7 @@ the currently supported settings through typed builders.
 | `isolation.level` | `.isolation_level(IsolationLevel::ReadCommitted)` | Supported by direct and group consumers. |
 | message headers | `ConsumerRecord::headers()` | Returns `ConsumerRecordHeader` values in wire order; `value()` is nullable because Kafka permits null header values. Legacy MessageSet records have no headers. |
 | partition leader epoch | `ConsumerRecord::leader_epoch()` | Preserves the RecordBatch partition leader epoch; legacy MessageSet records return `-1`. |
+| offset for leader epoch | `Consumer::offset_for_leader_epoch(...)` | Routes OffsetForLeaderEpoch v3 to the current partition leader and returns the broker-reported epoch end offset. It is a recovery primitive, not automatic consumer-position correction. |
 | `max.poll.records` | `.max_poll_records(...)` | Bounds records returned by one poll. |
 | `security.protocol` | `.security_protocol(SecurityProtocol::...)` | Prefer the SASL convenience methods for credentials. |
 | `sasl.mechanism=PLAIN` | `.sasl_plain(username, password)` | Use with SASL_PLAINTEXT or SASL_TLS. |
@@ -229,6 +230,12 @@ does not commit an offset. Map rust-rdkafka's `fetch_watermarks` to kafrust's
 async `fetch_watermarks`; kafrust uses the configured request timeout instead
 of accepting a timeout argument on each call and returns
 values through `PartitionWatermarks::low()` and `PartitionWatermarks::high()`.
+For log recovery, map an epoch-specific offset lookup to
+`Consumer::offset_for_leader_epoch(topic, partition, current_leader_epoch,
+leader_epoch)`. It returns `LeaderEpochOffset::leader_epoch()` and
+`LeaderEpochOffset::end_offset()`; the application remains responsible for
+deciding whether and how to seek after comparing the result with its local
+fetch state.
 
 ## Transactions
 

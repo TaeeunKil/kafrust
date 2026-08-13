@@ -101,6 +101,9 @@ use kafrust_protocol::api::offset_fetch::{
     OffsetFetchRequestV2, OffsetFetchRequestV9, OffsetFetchResponseV2, OffsetFetchResponseV9,
     OffsetFetchTopic, OffsetFetchTopicV9,
 };
+use kafrust_protocol::api::offset_for_leader_epoch::{
+    OffsetForLeaderEpochRequestV3, OffsetForLeaderEpochResponseV3, OffsetForLeaderEpochTopicV3,
+};
 use kafrust_protocol::api::produce::{
     MessageSetMessage, ProducePartitionV2, ProducePartitionV3, ProduceRequestV11,
     ProduceRequestV12, ProduceRequestV13, ProduceRequestV2, ProduceRequestV3, ProduceRequestV7,
@@ -1241,6 +1244,23 @@ impl Client {
         Ok(ListOffsetsResponseV1::decode_body(&mut decoder)?)
     }
 
+    /// Sends OffsetForLeaderEpoch v3 for partition log recovery metadata.
+    pub async fn offset_for_leader_epoch_v3(
+        &mut self,
+        topics: Vec<OffsetForLeaderEpochTopicV3>,
+    ) -> Result<OffsetForLeaderEpochResponseV3> {
+        let request = OffsetForLeaderEpochRequestV3 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            replica_id: -1,
+            topics,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(OffsetForLeaderEpochResponseV3::decode_body(&mut decoder)?)
+    }
+
     /// Sends JoinGroup v2 using the provided group protocol metadata.
     pub async fn join_group_v2(
         &mut self,
@@ -2328,8 +2348,12 @@ mod tests {
     };
     use crate::config::SaslCredentials;
     use crate::{ClientMetrics, Error};
+    use kafrust_protocol::api::offset_for_leader_epoch::{
+        OffsetForLeaderEpochPartitionV3, OffsetForLeaderEpochTopicV3,
+    };
     use kafrust_protocol::api::txn_offset_commit::TxnOffsetCommitPartition;
     use kafrust_protocol::codec::DecodeLimits;
+    use kafrust_protocol::codec::Encoder;
     use std::time::Duration;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
@@ -2516,6 +2540,51 @@ mod tests {
         assert_eq!(metrics.requests_failed, 0);
         assert_eq!(metrics.response_bytes, 16);
         assert_eq!(metrics.in_flight_requests, 0);
+        broker.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn sends_offset_for_leader_epoch_v3_over_injected_broker_stream() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(1024);
+        let broker = tokio::spawn(async move {
+            let request = read_test_frame(&mut broker_stream).await;
+            assert_eq!(&request[0..2], &[0, 23]);
+            assert_eq!(&request[2..4], &[0, 3]);
+            assert_eq!(&request[4..8], &[0, 0, 0, 1]);
+
+            let mut body = Encoder::new();
+            body.write_i32(0);
+            body.write_i32(1);
+            body.write_string("orders").unwrap();
+            body.write_i32(1);
+            body.write_i16(0);
+            body.write_i32(2);
+            body.write_i32(8);
+            body.write_i64(42);
+            let mut response = vec![0, 0, 0, 1];
+            response.extend(body.into_bytes());
+            write_test_frame(&mut broker_stream, &response).await;
+        });
+
+        let mut client = Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-offset-epoch-test".to_owned()),
+            Some(Duration::from_secs(1)),
+        );
+        let response = client
+            .offset_for_leader_epoch_v3(vec![OffsetForLeaderEpochTopicV3 {
+                name: "orders".to_owned(),
+                partitions: vec![OffsetForLeaderEpochPartitionV3 {
+                    partition_index: 2,
+                    current_leader_epoch: 8,
+                    leader_epoch: 7,
+                }],
+            }])
+            .await
+            .unwrap();
+
+        assert_eq!(response.topics[0].partitions[0].end_offset, 42);
+        assert_eq!(response.topics[0].partitions[0].leader_epoch, 8);
         broker.await.unwrap();
     }
 

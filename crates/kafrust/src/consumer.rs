@@ -10,6 +10,10 @@ use kafrust_protocol::api::list_offsets::{
     ListOffsetsTopicV1, EARLIEST_TIMESTAMP, LATEST_TIMESTAMP,
 };
 use kafrust_protocol::api::metadata::{BrokerMetadata, MetadataResponseV1};
+use kafrust_protocol::api::offset_for_leader_epoch::{
+    OffsetForLeaderEpochPartitionResponseV3, OffsetForLeaderEpochPartitionV3,
+    OffsetForLeaderEpochTopicResponseV3, OffsetForLeaderEpochTopicV3,
+};
 
 use crate::client::{Client, FetchOneRequestV11, FetchOneRequestV12, FetchOneRequestV4};
 use crate::config::{ClientConfig, OAuthBearerTokenProvider, SecurityProtocol};
@@ -211,6 +215,25 @@ pub struct PartitionWatermarks {
     high: i64,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// The end offset recorded for a requested Kafka partition leader epoch.
+pub struct LeaderEpochOffset {
+    leader_epoch: i32,
+    end_offset: i64,
+}
+
+impl LeaderEpochOffset {
+    /// Returns the leader epoch reported by Kafka.
+    pub fn leader_epoch(&self) -> i32 {
+        self.leader_epoch
+    }
+
+    /// Returns the first offset after the requested epoch's log range.
+    pub fn end_offset(&self) -> i64 {
+        self.end_offset
+    }
+}
+
 impl PartitionWatermarks {
     /// Returns the earliest available offset.
     pub fn low(&self) -> i64 {
@@ -398,6 +421,81 @@ impl Consumer {
                 result => return result,
             }
         }
+    }
+
+    /// Resolves the end offset for a partition leader epoch.
+    ///
+    /// `current_leader_epoch` is the epoch from the consumer's current
+    /// metadata, or `-1` when it is unknown. `leader_epoch` is the epoch whose
+    /// end offset should be returned. The partition does not need to be
+    /// assigned to this consumer.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.consumer.offset_for_leader_epoch",
+        skip_all,
+        fields(topic = tracing::field::Empty, partition, current_leader_epoch, leader_epoch),
+        err
+    )]
+    pub async fn offset_for_leader_epoch(
+        &mut self,
+        topic: impl Into<String>,
+        partition: i32,
+        current_leader_epoch: i32,
+        leader_epoch: i32,
+    ) -> Result<LeaderEpochOffset> {
+        let topic = topic.into();
+        tracing::Span::current().record("topic", topic.as_str());
+        let mut attempt = 0;
+
+        loop {
+            match self
+                .offset_for_leader_epoch_once(&topic, partition, current_leader_epoch, leader_epoch)
+                .await
+            {
+                Err(error) if attempt < self.config.max_retries && can_retry_fetch(&error) => {
+                    invalidate_metadata_cache(&mut self.metadata_cache, &topic);
+                    self.config.client.record_retry();
+                    attempt += 1;
+                }
+                result => return result,
+            }
+        }
+    }
+
+    async fn offset_for_leader_epoch_once(
+        &mut self,
+        topic: &str,
+        partition: i32,
+        current_leader_epoch: i32,
+        leader_epoch: i32,
+    ) -> Result<LeaderEpochOffset> {
+        let metadata = self.metadata_for_topic(topic).await?;
+        let leader = leader_for(&metadata, topic, partition)?;
+        let broker_addr = broker_addr_for(&metadata, leader)?;
+        let mut leader_client = self.connect_or_reuse_broker(&broker_addr).await?;
+        let response = leader_client
+            .offset_for_leader_epoch_v3(vec![OffsetForLeaderEpochTopicV3 {
+                name: topic.to_owned(),
+                partitions: vec![OffsetForLeaderEpochPartitionV3 {
+                    partition_index: partition,
+                    current_leader_epoch,
+                    leader_epoch,
+                }],
+            }])
+            .await?;
+        let partition_response =
+            offset_for_leader_epoch_partition_response(&response.topics, topic, partition)?;
+        if partition_response.error_code != 0 {
+            return Err(self.config.client.broker_error(
+                partition_response.error_code,
+                format!("offset for leader epoch {topic}-{partition}"),
+            ));
+        }
+        self.broker_clients.insert(broker_addr, leader_client);
+        Ok(LeaderEpochOffset {
+            leader_epoch: partition_response.leader_epoch,
+            end_offset: partition_response.end_offset,
+        })
     }
 
     async fn fetch_watermarks_once(
@@ -1373,6 +1471,26 @@ fn list_offset_partition_response<'a>(
         })
 }
 
+fn offset_for_leader_epoch_partition_response<'a>(
+    topics: &'a [OffsetForLeaderEpochTopicResponseV3],
+    topic_name: &str,
+    partition_index: i32,
+) -> Result<&'a OffsetForLeaderEpochPartitionResponseV3> {
+    topics
+        .iter()
+        .find(|topic| topic.name == topic_name)
+        .and_then(|topic| {
+            topic
+                .partitions
+                .iter()
+                .find(|partition| partition.partition_index == partition_index)
+        })
+        .ok_or_else(|| Error::UnknownTopicOrPartition {
+            topic: topic_name.to_owned(),
+            partition: partition_index,
+        })
+}
+
 fn visible_records(
     aborted_transactions: &[kafrust_protocol::api::fetch::AbortedTransactionV4],
     input_records: &[MessageSetRecord],
@@ -1471,8 +1589,9 @@ fn invalidate_metadata_cache(
 mod tests {
     use super::{
         assign_partition, can_retry_fetch, invalidate_metadata_cache, leader_for,
-        limit_fetched_records, visible_records, Consumer, ConsumerAssignment, ConsumerConfig,
-        ConsumerRecord, IsolationLevel, PartitionWatermarks, SecurityProtocol,
+        limit_fetched_records, offset_for_leader_epoch_partition_response, visible_records,
+        Consumer, ConsumerAssignment, ConsumerConfig, ConsumerRecord, IsolationLevel,
+        PartitionWatermarks, SecurityProtocol,
     };
     use crate::{Client, ClientMetrics, Error};
     use kafrust_protocol::api::fetch::{
@@ -1746,6 +1865,52 @@ mod tests {
         assert_eq!(watermarks.low(), 4);
         assert_eq!(watermarks.high(), 9);
         server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn fetches_offset_for_leader_epoch_from_partition_leader() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let request = read_frame(&mut socket).await;
+            assert_eq!(&request[0..4], &[0, 23, 0, 3]);
+            write_frame(&mut socket, &offset_for_leader_epoch_response_frame()).await;
+        });
+        let (client_stream, broker_stream) = tokio::io::duplex(64);
+        let _broker_stream = broker_stream;
+        let client = Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-leader-epoch-test".to_owned()),
+            Some(std::time::Duration::from_millis(500)),
+        );
+        let config = ConsumerConfig::new([addr.to_string()]).request_timeout_ms(500);
+        let mut consumer = Consumer::from_assignments(client, config, Vec::new());
+        let mut metadata = metadata_fixture();
+        metadata.brokers[0].host = addr.ip().to_string();
+        metadata.brokers[0].port = i32::from(addr.port());
+        consumer
+            .metadata_cache
+            .insert("orders".to_owned(), metadata);
+
+        let result = consumer
+            .offset_for_leader_epoch("orders", 0, 9, 7)
+            .await
+            .unwrap();
+
+        assert_eq!(result.leader_epoch(), 8);
+        assert_eq!(result.end_offset(), 42);
+        server.await.unwrap();
+    }
+
+    #[test]
+    fn reports_missing_offset_for_leader_epoch_partition() {
+        let error = offset_for_leader_epoch_partition_response(&[], "orders", 0).unwrap_err();
+
+        assert!(matches!(
+            error,
+            Error::UnknownTopicOrPartition { topic, partition: 0 } if topic == "orders"
+        ));
     }
 
     #[test]
@@ -2387,6 +2552,20 @@ mod tests {
         response.write_i16(0);
         response.write_i64(-1);
         response.write_i64(offset);
+        response.into_bytes()
+    }
+
+    fn offset_for_leader_epoch_response_frame() -> Vec<u8> {
+        let mut response = Encoder::new();
+        response.write_i32(1);
+        response.write_i32(0);
+        response.write_i32(1);
+        response.write_string("orders").unwrap();
+        response.write_i32(1);
+        response.write_i16(0);
+        response.write_i32(0);
+        response.write_i32(8);
+        response.write_i64(42);
         response.into_bytes()
     }
 }

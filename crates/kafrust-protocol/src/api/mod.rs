@@ -35,6 +35,7 @@ pub mod metadata;
 pub mod offset_commit;
 pub mod offset_delete;
 pub mod offset_fetch;
+pub mod offset_for_leader_epoch;
 pub mod produce;
 pub mod sasl;
 pub mod sync_group;
