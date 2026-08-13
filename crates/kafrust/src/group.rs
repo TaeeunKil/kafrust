@@ -34,7 +34,7 @@ use crate::client::Client;
 use crate::config::{ClientConfig, OAuthBearerTokenProvider, SecurityProtocol};
 use crate::consumer::{
     Consumer, ConsumerAssignment, ConsumerConfig, ConsumerPartitionQueue, ConsumerRecord,
-    IsolationLevel, PartitionWatermarks,
+    IsolationLevel, LeaderEpochOffset, PartitionWatermarks,
 };
 use crate::error::{BrokerErrorKind, Error, Result};
 use crate::metrics::ClientMetrics;
@@ -1772,6 +1772,23 @@ impl ConsumerGroup {
         partition: i32,
     ) -> Result<PartitionWatermarks> {
         self.consumer.fetch_watermarks(topic, partition).await
+    }
+
+    /// Resolves the end offset for a partition leader epoch.
+    ///
+    /// The partition does not need to be assigned to this group member. The
+    /// request is routed through the current partition leader and uses the
+    /// same bounded retry policy as direct consumer recovery calls.
+    pub async fn offset_for_leader_epoch(
+        &mut self,
+        topic: impl Into<String>,
+        partition: i32,
+        current_leader_epoch: i32,
+        leader_epoch: i32,
+    ) -> Result<LeaderEpochOffset> {
+        self.consumer
+            .offset_for_leader_epoch(topic, partition, current_leader_epoch, leader_epoch)
+            .await
     }
 
     /// Leaves the consumer group and consumes this member handle.

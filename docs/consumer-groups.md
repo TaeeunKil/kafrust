@@ -234,6 +234,11 @@ does not require the requested partition to be in the current assignment. It
 returns the earliest retained offset and the latest log-end offset without
 changing local position or committed offsets.
 
+`ConsumerGroup::offset_for_leader_epoch` exposes the same explicit epoch
+recovery lookup for assigned or unassigned partitions. It returns the broker's
+reported epoch end offset without changing group position or committing an
+offset.
+
 When a fetched RecordBatch supplies a partition leader epoch, group OffsetCommit
 v7/v9 requests carry that observed epoch instead of always sending `-1`. This
 keeps committed offsets tied to the broker epoch while preserving `-1` for
