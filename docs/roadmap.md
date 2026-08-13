@@ -1961,6 +1961,10 @@ Implemented evidence:
   200 responses from both docs.rs pages. The complete 17-job live matrix,
   including Kafka 3.7.2 three-broker sticky transfer and recovery, passed in
   [`31666975512`](https://github.com/TaeeunKil/kafrust/actions/runs/31666975512).
+- Release `v0.2.22` publishes the sticky compatibility correction after adding
+  same-generation duplicate-claim invalidation and Kafka-compatible mixed-topic
+  candidate ordering. The complete 17-job live matrix passed in
+  [`31668518895`](https://github.com/TaeeunKil/kafrust/actions/runs/31668518895).
 - Classic eager `StickyAssignor` support now has a public
   `ConsumerGroupAssignmentStrategy::Sticky` variant. JoinGroup uses
   Subscription v0 `user_data` with Kafka's previous-assignment schema,
