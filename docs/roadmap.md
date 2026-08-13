@@ -1934,3 +1934,8 @@ Implemented evidence:
   [`31661719918`](https://github.com/TaeeunKil/kafrust/actions/runs/31661719918)
   and the complete 17-job live matrix passed in
   [`31661883116`](https://github.com/TaeeunKil/kafrust/actions/runs/31661883116).
+- Fetch v12 now forwards the assignment's last fetched leader epoch, and group
+  offset-reset qualification covers initial Earliest/Latest behavior plus
+  committed offsets recovered after the retained log moves past them. The
+  complete 17-job live matrix passed on the follow-up commit in
+  [`31663188419`](https://github.com/TaeeunKil/kafrust/actions/runs/31663188419).

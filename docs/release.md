@@ -110,6 +110,13 @@ passed on the release preparation commit. Update this paragraph after each
 release with the current package and external verification results. None of
 these checks replace broader workload qualification.
 
+The `0.2.19` release candidate adds Fetch v12 last-fetched leader-epoch
+forwarding and group committed-offset recovery qualification. The complete
+17-job Live Kafka Smoke matrix passed on commit `1e5d5c6` in
+[`31663188419`](https://github.com/TaeeunKil/kafrust/actions/runs/31663188419).
+Update this paragraph with the package, docs.rs, and fresh-project results
+after publishing.
+
 ## Optional Broker Checks
 
 The default test suite does not require a Kafka broker. Before an alpha tag, run the opt-in examples or tests against a local broker when practical:
