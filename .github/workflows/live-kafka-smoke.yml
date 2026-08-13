@@ -968,6 +968,69 @@ jobs:
             exit 1
           fi
 
+      - name: Run repeated KIP-848 SCRAM coordinator failover
+        run: |
+          KAFRUST_GROUP_ID="kafrust-kip848-scram-repeat-${GITHUB_RUN_ID}" \
+          KAFRUST_PARTITION_QUEUE=1 \
+          KAFRUST_FAILOVER_PAUSE_MS=30000 \
+          cargo run -p kafrust --features tls --example consumer_group_failover \
+            >/tmp/kafrust-kip848-scram-repeat.log 2>&1 &
+          group_pid=$!
+
+          coordinator_node=""
+          before_seen=""
+          for attempt in {1..120}; do
+            coordinator_node="$({
+              sed -n 's/.*coordinator node \([0-9][0-9]*\)$/\1/p' \
+                /tmp/kafrust-kip848-scram-repeat.log | tail -n 1
+            })"
+            if grep -q "consumer group failover before polled" /tmp/kafrust-kip848-scram-repeat.log; then
+              before_seen=1
+            fi
+            if [ -n "$coordinator_node" ] && [ -n "$before_seen" ]; then
+              break
+            fi
+            if ! kill -0 "$group_pid" 2>/dev/null; then
+              cat /tmp/kafrust-kip848-scram-repeat.log || true
+              wait "$group_pid"
+            fi
+            sleep 1
+          done
+
+          if ! [[ "$coordinator_node" =~ ^[123]$ ]] || [ -z "$before_seen" ]; then
+            echo "repeated KIP-848 SCRAM failover did not reach its first poll"
+            cat /tmp/kafrust-kip848-scram-repeat.log || true
+            kill "$group_pid" 2>/dev/null || true
+            wait "$group_pid" || true
+            exit 1
+          fi
+
+          coordinator_container="kafrust-kip848-scram-${coordinator_node}"
+          docker stop "$coordinator_container"
+
+          group_status=0
+          wait "$group_pid" || group_status=$?
+          cat /tmp/kafrust-kip848-scram-repeat.log
+
+          docker start "$coordinator_container"
+          coordinator_ready=""
+          for attempt in {1..120}; do
+            if docker exec "$coordinator_container" \
+              /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server "${coordinator_container}:29092" \
+              >/tmp/kafrust-kip848-scram-repeat-recovery.log 2>&1; then
+              coordinator_ready=1
+              break
+            fi
+            sleep 2
+          done
+
+          if [ "$group_status" -ne 0 ] || [ -z "$coordinator_ready" ]; then
+            cat /tmp/kafrust-kip848-scram-repeat-recovery.log || true
+            docker logs "$coordinator_container"
+            exit 1
+          fi
+
       - name: Run KIP-848 SCRAM member-aware admin offset path
         env:
           KAFRUST_GROUP_ID: kafrust-kip848-admin-offsets-scram-${{ github.run_id }}
