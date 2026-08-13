@@ -1250,6 +1250,25 @@ jobs:
           echo "replica directory movement did not complete"
           exit 1
 
+      - name: Wait for all replicas to leave under-replicated state
+        run: |
+          for attempt in {1..60}; do
+            if docker exec kafrust-kafka-multi-1 /opt/kafka/bin/kafka-topics.sh \
+              --bootstrap-server kafrust-kafka-multi-1:29092 \
+              --describe \
+              --under-replicated-partitions \
+              >/tmp/kafrust-under-replicated.log 2>&1; then
+              if [ ! -s /tmp/kafrust-under-replicated.log ]; then
+                exit 0
+              fi
+            fi
+            cat /tmp/kafrust-under-replicated.log || true
+            sleep 2
+          done
+          echo "replicas remained under-replicated before transaction failover"
+          cat /tmp/kafrust-under-replicated.log || true
+          exit 1
+
       - name: Run transaction coordinator failover through broker stop
         run: |
           KAFRUST_TRANSACTIONAL_ID="kafrust-transaction-failover-${GITHUB_RUN_ID}" \
