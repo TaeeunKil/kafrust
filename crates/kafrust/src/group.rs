@@ -3545,6 +3545,7 @@ async fn assignments_from_protocol(
 ) -> Result<Vec<ConsumerAssignment>> {
     let mut assignments = Vec::new();
     let mut reset_partitions = Vec::new();
+    let leader_epochs = assignment_leader_epochs(bootstrap, assignment).await?;
     let (offset_topics, offset_error_code) =
         if let Some((member_id, member_epoch)) = consumer_member {
             let offsets = coordinator
@@ -3609,12 +3610,85 @@ async fn assignments_from_protocol(
             resolve_reset_offsets(bootstrap, client_config, &reset_partitions, timestamp).await?,
         );
     }
+    for assignment in &mut assignments {
+        if let Some(leader_epoch) =
+            leader_epochs.get(&(assignment.topic().to_owned(), assignment.partition()))
+        {
+            assignment.set_leader_epoch(*leader_epoch);
+        }
+    }
     assignments.sort_by(|left, right| {
         left.topic()
             .cmp(right.topic())
             .then_with(|| left.partition().cmp(&right.partition()))
     });
     Ok(assignments)
+}
+
+async fn assignment_leader_epochs(
+    bootstrap: &mut Client,
+    assignment: &ConsumerProtocolAssignmentV0,
+) -> Result<BTreeMap<(String, i32), i32>> {
+    if assignment.assignments.is_empty() || !bootstrap.supports_metadata_v12().await? {
+        return Ok(BTreeMap::new());
+    }
+
+    let requests = assignment
+        .assignments
+        .iter()
+        .map(|topic| MetadataRequestTopicV12 {
+            topic_id: [0; 16],
+            name: Some(topic.topic.clone()),
+        })
+        .collect();
+    let metadata = match bootstrap.metadata_v12(Some(requests)).await {
+        Ok(metadata) => metadata,
+        Err(error) => {
+            debug!(error = %error, "initial consumer-group leader epoch metadata unavailable");
+            return Ok(BTreeMap::new());
+        }
+    };
+    Ok(assignment_leader_epochs_from_metadata(
+        &metadata, assignment,
+    ))
+}
+
+fn assignment_leader_epochs_from_metadata(
+    metadata: &MetadataResponseV12,
+    assignment: &ConsumerProtocolAssignmentV0,
+) -> BTreeMap<(String, i32), i32> {
+    let assigned = assignment
+        .assignments
+        .iter()
+        .flat_map(|topic| {
+            topic
+                .partitions
+                .iter()
+                .map(|partition| (topic.topic.as_str(), *partition))
+        })
+        .collect::<BTreeSet<_>>();
+
+    let mut epochs = BTreeMap::new();
+    for topic in &metadata.topics {
+        let Some(topic_name) = topic.name.as_deref() else {
+            continue;
+        };
+        if topic.error_code != 0 {
+            continue;
+        }
+        for partition in &topic.partitions {
+            if partition.error_code == 0
+                && partition.leader_epoch >= 0
+                && assigned.contains(&(topic_name, partition.partition_index))
+            {
+                epochs.insert(
+                    (topic_name.to_owned(), partition.partition_index),
+                    partition.leader_epoch,
+                );
+            }
+        }
+    }
+    epochs
 }
 
 async fn resolve_reset_offsets(
@@ -4508,13 +4582,13 @@ mod tests {
     use std::time::Duration;
 
     use super::{
-        assignments_for_strategy, committed_offset, cooperative_assignment_requires_rejoin,
-        cooperative_rejoin_required_for_assignment, cooperative_sticky_assignments,
-        decode_classic_subscription, decode_sticky_user_data, encode_sticky_user_data,
-        group_retry_backoff, leave_group_response_error, list_offset, list_offsets_topics,
-        member_id_after_join_error, offset_commit_response_error, offset_commit_topics,
-        offset_commit_topics_v7, offset_commit_topics_v9, offset_fetch_topics,
-        pending_commit_assignments, queue_commit_offset, range_assignments,
+        assignment_leader_epochs_from_metadata, assignments_for_strategy, committed_offset,
+        cooperative_assignment_requires_rejoin, cooperative_rejoin_required_for_assignment,
+        cooperative_sticky_assignments, decode_classic_subscription, decode_sticky_user_data,
+        encode_sticky_user_data, group_retry_backoff, leave_group_response_error, list_offset,
+        list_offsets_topics, member_id_after_join_error, offset_commit_response_error,
+        offset_commit_topics, offset_commit_topics_v7, offset_commit_topics_v9,
+        offset_fetch_topics, pending_commit_assignments, queue_commit_offset, range_assignments,
         record_consumer_heartbeat_response, round_robin_assignments,
         should_rejoin_after_background_heartbeat, should_rejoin_group, should_retry_commit_worker,
         should_retry_consumer_join_transport, sticky_assignments, validate_commit_worker_interval,
@@ -4534,7 +4608,10 @@ mod tests {
         ListOffsetsPartitionResponseV1, ListOffsetsResponseV1, ListOffsetsTopicResponseV1,
         EARLIEST_TIMESTAMP,
     };
-    use kafrust_protocol::api::metadata::{MetadataResponseV1, PartitionMetadata, TopicMetadata};
+    use kafrust_protocol::api::metadata::{
+        MetadataPartitionV12, MetadataResponseV1, MetadataResponseV12, MetadataTopicV12,
+        PartitionMetadata, TopicMetadata,
+    };
     use kafrust_protocol::api::offset_commit::{
         OffsetCommitPartitionResponse, OffsetCommitTopicResponse,
     };
@@ -4617,6 +4694,55 @@ mod tests {
 
         let error = super::compile_topic_pattern("[").err();
         assert!(matches!(error, Some(Error::InvalidTopicPattern { .. })));
+    }
+
+    #[test]
+    fn extracts_leader_epochs_for_assigned_partitions() {
+        let assignment = ConsumerProtocolAssignmentV0 {
+            assignments: vec![ConsumerProtocolTopicAssignment {
+                topic: "orders".to_owned(),
+                partitions: vec![1],
+            }],
+            user_data: None,
+        };
+        let metadata = MetadataResponseV12 {
+            throttle_time_ms: 0,
+            brokers: Vec::new(),
+            cluster_id: None,
+            controller_id: 1,
+            topics: vec![MetadataTopicV12 {
+                error_code: 0,
+                name: Some("orders".to_owned()),
+                topic_id: [0; 16],
+                is_internal: false,
+                partitions: vec![
+                    MetadataPartitionV12 {
+                        error_code: 0,
+                        partition_index: 0,
+                        leader_id: 1,
+                        leader_epoch: 4,
+                        replica_nodes: vec![1],
+                        isr_nodes: vec![1],
+                        offline_replicas: Vec::new(),
+                    },
+                    MetadataPartitionV12 {
+                        error_code: 0,
+                        partition_index: 1,
+                        leader_id: 2,
+                        leader_epoch: 7,
+                        replica_nodes: vec![2],
+                        isr_nodes: vec![2],
+                        offline_replicas: Vec::new(),
+                    },
+                ],
+                topic_authorized_operations: -1,
+            }],
+        };
+
+        let epochs = assignment_leader_epochs_from_metadata(&metadata, &assignment);
+
+        assert_eq!(epochs.get(&(String::from("orders"), 1)), Some(&7));
+        assert!(!epochs.contains_key(&(String::from("orders"), 0)));
     }
 
     #[tokio::test]
