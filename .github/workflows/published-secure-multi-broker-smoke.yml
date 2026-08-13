@@ -16,13 +16,14 @@ on:
         required: true
         default: "classic"
       fault_mode:
-        description: "Fault mode: partition leader or coordinator-plus-partition leader"
+        description: "Fault mode: leader, coordinator-plus-leader, or repeated leader"
         required: true
         default: "leader"
         type: choice
         options:
           - leader
           - combined
+          - repeated
 
 env:
   CARGO_TERM_COLOR: always
@@ -284,6 +285,85 @@ jobs:
           else
             cargo run --manifest-path "$RUNNER_TEMP/kafrust-published-secure-multi-smoke/Cargo.toml"
           fi
+
+      - name: Restart first broker for repeated fault
+        if: inputs.fault_mode == 'repeated'
+        run: |
+          docker start kafrust-published-secure-multi-1
+          for attempt in {1..60}; do
+            if docker exec kafrust-published-secure-multi-1 /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server kafrust-published-secure-multi-1:29092 >/tmp/kafrust-published-secure-repeat-restart.log 2>&1; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/kafrust-published-secure-repeat-restart.log || true
+          docker logs kafrust-published-secure-multi-1
+          exit 1
+
+      - name: Choose second published secure repeated-fault target
+        if: inputs.fault_mode == 'repeated'
+        run: |
+          docker exec kafrust-published-secure-multi-1 /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server kafrust-published-secure-multi-1:29092 --describe --topic "$KAFRUST_TOPIC" \
+            | tee /tmp/kafrust-published-secure-repeat-topic.log
+          repeat_partition=""
+          repeat_broker=""
+          for candidate in 2 3; do
+            repeat_partition="$(awk -v broker="$candidate" -v first="$KAFRUST_PARTITION" '/Partition:/ { p=""; l=""; for (i = 1; i <= NF; i++) { if ($i == "Partition:") p=$(i + 1); if ($i == "Leader:") l=$(i + 1) } if (p != "" && p != first && l == broker) { print p; exit } }' /tmp/kafrust-published-secure-repeat-topic.log)"
+            if [ -n "$repeat_partition" ]; then
+              repeat_broker="$candidate"
+              break
+            fi
+          done
+          if [ -z "$repeat_partition" ]; then
+            cat /tmp/kafrust-published-secure-repeat-topic.log
+            echo "could not find a second partition leader for the repeated published fault"
+            exit 1
+          fi
+          probe_broker=1
+          if [ "$probe_broker" = "$repeat_broker" ]; then
+            probe_broker=2
+          fi
+          echo "KAFRUST_REPEAT_PARTITION=${repeat_partition}" >> "$GITHUB_ENV"
+          echo "KAFRUST_REPEAT_BROKER=${repeat_broker}" >> "$GITHUB_ENV"
+          echo "KAFRUST_REPEAT_PROBE_BROKER=${probe_broker}" >> "$GITHUB_ENV"
+
+      - name: Run repeated published secure pre-failover phase
+        if: inputs.fault_mode == 'repeated'
+        env:
+          KAFRUST_PHASE: pre
+          KAFRUST_VALUE: published-secure-repeated-before-${{ github.run_id }}
+        run: |
+          KAFRUST_PARTITION="$KAFRUST_REPEAT_PARTITION" \
+            cargo run --manifest-path "$RUNNER_TEMP/kafrust-published-secure-multi-smoke/Cargo.toml"
+
+      - name: Stop second published secure repeated-fault leader
+        if: inputs.fault_mode == 'repeated'
+        run: |
+          docker stop "kafrust-published-secure-multi-${KAFRUST_REPEAT_BROKER}"
+          for attempt in {1..60}; do
+            line="$(docker exec "kafrust-published-secure-multi-${KAFRUST_REPEAT_PROBE_BROKER}" /opt/kafka/bin/kafka-topics.sh \
+              --bootstrap-server "kafrust-published-secure-multi-${KAFRUST_REPEAT_PROBE_BROKER}:29092" --describe --topic "$KAFRUST_TOPIC" \
+              | awk -v partition="$KAFRUST_REPEAT_PARTITION" -v stopped="$KAFRUST_REPEAT_BROKER" '$0 ~ /Partition:/ { p=""; l=""; for (i = 1; i <= NF; i++) { if ($i == "Partition:") p=$(i + 1); if ($i == "Leader:") l=$(i + 1) } if (p == partition && l != stopped) print l }')"
+            if [ -n "$line" ] && [ "$line" != "-1" ]; then
+              echo "partition $KAFRUST_REPEAT_PARTITION moved from broker $KAFRUST_REPEAT_BROKER to leader $line"
+              exit 0
+            fi
+            sleep 2
+          done
+          docker exec "kafrust-published-secure-multi-${KAFRUST_REPEAT_PROBE_BROKER}" /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server "kafrust-published-secure-multi-${KAFRUST_REPEAT_PROBE_BROKER}:29092" --describe --topic "$KAFRUST_TOPIC"
+          exit 1
+
+      - name: Run repeated published secure post-failover phase
+        if: inputs.fault_mode == 'repeated'
+        env:
+          KAFRUST_PHASE: post
+          KAFRUST_VALUE: published-secure-repeated-after-${{ github.run_id }}
+        run: |
+          KAFRUST_PARTITION="$KAFRUST_REPEAT_PARTITION" \
+            cargo run --manifest-path "$RUNNER_TEMP/kafrust-published-secure-multi-smoke/Cargo.toml"
 
       - name: Verify published dependency versions
         run: |
