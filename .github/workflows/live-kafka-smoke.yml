@@ -3328,7 +3328,15 @@ jobs:
       - name: Initialize secured Admin OffsetCommit group coordinator
         env:
           KAFRUST_GROUP_ID: kafrust-secured-admin-offset-${{ github.run_id }}
-        run: cargo run -p kafrust --features tls --example consumer_group_poll
+        run: |
+          for attempt in {1..5}; do
+            if cargo run -p kafrust --features tls --example consumer_group_poll; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "secured Admin OffsetCommit group initialization did not converge"
+          exit 1
 
       - name: Run secured Admin DescribeGroups during coordinator stop
         env:
