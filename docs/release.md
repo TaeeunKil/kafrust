@@ -143,6 +143,14 @@ including the Kafka 3.7.2 three-broker sticky group path, passed in
 Both crates.io package endpoints and both published docs.rs pages returned HTTP
 200, and a fresh external project compiled `kafrust 0.2.22` with `tls`.
 
+The `0.2.23` release candidate adds classic AlterConfigs v1 through a typed
+`TopicConfigUpdate` API and updates the admin lifecycle example to exercise
+classic replacement followed by incremental alteration. The complete 17-job
+Live Kafka Smoke matrix passed on commit `1085880` in
+[`31669906872`](https://github.com/TaeeunKil/kafrust/actions/runs/31669906872),
+qualifying the plaintext broker profiles and Kafka 3.7.2 multi-broker path.
+Package, docs.rs, crates.io, and fresh external-project checks are pending.
+
 ## Optional Broker Checks
 
 The default test suite does not require a Kafka broker. Before an alpha tag, run the opt-in examples or tests against a local broker when practical:

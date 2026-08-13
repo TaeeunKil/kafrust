@@ -886,8 +886,12 @@ Implemented evidence:
   complete dynamic topic configuration maps, including null-valued deletion,
   validate-only mode, resource-level outcomes, broker throttle time, tracing,
   and broker-error metrics. Focused protocol and injected-broker tests pass;
-  the admin lifecycle example now exercises classic replacement followed by
-  incremental alteration. Live broker qualification remains the next gate.
+  the admin lifecycle example exercises classic replacement followed by
+  incremental alteration. The complete 17-job matrix qualified the plaintext
+  lifecycle on Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plus the Kafka 3.7.2
+  three-broker profile in
+  [`31669906872`](https://github.com/TaeeunKil/kafrust/actions/runs/31669906872).
+  Secured Admin AlterConfigs remains a separate gate.
 - DescribeGroups v1 discovers each requested group's coordinator independently
   and preserves state, protocol, member identity, raw protocol metadata and
   assignments, per-group errors, throttle time, tracing, and metrics.
