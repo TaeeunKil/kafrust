@@ -28,6 +28,15 @@ single-node broker versions, TLS, SASL/PLAIN, SASL/SCRAM, the test-only
 SASL/OAUTHBEARER validator, ACL administration, three-broker failover, and
 Kafka 4.3.1 KIP-848 coordinator recovery.
 
+The dedicated ambiguous-EndTxn gate passed in the Kafka 3.7.2 three-broker job
+[`94476744970`](https://github.com/TaeeunKil/kafrust/actions/runs/31708995196/job/94476744970).
+The proxy dropped the first EndTxn response, kafrust reported
+`TransactionOutcomeUnknown` without replaying EndTxn, and a fresh producer with
+the same transactional ID committed a recovery transaction that was observed
+alongside the original transaction through `read_committed`. The surrounding
+run later failed in an existing consumer-group leader-epoch smoke gate, so this
+is recorded as a gate-level result rather than a complete-matrix pass.
+
 The complete 17-job matrix for classic AlterConfigs v1 passed at commit
 `1085880` in [`31669906872`](https://github.com/TaeeunKil/kafrust/actions/runs/31669906872).
 The admin lifecycle example exercised complete-map topic configuration
@@ -388,6 +397,7 @@ other coordinator-routed writes remain separate qualification items.
 | Apache Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1 | complete 17-job KRaft matrix; plaintext, TLS, SASL, SCRAM, OAUTHBEARER, multi-broker, and KIP-848 profiles | v0.2.26 direct-consumer leader-epoch recovery regression matrix | [`Live Kafka Smoke`, run `31677617186`](https://github.com/TaeeunKil/kafrust/actions/runs/31677617186) on 2026-08-13 | Passing; live log-truncation injection not claimed |
 | Apache Kafka 3.7.2 | three-broker KRaft; repeated leader failover | v0.2.26 direct assigned-consumer automatic leader-epoch recovery after the second leader broker stop | [`Live Kafka Smoke`, run `31679167875`](https://github.com/TaeeunKil/kafrust/actions/runs/31679167875) on 2026-08-13 | Passing; group rebalance and data-loss/log-retention scenarios remain separate |
 | Apache Kafka 3.7.2 | three-broker KRaft | classic `ConsumerGroup` automatic leader-epoch recovery after the assigned partition's leader broker stop | [`Live Kafka Smoke`, run `31700020132`](https://github.com/TaeeunKil/kafrust/actions/runs/31700020132) on 2026-08-13; job [`94446655280`](https://github.com/TaeeunKil/kafrust/actions/runs/31700020132/job/94446655280) | Passing; membership preserved through the tested failover; KIP-848 and data-loss/log-retention scenarios remain separate |
+| Apache Kafka 3.7.2 | three-broker KRaft | EndTxn response loss, typed unknown outcome, same-transactional-ID recovery, and `read_committed` reconciliation | [`Live Kafka Smoke`, run `31708995196`](https://github.com/TaeeunKil/kafrust/actions/runs/31708995196); job [`94476744970`](https://github.com/TaeeunKil/kafrust/actions/runs/31708995196/job/94476744970) on 2026-08-13 | Passing at gate level; the surrounding run later failed in an existing consumer-group leader-epoch gate |
 
 ## Verified Paths
 

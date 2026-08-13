@@ -1350,11 +1350,19 @@ Evidence:
 - A deterministic injected-broker test drops the connection after receiving
   `EndTxn`, verifies `TransactionOutcomeUnknown`, and verifies that the
   producer is terminally `Defunct` and cannot begin another transaction.
+- The Kafka 3.7.2 three-broker live gate
+  [`31708995196`](https://github.com/TaeeunKil/kafrust/actions/runs/31708995196/job/94476744970)
+  drops the first `EndTxn` response, verifies that the producer reports the
+  unknown outcome without replaying `EndTxn`, then verifies same-
+  transactional-ID producer recovery and `read_committed` reconciliation.
 
 Known limits:
 
+- Transparent continuation after an unknown outcome is intentionally not
+  provided; callers must discard the defunct producer and reinitialize it.
 - Broader live transaction failure-injection beyond the verified coordinator
-  broker-stop commit paths is not yet claimed.
+  broker-stop and response-drop paths, plus sustained transaction throughput,
+  is not yet claimed.
 
 ## M19 Observability, Limits, And Performance
 
