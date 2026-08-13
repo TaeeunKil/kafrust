@@ -1850,3 +1850,9 @@ Implemented evidence:
   Kafka's nullable header-value semantics, while legacy MessageSet records
   continue to expose an empty header list. Focused protocol and high-level
   mapping tests cover ordered and null-valued headers.
+- Release `v0.2.11` published the consumer-header implementation after
+  protocol-first package verification, staged all-feature docs builds, a fresh
+  external TLS project compile, crates.io resolution, and HTTP 200 responses
+  from both docs.rs pages. The complete 18-job Kafka 3.7.2 through 4.3.1
+  plaintext, TLS, SASL, OAUTHBEARER, ACL, multi-broker failover, and KIP-848
+  matrix passed in [`31653113614`](https://github.com/TaeeunKil/kafrust/actions/runs/31653113614).
