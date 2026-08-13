@@ -1933,9 +1933,12 @@ Implemented evidence:
   [`31658987651`](https://github.com/TaeeunKil/kafrust/actions/runs/31658987651).
 - Consumer assignments now retain the latest RecordBatch leader epoch and send
   it in Fetch v11/v12 requests. Fenced and unknown leader-epoch broker errors
-  refresh metadata under the bounded fetch retry policy. Automatic offset
-  truncation correction and group-level recovery orchestration remain separate
-  release gates.
+  refresh metadata under the bounded fetch retry policy. Automatic direct
+  consumer truncation recovery now refreshes Metadata v12, resolves the prior
+  epoch boundary through OffsetForLeaderEpoch v3, clamps the retry offset, and
+  resends Fetch with the new epoch. An injected-broker regression covers the
+  complete path; live broker qualification and group-level recovery
+  orchestration remain separate release gates.
 - Release `v0.2.17` published leader-epoch propagation through consumer fetch
   state after protocol-first package verification, staged all-feature
   documentation builds, a fresh external project compile with `tls` and all

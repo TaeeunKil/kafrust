@@ -52,7 +52,7 @@ the currently supported settings through typed builders.
 | `isolation.level` | `.isolation_level(IsolationLevel::ReadCommitted)` | Supported by direct and group consumers. |
 | message headers | `ConsumerRecord::headers()` | Returns `ConsumerRecordHeader` values in wire order; `value()` is nullable because Kafka permits null header values. Legacy MessageSet records have no headers. |
 | partition leader epoch | `ConsumerRecord::leader_epoch()` | Preserves the RecordBatch partition leader epoch; legacy MessageSet records return `-1`. |
-| offset for leader epoch | `Consumer::offset_for_leader_epoch(...)` | Routes OffsetForLeaderEpoch v3 to the current partition leader and returns the broker-reported epoch end offset. It is a recovery primitive, not automatic consumer-position correction. |
+| offset for leader epoch | `Consumer::offset_for_leader_epoch(...)` | Routes OffsetForLeaderEpoch v3 to the current partition leader and returns the broker-reported epoch end offset. Assigned `Consumer::poll` also uses it for automatic direct-consumer truncation recovery when Metadata v12 is available; group rebalance recovery remains separate. |
 | `max.poll.records` | `.max_poll_records(...)` | Bounds records returned by one poll. |
 | `security.protocol` | `.security_protocol(SecurityProtocol::...)` | Prefer the SASL convenience methods for credentials. |
 | `sasl.mechanism=PLAIN` | `.sasl_plain(username, password)` | Use with SASL_PLAINTEXT or SASL_TLS. |

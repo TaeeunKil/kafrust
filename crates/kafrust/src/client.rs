@@ -90,7 +90,7 @@ use kafrust_protocol::api::list_transactions::{
 };
 use kafrust_protocol::api::metadata::{
     MetadataRequestTopicV12, MetadataRequestV1, MetadataRequestV12, MetadataResponseV1,
-    MetadataResponseV12,
+    MetadataResponseV12, API_KEY as METADATA_API_KEY,
 };
 use kafrust_protocol::api::offset_commit::{
     OffsetCommitRequestV2, OffsetCommitRequestV7, OffsetCommitRequestV9, OffsetCommitResponseV2,
@@ -369,6 +369,15 @@ impl Client {
             .await?;
         Ok(response
             .highest_supported_version(FETCH_API_KEY, 12)
+            .is_some_and(|version| version >= 12))
+    }
+
+    pub(crate) async fn supports_metadata_v12(&mut self) -> Result<bool> {
+        let response = self
+            .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
+            .await?;
+        Ok(response
+            .highest_supported_version(METADATA_API_KEY, 12)
             .is_some_and(|version| version >= 12))
     }
 

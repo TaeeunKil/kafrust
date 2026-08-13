@@ -147,6 +147,15 @@ The request is routed to the current partition leader. Pass `-1` for
 result preserves the broker-reported epoch and end offset; broker errors and
 stale leader metadata follow the consumer's bounded retry policy.
 
+Assigned `Consumer::poll` also uses this primitive automatically after a
+leader-epoch transition error when the broker advertises Metadata v12. It
+refreshes the partition leader epoch, resolves the end offset for the previous
+epoch, clamps the next fetch offset to that boundary, and retries with the new
+epoch. If Metadata v12 is unavailable, the consumer falls back to its bounded
+retry with an unknown epoch. This automatic path is currently limited to the
+direct assigned-consumer workflow; group rebalance recovery remains a separate
+compatibility gate.
+
 ## Automatic Group Commits
 
 Consumer groups keep explicit commits as the default. Applications that want

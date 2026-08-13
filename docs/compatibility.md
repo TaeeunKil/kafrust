@@ -794,6 +794,9 @@ The current compatibility claim does not cover:
   transmitted. Bootstrap connection failures before transmission are retried
   within the bounded AdminClient budget; ambiguous post-transmission outcomes
   remain returned to the caller for explicit reconciliation.
+- Automatic direct-consumer leader-epoch truncation recovery has focused
+  injected-broker coverage but is not yet claimed against a live Kafka broker.
+  Group rebalance recovery after log truncation remains a separate gate.
 - Kafka APIs that are not listed in the verified paths.
 
 ## Updating Compatibility

@@ -9,7 +9,10 @@ use kafrust_protocol::api::list_offsets::{
     ListOffsetsPartitionResponseV1, ListOffsetsPartitionV1, ListOffsetsTopicResponseV1,
     ListOffsetsTopicV1, EARLIEST_TIMESTAMP, LATEST_TIMESTAMP,
 };
-use kafrust_protocol::api::metadata::{BrokerMetadata, MetadataResponseV1};
+use kafrust_protocol::api::metadata::{
+    BrokerMetadata, MetadataPartitionV12, MetadataRequestTopicV12, MetadataResponseV1,
+    MetadataResponseV12,
+};
 use kafrust_protocol::api::offset_for_leader_epoch::{
     OffsetForLeaderEpochPartitionResponseV3, OffsetForLeaderEpochPartitionV3,
     OffsetForLeaderEpochTopicResponseV3, OffsetForLeaderEpochTopicV3,
@@ -811,6 +814,8 @@ impl Consumer {
         let mut fetch_offset = offset;
         let mut request_leader_epoch = current_leader_epoch;
         let mut reset_applied = false;
+        let mut truncation_checked = false;
+        let mut recovered_leader_epoch = None;
         debug!(topic, partition, offset, "fetching kafka records");
 
         loop {
@@ -837,12 +842,36 @@ impl Consumer {
                     attempt += 1;
                 }
                 Err(error)
-                    if attempt < self.config.max_retries
+                    if !truncation_checked
+                        && attempt < self.config.max_retries
                         && request_leader_epoch >= 0
                         && is_leader_epoch_transition_error(&error) =>
                 {
-                    request_leader_epoch = -1;
-                    invalidate_metadata_cache(&mut self.metadata_cache, topic);
+                    let previous_leader_epoch = request_leader_epoch;
+                    let current_leader_epoch = self
+                        .current_leader_epoch(topic, partition)
+                        .await?
+                        .filter(|epoch| *epoch >= previous_leader_epoch);
+                    if let Some(current_leader_epoch) = current_leader_epoch {
+                        invalidate_metadata_cache(&mut self.metadata_cache, topic);
+                        let epoch_offset = self
+                            .offset_for_leader_epoch(
+                                topic,
+                                partition,
+                                current_leader_epoch,
+                                previous_leader_epoch,
+                            )
+                            .await?;
+                        if epoch_offset.end_offset() >= 0 {
+                            fetch_offset = fetch_offset.min(epoch_offset.end_offset());
+                        }
+                        request_leader_epoch = current_leader_epoch;
+                        recovered_leader_epoch = Some(current_leader_epoch);
+                        truncation_checked = true;
+                    } else {
+                        request_leader_epoch = -1;
+                        invalidate_metadata_cache(&mut self.metadata_cache, topic);
+                    }
                     self.config.client.record_retry();
                     attempt += 1;
                 }
@@ -859,6 +888,10 @@ impl Consumer {
                         record_count = records.records.len(),
                         "fetched kafka records"
                     );
+                    let mut records = records;
+                    if records.leader_epoch.is_none() {
+                        records.leader_epoch = recovered_leader_epoch;
+                    }
                     return Ok(records);
                 }
                 Err(error) => return Err(error),
@@ -879,6 +912,28 @@ impl Consumer {
                 "explicit offset reset policy cannot recover an out-of-range fetch",
             )),
         }
+    }
+
+    async fn current_leader_epoch(&mut self, topic: &str, partition: i32) -> Result<Option<i32>> {
+        if !self.client.supports_metadata_v12().await? {
+            return Ok(None);
+        }
+
+        let metadata = self
+            .client
+            .metadata_v12(Some(vec![MetadataRequestTopicV12 {
+                topic_id: [0; 16],
+                name: Some(topic.to_owned()),
+            }]))
+            .await?;
+        let partition_metadata = metadata_v12_partition(&metadata, topic, partition)?;
+        if partition_metadata.error_code != 0 {
+            return Err(self.config.client.broker_error(
+                partition_metadata.error_code,
+                format!("metadata {topic}-{partition}"),
+            ));
+        }
+        Ok(Some(partition_metadata.leader_epoch))
     }
 
     async fn fetch_once(
@@ -1679,6 +1734,35 @@ fn offset_for_leader_epoch_partition_response<'a>(
         })
 }
 
+fn metadata_v12_partition<'a>(
+    metadata: &'a MetadataResponseV12,
+    topic_name: &str,
+    partition_index: i32,
+) -> Result<&'a MetadataPartitionV12> {
+    let topic = metadata
+        .topics
+        .iter()
+        .find(|topic| topic.name.as_deref() == Some(topic_name))
+        .ok_or_else(|| Error::UnknownTopicOrPartition {
+            topic: topic_name.to_owned(),
+            partition: partition_index,
+        })?;
+    if topic.error_code != 0 {
+        return Err(Error::Broker {
+            code: topic.error_code,
+            context: format!("metadata topic {topic_name}"),
+        });
+    }
+    topic
+        .partitions
+        .iter()
+        .find(|partition| partition.partition_index == partition_index)
+        .ok_or_else(|| Error::UnknownTopicOrPartition {
+            topic: topic_name.to_owned(),
+            partition: partition_index,
+        })
+}
+
 fn visible_records(
     aborted_transactions: &[kafrust_protocol::api::fetch::AbortedTransactionV4],
     input_records: &[MessageSetRecord],
@@ -1792,7 +1876,7 @@ fn invalidate_metadata_cache(
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
+#[allow(clippy::expect_used, clippy::unwrap_used)]
 mod tests {
     use super::{
         assign_partition, can_retry_fetch, invalidate_metadata_cache, leader_for,
@@ -2214,6 +2298,115 @@ mod tests {
         assert!(consumer.poll().await.unwrap().is_empty());
         assert_eq!(consumer.assignments()[0].leader_epoch(), 8);
         server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn recovers_assignment_after_leader_epoch_truncation() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) =
+                tokio::time::timeout(std::time::Duration::from_secs(2), listener.accept())
+                    .await
+                    .expect("bootstrap accept timed out")
+                    .unwrap();
+            let (mut first_fetch, _) =
+                tokio::time::timeout(std::time::Duration::from_secs(2), listener.accept())
+                    .await
+                    .expect("first fetch accept timed out")
+                    .unwrap();
+
+            let api_versions_request = read_frame(&mut first_fetch).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(
+                &mut first_fetch,
+                &api_versions_v3_metadata_fetch_response(1, 12),
+            )
+            .await;
+            let fetch_request = read_frame(&mut first_fetch).await;
+            assert_eq!(&fetch_request[0..4], &[0, 1, 0, 12]);
+            assert!(fetch_request
+                .windows(8)
+                .any(|window| window == 100_i64.to_be_bytes()));
+            write_frame(
+                &mut first_fetch,
+                &fetch_v12_response_frame_with_partition_error(2, 74),
+            )
+            .await;
+
+            let api_versions_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(
+                &mut bootstrap,
+                &api_versions_v3_metadata_fetch_response(1, 12),
+            )
+            .await;
+            let metadata_v12_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&metadata_v12_request[0..4], &[0, 3, 0, 12]);
+            write_frame(&mut bootstrap, &metadata_v12_response_frame(2, &addr, 5)).await;
+
+            let metadata_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+            write_frame(&mut bootstrap, &metadata_response_frame_for(3, &addr)).await;
+
+            let (mut recovery, _) = listener.accept().await.unwrap();
+            let epoch_request = read_frame(&mut recovery).await;
+            assert_eq!(&epoch_request[0..4], &[0, 23, 0, 3]);
+            write_frame(
+                &mut recovery,
+                &offset_for_leader_epoch_response_frame_with(1, 5, 50),
+            )
+            .await;
+            let api_versions_request = read_frame(&mut recovery).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(
+                &mut recovery,
+                &api_versions_v3_metadata_fetch_response(2, 12),
+            )
+            .await;
+            let retry_fetch_request = read_frame(&mut recovery).await;
+            assert_eq!(&retry_fetch_request[0..4], &[0, 1, 0, 12]);
+            assert!(retry_fetch_request
+                .windows(8)
+                .any(|window| window == 50_i64.to_be_bytes()));
+            assert!(retry_fetch_request
+                .windows(4)
+                .any(|window| window == 5_i32.to_be_bytes()));
+            write_frame(
+                &mut recovery,
+                &fetch_v12_response_frame_with_record_at(3, 0, 50),
+            )
+            .await;
+        });
+
+        let mut consumer = ConsumerConfig::new([addr.to_string()])
+            .request_timeout_ms(500)
+            .max_retries(2)
+            .build()
+            .await
+            .unwrap();
+        consumer.assign("orders", 0, 100);
+        consumer.update_assignment_leader_epoch("orders", 0, 4);
+        let mut metadata = metadata_fixture();
+        metadata.brokers[0].host = addr.ip().to_string();
+        metadata.brokers[0].port = i32::from(addr.port());
+        consumer
+            .metadata_cache
+            .insert("orders".to_owned(), metadata);
+
+        let records = tokio::time::timeout(std::time::Duration::from_secs(5), consumer.poll())
+            .await
+            .expect("leader epoch recovery poll timed out")
+            .unwrap();
+        tokio::time::timeout(std::time::Duration::from_secs(5), server)
+            .await
+            .expect("leader epoch recovery server timed out")
+            .unwrap();
+
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].offset(), 50);
+        assert_eq!(consumer.position("orders", 0), Some(51));
+        assert_eq!(consumer.assignments()[0].leader_epoch(), 5);
     }
 
     #[tokio::test]
@@ -2979,6 +3172,27 @@ mod tests {
         response.into_bytes()
     }
 
+    fn api_versions_v3_metadata_fetch_response(
+        correlation_id: i32,
+        fetch_max_version: i16,
+    ) -> Vec<u8> {
+        let mut response = Encoder::new();
+        response.write_i32(correlation_id);
+        response.write_i16(0);
+        response.write_unsigned_varint(3); // two compact API key entries
+        response.write_i16(3); // Metadata
+        response.write_i16(0);
+        response.write_i16(12);
+        response.write_unsigned_varint(0);
+        response.write_i16(1); // Fetch
+        response.write_i16(0);
+        response.write_i16(fetch_max_version);
+        response.write_unsigned_varint(0);
+        response.write_i32(0);
+        response.write_unsigned_varint(0);
+        response.into_bytes()
+    }
+
     fn fetch_v11_error_response_frame(correlation_id: i32, error_code: i16) -> Vec<u8> {
         fetch_v11_response_frame_with_error(correlation_id, error_code, -1)
     }
@@ -3040,6 +3254,14 @@ mod tests {
     }
 
     fn fetch_v12_response_frame_with_record(correlation_id: i32, session_id: i32) -> Vec<u8> {
+        fetch_v12_response_frame_with_record_at(correlation_id, session_id, 42)
+    }
+
+    fn fetch_v12_response_frame_with_record_at(
+        correlation_id: i32,
+        session_id: i32,
+        offset: i64,
+    ) -> Vec<u8> {
         let mut message = Encoder::new();
         message.write_i32(0);
         message.write_i8(1);
@@ -3050,7 +3272,7 @@ mod tests {
         let message = message.into_bytes();
 
         let mut records = Encoder::new();
-        records.write_i64(42);
+        records.write_i64(offset);
         records.write_i32(i32::try_from(message.len()).unwrap());
         records.write_raw(&message);
         let records = records.into_bytes();
@@ -3074,6 +3296,33 @@ mod tests {
         response
             .write_compact_nullable_bytes(Some(&records))
             .unwrap();
+        response.write_unsigned_varint(0); // partition tags
+        response.write_unsigned_varint(0); // topic tags
+        response.write_unsigned_varint(0); // response tags
+        response.into_bytes()
+    }
+
+    fn fetch_v12_response_frame_with_partition_error(
+        correlation_id: i32,
+        error_code: i16,
+    ) -> Vec<u8> {
+        let mut response = Encoder::new();
+        response.write_i32(correlation_id);
+        response.write_unsigned_varint(0); // response header tags
+        response.write_i32(0); // throttle time
+        response.write_i16(0);
+        response.write_i32(0);
+        response.write_unsigned_varint(2); // one compact topic
+        response.write_compact_string("orders").unwrap();
+        response.write_unsigned_varint(2); // one compact partition
+        response.write_i32(0);
+        response.write_i16(error_code);
+        response.write_i64(43);
+        response.write_i64(43);
+        response.write_i64(0);
+        response.write_unsigned_varint(1); // no aborted transactions
+        response.write_i32(-1);
+        response.write_compact_nullable_bytes(Some(&[])).unwrap();
         response.write_unsigned_varint(0); // partition tags
         response.write_unsigned_varint(0); // topic tags
         response.write_unsigned_varint(0); // response tags
@@ -3118,16 +3367,91 @@ mod tests {
     }
 
     fn offset_for_leader_epoch_response_frame() -> Vec<u8> {
+        offset_for_leader_epoch_response_frame_with(1, 8, 42)
+    }
+
+    fn offset_for_leader_epoch_response_frame_with(
+        correlation_id: i32,
+        leader_epoch: i32,
+        end_offset: i64,
+    ) -> Vec<u8> {
         let mut response = Encoder::new();
-        response.write_i32(1);
+        response.write_i32(correlation_id);
         response.write_i32(0);
         response.write_i32(1);
         response.write_string("orders").unwrap();
         response.write_i32(1);
         response.write_i16(0);
         response.write_i32(0);
-        response.write_i32(8);
-        response.write_i64(42);
+        response.write_i32(leader_epoch);
+        response.write_i64(end_offset);
+        response.into_bytes()
+    }
+
+    fn metadata_response_frame_for(correlation_id: i32, addr: &std::net::SocketAddr) -> Vec<u8> {
+        let mut response = Encoder::new();
+        response.write_i32(correlation_id);
+        response.write_i32(1);
+        response.write_i32(1);
+        response.write_string(&addr.ip().to_string()).unwrap();
+        response.write_i32(i32::from(addr.port()));
+        response.write_nullable_string(None).unwrap();
+        response.write_i32(1);
+        response.write_i32(1);
+        response.write_i16(0);
+        response.write_string("orders").unwrap();
+        response.write_i8(0);
+        response.write_i32(1);
+        response.write_i16(0);
+        response.write_i32(0);
+        response.write_i32(1);
+        response.write_i32(1);
+        response.write_i32(1);
+        response.write_i32(1);
+        response.write_i32(1);
+        response.into_bytes()
+    }
+
+    fn metadata_v12_response_frame(
+        correlation_id: i32,
+        addr: &std::net::SocketAddr,
+        leader_epoch: i32,
+    ) -> Vec<u8> {
+        let mut response = Encoder::new();
+        response.write_i32(correlation_id);
+        response.write_unsigned_varint(0); // response header tags
+        response.write_i32(0); // throttle time
+        response.write_unsigned_varint(2); // one compact broker
+        response.write_i32(1);
+        response
+            .write_compact_string(&addr.ip().to_string())
+            .unwrap();
+        response.write_i32(i32::from(addr.port()));
+        response.write_compact_nullable_string(None).unwrap();
+        response.write_unsigned_varint(0); // broker tags
+        response.write_compact_nullable_string(None).unwrap(); // cluster id
+        response.write_i32(1); // controller id
+        response.write_unsigned_varint(2); // one compact topic
+        response.write_i16(0);
+        response
+            .write_compact_nullable_string(Some("orders"))
+            .unwrap();
+        response.write_uuid(&[0; 16]);
+        response.write_i8(0); // internal
+        response.write_unsigned_varint(2); // one compact partition
+        response.write_i16(0);
+        response.write_i32(0);
+        response.write_i32(1);
+        response.write_i32(leader_epoch);
+        response.write_unsigned_varint(2); // one replica
+        response.write_i32(1);
+        response.write_unsigned_varint(2); // one ISR
+        response.write_i32(1);
+        response.write_unsigned_varint(1); // no offline replicas
+        response.write_unsigned_varint(0); // partition tags
+        response.write_i32(-2_147_483_648); // authorized operations unknown
+        response.write_unsigned_varint(0); // topic tags
+        response.write_unsigned_varint(0); // response tags
         response.into_bytes()
     }
 }
