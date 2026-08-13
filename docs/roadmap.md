@@ -1840,3 +1840,8 @@ Implemented evidence:
   methods on `ClientConfig`, `ProducerConfig`, `ConsumerConfig`, and
   `ConsumerGroupConfig`, so applications can fail startup configuration before
   beginning their broker connection lifecycle.
+- Release `v0.2.10` published `kafrust-protocol` before `kafrust` after package
+  dry-runs, staged all-feature docs builds, and an external published-crate
+  smoke project passed. crates.io resolves both packages at `0.2.10`, both
+  docs.rs pages return HTTP 200, and the release is ready for its Git tag and
+  GitHub release once remote authentication is available.
