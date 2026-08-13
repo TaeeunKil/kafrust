@@ -1902,3 +1902,9 @@ Implemented evidence:
   injected-broker coverage. It is an explicit recovery primitive; automatic
   fetch truncation correction, group rebalance integration, and live
   failure-injection qualification remain future work.
+- Release `v0.2.16` published the OffsetForLeaderEpoch recovery primitive after
+  protocol-first package verification, staged all-feature documentation builds,
+  a fresh external project compile with `tls` and all features, crates.io
+  resolution, and HTTP 200 responses from both docs.rs pages. The complete
+  17-job live matrix passed on the release preparation commit in
+  [`31658987651`](https://github.com/TaeeunKil/kafrust/actions/runs/31658987651).
