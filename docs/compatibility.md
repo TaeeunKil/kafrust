@@ -239,8 +239,15 @@ The follow-up matrix in
 [`31597505667`](https://github.com/TaeeunKil/kafrust/actions/runs/31597505667)
 also passed the same operation on the Kafka 3.7.2 three-broker profile, TLS,
 SASL_PLAINTEXT, and SASL_SSL/SCRAM profiles. These checks cover coordinator
-routing through the configured security transports; they do not yet inject a
-coordinator stop during the admin request itself.
+routing through the configured security transports. The secured three-broker
+SASL_SSL/SCRAM profile now also holds an exact-offset Admin OffsetCommit before
+transmission, stops its group coordinator, and completes the commit with
+`retries=1` after rediscovery in
+[`31696797715`](https://github.com/TaeeunKil/kafrust/actions/runs/31696797715)
+([job](https://github.com/TaeeunKil/kafrust/actions/runs/31696797715/job/94436319841)).
+This qualifies the state-idempotent OffsetCommit failure-injection path for
+that secured three-broker profile; other coordinator-routed mutations remain
+separate workload-specific gates.
 
 Admin coordinator discovery now retries transient `CoordinatorLoadInProgress`,
 `CoordinatorNotAvailable`, and `NotCoordinator` responses, as well as discovery

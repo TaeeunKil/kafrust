@@ -952,7 +952,15 @@ Implemented evidence:
   reconnect path, with focused coverage for a dropped request and successful
   rediscovery. The default five-attempt budget is configurable through
   `AdminClient::max_retries`, including disabling retries with zero. The
-  read-only `DescribeProducers v0` path now retries transient leader movement,
+  secured Kafka 3.7.2 three-broker SASL_SSL/SCRAM profile also holds the
+  exact-offset OffsetCommit request before transmission, stops its active
+  group coordinator, and completes the state-idempotent commit with
+  `retries=1` after rediscovery in
+  [`31696797715`](https://github.com/TaeeunKil/kafrust/actions/runs/31696797715)
+  ([job](https://github.com/TaeeunKil/kafrust/actions/runs/31696797715/job/94436319841)).
+  Other coordinator-routed mutations remain separate workload-specific gates
+  because their post-transmission outcomes are not generally safe to replay.
+  The read-only `DescribeProducers v0` path now retries transient leader movement,
   metadata convergence, transport, and timeout failures through fresh Metadata
   v1 routing; transient per-partition leader responses are also retried. The
   `DescribeTransactions v0` path retries coordinator rediscovery, transport,
