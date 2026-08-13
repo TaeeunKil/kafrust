@@ -477,6 +477,20 @@ with `recovered=true` plus zero final in-flight or buffered records. Together
 the Kafka 3.7.2 and 4.3.1 runs qualify the tested plaintext simultaneous-loss
 behavior, not secured simultaneous loss or production SLOs.
 
+The secured simultaneous broker-loss workflow
+[`31750274774`](https://github.com/TaeeunKil/kafrust/actions/runs/31750274774)
+then passed a fresh external `kafrust 0.2.28` project with the `tls` feature
+against Kafka 4.3.1 SASL_SSL/SCRAM-SHA-256. The three-broker,
+three-replicated-partition workload used `Acks::All` with
+`min.insync.replicas=2`, stopped brokers 1 and 2 simultaneously for ten
+seconds, and reconciled 2,704,200 successfully acknowledged records after
+recovery. Kafka rejected 282 produce operations while two brokers were down;
+the client recorded two failed requests and three retries, then reported
+`recovered=true` with zero final in-flight or buffered records. This closes the
+tested secured simultaneous-loss durability/availability profile; unclean
+election data loss, production SLOs, and service canary readiness remain
+separate claims.
+
 The following current-main live run
 [`31719615947`](https://github.com/TaeeunKil/kafrust/actions/runs/31719615947)
 also passed the controlled classic consumer-group combined-fault gate in the

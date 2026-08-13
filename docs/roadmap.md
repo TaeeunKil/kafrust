@@ -1583,6 +1583,15 @@ completed and both final resource gauges were zero.
   3.7.2 and 4.3.1 runs qualify the tested plaintext simultaneous-loss behavior;
   secured simultaneous loss, direct rust-rdkafka comparison, production SLO,
   and canary evidence remain open.
+- The published secured simultaneous-loss gate then passed in
+  [`31750274774`](https://github.com/TaeeunKil/kafrust/actions/runs/31750274774).
+  A fresh external `0.2.28` project with `tls` survived simultaneous
+  ten-second outages of brokers 1 and 2 in Kafka 4.3.1 SASL_SSL/SCRAM, using
+  `Acks::All` and `min.insync.replicas=2`. It reconciled 2,704,200 successfully
+  acknowledged records, recorded the expected write rejections while the
+  cluster had only one in-sync broker, then recovered with zero in-flight and
+  buffered records. Unclean-election data loss, production SLOs, and canary
+  evidence remain separate gates.
 - Shared metrics count non-zero Kafka error codes handled by authentication,
   producer, transaction, consumer, and consumer-group operations, including
   retry attempts and partial batch failures. This separates protocol-level
@@ -2373,6 +2382,15 @@ Implemented evidence:
   in-flight and buffered records. Secured simultaneous loss, direct
   rust-rdkafka comparison, production SLOs, and service canary readiness remain
   open.
+- The published secured simultaneous-loss gate then passed in
+  [`31750274774`](https://github.com/TaeeunKil/kafrust/actions/runs/31750274774).
+  A fresh external `0.2.28` project with `tls` survived simultaneous
+  ten-second outages of brokers 1 and 2 in Kafka 4.3.1 SASL_SSL/SCRAM, using
+  `Acks::All` and `min.insync.replicas=2`. It reconciled 2,704,200 successfully
+  acknowledged records, recorded the expected write rejections while the
+  cluster had only one in-sync broker, then recovered with zero in-flight and
+  buffered records. Unclean-election data loss, production SLOs, and service
+  canary readiness remain separate gates.
 - The published multi-broker soak gate then passed in
   [`31746182158`](https://github.com/TaeeunKil/kafrust/actions/runs/31746182158).
   A fresh external `0.2.28` project survived a ten-second broker outage in a
