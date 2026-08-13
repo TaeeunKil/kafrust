@@ -2721,6 +2721,7 @@ jobs:
               -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=3 \
               -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=2 \
               -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 \
+              -e KAFKA_LOG_DIRS=/tmp/kafka-logs,/tmp/kafka-logs-2 \
               -e KAFKA_SASL_ENABLED_MECHANISMS=SCRAM-SHA-256,SCRAM-SHA-512 \
               -e KAFKA_SSL_KEYSTORE_FILENAME=kafka.server.keystore.p12 \
               -e KAFKA_SSL_KEYSTORE_CREDENTIALS=keystore-password \
@@ -2789,6 +2790,45 @@ jobs:
               -verify_return_error \
               </dev/null >/tmp/kafrust-scram-ssl-listener-${port}.log 2>&1
           done
+
+      - name: Run secured leader election through the controller
+        run: |
+          KAFRUST_ELECTION_PARTITION="$KAFRUST_FAILOVER_PARTITION" \
+          KAFRUST_ELECTION_TYPE=preferred \
+          cargo run -p kafrust --features tls --example admin_elect_leaders
+
+      - name: Inspect secured broker log directories
+        env:
+          KAFRUST_LOG_DIR_BROKERS: "1,2,3"
+          KAFRUST_LOG_DIR_TOPIC: ${{ env.KAFRUST_TOPIC }}
+          KAFRUST_LOG_DIR_PARTITION: "0"
+        run: cargo run -p kafrust --features tls --example admin_describe_log_dirs
+
+      - name: Move a secured disposable replica to a second log directory
+        run: |
+          KAFRUST_REPLICA_LOG_DIR_BROKER=1 \
+          KAFRUST_REPLICA_LOG_DIR_TOPIC="$KAFRUST_TOPIC" \
+          KAFRUST_REPLICA_LOG_DIR_PARTITION="$KAFRUST_FAILOVER_PARTITION" \
+          KAFRUST_REPLICA_LOG_DIR_DESTINATION=/tmp/kafka-logs-2 \
+          cargo run -p kafrust --features tls --example admin_alter_replica_log_dirs
+
+      - name: Verify secured replica directory movement completed
+        run: |
+          for attempt in {1..60}; do
+            output="$(
+              KAFRUST_LOG_DIR_BROKERS=1 \
+              KAFRUST_LOG_DIR_TOPIC="$KAFRUST_TOPIC" \
+              KAFRUST_LOG_DIR_PARTITION="$KAFRUST_FAILOVER_PARTITION" \
+              cargo run -p kafrust --features tls --example admin_describe_log_dirs 2>&1
+            )"
+            printf '%s\n' "$output"
+            if printf '%s\n' "$output" | grep -q 'future=false path=/tmp/kafka-logs-2'; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "secured replica directory movement did not complete"
+          exit 1
 
       - name: Build secured failover examples
         run: >-
