@@ -1920,3 +1920,17 @@ Implemented evidence:
   pages. The complete 17-job live matrix passed on the release preparation
   commit in
   [`31660184647`](https://github.com/TaeeunKil/kafrust/actions/runs/31660184647).
+- Assigned direct consumers can opt into bounded `OffsetResetPolicy::Earliest`
+  or `Latest` recovery when Kafka returns `OFFSET_OUT_OF_RANGE`. The client
+  resolves the retained low watermark or current log end through the partition
+  leader and retries the assigned poll once; explicit `Consumer::fetch` offsets
+  remain unchanged. `OffsetResetPolicy` is now shared by direct and group
+  consumer configuration, and the typed `BrokerErrorKind::OffsetOutOfRange`
+  classification is covered by injected-broker regression tests.
+- Release `v0.2.18` published the bounded out-of-range consumer recovery slice
+  after protocol-first package verification, staged all-feature documentation
+  builds, a fresh external project compile with `tls`, crates.io resolution,
+  and HTTP 200 responses from both docs.rs pages. Main CI passed in
+  [`31661719918`](https://github.com/TaeeunKil/kafrust/actions/runs/31661719918)
+  and the complete 17-job live matrix passed in
+  [`31661883116`](https://github.com/TaeeunKil/kafrust/actions/runs/31661883116).
