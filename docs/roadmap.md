@@ -1962,6 +1962,9 @@ Implemented evidence:
   ownership, and applies transfers eagerly in the current SyncGroup result.
   Leader-side parsing also accepts the append-only classic subscription
   envelope through v3. Focused tests cover wire bytes, generation metadata,
-  versioned envelopes, balancing, and member transfer. A live multi-member
-  sticky matrix remains a release gate and is intentionally not claimed by
-  this local implementation milestone.
+  versioned envelopes, balancing, and member transfer. The Kafka 3.7.2
+  three-broker multi-member sticky matrix passed transfer, transient-member
+  rollback, and member-loss recovery in
+  [`31666975512`](https://github.com/TaeeunKil/kafrust/actions/runs/31666975512),
+  completing this release gate. Exact parity for every Kafka assignor edge
+  case and arbitrary mixed-subscription workload remains future work.

@@ -246,6 +246,7 @@ other coordinator-routed writes remain separate qualification items.
 | Apache Kafka 3.7.2 | single-node KRaft | SASL_SSL SCRAM credential administration | `Live Kafka Smoke` SASL_SSL SCRAM job, manual run `31461980967` on 2026-08-11 | Passing |
 | Apache Kafka 3.7.2 | three-broker KRaft | controller-routed partition reassignment | `Live Kafka Smoke` multi-broker job, manual run `31462962605` on 2026-08-11 | Passing |
 | Apache Kafka 3.7.2 | three-broker KRaft | cooperative-sticky consumer protocol, multi-member transfer, transient-member rollback, member-loss recovery, and rebalance listener lifecycle | [`Live Kafka Smoke`, run `31557534371`](https://github.com/TaeeunKil/kafrust/actions/runs/31557534371) on 2026-08-12 | Passing |
+| Apache Kafka 3.7.2 | three-broker KRaft | classic eager sticky consumer assignor; multi-member transfer, transient-member rollback, and member-loss recovery | [`Live Kafka Smoke`, run `31666975512`](https://github.com/TaeeunKil/kafrust/actions/runs/31666975512) on 2026-08-13 | Passing |
 | Apache Kafka 3.7.2 | three-broker KRaft | SASL_PLAINTEXT with SASL/PLAIN; transaction/group coordinator, producer, and direct-consumer broker-stop recovery | [`Live Kafka Smoke`, run `31554396594`](https://github.com/TaeeunKil/kafrust/actions/runs/31554396594) on 2026-08-12 | Passing |
 | Apache Kafka 3.7.2 | three-broker KRaft | SASL_SSL with SCRAM-SHA-256; group-coordinator and partition-leader broker-stop recovery | [`Live Kafka Smoke`, run `31568412595`](https://github.com/TaeeunKil/kafrust/actions/runs/31568412595) on 2026-08-12 | Passing |
 | Apache Kafka 3.7.2 | three-broker KRaft | SASL_SSL with SCRAM-SHA-256; safe transactional producer reinitialization after transaction-coordinator broker stop | [`Live Kafka Smoke`, run `31572745537`](https://github.com/TaeeunKil/kafrust/actions/runs/31572745537) on 2026-08-12 | Passing; old producer outcome remains explicitly unknown |
@@ -327,8 +328,11 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
   in the current SyncGroup assignment. Leader-side classic subscription parsing
   accepts the append-only v0-v3 envelope used by Kafka 3.7 through current
   clients. Focused tests cover wire bytes, generation metadata, balancing, and
-  immediate transfer; a live broker matrix for this new strategy remains
-  pending and is not claimed here.
+  immediate transfer. The Kafka 3.7.2 three-broker live matrix also passed
+  multi-member transfer, transient-member rollback, and member-loss recovery in
+  [`31666975512`](https://github.com/TaeeunKil/kafrust/actions/runs/31666975512).
+  This verifies the documented eager sticky workflow, not exact parity with
+  every Kafka assignor edge case or arbitrary mixed-subscription workload.
 - Produce `acks=0` encodes the requested Produce API version, writes and flushes
   the request, and returns unknown-offset metadata without attempting to read a
   response. Immediate and batch examples passed against Kafka 3.7.2, 3.8.1,
