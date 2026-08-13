@@ -2130,6 +2130,13 @@ Implemented evidence:
   with an epoch transition from 3 to 4. The Kafka 4.3.1 three-broker KIP-848
   job also passed the corresponding gate in
   [`94453938633`](https://github.com/TaeeunKil/kafrust/actions/runs/31702236760/job/94453938633)
-  with an epoch transition from 0 to 1. Secured KIP-848 partition-leader
-  recovery, broader fault combinations, and data-loss/log-retention scenarios
-  remain separate 1.0 gates.
+  with an epoch transition from 0 to 1. The same gate also passed over Kafka
+  4.3.1 `SASL_PLAINTEXT` in job
+  [`94459402338`](https://github.com/TaeeunKil/kafrust/actions/runs/31703868759/job/94459402338)
+  with epoch 2 to 3 and over `SASL_SSL` with SCRAM-SHA-256 in job
+  [`94459402266`](https://github.com/TaeeunKil/kafrust/actions/runs/31703868759/job/94459402266)
+  with epoch 1 to 2. The follow-up complete 17-job matrix passed at commit
+  `9e53941` in
+  [`31703868759`](https://github.com/TaeeunKil/kafrust/actions/runs/31703868759).
+  Broader fault combinations and data-loss/log-retention scenarios remain
+  separate 1.0 gates.

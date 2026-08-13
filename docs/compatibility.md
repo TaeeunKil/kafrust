@@ -138,9 +138,21 @@ three-broker KIP-848 profile passed the corresponding consumer-protocol gate
 in job
 [`94453938633`](https://github.com/TaeeunKil/kafrust/actions/runs/31702236760/job/94453938633),
 including a live partition epoch transition from 0 to 1. This closes the
-tested classic and plaintext KIP-848 group leader-epoch recovery claims;
-secured KIP-848 partition-leader recovery and data-loss/log-retention
-scenarios remain separate claims.
+tested classic and plaintext KIP-848 group leader-epoch recovery claims. The
+same consumer-protocol leader-stop gate also passed over Kafka 4.3.1
+`SASL_PLAINTEXT` in job
+[`94459402338`](https://github.com/TaeeunKil/kafrust/actions/runs/31703868759/job/94459402338)
+and over Kafka 4.3.1 `SASL_SSL` with SCRAM-SHA-256 in job
+[`94459402266`](https://github.com/TaeeunKil/kafrust/actions/runs/31703868759/job/94459402266).
+These secured KIP-848 runs observed live epoch transitions from 2 to 3 and
+from 1 to 2 respectively. Data-loss/log-retention scenarios remain separate
+claims.
+
+The follow-up complete 17-job matrix in
+[`31703868759`](https://github.com/TaeeunKil/kafrust/actions/runs/31703868759)
+passed at commit `9e53941` after adding the secured KIP-848 leader-epoch gates
+and a bounded retry around the existing secured group bootstrap step. The
+retry is limited to five attempts and does not change client retry semantics.
 
 The current development line also implements controller-routed ElectLeaders
 v0-v2 negotiation and typed preferred/unclean election results. Focused wire
