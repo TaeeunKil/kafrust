@@ -19,6 +19,11 @@ on:
         description: "Payload bytes per record"
         required: true
         default: "1024"
+      kafrust_source:
+        description: "Compare the checked-out kafrust source instead of crates.io"
+        required: true
+        type: boolean
+        default: false
 
 env:
   CARGO_TERM_COLOR: always
@@ -88,12 +93,18 @@ jobs:
       - name: Create fresh external comparison project
         env:
           KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version }}
+          KAFRUST_SOURCE: ${{ inputs.kafrust_source }}
         run: |
           project_dir="$RUNNER_TEMP/kafrust-published-rust-rdkafka-comparison"
           cargo new --bin "$project_dir"
           cp .github/published-rust-rdkafka-comparison/src/main.rs "$project_dir/src/main.rs"
-          sed "s/__KAFRUST_VERSION__/$KAFRUST_PUBLISHED_VERSION/" \
-            .github/published-rust-rdkafka-comparison/Cargo.toml > "$project_dir/Cargo.toml"
+          if [ "$KAFRUST_SOURCE" = "true" ]; then
+            sed "s|kafrust = \"__KAFRUST_VERSION__\"|kafrust = { path = \"$GITHUB_WORKSPACE/crates/kafrust\" }|" \
+              .github/published-rust-rdkafka-comparison/Cargo.toml > "$project_dir/Cargo.toml"
+          else
+            sed "s/__KAFRUST_VERSION__/$KAFRUST_PUBLISHED_VERSION/" \
+              .github/published-rust-rdkafka-comparison/Cargo.toml > "$project_dir/Cargo.toml"
+          fi
 
       - name: Build external comparison project
         run: cargo build --release --manifest-path "$RUNNER_TEMP/kafrust-published-rust-rdkafka-comparison/Cargo.toml"
@@ -116,7 +127,11 @@ jobs:
       - name: Verify published and comparison dependency versions
         run: |
           grep -A1 -q 'name = "kafrust"' "$RUNNER_TEMP/kafrust-published-rust-rdkafka-comparison/Cargo.lock"
-          grep -A1 -q 'version = "${{ inputs.kafrust_version }}"' "$RUNNER_TEMP/kafrust-published-rust-rdkafka-comparison/Cargo.lock"
+          if [ "${{ inputs.kafrust_source }}" = "true" ]; then
+            grep -A1 -q 'version = "0.2.28"' "$RUNNER_TEMP/kafrust-published-rust-rdkafka-comparison/Cargo.lock"
+          else
+            grep -A1 -q 'version = "${{ inputs.kafrust_version }}"' "$RUNNER_TEMP/kafrust-published-rust-rdkafka-comparison/Cargo.lock"
+          fi
           grep -A1 -q 'name = "rdkafka"' "$RUNNER_TEMP/kafrust-published-rust-rdkafka-comparison/Cargo.lock"
           grep -A1 -q 'version = "0.39.0"' "$RUNNER_TEMP/kafrust-published-rust-rdkafka-comparison/Cargo.lock"
 
