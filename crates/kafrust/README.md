@@ -68,6 +68,10 @@ per-entity results; both paths are live-verified in the documented Kafka
 3.7.2 StandardAuthorizer profile. Consumer-group offset listing and
 administrative alteration use typed classic OffsetFetch v2 and OffsetCommit v2
 results. See the repository's `docs/admin-api.md` for details.
+Delegation-token lifecycle APIs cover create, describe, renew, and expire with
+negotiated Kafka versions. They require an authenticated SASL or mutual-TLS
+channel and a broker-side delegation-token secret; use the
+`admin_delegation_tokens` example for the complete opt-in lifecycle.
 
 ## Install
 

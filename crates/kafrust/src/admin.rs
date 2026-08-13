@@ -25,6 +25,11 @@ use kafrust_protocol::api::create_partitions::{
 use kafrust_protocol::api::create_topics::{
     CreateTopicsAssignmentV2, CreateTopicsConfigV2, CreateTopicsTopicResultV2, CreateTopicsTopicV2,
 };
+use kafrust_protocol::api::delegation_token::{
+    CreateDelegationTokenRequest, CreateDelegationTokenResponse,
+    DelegationTokenPrincipal as ProtocolDelegationTokenPrincipal, DescribeDelegationTokenResponse,
+    DescribedDelegationToken, RenewDelegationTokenResponse,
+};
 use kafrust_protocol::api::delete_acls::{
     DeleteAclsFilterResultV1, DeleteAclsFilterV1, DeleteAclsMatchingAclV1,
 };
@@ -541,6 +546,214 @@ impl AdminClient {
             }
         }
         Ok(AlterUserScramCredentialsResult::from_protocol(response))
+    }
+
+    /// Creates a delegation token through the active controller.
+    ///
+    /// Connection, controller, and ApiVersions discovery may be retried before
+    /// transmission. The token mutation itself is single-attempt because a
+    /// transport failure after transmission leaves the broker outcome
+    /// ambiguous. The returned HMAC is required for renewal or expiry and is
+    /// never included in tracing fields or `Debug` output.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.create_delegation_token",
+        skip_all,
+        fields(renewer_count = options.renewers.len()),
+        err
+    )]
+    pub async fn create_delegation_token(
+        &self,
+        options: CreateDelegationTokenOptions,
+    ) -> Result<CreatedDelegationToken> {
+        let (mut client, version) = self
+            .controller_client_with_api_version(
+                kafrust_protocol::api::delegation_token::CREATE_API_KEY,
+                3,
+                "broker does not advertise CreateDelegationToken v1 or newer",
+            )
+            .await?;
+        if options.owner.is_some() && version < 3 {
+            return Err(Error::Unsupported(
+                "delegation token owner selection requires CreateDelegationToken v3",
+            ));
+        }
+        let request = CreateDelegationTokenRequest {
+            correlation_id: 0,
+            client_id: None,
+            owner: options
+                .owner
+                .as_ref()
+                .map(DelegationTokenPrincipal::as_protocol),
+            renewers: options
+                .renewers
+                .iter()
+                .map(DelegationTokenPrincipal::as_protocol)
+                .collect(),
+            max_lifetime_ms: options.max_lifetime_ms,
+        };
+        let response = match version {
+            1 => client.create_delegation_token_v1(request).await?,
+            2 | 3 => client.create_delegation_token_v2(request, version).await?,
+            _ => {
+                return Err(Error::Unsupported(
+                    "unsupported CreateDelegationToken version",
+                ))
+            }
+        };
+        if response.error_code != 0 {
+            self.config.record_broker_error();
+        }
+        Ok(CreatedDelegationToken::from_protocol(response))
+    }
+
+    /// Describes delegation tokens visible to the authenticated principal.
+    ///
+    /// `None` asks Kafka for every token permitted by the broker. This is a
+    /// read operation and preserves the HMAC values needed by administrative
+    /// renewal or expiry; callers must protect those bytes like credentials.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.describe_delegation_tokens",
+        skip_all,
+        fields(owner_count = owners.map_or(0, <[DelegationTokenPrincipal]>::len)),
+        err
+    )]
+    pub async fn describe_delegation_tokens(
+        &self,
+        owners: Option<&[DelegationTokenPrincipal]>,
+    ) -> Result<DescribeDelegationTokensResult> {
+        let owners = owners.map(|owners| {
+            owners
+                .iter()
+                .map(DelegationTokenPrincipal::as_protocol)
+                .collect::<Vec<_>>()
+        });
+        let mut retry = 0;
+        let response = loop {
+            let (mut client, version) = self
+                .controller_client_with_api_version(
+                    kafrust_protocol::api::delegation_token::DESCRIBE_API_KEY,
+                    3,
+                    "broker does not advertise DescribeDelegationToken v1 or newer",
+                )
+                .await?;
+            let response = match version {
+                1 => client.describe_delegation_token_v1(owners.clone()).await,
+                _ => {
+                    client
+                        .describe_delegation_token_v2(owners.clone(), version)
+                        .await
+                }
+            };
+            match response {
+                Ok(response)
+                    if retry < self.max_retries
+                        && is_retryable_admin_read_code(response.error_code) =>
+                {
+                    self.config.record_broker_error();
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                }
+                Ok(response) => break response,
+                Err(error) if retry < self.max_retries && is_retryable_admin_read_error(&error) => {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                }
+                Err(error) => return Err(error),
+            }
+        };
+        if response.error_code != 0 {
+            self.config.record_broker_error();
+        }
+        Ok(DescribeDelegationTokensResult::from_protocol(response))
+    }
+
+    /// Renews one delegation token through the active controller.
+    ///
+    /// The HMAC is treated as credential material and is not logged. A
+    /// transport failure after transmission is returned without replaying the
+    /// mutation.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.renew_delegation_token",
+        skip_all,
+        fields(renew_period = ?renew_period),
+        err
+    )]
+    pub async fn renew_delegation_token(
+        &self,
+        hmac: &[u8],
+        renew_period: Duration,
+    ) -> Result<DelegationTokenOperationResult> {
+        let (mut client, version) = self
+            .controller_client_with_api_version(
+                kafrust_protocol::api::delegation_token::RENEW_API_KEY,
+                2,
+                "broker does not advertise RenewDelegationToken v1 or newer",
+            )
+            .await?;
+        let renew_period_ms = duration_millis_i64(renew_period);
+        let response = match version {
+            1 => {
+                client
+                    .renew_delegation_token_v1(hmac.to_vec(), renew_period_ms)
+                    .await?
+            }
+            _ => {
+                client
+                    .renew_delegation_token_v2(hmac.to_vec(), renew_period_ms)
+                    .await?
+            }
+        };
+        if response.error_code != 0 {
+            self.config.record_broker_error();
+        }
+        Ok(DelegationTokenOperationResult::from_protocol(response))
+    }
+
+    /// Expires one delegation token through the active controller.
+    ///
+    /// A zero period requests immediate expiry according to Kafka's protocol.
+    /// The HMAC is treated as credential material and is never logged.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.expire_delegation_token",
+        skip_all,
+        fields(expiry_time_period = ?expiry_time_period),
+        err
+    )]
+    pub async fn expire_delegation_token(
+        &self,
+        hmac: &[u8],
+        expiry_time_period: Duration,
+    ) -> Result<DelegationTokenOperationResult> {
+        let (mut client, version) = self
+            .controller_client_with_api_version(
+                kafrust_protocol::api::delegation_token::EXPIRE_API_KEY,
+                2,
+                "broker does not advertise ExpireDelegationToken v1 or newer",
+            )
+            .await?;
+        let expiry_time_period_ms = duration_millis_i64(expiry_time_period);
+        let response = match version {
+            1 => {
+                client
+                    .expire_delegation_token_v1(hmac.to_vec(), expiry_time_period_ms)
+                    .await?
+            }
+            _ => {
+                client
+                    .expire_delegation_token_v2(hmac.to_vec(), expiry_time_period_ms)
+                    .await?
+            }
+        };
+        if response.error_code != 0 {
+            self.config.record_broker_error();
+        }
+        Ok(DelegationTokenOperationResult::from_protocol(response))
     }
 
     /// Triggers a preferred or unclean leader election through the active
@@ -1765,6 +1978,56 @@ impl AdminClient {
         }
     }
 
+    // ApiVersions discovery is safe to retry because the controller-scoped
+    // operation has not been transmitted yet. The returned client is used for
+    // exactly one subsequent token request.
+    async fn controller_client_with_api_version(
+        &self,
+        api_key: i16,
+        max_version: i16,
+        operation: &'static str,
+    ) -> Result<(Client, i16)> {
+        let mut retry = 0;
+        loop {
+            let mut client = match self.controller_client().await {
+                Ok(client) => client,
+                Err(error)
+                    if retry < self.max_retries
+                        && is_retryable_admin_controller_read_error(&error) =>
+                {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
+            let api_versions = match client
+                .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
+                .await
+            {
+                Ok(api_versions) => api_versions,
+                Err(error)
+                    if retry < self.max_retries
+                        && is_retryable_admin_controller_read_error(&error) =>
+                {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
+            let Some(version) = api_versions
+                .highest_supported_version(api_key, max_version)
+                .filter(|version| *version >= 1)
+            else {
+                return Err(Error::Unsupported(operation));
+            };
+            return Ok((client, version));
+        }
+    }
+
     // Bootstrap connection retries are safe because no admin request has been
     // transmitted yet. Mutation requests remain single-attempt below so an
     // ambiguous transport failure cannot duplicate a broker-side change.
@@ -2398,6 +2661,376 @@ impl AdminClient {
             }
         }
         Ok(ListTransactionsResult::from_protocol_responses(responses))
+    }
+}
+
+/// A Kafka principal used as a delegation-token owner or renewer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DelegationTokenPrincipal {
+    principal_type: String,
+    principal_name: String,
+}
+
+impl DelegationTokenPrincipal {
+    /// Creates a principal such as `User:alice`.
+    pub fn new(principal_type: impl Into<String>, principal_name: impl Into<String>) -> Self {
+        Self {
+            principal_type: principal_type.into(),
+            principal_name: principal_name.into(),
+        }
+    }
+
+    /// Returns the Kafka principal type.
+    pub fn principal_type(&self) -> &str {
+        &self.principal_type
+    }
+
+    /// Returns the Kafka principal name.
+    pub fn principal_name(&self) -> &str {
+        &self.principal_name
+    }
+
+    fn as_protocol(&self) -> ProtocolDelegationTokenPrincipal {
+        ProtocolDelegationTokenPrincipal {
+            principal_type: self.principal_type.clone(),
+            principal_name: self.principal_name.clone(),
+        }
+    }
+
+    fn from_protocol(principal: ProtocolDelegationTokenPrincipal) -> Self {
+        Self {
+            principal_type: principal.principal_type,
+            principal_name: principal.principal_name,
+        }
+    }
+}
+
+/// Options for creating one Kafka delegation token.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CreateDelegationTokenOptions {
+    owner: Option<DelegationTokenPrincipal>,
+    renewers: Vec<DelegationTokenPrincipal>,
+    max_lifetime_ms: i64,
+}
+
+impl CreateDelegationTokenOptions {
+    /// Creates options using the broker's configured maximum lifetime.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Selects an explicit owner. Kafka uses the authenticated principal when
+    /// no owner is provided.
+    pub fn owner(mut self, owner: DelegationTokenPrincipal) -> Self {
+        self.owner = Some(owner);
+        self
+    }
+
+    /// Adds a principal that may renew the created token.
+    pub fn renewer(mut self, renewer: DelegationTokenPrincipal) -> Self {
+        self.renewers.push(renewer);
+        self
+    }
+
+    /// Sets the maximum token lifetime. The default `-1` delegates the value
+    /// to Kafka's server-side configuration.
+    pub fn max_lifetime(mut self, lifetime: Duration) -> Self {
+        self.max_lifetime_ms = duration_millis_i64(lifetime);
+        self
+    }
+}
+
+impl Default for CreateDelegationTokenOptions {
+    fn default() -> Self {
+        Self {
+            owner: None,
+            renewers: Vec::new(),
+            max_lifetime_ms: -1,
+        }
+    }
+}
+
+/// A created delegation token and its credential HMAC.
+#[derive(Clone, PartialEq, Eq)]
+pub struct CreatedDelegationToken {
+    owner: DelegationTokenPrincipal,
+    requester: Option<DelegationTokenPrincipal>,
+    issue_timestamp_ms: i64,
+    expiry_timestamp_ms: i64,
+    max_timestamp_ms: i64,
+    token_id: String,
+    hmac: Vec<u8>,
+    error_code: i16,
+    throttle_time: Duration,
+}
+
+impl fmt::Debug for CreatedDelegationToken {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("CreatedDelegationToken")
+            .field("owner", &self.owner)
+            .field("requester", &self.requester)
+            .field("issue_timestamp_ms", &self.issue_timestamp_ms)
+            .field("expiry_timestamp_ms", &self.expiry_timestamp_ms)
+            .field("max_timestamp_ms", &self.max_timestamp_ms)
+            .field("token_id", &self.token_id)
+            .field("hmac_len", &self.hmac.len())
+            .field("error_code", &self.error_code)
+            .field("throttle_time", &self.throttle_time)
+            .finish()
+    }
+}
+
+impl CreatedDelegationToken {
+    /// Returns the token owner.
+    pub fn owner(&self) -> &DelegationTokenPrincipal {
+        &self.owner
+    }
+
+    /// Returns the requester when the broker negotiated CreateDelegationToken
+    /// v3 or newer.
+    pub fn requester(&self) -> Option<&DelegationTokenPrincipal> {
+        self.requester.as_ref()
+    }
+
+    /// Returns the issue timestamp in Unix milliseconds.
+    pub fn issue_timestamp_ms(&self) -> i64 {
+        self.issue_timestamp_ms
+    }
+
+    /// Returns the expiry timestamp in Unix milliseconds.
+    pub fn expiry_timestamp_ms(&self) -> i64 {
+        self.expiry_timestamp_ms
+    }
+
+    /// Returns the maximum token timestamp in Unix milliseconds.
+    pub fn max_timestamp_ms(&self) -> i64 {
+        self.max_timestamp_ms
+    }
+
+    /// Returns Kafka's token identifier.
+    pub fn token_id(&self) -> &str {
+        &self.token_id
+    }
+
+    /// Returns the HMAC required by renew and expire operations.
+    pub fn hmac(&self) -> &[u8] {
+        &self.hmac
+    }
+
+    /// Returns Kafka's raw response error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns the broker throttle duration.
+    pub fn throttle_time(&self) -> Duration {
+        self.throttle_time
+    }
+
+    /// Returns whether Kafka created the token successfully.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+    }
+
+    /// Returns kafrust's broker error classification, when present.
+    pub fn broker_error_kind(&self) -> Option<BrokerErrorKind> {
+        (self.error_code != 0).then(|| BrokerErrorKind::from_code(self.error_code))
+    }
+
+    fn from_protocol(response: CreateDelegationTokenResponse) -> Self {
+        Self {
+            owner: DelegationTokenPrincipal::from_protocol(response.owner),
+            requester: response
+                .requester
+                .map(DelegationTokenPrincipal::from_protocol),
+            issue_timestamp_ms: response.issue_timestamp_ms,
+            expiry_timestamp_ms: response.expiry_timestamp_ms,
+            max_timestamp_ms: response.max_timestamp_ms,
+            token_id: response.token_id,
+            hmac: response.hmac,
+            error_code: response.error_code,
+            throttle_time: Duration::from_millis(nonnegative_i32_to_u64(response.throttle_time_ms)),
+        }
+    }
+}
+
+/// Result returned by delegation-token renew and expire operations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DelegationTokenOperationResult {
+    error_code: i16,
+    expiry_timestamp_ms: i64,
+    throttle_time: Duration,
+}
+
+impl DelegationTokenOperationResult {
+    /// Returns Kafka's raw response error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns the resulting expiry timestamp in Unix milliseconds.
+    pub fn expiry_timestamp_ms(&self) -> i64 {
+        self.expiry_timestamp_ms
+    }
+
+    /// Returns the broker throttle duration.
+    pub fn throttle_time(&self) -> Duration {
+        self.throttle_time
+    }
+
+    /// Returns whether Kafka accepted the operation.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+    }
+
+    /// Returns kafrust's broker error classification, when present.
+    pub fn broker_error_kind(&self) -> Option<BrokerErrorKind> {
+        (self.error_code != 0).then(|| BrokerErrorKind::from_code(self.error_code))
+    }
+
+    fn from_protocol(response: RenewDelegationTokenResponse) -> Self {
+        Self {
+            error_code: response.error_code,
+            expiry_timestamp_ms: response.expiry_timestamp_ms,
+            throttle_time: Duration::from_millis(nonnegative_i32_to_u64(response.throttle_time_ms)),
+        }
+    }
+}
+
+/// Result returned by [`AdminClient::describe_delegation_tokens`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DescribeDelegationTokensResult {
+    error_code: i16,
+    throttle_time: Duration,
+    tokens: Vec<DescribedDelegationTokenResult>,
+}
+
+impl DescribeDelegationTokensResult {
+    /// Returns Kafka's top-level response error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns the broker throttle duration.
+    pub fn throttle_time(&self) -> Duration {
+        self.throttle_time
+    }
+
+    /// Returns the tokens visible to the authenticated principal.
+    pub fn tokens(&self) -> &[DescribedDelegationTokenResult] {
+        &self.tokens
+    }
+
+    /// Returns whether Kafka returned the token listing successfully.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+    }
+
+    /// Returns kafrust's broker error classification, when present.
+    pub fn broker_error_kind(&self) -> Option<BrokerErrorKind> {
+        (self.error_code != 0).then(|| BrokerErrorKind::from_code(self.error_code))
+    }
+
+    fn from_protocol(response: DescribeDelegationTokenResponse) -> Self {
+        Self {
+            error_code: response.error_code,
+            throttle_time: Duration::from_millis(nonnegative_i32_to_u64(response.throttle_time_ms)),
+            tokens: response
+                .tokens
+                .into_iter()
+                .map(DescribedDelegationTokenResult::from_protocol)
+                .collect(),
+        }
+    }
+}
+
+/// One token returned by DescribeDelegationToken.
+#[derive(Clone, PartialEq, Eq)]
+pub struct DescribedDelegationTokenResult {
+    owner: DelegationTokenPrincipal,
+    requester: Option<DelegationTokenPrincipal>,
+    issue_timestamp_ms: i64,
+    expiry_timestamp_ms: i64,
+    max_timestamp_ms: i64,
+    token_id: String,
+    hmac: Vec<u8>,
+    renewers: Vec<DelegationTokenPrincipal>,
+}
+
+impl fmt::Debug for DescribedDelegationTokenResult {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("DescribedDelegationTokenResult")
+            .field("owner", &self.owner)
+            .field("requester", &self.requester)
+            .field("issue_timestamp_ms", &self.issue_timestamp_ms)
+            .field("expiry_timestamp_ms", &self.expiry_timestamp_ms)
+            .field("max_timestamp_ms", &self.max_timestamp_ms)
+            .field("token_id", &self.token_id)
+            .field("hmac_len", &self.hmac.len())
+            .field("renewers", &self.renewers)
+            .finish()
+    }
+}
+
+impl DescribedDelegationTokenResult {
+    /// Returns the token owner.
+    pub fn owner(&self) -> &DelegationTokenPrincipal {
+        &self.owner
+    }
+
+    /// Returns the requester when the broker negotiated DescribeDelegationToken
+    /// v3 or newer.
+    pub fn requester(&self) -> Option<&DelegationTokenPrincipal> {
+        self.requester.as_ref()
+    }
+
+    /// Returns the issue timestamp in Unix milliseconds.
+    pub fn issue_timestamp_ms(&self) -> i64 {
+        self.issue_timestamp_ms
+    }
+
+    /// Returns the expiry timestamp in Unix milliseconds.
+    pub fn expiry_timestamp_ms(&self) -> i64 {
+        self.expiry_timestamp_ms
+    }
+
+    /// Returns the maximum token timestamp in Unix milliseconds.
+    pub fn max_timestamp_ms(&self) -> i64 {
+        self.max_timestamp_ms
+    }
+
+    /// Returns Kafka's token identifier.
+    pub fn token_id(&self) -> &str {
+        &self.token_id
+    }
+
+    /// Returns the HMAC required by renew and expire operations.
+    pub fn hmac(&self) -> &[u8] {
+        &self.hmac
+    }
+
+    /// Returns the principals allowed to renew this token.
+    pub fn renewers(&self) -> &[DelegationTokenPrincipal] {
+        &self.renewers
+    }
+
+    fn from_protocol(token: DescribedDelegationToken) -> Self {
+        Self {
+            owner: DelegationTokenPrincipal::from_protocol(token.owner),
+            requester: token.requester.map(DelegationTokenPrincipal::from_protocol),
+            issue_timestamp_ms: token.issue_timestamp_ms,
+            expiry_timestamp_ms: token.expiry_timestamp_ms,
+            max_timestamp_ms: token.max_timestamp_ms,
+            token_id: token.token_id,
+            hmac: token.hmac,
+            renewers: token
+                .renewers
+                .into_iter()
+                .map(DelegationTokenPrincipal::from_protocol)
+                .collect(),
+        }
     }
 }
 
@@ -8234,10 +8867,11 @@ mod tests {
         AlterConfigsOptions, ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter,
         ClientQuotaFilterComponent, ClientQuotaMatchType, ConfigAlterOperationKind, ConfigSource,
         ConsumerGroupOffset, ConsumerGroupOffsetDelete, ConsumerGroupOffsetQuery,
-        CreatePartitionsOptions, CreateTopicsOptions, DeleteRecordsOptions, DeleteRecordsTopic,
-        DeleteTopicsOptions, DescribeConfigsOptions, DescribeProducersTopic, ElectLeadersOptions,
-        ElectionType, LeaderElection, ListTransactionsOptions, LogDirTopic, NewPartitions,
-        NewTopic, PartitionReassignment, PartitionReassignmentOptions, PartitionReassignmentQuery,
+        CreateDelegationTokenOptions, CreatePartitionsOptions, CreateTopicsOptions,
+        DelegationTokenPrincipal, DeleteRecordsOptions, DeleteRecordsTopic, DeleteTopicsOptions,
+        DescribeConfigsOptions, DescribeProducersTopic, ElectLeadersOptions, ElectionType,
+        LeaderElection, ListTransactionsOptions, LogDirTopic, NewPartitions, NewTopic,
+        PartitionReassignment, PartitionReassignmentOptions, PartitionReassignmentQuery,
         ReplicaLogDirAssignment, ScramCredentialDeletion, ScramCredentialMechanism,
         ScramCredentialUpsertion, TopicConfigAlteration, TopicConfigResource, TopicConfigUpdate,
     };
@@ -10571,6 +11205,83 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn creates_delegation_token_on_controller_with_negotiated_v3() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let metadata_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+            write_frame(&mut bootstrap, &metadata_response(addr.port())).await;
+
+            let (mut controller, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut controller).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut controller, &api_versions_with_delegation_token(38, 3)).await;
+
+            let request = read_frame(&mut controller).await;
+            assert_eq!(&request[0..4], &[0, 38, 0, 3]);
+            assert!(request
+                .windows(6)
+                .any(|bytes| { bytes == [6, b'o', b'w', b'n', b'e', b'r'] }));
+            write_frame(&mut controller, &create_delegation_token_v3_response()).await;
+        });
+        let admin =
+            AdminClient::new(ClientConfig::new([addr.to_string()]).request_timeout_ms(1_000));
+        let result = admin
+            .create_delegation_token(
+                CreateDelegationTokenOptions::new()
+                    .owner(DelegationTokenPrincipal::new("User", "owner"))
+                    .renewer(DelegationTokenPrincipal::new("User", "renew")),
+            )
+            .await
+            .unwrap();
+
+        assert!(result.is_success());
+        assert_eq!(result.owner().principal_name(), "owner");
+        assert_eq!(result.requester().unwrap().principal_name(), "requester");
+        assert_eq!(result.hmac(), b"secret-hmac");
+        assert!(!format!("{result:?}").contains("secret-hmac"));
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn describes_delegation_tokens_on_controller_with_negotiated_v3() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let metadata_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+            write_frame(&mut bootstrap, &metadata_response(addr.port())).await;
+
+            let (mut controller, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut controller).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut controller, &api_versions_with_delegation_token(41, 3)).await;
+
+            let request = read_frame(&mut controller).await;
+            assert_eq!(&request[0..4], &[0, 41, 0, 3]);
+            assert!(request.ends_with(&[0, 0]));
+            write_frame(&mut controller, &describe_delegation_token_v3_response()).await;
+        });
+        let admin =
+            AdminClient::new(ClientConfig::new([addr.to_string()]).request_timeout_ms(1_000));
+
+        let result = admin.describe_delegation_tokens(None).await.unwrap();
+
+        assert!(result.is_success());
+        assert_eq!(result.tokens().len(), 1);
+        let token = &result.tokens()[0];
+        assert_eq!(token.owner().principal_name(), "owner");
+        assert_eq!(token.requester().unwrap().principal_name(), "requester");
+        assert_eq!(token.renewers()[0].principal_name(), "renew");
+        assert_eq!(token.hmac(), b"secret-hmac");
+        assert!(!format!("{result:?}").contains("secret-hmac"));
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn routes_delete_topics_to_controller_and_preserves_partial_result() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -11441,6 +12152,20 @@ mod tests {
         encoder.into_bytes()
     }
 
+    fn api_versions_with_delegation_token(api_key: i16, max_version: i16) -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_i16(0); // success
+        encoder.write_unsigned_varint(2); // one API key
+        encoder.write_i16(api_key);
+        encoder.write_i16(1);
+        encoder.write_i16(max_version);
+        encoder.write_empty_tagged_fields();
+        encoder.write_i32(0); // throttle time
+        encoder.write_empty_tagged_fields();
+        encoder.into_bytes()
+    }
+
     fn api_versions_with_describe_log_dirs(max_version: i16) -> Vec<u8> {
         let mut encoder = Encoder::new();
         encoder.write_i32(1); // correlation ID
@@ -11525,6 +12250,60 @@ mod tests {
         encoder.write_i16(0); // success
         encoder.write_empty_tagged_fields(); // partition tags
         encoder.write_empty_tagged_fields(); // topic tags
+        encoder.write_empty_tagged_fields(); // response tags
+        encoder.into_bytes()
+    }
+
+    fn create_delegation_token_v3_response() -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_empty_tagged_fields(); // response header tags
+        encoder.write_i16(0); // top-level success
+        encoder.write_compact_string("User").unwrap();
+        encoder.write_compact_string("owner").unwrap();
+        encoder.write_empty_tagged_fields(); // owner tags
+        encoder.write_compact_string("User").unwrap();
+        encoder.write_compact_string("requester").unwrap();
+        encoder.write_empty_tagged_fields(); // requester tags
+        encoder.write_i64(10);
+        encoder.write_i64(20);
+        encoder.write_i64(30);
+        encoder.write_compact_string("token-1").unwrap();
+        encoder.write_compact_bytes(b"secret-hmac").unwrap();
+        encoder.write_i32(4); // throttle time
+        encoder.write_empty_tagged_fields(); // response tags
+        encoder.into_bytes()
+    }
+
+    fn describe_delegation_token_v3_response() -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_empty_tagged_fields(); // response header tags
+        encoder.write_i16(0); // top-level success
+        encoder
+            .write_compact_array(Some(&[()]), |encoder, ()| {
+                encoder.write_compact_string("User")?;
+                encoder.write_compact_string("owner")?;
+                encoder.write_empty_tagged_fields(); // owner tags
+                encoder.write_compact_string("User")?;
+                encoder.write_compact_string("requester")?;
+                encoder.write_empty_tagged_fields(); // requester tags
+                encoder.write_i64(10);
+                encoder.write_i64(20);
+                encoder.write_i64(30);
+                encoder.write_compact_string("token-1")?;
+                encoder.write_compact_bytes(b"secret-hmac")?;
+                encoder.write_compact_array(Some(&[()]), |encoder, ()| {
+                    encoder.write_compact_string("User")?;
+                    encoder.write_compact_string("renew")?;
+                    encoder.write_empty_tagged_fields();
+                    Ok(())
+                })?;
+                encoder.write_empty_tagged_fields(); // token tags
+                Ok(())
+            })
+            .unwrap();
+        encoder.write_i32(5); // throttle time
         encoder.write_empty_tagged_fields(); // response tags
         encoder.into_bytes()
     }

@@ -10,6 +10,7 @@ pub mod consumer_group_heartbeat;
 pub mod create_acls;
 pub mod create_partitions;
 pub mod create_topics;
+pub mod delegation_token;
 pub mod delete_acls;
 pub mod delete_groups;
 pub mod delete_records;

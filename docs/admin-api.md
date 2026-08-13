@@ -1019,3 +1019,69 @@ controller. `ScramCredentialUpsertion` derives Kafka's salted password with
 PBKDF2 and retains no plaintext password. Its debug output reports only lengths,
 never salts or derived credential bytes. Kafka authorization still applies, and
 the caller must have the broker permissions required for credential changes.
+
+## Manage Delegation Tokens
+
+Delegation token operations must use an authenticated SASL or mutual-TLS
+channel; Kafka rejects token management over unauthenticated PLAINTEXT,
+one-way TLS, and delegation-token authenticated channels. The broker must also
+be configured with the same
+delegation token secret on every broker and, for KRaft, every controller. See
+Kafka's [broker configuration](https://kafka.apache.org/38/configuration/broker-configs/)
+for the version-specific secret-key name and defaults.
+
+```rust
+use kafrust::{
+    AdminClient, ClientConfig, CreateDelegationTokenOptions, DelegationTokenPrincipal,
+};
+use std::time::Duration;
+
+# async fn example() -> kafrust::Result<()> {
+let admin = AdminClient::new(ClientConfig::new(["localhost:9092"]));
+let renewer = DelegationTokenPrincipal::new("User", "orders-service");
+let created = admin
+    .create_delegation_token(
+        CreateDelegationTokenOptions::new().renewer(renewer),
+    )
+    .await?;
+assert!(created.is_success());
+
+let described = admin.describe_delegation_tokens(None).await?;
+assert!(described.is_success());
+for token in described.tokens() {
+    println!(
+        "{} expires at {} (HMAC length {})",
+        token.token_id(),
+        token.expiry_timestamp_ms(),
+        token.hmac().len(),
+    );
+}
+
+let renewed = admin
+    .renew_delegation_token(created.hmac(), Duration::from_secs(60))
+    .await?;
+assert!(renewed.is_success());
+
+let expired = admin
+    .expire_delegation_token(created.hmac(), Duration::ZERO)
+    .await?;
+assert!(expired.is_success());
+# Ok(())
+# }
+```
+
+`CreateDelegationToken`, `RenewDelegationToken`, `ExpireDelegationToken`, and
+`DescribeDelegationToken` negotiate the highest supported Kafka API version in
+the client-supported ranges. The current implementation uses v1-v3 for create
+and describe, and v1-v2 for renew and expire; flexible encoding is used from
+v2 onward, while create/describe v3 preserves requester and explicit-owner
+details. Controller discovery and ApiVersions negotiation are retried before a
+request is transmitted. Mutating requests are never replayed after a send,
+because a lost response leaves the broker-side outcome ambiguous.
+
+The HMAC returned by create and describe is credential material. It is exposed
+only through an explicit `hmac()` accessor, while `Debug` and tracing redact
+the bytes. Store it in a secret manager and do not include it in application
+logs, metrics labels, error messages, or crash reports. The
+`admin_delegation_tokens` example performs the complete lifecycle without
+printing the HMAC.

@@ -33,6 +33,11 @@ use kafrust_protocol::api::create_partitions::{
 use kafrust_protocol::api::create_topics::{
     CreateTopicsRequestV2, CreateTopicsResponseV2, CreateTopicsTopicV2,
 };
+use kafrust_protocol::api::delegation_token::{
+    CreateDelegationTokenRequest, CreateDelegationTokenResponse, DescribeDelegationTokenRequest,
+    DescribeDelegationTokenResponse, ExpireDelegationTokenRequest, ExpireDelegationTokenResponse,
+    RenewDelegationTokenRequest, RenewDelegationTokenResponse,
+};
 use kafrust_protocol::api::delete_acls::{DeleteAclsRequestV1, DeleteAclsResponseV1};
 use kafrust_protocol::api::delete_groups::{DeleteGroupsRequestV1, DeleteGroupsResponseV1};
 use kafrust_protocol::api::delete_records::{
@@ -1043,6 +1048,156 @@ impl Client {
         let _header = ResponseHeader::decode_v1(&mut decoder)?;
         Ok(AlterUserScramCredentialsResponseV0::decode_body(
             &mut decoder,
+        )?)
+    }
+
+    /// Sends CreateDelegationToken v1 to the broker represented by this
+    /// connection.
+    pub async fn create_delegation_token_v1(
+        &mut self,
+        request: CreateDelegationTokenRequest,
+    ) -> Result<CreateDelegationTokenResponse> {
+        let request = CreateDelegationTokenRequest {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            ..request
+        };
+        let response = self.send_request(&request.encode_v1()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(CreateDelegationTokenResponse::decode_body_v1(&mut decoder)?)
+    }
+
+    /// Sends CreateDelegationToken v2 or v3 using flexible encoding.
+    pub async fn create_delegation_token_v2(
+        &mut self,
+        request: CreateDelegationTokenRequest,
+        api_version: i16,
+    ) -> Result<CreateDelegationTokenResponse> {
+        let request = CreateDelegationTokenRequest {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            ..request
+        };
+        let response = self.send_request(&request.encode_v2(api_version)?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(CreateDelegationTokenResponse::decode_body_v2(
+            &mut decoder,
+            api_version,
+        )?)
+    }
+
+    /// Sends RenewDelegationToken v1 to the broker represented by this
+    /// connection.
+    pub async fn renew_delegation_token_v1(
+        &mut self,
+        hmac: Vec<u8>,
+        renew_period_ms: i64,
+    ) -> Result<RenewDelegationTokenResponse> {
+        let request = RenewDelegationTokenRequest {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            hmac,
+            renew_period_ms,
+        };
+        let response = self.send_request(&request.encode_v1()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(RenewDelegationTokenResponse::decode_body_v1(&mut decoder)?)
+    }
+
+    /// Sends RenewDelegationToken v2 using flexible encoding.
+    pub async fn renew_delegation_token_v2(
+        &mut self,
+        hmac: Vec<u8>,
+        renew_period_ms: i64,
+    ) -> Result<RenewDelegationTokenResponse> {
+        let request = RenewDelegationTokenRequest {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            hmac,
+            renew_period_ms,
+        };
+        let response = self.send_request(&request.encode_v2()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(RenewDelegationTokenResponse::decode_body_v2(&mut decoder)?)
+    }
+
+    /// Sends ExpireDelegationToken v1 to the broker represented by this
+    /// connection.
+    pub async fn expire_delegation_token_v1(
+        &mut self,
+        hmac: Vec<u8>,
+        expiry_time_period_ms: i64,
+    ) -> Result<ExpireDelegationTokenResponse> {
+        let request = ExpireDelegationTokenRequest {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            hmac,
+            expiry_time_period_ms,
+        };
+        let response = self.send_request(&request.encode_v1()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(ExpireDelegationTokenResponse::decode_body_v1(&mut decoder)?)
+    }
+
+    /// Sends ExpireDelegationToken v2 using flexible encoding.
+    pub async fn expire_delegation_token_v2(
+        &mut self,
+        hmac: Vec<u8>,
+        expiry_time_period_ms: i64,
+    ) -> Result<ExpireDelegationTokenResponse> {
+        let request = ExpireDelegationTokenRequest {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            hmac,
+            expiry_time_period_ms,
+        };
+        let response = self.send_request(&request.encode_v2()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(ExpireDelegationTokenResponse::decode_body_v2(&mut decoder)?)
+    }
+
+    /// Sends DescribeDelegationToken v1 to the broker represented by this
+    /// connection.
+    pub async fn describe_delegation_token_v1(
+        &mut self,
+        owners: Option<Vec<kafrust_protocol::api::delegation_token::DelegationTokenPrincipal>>,
+    ) -> Result<DescribeDelegationTokenResponse> {
+        let request = DescribeDelegationTokenRequest {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            owners,
+        };
+        let response = self.send_request(&request.encode_v1()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(DescribeDelegationTokenResponse::decode_body_v1(
+            &mut decoder,
+        )?)
+    }
+
+    /// Sends DescribeDelegationToken v2 or v3 using flexible encoding.
+    pub async fn describe_delegation_token_v2(
+        &mut self,
+        owners: Option<Vec<kafrust_protocol::api::delegation_token::DelegationTokenPrincipal>>,
+        api_version: i16,
+    ) -> Result<DescribeDelegationTokenResponse> {
+        let request = DescribeDelegationTokenRequest {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            owners,
+        };
+        let response = self.send_request(&request.encode_v2(api_version)?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(DescribeDelegationTokenResponse::decode_body_v2(
+            &mut decoder,
+            api_version,
         )?)
     }
 

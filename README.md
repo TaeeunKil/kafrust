@@ -161,6 +161,11 @@ typed SCRAM credential administration, including controller routing and
 per-user outcomes; the read-only describe path retries transient transport and
 broker failures within the bounded AdminClient budget, and the Kafka 3.7.2
 SASL_SSL roundtrip is live-verified.
+Delegation-token lifecycle APIs cover create, describe, renew, and expire with
+negotiated Kafka versions and redacted HMAC debug output. They require an
+authenticated SASL or mutual-TLS channel and a broker-side delegation-token
+secret; the complete opt-in lifecycle is exercised by the
+`admin_delegation_tokens` example.
 `alter_partition_reassignments` and `list_partition_reassignments` expose
 controller-routed replica target changes, cancellation, and bounded ongoing
 status inspection; the read-only listing path re-discovers the controller after

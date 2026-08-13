@@ -375,6 +375,11 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
 - SCRAM credential upsert, describe, and delete through `AdminClient` using
   flexible API v0 request/response encoding. The SASL_SSL SCRAM profile passed
   this roundtrip against Kafka 3.7.2 in manual run `31461980967`.
+- Delegation-token create, describe, renew, and expire through `AdminClient`
+  use negotiated Kafka API versions, controller routing, and redacted HMAC
+  handling. Focused protocol and injected-controller tests pass. The opt-in
+  live lifecycle gate is configured on the Kafka 4.3.1 SASL_PLAINTEXT profile;
+  its broker run is the remaining evidence for this capability.
 - The read-only `DescribeUserScramCredentials v0` path retries transport,
   timeout, and retryable top-level broker failures within the bounded
   `AdminClient` budget; focused mock-broker coverage verifies a dropped request
