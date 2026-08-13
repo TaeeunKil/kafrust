@@ -891,7 +891,11 @@ Implemented evidence:
   lifecycle on Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plus the Kafka 3.7.2
   three-broker profile in
   [`31669906872`](https://github.com/TaeeunKil/kafrust/actions/runs/31669906872).
-  Secured Admin AlterConfigs remains a separate gate.
+  The same lifecycle also passed over Kafka 3.7.2 TLS, SASL/PLAIN, and
+  SASL_SSL SCRAM-SHA-256 in the complete matrix
+  [`31674680581`](https://github.com/TaeeunKil/kafrust/actions/runs/31674680581),
+  qualifying those secured Admin AlterConfigs profiles. Post-transmission
+  mutation recovery remains a separate gate.
 - DescribeGroups v1 discovers each requested group's coordinator independently
   and preserves state, protocol, member identity, raw protocol metadata and
   assignments, per-group errors, throttle time, tracing, and metrics.
@@ -2012,3 +2016,8 @@ Implemented evidence:
   [`31666975512`](https://github.com/TaeeunKil/kafrust/actions/runs/31666975512),
   completing this release gate. Exact parity for every Kafka assignor edge
   case and arbitrary mixed-subscription workload remains future work.
+- The classic Admin topic lifecycle is now live-qualified over authenticated
+  Kafka connections. TLS, SASL/PLAIN, and SASL_SSL SCRAM-SHA-256 profiles all
+  passed CreateTopics, DescribeConfigs, classic AlterConfigs,
+  IncrementalAlterConfigs, and DeleteTopics in the complete matrix
+  [`31674680581`](https://github.com/TaeeunKil/kafrust/actions/runs/31674680581).

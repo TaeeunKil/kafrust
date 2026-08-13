@@ -30,8 +30,14 @@ The complete 17-job matrix for classic AlterConfigs v1 passed at commit
 The admin lifecycle example exercised complete-map topic configuration
 replacement followed by incremental alteration on Kafka 3.7.2, 3.8.1, 3.9.1,
 and 4.3.1 single-node profiles plus the Kafka 3.7.2 three-broker profile.
-This qualifies the plaintext workflows only; secured Admin AlterConfigs
-profiles and post-transmission mutation recovery remain unclaimed.
+A follow-up complete matrix on commit `0ec1512` in
+[`31674680581`](https://github.com/TaeeunKil/kafrust/actions/runs/31674680581)
+ran the same lifecycle over Kafka 3.7.2 TLS, SASL/PLAIN, and SASL_SSL
+SCRAM-SHA-256 profiles. The secured logs confirm CreateTopics,
+DescribeConfigs, classic AlterConfigs, IncrementalAlterConfigs, and
+DeleteTopics over authenticated connections. This qualifies secured Admin
+AlterConfigs for those profiles; post-transmission mutation recovery remains
+unclaimed.
 
 The latest complete matrix in
 [`31624278107`](https://github.com/TaeeunKil/kafrust/actions/runs/31624278107)
@@ -278,7 +284,7 @@ other coordinator-routed writes remain separate qualification items.
 | Apache Kafka 3.7.2 | three-broker KRaft; PLAINTEXT and SASL_SSL SCRAM failover profiles | DescribeProducers v0 leader routing; DescribeTransactions v0 coordinator routing | [`Live Kafka Smoke`, run `31589394777`](https://github.com/TaeeunKil/kafrust/actions/runs/31589394777) on 2026-08-12 | Passing |
 | Apache Kafka 4.3.1 | single-node and three-broker KRaft; three-broker SASL_PLAINTEXT and SASL_SSL/SCRAM | KIP-848 member-aware Admin OffsetFetch v9 and OffsetCommit v9 | [`Live Kafka Smoke`, run `31607006237`](https://github.com/TaeeunKil/kafrust/actions/runs/31607006237) on 2026-08-12 | Passing; plaintext and secured profiles |
 | Apache Kafka 3.7.2 | three-broker KRaft | In-flight leader-routed DeleteRecords v1 and DescribeProducers v0, coordinator-routed DescribeTransactions v0, DescribeGroups v1, OffsetFetch v2, and exact-offset OffsetCommit v2, plus broker-routed DescribeConfigs v1 and ListGroups v1, pre-transmission gates, broker stops, fresh discovery/retry | [`Live Kafka Smoke`, run `31616181960`](https://github.com/TaeeunKil/kafrust/actions/runs/31616181960) on 2026-08-12 | Passing; ListGroups recorded `retries=7` |
-| Apache Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1 | single-node KRaft; Kafka 3.7.2 also three-broker KRaft | classic AlterConfigs v1 complete-map topic replacement followed by IncrementalAlterConfigs v0 | [`Live Kafka Smoke`, run `31669906872`](https://github.com/TaeeunKil/kafrust/actions/runs/31669906872) on 2026-08-13 | Passing; plaintext admin lifecycle only |
+| Apache Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1 | single-node KRaft; Kafka 3.7.2 also three-broker KRaft; Kafka 3.7.2 TLS, SASL_PLAINTEXT, and SASL_SSL SCRAM single-node profiles | classic AlterConfigs v1 complete-map topic replacement followed by IncrementalAlterConfigs v0 | [Plaintext run `31669906872`](https://github.com/TaeeunKil/kafrust/actions/runs/31669906872); [secured run `31674680581`](https://github.com/TaeeunKil/kafrust/actions/runs/31674680581) on 2026-08-13 | Passing; plaintext and secured admin lifecycle profiles |
 | Apache Kafka 3.7.2 | three-broker KRaft | Metadata v1 `DescribeCluster` and `ListTopics` bootstrap failover after broker 1 stop | [`Live Kafka Smoke`, run `31620595346`](https://github.com/TaeeunKil/kafrust/actions/runs/31620595346) on 2026-08-12 | Passing; `retries=1` for each path |
 | Apache Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1 | single-node KRaft | Produce `acks=0` immediate and batch dispatch | `Live Kafka Smoke`, manual run `31464933145` on 2026-08-11 | Passing; broker acceptance is intentionally unconfirmed |
 | Apache Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1; Kafka 4.3.1 KIP-848 | single-node KRaft | opt-in automatic consumer-group commit and restored positions | [`Live Kafka Smoke`, run `31593984640`](https://github.com/TaeeunKil/kafrust/actions/runs/31593984640) on 2026-08-12 | Passing; at-least-once tradeoff |
@@ -370,8 +376,9 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
   fixtures, injected-broker partial-result coverage, and live complete-map
   replacement followed by incremental readback on the supported plaintext
   profiles in run [`31669906872`](https://github.com/TaeeunKil/kafrust/actions/runs/31669906872).
-  Secured Admin AlterConfigs and post-transmission mutation recovery remain
-  separate qualification gates.
+  The same lifecycle passed over Kafka 3.7.2 TLS, SASL/PLAIN, and SASL_SSL
+  SCRAM-SHA-256 in [`31674680581`](https://github.com/TaeeunKil/kafrust/actions/runs/31674680581).
+  Post-transmission mutation recovery remains a separate qualification gate.
 - Coordinator-routed DescribeGroups v1. Manual run `30061497355` passed this
   path against Kafka 3.7.2 and Kafka 4.3.1 plaintext brokers plus the Kafka
   3.7.2 TLS, SASL_PLAINTEXT, and SASL_SSL profiles.
