@@ -154,6 +154,16 @@ qualifying the plaintext broker profiles and Kafka 3.7.2 multi-broker path.
 Both crates.io package endpoints and both docs.rs pages returned HTTP 200, and
 a fresh external project compiled published `kafrust 0.2.23` with `tls`.
 
+The `0.2.24` packages passed Cargo package and publish verification on release
+preparation commit `f64df2e`; `kafrust-protocol` was published before
+`kafrust`. The release adds broker-scoped fetch-session reuse for rack-aware
+Fetch v11/v12 requests, with focused session and invalid-epoch retry coverage.
+The complete 17-job Live Kafka Smoke matrix passed on code commit `8615833` in
+[`31671783977`](https://github.com/TaeeunKil/kafrust/actions/runs/31671783977),
+including the Kafka 3.7.2 three-broker rack-aware follow-up request. Both
+crates.io package endpoints and docs.rs pages returned HTTP 200, and a fresh
+external project compiled published `kafrust 0.2.24` with `tls`.
+
 ## Optional Broker Checks
 
 The default test suite does not require a Kafka broker. Before an alpha tag, run the opt-in examples or tests against a local broker when practical:

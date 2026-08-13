@@ -1988,6 +1988,11 @@ Implemented evidence:
   `tls` compile verification passed after the complete 17-job matrix qualified
   the plaintext admin lifecycle and Kafka 3.7.2 three-broker path in
   [`31669906872`](https://github.com/TaeeunKil/kafrust/actions/runs/31669906872).
+- Release `v0.2.24` publishes broker-scoped fetch-session reuse for rack-aware
+  Fetch v11/v12. Package, docs.rs, crates.io, and fresh external `tls` compile
+  verification passed after the complete 17-job matrix qualified the Kafka
+  3.7.2 three-broker follow-up path in
+  [`31671783977`](https://github.com/TaeeunKil/kafrust/actions/runs/31671783977).
 - Classic eager `StickyAssignor` support now has a public
   `ConsumerGroupAssignmentStrategy::Sticky` variant. JoinGroup uses
   Subscription v0 `user_data` with Kafka's previous-assignment schema,
