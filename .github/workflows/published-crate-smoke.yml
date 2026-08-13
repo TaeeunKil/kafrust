@@ -10,13 +10,14 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  KAFRUST_BOOTSTRAP_SERVERS: localhost:9092
 
 jobs:
   published-crate:
     name: Published kafrust ${{ inputs.kafrust_version }} (${{ matrix.profile }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      KAFRUST_BOOTSTRAP_SERVERS: ${{ matrix.bootstrap_servers }}
     strategy:
       fail-fast: false
       matrix:
@@ -24,9 +25,21 @@ jobs:
           - profile: kafka-3.7.2-classic
             kafka_version: 3.7.2
             group_protocol: classic
+            bootstrap_servers: localhost:9092
+            security_protocol: plaintext
+            kafrust_features: '[]'
           - profile: kafka-4.3.1-kip848
             kafka_version: 4.3.1
             group_protocol: consumer
+            bootstrap_servers: localhost:9092
+            security_protocol: plaintext
+            kafrust_features: '[]'
+          - profile: kafka-3.7.2-sasl-ssl-scram
+            kafka_version: 3.7.2
+            group_protocol: classic
+            bootstrap_servers: localhost:9095
+            security_protocol: sasl_tls
+            kafrust_features: '["tls"]'
 
     steps:
       - name: Checkout
@@ -37,7 +50,64 @@ jobs:
         with:
           toolchain: "1.81.0"
 
+      - name: Generate TLS certificates
+        if: matrix.security_protocol == 'sasl_tls'
+        run: |
+          mkdir -p sasl-ssl
+          openssl req -x509 -newkey rsa:2048 -days 1 -nodes \
+            -subj "/CN=kafrust-test-ca" \
+            -keyout sasl-ssl/ca.key \
+            -out sasl-ssl/ca.crt
+          openssl x509 \
+            -in sasl-ssl/ca.crt \
+            -outform DER \
+            -out sasl-ssl/ca.der
+          openssl req -newkey rsa:2048 -nodes \
+            -subj "/CN=localhost" \
+            -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" \
+            -keyout sasl-ssl/server.key \
+            -out sasl-ssl/server.csr
+          openssl x509 -req \
+            -in sasl-ssl/server.csr \
+            -CA sasl-ssl/ca.crt \
+            -CAkey sasl-ssl/ca.key \
+            -CAcreateserial \
+            -days 1 \
+            -sha256 \
+            -copy_extensions copy \
+            -out sasl-ssl/server.crt
+          openssl pkcs12 -export \
+            -in sasl-ssl/server.crt \
+            -inkey sasl-ssl/server.key \
+            -certfile sasl-ssl/ca.crt \
+            -name localhost \
+            -out sasl-ssl/kafka.server.keystore.p12 \
+            -password pass:kafrust
+          keytool -importcert \
+            -noprompt \
+            -alias kafrust-test-ca \
+            -file sasl-ssl/ca.crt \
+            -keystore sasl-ssl/kafka.client.truststore.p12 \
+            -storetype PKCS12 \
+            -storepass kafrust
+          printf kafrust > sasl-ssl/keystore-password
+          printf kafrust > sasl-ssl/key-password
+          chmod 644 sasl-ssl/*
+
+      - name: Write SCRAM broker config
+        if: matrix.security_protocol == 'sasl_tls'
+        run: |
+          cat > sasl-ssl/kafka_server_jaas.conf <<'EOF'
+          KafkaServer {
+            org.apache.kafka.common.security.scram.ScramLoginModule required
+            username="broker"
+            password="broker-secret";
+          };
+          EOF
+          chmod 644 sasl-ssl/kafka_server_jaas.conf
+
       - name: Start Kafka
+        if: matrix.security_protocol == 'plaintext'
         run: |
           docker run -d --name kafrust-published-kafka \
             -p 9092:9092 \
@@ -55,16 +125,65 @@ jobs:
             -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 \
             apache/kafka:${{ matrix.kafka_version }}
 
+      - name: Start Kafka with SASL_SSL SCRAM
+        if: matrix.security_protocol == 'sasl_tls'
+        run: |
+          docker run -d --name kafrust-published-kafka \
+            -p 9095:9095 \
+            -v "$PWD/sasl-ssl:/etc/kafka/secrets:ro" \
+            -e KAFKA_OPTS="-Djava.security.auth.login.config=/etc/kafka/secrets/kafka_server_jaas.conf" \
+            -e KAFKA_NODE_ID=1 \
+            -e KAFKA_PROCESS_ROLES=broker,controller \
+            -e KAFKA_LISTENERS=PLAINTEXT://:9092,SASL_SSL://:9095,CONTROLLER://:9093 \
+            -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092,SASL_SSL://localhost:9095 \
+            -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+            -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,SASL_SSL:SASL_SSL \
+            -e KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT \
+            -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@localhost:9093 \
+            -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
+            -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1 \
+            -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1 \
+            -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 \
+            -e KAFKA_SASL_ENABLED_MECHANISMS=SCRAM-SHA-256,SCRAM-SHA-512 \
+            -e KAFKA_SSL_KEYSTORE_FILENAME=kafka.server.keystore.p12 \
+            -e KAFKA_SSL_KEYSTORE_CREDENTIALS=keystore-password \
+            -e KAFKA_SSL_KEY_CREDENTIALS=key-password \
+            -e KAFKA_SSL_KEYSTORE_TYPE=PKCS12 \
+            -e KAFKA_SSL_CLIENT_AUTH=none \
+            apache/kafka:3.7.2
+
       - name: Wait for Kafka
         run: |
-          for attempt in {1..90}; do
-            if (echo > /dev/tcp/127.0.0.1/9092) >/dev/null 2>&1; then
-              exit 0
-            fi
-            sleep 1
-          done
+          if [ "${{ matrix.security_protocol }}" = "sasl_tls" ]; then
+            for attempt in {1..90}; do
+              if docker exec kafrust-published-kafka /opt/kafka/bin/kafka-broker-api-versions.sh \
+                --bootstrap-server localhost:9092 \
+                >/tmp/kafrust-published-kafka-startup.log 2>&1; then
+                exit 0
+              fi
+              sleep 1
+            done
+          else
+            for attempt in {1..90}; do
+              if (echo > /dev/tcp/127.0.0.1/9092) >/dev/null 2>&1; then
+                exit 0
+              fi
+              sleep 1
+            done
+          fi
+          cat /tmp/kafrust-published-kafka-startup.log 2>/dev/null || true
           docker logs kafrust-published-kafka
           exit 1
+
+      - name: Create SCRAM user
+        if: matrix.security_protocol == 'sasl_tls'
+        run: |
+          docker exec kafrust-published-kafka /opt/kafka/bin/kafka-configs.sh \
+            --bootstrap-server localhost:9092 \
+            --alter \
+            --add-config 'SCRAM-SHA-256=[iterations=4096,password=kafrust-secret]' \
+            --entity-type users \
+            --entity-name kafrust
 
       - name: Create external smoke topic
         env:
@@ -80,11 +199,14 @@ jobs:
       - name: Create fresh external project
         env:
           KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version }}
+          KAFRUST_FEATURES: ${{ matrix.kafrust_features }}
         run: |
           project_dir="$RUNNER_TEMP/kafrust-published-smoke"
           cargo new --bin "$project_dir"
           cp .github/published-crate-smoke/src/main.rs "$project_dir/src/main.rs"
-          sed "s/__KAFRUST_VERSION__/${KAFRUST_PUBLISHED_VERSION}/" \
+          sed \
+            -e "s|__KAFRUST_VERSION__|${KAFRUST_PUBLISHED_VERSION}|" \
+            -e "s|__KAFRUST_FEATURES__|${KAFRUST_FEATURES}|" \
             .github/published-crate-smoke/Cargo.toml > "$project_dir/Cargo.toml"
           if [ "$project_dir" = "$GITHUB_WORKSPACE" ]; then
             echo "the published smoke project must be outside the repository"
@@ -98,6 +220,13 @@ jobs:
           KAFRUST_TOPIC: kafrust-published-${{ matrix.profile }}-${{ github.run_id }}
           KAFRUST_GROUP_ID: kafrust-published-group-${{ matrix.profile }}-${{ github.run_id }}
           KAFRUST_GROUP_PROTOCOL: ${{ matrix.group_protocol }}
+          KAFRUST_SECURITY_PROTOCOL: ${{ matrix.security_protocol }}
+          KAFRUST_SASL_MECHANISM: scram-sha-256
+          KAFRUST_SASL_USERNAME: kafrust
+          KAFRUST_SASL_PASSWORD: kafrust-secret
+          KAFRUST_TLS_SERVER_NAME: localhost
+          KAFRUST_TLS_ROOT_CERT_DER_PATH: ${{ github.workspace }}/sasl-ssl/ca.der
+          KAFRUST_FEATURES: ${{ matrix.kafrust_features }}
           KAFRUST_VALUE: published-crate-${{ github.run_id }}
         run: |
           project_dir="$RUNNER_TEMP/kafrust-published-smoke"

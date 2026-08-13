@@ -1,9 +1,92 @@
-use std::env;
+use std::{env, fs};
 
 use kafrust::{
     Acks, AdminClient, ClientConfig, ConsumerConfig, ConsumerGroupConfig, ConsumerGroupProtocol,
-    Error, OffsetResetPolicy, ProducerConfig, ProducerRecord,
+    Error, OffsetResetPolicy, ProducerConfig, ProducerRecord, SecurityProtocol,
 };
+
+struct SecuritySettings {
+    protocol: SecurityProtocol,
+    tls_server_name: Option<String>,
+    tls_root_certificate_der: Option<Vec<u8>>,
+    sasl_mechanism: Option<String>,
+    sasl_username: Option<String>,
+    sasl_password: Option<String>,
+}
+
+impl SecuritySettings {
+    fn from_env() -> kafrust::Result<Self> {
+        let protocol_name =
+            env::var("KAFRUST_SECURITY_PROTOCOL").unwrap_or_else(|_| "plaintext".to_owned());
+        let protocol = match protocol_name.as_str() {
+            "plaintext" => SecurityProtocol::Plaintext,
+            "tls" => SecurityProtocol::Tls,
+            "sasl_plaintext" => SecurityProtocol::SaslPlaintext,
+            "sasl_tls" => SecurityProtocol::SaslTls,
+            _ => {
+                return Err(Error::Unsupported(
+                    "KAFRUST_SECURITY_PROTOCOL must be plaintext, tls, sasl_plaintext, or sasl_tls",
+                ));
+            }
+        };
+
+        let tls_server_name = match protocol {
+            SecurityProtocol::Tls | SecurityProtocol::SaslTls => Some(
+                env::var("KAFRUST_TLS_SERVER_NAME")
+                    .map_err(|_| Error::Unsupported("KAFRUST_TLS_SERVER_NAME is required"))?,
+            ),
+            _ => None,
+        };
+        let tls_root_certificate_der = match protocol {
+            SecurityProtocol::Tls | SecurityProtocol::SaslTls => {
+                let path = env::var("KAFRUST_TLS_ROOT_CERT_DER_PATH").map_err(|_| {
+                    Error::Unsupported("KAFRUST_TLS_ROOT_CERT_DER_PATH is required")
+                })?;
+                Some(fs::read(path).map_err(|_| {
+                    Error::Unsupported("KAFRUST_TLS_ROOT_CERT_DER_PATH could not be read")
+                })?)
+            }
+            _ => None,
+        };
+
+        let sasl_mechanism = match protocol {
+            SecurityProtocol::SaslPlaintext | SecurityProtocol::SaslTls => Some(
+                env::var("KAFRUST_SASL_MECHANISM")
+                    .map_err(|_| Error::Unsupported("KAFRUST_SASL_MECHANISM is required"))?,
+            ),
+            _ => None,
+        };
+        if let Some(mechanism) = sasl_mechanism.as_deref() {
+            if !matches!(mechanism, "plain" | "scram-sha-256" | "scram-sha-512") {
+                return Err(Error::Unsupported(
+                    "KAFRUST_SASL_MECHANISM must be plain, scram-sha-256, or scram-sha-512",
+                ));
+            }
+        }
+        let (sasl_username, sasl_password) = match protocol {
+            SecurityProtocol::SaslPlaintext | SecurityProtocol::SaslTls => (
+                Some(
+                    env::var("KAFRUST_SASL_USERNAME")
+                        .map_err(|_| Error::Unsupported("KAFRUST_SASL_USERNAME is required"))?,
+                ),
+                Some(
+                    env::var("KAFRUST_SASL_PASSWORD")
+                        .map_err(|_| Error::Unsupported("KAFRUST_SASL_PASSWORD is required"))?,
+                ),
+            ),
+            _ => (None, None),
+        };
+
+        Ok(Self {
+            protocol,
+            tls_server_name,
+            tls_root_certificate_der,
+            sasl_mechanism,
+            sasl_username,
+            sasl_password,
+        })
+    }
+}
 
 #[tokio::main]
 async fn main() -> kafrust::Result<()> {
@@ -15,6 +98,7 @@ async fn main() -> kafrust::Result<()> {
         .map_err(|_| Error::Unsupported("KAFRUST_GROUP_ID is required"))?;
     let value =
         env::var("KAFRUST_VALUE").map_err(|_| Error::Unsupported("KAFRUST_VALUE is required"))?;
+    let security = SecuritySettings::from_env()?;
     let group_protocol = match env::var("KAFRUST_GROUP_PROTOCOL").as_deref() {
         Ok("classic") | Err(_) => ConsumerGroupProtocol::Classic,
         Ok("consumer") => ConsumerGroupProtocol::Consumer,
@@ -25,9 +109,43 @@ async fn main() -> kafrust::Result<()> {
         }
     };
 
-    let admin = AdminClient::new(
-        ClientConfig::new([bootstrap_servers.clone()]).client_id("kafrust-published-smoke-admin"),
-    );
+    macro_rules! configure_security {
+        ($config:expr) => {{
+            let config = $config.security_protocol(security.protocol);
+            let config = match security.tls_server_name.as_deref() {
+                Some(server_name) => config.tls_server_name(server_name),
+                None => config,
+            };
+            let config = match security.tls_root_certificate_der.as_deref() {
+                Some(certificate) => config.tls_root_certificate_der(certificate.to_vec()),
+                None => config,
+            };
+            match security.sasl_mechanism.as_deref() {
+                Some("plain") | Some("scram-sha-256") | Some("scram-sha-512") => {
+                    let username = security
+                        .sasl_username
+                        .as_deref()
+                        .ok_or(Error::Unsupported("SASL username is missing"))?;
+                    let password = security
+                        .sasl_password
+                        .as_deref()
+                        .ok_or(Error::Unsupported("SASL password is missing"))?;
+                    match security.sasl_mechanism.as_deref() {
+                        Some("plain") => config.sasl_plain(username, password),
+                        Some("scram-sha-256") => config.sasl_scram_sha_256(username, password),
+                        Some("scram-sha-512") => config.sasl_scram_sha_512(username, password),
+                        _ => config,
+                    }
+                }
+                _ => config,
+            }
+        }};
+    }
+
+    let admin = AdminClient::new(configure_security!(ClientConfig::new([
+        bootstrap_servers.clone()
+    ])
+    .client_id("kafrust-published-smoke-admin")));
     let cluster = admin.describe_cluster().await?;
     if cluster.brokers().is_empty() {
         return Err(Error::Unsupported(
@@ -35,12 +153,12 @@ async fn main() -> kafrust::Result<()> {
         ));
     }
 
-    let mut producer = ProducerConfig::new([bootstrap_servers.clone()])
+    let mut producer = configure_security!(ProducerConfig::new([bootstrap_servers.clone()])
         .client_id("kafrust-published-smoke-producer")
         .acks(Acks::Leader)
-        .enable_idempotence(true)
-        .build()
-        .await?;
+        .enable_idempotence(true))
+    .build()
+    .await?;
     let metadata = producer
         .send(
             ProducerRecord::to(topic.clone())
@@ -49,11 +167,11 @@ async fn main() -> kafrust::Result<()> {
         )
         .await?;
 
-    let mut consumer = ConsumerConfig::new([bootstrap_servers.clone()])
+    let mut consumer = configure_security!(ConsumerConfig::new([bootstrap_servers.clone()])
         .client_id("kafrust-published-smoke-consumer")
-        .max_poll_records(10)
-        .build()
-        .await?;
+        .max_poll_records(10))
+    .build()
+    .await?;
     consumer.assign(&topic, metadata.partition(), metadata.offset());
     let records = consumer.poll().await?;
     if !records.iter().any(|record| {
@@ -67,15 +185,15 @@ async fn main() -> kafrust::Result<()> {
         ));
     }
 
-    let mut group = ConsumerGroupConfig::new([bootstrap_servers], group_id)
-        .client_id("kafrust-published-smoke-group")
-        .group_protocol(group_protocol)
-        .max_retries(5)
-        .max_poll_records(10)
-        .offset_reset_policy(OffsetResetPolicy::Earliest)
-        .subscribe(topic.clone())
-        .join()
-        .await?;
+    let mut group = configure_security!(ConsumerGroupConfig::new([bootstrap_servers], group_id)
+        .client_id("kafrust-published-smoke-group"))
+    .group_protocol(group_protocol)
+    .max_retries(5)
+    .max_poll_records(10)
+    .offset_reset_policy(OffsetResetPolicy::Earliest)
+    .subscribe(topic.clone())
+    .join()
+    .await?;
     let group_records = group.poll().await?;
     if !group_records
         .iter()
