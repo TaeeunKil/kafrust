@@ -2254,6 +2254,12 @@ Implemented evidence:
   passed Kafka 3.7.2 classic, Kafka 4.3.1 KIP-848, SASL_SSL/SCRAM, and all
   four compression profiles from fresh external projects. Broader Admin
   authorization and mutation-failure matrices remain separate 1.0 gates.
+- The published `0.2.28` transaction failover workflow passed in
+  [`31738090052`](https://github.com/TaeeunKil/kafrust/actions/runs/31738090052).
+  A fresh external project identified its transaction coordinator, recovered
+  after that broker was stopped during an open transaction, and verified the
+  committed record through `ReadCommitted`. Ambiguous outcomes, fencing, and
+  throughput workloads remain separate 1.0 gates.
 - The complete 17-job run [`31719615947`](https://github.com/TaeeunKil/kafrust/actions/runs/31719615947)
   adds a controlled combined-fault gate in the Kafka 3.7.2 three-broker
   plaintext profile. It deliberately colocates the classic group coordinator

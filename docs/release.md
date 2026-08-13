@@ -326,6 +326,15 @@ group and verified classic or KIP-848 committed offsets through the published
 API. This is representative operational parity, not every Admin authorization
 or failure workload.
 
+The published transaction failover workflow
+[`31738090052`](https://github.com/TaeeunKil/kafrust/actions/runs/31738090052)
+also passed against Kafka 3.7.2 three-broker KRaft. The fresh external project
+identified the transaction coordinator, the workflow stopped that broker while
+the transaction was open, and the published `0.2.28` producer committed through
+the replacement coordinator. A published `ReadCommitted` consumer observed the
+committed record. This qualifies coordinator-stop recovery, not every
+ambiguous-outcome, fencing, or throughput workload.
+
 The following current-main live run
 [`31719615947`](https://github.com/TaeeunKil/kafrust/actions/runs/31719615947)
 also passed the controlled classic consumer-group combined-fault gate in the
