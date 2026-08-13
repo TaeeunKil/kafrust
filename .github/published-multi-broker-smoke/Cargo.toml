@@ -1,0 +1,9 @@
+[package]
+name = "kafrust-published-multi-broker-smoke"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+kafrust = { version = "__KAFRUST_VERSION__", features = __KAFRUST_FEATURES__ }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

@@ -1,0 +1,142 @@
+name: Published Multi-Broker Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      kafrust_version:
+        description: "Published kafrust version to execute from crates.io"
+        required: true
+        default: "0.2.28"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  published-multi-broker:
+    name: Published kafrust ${{ inputs.kafrust_version }} multi-broker failover
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      KAFRUST_BOOTSTRAP_SERVERS: localhost:19092,localhost:19093,localhost:19094
+      KAFRUST_TOPIC: kafrust-published-multi-${{ github.run_id }}
+      KAFRUST_GROUP_ID: kafrust-published-multi-group-${{ github.run_id }}
+      KAFRUST_VALUE: published-multi-${{ github.run_id }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.81.0"
+
+      - name: Start three-broker Kafka 3.7.2
+        run: |
+          docker network create kafrust-published-multi
+          cluster_id="$(docker run --rm apache/kafka:3.7.2 /opt/kafka/bin/kafka-storage.sh random-uuid)"
+          for node in 1 2 3; do
+            external_port=$((19091 + node))
+            docker run -d --name "kafrust-published-multi-${node}" \
+              --network kafrust-published-multi \
+              -p "${external_port}:9092" \
+              -e KAFKA_CLUSTER_ID="${cluster_id}" \
+              -e KAFKA_NODE_ID="${node}" \
+              -e KAFKA_PROCESS_ROLES=broker,controller \
+              -e KAFKA_LISTENERS=INTERNAL://:29092,EXTERNAL://:9092,CONTROLLER://:9093 \
+              -e KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafrust-published-multi-${node}:29092,EXTERNAL://localhost:${external_port} \
+              -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+              -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT \
+              -e KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL \
+              -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafrust-published-multi-1:9093,2@kafrust-published-multi-2:9093,3@kafrust-published-multi-3:9093 \
+              -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=3 \
+              -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=3 \
+              -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=2 \
+              -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 \
+              apache/kafka:3.7.2
+          done
+
+      - name: Wait for Kafka cluster
+        run: |
+          for attempt in {1..120}; do
+            if docker exec kafrust-published-multi-1 /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server kafrust-published-multi-1:29092 \
+              >/tmp/kafrust-published-multi-probe.log 2>&1; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/kafrust-published-multi-probe.log || true
+          docker logs kafrust-published-multi-1
+          docker logs kafrust-published-multi-2
+          docker logs kafrust-published-multi-3
+          exit 1
+
+      - name: Create replicated topic and choose broker 1 leader
+        run: |
+          docker exec kafrust-published-multi-1 /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server kafrust-published-multi-1:29092 \
+            --create --if-not-exists --topic "$KAFRUST_TOPIC" --partitions 6 --replication-factor 3
+          docker exec kafrust-published-multi-1 /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server kafrust-published-multi-1:29092 --describe --topic "$KAFRUST_TOPIC" \
+            | tee /tmp/kafrust-published-multi-topic.log
+          failover_partition="$(awk '/Partition:/ && /Leader: 1/ { for (i = 1; i <= NF; i++) if ($i == "Partition:") { print $(i + 1); exit } }' /tmp/kafrust-published-multi-topic.log)"
+          if [ -z "$failover_partition" ]; then
+            cat /tmp/kafrust-published-multi-topic.log
+            echo "could not find a partition led by broker 1"
+            exit 1
+          fi
+          echo "KAFRUST_PARTITION=${failover_partition}" >> "$GITHUB_ENV"
+
+      - name: Create fresh external project
+        env:
+          KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version }}
+        run: |
+          project_dir="$RUNNER_TEMP/kafrust-published-multi-smoke"
+          if [ "$project_dir" = "$GITHUB_WORKSPACE" ]; then
+            echo "the published multi-broker project must be outside the repository"
+            exit 1
+          fi
+          cargo new --bin "$project_dir"
+          cp .github/published-multi-broker-smoke/src/main.rs "$project_dir/src/main.rs"
+          sed "s/__KAFRUST_VERSION__/$KAFRUST_PUBLISHED_VERSION/; s/__KAFRUST_FEATURES__/[]/" \
+            .github/published-multi-broker-smoke/Cargo.toml > "$project_dir/Cargo.toml"
+
+      - name: Run published pre-failover phase
+        env:
+          KAFRUST_PHASE: pre
+        run: cargo run --manifest-path "$RUNNER_TEMP/kafrust-published-multi-smoke/Cargo.toml"
+
+      - name: Stop selected partition leader
+        run: |
+          docker stop kafrust-published-multi-1
+          for attempt in {1..60}; do
+            line="$(docker exec kafrust-published-multi-2 /opt/kafka/bin/kafka-topics.sh \
+              --bootstrap-server kafrust-published-multi-2:29092 --describe --topic "$KAFRUST_TOPIC" \
+              | awk -v partition="$KAFRUST_PARTITION" '$0 ~ /Partition:/ { p=""; l=""; for (i = 1; i <= NF; i++) { if ($i == "Partition:") p=$(i + 1); if ($i == "Leader:") l=$(i + 1) } if (p == partition) print l }')"
+            if [ -n "$line" ] && [ "$line" != "1" ] && [ "$line" != "-1" ]; then
+              echo "partition $KAFRUST_PARTITION moved to leader $line"
+              exit 0
+            fi
+            sleep 2
+          done
+          docker exec kafrust-published-multi-2 /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server kafrust-published-multi-2:29092 --describe --topic "$KAFRUST_TOPIC"
+          exit 1
+
+      - name: Run published post-failover phase
+        env:
+          KAFRUST_PHASE: post
+        run: cargo run --manifest-path "$RUNNER_TEMP/kafrust-published-multi-smoke/Cargo.toml"
+
+      - name: Verify published dependency versions
+        run: |
+          grep -A1 -q 'name = "kafrust"' "$RUNNER_TEMP/kafrust-published-multi-smoke/Cargo.lock"
+          grep -A1 -q "version = \"${{ inputs.kafrust_version }}\"" "$RUNNER_TEMP/kafrust-published-multi-smoke/Cargo.lock"
+
+      - name: Dump Kafka diagnostics
+        if: failure()
+        run: |
+          docker logs kafrust-published-multi-1 || true
+          docker logs kafrust-published-multi-2 || true
+          docker logs kafrust-published-multi-3 || true
