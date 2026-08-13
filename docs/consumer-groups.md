@@ -466,5 +466,8 @@ written by the replacement leader. The Kafka 3.7.2 plaintext classic path and
 the Kafka 4.3.1 plaintext KIP-848 path are qualified in
 [`Live Kafka Smoke` run `31723663771`](https://github.com/TaeeunKil/kafrust/actions/runs/31723663771).
 The KIP-848 path uses the same protocol-selectable example with
-`KAFRUST_GROUP_PROTOCOL=consumer`. Secured combined-fault behavior remains a
-separate compatibility gate.
+`KAFRUST_GROUP_PROTOCOL=consumer`. The Kafka 3.7.2 classic combined path also
+passed over authenticated `SASL_PLAINTEXT` in
+[`Live Kafka Smoke` run `31725607371`](https://github.com/TaeeunKil/kafrust/actions/runs/31725607371).
+SASL_SSL/SCRAM KIP-848 combined-fault behavior remains a separate
+compatibility gate.

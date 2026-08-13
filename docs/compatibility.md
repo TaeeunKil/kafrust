@@ -29,13 +29,15 @@ SASL/OAUTHBEARER validator, ACL administration, three-broker failover, and
 Kafka 4.3.1 KIP-848 coordinator recovery.
 
 The latest complete 17-job matrix on current `main`,
-[`31723663771`](https://github.com/TaeeunKil/kafrust/actions/runs/31723663771),
+[`31725607371`](https://github.com/TaeeunKil/kafrust/actions/runs/31725607371),
 passed all supported broker, security, ACL, multi-broker, and KIP-848 jobs.
 Its direct assigned-consumer leader-epoch gate and secured/KIP-848 leader-epoch
 gates kept the heartbeat alive, isolated the partition leader from the group
 coordinator, and verified automatic `OffsetForLeaderEpoch` recovery where the
 broker path returned a leader-epoch transition. The classic group combined
-gate separately verifies rejoin and post-failover record consumption.
+gate separately verifies rejoin and post-failover record consumption. The same
+matrix also passed the secured Kafka 3.7.2 `SASL_PLAINTEXT` classic combined
+gate, where the stopped broker was both coordinator and partition leader.
 
 The dedicated ambiguous-EndTxn gate passed in the Kafka 3.7.2 three-broker job
 [`94476744970`](https://github.com/TaeeunKil/kafrust/actions/runs/31708995196/job/94476744970).
@@ -408,6 +410,7 @@ other coordinator-routed writes remain separate qualification items.
 | Apache Kafka 3.7.2 | three-broker KRaft; repeated leader failover | v0.2.26 direct assigned-consumer automatic leader-epoch recovery after the second leader broker stop | [`Live Kafka Smoke`, run `31679167875`](https://github.com/TaeeunKil/kafrust/actions/runs/31679167875) on 2026-08-13 | Passing; group rebalance and unclean-election data-loss scenarios remain separate |
 | Apache Kafka 3.7.2 | three-broker KRaft | classic `ConsumerGroup` automatic leader-epoch recovery after the assigned partition's leader broker stop | [`Live Kafka Smoke`, run `31700020132`](https://github.com/TaeeunKil/kafrust/actions/runs/31700020132) on 2026-08-13; job [`94446655280`](https://github.com/TaeeunKil/kafrust/actions/runs/31700020132/job/94446655280) | Passing; membership preserved through the tested failover; KIP-848 and unclean-election data-loss scenarios remain separate |
 | Apache Kafka 3.7.2 | three-broker KRaft; classic consumer group; coordinator and partition leader intentionally colocated | group rejoin and post-failover record consumption when one stopped broker is both the group coordinator and target partition leader | [`Live Kafka Smoke`, run `31723663771`](https://github.com/TaeeunKil/kafrust/actions/runs/31723663771); job steps `Run consumer-group leader-epoch failover`, `Prepare combined coordinator and partition leader failover`, and `Run combined coordinator and partition leader failover` | Passing; plaintext classic path; secured and broader combined fault matrices remain separate |
+| Apache Kafka 3.7.2 | three-broker KRaft; classic consumer group; `SASL_PLAINTEXT`; coordinator and partition leader intentionally colocated | authenticated group rejoin and post-failover record consumption when one stopped broker is both the group coordinator and target partition leader | [`Live Kafka Smoke`, run `31725607371`](https://github.com/TaeeunKil/kafrust/actions/runs/31725607371); job `Kafka 3.7.2 multi-broker SASL_PLAINTEXT failover`, step `Run SASL combined coordinator and partition leader failover` | Passing; SASL/PLAIN classic path; SASL_SSL/SCRAM KIP-848 and broader combined fault matrices remain separate |
 | Apache Kafka 4.3.1 | three-broker KRaft; KIP-848 consumer protocol; PLAINTEXT | group rejoin and post-failover record consumption when one stopped broker is both the group coordinator and target partition leader | [`Live Kafka Smoke`, run `31723663771`](https://github.com/TaeeunKil/kafrust/actions/runs/31723663771); job steps `Prepare KIP-848 combined coordinator and partition leader failover` and `Run KIP-848 combined coordinator and partition leader failover` | Passing; plaintext KIP-848 path only; secured and broader combined fault matrices remain separate |
 | Apache Kafka 3.7.2 | three-broker KRaft | EndTxn response loss, typed unknown outcome, same-transactional-ID recovery, and `read_committed` reconciliation | [`Live Kafka Smoke`, run `31708995196`](https://github.com/TaeeunKil/kafrust/actions/runs/31708995196); job [`94476744970`](https://github.com/TaeeunKil/kafrust/actions/runs/31708995196/job/94476744970) on 2026-08-13 | Passing at gate level; the surrounding run later failed in an existing consumer-group leader-epoch gate |
 | Apache Kafka 3.7.2 and 4.3.1 | three-broker KRaft; classic and KIP-848; PLAINTEXT, SASL_PLAINTEXT, and SASL_SSL/SCRAM | consumer-group leader-epoch recovery with heartbeat-preserved membership and coordinator-isolated partition failover | [`Live Kafka Smoke`, run `31716400583`](https://github.com/TaeeunKil/kafrust/actions/runs/31716400583) on 2026-08-13 | Passing; broader data-loss/log-retention and KIP-848 or secured combined coordinator-plus-leader faults remain separate |
@@ -930,8 +933,9 @@ The current compatibility claim does not cover:
   not claim transparent continuation of the old producer or the outcome of a
   transaction whose commit returned `INVALID_PRODUCER_EPOCH`.
 - Broader transaction and KIP-848 failure-injection profiles beyond the
-  verified coordinator broker-stop paths, including repeated transaction or
-  KIP-848 coordinator faults and broader partition-leader fault matrices.
+  verified coordinator broker-stop paths, including secured SASL_SSL/SCRAM
+  KIP-848 combined coordinator/partition-leader faults, repeated transaction
+  or KIP-848 coordinator faults, and broader partition-leader fault matrices.
 - Idempotent failure-injection profiles beyond the verified three-broker
   leader-stop recovery path. The ambiguous-response duplicate path is covered
   by a deterministic injected broker test.

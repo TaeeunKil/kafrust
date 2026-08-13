@@ -739,6 +739,14 @@ Evidence:
   consumer-group coordinator and partition-leader broker-stop recovery with
   the same authenticated bootstrap set.
 - Manual `Live Kafka Smoke` run
+  [`31725607371`](https://github.com/TaeeunKil/kafrust/actions/runs/31725607371)
+  passed all 17 jobs after the secured combined-fault gate was added. The
+  Kafka 3.7.2 three-broker `SASL_PLAINTEXT` classic group path selected a
+  broker that was both coordinator and partition leader, stopped it, waited
+  for replacement leadership, and consumed a post-failover record after
+  rejoin. The workflow also made the existing Kafka 4.3.1 SASL_SSL/SCRAM
+  KIP-848 leader-epoch check choose its partition leader dynamically.
+- Manual `Live Kafka Smoke` run
   [`31572745537`](https://github.com/TaeeunKil/kafrust/actions/runs/31572745537)
   passed all 16 jobs on 2026-08-12. Its Kafka 3.7.2 three-broker `SASL_SSL`
   SCRAM job stopped the transaction coordinator, verified that the original

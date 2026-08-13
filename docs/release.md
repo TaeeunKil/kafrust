@@ -251,6 +251,16 @@ plus post-failover record consumption. The Kafka 3.7.2 classic group path also
 passed its observable post-failover record check. Secured combined faults and
 broader workload matrices remain outside the release claim.
 
+The next complete current-main matrix
+[`31725607371`](https://github.com/TaeeunKil/kafrust/actions/runs/31725607371)
+passed all 17 jobs. It added the Kafka 3.7.2 `SASL_PLAINTEXT` classic combined
+fault gate, selecting a broker that was both group coordinator and partition
+leader, then verifying authenticated replacement-leader production and group
+consumption after rejoin. It also removed an execution-order assumption from
+the Kafka 4.3.1 SASL_SSL/SCRAM KIP-848 leader-epoch gate. These are current-main
+qualification results and do not modify the published `0.2.27` artifacts;
+SASL_SSL/SCRAM KIP-848 combined faults remain unclaimed.
+
 ## Optional Broker Checks
 
 The default test suite does not require a Kafka broker. Before an alpha tag, run the opt-in examples or tests against a local broker when practical:
