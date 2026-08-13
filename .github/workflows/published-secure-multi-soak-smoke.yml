@@ -15,6 +15,14 @@ on:
         description: "Broker 1 outage duration"
         required: true
         default: "10"
+      fault_mode:
+        description: "Fault mode: single broker or simultaneous brokers 1 and 2"
+        required: true
+        default: "single"
+        type: choice
+        options:
+          - single
+          - simultaneous
 
 env:
   CARGO_TERM_COLOR: always
@@ -32,7 +40,7 @@ env:
 
 jobs:
   published-secure-multi-soak:
-    name: Published kafrust ${{ inputs.kafrust_version }} Kafka 4.3.1 secure multi-broker restart
+    name: Published kafrust ${{ inputs.kafrust_version }} Kafka 4.3.1 secure ${{ inputs.fault_mode }} multi-broker restart
     runs-on: ubuntu-latest
     timeout-minutes: 35
 
@@ -145,9 +153,17 @@ jobs:
           ) &
           soak_pid=$!
           sleep "$((KAFRUST_SOAK_SECONDS / 3))"
-          docker stop -t 1 kafrust-published-secure-multi-soak-1
+          if [ "${{ inputs.fault_mode }}" = "simultaneous" ]; then
+            docker stop -t 1 kafrust-published-secure-multi-soak-1 kafrust-published-secure-multi-soak-2
+          else
+            docker stop -t 1 kafrust-published-secure-multi-soak-1
+          fi
           sleep "${{ inputs.outage_seconds }}"
-          docker start kafrust-published-secure-multi-soak-1
+          if [ "${{ inputs.fault_mode }}" = "simultaneous" ]; then
+            docker start kafrust-published-secure-multi-soak-1 kafrust-published-secure-multi-soak-2
+          else
+            docker start kafrust-published-secure-multi-soak-1
+          fi
           wait "$soak_pid"
           test -s published-secure-multi-soak.json
           grep -q '"recovered":true' published-secure-multi-soak.json
