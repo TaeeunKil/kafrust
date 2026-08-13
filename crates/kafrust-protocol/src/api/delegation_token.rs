@@ -350,10 +350,14 @@ fn decode_legacy_principal(decoder: &mut Decoder<'_>) -> Result<DelegationTokenP
 }
 
 fn decode_flexible_principal(decoder: &mut Decoder<'_>) -> Result<DelegationTokenPrincipal> {
-    let principal = DelegationTokenPrincipal {
+    Ok(DelegationTokenPrincipal {
         principal_type: decoder.read_compact_string()?,
         principal_name: decoder.read_compact_string()?,
-    };
+    })
+}
+
+fn decode_flexible_principal_struct(decoder: &mut Decoder<'_>) -> Result<DelegationTokenPrincipal> {
+    let principal = decode_flexible_principal(decoder)?;
     decoder.read_tagged_fields()?;
     Ok(principal)
 }
@@ -396,7 +400,10 @@ fn decode_flexible_token(
     let token_id = decoder.read_compact_string()?;
     let hmac = decoder.read_compact_bytes()?;
     let renewers = decoder
-        .read_compact_array("delegation token renewers", decode_flexible_principal)?
+        .read_compact_array(
+            "delegation token renewers",
+            decode_flexible_principal_struct,
+        )?
         .unwrap_or_default();
     decoder.read_tagged_fields()?;
     Ok(DescribedDelegationToken {
@@ -482,6 +489,35 @@ mod tests {
     }
 
     #[test]
+    fn decodes_create_delegation_token_v3_response_without_nested_principal_tags() {
+        let mut bytes = Encoder::new();
+        bytes.write_i16(0);
+        bytes.write_compact_string("User").unwrap();
+        bytes.write_compact_string("owner").unwrap();
+        bytes.write_compact_string("User").unwrap();
+        bytes.write_compact_string("requester").unwrap();
+        bytes.write_i64(10);
+        bytes.write_i64(20);
+        bytes.write_i64(30);
+        bytes.write_compact_string("token-1").unwrap();
+        bytes.write_compact_bytes(b"secret-hmac").unwrap();
+        bytes.write_i32(4);
+        bytes.write_empty_tagged_fields();
+
+        let encoded = bytes.into_bytes();
+        let mut decoder = Decoder::new(&encoded);
+        let response = CreateDelegationTokenResponse::decode_body_v2(&mut decoder, 3).unwrap();
+        assert_eq!(response.owner.principal_name, "owner");
+        assert_eq!(
+            response.requester.as_ref().unwrap().principal_name,
+            "requester"
+        );
+        assert_eq!(response.hmac, b"secret-hmac");
+        assert_eq!(response.throttle_time_ms, 4);
+        assert!(decoder.is_empty());
+    }
+
+    #[test]
     fn encodes_renew_and_expire_delegation_token_v2() {
         let renew = RenewDelegationTokenRequest {
             correlation_id: 40,
@@ -518,10 +554,8 @@ mod tests {
         bytes.write_unsigned_varint(2); // one token
         bytes.write_compact_string("User").unwrap();
         bytes.write_compact_string("alice").unwrap();
-        bytes.write_empty_tagged_fields();
         bytes.write_compact_string("User").unwrap();
         bytes.write_compact_string("admin").unwrap();
-        bytes.write_empty_tagged_fields();
         bytes.write_i64(1);
         bytes.write_i64(2);
         bytes.write_i64(3);

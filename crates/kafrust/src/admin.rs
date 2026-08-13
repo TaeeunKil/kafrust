@@ -12261,10 +12261,8 @@ mod tests {
         encoder.write_i16(0); // top-level success
         encoder.write_compact_string("User").unwrap();
         encoder.write_compact_string("owner").unwrap();
-        encoder.write_empty_tagged_fields(); // owner tags
         encoder.write_compact_string("User").unwrap();
         encoder.write_compact_string("requester").unwrap();
-        encoder.write_empty_tagged_fields(); // requester tags
         encoder.write_i64(10);
         encoder.write_i64(20);
         encoder.write_i64(30);
@@ -12284,10 +12282,8 @@ mod tests {
             .write_compact_array(Some(&[()]), |encoder, ()| {
                 encoder.write_compact_string("User")?;
                 encoder.write_compact_string("owner")?;
-                encoder.write_empty_tagged_fields(); // owner tags
                 encoder.write_compact_string("User")?;
                 encoder.write_compact_string("requester")?;
-                encoder.write_empty_tagged_fields(); // requester tags
                 encoder.write_i64(10);
                 encoder.write_i64(20);
                 encoder.write_i64(30);
