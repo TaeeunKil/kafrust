@@ -765,7 +765,9 @@ jobs:
         run: cargo run -p kafrust --example admin_delegation_tokens
 
       - name: Build KIP-848 SASL failover example
-        run: cargo build -p kafrust --example consumer_group_failover
+        run: |
+          cargo build -p kafrust --example consumer_group_failover
+          cargo build -p kafrust --example consumer_group_epoch_failover
 
       - name: Run KIP-848 SASL coordinator failover
         run: |
@@ -826,6 +828,108 @@ jobs:
           if [ "$group_status" -ne 0 ] || [ -z "$coordinator_ready" ]; then
             cat /tmp/kafrust-kip848-sasl-recovery.log || true
             docker logs "$coordinator_container"
+            exit 1
+          fi
+
+      - name: Run KIP-848 SASL consumer-group leader-epoch failover
+        run: |
+          group_epoch_partition=""
+          for attempt in {1..120}; do
+            docker exec kafrust-kafka-kip848-sasl-1 /opt/kafka/bin/kafka-topics.sh \
+              --bootstrap-server kafrust-kafka-kip848-sasl-1:29092 \
+              --describe \
+              --topic "$KAFRUST_TOPIC" \
+              >/tmp/kafrust-kip848-sasl-group-epoch-topic.log 2>&1 || true
+            group_epoch_partition="$(awk '/Partition:/ && /Leader: 1/ { for (i = 1; i <= NF; i++) if ($i == "Partition:") { print $(i + 1); exit } }' /tmp/kafrust-kip848-sasl-group-epoch-topic.log)"
+            if [ -n "$group_epoch_partition" ]; then
+              break
+            fi
+            sleep 2
+          done
+
+          if [ -z "$group_epoch_partition" ]; then
+            cat /tmp/kafrust-kip848-sasl-group-epoch-topic.log || true
+            echo "could not find a KIP-848 SASL leader-epoch partition led by broker 1"
+            exit 1
+          fi
+
+          KAFRUST_PARTITION="$group_epoch_partition" \
+          KAFRUST_KEY="kafrust-kip848-sasl-group-epoch-${GITHUB_RUN_ID}" \
+          KAFRUST_VALUE="kafrust kip848 sasl group epoch seed" \
+          cargo run -p kafrust --example producer_send
+
+          group_epoch_log=/tmp/kafrust-kip848-sasl-consumer-group-epoch-failover.log
+          KAFRUST_GROUP_ID="kafrust-kip848-sasl-group-epoch-${GITHUB_RUN_ID}" \
+          KAFRUST_GROUP_PROTOCOL=consumer \
+          KAFRUST_PARTITION="$group_epoch_partition" \
+          KAFRUST_OFFSET=0 \
+          KAFRUST_FAILOVER_PAUSE_MS=10000 \
+          RUST_LOG=kafrust=debug \
+          cargo run -p kafrust --example consumer_group_epoch_failover \
+            >"$group_epoch_log" 2>&1 &
+          group_epoch_pid=$!
+
+          group_epoch_before_seen=""
+          for attempt in {1..90}; do
+            if grep -q "group epoch failover before polled" "$group_epoch_log"; then
+              group_epoch_before_seen=1
+              break
+            fi
+            if ! kill -0 "$group_epoch_pid" 2>/dev/null; then
+              cat "$group_epoch_log" || true
+              wait "$group_epoch_pid"
+            fi
+            sleep 1
+          done
+
+          if [ -z "$group_epoch_before_seen" ]; then
+            cat "$group_epoch_log" || true
+            echo "KIP-848 SASL group did not reach its pre-stop poll"
+            kill "$group_epoch_pid" 2>/dev/null || true
+            wait "$group_epoch_pid" || true
+            exit 1
+          fi
+
+          docker stop kafrust-kafka-kip848-sasl-1
+          group_epoch_leader_ready=""
+          for attempt in {1..60}; do
+            docker exec kafrust-kafka-kip848-sasl-2 /opt/kafka/bin/kafka-topics.sh \
+              --bootstrap-server kafrust-kafka-kip848-sasl-2:29092 \
+              --describe \
+              --topic "$KAFRUST_TOPIC" \
+              >/tmp/kafrust-kip848-sasl-group-epoch-after-stop-topic.log 2>&1 || true
+            if awk -v target="$group_epoch_partition" \
+              '$0 ~ /Partition:/ && $0 ~ ("Partition: " target) && $0 !~ /Leader: 1/ && $0 !~ /Leader: -1|Leader: none/ { found=1 } END { exit !found }' \
+              /tmp/kafrust-kip848-sasl-group-epoch-after-stop-topic.log; then
+              group_epoch_leader_ready=1
+              break
+            fi
+            sleep 1
+          done
+
+          group_epoch_status=0
+          wait "$group_epoch_pid" || group_epoch_status=$?
+          cat "$group_epoch_log"
+
+          docker start kafrust-kafka-kip848-sasl-1
+          group_epoch_broker_ready=""
+          for attempt in {1..120}; do
+            if docker exec kafrust-kafka-kip848-sasl-1 /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server kafrust-kafka-kip848-sasl-1:29092 \
+              >/tmp/kafrust-kip848-sasl-group-epoch-recovery.log 2>&1; then
+              group_epoch_broker_ready=1
+              break
+            fi
+            sleep 2
+          done
+
+          if [ "$group_epoch_status" -ne 0 ] || [ -z "$group_epoch_leader_ready" ] || \
+             [ -z "$group_epoch_broker_ready" ] || \
+             ! grep -q "recovered fetch after leader epoch transition" "$group_epoch_log"; then
+            cat /tmp/kafrust-kip848-sasl-group-epoch-after-stop-topic.log || true
+            cat /tmp/kafrust-kip848-sasl-group-epoch-recovery.log || true
+            docker logs kafrust-kafka-kip848-sasl-1
+            echo "KIP-848 SASL consumer group did not prove automatic leader-epoch recovery"
             exit 1
           fi
 
@@ -1008,7 +1112,9 @@ jobs:
           done
 
       - name: Build KIP-848 SCRAM failover example
-        run: cargo build -p kafrust --features tls --example consumer_group_failover
+        run: |
+          cargo build -p kafrust --features tls --example consumer_group_failover
+          cargo build -p kafrust --features tls --example consumer_group_epoch_failover
 
       - name: Run KIP-848 SCRAM coordinator failover
         run: |
@@ -1132,6 +1238,108 @@ jobs:
           if [ "$group_status" -ne 0 ] || [ -z "$coordinator_ready" ]; then
             cat /tmp/kafrust-kip848-scram-repeat-recovery.log || true
             docker logs "$coordinator_container"
+            exit 1
+          fi
+
+      - name: Run KIP-848 SCRAM consumer-group leader-epoch failover
+        run: |
+          group_epoch_partition=""
+          for attempt in {1..120}; do
+            docker exec kafrust-kip848-scram-1 /opt/kafka/bin/kafka-topics.sh \
+              --bootstrap-server kafrust-kip848-scram-1:29092 \
+              --describe \
+              --topic "$KAFRUST_TOPIC" \
+              >/tmp/kafrust-kip848-scram-group-epoch-topic.log 2>&1 || true
+            group_epoch_partition="$(awk '/Partition:/ && /Leader: 1/ { for (i = 1; i <= NF; i++) if ($i == "Partition:") { print $(i + 1); exit } }' /tmp/kafrust-kip848-scram-group-epoch-topic.log)"
+            if [ -n "$group_epoch_partition" ]; then
+              break
+            fi
+            sleep 2
+          done
+
+          if [ -z "$group_epoch_partition" ]; then
+            cat /tmp/kafrust-kip848-scram-group-epoch-topic.log || true
+            echo "could not find a KIP-848 SCRAM leader-epoch partition led by broker 1"
+            exit 1
+          fi
+
+          KAFRUST_PARTITION="$group_epoch_partition" \
+          KAFRUST_KEY="kafrust-kip848-scram-group-epoch-${GITHUB_RUN_ID}" \
+          KAFRUST_VALUE="kafrust kip848 scram group epoch seed" \
+          cargo run -p kafrust --features tls --example producer_send
+
+          group_epoch_log=/tmp/kafrust-kip848-scram-consumer-group-epoch-failover.log
+          KAFRUST_GROUP_ID="kafrust-kip848-scram-group-epoch-${GITHUB_RUN_ID}" \
+          KAFRUST_GROUP_PROTOCOL=consumer \
+          KAFRUST_PARTITION="$group_epoch_partition" \
+          KAFRUST_OFFSET=0 \
+          KAFRUST_FAILOVER_PAUSE_MS=10000 \
+          RUST_LOG=kafrust=debug \
+          cargo run -p kafrust --features tls --example consumer_group_epoch_failover \
+            >"$group_epoch_log" 2>&1 &
+          group_epoch_pid=$!
+
+          group_epoch_before_seen=""
+          for attempt in {1..90}; do
+            if grep -q "group epoch failover before polled" "$group_epoch_log"; then
+              group_epoch_before_seen=1
+              break
+            fi
+            if ! kill -0 "$group_epoch_pid" 2>/dev/null; then
+              cat "$group_epoch_log" || true
+              wait "$group_epoch_pid"
+            fi
+            sleep 1
+          done
+
+          if [ -z "$group_epoch_before_seen" ]; then
+            cat "$group_epoch_log" || true
+            echo "KIP-848 SCRAM group did not reach its pre-stop poll"
+            kill "$group_epoch_pid" 2>/dev/null || true
+            wait "$group_epoch_pid" || true
+            exit 1
+          fi
+
+          docker stop kafrust-kip848-scram-1
+          group_epoch_leader_ready=""
+          for attempt in {1..60}; do
+            docker exec kafrust-kip848-scram-2 /opt/kafka/bin/kafka-topics.sh \
+              --bootstrap-server kafrust-kip848-scram-2:29092 \
+              --describe \
+              --topic "$KAFRUST_TOPIC" \
+              >/tmp/kafrust-kip848-scram-group-epoch-after-stop-topic.log 2>&1 || true
+            if awk -v target="$group_epoch_partition" \
+              '$0 ~ /Partition:/ && $0 ~ ("Partition: " target) && $0 !~ /Leader: 1/ && $0 !~ /Leader: -1|Leader: none/ { found=1 } END { exit !found }' \
+              /tmp/kafrust-kip848-scram-group-epoch-after-stop-topic.log; then
+              group_epoch_leader_ready=1
+              break
+            fi
+            sleep 1
+          done
+
+          group_epoch_status=0
+          wait "$group_epoch_pid" || group_epoch_status=$?
+          cat "$group_epoch_log"
+
+          docker start kafrust-kip848-scram-1
+          group_epoch_broker_ready=""
+          for attempt in {1..120}; do
+            if docker exec kafrust-kip848-scram-1 /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server kafrust-kip848-scram-1:29092 \
+              >/tmp/kafrust-kip848-scram-group-epoch-recovery.log 2>&1; then
+              group_epoch_broker_ready=1
+              break
+            fi
+            sleep 2
+          done
+
+          if [ "$group_epoch_status" -ne 0 ] || [ -z "$group_epoch_leader_ready" ] || \
+             [ -z "$group_epoch_broker_ready" ] || \
+             ! grep -q "recovered fetch after leader epoch transition" "$group_epoch_log"; then
+            cat /tmp/kafrust-kip848-scram-group-epoch-after-stop-topic.log || true
+            cat /tmp/kafrust-kip848-scram-group-epoch-recovery.log || true
+            docker logs kafrust-kip848-scram-1
+            echo "KIP-848 SCRAM consumer group did not prove automatic leader-epoch recovery"
             exit 1
           fi
 
