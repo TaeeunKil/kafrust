@@ -2024,3 +2024,12 @@ Implemented evidence:
   passed CreateTopics, DescribeConfigs, classic AlterConfigs,
   IncrementalAlterConfigs, and DeleteTopics in the complete matrix
   [`31674680581`](https://github.com/TaeeunKil/kafrust/actions/runs/31674680581).
+- Release `v0.2.26` publishes automatic direct-consumer leader-epoch
+  truncation recovery. After a fenced or unknown leader-epoch Fetch error, the
+  client negotiates Metadata v12, resolves the previous epoch boundary through
+  OffsetForLeaderEpoch v3, clamps the retry offset, and resends Fetch with the
+  current epoch. The complete 17-job matrix passed on code commit `1694889` in
+  [`31677617186`](https://github.com/TaeeunKil/kafrust/actions/runs/31677617186).
+  Package, docs.rs, crates.io, and fresh external Rust 1.81 `tls` compile
+  checks passed for `0.2.26`. Live log-truncation fault injection and group
+  rebalance recovery remain separate gates.

@@ -109,6 +109,14 @@ in [`31673377685`](https://github.com/TaeeunKil/kafrust/actions/runs/31673377685
 including the supported plaintext, TLS, SASL, KIP-848, and multi-broker paths.
 The v4 fallback remains covered by a focused broker-capability regression test.
 
+Release `v0.2.26` adds automatic direct-consumer truncation recovery after a
+fenced or unknown leader epoch. The complete 17-job matrix passed on code
+commit `1694889` in
+[`31677617186`](https://github.com/TaeeunKil/kafrust/actions/runs/31677617186),
+including plaintext, TLS, SASL, SCRAM, OAUTHBEARER, multi-broker, and KIP-848
+profiles. The matrix is a regression gate for the release; it does not claim a
+live log-truncation fault-injection scenario.
+
 Release `v0.2.19` additionally qualifies Fetch v12 forwarding of the last
 fetched partition leader epoch and consumer-group `Earliest`/`Latest` recovery
 when a committed offset is no longer retained. The dedicated offset-reset
@@ -293,6 +301,7 @@ other coordinator-routed writes remain separate qualification items.
 | Apache Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1 | complete 17-job KRaft matrix; plaintext, TLS, SASL, OAUTHBEARER, ACL, multi-broker, and KIP-848 profiles | Full smoke plus Kafka 3.7.2 multi-broker DeleteRecords and DescribeProducers leader-stop recovery | [`Live Kafka Smoke`, run `31630339333`](https://github.com/TaeeunKil/kafrust/actions/runs/31630339333) on 2026-08-13 | Passing |
 | Apache Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1 | complete 17-job KRaft matrix; plaintext, TLS, SASL, OAUTHBEARER, ACL, multi-broker, and KIP-848 profiles | ListTransactions broker-shard aggregation, topic-ID Produce v13 with name-based v12/v11/v9 fallback, rack-aware Fetch v12, and existing failover gates | [`Live Kafka Smoke`, run `31648660947`](https://github.com/TaeeunKil/kafrust/actions/runs/31648660947) on 2026-08-13 | Passing; Produce selected v13 on Kafka 4.3.1, v11 on 3.8.1/3.9.1, and v9 on 3.7.2; ListTransactions examples returned records on single-node and 3.7.2 multi-broker profiles |
 | Apache Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1 | complete 17-job KRaft matrix; dedicated offset-reset topic | Fetch v12 last-fetched leader epoch; group `Earliest`/`Latest` reset with committed out-of-range recovery | [`Live Kafka Smoke`, run `31663188419`](https://github.com/TaeeunKil/kafrust/actions/runs/31663188419) on 2026-08-13 | Passing |
+| Apache Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1 | complete 17-job KRaft matrix; plaintext, TLS, SASL, SCRAM, OAUTHBEARER, multi-broker, and KIP-848 profiles | v0.2.26 direct-consumer leader-epoch recovery regression matrix | [`Live Kafka Smoke`, run `31677617186`](https://github.com/TaeeunKil/kafrust/actions/runs/31677617186) on 2026-08-13 | Passing; live log-truncation injection not claimed |
 
 ## Verified Paths
 

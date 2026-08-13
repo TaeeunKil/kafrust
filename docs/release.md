@@ -174,6 +174,17 @@ retaining Fetch v4 fallback for older broker capability ranges. The complete
 Both crates.io package endpoints and docs.rs pages returned HTTP 200, and a
 fresh external project compiled published `kafrust 0.2.25` with `tls`.
 
+The `0.2.26` packages passed Cargo package and publish verification on release
+preparation commit `3f917c6`; `kafrust-protocol` was published before
+`kafrust`. The release adds automatic direct-consumer leader-epoch truncation
+recovery after a fenced or unknown leader epoch, with focused injected-broker
+coverage and documented live-qualification limits. The complete 17-job Live
+Kafka Smoke matrix passed on code commit `1694889` in
+[`31677617186`](https://github.com/TaeeunKil/kafrust/actions/runs/31677617186).
+Both crates.io package endpoints and both docs.rs pages returned HTTP 200. A
+fresh external project compiled published `kafrust 0.2.26` with `tls` on Rust
+1.81 MSVC.
+
 ## Optional Broker Checks
 
 The default test suite does not require a Kafka broker. Before an alpha tag, run the opt-in examples or tests against a local broker when practical:
