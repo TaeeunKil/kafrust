@@ -16,6 +16,7 @@ async fn main() -> kafrust::Result<()> {
     let offset = offset_from_env()?;
     let pause = pause_from_env()?;
     let protocol = group_protocol_from_env()?;
+    let expected_value = std::env::var("KAFRUST_EXPECTED_VALUE").ok();
 
     let mut group = common::apply_security(
         ConsumerGroupConfig::new(bootstrap_servers, group_id.clone())
@@ -67,6 +68,19 @@ async fn main() -> kafrust::Result<()> {
 
     let after = group.poll_with_heartbeat(&mut heartbeat).await?;
     print_records("group epoch failover after polled", &after)?;
+    if let Some(expected_value) = expected_value.as_deref() {
+        if !after.iter().any(|record| {
+            record.topic() == topic
+                && record.partition() == partition
+                && record.value() == Some(expected_value.as_bytes())
+        }) {
+            return Err(Error::Unsupported(
+                "consumer group did not fetch the expected post-failover record",
+            ));
+        }
+        println!("group epoch failover observed expected post-failover record");
+        flush_stdout()?;
+    }
     heartbeat.stop().await?;
     group.leave().await?;
     println!("group epoch failover left group");
@@ -77,10 +91,11 @@ fn print_records(label: &str, records: &[ConsumerRecord]) -> kafrust::Result<()>
     println!("{label} count={}", records.len());
     for record in records {
         println!(
-            "fetched {}-{}@{}",
+            "fetched {}-{}@{} value={:?}",
             record.topic(),
             record.partition(),
-            record.offset()
+            record.offset(),
+            record.value().map(String::from_utf8_lossy)
         );
     }
     flush_stdout()

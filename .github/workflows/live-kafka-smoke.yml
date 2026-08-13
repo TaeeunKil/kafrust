@@ -2378,6 +2378,7 @@ jobs:
           KAFRUST_TOPIC="$group_epoch_topic" \
           KAFRUST_PARTITION="$group_epoch_partition" \
           KAFRUST_OFFSET=0 \
+          KAFRUST_EXPECTED_VALUE="post-failover-${GITHUB_RUN_ID}" \
           KAFRUST_FAILOVER_PAUSE_MS=30000 \
           RUST_LOG=kafrust=debug \
           cargo run -p kafrust --example consumer_group_epoch_failover \
@@ -2464,11 +2465,11 @@ jobs:
 
           if [ "$group_epoch_status" -ne 0 ] || [ "$group_epoch_producer_status" -ne 0 ] || \
              [ -z "$group_epoch_broker_ready" ] || \
-             ! grep -q "recovered fetch after leader epoch transition" "$group_epoch_log"; then
+             ! grep -q "group epoch failover observed expected post-failover record" "$group_epoch_log"; then
             cat /tmp/kafrust-group-epoch-after-stop-topic.log || true
             cat /tmp/kafrust-group-epoch-recovery.log || true
             docker logs "kafrust-kafka-multi-${group_epoch_broker}"
-            echo "consumer group did not prove automatic leader-epoch recovery"
+            echo "consumer group did not prove post-failover record recovery"
             exit 1
           fi
 
