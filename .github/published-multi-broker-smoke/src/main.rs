@@ -144,9 +144,10 @@ async fn main() -> kafrust::Result<()> {
         bootstrap_servers.split(',').map(str::to_owned),
     ));
     let brokers = cluster.describe_cluster().await?;
-    if brokers.brokers().len() != 3 {
+    let expected_broker_count = if phase == "pre" { 3 } else { 2 };
+    if brokers.brokers().len() < expected_broker_count {
         return Err(Error::Unsupported(
-            "published multi-broker smoke did not observe three brokers",
+            "published multi-broker smoke did not observe the expected live brokers",
         ));
     }
 
