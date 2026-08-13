@@ -335,6 +335,18 @@ the replacement coordinator. A published `ReadCommitted` consumer observed the
 committed record. This qualifies coordinator-stop recovery, not every
 ambiguous-outcome, fencing, or throughput workload.
 
+The published secured multi-broker workflow then passed both supported group
+protocol profiles. Kafka 3.7.2 classic passed in
+[`31738997447`](https://github.com/TaeeunKil/kafrust/actions/runs/31738997447),
+and Kafka 4.3.1 KIP-848 passed in
+[`31739154764`](https://github.com/TaeeunKil/kafrust/actions/runs/31739154764).
+Each fresh external project resolved `kafrust 0.2.28` with the `tls` feature,
+validated three SASL_SSL listeners, authenticated Admin/producer/group paths
+with SCRAM-SHA-256, stopped broker 1's selected partition leader, and consumed
+a post-failover record through the replacement leader. This is published
+secured leader-failover evidence, not a claim for every security mechanism,
+coordinator-plus-leader fault combination, or workload profile.
+
 The following current-main live run
 [`31719615947`](https://github.com/TaeeunKil/kafrust/actions/runs/31719615947)
 also passed the controlled classic consumer-group combined-fault gate in the

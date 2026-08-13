@@ -2260,6 +2260,17 @@ Implemented evidence:
   after that broker was stopped during an open transaction, and verified the
   committed record through `ReadCommitted`. Ambiguous outcomes, fencing, and
   throughput workloads remain separate 1.0 gates.
+- The published secured multi-broker workflow passed both representative
+  security and group-protocol combinations. Kafka 3.7.2 classic passed in
+  [`31738997447`](https://github.com/TaeeunKil/kafrust/actions/runs/31738997447),
+  and Kafka 4.3.1 KIP-848 passed in
+  [`31739154764`](https://github.com/TaeeunKil/kafrust/actions/runs/31739154764).
+  Fresh external projects resolved `kafrust 0.2.28` with `tls`, validated all
+  three SASL_SSL listeners, authenticated Admin/producer/group operations with
+  SCRAM-SHA-256, and recovered after the selected partition leader stopped.
+  This closes one published secured leader-failover gate; coordinator-plus-
+  leader colocation, broader security mechanisms, and workload/fault matrices
+  remain required before the M21 1.0 replacement claim.
 - The complete 17-job run [`31719615947`](https://github.com/TaeeunKil/kafrust/actions/runs/31719615947)
   adds a controlled combined-fault gate in the Kafka 3.7.2 three-broker
   plaintext profile. It deliberately colocates the classic group coordinator
