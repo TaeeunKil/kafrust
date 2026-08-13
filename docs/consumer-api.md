@@ -194,6 +194,12 @@ Current implementation status:
   negotiation. When the broker advertises Fetch v12, the rack ID is sent using
   the flexible schema and the next request follows `preferred_read_replica`.
   Fetch v11 and the existing Fetch v4 leader route remain automatic fallbacks.
+- Rack-aware Fetch v11/v12 requests reuse a broker-scoped fetch session across
+  sequential polls. The first request opens the session at epoch `0`; later
+  requests advance the epoch. Assignment changes, seek/pause/resume operations,
+  broker reconnects, and fetch errors discard the session so the next request
+  starts cleanly. The current session claim is limited to the rack-aware v11/v12
+  path; the v4 compatibility fallback does not claim fetch-session reuse.
 - `ConsumerConfig::request_timeout_ms` controls the request timeout used for metadata and fetch roundtrips.
 - `ConsumerConfig::security_protocol` stores the Kafka security protocol for consumer broker connections. `Plaintext` is the default transport; TLS requires the non-default `tls` crate feature; `tls_server_name(name)` overrides the certificate validation name when the bootstrap host differs from the broker certificate; `tls_root_certificate_der(bytes)` adds DER-encoded root certificates while keeping platform roots enabled; `sasl_plain(username, password)`, `sasl_scram_sha_256(username, password)`, and `sasl_scram_sha_512(username, password)` provide SASL credentials for `SaslPlaintext` or `SaslTls`.
 - `ConsumerConfig::max_retries` controls retry attempts for stale metadata, unknown topic-partition entries in cached metadata, missing leader or broker metadata, transient fetch broker errors, request timeouts, and connection I/O failures.

@@ -317,6 +317,10 @@ unavailable. Wire-level and injected multi-broker routing tests cover this path.
 three-broker `broker.rack` plus `RackAwareReplicaSelector` profile passed in
 [`Live Kafka Smoke`, run `31640494509`](https://github.com/TaeeunKil/kafrust/actions/runs/31640494509),
 including live Fetch v12 requests and preferred-replica routing.
+Rack-aware Fetch v11/v12 requests also reuse a broker-scoped fetch session across
+sequential polls; assignment changes, local position controls, reconnects, and
+fetch errors reset that session. Fetch v4 remains a compatibility fallback
+without a fetch-session claim.
 
 ### Consumer Group
 

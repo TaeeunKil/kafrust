@@ -82,6 +82,8 @@ pub enum BrokerErrorKind {
     FencedLeaderEpoch,
     /// Kafka could not identify the supplied leader epoch during a transition.
     UnknownLeaderEpoch,
+    /// Kafka rejected the current fetch session epoch and requires a new session.
+    InvalidFetchSessionEpoch,
 }
 
 impl BrokerErrorKind {
@@ -123,6 +125,7 @@ impl BrokerErrorKind {
             113 => Self::StaleMemberEpoch,
             74 => Self::FencedLeaderEpoch,
             75 => Self::UnknownLeaderEpoch,
+            70 => Self::InvalidFetchSessionEpoch,
             86 => Self::GroupSubscribedToTopic,
             90 => Self::ProducerFenced,
             _ => Self::Unknown,
@@ -521,6 +524,10 @@ mod tests {
         assert_eq!(
             BrokerErrorKind::from_code(75),
             BrokerErrorKind::UnknownLeaderEpoch
+        );
+        assert_eq!(
+            BrokerErrorKind::from_code(70),
+            BrokerErrorKind::InvalidFetchSessionEpoch
         );
         assert_eq!(BrokerErrorKind::from_code(999), BrokerErrorKind::Unknown);
     }

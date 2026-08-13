@@ -286,7 +286,27 @@ pub struct Consumer {
     partition_queues: BTreeMap<(String, i32), mpsc::Sender<ConsumerRecord>>,
     metadata_cache: BTreeMap<String, MetadataResponseV1>,
     broker_clients: BTreeMap<String, Client>,
+    fetch_sessions: BTreeMap<String, FetchSessionState>,
     preferred_read_replicas: BTreeMap<(String, i32), i32>,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct FetchSessionState {
+    session_id: i32,
+    next_epoch: i32,
+}
+
+impl FetchSessionState {
+    fn next_request(self) -> (i32, i32) {
+        (self.session_id, self.next_epoch)
+    }
+
+    fn advance_with_response(self, session_id: i32) -> Self {
+        Self {
+            session_id,
+            next_epoch: self.next_epoch.saturating_add(1),
+        }
+    }
 }
 
 impl Consumer {
@@ -302,6 +322,7 @@ impl Consumer {
             partition_queues: BTreeMap::new(),
             metadata_cache: BTreeMap::new(),
             broker_clients: BTreeMap::new(),
+            fetch_sessions: BTreeMap::new(),
             preferred_read_replicas: BTreeMap::new(),
         }
     }
@@ -356,6 +377,7 @@ impl Consumer {
         });
         self.assignments = assignments;
         self.metadata_cache.clear();
+        self.fetch_sessions.clear();
     }
 
     /// Assigns a topic partition and next offset to fetch.
@@ -363,6 +385,7 @@ impl Consumer {
         let topic = topic.into();
         self.partition_queues.remove(&(topic.clone(), partition));
         assign_partition(&mut self.assignments, topic, partition, offset);
+        self.fetch_sessions.clear();
     }
 
     /// Returns the current topic partition assignments.
@@ -422,18 +445,21 @@ impl Consumer {
             ));
         }
         self.assignment_mut(topic, partition)?.next_offset = offset;
+        self.fetch_sessions.clear();
         Ok(())
     }
 
     /// Pauses fetching from an assigned topic partition.
     pub fn pause(&mut self, topic: &str, partition: i32) -> Result<()> {
         self.assignment_mut(topic, partition)?.paused = true;
+        self.fetch_sessions.clear();
         Ok(())
     }
 
     /// Resumes fetching from an assigned topic partition.
     pub fn resume(&mut self, topic: &str, partition: i32) -> Result<()> {
         self.assignment_mut(topic, partition)?.paused = false;
+        self.fetch_sessions.clear();
         Ok(())
     }
 
@@ -885,98 +911,93 @@ impl Consumer {
             .client_config()
             .client_rack_ref()
             .map(str::to_owned);
-        let (error_code, preferred_read_replica, aborted_transactions, records) =
-            if let Some(rack_id) = rack_id {
-                if leader_client.supports_fetch_v12().await? {
-                    let response = leader_client
-                        .fetch_one_v12(FetchOneRequestV12 {
-                            replica_id: -1,
-                            max_wait_ms: self.config.max_wait_ms,
-                            min_bytes: self.config.min_bytes,
-                            max_bytes: self.config.max_partition_bytes,
-                            isolation_level: self.config.isolation_level.as_i8(),
-                            topic: topic.to_owned(),
-                            partition_index: partition,
-                            current_leader_epoch,
-                            fetch_offset: offset,
-                            last_fetched_epoch: current_leader_epoch,
-                            max_partition_bytes: self.config.max_partition_bytes,
-                            rack_id,
-                        })
-                        .await?;
-                    if response.error_code != 0 {
-                        return Err(self.config.client.broker_error(
-                            response.error_code,
-                            format!("fetch {topic}-{partition}@{offset}"),
-                        ));
-                    }
-                    let partition_response =
-                        fetch_partition_response_v12(&response, topic, partition)?;
-                    (
-                        partition_response.error_code,
-                        Some(partition_response.preferred_read_replica),
-                        partition_response
-                            .aborted_transactions
-                            .iter()
-                            .map(|transaction| AbortedTransactionV4 {
-                                producer_id: transaction.producer_id,
-                                first_offset: transaction.first_offset,
-                            })
-                            .collect(),
-                        partition_response.records.clone(),
-                    )
-                } else if leader_client.supports_fetch_v11().await? {
-                    let response = leader_client
-                        .fetch_one_v11(FetchOneRequestV11 {
-                            replica_id: -1,
-                            max_wait_ms: self.config.max_wait_ms,
-                            min_bytes: self.config.min_bytes,
-                            max_bytes: self.config.max_partition_bytes,
-                            isolation_level: self.config.isolation_level.as_i8(),
-                            topic: topic.to_owned(),
-                            partition_index: partition,
-                            current_leader_epoch,
-                            fetch_offset: offset,
-                            max_partition_bytes: self.config.max_partition_bytes,
-                            rack_id,
-                        })
-                        .await?;
-                    if response.error_code != 0 {
-                        return Err(self.config.client.broker_error(
-                            response.error_code,
-                            format!("fetch {topic}-{partition}@{offset}"),
-                        ));
-                    }
-                    let partition_response =
-                        fetch_partition_response_v11(&response, topic, partition)?;
-                    (
-                        partition_response.error_code,
-                        Some(partition_response.preferred_read_replica),
-                        partition_response.aborted_transactions.clone(),
-                        partition_response.records.clone(),
-                    )
-                } else {
-                    let response = leader_client
-                        .fetch_one_v4(FetchOneRequestV4 {
-                            replica_id: -1,
-                            max_wait_ms: self.config.max_wait_ms,
-                            min_bytes: self.config.min_bytes,
-                            max_bytes: self.config.max_partition_bytes,
-                            isolation_level: self.config.isolation_level.as_i8(),
-                            topic: topic.to_owned(),
-                            partition_index: partition,
-                            fetch_offset: offset,
-                            max_partition_bytes: self.config.max_partition_bytes,
-                        })
-                        .await?;
-                    let partition_response = fetch_partition_response(&response, topic, partition)?;
-                    (
-                        partition_response.error_code,
-                        Some(-1),
-                        partition_response.aborted_transactions.clone(),
-                        partition_response.records.clone(),
-                    )
+        let session = self
+            .fetch_sessions
+            .get(&broker_addr)
+            .copied()
+            .unwrap_or_default();
+        let (session_id, session_epoch) = session.next_request();
+        let (
+            error_code,
+            preferred_read_replica,
+            aborted_transactions,
+            records,
+            response_session_id,
+        ) = if let Some(rack_id) = rack_id {
+            if leader_client.supports_fetch_v12().await? {
+                let response = leader_client
+                    .fetch_one_v12(FetchOneRequestV12 {
+                        replica_id: -1,
+                        max_wait_ms: self.config.max_wait_ms,
+                        min_bytes: self.config.min_bytes,
+                        max_bytes: self.config.max_partition_bytes,
+                        isolation_level: self.config.isolation_level.as_i8(),
+                        topic: topic.to_owned(),
+                        partition_index: partition,
+                        current_leader_epoch,
+                        fetch_offset: offset,
+                        last_fetched_epoch: current_leader_epoch,
+                        max_partition_bytes: self.config.max_partition_bytes,
+                        session_id,
+                        session_epoch,
+                        rack_id,
+                    })
+                    .await?;
+                if response.error_code != 0 {
+                    self.fetch_sessions.remove(&broker_addr);
+                    return Err(self.config.client.broker_error(
+                        response.error_code,
+                        format!("fetch {topic}-{partition}@{offset}"),
+                    ));
                 }
+                let partition_response = fetch_partition_response_v12(&response, topic, partition)?;
+                (
+                    partition_response.error_code,
+                    Some(partition_response.preferred_read_replica),
+                    partition_response
+                        .aborted_transactions
+                        .iter()
+                        .map(|transaction| AbortedTransactionV4 {
+                            producer_id: transaction.producer_id,
+                            first_offset: transaction.first_offset,
+                        })
+                        .collect(),
+                    partition_response.records.clone(),
+                    response.session_id,
+                )
+            } else if leader_client.supports_fetch_v11().await? {
+                let response = leader_client
+                    .fetch_one_v11(FetchOneRequestV11 {
+                        replica_id: -1,
+                        max_wait_ms: self.config.max_wait_ms,
+                        min_bytes: self.config.min_bytes,
+                        max_bytes: self.config.max_partition_bytes,
+                        isolation_level: self.config.isolation_level.as_i8(),
+                        topic: topic.to_owned(),
+                        partition_index: partition,
+                        current_leader_epoch,
+                        fetch_offset: offset,
+                        max_partition_bytes: self.config.max_partition_bytes,
+                        session_id,
+                        session_epoch,
+                        rack_id,
+                    })
+                    .await?;
+                if response.error_code != 0 {
+                    self.fetch_sessions.remove(&broker_addr);
+                    return Err(self.config.client.broker_error(
+                        response.error_code,
+                        format!("fetch {topic}-{partition}@{offset}"),
+                    ));
+                }
+                let partition_response = fetch_partition_response_v11(&response, topic, partition)?;
+                (
+                    partition_response.error_code,
+                    Some(partition_response.preferred_read_replica),
+                    partition_response.aborted_transactions.clone(),
+                    partition_response.records.clone(),
+                    response.session_id,
+                )
             } else {
                 let response = leader_client
                     .fetch_one_v4(FetchOneRequestV4 {
@@ -994,16 +1015,50 @@ impl Consumer {
                 let partition_response = fetch_partition_response(&response, topic, partition)?;
                 (
                     partition_response.error_code,
-                    None,
+                    Some(-1),
                     partition_response.aborted_transactions.clone(),
                     partition_response.records.clone(),
+                    0,
                 )
-            };
+            }
+        } else {
+            let response = leader_client
+                .fetch_one_v4(FetchOneRequestV4 {
+                    replica_id: -1,
+                    max_wait_ms: self.config.max_wait_ms,
+                    min_bytes: self.config.min_bytes,
+                    max_bytes: self.config.max_partition_bytes,
+                    isolation_level: self.config.isolation_level.as_i8(),
+                    topic: topic.to_owned(),
+                    partition_index: partition,
+                    fetch_offset: offset,
+                    max_partition_bytes: self.config.max_partition_bytes,
+                })
+                .await?;
+            let partition_response = fetch_partition_response(&response, topic, partition)?;
+            (
+                partition_response.error_code,
+                None,
+                partition_response.aborted_transactions.clone(),
+                partition_response.records.clone(),
+                0,
+            )
+        };
         if error_code != 0 {
+            self.fetch_sessions.remove(&broker_addr);
             return Err(self
                 .config
                 .client
                 .broker_error(error_code, format!("fetch {topic}-{partition}@{offset}")));
+        }
+
+        if response_session_id > 0 {
+            self.fetch_sessions.insert(
+                broker_addr.clone(),
+                session.advance_with_response(response_session_id),
+            );
+        } else {
+            self.fetch_sessions.remove(&broker_addr);
         }
 
         if let Some(preferred_read_replica) = preferred_read_replica {
@@ -1089,6 +1144,7 @@ impl Consumer {
         if let Some(client) = self.broker_clients.remove(broker_addr) {
             return Ok(client);
         }
+        self.fetch_sessions.remove(broker_addr);
         self.config
             .client
             .connect_broker(broker_addr.to_owned())
@@ -1467,6 +1523,7 @@ impl ConsumerConfig {
             partition_queues: BTreeMap::new(),
             metadata_cache: BTreeMap::new(),
             broker_clients: BTreeMap::new(),
+            fetch_sessions: BTreeMap::new(),
             preferred_read_replicas: BTreeMap::new(),
         })
     }
@@ -1693,6 +1750,7 @@ fn can_retry_fetch(error: &Error) -> bool {
                 | BrokerErrorKind::ReplicaNotAvailable
                 | BrokerErrorKind::FencedLeaderEpoch
                 | BrokerErrorKind::UnknownLeaderEpoch
+                | BrokerErrorKind::InvalidFetchSessionEpoch
         ),
         Error::Io(_)
         | Error::RequestTimedOut { .. }
@@ -2176,6 +2234,67 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn reuses_fetch_session_for_sequential_rack_aware_polls() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut socket).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut socket, &api_versions_v3_fetch_v12_response(1)).await;
+
+            let first_fetch = read_frame(&mut socket).await;
+            assert_eq!(&first_fetch[0..4], &[0, 1, 0, 12]);
+            assert!(first_fetch.windows(4).any(|window| window == [0, 0, 0, 0]));
+            write_frame(
+                &mut socket,
+                &fetch_v12_response_frame_with_session(2, -1, 17),
+            )
+            .await;
+
+            let second_fetch = read_frame(&mut socket).await;
+            assert_eq!(&second_fetch[0..4], &[0, 1, 0, 12]);
+            assert!(second_fetch
+                .windows(4)
+                .any(|window| window == [0, 0, 0, 17]));
+            assert!(second_fetch.windows(4).any(|window| window == [0, 0, 0, 1]));
+            write_frame(
+                &mut socket,
+                &fetch_v12_response_frame_with_session(3, -1, 17),
+            )
+            .await;
+        });
+        let (client_stream, broker_stream) = tokio::io::duplex(64);
+        let _broker_stream = broker_stream;
+        let client = Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-fetch-session-test".to_owned()),
+            Some(std::time::Duration::from_millis(500)),
+        );
+        let config = ConsumerConfig::new([addr.to_string()])
+            .request_timeout_ms(500)
+            .client_rack("rack-a");
+        let mut consumer = Consumer::from_assignments(
+            client,
+            config,
+            vec![ConsumerAssignment::new("orders".to_owned(), 0, 42)],
+        );
+        let mut metadata = metadata_fixture();
+        metadata.brokers[0].host = addr.ip().to_string();
+        metadata.brokers[0].port = i32::from(addr.port());
+        consumer
+            .metadata_cache
+            .insert("orders".to_owned(), metadata);
+
+        assert!(consumer.poll().await.unwrap().is_empty());
+        assert_eq!(consumer.fetch_sessions[&addr.to_string()].session_id, 17);
+        assert_eq!(consumer.fetch_sessions[&addr.to_string()].next_epoch, 1);
+        assert!(consumer.poll().await.unwrap().is_empty());
+        assert_eq!(consumer.fetch_sessions[&addr.to_string()].next_epoch, 2);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn fetches_offset_for_leader_epoch_from_partition_leader() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -2252,6 +2371,10 @@ mod tests {
         }));
         assert!(can_retry_fetch(&Error::Broker {
             code: 75,
+            context: "fetch orders-0@0".to_owned(),
+        }));
+        assert!(can_retry_fetch(&Error::Broker {
+            code: 70,
             context: "fetch orders-0@0".to_owned(),
         }));
         assert!(!can_retry_fetch(&Error::Broker {
@@ -2859,12 +2982,20 @@ mod tests {
     }
 
     fn fetch_v12_response_frame(correlation_id: i32, preferred_read_replica: i32) -> Vec<u8> {
+        fetch_v12_response_frame_with_session(correlation_id, preferred_read_replica, 0)
+    }
+
+    fn fetch_v12_response_frame_with_session(
+        correlation_id: i32,
+        preferred_read_replica: i32,
+        session_id: i32,
+    ) -> Vec<u8> {
         let mut response = Encoder::new();
         response.write_i32(correlation_id);
         response.write_unsigned_varint(0); // response header tags
-        response.write_i32(0);
+        response.write_i32(0); // throttle time
         response.write_i16(0);
-        response.write_i32(0);
+        response.write_i32(session_id);
         response.write_unsigned_varint(2); // one compact topic
         response.write_compact_string("orders").unwrap();
         response.write_unsigned_varint(2); // one compact partition

@@ -284,6 +284,9 @@ response when supported; Fetch v11 and the existing Fetch v4 leader path remain
 fallbacks. The protocol and injected routing tests pass. The Kafka 3.7.2 three-broker `broker.rack` plus
 `RackAwareReplicaSelector` profile is live-qualified in
 [`31640494509`](https://github.com/TaeeunKil/kafrust/actions/runs/31640494509).
+Rack-aware Fetch v11/v12 requests reuse a broker-scoped fetch session across
+sequential polls. Assignment changes, seek/pause/resume, reconnects, and fetch
+errors discard the session; the Fetch v4 fallback does not claim session reuse.
 
 ## Consumer Group
 

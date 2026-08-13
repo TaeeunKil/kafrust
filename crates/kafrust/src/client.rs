@@ -185,6 +185,8 @@ pub(crate) struct FetchOneRequestV11 {
     pub current_leader_epoch: i32,
     pub fetch_offset: i64,
     pub max_partition_bytes: i32,
+    pub session_id: i32,
+    pub session_epoch: i32,
     pub rack_id: String,
 }
 
@@ -201,6 +203,8 @@ pub(crate) struct FetchOneRequestV12 {
     pub fetch_offset: i64,
     pub last_fetched_epoch: i32,
     pub max_partition_bytes: i32,
+    pub session_id: i32,
+    pub session_epoch: i32,
     pub rack_id: String,
 }
 
@@ -1594,8 +1598,8 @@ impl Client {
             min_bytes: request.min_bytes,
             max_bytes: request.max_bytes,
             isolation_level: request.isolation_level,
-            session_id: 0,
-            session_epoch: 0,
+            session_id: request.session_id,
+            session_epoch: request.session_epoch,
             topics: vec![FetchTopicV11 {
                 name: request.topic,
                 partitions: vec![FetchPartitionV11 {
@@ -1627,8 +1631,8 @@ impl Client {
             min_bytes: request.min_bytes,
             max_bytes: request.max_bytes,
             isolation_level: request.isolation_level,
-            session_id: 0,
-            session_epoch: 0,
+            session_id: request.session_id,
+            session_epoch: request.session_epoch,
             topics: vec![FetchTopicV12 {
                 name: request.topic,
                 partitions: vec![FetchPartitionV12 {
