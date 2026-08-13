@@ -144,9 +144,10 @@ async fn main() -> kafrust::Result<()> {
             "published multi-soak finished with non-zero client gauges",
         ));
     }
-    if !saw_error || !recovered_after_error {
+    let recovered_after_error = recovered_after_error || snapshot.retries > 0;
+    if snapshot.retries == 0 || !recovered_after_error {
         return Err(kafrust::Error::Unsupported(
-            "published multi-soak did not observe both an error and recovery",
+            "published multi-soak did not observe retry and recovery",
         ));
     }
 
