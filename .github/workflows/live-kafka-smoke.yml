@@ -2741,6 +2741,7 @@ jobs:
               -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=2 \
               -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 \
               -e KAFKA_LOG_DIRS=/tmp/kafka-logs,/tmp/kafka-logs-2 \
+              -e KAFKA_DELEGATION_TOKEN_SECRET_KEY=kafrust-delegation-secret \
               -e KAFKA_SASL_ENABLED_MECHANISMS=SCRAM-SHA-256,SCRAM-SHA-512 \
               -e KAFKA_SSL_KEYSTORE_FILENAME=kafka.server.keystore.p12 \
               -e KAFKA_SSL_KEYSTORE_CREDENTIALS=keystore-password \
@@ -2809,6 +2810,11 @@ jobs:
               -verify_return_error \
               </dev/null >/tmp/kafrust-scram-ssl-listener-${port}.log 2>&1
           done
+
+      - name: Run SASL_SSL SCRAM multi-broker delegation token lifecycle
+        env:
+          KAFRUST_DELEGATION_TOKEN_RENEWER: User:kafrust
+        run: cargo run -p kafrust --features tls --example admin_delegation_tokens
 
       - name: Run secured leader election through the controller
         run: |
