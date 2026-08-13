@@ -643,8 +643,11 @@ with zero in-flight requests and buffered records.
   3.8.1, 3.9.1, and 4.3.1, including explicit rejoin and the corrected Kafka
   4.3.1 KIP-848 path, in [`Live Kafka Smoke`, run
   `31561944247`](https://github.com/TaeeunKil/kafrust/actions/runs/31561944247).
-  Secured-broker topic-discovery permission behavior still requires targeted
-  qualification.
+  A Kafka 3.7.2 StandardAuthorizer job then ran the same regex subscription
+  over SASL_PLAINTEXT as a restricted user with one allowed and one denied
+  topic. The initial assignment and explicit rejoin exposed only the allowed
+  topic and fetched its record in
+  [`31694784179`](https://github.com/TaeeunKil/kafrust/actions/runs/31694784179).
 - The regex consumer smoke also fetched a produced record, queued its next
   offset with `commit_record`, and flushed the queue through
   `commit_queued_offsets`. The classic path passed across Kafka 3.7.2, 3.8.1,
@@ -660,7 +663,6 @@ with zero in-flight requests and buffered records.
   and position preservation. The direct and group queue examples passed across
   Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 in
   [`Live Kafka Smoke`, run `31566523106`](https://github.com/TaeeunKil/kafrust/actions/runs/31566523106).
-  Secured topic-discovery permission behavior remains open compatibility work.
 - KIP-848 consumer groups through `ConsumerGroupHeartbeat v0`, Metadata v12
   topic UUID assignment, member-epoch foreground/background heartbeats,
   OffsetFetch v9, OffsetCommit v9, rejoin after concurrent membership, and

@@ -243,8 +243,12 @@ Known limits:
 - `ConsumerGroup::rejoin` is public and refreshes regex topic discovery before
   joining again. The classic matrix and Kafka 4.3.1 KIP-848 regex paths passed
   initial and explicit rejoin assignment checks in [`Live Kafka Smoke`, run
-  `31561944247`](https://github.com/TaeeunKil/kafrust/actions/runs/31561944247);
-  secured topic-discovery permissions remain open.
+  `31561944247`](https://github.com/TaeeunKil/kafrust/actions/runs/31561944247).
+  A Kafka 3.7.2 StandardAuthorizer job then ran the same regex subscription
+  over SASL_PLAINTEXT as a restricted user with one allowed and one denied
+  topic. The initial assignment and explicit rejoin exposed only the allowed
+  topic and fetched its record in
+  [`31694784179`](https://github.com/TaeeunKil/kafrust/actions/runs/31694784179).
 
 ## M6 Production Behavior
 
