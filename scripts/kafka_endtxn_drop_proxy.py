@@ -32,7 +32,10 @@ async def proxy_connection(
     target_port: int,
     drop_marker: Path,
 ) -> None:
+    peer = client_writer.get_extra_info("peername")
+    print(f"accepted client {peer}", flush=True)
     target_reader, target_writer = await asyncio.open_connection(target_host, target_port)
+    print(f"connected to target {target_host}:{target_port}", flush=True)
     request_api_keys: asyncio.Queue[int] = asyncio.Queue()
 
     async def forward_requests() -> None:
@@ -43,6 +46,7 @@ async def proxy_connection(
             if len(body) < 4:
                 raise RuntimeError("Kafka request body is shorter than its header")
             api_key = struct.unpack(">h", body[:2])[0]
+            print(f"request api_key={api_key} length={len(body)}", flush=True)
             await request_api_keys.put(api_key)
             await write_frame(target_writer, body)
 
@@ -52,6 +56,7 @@ async def proxy_connection(
             if body is None:
                 return
             api_key = await request_api_keys.get()
+            print(f"response api_key={api_key} length={len(body)}", flush=True)
             if api_key == END_TXN_API_KEY and claim_drop_marker(drop_marker):
                 print("forwarded EndTxn request and dropped its response", flush=True)
                 return
@@ -96,6 +101,10 @@ async def main() -> None:
             )
         except (ConnectionError, asyncio.IncompleteReadError) as error:
             print(f"proxy connection closed: {error}", flush=True)
+            writer.close()
+            await writer.wait_closed()
+        except Exception as error:
+            print(f"proxy connection failed: {error!r}", flush=True)
             writer.close()
             await writer.wait_closed()
 

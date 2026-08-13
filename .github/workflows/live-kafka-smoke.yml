@@ -1477,7 +1477,7 @@ jobs:
               -e KAFKA_NODE_ID="${node}" \
               -e KAFKA_PROCESS_ROLES=broker,controller \
               -e KAFKA_LISTENERS=INTERNAL://:29092,EXTERNAL://:9092,CONTROLLER://:9093 \
-              -e KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafrust-kafka-ambiguity-${node}:29092,EXTERNAL://localhost:${proxy_port} \
+              -e KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafrust-kafka-ambiguity-${node}:29092,EXTERNAL://127.0.0.1:${proxy_port} \
               -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
               -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT \
               -e KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL \
@@ -1542,7 +1542,7 @@ jobs:
 
       - name: Qualify ambiguous EndTxn outcome and read-committed reconciliation
         env:
-          KAFRUST_BOOTSTRAP_SERVERS: localhost:39092,localhost:39093,localhost:39094
+          KAFRUST_BOOTSTRAP_SERVERS: 127.0.0.1:39092,127.0.0.1:39093,127.0.0.1:39094
           KAFRUST_TOPIC: kafrust-transaction-ambiguity-${{ github.run_id }}
           KAFRUST_TRANSACTIONAL_ID: kafrust-transaction-ambiguity-${{ github.run_id }}
         run: cargo run -p kafrust --example producer_transaction_ambiguity
