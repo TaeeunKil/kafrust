@@ -381,7 +381,12 @@ async fn main() -> kafrust::Result<()> {
         .ok_or(Error::MissingGroupDescription {
             group_id: group_id.clone(),
         })?;
-    if !described_group.is_success() || described_group.members().is_empty() {
+    let missing_classic_members =
+        group_protocol == ConsumerGroupProtocol::Classic && described_group.members().is_empty();
+    if !described_group.is_success()
+        || described_group.state().is_empty()
+        || missing_classic_members
+    {
         return Err(Error::Unsupported(
             "published admin describe_consumer_groups returned an invalid active group",
         ));
