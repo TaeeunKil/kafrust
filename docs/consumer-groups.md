@@ -186,6 +186,13 @@ offset. The default remains `Offset(0)` for compatibility with the pre-policy
 API, and the existing `start_offset(n)` builder is equivalent to
 `offset_reset_policy(OffsetResetPolicy::Offset(n))`.
 
+The same `Earliest` and `Latest` policies also recover a committed assignment
+when its next offset is no longer retained and the broker returns
+`OFFSET_OUT_OF_RANGE`: the group fetch resolves the current low watermark or
+log end and retries once. `ConsumerGroup::poll` inherits this behavior from
+the direct consumer path; explicit `Offset(n)` keeps the broker error visible
+instead of silently moving the committed position.
+
 ## Position Control
 
 `ConsumerGroup` exposes `position`, `seek`, `pause`, and `resume` for its

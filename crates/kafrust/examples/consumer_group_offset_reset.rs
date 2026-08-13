@@ -1,10 +1,13 @@
 mod common;
 
 use kafrust::{
-    Acks, ConsumerGroupConfig, Error, OffsetResetPolicy, ProducerConfig, ProducerRecord,
+    Acks, AdminClient, ClientConfig, ConsumerGroupConfig, DeleteRecordsOptions, DeleteRecordsTopic,
+    Error, OffsetResetPolicy, ProducerConfig, ProducerRecord,
 };
 
 const BEFORE_VALUE: &[u8] = b"kafrust-offset-reset-before";
+const FILLER_VALUE: &[u8] = b"kafrust-offset-reset-filler";
+const RECOVERED_VALUE: &[u8] = b"kafrust-offset-reset-recovered";
 const AFTER_VALUE: &[u8] = b"kafrust-offset-reset-after";
 
 #[tokio::main]
@@ -26,6 +29,13 @@ async fn main() -> kafrust::Result<()> {
                 .value(BEFORE_VALUE),
         )
         .await?;
+    producer
+        .send(
+            ProducerRecord::to(topic.clone())
+                .partition(0)
+                .value(FILLER_VALUE),
+        )
+        .await?;
 
     let mut earliest = group(
         bootstrap_servers.clone(),
@@ -40,7 +50,67 @@ async fn main() -> kafrust::Result<()> {
             "earliest offset reset did not return an existing record",
         ));
     }
+    let committed_offset = earliest.position(&topic, 0).ok_or(Error::Unsupported(
+        "earliest group has no partition position",
+    ))?;
+    earliest.commit_offsets().await?;
     earliest.leave().await?;
+
+    let admin = AdminClient::new(common::apply_security(
+        ClientConfig::new(bootstrap_servers.clone()).client_id("kafrust-offset-recovery-admin"),
+    )?);
+    let delete_result = admin
+        .delete_records(
+            &[DeleteRecordsTopic::new(topic.clone()).partition(0, committed_offset + 1)],
+            DeleteRecordsOptions::new(),
+        )
+        .await?;
+    let deleted_topic = delete_result
+        .topics()
+        .iter()
+        .find(|candidate| candidate.name() == topic)
+        .ok_or(Error::UnknownTopicOrPartition {
+            topic: topic.clone(),
+            partition: 0,
+        })?;
+    let deleted_partition = deleted_topic
+        .partitions()
+        .iter()
+        .find(|candidate| candidate.partition_index() == 0)
+        .ok_or(Error::UnknownTopicOrPartition {
+            topic: topic.clone(),
+            partition: 0,
+        })?;
+    if !deleted_partition.is_success() || deleted_partition.low_watermark() <= committed_offset {
+        return Err(Error::Unsupported(
+            "delete records did not move the low watermark past the committed offset",
+        ));
+    }
+    producer
+        .send(
+            ProducerRecord::to(topic.clone())
+                .partition(0)
+                .value(RECOVERED_VALUE),
+        )
+        .await?;
+
+    let mut recovered = group(
+        bootstrap_servers.clone(),
+        format!("{group_id}-committed-out-of-range"),
+        &topic,
+        OffsetResetPolicy::Earliest,
+    )
+    .await?;
+    let recovered_records = recovered.poll().await?;
+    if !contains_value(&recovered_records, RECOVERED_VALUE)
+        || contains_value(&recovered_records, BEFORE_VALUE)
+        || contains_value(&recovered_records, FILLER_VALUE)
+    {
+        return Err(Error::Unsupported(
+            "committed out-of-range group offset did not recover from the earliest watermark",
+        ));
+    }
+    recovered.leave().await?;
 
     let mut latest = group(
         bootstrap_servers,
@@ -78,6 +148,7 @@ async fn group(
     )?
     .offset_reset_policy(policy)
     .subscribe(topic)
+    .max_poll_records(1)
     .join()
     .await
 }

@@ -4751,6 +4751,12 @@ mod tests {
             consumer_config.isolation_level_ref(),
             IsolationLevel::ReadCommitted
         );
+
+        let recovery_config = config.offset_reset_policy(OffsetResetPolicy::Earliest);
+        assert_eq!(
+            recovery_config.consumer_config().offset_reset_policy_ref(),
+            OffsetResetPolicy::Earliest
+        );
     }
 
     #[test]
