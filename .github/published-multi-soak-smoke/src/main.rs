@@ -27,7 +27,7 @@ async fn main() -> kafrust::Result<()> {
         .metrics(metrics.clone())
         .request_timeout_ms(5_000)
         .acks(Acks::Leader)
-        .max_retries(3)
+        .max_retries(10)
         .max_records_per_batch(batch_size)
         .max_batch_bytes(900 * 1024)
         .build()
@@ -37,7 +37,7 @@ async fn main() -> kafrust::Result<()> {
         .metrics(metrics.clone())
         .request_timeout_ms(5_000)
         .max_wait_ms(100)
-        .max_retries(3)
+        .max_retries(10)
         .max_partition_bytes(16 * 1024 * 1024)
         .build()
         .await?;
