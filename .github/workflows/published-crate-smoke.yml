@@ -28,18 +28,49 @@ jobs:
             bootstrap_servers: localhost:9092
             security_protocol: plaintext
             kafrust_features: '[]'
+            compression: none
           - profile: kafka-4.3.1-kip848
             kafka_version: 4.3.1
             group_protocol: consumer
             bootstrap_servers: localhost:9092
             security_protocol: plaintext
             kafrust_features: '[]'
+            compression: none
           - profile: kafka-3.7.2-sasl-ssl-scram
             kafka_version: 3.7.2
             group_protocol: classic
             bootstrap_servers: localhost:9095
             security_protocol: sasl_tls
             kafrust_features: '["tls"]'
+            compression: none
+          - profile: kafka-3.7.2-gzip
+            kafka_version: 3.7.2
+            group_protocol: classic
+            bootstrap_servers: localhost:9092
+            security_protocol: plaintext
+            kafrust_features: '[]'
+            compression: gzip
+          - profile: kafka-3.7.2-snappy
+            kafka_version: 3.7.2
+            group_protocol: classic
+            bootstrap_servers: localhost:9092
+            security_protocol: plaintext
+            kafrust_features: '[]'
+            compression: snappy
+          - profile: kafka-3.7.2-lz4
+            kafka_version: 3.7.2
+            group_protocol: classic
+            bootstrap_servers: localhost:9092
+            security_protocol: plaintext
+            kafrust_features: '[]'
+            compression: lz4
+          - profile: kafka-3.7.2-zstd
+            kafka_version: 3.7.2
+            group_protocol: classic
+            bootstrap_servers: localhost:9092
+            security_protocol: plaintext
+            kafrust_features: '[]'
+            compression: zstd
 
     steps:
       - name: Checkout
@@ -230,6 +261,7 @@ jobs:
           KAFRUST_GROUP_PROTOCOL: ${{ matrix.group_protocol }}
           KAFRUST_TRANSACTIONAL_ID: kafrust-published-transaction-${{ matrix.profile }}-${{ github.run_id }}
           KAFRUST_SECURITY_PROTOCOL: ${{ matrix.security_protocol }}
+          KAFRUST_COMPRESSION: ${{ matrix.compression }}
           KAFRUST_SASL_MECHANISM: scram-sha-256
           KAFRUST_SASL_USERNAME: kafrust
           KAFRUST_SASL_PASSWORD: kafrust-secret

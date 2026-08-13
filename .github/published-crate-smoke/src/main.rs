@@ -1,8 +1,9 @@
 use std::{env, fs};
 
 use kafrust::{
-    Acks, AdminClient, ClientConfig, ConsumerConfig, ConsumerGroupConfig, ConsumerGroupProtocol,
-    Error, IsolationLevel, OffsetResetPolicy, ProducerConfig, ProducerRecord, SecurityProtocol,
+    Acks, AdminClient, ClientConfig, Compression, ConsumerConfig, ConsumerGroupConfig,
+    ConsumerGroupProtocol, Error, IsolationLevel, OffsetResetPolicy, ProducerConfig,
+    ProducerRecord, SecurityProtocol,
 };
 
 struct SecuritySettings {
@@ -102,6 +103,18 @@ async fn main() -> kafrust::Result<()> {
         .map_err(|_| Error::Unsupported("KAFRUST_TRANSACTIONAL_ID is required"))?;
     let value =
         env::var("KAFRUST_VALUE").map_err(|_| Error::Unsupported("KAFRUST_VALUE is required"))?;
+    let compression = match env::var("KAFRUST_COMPRESSION").as_deref() {
+        Ok("none") | Err(_) => Compression::None,
+        Ok("gzip") => Compression::Gzip,
+        Ok("snappy") => Compression::Snappy,
+        Ok("lz4") => Compression::Lz4,
+        Ok("zstd") => Compression::Zstd,
+        Ok(_) => {
+            return Err(Error::Unsupported(
+                "KAFRUST_COMPRESSION must be none, gzip, snappy, lz4, or zstd",
+            ));
+        }
+    };
     let security = SecuritySettings::from_env()?;
     let group_protocol = match env::var("KAFRUST_GROUP_PROTOCOL").as_deref() {
         Ok("classic") | Err(_) => ConsumerGroupProtocol::Classic,
@@ -160,7 +173,8 @@ async fn main() -> kafrust::Result<()> {
     let mut producer = configure_security!(ProducerConfig::new([bootstrap_servers.clone()])
         .client_id("kafrust-published-smoke-producer")
         .acks(Acks::Leader)
-        .enable_idempotence(true))
+        .enable_idempotence(true)
+        .compression(compression))
     .build()
     .await?;
     let metadata = producer
@@ -192,7 +206,8 @@ async fn main() -> kafrust::Result<()> {
     let mut transactional_producer =
         configure_security!(ProducerConfig::new([bootstrap_servers.clone()])
             .client_id("kafrust-published-smoke-transaction-producer")
-            .transactional_id(transactional_id))
+            .transactional_id(transactional_id)
+            .compression(compression))
         .build()
         .await?;
     transactional_producer.begin_transaction()?;
