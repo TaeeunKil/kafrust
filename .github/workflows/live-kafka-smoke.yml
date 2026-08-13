@@ -1331,6 +1331,7 @@ jobs:
       - name: Build KIP-848 SCRAM failover example
         run: |
           cargo build -p kafrust --features tls --example consumer_group_failover
+          cargo build -p kafrust --features tls --example consumer_group_combined_failover
           cargo build -p kafrust --features tls --example consumer_group_epoch_failover
 
       - name: Run KIP-848 SCRAM coordinator failover
@@ -1567,6 +1568,158 @@ jobs:
             cat /tmp/kafrust-kip848-scram-group-epoch-recovery.log || true
             docker logs "kafrust-kip848-scram-${group_epoch_broker}"
             echo "KIP-848 SCRAM consumer group did not prove automatic leader-epoch recovery"
+            exit 1
+          fi
+
+      - name: Run KIP-848 SCRAM combined coordinator and partition leader failover
+        run: |
+          combined_group_id="kafrust-kip848-scram-combined-${GITHUB_RUN_ID}"
+          combined_topic="kafrust-kip848-scram-combined-${GITHUB_RUN_ID}"
+          docker exec kafrust-kip848-scram-1 /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server kafrust-kip848-scram-1:29092 \
+            --create \
+            --if-not-exists \
+            --topic "$combined_topic" \
+            --partitions 3 \
+            --replication-factor 3
+
+          preflight_log=/tmp/kafrust-kip848-scram-combined-preflight.log
+          preflight_status=0
+          KAFRUST_GROUP_ID="$combined_group_id" \
+          KAFRUST_GROUP_PROTOCOL=consumer \
+          KAFRUST_TOPIC="$combined_topic" \
+          KAFRUST_FAILOVER_PAUSE_MS=0 \
+          cargo run -p kafrust --features tls --example consumer_group_failover \
+            >"$preflight_log" 2>&1 || preflight_status=$?
+          combined_coordinator_node="$(sed -n 's/.*coordinator node \([0-9][0-9]*\)$/\1/p' "$preflight_log" | tail -n 1)"
+          if [ "$preflight_status" -ne 0 ] || ! [[ "$combined_coordinator_node" =~ ^[123]$ ]]; then
+            cat "$preflight_log" || true
+            echo "KIP-848 SCRAM combined-fault preflight did not report a coordinator"
+            exit 1
+          fi
+
+          combined_assignment=""
+          for attempt in {1..120}; do
+            docker exec kafrust-kip848-scram-1 /opt/kafka/bin/kafka-topics.sh \
+              --bootstrap-server kafrust-kip848-scram-1:29092 \
+              --describe \
+              --topic "$combined_topic" \
+              >/tmp/kafrust-kip848-scram-combined-topic.log 2>&1 || true
+            combined_assignment="$(awk -v coordinator="$combined_coordinator_node" '/Partition:/ { partition=""; leader=""; for (i = 1; i <= NF; i++) { if ($i == "Partition:") partition=$(i + 1); if ($i == "Leader:") leader=$(i + 1) } if (partition != "" && leader == coordinator) { print partition, leader; exit } }' /tmp/kafrust-kip848-scram-combined-topic.log)"
+            if [ -n "$combined_assignment" ]; then
+              break
+            fi
+            sleep 2
+          done
+
+          if [ -z "$combined_assignment" ]; then
+            cat /tmp/kafrust-kip848-scram-combined-topic.log || true
+            echo "could not find a KIP-848 SCRAM partition led by the group coordinator"
+            exit 1
+          fi
+          read -r combined_partition combined_leader <<<"$combined_assignment"
+          combined_probe_broker=""
+          for candidate in 1 2 3; do
+            if [ "$candidate" != "$combined_leader" ]; then
+              combined_probe_broker="$candidate"
+              break
+            fi
+          done
+
+          KAFRUST_TOPIC="$combined_topic" \
+          KAFRUST_PARTITION="$combined_partition" \
+          KAFRUST_KEY="kafrust-kip848-scram-combined-before-${GITHUB_RUN_ID}" \
+          KAFRUST_VALUE="kafrust-kip848-scram-combined-before-${GITHUB_RUN_ID}" \
+          cargo run -p kafrust --features tls --example producer_send
+
+          combined_log=/tmp/kafrust-kip848-scram-combined-failover.log
+          KAFRUST_GROUP_PROTOCOL=consumer \
+          KAFRUST_GROUP_ID="$combined_group_id" \
+          KAFRUST_TOPIC="$combined_topic" \
+          KAFRUST_PARTITION="$combined_partition" \
+          KAFRUST_EXPECTED_VALUE="kafrust-kip848-scram-combined-after-${GITHUB_RUN_ID}" \
+          KAFRUST_FAILOVER_PAUSE_MS=30000 \
+          cargo run -p kafrust --features tls --example consumer_group_combined_failover \
+            >"$combined_log" 2>&1 &
+          combined_group_pid=$!
+
+          combined_before_seen=""
+          for attempt in {1..90}; do
+            if grep -q "combined group failover before polled" "$combined_log"; then
+              combined_before_seen=1
+              break
+            fi
+            if ! kill -0 "$combined_group_pid" 2>/dev/null; then
+              cat "$combined_log" || true
+              wait "$combined_group_pid"
+            fi
+            sleep 1
+          done
+          if [ -z "$combined_before_seen" ]; then
+            cat "$combined_log" || true
+            kill "$combined_group_pid" 2>/dev/null || true
+            wait "$combined_group_pid" || true
+            echo "KIP-848 SCRAM combined-fault group did not reach its pre-stop poll"
+            exit 1
+          fi
+
+          docker stop "kafrust-kip848-scram-${combined_leader}"
+          combined_replacement_ready=""
+          for attempt in {1..90}; do
+            docker exec "kafrust-kip848-scram-${combined_probe_broker}" /opt/kafka/bin/kafka-topics.sh \
+              --bootstrap-server "kafrust-kip848-scram-${combined_probe_broker}:29092" \
+              --describe \
+              --topic "$combined_topic" \
+              >/tmp/kafrust-kip848-scram-combined-after-stop-topic.log 2>&1 || true
+            if awk -v target="$combined_partition" -v stopped="$combined_leader" \
+              '$0 ~ /Partition:/ { partition=""; leader=""; for (i = 1; i <= NF; i++) { if ($i == "Partition:") partition=$(i + 1); if ($i == "Leader:") leader=$(i + 1) } if (partition == target && leader ~ /^[123]$/ && leader != stopped) found=1 } END { exit !found }' \
+              /tmp/kafrust-kip848-scram-combined-after-stop-topic.log; then
+              combined_replacement_ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ -z "$combined_replacement_ready" ]; then
+            cat /tmp/kafrust-kip848-scram-combined-after-stop-topic.log || true
+            cat "$combined_log" || true
+            kill "$combined_group_pid" 2>/dev/null || true
+            wait "$combined_group_pid" || true
+            echo "KIP-848 SCRAM combined-fault partition did not elect a replacement leader"
+            exit 1
+          fi
+
+          combined_producer_log=/tmp/kafrust-kip848-scram-combined-producer.log
+          KAFRUST_TOPIC="$combined_topic" \
+          KAFRUST_PARTITION="$combined_partition" \
+          KAFRUST_KEY="kafrust-kip848-scram-combined-after-key-${GITHUB_RUN_ID}" \
+          KAFRUST_VALUE="kafrust-kip848-scram-combined-after-${GITHUB_RUN_ID}" \
+          cargo run -p kafrust --features tls --example producer_send \
+            >"$combined_producer_log" 2>&1
+
+          combined_group_status=0
+          wait "$combined_group_pid" || combined_group_status=$?
+          cat "$combined_log"
+          cat "$combined_producer_log"
+
+          docker start "kafrust-kip848-scram-${combined_leader}"
+          combined_broker_ready=""
+          for attempt in {1..120}; do
+            if docker exec "kafrust-kip848-scram-${combined_leader}" \
+              /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server "kafrust-kip848-scram-${combined_leader}:29092" \
+              >/tmp/kafrust-kip848-scram-combined-recovery.log 2>&1; then
+              combined_broker_ready=1
+              break
+            fi
+            sleep 2
+          done
+
+          if [ "$combined_group_status" -ne 0 ] || [ -z "$combined_broker_ready" ] || \
+             ! grep -q "kafrust-kip848-scram-combined-after-${GITHUB_RUN_ID}" "$combined_log"; then
+            cat /tmp/kafrust-kip848-scram-combined-after-stop-topic.log || true
+            cat /tmp/kafrust-kip848-scram-combined-recovery.log || true
+            docker logs "kafrust-kip848-scram-${combined_leader}"
+            echo "KIP-848 SCRAM combined coordinator and partition leader failover did not recover"
             exit 1
           fi
 
