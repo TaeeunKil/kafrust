@@ -387,17 +387,32 @@ async fn main() -> kafrust::Result<()> {
     .join()
     .await?;
     let restored_records = restored_group.poll().await?;
-    if restored_records.iter().any(|record| {
+    let replayed_committed_record = restored_records.iter().any(|record| {
         record.topic() == topic
             && record.partition() == committed_record.partition()
             && record.offset() == committed_offset
             && record.value() == Some(value.as_bytes())
-    }) || !restored_records.iter().any(|record| {
+    });
+    let restored_expected_record = restored_records.iter().any(|record| {
         record.topic() == topic
             && record.partition() == restored_metadata.partition()
             && record.offset() == restored_metadata.offset()
             && record.value() == Some(restored_value.as_bytes())
-    }) {
+    });
+    if replayed_committed_record || !restored_expected_record {
+        println!(
+            "group restore diagnostics: committed_offset={committed_offset}, expected_offset={}, replayed_committed_record={replayed_committed_record}, restored_expected_record={restored_expected_record}",
+            restored_metadata.offset()
+        );
+        for record in &restored_records {
+            println!(
+                "group restore record: {}-{}@{} value={:?}",
+                record.topic(),
+                record.partition(),
+                record.offset(),
+                record.value().map(String::from_utf8_lossy)
+            );
+        }
         return Err(Error::Unsupported(
             "published crate consumer group did not restore from its committed offset",
         ));
