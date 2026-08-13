@@ -2136,6 +2136,15 @@ Implemented evidence:
   [`31716400583`](https://github.com/TaeeunKil/kafrust/actions/runs/31716400583),
   including heartbeat-preserved classic Kafka 3.7.2 and KIP-848 Kafka 4.3.1
   leader-epoch recovery over plaintext, SASL/PLAIN, and SASL_SSL/SCRAM.
+- The current main line adds the `consumer_retention_recovery` example and a
+  direct assigned-consumer `OffsetOutOfRange` gate. It produces a known
+  position, moves the retained low watermark past that position with Admin
+  `DeleteRecords`, then verifies `OffsetResetPolicy::Earliest` resumes from
+  the new boundary and reaches a post-delete record. All four single-node
+  Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 profiles passed this gate in the
+  complete 17-job run [`31717934296`](https://github.com/TaeeunKil/kafrust/actions/runs/31717934296).
+  This is a controlled retention boundary claim; arbitrary retention timing,
+  unclean-election data loss, and combined fault scenarios remain unclaimed.
 - Classic and KIP-848 consumer-group polling now have live leader-epoch
   recovery gates. The complete matrix in
   [`31702236760`](https://github.com/TaeeunKil/kafrust/actions/runs/31702236760)
@@ -2153,5 +2162,5 @@ Implemented evidence:
   with epoch 1 to 2. The follow-up complete 17-job matrix passed at commit
   `9e53941` in
   [`31703868759`](https://github.com/TaeeunKil/kafrust/actions/runs/31703868759).
-  Broader fault combinations and data-loss/log-retention scenarios remain
-  separate 1.0 gates.
+  Broader fault combinations, arbitrary retention timing, and unclean-election
+  data-loss scenarios remain separate 1.0 gates.

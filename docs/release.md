@@ -211,6 +211,14 @@ leader-epoch recovery over plaintext, SASL/PLAIN, and SASL_SSL/SCRAM. The
 follow-up workflow and example fixes are on `main`; they do not change the
 already-published `0.2.27` library artifacts.
 
+The next current-main qualification run
+[`31717934296`](https://github.com/TaeeunKil/kafrust/actions/runs/31717934296)
+also passed all 17 jobs after adding the direct assigned-consumer retention
+example. Its controlled `DeleteRecords` scenario moved the low watermark past
+the consumer position and verified `OffsetResetPolicy::Earliest` recovery on
+Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1. This is a main-branch 1.0 gate and does
+not modify the already-published `0.2.27` artifacts.
+
 ## Optional Broker Checks
 
 The default test suite does not require a Kafka broker. Before an alpha tag, run the opt-in examples or tests against a local broker when practical:
