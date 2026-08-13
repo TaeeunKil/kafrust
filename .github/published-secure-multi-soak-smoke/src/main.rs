@@ -191,7 +191,9 @@ async fn main() -> kafrust::Result<()> {
     }
 
     let snapshot = metrics.snapshot();
-    if produced != consumed || snapshot.produced_records != produced {
+    let produced_records = u64::try_from(produced)
+        .map_err(|_| Error::Unsupported("secure soak record count is too large"))?;
+    if produced != consumed || snapshot.produced_records != produced_records {
         eprintln!(
             "secure multi-soak count mismatch: local produced={produced} consumed={consumed}; metrics produced={} consumed={}",
             snapshot.produced_records, snapshot.consumed_records
