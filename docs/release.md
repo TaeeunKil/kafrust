@@ -427,6 +427,16 @@ zero retries and zero final in-flight or buffered records. This is a published
 baseline for repeatability, not a direct rust-rdkafka comparison or production
 SLO.
 
+The published soak workflow
+[`31744827441`](https://github.com/TaeeunKil/kafrust/actions/runs/31744827441)
+passed a fresh external `kafrust 0.2.28` project against Kafka 4.3.1. The
+120-second, 1-KiB, batch-size-100 workload stopped the broker after one third of
+the run, waited ten seconds, restarted it, and reconciled 7,229,000 produced
+and consumed records. It observed 173 operation errors, 982 failed requests,
+and 1,210 retries, then reported `recovered=true` with zero final in-flight or
+buffered records. This is a published single-node recovery profile, not a
+multi-broker soak or production SLO.
+
 The following current-main live run
 [`31719615947`](https://github.com/TaeeunKil/kafrust/actions/runs/31719615947)
 also passed the controlled classic consumer-group combined-fault gate in the

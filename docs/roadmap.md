@@ -1539,6 +1539,14 @@ completed and both final resource gauges were zero.
   with p50/p95/p99 batch latency recorded, zero retries, and zero final queue
   gauges. This closes the published performance-baseline gate; it does not
   claim a rust-rdkafka comparison, production SLO, or long-running soak.
+- Published `kafrust 0.2.28` soak run
+  [`31744827441`](https://github.com/TaeeunKil/kafrust/actions/runs/31744827441)
+  passed Kafka 4.3.1 after a broker stop at one third of a 120-second run and
+  a ten-second outage. The fresh external project processed 7,229,000 records,
+  observed 173 operation errors, 982 failed requests, and 1,210 retries, then
+  recovered with `recovered=true` and zero final queue gauges. This closes the
+  published single-node soak gate; multi-broker soak, direct rust-rdkafka
+  comparison, production SLO, and canary evidence remain open.
 - Shared metrics count non-zero Kafka error codes handled by authentication,
   producer, transaction, consumer, and consumer-group operations, including
   retry attempts and partial batch failures. This separates protocol-level
@@ -2314,6 +2322,13 @@ Implemented evidence:
   48.9k records/s and consumer throughput from 210.6k to 268.3k records/s.
   This is a published baseline for repeatability, not a direct rust-rdkafka
   comparison, production SLO, or long-running soak result.
+- The published single-node soak gate then passed in
+  [`31744827441`](https://github.com/TaeeunKil/kafrust/actions/runs/31744827441).
+  A fresh external `0.2.28` project ran for 120 seconds against Kafka 4.3.1,
+  survived a ten-second broker outage, reconciled 7,229,000 records, and ended
+  with `recovered=true` plus zero in-flight and buffered records. The remaining
+  claim is deliberately narrow: this does not establish multi-broker soak,
+  direct rust-rdkafka parity, production SLOs, or service canary readiness.
 - The published secured multi-broker workflow passed both representative
   security and group-protocol combinations. Kafka 3.7.2 classic passed in
   [`31738997447`](https://github.com/TaeeunKil/kafrust/actions/runs/31738997447),
