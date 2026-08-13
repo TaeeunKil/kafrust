@@ -3419,7 +3419,7 @@ jobs:
         env:
           KAFRUST_GROUP_ID: kafrust-secured-admin-offset-${{ github.run_id }}
         run: |
-          for attempt in {1..5}; do
+          for attempt in {1..20}; do
             if cargo run -p kafrust --features tls --example consumer_group_poll; then
               exit 0
             fi

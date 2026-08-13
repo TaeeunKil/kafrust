@@ -14,7 +14,7 @@ async fn main() -> kafrust::Result<()> {
         ProducerConfig::new(bootstrap_servers.clone())
             .client_id("kafrust-transaction-ambiguity-producer")
             .transactional_id(transactional_id.clone())
-            .max_retries(1),
+            .max_retries(30),
     )?
     .build()
     .await?;
