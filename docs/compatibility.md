@@ -126,16 +126,21 @@ automatic recovery through the bounded OffsetForLeaderEpoch path. This proves
 live direct-consumer leader-epoch failover recovery; group rebalance recovery
 and data-loss/log-retention fault scenarios remain separate claims.
 
-The follow-up complete matrix in
-[`31700020132`](https://github.com/TaeeunKil/kafrust/actions/runs/31700020132)
-also qualified the classic `ConsumerGroup` path on the Kafka 3.7.2
-three-broker profile. The gate preserved the group's membership across the
-broker stop, waited for the selected partition's new leader, and verified the
-assigned consumer's automatic OffsetForLeaderEpoch recovery in job
-[`94446655280`](https://github.com/TaeeunKil/kafrust/actions/runs/31700020132/job/94446655280).
-This closes the tested classic group leader-epoch recovery claim; KIP-848
-group-heartbeat recovery and data-loss/log-retention scenarios remain separate
-claims.
+The complete matrix in
+[`31702236760`](https://github.com/TaeeunKil/kafrust/actions/runs/31702236760)
+also qualified assigned consumer-group leader-epoch recovery. The Kafka 3.7.2
+three-broker classic profile preserved the group session across the broker
+stop, waited for the selected partition's new leader, and verified automatic
+OffsetForLeaderEpoch recovery from the assigned consumer in job
+[`94453938654`](https://github.com/TaeeunKil/kafrust/actions/runs/31702236760/job/94453938654),
+including a live partition epoch transition from 3 to 4. The Kafka 4.3.1
+three-broker KIP-848 profile passed the corresponding consumer-protocol gate
+in job
+[`94453938633`](https://github.com/TaeeunKil/kafrust/actions/runs/31702236760/job/94453938633),
+including a live partition epoch transition from 0 to 1. This closes the
+tested classic and plaintext KIP-848 group leader-epoch recovery claims;
+secured KIP-848 partition-leader recovery and data-loss/log-retention
+scenarios remain separate claims.
 
 The current development line also implements controller-routed ElectLeaders
 v0-v2 negotiation and typed preferred/unclean election results. Focused wire
