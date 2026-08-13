@@ -415,6 +415,18 @@ Admin OffsetCommit v2, and consumed from the reset position after rejoin. This
 qualifies representative published mutation and offset policy behavior, not
 every Admin mutation, ACL pattern, provider, or ambiguous failure mode.
 
+The published performance workflow
+[`31744206188`](https://github.com/TaeeunKil/kafrust/actions/runs/31744206188)
+passed all four external `kafrust 0.2.28` profiles: Kafka 3.7.2 and 4.3.1
+with no compression and Zstd. Each fresh project produced and consumed 10,000
+1-KiB records in batches of 200. Producer throughput was 48,929 records/s and
+45,507 records/s for Kafka 3.7.2 no-compression and Zstd, and 43,736 records/s
+and 44,797 records/s for Kafka 4.3.1. Consumer throughput was 210,558,
+257,703, 229,630, and 268,299 records/s in the same order. All profiles had
+zero retries and zero final in-flight or buffered records. This is a published
+baseline for repeatability, not a direct rust-rdkafka comparison or production
+SLO.
+
 The following current-main live run
 [`31719615947`](https://github.com/TaeeunKil/kafrust/actions/runs/31719615947)
 also passed the controlled classic consumer-group combined-fault gate in the

@@ -1531,6 +1531,14 @@ completed and both final resource gauges were zero.
   records, 136 operation errors, 685 failed requests, and 950 retries.
   Recovery completed and the final in-flight and buffered-record gauges were
   both zero.
+- Published `kafrust 0.2.28` performance run
+  [`31744206188`](https://github.com/TaeeunKil/kafrust/actions/runs/31744206188)
+  passed four fresh external projects against Kafka 3.7.2 and 4.3.1 with no
+  compression and Zstd. The 10,000-record, 1-KiB, batch-size-200 workload
+  measured 43.7k-48.9k producer records/s and 210.6k-268.3k consumer records/s,
+  with p50/p95/p99 batch latency recorded, zero retries, and zero final queue
+  gauges. This closes the published performance-baseline gate; it does not
+  claim a rust-rdkafka comparison, production SLO, or long-running soak.
 - Shared metrics count non-zero Kafka error codes handled by authentication,
   producer, transaction, consumer, and consumer-group operations, including
   retry attempts and partial batch failures. This separates protocol-level
@@ -2297,6 +2305,15 @@ Implemented evidence:
   from the reset position after rejoin. This closes the representative
   published mutation/offset gate; every Admin mutation, ACL pattern, provider,
   and ambiguous failure workload remains outside the 1.0 claim.
+- The published performance qualification then passed all four matrix profiles
+  in [`31744206188`](https://github.com/TaeeunKil/kafrust/actions/runs/31744206188):
+  Kafka 3.7.2 and 4.3.1 with no compression and Zstd. Fresh external `0.2.28`
+  projects produced and consumed 10,000 1-KiB records in batches of 200,
+  measured batch p50/p95/p99 latency, and ended with zero retries and zero
+  in-flight or buffered records. Producer throughput ranged from 43.7k to
+  48.9k records/s and consumer throughput from 210.6k to 268.3k records/s.
+  This is a published baseline for repeatability, not a direct rust-rdkafka
+  comparison, production SLO, or long-running soak result.
 - The published secured multi-broker workflow passed both representative
   security and group-protocol combinations. Kafka 3.7.2 classic passed in
   [`31738997447`](https://github.com/TaeeunKil/kafrust/actions/runs/31738997447),
