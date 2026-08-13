@@ -318,6 +318,14 @@ Both runs observed disjoint ownership of all six topic partitions and consumed
 the partition records through the published `0.2.28` artifact. These are
 representative two-member workloads, not every assignor or failure mode.
 
+The published `0.2.28` seven-profile smoke was rerun after adding active-group
+Admin checks. [`31737581786`](https://github.com/TaeeunKil/kafrust/actions/runs/31737581786)
+passed Kafka 3.7.2 classic, Kafka 4.3.1 KIP-848, SASL_SSL/SCRAM, and all four
+compression profiles. Each external project listed and described its active
+group and verified classic or KIP-848 committed offsets through the published
+API. This is representative operational parity, not every Admin authorization
+or failure workload.
+
 The following current-main live run
 [`31719615947`](https://github.com/TaeeunKil/kafrust/actions/runs/31719615947)
 also passed the controlled classic consumer-group combined-fault gate in the

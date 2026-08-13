@@ -2248,6 +2248,12 @@ Implemented evidence:
   Both runs covered disjoint ownership of all six partitions and consumption
   through the published `0.2.28` artifact; broader assignor and failure
   matrices remain separate 1.0 gates.
+- The published `0.2.28` seven-profile smoke then added active-group Admin
+  inspection and committed-offset reads. Run
+  [`31737581786`](https://github.com/TaeeunKil/kafrust/actions/runs/31737581786)
+  passed Kafka 3.7.2 classic, Kafka 4.3.1 KIP-848, SASL_SSL/SCRAM, and all
+  four compression profiles from fresh external projects. Broader Admin
+  authorization and mutation-failure matrices remain separate 1.0 gates.
 - The complete 17-job run [`31719615947`](https://github.com/TaeeunKil/kafrust/actions/runs/31719615947)
   adds a controlled combined-fault gate in the Kafka 3.7.2 three-broker
   plaintext profile. It deliberately colocates the classic group coordinator
