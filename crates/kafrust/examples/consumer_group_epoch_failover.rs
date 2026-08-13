@@ -3,7 +3,7 @@ mod common;
 use std::io::{self, Write};
 use std::time::Duration;
 
-use kafrust::{ConsumerGroupConfig, ConsumerRecord, Error};
+use kafrust::{ConsumerGroupConfig, ConsumerGroupProtocol, ConsumerRecord, Error};
 
 #[tokio::main]
 async fn main() -> kafrust::Result<()> {
@@ -15,10 +15,12 @@ async fn main() -> kafrust::Result<()> {
     let partition = partition_from_env()?;
     let offset = offset_from_env()?;
     let pause = pause_from_env()?;
+    let protocol = group_protocol_from_env()?;
 
     let mut group = common::apply_security(
         ConsumerGroupConfig::new(bootstrap_servers, group_id.clone())
             .client_id("kafrust-consumer-group-epoch-failover")
+            .group_protocol(protocol)
             .session_timeout_ms(30_000)
             .start_offset(offset)
             .max_retries(5)
@@ -112,6 +114,22 @@ fn pause_from_env() -> kafrust::Result<Duration> {
         .unwrap_or(Ok(Duration::ZERO))
 }
 
+fn group_protocol_from_env() -> kafrust::Result<ConsumerGroupProtocol> {
+    std::env::var("KAFRUST_GROUP_PROTOCOL")
+        .map(|value| parse_group_protocol(&value))
+        .unwrap_or(Ok(ConsumerGroupProtocol::Classic))
+}
+
+fn parse_group_protocol(value: &str) -> kafrust::Result<ConsumerGroupProtocol> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "classic" => Ok(ConsumerGroupProtocol::Classic),
+        "consumer" | "kip-848" => Ok(ConsumerGroupProtocol::Consumer),
+        _ => Err(Error::Unsupported(
+            "KAFRUST_GROUP_PROTOCOL must be classic or consumer",
+        )),
+    }
+}
+
 fn parse_pause(value: &str) -> kafrust::Result<Duration> {
     value
         .trim()
@@ -128,13 +146,19 @@ fn flush_stdout() -> kafrust::Result<()> {
 mod tests {
     use std::time::Duration;
 
-    use super::{parse_offset, parse_partition, parse_pause};
+    use kafrust::ConsumerGroupProtocol;
+
+    use super::{parse_group_protocol, parse_offset, parse_partition, parse_pause};
 
     #[test]
     fn parses_failover_values() {
         assert_eq!(parse_partition(" 2 ").unwrap(), 2);
         assert_eq!(parse_offset(" 42 ").unwrap(), 42);
         assert_eq!(parse_pause(" 1500 ").unwrap(), Duration::from_millis(1500));
+        assert_eq!(
+            parse_group_protocol(" KIP-848 ").unwrap(),
+            ConsumerGroupProtocol::Consumer
+        );
     }
 
     #[test]
@@ -142,5 +166,6 @@ mod tests {
         assert!(parse_partition("not-a-partition").is_err());
         assert!(parse_offset("not-an-offset").is_err());
         assert!(parse_pause("one second").is_err());
+        assert!(parse_group_protocol("unknown").is_err());
     }
 }
