@@ -2,7 +2,7 @@ use std::{env, fs};
 
 use kafrust::{
     Acks, AdminClient, ClientConfig, ConsumerConfig, ConsumerGroupConfig, ConsumerGroupProtocol,
-    Error, OffsetResetPolicy, ProducerConfig, ProducerRecord, SecurityProtocol,
+    Error, IsolationLevel, OffsetResetPolicy, ProducerConfig, ProducerRecord, SecurityProtocol,
 };
 
 struct SecuritySettings {
@@ -94,8 +94,12 @@ async fn main() -> kafrust::Result<()> {
         .map_err(|_| Error::Unsupported("KAFRUST_BOOTSTRAP_SERVERS is required"))?;
     let topic =
         env::var("KAFRUST_TOPIC").map_err(|_| Error::Unsupported("KAFRUST_TOPIC is required"))?;
+    let transaction_topic = env::var("KAFRUST_TRANSACTION_TOPIC")
+        .map_err(|_| Error::Unsupported("KAFRUST_TRANSACTION_TOPIC is required"))?;
     let group_id = env::var("KAFRUST_GROUP_ID")
         .map_err(|_| Error::Unsupported("KAFRUST_GROUP_ID is required"))?;
+    let transactional_id = env::var("KAFRUST_TRANSACTIONAL_ID")
+        .map_err(|_| Error::Unsupported("KAFRUST_TRANSACTIONAL_ID is required"))?;
     let value =
         env::var("KAFRUST_VALUE").map_err(|_| Error::Unsupported("KAFRUST_VALUE is required"))?;
     let security = SecuritySettings::from_env()?;
@@ -185,6 +189,60 @@ async fn main() -> kafrust::Result<()> {
         ));
     }
 
+    let mut transactional_producer =
+        configure_security!(ProducerConfig::new([bootstrap_servers.clone()])
+            .client_id("kafrust-published-smoke-transaction-producer")
+            .transactional_id(transactional_id))
+        .build()
+        .await?;
+    transactional_producer.begin_transaction()?;
+    let aborted_value = format!("{value}-aborted");
+    let aborted_metadata = transactional_producer
+        .send(
+            ProducerRecord::to(transaction_topic.clone())
+                .partition(0)
+                .value(aborted_value.as_bytes()),
+        )
+        .await?;
+    transactional_producer.abort_transaction().await?;
+
+    transactional_producer.begin_transaction()?;
+    let committed_value = format!("{value}-committed");
+    let committed_metadata = transactional_producer
+        .send(
+            ProducerRecord::to(transaction_topic.clone())
+                .partition(0)
+                .value(committed_value.as_bytes()),
+        )
+        .await?;
+    transactional_producer.commit_transaction().await?;
+
+    let mut committed_consumer =
+        configure_security!(ConsumerConfig::new([bootstrap_servers.clone()])
+            .client_id("kafrust-published-smoke-read-committed")
+            .max_poll_records(10)
+            .isolation_level(IsolationLevel::ReadCommitted))
+        .build()
+        .await?;
+    committed_consumer.assign(
+        &transaction_topic,
+        aborted_metadata.partition(),
+        aborted_metadata.offset(),
+    );
+    let committed_records = committed_consumer.poll().await?;
+    if committed_records.iter().any(|record| {
+        record.topic() == transaction_topic && record.value() == Some(aborted_value.as_bytes())
+    }) || !committed_records.iter().any(|record| {
+        record.topic() == transaction_topic
+            && record.partition() == committed_metadata.partition()
+            && record.offset() == committed_metadata.offset()
+            && record.value() == Some(committed_value.as_bytes())
+    }) {
+        return Err(Error::Unsupported(
+            "published crate read_committed consumer returned the wrong transaction records",
+        ));
+    }
+
     let mut group = configure_security!(ConsumerGroupConfig::new([bootstrap_servers], group_id)
         .client_id("kafrust-published-smoke-group"))
     .group_protocol(group_protocol)
@@ -206,7 +264,7 @@ async fn main() -> kafrust::Result<()> {
     group.leave().await?;
 
     println!(
-        "published kafrust verified admin, idempotent producer, direct consumer, and group {}-{}@{}",
+        "published kafrust verified admin, idempotent producer, transaction commit/abort, read_committed, direct consumer, and group {}-{}@{}",
         metadata.topic(),
         metadata.partition(),
         metadata.offset()
