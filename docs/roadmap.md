@@ -747,11 +747,13 @@ Evidence:
   rejoin. The workflow also made the existing Kafka 4.3.1 SASL_SSL/SCRAM
   KIP-848 leader-epoch check choose its partition leader dynamically.
 - Manual `Live Kafka Smoke` run
-  [`31726636088`](https://github.com/TaeeunKil/kafrust/actions/runs/31726636088)
+  [`31727573855`](https://github.com/TaeeunKil/kafrust/actions/runs/31727573855)
   passed all 17 jobs after adding the Kafka 4.3.1 `SASL_SSL` SCRAM KIP-848
-  combined-fault path. The selected broker was both group coordinator and
-  partition leader; after it was stopped, the authenticated replacement
-  leader accepted a record and the KIP-848 group consumed it after rejoin.
+  combined-fault path and the replicated classic-group retention gate. The
+  selected KIP-848 broker was both group coordinator and partition leader;
+  after it was stopped, the authenticated replacement leader accepted a
+  record and the KIP-848 group consumed it after rejoin. The same run verified
+  committed classic-group offset recovery after `DeleteRecords`.
 - The same complete matrix also ran the classic `consumer_group_offset_reset`
   example on a Kafka 3.7.2 three-broker replicated topic. It committed a group
   position, moved the low watermark past that position through Admin
@@ -2183,8 +2185,9 @@ Implemented evidence:
   plaintext profile. It deliberately colocates the classic group coordinator
   and target partition leader, stops that broker, writes a post-failover
   record through the replacement leader, and verifies group rejoin plus
-  consumption of that record. KIP-848, secured, and broader combined-fault
-  combinations remain separate gates.
+  consumption of that record. Broader combined-fault combinations remain
+  separate gates; the KIP-848 plaintext and secured paths are recorded in the
+  subsequent current-main qualification entries above.
 - The complete 17-job run
   [`31723663771`](https://github.com/TaeeunKil/kafrust/actions/runs/31723663771)
   extends the combined-fault gate to Kafka 4.3.1 plaintext KIP-848. The
@@ -2194,7 +2197,8 @@ Implemented evidence:
   consumption. The same run also keeps the Kafka 3.7.2 classic group gate
   green after its check was narrowed to the observable post-failover record;
   direct assigned-consumer leader-epoch marker coverage remains a separate
-  gate. Secured combined faults and broader fault matrices remain unclaimed.
+  gate. Secured combined faults are covered by the subsequent current-main
+  qualification entry; broader fault matrices remain unclaimed.
 - Classic and KIP-848 consumer-group polling now have live leader-epoch
   recovery gates. The complete matrix in
   [`31702236760`](https://github.com/TaeeunKil/kafrust/actions/runs/31702236760)

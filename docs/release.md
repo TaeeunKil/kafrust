@@ -262,7 +262,7 @@ qualification results and do not modify the published `0.2.27` artifacts;
 the secured KIP-848 combined gate was qualified in the subsequent matrix below.
 
 The following complete current-main matrix
-[`31726636088`](https://github.com/TaeeunKil/kafrust/actions/runs/31726636088)
+[`31727573855`](https://github.com/TaeeunKil/kafrust/actions/runs/31727573855)
 passed all 17 jobs and qualified the Kafka 4.3.1 KIP-848 combined coordinator
 and partition-leader fault over `SASL_SSL` with SCRAM-SHA-256. It stopped the
 selected broker, produced through the authenticated replacement leader, and

@@ -478,5 +478,5 @@ passed over authenticated `SASL_PLAINTEXT` in
 [`Live Kafka Smoke` run `31725607371`](https://github.com/TaeeunKil/kafrust/actions/runs/31725607371).
 The Kafka 4.3.1 KIP-848 combined path also passed over authenticated
 `SASL_SSL` with SCRAM-SHA-256 in
-[`Live Kafka Smoke` run `31726636088`](https://github.com/TaeeunKil/kafrust/actions/runs/31726636088).
+[`Live Kafka Smoke` run `31727573855`](https://github.com/TaeeunKil/kafrust/actions/runs/31727573855).
 Broader transaction and combined-fault matrices remain separate gates.
