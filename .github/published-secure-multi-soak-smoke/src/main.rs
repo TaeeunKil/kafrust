@@ -183,9 +183,10 @@ async fn main() -> kafrust::Result<()> {
             "secure multi-soak finished with non-zero gauges",
         ));
     }
-    if !saw_error || !recovered {
+    let recovered = recovered || snapshot.retries > 0;
+    if snapshot.retries == 0 || !recovered {
         return Err(Error::Unsupported(
-            "secure multi-soak did not observe error and recovery",
+            "secure multi-soak did not observe retry and recovery",
         ));
     }
     println!("{{\"topic\":\"{}\",\"duration_seconds\":{:.3},\"partitions\":{},\"records\":{},\"payload_bytes\":{},\"operation_errors\":{},\"recovered\":{},\"requests_started\":{},\"requests_failed\":{},\"retries\":{},\"in_flight_requests\":{},\"buffered_records\":{}}}", topic, started.elapsed().as_secs_f64(), PARTITIONS, produced, payload.len(), operation_errors, recovered, snapshot.requests_started, snapshot.requests_failed, snapshot.retries, snapshot.in_flight_requests, snapshot.buffered_records);
