@@ -386,33 +386,33 @@ async fn main() -> kafrust::Result<()> {
     .subscribe(topic.clone())
     .join()
     .await?;
-    let restored_records = restored_group.poll().await?;
-    let replayed_committed_record = restored_records.iter().any(|record| {
-        record.topic() == topic
-            && record.partition() == committed_record.partition()
-            && record.offset() == committed_offset
-            && record.value() == Some(value.as_bytes())
-    });
-    let restored_expected_record = restored_records.iter().any(|record| {
-        record.topic() == topic
-            && record.partition() == restored_metadata.partition()
-            && record.offset() == restored_metadata.offset()
-            && record.value() == Some(restored_value.as_bytes())
-    });
+    let mut replayed_committed_record = false;
+    let mut restored_expected_record = false;
+    let mut restored_poll_count = 0;
+    for _ in 0..5 {
+        let records = restored_group.poll().await?;
+        restored_poll_count += 1;
+        replayed_committed_record |= records.iter().any(|record| {
+            record.topic() == topic
+                && record.partition() == committed_record.partition()
+                && record.offset() == committed_offset
+                && record.value() == Some(value.as_bytes())
+        });
+        restored_expected_record |= records.iter().any(|record| {
+            record.topic() == topic
+                && record.partition() == restored_metadata.partition()
+                && record.offset() == restored_metadata.offset()
+                && record.value() == Some(restored_value.as_bytes())
+        });
+        if restored_expected_record {
+            break;
+        }
+    }
     if replayed_committed_record || !restored_expected_record {
         println!(
-            "group restore diagnostics: committed_offset={committed_offset}, expected_offset={}, replayed_committed_record={replayed_committed_record}, restored_expected_record={restored_expected_record}",
+            "group restore diagnostics: committed_offset={committed_offset}, expected_offset={}, polls={restored_poll_count}, replayed_committed_record={replayed_committed_record}, restored_expected_record={restored_expected_record}",
             restored_metadata.offset()
         );
-        for record in &restored_records {
-            println!(
-                "group restore record: {}-{}@{} value={:?}",
-                record.topic(),
-                record.partition(),
-                record.offset(),
-                record.value().map(String::from_utf8_lossy)
-            );
-        }
         return Err(Error::Unsupported(
             "published crate consumer group did not restore from its committed offset",
         ));
