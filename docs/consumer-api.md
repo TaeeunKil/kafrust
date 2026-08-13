@@ -156,6 +156,24 @@ retry with an unknown epoch. This automatic path is currently limited to the
 direct assigned-consumer workflow; group rebalance recovery remains a separate
 compatibility gate.
 
+For retained-log boundaries, configure a recovery reset policy before polling:
+
+```rust,ignore
+let mut consumer = ConsumerConfig::new(["localhost:9092"])
+    .offset_reset_policy(OffsetResetPolicy::Earliest)
+    .build()
+    .await?;
+consumer.assign("orders", 0, committed_offset);
+let records = consumer.poll().await?;
+```
+
+When Kafka returns `OffsetOutOfRange`, `poll` resolves the current low or high
+watermark according to the configured policy, retries once from that boundary,
+and advances the assignment only from records actually returned. The default
+policy is an explicit offset and therefore returns the broker error instead of
+silently skipping data. The `consumer_retention_recovery` example and the live
+smoke gate exercise this behavior after an Admin `DeleteRecords` operation.
+
 ## Automatic Group Commits
 
 Consumer groups keep explicit commits as the default. Applications that want

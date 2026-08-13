@@ -292,6 +292,19 @@ jobs:
             --replication-factor 1
           cargo run -p kafrust --example consumer_group_offset_reset
 
+      - name: Run direct consumer retention recovery example
+        env:
+          KAFRUST_TOPIC: kafrust-direct-retention-${{ matrix.kafka-version }}-${{ github.run_id }}
+        run: |
+          docker exec kafrust-kafka /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server localhost:9092 \
+            --create \
+            --if-not-exists \
+            --topic "$KAFRUST_TOPIC" \
+            --partitions 1 \
+            --replication-factor 1
+          cargo run -p kafrust --example consumer_retention_recovery
+
       - name: Run consumer position and watermark control example
         env:
           KAFRUST_GROUP_ID: kafrust-position-control-${{ matrix.kafka-version }}
