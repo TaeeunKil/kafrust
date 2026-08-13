@@ -2317,6 +2317,15 @@ Implemented evidence:
   that broker, stopped it, and verified authenticated producer recovery plus
   same-group post-failover consumption. Repeated faults, broader security
   mechanisms, and the complete 1.0 failure matrix remain open.
+- The published secured repeated-leader workflow passed two sequential
+  partition-leader failures for Kafka 3.7.2 classic in
+  [`31743322062`](https://github.com/TaeeunKil/kafrust/actions/runs/31743322062)
+  and Kafka 4.3.1 KIP-848 in
+  [`31743497415`](https://github.com/TaeeunKil/kafrust/actions/runs/31743497415).
+  Each external project recovered after broker 1 stopped, restarted it, then
+  recovered again after a different partition leader stopped. This closes the
+  published secured repeated-leader gate; unclean election, simultaneous loss,
+  every security mechanism, and the complete 1.0 fault matrix remain open.
 - The complete 17-job run [`31719615947`](https://github.com/TaeeunKil/kafrust/actions/runs/31719615947)
   adds a controlled combined-fault gate in the Kafka 3.7.2 three-broker
   plaintext profile. It deliberately colocates the classic group coordinator

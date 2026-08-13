@@ -369,6 +369,17 @@ producer recovery plus same-group post-failover consumption. This qualifies a
 representative combined fault, not repeated faults, every security mechanism,
 or the complete 1.0 failure matrix.
 
+The published secured repeated-leader workflow then passed two sequential
+partition-leader failures. Kafka 3.7.2 classic passed in
+[`31743322062`](https://github.com/TaeeunKil/kafrust/actions/runs/31743322062),
+and Kafka 4.3.1 KIP-848 passed in
+[`31743497415`](https://github.com/TaeeunKil/kafrust/actions/runs/31743497415).
+Each fresh external project recovered after broker 1 stopped, restarted that
+broker, then recovered again after a different partition leader stopped. This
+qualifies repeated leader-failover behavior for the tested security and group
+protocols, not unclean election, simultaneous broker loss, every security
+mechanism, or the complete 1.0 fault matrix.
+
 The published secured transaction workflow also passed coordinator-stop
 recovery for Kafka 3.7.2 in
 [`31741012713`](https://github.com/TaeeunKil/kafrust/actions/runs/31741012713)
