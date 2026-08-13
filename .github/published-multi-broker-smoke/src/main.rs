@@ -1,8 +1,8 @@
 use std::env;
 
 use kafrust::{
-    Acks, AdminClient, ClientConfig, ConsumerGroupConfig, Error, OffsetResetPolicy, ProducerConfig,
-    ProducerRecord,
+    Acks, AdminClient, ClientConfig, ConsumerGroupConfig, ConsumerGroupProtocol, Error,
+    OffsetResetPolicy, ProducerConfig, ProducerRecord,
 };
 
 fn required(name: &str) -> Result<String, Error> {
@@ -15,6 +15,21 @@ fn required_i32(name: &str) -> Result<i32, Error> {
         .map_err(|_| Error::Unsupported("published multi-broker smoke variable was not an integer"))
 }
 
+fn group_protocol() -> Result<ConsumerGroupProtocol, Error> {
+    match env::var("KAFRUST_GROUP_PROTOCOL")
+        .unwrap_or_else(|_| "classic".to_owned())
+        .trim()
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "classic" => Ok(ConsumerGroupProtocol::Classic),
+        "consumer" | "kip-848" => Ok(ConsumerGroupProtocol::Consumer),
+        _ => Err(Error::Unsupported(
+            "KAFRUST_GROUP_PROTOCOL must be classic or consumer",
+        )),
+    }
+}
+
 fn producer_config(bootstrap_servers: &str) -> ProducerConfig {
     ProducerConfig::new(bootstrap_servers.split(',').map(str::to_owned))
         .client_id("kafrust-published-multi-broker-producer")
@@ -22,15 +37,16 @@ fn producer_config(bootstrap_servers: &str) -> ProducerConfig {
         .enable_idempotence(true)
 }
 
-fn group_config(bootstrap_servers: &str, group_id: &str) -> ConsumerGroupConfig {
-    ConsumerGroupConfig::new(
+fn group_config(bootstrap_servers: &str, group_id: &str) -> Result<ConsumerGroupConfig, Error> {
+    Ok(ConsumerGroupConfig::new(
         bootstrap_servers.split(',').map(str::to_owned),
         group_id.to_owned(),
     )
     .client_id("kafrust-published-multi-broker-group")
+    .group_protocol(group_protocol()?)
     .max_retries(10)
     .max_poll_records(20)
-    .offset_reset_policy(OffsetResetPolicy::Earliest)
+    .offset_reset_policy(OffsetResetPolicy::Earliest))
 }
 
 async fn run_pre(
@@ -49,7 +65,7 @@ async fn run_pre(
         )
         .await?;
 
-    let mut group = group_config(bootstrap_servers, group_id)
+    let mut group = group_config(bootstrap_servers, group_id)?
         .subscribe(topic.to_owned())
         .join()
         .await?;
@@ -99,7 +115,7 @@ async fn run_post(
         )
         .await?;
 
-    let mut group = group_config(bootstrap_servers, group_id)
+    let mut group = group_config(bootstrap_servers, group_id)?
         .subscribe(topic.to_owned())
         .join()
         .await?;

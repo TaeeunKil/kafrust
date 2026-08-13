@@ -7,13 +7,21 @@ on:
         description: "Published kafrust version to execute from crates.io"
         required: true
         default: "0.2.28"
+      kafka_version:
+        description: "Apache Kafka broker image version"
+        required: true
+        default: "3.7.2"
+      group_protocol:
+        description: "Consumer group protocol: classic or consumer (KIP-848)"
+        required: true
+        default: "classic"
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   published-multi-broker:
-    name: Published kafrust ${{ inputs.kafrust_version }} multi-broker failover
+    name: Published kafrust ${{ inputs.kafrust_version }} ${{ inputs.kafka_version }} ${{ inputs.group_protocol }} multi-broker failover
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -21,6 +29,7 @@ jobs:
       KAFRUST_TOPIC: kafrust-published-multi-${{ github.run_id }}
       KAFRUST_GROUP_ID: kafrust-published-multi-group-${{ github.run_id }}
       KAFRUST_VALUE: published-multi-${{ github.run_id }}
+      KAFRUST_GROUP_PROTOCOL: ${{ inputs.group_protocol }}
 
     steps:
       - name: Checkout
@@ -31,10 +40,10 @@ jobs:
         with:
           toolchain: "1.81.0"
 
-      - name: Start three-broker Kafka 3.7.2
+      - name: Start three-broker Kafka ${{ inputs.kafka_version }}
         run: |
           docker network create kafrust-published-multi
-          cluster_id="$(docker run --rm apache/kafka:3.7.2 /opt/kafka/bin/kafka-storage.sh random-uuid)"
+          cluster_id="$(docker run --rm apache/kafka:${{ inputs.kafka_version }} /opt/kafka/bin/kafka-storage.sh random-uuid)"
           for node in 1 2 3; do
             external_port=$((19091 + node))
             docker run -d --name "kafrust-published-multi-${node}" \
@@ -53,7 +62,7 @@ jobs:
               -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=3 \
               -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=2 \
               -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 \
-              apache/kafka:3.7.2
+              apache/kafka:${{ inputs.kafka_version }}
           done
 
       - name: Wait for Kafka cluster
