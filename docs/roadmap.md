@@ -752,6 +752,12 @@ Evidence:
   combined-fault path. The selected broker was both group coordinator and
   partition leader; after it was stopped, the authenticated replacement
   leader accepted a record and the KIP-848 group consumed it after rejoin.
+- The same complete matrix also ran the classic `consumer_group_offset_reset`
+  example on a Kafka 3.7.2 three-broker replicated topic. It committed a group
+  position, moved the low watermark past that position through Admin
+  `DeleteRecords`, and verified `OffsetResetPolicy::Earliest` recovery at the
+  retained boundary. Arbitrary retention timing and unclean-election data loss
+  remain outside the claim.
 - Manual `Live Kafka Smoke` run
   [`31572745537`](https://github.com/TaeeunKil/kafrust/actions/runs/31572745537)
   passed all 16 jobs on 2026-08-12. Its Kafka 3.7.2 three-broker `SASL_SSL`

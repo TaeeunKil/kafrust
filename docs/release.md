@@ -270,6 +270,12 @@ verified group rejoin plus post-failover consumption. This current-main gate
 does not modify the published `0.2.27` artifacts; broader fault and transaction
 matrices remain outside the release claim.
 
+That same current-main matrix also qualified a Kafka 3.7.2 three-broker classic
+consumer-group retained-log boundary: after a committed position was deleted
+through Admin `DeleteRecords`, `OffsetResetPolicy::Earliest` recovered the group
+and it consumed a post-delete record. This is a current-main compatibility gate,
+not a change to the published `0.2.27` artifacts.
+
 ## Optional Broker Checks
 
 The default test suite does not require a Kafka broker. Before an alpha tag, run the opt-in examples or tests against a local broker when practical:

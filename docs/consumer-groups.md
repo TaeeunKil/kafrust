@@ -459,6 +459,13 @@ KAFRUST_BOOTSTRAP_SERVERS=localhost:9092 KAFRUST_GROUP_ID=orders-reset KAFRUST_T
 
 The opt-in broker roundtrip test also covers coordinator discovery when `KAFRUST_BOOTSTRAP_SERVERS` is set.
 
+The `consumer_group_offset_reset` example also qualifies a controlled retained-log
+boundary for classic groups. In the Kafka 3.7.2 three-broker profile, it commits
+an offset, uses Admin `DeleteRecords` to move the low watermark beyond that
+offset, and verifies that `OffsetResetPolicy::Earliest` recovers the group at
+the retained boundary and reads a post-delete record. This does not claim
+arbitrary retention timing or unclean-election data-loss recovery.
+
 The group implementation also has a development-only combined-fault smoke path:
 the live matrix can place the target partition leader on the group coordinator,
 stop that one broker, and verify foreground rejoin plus consumption of a record

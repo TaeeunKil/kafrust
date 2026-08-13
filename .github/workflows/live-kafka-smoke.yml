@@ -1843,6 +1843,20 @@ jobs:
           fi
           echo "KAFRUST_RACK_PARTITION=${rack_partition}" >> "$GITHUB_ENV"
 
+      - name: Run multi-broker consumer-group retained-log recovery
+        env:
+          KAFRUST_GROUP_ID: kafrust-group-retention-multi-${{ github.run_id }}
+          KAFRUST_TOPIC: kafrust-group-retention-multi-${{ github.run_id }}
+        run: |
+          docker exec kafrust-kafka-multi-1 /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server kafrust-kafka-multi-1:29092 \
+            --create \
+            --if-not-exists \
+            --topic "$KAFRUST_TOPIC" \
+            --partitions 1 \
+            --replication-factor 3
+          cargo run -p kafrust --example consumer_group_offset_reset
+
       - name: Start transaction ambiguity Kafka cluster
         run: |
           docker network create kafrust-transaction-ambiguity
