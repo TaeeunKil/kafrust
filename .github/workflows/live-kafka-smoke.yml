@@ -2918,7 +2918,14 @@ jobs:
           echo "secured replica directory movement did not complete"
           exit 1
 
+      - name: Initialize secured Admin OffsetCommit group coordinator
+        env:
+          KAFRUST_GROUP_ID: kafrust-secured-admin-offset-${{ github.run_id }}
+        run: cargo run -p kafrust --features tls --example consumer_group_poll
+
       - name: Run secured Admin OffsetCommit during coordinator stop
+        env:
+          KAFRUST_GROUP_ID: kafrust-secured-admin-offset-${{ github.run_id }}
         run: |
           ready_file=/tmp/kafrust-secured-admin-offset-commit-ready
           release_file=/tmp/kafrust-secured-admin-offset-commit-release
