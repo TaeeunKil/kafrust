@@ -3126,12 +3126,29 @@ fn sticky_assignments_from_owned(
     let mut owner_by_partition = BTreeMap::<(String, i32), String>::new();
     let mut invalidated_previous = BTreeSet::<(String, i32)>::new();
     let mut available = BTreeSet::<(String, i32)>::new();
+    let mut assignment_order = Vec::<(String, i32)>::new();
 
-    for topics in subscriptions.values() {
-        for topic in topics {
-            for partition in partitions_for(metadata, topic)? {
-                available.insert((topic.clone(), partition));
-            }
+    let topics = subscriptions
+        .values()
+        .flat_map(|topics| topics.iter())
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    let mut topics_by_candidate_count = topics
+        .into_iter()
+        .map(|topic| {
+            let candidate_count = subscriptions
+                .values()
+                .filter(|topics| topics.contains(&topic))
+                .count();
+            (candidate_count, topic)
+        })
+        .collect::<Vec<_>>();
+    topics_by_candidate_count.sort();
+    for (_, topic) in topics_by_candidate_count {
+        for partition in partitions_for(metadata, &topic)? {
+            let partition = (topic.clone(), partition);
+            available.insert(partition.clone());
+            assignment_order.push(partition);
         }
     }
 
@@ -3170,7 +3187,7 @@ fn sticky_assignments_from_owned(
         }
     }
 
-    for partition in available {
+    for partition in assignment_order {
         if owner_by_partition.contains_key(&partition) {
             continue;
         }
@@ -5150,6 +5167,29 @@ mod tests {
         assert_eq!(member_a.assignments[0].partitions, vec![1, 3]);
         assert_eq!(member_b.assignments[0].partitions, vec![2]);
         assert_eq!(member_c.assignments[0].partitions, vec![0]);
+    }
+
+    #[test]
+    fn sticky_balances_mixed_topic_subscriptions_by_topic_candidate_count() {
+        let members = vec![
+            sticky_member("member-a", &["orders"], Vec::new(), Some(1)),
+            sticky_member("member-b", &["orders", "payments"], Vec::new(), Some(1)),
+            sticky_member("member-c", &["orders"], Vec::new(), Some(1)),
+        ];
+        let mut metadata = metadata_fixture("orders", &[0, 1, 2]);
+        metadata.topics.push(topic_metadata("payments", &[0, 1]));
+
+        let assignments = sticky_assignments(&members, &metadata).unwrap();
+
+        let member_a = decode_assignment(&assignments[0].assignment);
+        let member_b = decode_assignment(&assignments[1].assignment);
+        let member_c = decode_assignment(&assignments[2].assignment);
+        assert_eq!(member_a.assignments[0].topic, "orders");
+        assert_eq!(member_a.assignments[0].partitions, vec![0, 2]);
+        assert_eq!(member_b.assignments[0].topic, "payments");
+        assert_eq!(member_b.assignments[0].partitions, vec![0, 1]);
+        assert_eq!(member_c.assignments[0].topic, "orders");
+        assert_eq!(member_c.assignments[0].partitions, vec![1]);
     }
 
     #[test]
