@@ -1,0 +1,9 @@
+[package]
+name = "kafrust-published-smoke"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+kafrust = "__KAFRUST_VERSION__"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

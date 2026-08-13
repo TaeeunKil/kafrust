@@ -274,6 +274,11 @@ After both crates are published:
    cargo check --manifest-path /tmp/kafrust-published-smoke/Cargo.toml
    ```
 
-3. Confirm docs.rs builds the published documentation for both crates.
-4. Push an annotated release tag and create a GitHub release.
-5. Run the `Live Kafka Smoke` workflow from GitHub Actions against `main`.
+3. Run the manually dispatched `Published Crate Smoke` workflow with the same
+   version. It creates an external project under `$RUNNER_TEMP`, resolves the
+   dependency from crates.io, and executes a producer-to-direct-consumer
+   roundtrip against Kafka 3.7.2. This is stronger than a workspace compile
+   because the smoke project has no path dependency on the repository.
+4. Confirm docs.rs builds the published documentation for both crates.
+5. Push an annotated release tag and create a GitHub release.
+6. Run the `Live Kafka Smoke` workflow from GitHub Actions against `main`.
