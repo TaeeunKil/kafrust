@@ -256,6 +256,7 @@ jobs:
       - name: Run published crate producer and consumer
         env:
           KAFRUST_TOPIC: kafrust-published-${{ matrix.profile }}-${{ github.run_id }}
+          KAFRUST_ADMIN_TOPIC: kafrust-published-admin-${{ matrix.profile }}-${{ github.run_id }}
           KAFRUST_TRANSACTION_TOPIC: kafrust-published-transactions-${{ matrix.profile }}-${{ github.run_id }}
           KAFRUST_GROUP_ID: kafrust-published-group-${{ matrix.profile }}-${{ github.run_id }}
           KAFRUST_GROUP_PROTOCOL: ${{ matrix.group_protocol }}

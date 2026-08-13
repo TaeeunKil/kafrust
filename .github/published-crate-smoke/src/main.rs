@@ -2,8 +2,9 @@ use std::{env, fs};
 
 use kafrust::{
     Acks, AdminClient, ClientConfig, Compression, ConsumerConfig, ConsumerGroupConfig,
-    ConsumerGroupProtocol, Error, IsolationLevel, OffsetResetPolicy, ProducerConfig,
-    ProducerRecord, SecurityProtocol,
+    ConsumerGroupProtocol, CreateTopicsOptions, DeleteTopicsOptions, DescribeConfigsOptions, Error,
+    IsolationLevel, NewTopic, OffsetResetPolicy, ProducerConfig, ProducerRecord, SecurityProtocol,
+    TopicConfigResource,
 };
 
 struct SecuritySettings {
@@ -95,6 +96,8 @@ async fn main() -> kafrust::Result<()> {
         .map_err(|_| Error::Unsupported("KAFRUST_BOOTSTRAP_SERVERS is required"))?;
     let topic =
         env::var("KAFRUST_TOPIC").map_err(|_| Error::Unsupported("KAFRUST_TOPIC is required"))?;
+    let admin_topic = env::var("KAFRUST_ADMIN_TOPIC")
+        .map_err(|_| Error::Unsupported("KAFRUST_ADMIN_TOPIC is required"))?;
     let transaction_topic = env::var("KAFRUST_TRANSACTION_TOPIC")
         .map_err(|_| Error::Unsupported("KAFRUST_TRANSACTION_TOPIC is required"))?;
     let group_id = env::var("KAFRUST_GROUP_ID")
@@ -168,6 +171,77 @@ async fn main() -> kafrust::Result<()> {
         return Err(Error::Unsupported(
             "published crate admin client returned no brokers",
         ));
+    }
+
+    let created_topics = admin
+        .create_topics(
+            &[NewTopic::new(&admin_topic, 1, 1).config("cleanup.policy", "delete")],
+            CreateTopicsOptions::new(),
+        )
+        .await?;
+    let created_topic = created_topics.topics().first().ok_or(Error::Unsupported(
+        "published admin create returned no topic",
+    ))?;
+    if !created_topic.is_success() {
+        return Err(Error::Broker {
+            code: created_topic.error_code(),
+            context: "published admin create topic failed".to_owned(),
+        });
+    }
+
+    let listed_topic = admin
+        .list_topics()
+        .await?
+        .into_iter()
+        .find(|listed| listed.name() == admin_topic)
+        .ok_or(Error::Unsupported(
+            "published admin list did not return the created topic",
+        ))?;
+    if listed_topic.partition_count() != 1 || !listed_topic.is_success() {
+        return Err(Error::Unsupported(
+            "published admin list returned an invalid created topic",
+        ));
+    }
+
+    let described_configs = admin
+        .describe_topic_configs(
+            &[TopicConfigResource::with_keys(
+                &admin_topic,
+                ["cleanup.policy"],
+            )],
+            DescribeConfigsOptions::new(),
+        )
+        .await?;
+    let described_resource = described_configs
+        .resources()
+        .first()
+        .ok_or(Error::Unsupported(
+            "published admin config returned no resource",
+        ))?;
+    if !described_resource.is_success()
+        || described_resource
+            .entries()
+            .iter()
+            .find(|entry| entry.name() == "cleanup.policy")
+            .and_then(|entry| entry.value())
+            != Some("delete")
+    {
+        return Err(Error::Unsupported(
+            "published admin config did not preserve cleanup.policy",
+        ));
+    }
+
+    let deleted_topics = admin
+        .delete_topics(&[admin_topic.clone()], DeleteTopicsOptions::new())
+        .await?;
+    let deleted_topic = deleted_topics.topics().first().ok_or(Error::Unsupported(
+        "published admin delete returned no topic",
+    ))?;
+    if !deleted_topic.is_success() {
+        return Err(Error::Broker {
+            code: deleted_topic.error_code(),
+            context: "published admin delete topic failed".to_owned(),
+        });
     }
 
     let mut producer = configure_security!(ProducerConfig::new([bootstrap_servers.clone()])
@@ -279,7 +353,7 @@ async fn main() -> kafrust::Result<()> {
     group.leave().await?;
 
     println!(
-        "published kafrust verified admin, idempotent producer, transaction commit/abort, read_committed, direct consumer, and group {}-{}@{}",
+        "published kafrust verified admin cluster/topic lifecycle, idempotent producer, transaction commit/abort, read_committed, direct consumer, and group {}-{}@{}",
         metadata.topic(),
         metadata.partition(),
         metadata.offset()
