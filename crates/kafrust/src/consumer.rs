@@ -910,7 +910,8 @@ impl Consumer {
             .config
             .client_config()
             .client_rack_ref()
-            .map(str::to_owned);
+            .map(str::to_owned)
+            .unwrap_or_default();
         let session = self
             .fetch_sessions
             .get(&broker_addr)
@@ -923,104 +924,80 @@ impl Consumer {
             aborted_transactions,
             records,
             response_session_id,
-        ) = if let Some(rack_id) = rack_id {
-            if leader_client.supports_fetch_v12().await? {
-                let response = leader_client
-                    .fetch_one_v12(FetchOneRequestV12 {
-                        replica_id: -1,
-                        max_wait_ms: self.config.max_wait_ms,
-                        min_bytes: self.config.min_bytes,
-                        max_bytes: self.config.max_partition_bytes,
-                        isolation_level: self.config.isolation_level.as_i8(),
-                        topic: topic.to_owned(),
-                        partition_index: partition,
-                        current_leader_epoch,
-                        fetch_offset: offset,
-                        last_fetched_epoch: current_leader_epoch,
-                        max_partition_bytes: self.config.max_partition_bytes,
-                        session_id,
-                        session_epoch,
-                        rack_id,
-                    })
-                    .await?;
-                if response.error_code != 0 {
-                    self.fetch_sessions.remove(&broker_addr);
-                    return Err(self.config.client.broker_error(
-                        response.error_code,
-                        format!("fetch {topic}-{partition}@{offset}"),
-                    ));
-                }
-                let partition_response = fetch_partition_response_v12(&response, topic, partition)?;
-                (
-                    partition_response.error_code,
-                    Some(partition_response.preferred_read_replica),
-                    partition_response
-                        .aborted_transactions
-                        .iter()
-                        .map(|transaction| AbortedTransactionV4 {
-                            producer_id: transaction.producer_id,
-                            first_offset: transaction.first_offset,
-                        })
-                        .collect(),
-                    partition_response.records.clone(),
-                    response.session_id,
-                )
-            } else if leader_client.supports_fetch_v11().await? {
-                let response = leader_client
-                    .fetch_one_v11(FetchOneRequestV11 {
-                        replica_id: -1,
-                        max_wait_ms: self.config.max_wait_ms,
-                        min_bytes: self.config.min_bytes,
-                        max_bytes: self.config.max_partition_bytes,
-                        isolation_level: self.config.isolation_level.as_i8(),
-                        topic: topic.to_owned(),
-                        partition_index: partition,
-                        current_leader_epoch,
-                        fetch_offset: offset,
-                        max_partition_bytes: self.config.max_partition_bytes,
-                        session_id,
-                        session_epoch,
-                        rack_id,
-                    })
-                    .await?;
-                if response.error_code != 0 {
-                    self.fetch_sessions.remove(&broker_addr);
-                    return Err(self.config.client.broker_error(
-                        response.error_code,
-                        format!("fetch {topic}-{partition}@{offset}"),
-                    ));
-                }
-                let partition_response = fetch_partition_response_v11(&response, topic, partition)?;
-                (
-                    partition_response.error_code,
-                    Some(partition_response.preferred_read_replica),
-                    partition_response.aborted_transactions.clone(),
-                    partition_response.records.clone(),
-                    response.session_id,
-                )
-            } else {
-                let response = leader_client
-                    .fetch_one_v4(FetchOneRequestV4 {
-                        replica_id: -1,
-                        max_wait_ms: self.config.max_wait_ms,
-                        min_bytes: self.config.min_bytes,
-                        max_bytes: self.config.max_partition_bytes,
-                        isolation_level: self.config.isolation_level.as_i8(),
-                        topic: topic.to_owned(),
-                        partition_index: partition,
-                        fetch_offset: offset,
-                        max_partition_bytes: self.config.max_partition_bytes,
-                    })
-                    .await?;
-                let partition_response = fetch_partition_response(&response, topic, partition)?;
-                (
-                    partition_response.error_code,
-                    Some(-1),
-                    partition_response.aborted_transactions.clone(),
-                    partition_response.records.clone(),
-                    0,
-                )
+        ) = if leader_client.supports_fetch_v12().await? {
+            let response = leader_client
+                .fetch_one_v12(FetchOneRequestV12 {
+                    replica_id: -1,
+                    max_wait_ms: self.config.max_wait_ms,
+                    min_bytes: self.config.min_bytes,
+                    max_bytes: self.config.max_partition_bytes,
+                    isolation_level: self.config.isolation_level.as_i8(),
+                    topic: topic.to_owned(),
+                    partition_index: partition,
+                    current_leader_epoch,
+                    fetch_offset: offset,
+                    last_fetched_epoch: current_leader_epoch,
+                    max_partition_bytes: self.config.max_partition_bytes,
+                    session_id,
+                    session_epoch,
+                    rack_id,
+                })
+                .await?;
+            if response.error_code != 0 {
+                self.fetch_sessions.remove(&broker_addr);
+                return Err(self.config.client.broker_error(
+                    response.error_code,
+                    format!("fetch {topic}-{partition}@{offset}"),
+                ));
             }
+            let partition_response = fetch_partition_response_v12(&response, topic, partition)?;
+            (
+                partition_response.error_code,
+                Some(partition_response.preferred_read_replica),
+                partition_response
+                    .aborted_transactions
+                    .iter()
+                    .map(|transaction| AbortedTransactionV4 {
+                        producer_id: transaction.producer_id,
+                        first_offset: transaction.first_offset,
+                    })
+                    .collect(),
+                partition_response.records.clone(),
+                response.session_id,
+            )
+        } else if leader_client.supports_fetch_v11().await? {
+            let response = leader_client
+                .fetch_one_v11(FetchOneRequestV11 {
+                    replica_id: -1,
+                    max_wait_ms: self.config.max_wait_ms,
+                    min_bytes: self.config.min_bytes,
+                    max_bytes: self.config.max_partition_bytes,
+                    isolation_level: self.config.isolation_level.as_i8(),
+                    topic: topic.to_owned(),
+                    partition_index: partition,
+                    current_leader_epoch,
+                    fetch_offset: offset,
+                    max_partition_bytes: self.config.max_partition_bytes,
+                    session_id,
+                    session_epoch,
+                    rack_id,
+                })
+                .await?;
+            if response.error_code != 0 {
+                self.fetch_sessions.remove(&broker_addr);
+                return Err(self.config.client.broker_error(
+                    response.error_code,
+                    format!("fetch {topic}-{partition}@{offset}"),
+                ));
+            }
+            let partition_response = fetch_partition_response_v11(&response, topic, partition)?;
+            (
+                partition_response.error_code,
+                Some(partition_response.preferred_read_replica),
+                partition_response.aborted_transactions.clone(),
+                partition_response.records.clone(),
+                response.session_id,
+            )
         } else {
             let response = leader_client
                 .fetch_one_v4(FetchOneRequestV4 {
@@ -1038,7 +1015,7 @@ impl Consumer {
             let partition_response = fetch_partition_response(&response, topic, partition)?;
             (
                 partition_response.error_code,
-                None,
+                Some(-1),
                 partition_response.aborted_transactions.clone(),
                 partition_response.records.clone(),
                 0,
@@ -2127,9 +2104,12 @@ mod tests {
         let addr = listener.local_addr().unwrap();
         let server = tokio::spawn(async move {
             let (mut first_socket, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut first_socket).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut first_socket, &api_versions_v3_fetch_v12_response(1)).await;
             let first_fetch = read_frame(&mut first_socket).await;
-            assert_eq!(&first_fetch[0..4], &[0, 1, 0, 4]);
-            write_frame(&mut first_socket, &fetch_v4_out_of_range_response_frame(1)).await;
+            assert_eq!(&first_fetch[0..4], &[0, 1, 0, 12]);
+            write_frame(&mut first_socket, &fetch_v12_out_of_range_response_frame(2)).await;
             drop(first_socket);
 
             let (mut second_socket, _) = listener.accept().await.unwrap();
@@ -2146,11 +2126,14 @@ mod tests {
                 )
                 .await;
             }
+            let api_versions_request = read_frame(&mut second_socket).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut second_socket, &api_versions_v3_fetch_v12_response(3)).await;
             let second_fetch = read_frame(&mut second_socket).await;
-            assert_eq!(&second_fetch[0..4], &[0, 1, 0, 4]);
+            assert_eq!(&second_fetch[0..4], &[0, 1, 0, 12]);
             write_frame(
                 &mut second_socket,
-                &fetch_v4_response_frame_with_correlation(3),
+                &fetch_v12_response_frame_with_record(4, 0),
             )
             .await;
         });
@@ -2504,9 +2487,12 @@ mod tests {
         let addr = listener.local_addr().unwrap();
         let server = tokio::spawn(async move {
             let (mut socket, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut socket).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut socket, &api_versions_v3_fetch_v12_response(1)).await;
             let request = read_frame(&mut socket).await;
-            assert_eq!(&request[0..4], &[0, 1, 0, 4]);
-            write_frame(&mut socket, &fetch_v4_response_frame()).await;
+            assert_eq!(&request[0..4], &[0, 1, 0, 12]);
+            write_frame(&mut socket, &fetch_v12_response_frame_with_record(2, 0)).await;
         });
         let (client_stream, broker_stream) = tokio::io::duplex(64);
         let _broker_stream = broker_stream;
@@ -2541,9 +2527,12 @@ mod tests {
         let addr = listener.local_addr().unwrap();
         let server = tokio::spawn(async move {
             let (mut socket, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut socket).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut socket, &api_versions_v3_fetch_v12_response(1)).await;
             let request = read_frame(&mut socket).await;
-            assert_eq!(&request[0..4], &[0, 1, 0, 4]);
-            write_frame(&mut socket, &fetch_v4_response_frame()).await;
+            assert_eq!(&request[0..4], &[0, 1, 0, 12]);
+            write_frame(&mut socket, &fetch_v12_response_frame_with_record(2, 0)).await;
         });
 
         let (client_stream, broker_stream) = tokio::io::duplex(64);
@@ -2583,10 +2572,17 @@ mod tests {
         let addr = listener.local_addr().unwrap();
         let server = tokio::spawn(async move {
             let (mut socket, _) = listener.accept().await.unwrap();
-            for _ in 0..2 {
+            let api_versions_request = read_frame(&mut socket).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut socket, &api_versions_v3_fetch_v12_response(1)).await;
+            for correlation_id in [2, 3] {
                 let request = read_frame(&mut socket).await;
-                assert_eq!(&request[0..4], &[0, 1, 0, 4]);
-                write_frame(&mut socket, &fetch_v4_response_frame()).await;
+                assert_eq!(&request[0..4], &[0, 1, 0, 12]);
+                write_frame(
+                    &mut socket,
+                    &fetch_v12_response_frame_with_record(correlation_id, 0),
+                )
+                .await;
             }
         });
 
@@ -2631,10 +2627,17 @@ mod tests {
         let addr = listener.local_addr().unwrap();
         let server = tokio::spawn(async move {
             let (mut socket, _) = listener.accept().await.unwrap();
-            for _ in 0..2 {
+            let api_versions_request = read_frame(&mut socket).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut socket, &api_versions_v3_fetch_v12_response(1)).await;
+            for (correlation_id, session_id) in [(2, 17), (3, 17)] {
                 let request = read_frame(&mut socket).await;
-                assert_eq!(&request[0..4], &[0, 1, 0, 4]);
-                write_frame(&mut socket, &fetch_v4_response_frame()).await;
+                assert_eq!(&request[0..4], &[0, 1, 0, 12]);
+                write_frame(
+                    &mut socket,
+                    &fetch_v12_response_frame_with_record(correlation_id, session_id),
+                )
+                .await;
             }
         });
 
@@ -2660,6 +2663,45 @@ mod tests {
         assert_eq!(first.len(), 1);
         assert_eq!(second.len(), 1);
         assert_eq!(consumer.broker_clients.len(), 1);
+        assert_eq!(consumer.fetch_sessions[&addr.to_string()].session_id, 17);
+        assert_eq!(consumer.fetch_sessions[&addr.to_string()].next_epoch, 2);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn falls_back_to_fetch_v4_when_broker_lacks_session_versions() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut socket).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut socket, &api_versions_v3_fetch_response(1, 10)).await;
+
+            let fetch_request = read_frame(&mut socket).await;
+            assert_eq!(&fetch_request[0..4], &[0, 1, 0, 4]);
+            write_frame(&mut socket, &fetch_v4_response_frame()).await;
+        });
+        let (client_stream, broker_stream) = tokio::io::duplex(64);
+        let _broker_stream = broker_stream;
+        let client = Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-fetch-v4-fallback-test".to_owned()),
+            Some(std::time::Duration::from_millis(500)),
+        );
+        let config = ConsumerConfig::new([addr.to_string()]).request_timeout_ms(500);
+        let mut consumer = Consumer::from_assignments(client, config, Vec::new());
+        let mut metadata = metadata_fixture();
+        metadata.brokers[0].host = addr.ip().to_string();
+        metadata.brokers[0].port = i32::from(addr.port());
+        consumer
+            .metadata_cache
+            .insert("orders".to_owned(), metadata);
+
+        let records = consumer.fetch("orders", 0, 42).await.unwrap();
+
+        assert_eq!(records.len(), 1);
+        assert!(consumer.fetch_sessions.is_empty());
         server.await.unwrap();
     }
 
@@ -2915,22 +2957,6 @@ mod tests {
         response.into_bytes()
     }
 
-    fn fetch_v4_out_of_range_response_frame(correlation_id: i32) -> Vec<u8> {
-        let mut response = Encoder::new();
-        response.write_i32(correlation_id);
-        response.write_i32(0);
-        response.write_i32(1);
-        response.write_string("orders").unwrap();
-        response.write_i32(1);
-        response.write_i32(0);
-        response.write_i16(1);
-        response.write_i64(-1);
-        response.write_i64(-1);
-        response.write_i32(0);
-        response.write_bytes(&[]).unwrap();
-        response.into_bytes()
-    }
-
     fn api_versions_v3_fetch_v11_response(correlation_id: i32) -> Vec<u8> {
         api_versions_v3_fetch_response(correlation_id, 11)
     }
@@ -3006,6 +3032,71 @@ mod tests {
         response.write_i64(42);
         response.write_unsigned_varint(1); // no aborted transactions
         response.write_i32(preferred_read_replica);
+        response.write_compact_nullable_bytes(Some(&[])).unwrap();
+        response.write_unsigned_varint(0); // partition tags
+        response.write_unsigned_varint(0); // topic tags
+        response.write_unsigned_varint(0); // response tags
+        response.into_bytes()
+    }
+
+    fn fetch_v12_response_frame_with_record(correlation_id: i32, session_id: i32) -> Vec<u8> {
+        let mut message = Encoder::new();
+        message.write_i32(0);
+        message.write_i8(1);
+        message.write_i8(0);
+        message.write_i64(123);
+        message.write_nullable_bytes(Some(b"order-1")).unwrap();
+        message.write_nullable_bytes(Some(b"created")).unwrap();
+        let message = message.into_bytes();
+
+        let mut records = Encoder::new();
+        records.write_i64(42);
+        records.write_i32(i32::try_from(message.len()).unwrap());
+        records.write_raw(&message);
+        let records = records.into_bytes();
+
+        let mut response = Encoder::new();
+        response.write_i32(correlation_id);
+        response.write_unsigned_varint(0); // response header tags
+        response.write_i32(0); // throttle time
+        response.write_i16(0);
+        response.write_i32(session_id);
+        response.write_unsigned_varint(2); // one compact topic
+        response.write_compact_string("orders").unwrap();
+        response.write_unsigned_varint(2); // one compact partition
+        response.write_i32(0);
+        response.write_i16(0);
+        response.write_i64(43);
+        response.write_i64(43);
+        response.write_i64(0);
+        response.write_unsigned_varint(1); // no aborted transactions
+        response.write_i32(-1);
+        response
+            .write_compact_nullable_bytes(Some(&records))
+            .unwrap();
+        response.write_unsigned_varint(0); // partition tags
+        response.write_unsigned_varint(0); // topic tags
+        response.write_unsigned_varint(0); // response tags
+        response.into_bytes()
+    }
+
+    fn fetch_v12_out_of_range_response_frame(correlation_id: i32) -> Vec<u8> {
+        let mut response = Encoder::new();
+        response.write_i32(correlation_id);
+        response.write_unsigned_varint(0); // response header tags
+        response.write_i32(0); // throttle time
+        response.write_i16(0);
+        response.write_i32(0);
+        response.write_unsigned_varint(2); // one compact topic
+        response.write_compact_string("orders").unwrap();
+        response.write_unsigned_varint(2); // one compact partition
+        response.write_i32(0);
+        response.write_i16(1); // OFFSET_OUT_OF_RANGE
+        response.write_i64(-1);
+        response.write_i64(-1);
+        response.write_i64(0);
+        response.write_unsigned_varint(1); // no aborted transactions
+        response.write_i32(-1);
         response.write_compact_nullable_bytes(Some(&[])).unwrap();
         response.write_unsigned_varint(0); // partition tags
         response.write_unsigned_varint(0); // topic tags

@@ -189,12 +189,14 @@ Current implementation status:
   partition offsets.
 - `Consumer::offset_for_leader_epoch` exposes leader-routed end offsets for a
   requested partition leader epoch.
-- Fetch uses metadata lookup and partition leader routing. Set
-  `ConsumerConfig::client_rack("rack-a")` to enable rack-aware Fetch
-  negotiation. When the broker advertises Fetch v12, the rack ID is sent using
-  the flexible schema and the next request follows `preferred_read_replica`.
-  Fetch v11 and the existing Fetch v4 leader route remain automatic fallbacks.
-- Rack-aware Fetch v11/v12 requests reuse a broker-scoped fetch session across
+- Fetch uses metadata lookup and partition leader routing. Direct and group
+  consumers negotiate Fetch v12, then v11, when the selected broker advertises
+  those versions. Set `ConsumerConfig::client_rack("rack-a")` (or the matching
+  group builder) to send a rack ID using the flexible schema and follow
+  `preferred_read_replica`; without a rack, the same session-capable request
+  path is used with an empty rack ID. Fetch v4 remains the automatic fallback
+  for brokers that do not advertise v11 or v12.
+- Fetch v11/v12 requests reuse a broker-scoped fetch session across
   sequential polls. The first request opens the session at epoch `0`; later
   requests advance the epoch. Assignment changes, seek/pause/resume operations,
   broker reconnects, and fetch errors discard the session so the next request

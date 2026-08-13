@@ -543,9 +543,9 @@ with zero in-flight requests and buffered records.
   focused wire and injected multi-broker routing tests cover this path. The
   Kafka 3.7.2 three-broker rack-aware profile is also live-qualified in
   [`31640494509`](https://github.com/TaeeunKil/kafrust/actions/runs/31640494509).
-  Rack-aware Fetch v11/v12 requests reuse a broker-scoped session across
-  sequential polls, with session reset on assignment or position changes,
-  reconnects, and fetch errors; this path passed in
+  Fetch v11/v12 requests reuse a broker-scoped session across sequential polls,
+  with session reset on assignment or position changes, reconnects, and fetch
+  errors; the rack-aware path passed in
   [`31671783977`](https://github.com/TaeeunKil/kafrust/actions/runs/31671783977).
 - Consumer group join, sync, heartbeat, poll, and offset commit through the alpha classic consumer group path with range assignment.
 - Client-side regex topic subscription resolves Metadata v1 topic names before

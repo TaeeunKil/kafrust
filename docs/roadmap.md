@@ -1575,9 +1575,10 @@ Implemented evidence:
   profile passed live qualification in
   [`31640494509`](https://github.com/TaeeunKil/kafrust/actions/runs/31640494509),
   including live Fetch v12 requests and preferred-replica routing.
-- Rack-aware direct Fetch v11/v12 now tracks the broker-scoped fetch session
-  ID and epoch across sequential polls. Focused tests cover session creation,
-  epoch advancement, and retry classification for `INVALID_FETCH_SESSION_EPOCH`.
+- Direct and group Fetch v11/v12 now track the broker-scoped fetch session ID
+  and epoch across sequential polls. Focused tests cover session creation,
+  epoch advancement, retry classification for `INVALID_FETCH_SESSION_EPOCH`,
+  and v4 fallback when a broker advertises neither session-capable version.
   Session state is explicitly discarded on assignment or position changes,
   reconnects, and fetch errors; the v4 fallback remains outside this claim.
   The complete 17-job matrix, including the Kafka 3.7.2 three-broker

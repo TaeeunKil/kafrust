@@ -11,7 +11,7 @@ Tokio-based admin, producer, direct consumer, and alpha classic/KIP-848
 consumer group APIs on top of the companion
 [`kafrust-protocol`](https://docs.rs/kafrust-protocol) wire-format crate.
 
-Current release: `0.2.24`.
+Current release: `0.2.25`.
 
 This crate is alpha. Use it for experiments, local broker checks, simple
 internal tools, and API evaluation. For broad production Kafka workloads that
@@ -277,16 +277,19 @@ Fetched records expose Kafka RecordBatch headers through `record.headers()`.
 `ConsumerRecordHeader::value()` returns an optional byte slice because Kafka
 allows null header values; legacy MessageSet records have an empty header list.
 
-For rack-aware reads, set `ConsumerConfig::client_rack("rack-a")` (or the
-matching `ConsumerGroupConfig` builder). Fetch v12 negotiation carries the
-rack ID using the flexible schema and follows Kafka's `preferred_read_replica`
-response when supported; Fetch v11 and the existing Fetch v4 leader path remain
-fallbacks. The protocol and injected routing tests pass. The Kafka 3.7.2 three-broker `broker.rack` plus
+Direct and group consumers negotiate Fetch v12, then v11, when the selected
+broker advertises those versions. For rack-aware reads, set
+`ConsumerConfig::client_rack("rack-a")` (or the matching
+`ConsumerGroupConfig` builder). Fetch v12 carries the rack ID using the flexible
+schema and follows Kafka's `preferred_read_replica` response when supported;
+without a rack, the same session-capable path uses an empty rack ID. Fetch v4
+remains the fallback for brokers that do not advertise v11 or v12. The protocol
+and injected routing tests pass. The Kafka 3.7.2 three-broker `broker.rack` plus
 `RackAwareReplicaSelector` profile is live-qualified in
 [`31640494509`](https://github.com/TaeeunKil/kafrust/actions/runs/31640494509).
-Rack-aware Fetch v11/v12 requests reuse a broker-scoped fetch session across
-sequential polls. Assignment changes, seek/pause/resume, reconnects, and fetch
-errors discard the session; the Fetch v4 fallback does not claim session reuse.
+Fetch v11/v12 requests reuse a broker-scoped fetch session across sequential
+polls. Assignment changes, seek/pause/resume, reconnects, and fetch errors
+discard the session; the Fetch v4 fallback does not claim session reuse.
 The complete 17-job matrix for this path passed in
 [`31671783977`](https://github.com/TaeeunKil/kafrust/actions/runs/31671783977),
 including the Kafka 3.7.2 three-broker rack-aware follow-up request.

@@ -359,8 +359,8 @@ impl Client {
             .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
             .await?;
         Ok(response
-            .highest_supported_version(FETCH_API_KEY, 11)
-            .is_some())
+            .highest_supported_version(FETCH_API_KEY, 12)
+            .is_some_and(|version| version >= 11))
     }
 
     pub(crate) async fn supports_fetch_v12(&mut self) -> Result<bool> {
@@ -369,7 +369,7 @@ impl Client {
             .await?;
         Ok(response
             .highest_supported_version(FETCH_API_KEY, 12)
-            .is_some())
+            .is_some_and(|version| version >= 12))
     }
 
     /// Returns the broker-advertised SASL session lifetime in milliseconds.

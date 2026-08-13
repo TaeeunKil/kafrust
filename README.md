@@ -15,7 +15,7 @@ visible in public APIs: bootstrap servers, client IDs, topics, partitions,
 offsets, acknowledgements, metadata refresh, consumer groups, heartbeats, and
 commits.
 
-Current release: `0.2.24`.
+Current release: `0.2.25`.
 
 Use kafrust today for experiments, local broker checks, simple internal tools,
 and API evaluation. For broad production Kafka workloads that need mature
@@ -308,19 +308,21 @@ Fetched records also expose Kafka RecordBatch headers through
 `value()` returns `Option<&[u8]>` so null header values remain distinguishable
 from empty values. Legacy MessageSet records expose no headers.
 
-For rack-aware reads, set `ConsumerConfig::client_rack("rack-a")` (or the
-matching `ConsumerGroupConfig` builder). When the selected broker advertises
-Fetch v12, kafrust sends the rack ID using the flexible Fetch schema and follows Kafka's
-`preferred_read_replica` response on the next fetch. It falls back to the
-Fetch v11 and then the existing Fetch v4 leader path when newer versions are
-unavailable. Wire-level and injected multi-broker routing tests cover this path. The Kafka 3.7.2
+Direct and group consumers negotiate Fetch v12, then v11, when the selected
+broker advertises those versions. For rack-aware reads, set
+`ConsumerConfig::client_rack("rack-a")` (or the matching
+`ConsumerGroupConfig` builder); kafrust sends the rack ID using the flexible
+Fetch schema and follows Kafka's `preferred_read_replica` response on the next
+fetch. Without a rack, the same session-capable path uses an empty rack ID.
+Fetch v4 remains the fallback for brokers that do not advertise v11 or v12.
+Wire-level and injected multi-broker routing tests cover this path. The Kafka 3.7.2
 three-broker `broker.rack` plus `RackAwareReplicaSelector` profile passed in
 [`Live Kafka Smoke`, run `31640494509`](https://github.com/TaeeunKil/kafrust/actions/runs/31640494509),
 including live Fetch v12 requests and preferred-replica routing.
-Rack-aware Fetch v11/v12 requests also reuse a broker-scoped fetch session across
-sequential polls; assignment changes, local position controls, reconnects, and
-fetch errors reset that session. Fetch v4 remains a compatibility fallback
-without a fetch-session claim.
+Fetch v11/v12 requests reuse a broker-scoped fetch session across sequential
+polls; assignment changes, local position controls, reconnects, and fetch errors
+reset that session. Fetch v4 remains a compatibility fallback without a
+fetch-session claim.
 The complete 17-job matrix for this session path passed in
 [`31671783977`](https://github.com/TaeeunKil/kafrust/actions/runs/31671783977),
 including the Kafka 3.7.2 three-broker rack-aware follow-up request.
@@ -546,8 +548,8 @@ Primary public entry points:
 
 Generated API documentation:
 
-- [`kafrust`](https://docs.rs/kafrust/0.2.24/kafrust/)
-- [`kafrust-protocol`](https://docs.rs/kafrust-protocol/0.2.24/kafrust_protocol/)
+- [`kafrust`](https://docs.rs/kafrust/0.2.25/kafrust/)
+- [`kafrust-protocol`](https://docs.rs/kafrust-protocol/0.2.25/kafrust_protocol/)
 
 ## Documentation
 
