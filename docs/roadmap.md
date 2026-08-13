@@ -1949,3 +1949,9 @@ Implemented evidence:
   [`31665016772`](https://github.com/TaeeunKil/kafrust/actions/runs/31665016772);
   transparent replay after a mutation transport failure remains explicitly
   outside the compatibility claim.
+- Release `v0.2.20` published the coordinator-response retry slice after
+  protocol-first package verification, staged all-feature documentation builds,
+  a fresh external Rust 1.81 project compile with `tls`, crates.io resolution,
+  and HTTP 200 responses from both docs.rs pages. The complete 17-job live
+  matrix remained green in
+  [`31665016772`](https://github.com/TaeeunKil/kafrust/actions/runs/31665016772).

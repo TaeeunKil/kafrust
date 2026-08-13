@@ -117,6 +117,13 @@ pages returned HTTP 200, and a fresh external project compiled the published
 Smoke matrix passed on commit `1e5d5c6` in
 [`31663188419`](https://github.com/TaeeunKil/kafrust/actions/runs/31663188419).
 
+The `0.2.20` packages passed Cargo publish verification on release preparation
+commit `5d028f1`; `kafrust-protocol` was published before `kafrust`. Both
+docs.rs pages returned HTTP 200, and a fresh external project compiled the
+published `kafrust 0.2.20` crate with `tls` on Rust 1.81. The complete 17-job
+Live Kafka Smoke matrix passed the Admin retry change on commit `ec293d1` in
+[`31665016772`](https://github.com/TaeeunKil/kafrust/actions/runs/31665016772).
+
 ## Optional Broker Checks
 
 The default test suite does not require a Kafka broker. Before an alpha tag, run the opt-in examples or tests against a local broker when practical:
