@@ -126,8 +126,11 @@ and data-loss/log-retention fault scenarios remain separate claims.
 The current development line also implements controller-routed ElectLeaders
 v0-v2 negotiation and typed preferred/unclean election results. Focused wire
 and injected-controller tests pass, and the multi-broker smoke workflow now
-executes the preferred-election example after replica reassignment. This is
-not yet a live compatibility claim until that workflow run completes; unclean
+executes the preferred-election example after replica reassignment. The Kafka
+3.7.2 three-broker path returned a successful preferred election in run
+[`31681439569`](https://github.com/TaeeunKil/kafrust/actions/runs/31681439569),
+qualifying plaintext controller routing and per-partition success decoding.
+Secured controller routing and unclean election remain separate claims; unclean
 election remains an explicit, data-loss-sensitive operation and is not part of
 the default smoke gate.
 

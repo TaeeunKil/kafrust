@@ -168,7 +168,9 @@ transient failures, and the Kafka 3.7.2 three-broker path is live-verified.
 `elect_leaders` exposes controller-routed preferred and one-shot unclean leader
 elections with negotiated ElectLeaders v0-v2 responses; preferred no-op error
 84 remains observable and unclean election requires an explicit operator
-choice. See [Admin API](docs/admin-api.md) for the recovery warning and example.
+choice. The Kafka 3.7.2 three-broker preferred-election path is live-qualified;
+secured routing remains a separate gate. See [Admin API](docs/admin-api.md) for
+the recovery warning and example.
 `describe_cluster` and `list_topics` likewise retry transport and timeout
 failures, and `list_topics` retries transient topic/partition metadata errors
 while preserving final topic-level metadata errors.

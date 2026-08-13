@@ -1028,8 +1028,10 @@ Implemented evidence:
   per-partition results, and v0 rejects unclean requests instead of silently
   downgrading them. Focused wire and controller-routing tests pass. The
   multi-broker workflow runs the preferred-election example after reassignment;
-  its live result is still pending and unclean election is deliberately outside
-  the default gate because it can lose records.
+  Kafka 3.7.2 returned partition success in
+  [`31681439569`](https://github.com/TaeeunKil/kafrust/actions/runs/31681439569).
+  Secured controller routing remains a separate gate, and unclean election is
+  deliberately outside the default gate because it can lose records.
 - The `admin_describe_group` example runs after the consumer-group smoke path
   across plaintext, multi-broker, TLS, SASL_PLAINTEXT, and SASL_SSL profiles.
 - The admin lifecycle example waits for asynchronous metadata propagation in
@@ -2046,6 +2048,8 @@ Implemented evidence:
   the OffsetForLeaderEpoch path. Group rebalance recovery and data-loss/log-
   retention fault scenarios remain separate gates.
 - The current development line adds controller-routed ElectLeaders v0-v2
-  negotiation and typed preferred/unclean outcomes. The next release gate is
-  live multi-broker preferred-election verification plus secured controller
-  routing; this does not make unclean election a default-safe operation.
+  negotiation and typed preferred/unclean outcomes. Plaintext multi-broker
+  preferred-election verification is complete in
+  [`31681439569`](https://github.com/TaeeunKil/kafrust/actions/runs/31681439569);
+  secured controller routing remains the next release gate. This does not make
+  unclean election a default-safe operation.
