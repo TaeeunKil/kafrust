@@ -1056,6 +1056,10 @@ impl ConsumerGroupConfig {
                     .collect(),
             ))
             .await?;
+        let has_assignable_partitions = metadata
+            .topics
+            .iter()
+            .any(|topic| topic.error_code == 0 && !topic.partitions.is_empty());
         let topic_ids = topic_ids_for_names(&metadata, &topics).map_err(|error| match error {
             Error::Broker { code, context } => self.client.broker_error(code, context),
             error => error,
@@ -1156,8 +1160,13 @@ impl ConsumerGroupConfig {
             commit_worker: None,
             auto_commit_worker: None,
         };
-        if group.consumer_owned_partitions.is_none() {
-            group.wait_for_consumer_assignment().await?;
+        if !consumer_assignment_ready(
+            group.consumer_owned_partitions.as_deref(),
+            has_assignable_partitions,
+        ) {
+            group
+                .wait_for_consumer_assignment(has_assignable_partitions)
+                .await?;
         }
         group.notify_rebalance(RebalancePhase::After, group.consumer.assignments());
         Ok(group)
@@ -1575,6 +1584,18 @@ impl ConsumerGroupMetadata {
     }
 }
 
+fn consumer_assignment_ready(
+    assignments: Option<&[ConsumerGroupHeartbeatTopicPartitions]>,
+    require_partitions: bool,
+) -> bool {
+    assignments.is_some_and(|assignments| {
+        !require_partitions
+            || assignments
+                .iter()
+                .any(|assignment| !assignment.partitions.is_empty())
+    })
+}
+
 impl ConsumerGroup {
     /// Returns the Kafka consumer group ID.
     pub fn group_id(&self) -> &str {
@@ -1624,12 +1645,18 @@ impl ConsumerGroup {
         Ok(())
     }
 
-    async fn wait_for_consumer_assignment(&mut self) -> Result<()> {
+    async fn wait_for_consumer_assignment(&mut self, require_partitions: bool) -> Result<()> {
         let timeout_ms = self.config.rebalance_timeout_ms.max(1) as u64;
         let deadline = time::Instant::now() + Duration::from_millis(timeout_ms);
-        while self.consumer_owned_partitions.is_none() {
+        while !consumer_assignment_ready(
+            self.consumer_owned_partitions.as_deref(),
+            require_partitions,
+        ) {
             self.heartbeat_consumer().await?;
-            if self.consumer_owned_partitions.is_some() {
+            if consumer_assignment_ready(
+                self.consumer_owned_partitions.as_deref(),
+                require_partitions,
+            ) {
                 break;
             }
             if time::Instant::now() >= deadline {
@@ -4583,12 +4610,13 @@ mod tests {
 
     use super::{
         assignment_leader_epochs_from_metadata, assignments_for_strategy, committed_offset,
-        cooperative_assignment_requires_rejoin, cooperative_rejoin_required_for_assignment,
-        cooperative_sticky_assignments, decode_classic_subscription, decode_sticky_user_data,
-        encode_sticky_user_data, group_retry_backoff, leave_group_response_error, list_offset,
-        list_offsets_topics, member_id_after_join_error, offset_commit_response_error,
-        offset_commit_topics, offset_commit_topics_v7, offset_commit_topics_v9,
-        offset_fetch_topics, pending_commit_assignments, queue_commit_offset, range_assignments,
+        consumer_assignment_ready, cooperative_assignment_requires_rejoin,
+        cooperative_rejoin_required_for_assignment, cooperative_sticky_assignments,
+        decode_classic_subscription, decode_sticky_user_data, encode_sticky_user_data,
+        group_retry_backoff, leave_group_response_error, list_offset, list_offsets_topics,
+        member_id_after_join_error, offset_commit_response_error, offset_commit_topics,
+        offset_commit_topics_v7, offset_commit_topics_v9, offset_fetch_topics,
+        pending_commit_assignments, queue_commit_offset, range_assignments,
         record_consumer_heartbeat_response, round_robin_assignments,
         should_rejoin_after_background_heartbeat, should_rejoin_group, should_retry_commit_worker,
         should_retry_consumer_join_transport, sticky_assignments, validate_commit_worker_interval,
@@ -4983,6 +5011,23 @@ mod tests {
 
         assert_eq!(config.group_protocol_ref(), ConsumerGroupProtocol::Consumer);
         assert_eq!(config.server_assignor_ref(), Some("uniform"));
+    }
+
+    #[test]
+    fn waits_for_non_empty_kip_848_assignment_when_partitions_exist() {
+        let empty = [ConsumerGroupHeartbeatTopicPartitions {
+            topic_id: [1; 16],
+            partitions: Vec::new(),
+        }];
+        let assigned = [ConsumerGroupHeartbeatTopicPartitions {
+            topic_id: [1; 16],
+            partitions: vec![0],
+        }];
+
+        assert!(!consumer_assignment_ready(Some(&empty), true));
+        assert!(consumer_assignment_ready(Some(&empty), false));
+        assert!(consumer_assignment_ready(Some(&assigned), true));
+        assert!(!consumer_assignment_ready(None, true));
     }
 
     #[test]
