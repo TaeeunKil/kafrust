@@ -906,7 +906,11 @@ Implemented evidence:
   commit `9d3916f` in
   [`31688516207`](https://github.com/TaeeunKil/kafrust/actions/runs/31688516207).
   Secured profiles beyond SASL_PLAINTEXT and post-transmission mutation
-  recovery remain separate qualification gates.
+  recovery remain separate qualification gates. The same lifecycle also
+  passed over TLS with SCRAM-SHA-256 on Kafka 3.7.2 in the complete matrix
+  [`31689260396`](https://github.com/TaeeunKil/kafrust/actions/runs/31689260396),
+  completing the documented single-broker SASL_SSL/SCRAM gate; secured
+  multi-broker token failover remains separate.
 - DescribeGroups v1 discovers each requested group's coordinator independently
   and preserves state, protocol, member identity, raw protocol metadata and
   assignments, per-group errors, throttle time, tracing, and metrics.
