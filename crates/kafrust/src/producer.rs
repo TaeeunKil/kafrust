@@ -3276,31 +3276,6 @@ impl Producer {
             {
                 Ok(response) => response,
                 Err(error) => {
-                    if is_retryable_transaction_transport_error(&error)
-                        && attempt < self.config.max_retries
-                    {
-                        attempt += 1;
-                        time::sleep(IDEMPOTENT_INIT_RETRY_BACKOFF).await;
-                        self.config.client.record_retry();
-                        match reconnect_transaction_client(
-                            &self.config.client,
-                            &mut attempt,
-                            self.config.max_retries,
-                        )
-                        .await
-                        {
-                            Ok(reconnected) => {
-                                self.client = reconnected;
-                                continue;
-                            }
-                            Err(_) => {
-                                self.mark_transaction_defunct();
-                                return Err(Error::TransactionOutcomeUnknown {
-                                    operation: if committed { "commit" } else { "abort" },
-                                });
-                            }
-                        }
-                    }
                     if is_transaction_outcome_unknown_error(&error) {
                         self.mark_transaction_defunct();
                         return Err(Error::TransactionOutcomeUnknown {
@@ -5791,9 +5766,11 @@ mod tests {
             drop(coordinator_socket);
         });
 
+        let metrics = ClientMetrics::new();
         let config = ProducerConfig::new([bootstrap_addr.to_string()])
+            .metrics(metrics.clone())
             .transactional_id("orders-tx")
-            .max_retries(0);
+            .max_retries(2);
         let client = config.client.clone().connect().await.unwrap();
         let mut transaction_state = TransactionState::new("orders-tx".to_owned());
         transaction_state.status = TransactionStatus::InTransaction;
@@ -5822,6 +5799,7 @@ mod tests {
             producer.begin_transaction(),
             Err(Error::TransactionProducerDefunct)
         ));
+        assert_eq!(metrics.snapshot().retries, 0);
 
         server.await.unwrap();
     }
