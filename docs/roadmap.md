@@ -1575,6 +1575,14 @@ completed and both final resource gauges were zero.
   published plaintext simultaneous-loss gate; secured simultaneous loss,
   direct rust-rdkafka comparison, production SLO, and canary evidence remain
   open.
+- The same published simultaneous-loss gate passed Kafka 3.7.2 in
+  [`31748860976`](https://github.com/TaeeunKil/kafrust/actions/runs/31748860976).
+  The fresh external `0.2.28` project processed 4,620,200 records across three
+  replicated partitions, observed one failed request and 1,008 retries, and
+  ended with `recovered=true` plus zero final queue gauges. The paired Kafka
+  3.7.2 and 4.3.1 runs qualify the tested plaintext simultaneous-loss behavior;
+  secured simultaneous loss, direct rust-rdkafka comparison, production SLO,
+  and canary evidence remain open.
 - Shared metrics count non-zero Kafka error codes handled by authentication,
   producer, transaction, consumer, and consumer-group operations, including
   retry attempts and partial batch failures. This separates protocol-level

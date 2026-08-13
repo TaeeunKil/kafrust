@@ -469,6 +469,14 @@ retries with no high-level operation errors, then reported `recovered=true` and
 zero final in-flight or buffered records. This is a published plaintext
 simultaneous-loss profile, not secured or production SLO evidence.
 
+The same published simultaneous broker-loss workflow passed Kafka 3.7.2 in
+[`31748860976`](https://github.com/TaeeunKil/kafrust/actions/runs/31748860976).
+The fresh external `0.2.28` project processed 4,620,200 records across three
+replicated partitions, observed one failed request and 1,008 retries, and ended
+with `recovered=true` plus zero final in-flight or buffered records. Together
+the Kafka 3.7.2 and 4.3.1 runs qualify the tested plaintext simultaneous-loss
+behavior, not secured simultaneous loss or production SLOs.
+
 The following current-main live run
 [`31719615947`](https://github.com/TaeeunKil/kafrust/actions/runs/31719615947)
 also passed the controlled classic consumer-group combined-fault gate in the
