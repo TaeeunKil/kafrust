@@ -2218,6 +2218,14 @@ Implemented evidence:
   `AdminClient` API across the classic, KIP-848, SASL_SSL/SCRAM, and four
   compression profiles. This is representative Admin runtime evidence, not
   every Admin API or authorization policy.
+- Release `v0.2.28` publishes the KIP-848 empty-assignment join fix together
+  with the coordinated protocol and client crates. The seven-profile external
+  published smoke [`31734198869`](https://github.com/TaeeunKil/kafrust/actions/runs/31734198869)
+  resolved both `0.2.28` crates from crates.io and passed classic, KIP-848,
+  SASL_SSL/SCRAM, and Gzip/Snappy/LZ4/Zstd profiles. It also verified
+  `commit_record` plus `commit_queued_offsets`, same-group leave/rejoin, and
+  resume at the committed offset without replay. This is published-artifact
+  evidence for representative paths, not the full replacement gate.
 - The complete 17-job run [`31719615947`](https://github.com/TaeeunKil/kafrust/actions/runs/31719615947)
   adds a controlled combined-fault gate in the Kafka 3.7.2 three-broker
   plaintext profile. It deliberately colocates the classic group coordinator

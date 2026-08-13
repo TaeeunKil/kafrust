@@ -279,6 +279,19 @@ SASL_SSL/SCRAM, and four compression profiles; this is representative Admin
 runtime evidence, not a claim that every Admin API and authorization policy is
 interchangeable yet.
 
+The `0.2.28` packages were then published protocol-first after the local
+workspace, package, and registry verification gates passed. A fresh external
+project matrix resolved `kafrust 0.2.28` and `kafrust-protocol 0.2.28` from
+crates.io and passed all seven profiles in
+[`Published Crate Smoke`, run `31734198869`](https://github.com/TaeeunKil/kafrust/actions/runs/31734198869): Kafka 3.7.2 classic, Kafka 4.3.1 KIP-848, Kafka 3.7.2 SASL_SSL/SCRAM, and Gzip, Snappy, LZ4, and Zstd. The published flow now also commits the first group record, leaves, rejoins with the same group ID, and consumes a post-commit record without replaying the committed record. This is representative published runtime evidence, not a full replacement, multi-broker, authorization, or workload claim.
+
+The KIP-848 result also includes a current-main fix carried by `0.2.28`: when
+Kafka returns an initial empty assignment while subscribed topic partitions
+exist, `ConsumerGroup::join` waits for the non-empty broker assignment before
+exposing the group handle. A focused regression test and all 321 workspace
+tests pass; broader multi-member assignment and failure qualification remain
+separate gates.
+
 The following current-main live run
 [`31719615947`](https://github.com/TaeeunKil/kafrust/actions/runs/31719615947)
 also passed the controlled classic consumer-group combined-fault gate in the
