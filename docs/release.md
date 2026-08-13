@@ -219,6 +219,13 @@ the consumer position and verified `OffsetResetPolicy::Earliest` recovery on
 Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1. This is a main-branch 1.0 gate and does
 not modify the already-published `0.2.27` artifacts.
 
+The published runtime smoke
+[`31719041843`](https://github.com/TaeeunKil/kafrust/actions/runs/31719041843)
+then created a fresh project outside the repository, resolved `kafrust 0.2.27`
+and its matching protocol crate from crates.io, and executed a producer to
+direct-consumer roundtrip against Kafka 3.7.2. This verifies published runtime
+linkage in addition to the earlier compile-only external smoke.
+
 ## Optional Broker Checks
 
 The default test suite does not require a Kafka broker. Before an alpha tag, run the opt-in examples or tests against a local broker when practical:

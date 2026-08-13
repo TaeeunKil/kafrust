@@ -2145,6 +2145,12 @@ Implemented evidence:
   complete 17-job run [`31717934296`](https://github.com/TaeeunKil/kafrust/actions/runs/31717934296).
   This is a controlled retention boundary claim; arbitrary retention timing,
   unclean-election data loss, and combined fault scenarios remain unclaimed.
+- A fresh project outside the repository resolved published `kafrust 0.2.27`
+  and `kafrust-protocol 0.2.27` from crates.io, then executed a producer to
+  direct-consumer roundtrip against Kafka 3.7.2 in
+  [`Published Crate Smoke`, run `31719041843`](https://github.com/TaeeunKil/kafrust/actions/runs/31719041843).
+  The lockfile was checked for the requested published client version, so this
+  gate does not rely on the workspace path dependency.
 - Classic and KIP-848 consumer-group polling now have live leader-epoch
   recovery gates. The complete matrix in
   [`31702236760`](https://github.com/TaeeunKil/kafrust/actions/runs/31702236760)
