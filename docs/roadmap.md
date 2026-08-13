@@ -2196,6 +2196,14 @@ Implemented evidence:
   idempotent-producer, direct-consumer, and classic group paths. This qualifies
   the tested published security profile, not every security provider,
   topology, or failure mode.
+- The same three-profile published workflow
+  [`31730411006`](https://github.com/TaeeunKil/kafrust/actions/runs/31730411006)
+  added a transaction boundary check. Each fresh external project wrote an
+  aborted transaction followed by a committed transaction and verified that
+  `ReadCommitted` exposed only the committed record on Kafka 3.7.2 classic,
+  Kafka 4.3.1 KIP-848, and Kafka 3.7.2 SASL_SSL/SCRAM with the published `tls`
+  feature. This qualifies representative published transaction semantics, not
+  every transaction failure or throughput workload.
 - The complete 17-job run [`31719615947`](https://github.com/TaeeunKil/kafrust/actions/runs/31719615947)
   adds a controlled combined-fault gate in the Kafka 3.7.2 three-broker
   plaintext profile. It deliberately colocates the classic group coordinator

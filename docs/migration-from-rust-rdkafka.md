@@ -271,6 +271,10 @@ EndTxn and refuses to commit after a delivery failure. Transaction coordinator
 broker-stop recovery with `read_committed` verification is qualified on the
 Kafka 3.7.2 three-broker SASL/PLAIN profile in
 [`Live Kafka Smoke` run `31554396594`](https://github.com/TaeeunKil/kafrust/actions/runs/31554396594).
+The published `kafrust 0.2.27` artifact also passed an external
+abort-then-commit plus `ReadCommitted` smoke on Kafka 3.7.2 classic, Kafka
+4.3.1 KIP-848, and Kafka 3.7.2 SASL_SSL/SCRAM in
+[`Published Crate Smoke` run `31730411006`](https://github.com/TaeeunKil/kafrust/actions/runs/31730411006).
 If the EndTxn response is lost, kafrust returns the typed
 `Error::TransactionOutcomeUnknown` and marks the producer `Defunct`; the caller
 must discard it and reinitialize a producer with the same transactional ID
@@ -352,7 +356,7 @@ an ambiguous request.
 | Regex topic subscription | Verified for initial and explicit rejoin two-topic assignment on Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke, including the corrected KIP-848 path on 4.3.1, in [`Live Kafka Smoke` run `31561944247`](https://github.com/TaeeunKil/kafrust/actions/runs/31561944247); qualify topic-discovery permissions on secured target brokers |
 | TLS, SASL/PLAIN, or SASL/SCRAM-SHA-256 | Candidate on documented profiles |
 | SASL/OAUTHBEARER | Candidate on the Kafka 3.7.2 built-in-validator and signed local OIDC/JWKS fixture profiles, including static/provider-backed authentication and flexible `SaslAuthenticate v2` re-authentication; external provider-specific behavior, detached refresh workers, and production token/authorization policy remain open |
-| Transactions and read-committed consumption | Alpha candidate; transaction coordinator broker-stop recovery is verified on the documented Kafka 3.7.2 three-broker SASL/PLAIN profile, safe same-transactional-ID producer reinitialization after SCRAM coordinator failure is verified in run `31572745537`, and the ambiguous EndTxn plus `read_committed` reconciliation gate passed in [`31708995196`](https://github.com/TaeeunKil/kafrust/actions/runs/31708995196/job/94476744970). The caller must discard a producer after `TransactionOutcomeUnknown`; transparent continuation and broader target-specific failure/throughput qualification remain |
+| Transactions and read-committed consumption | Alpha candidate; transaction coordinator broker-stop recovery is verified on the documented Kafka 3.7.2 three-broker SASL/PLAIN profile, safe same-transactional-ID producer reinitialization after SCRAM coordinator failure is verified in run `31572745537`, the ambiguous EndTxn plus `read_committed` reconciliation gate passed in [`31708995196`](https://github.com/TaeeunKil/kafrust/actions/runs/31708995196/job/94476744970), and the published `0.2.27` artifact passed abort/commit plus `ReadCommitted` runtime checks across classic, KIP-848, and SASL_SSL/SCRAM profiles in [`31730411006`](https://github.com/TaeeunKil/kafrust/actions/runs/31730411006). The caller must discard a producer after `TransactionOutcomeUnknown`; transparent continuation and broader target-specific failure/throughput qualification remain |
 | `acks=0` fire-and-forget | Verified on Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 single-node plaintext smoke; qualify workload loss/error semantics |
 | Non-Tokio runtime or synchronous client | Blocked |
 | Custom partitioner | Candidate; `ProducerConfig::partitioner` covers records without an explicit partition across immediate, batch, and buffered paths |

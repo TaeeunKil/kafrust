@@ -253,6 +253,15 @@ completed the Admin, idempotent-producer, direct-consumer, and classic group
 paths. This is published security runtime evidence for the tested profile; it
 does not claim all security providers, broker topologies, or failure modes.
 
+The published transaction runtime gate passed in the same three-profile
+workflow [`31730411006`](https://github.com/TaeeunKil/kafrust/actions/runs/31730411006).
+Each fresh external project wrote an aborted transaction followed by a committed
+transaction and verified that `ReadCommitted` exposed only the committed record.
+The gate passed for Kafka 3.7.2 classic, Kafka 4.3.1 KIP-848, and Kafka 3.7.2
+SASL_SSL/SCRAM with the published `tls` feature. This validates representative
+published transaction semantics, not every transaction failure or throughput
+workload.
+
 The following current-main live run
 [`31719615947`](https://github.com/TaeeunKil/kafrust/actions/runs/31719615947)
 also passed the controlled classic consumer-group combined-fault gate in the
