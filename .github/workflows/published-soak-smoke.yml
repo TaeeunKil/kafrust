@@ -1,0 +1,131 @@
+name: Published Soak Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      kafrust_version:
+        description: "Published kafrust version to qualify from crates.io"
+        required: true
+        default: "0.2.28"
+      duration_seconds:
+        description: "Soak duration before final drain (minimum 60)"
+        required: true
+        default: "120"
+      outage_seconds:
+        description: "Kafka broker outage duration"
+        required: true
+        default: "10"
+
+env:
+  CARGO_TERM_COLOR: always
+  KAFRUST_BOOTSTRAP_SERVERS: localhost:25092
+  KAFRUST_TOPIC: kafrust-published-soak-${{ github.run_id }}
+  KAFRUST_SOAK_SECONDS: ${{ inputs.duration_seconds }}
+  KAFRUST_SOAK_BATCH_SIZE: "100"
+  KAFRUST_SOAK_PAYLOAD_BYTES: "1024"
+
+jobs:
+  published-soak:
+    name: Published kafrust ${{ inputs.kafrust_version }} Kafka 4.3.1 broker restart
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.81.0"
+
+      - name: Start Kafka
+        run: |
+          docker run -d --name kafrust-published-soak \
+            -p 25092:9098 \
+            -e KAFKA_NODE_ID=1 \
+            -e KAFKA_PROCESS_ROLES=broker,controller \
+            -e KAFKA_LISTENERS=INTERNAL://:9092,PLAINTEXT://:9098,CONTROLLER://:9093 \
+            -e KAFKA_ADVERTISED_LISTENERS=INTERNAL://localhost:9092,PLAINTEXT://localhost:25092 \
+            -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+            -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT \
+            -e KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL \
+            -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@localhost:9093 \
+            -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
+            apache/kafka:4.3.1
+
+      - name: Wait for Kafka
+        run: |
+          for attempt in {1..90}; do
+            if docker exec kafrust-published-soak /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server localhost:9092 >/tmp/kafrust-published-soak-probe.log 2>&1; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/kafrust-published-soak-probe.log || true
+          docker logs kafrust-published-soak
+          exit 1
+
+      - name: Create soak topic
+        run: |
+          docker exec kafrust-published-soak /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server localhost:9092 \
+            --create \
+            --topic "$KAFRUST_TOPIC" \
+            --partitions 1 \
+            --replication-factor 1
+
+      - name: Create fresh external project
+        env:
+          KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version }}
+        run: |
+          project_dir="$RUNNER_TEMP/kafrust-published-soak-smoke"
+          if [ "$project_dir" = "$GITHUB_WORKSPACE" ]; then
+            echo "the published soak project must be outside the repository"
+            exit 1
+          fi
+          cargo new --bin "$project_dir"
+          cp .github/published-soak-smoke/src/main.rs "$project_dir/src/main.rs"
+          sed "s/__KAFRUST_VERSION__/$KAFRUST_PUBLISHED_VERSION/" \
+            .github/published-soak-smoke/Cargo.toml > "$project_dir/Cargo.toml"
+
+      - name: Build published external soak
+        run: cargo build --release --manifest-path "$RUNNER_TEMP/kafrust-published-soak-smoke/Cargo.toml"
+
+      - name: Run published soak with broker restart
+        run: |
+          set -euo pipefail
+          if [ "$KAFRUST_SOAK_SECONDS" -lt 60 ]; then
+            echo "duration_seconds must be at least 60"
+            exit 1
+          fi
+          (
+            set -o pipefail
+            cargo run --quiet --release --manifest-path "$RUNNER_TEMP/kafrust-published-soak-smoke/Cargo.toml" \
+              | tee published-soak.json
+          ) &
+          soak_pid=$!
+          sleep "$((KAFRUST_SOAK_SECONDS / 3))"
+          docker stop -t 1 kafrust-published-soak
+          sleep "${{ inputs.outage_seconds }}"
+          docker start kafrust-published-soak
+          wait "$soak_pid"
+          test -s published-soak.json
+          grep -q '"recovered":true' published-soak.json
+
+      - name: Verify published dependency version
+        run: |
+          grep -A1 -q 'name = "kafrust"' "$RUNNER_TEMP/kafrust-published-soak-smoke/Cargo.lock"
+          grep -A1 -q 'version = "${{ inputs.kafrust_version }}"' "$RUNNER_TEMP/kafrust-published-soak-smoke/Cargo.lock"
+
+      - name: Upload published soak result
+        uses: actions/upload-artifact@v6
+        with:
+          name: kafrust-published-soak-${{ github.run_id }}
+          path: published-soak.json
+          retention-days: 90
+
+      - name: Dump Kafka logs
+        if: failure()
+        run: docker logs kafrust-published-soak
