@@ -1908,3 +1908,8 @@ Implemented evidence:
   resolution, and HTTP 200 responses from both docs.rs pages. The complete
   17-job live matrix passed on the release preparation commit in
   [`31658987651`](https://github.com/TaeeunKil/kafrust/actions/runs/31658987651).
+- Consumer assignments now retain the latest RecordBatch leader epoch and send
+  it in Fetch v11/v12 requests. Fenced and unknown leader-epoch broker errors
+  refresh metadata under the bounded fetch retry policy. Automatic offset
+  truncation correction and group-level recovery orchestration remain separate
+  release gates.

@@ -76,6 +76,10 @@ pub enum BrokerErrorKind {
     FencedMemberEpoch,
     /// Kafka reported a stale consumer-group member epoch.
     StaleMemberEpoch,
+    /// Kafka rejected a fetch because the supplied leader epoch is fenced.
+    FencedLeaderEpoch,
+    /// Kafka could not identify the supplied leader epoch during a transition.
+    UnknownLeaderEpoch,
 }
 
 impl BrokerErrorKind {
@@ -114,6 +118,8 @@ impl BrokerErrorKind {
             82 => Self::FencedInstanceId,
             110 => Self::FencedMemberEpoch,
             113 => Self::StaleMemberEpoch,
+            74 => Self::FencedLeaderEpoch,
+            75 => Self::UnknownLeaderEpoch,
             86 => Self::GroupSubscribedToTopic,
             90 => Self::ProducerFenced,
             _ => Self::Unknown,
@@ -500,6 +506,14 @@ mod tests {
         assert_eq!(
             BrokerErrorKind::from_code(90),
             BrokerErrorKind::ProducerFenced
+        );
+        assert_eq!(
+            BrokerErrorKind::from_code(74),
+            BrokerErrorKind::FencedLeaderEpoch
+        );
+        assert_eq!(
+            BrokerErrorKind::from_code(75),
+            BrokerErrorKind::UnknownLeaderEpoch
         );
         assert_eq!(BrokerErrorKind::from_code(999), BrokerErrorKind::Unknown);
     }

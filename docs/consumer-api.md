@@ -85,6 +85,9 @@ consumer.resume("orders", 0)?;
 `position` returns the next offset that poll will fetch. `seek` changes that
 in-memory position without committing it to Kafka. Paused assignments remain
 visible and retain their position, but `poll` skips their fetch requests.
+`ConsumerAssignment::leader_epoch()` exposes the latest RecordBatch leader
+epoch observed for an assignment; it starts at `-1` and is sent in subsequent
+Fetch v11/v12 requests. Legacy MessageSet responses do not update it.
 Seeking, pausing, or resuming a partition that is not assigned returns
 `Error::UnassignedTopicPartition`. Seek a split partition only after dropping
 its active queue; this prevents buffered records from being mixed with a new

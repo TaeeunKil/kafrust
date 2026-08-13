@@ -286,6 +286,16 @@ impl Consumer {
                 )
             })
             .collect::<BTreeMap<_, _>>();
+        let previous_leader_epochs = self
+            .assignments
+            .iter()
+            .map(|assignment| {
+                (
+                    (assignment.topic.clone(), assignment.partition),
+                    assignment.leader_epoch,
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
         let paused = self
             .assignments
             .iter()
@@ -294,6 +304,11 @@ impl Consumer {
             .collect::<BTreeSet<_>>();
         for assignment in &mut assignments {
             assignment.paused = paused.contains(&(assignment.topic.clone(), assignment.partition));
+            if let Some(previous_epoch) =
+                previous_leader_epochs.get(&(assignment.topic.clone(), assignment.partition))
+            {
+                assignment.leader_epoch = *previous_epoch;
+            }
         }
         assignments.sort_by(|left, right| {
             left.topic
@@ -575,8 +590,16 @@ impl Consumer {
                     &assignment.topic,
                     assignment.partition,
                     assignment.next_offset,
+                    assignment.leader_epoch,
                 )
                 .await?;
+            if let Some(leader_epoch) = fetched.leader_epoch {
+                self.update_assignment_leader_epoch(
+                    &assignment.topic,
+                    assignment.partition,
+                    leader_epoch,
+                );
+            }
             let fetched_record_count = fetched.records.len();
             limit_fetched_records(
                 &mut fetched.records,
@@ -711,7 +734,7 @@ impl Consumer {
         let topic = topic.into();
         tracing::Span::current().record("topic", topic.as_str());
         let records = self
-            .fetch_with_progress(&topic, partition, offset)
+            .fetch_with_progress(&topic, partition, offset, -1)
             .await?
             .records;
         self.config.client.record_consumed(records.len());
@@ -723,12 +746,15 @@ impl Consumer {
         topic: &str,
         partition: i32,
         offset: i64,
+        current_leader_epoch: i32,
     ) -> Result<FetchedPartition> {
         let mut attempt = 0;
         debug!(topic, partition, offset, "fetching kafka records");
 
         loop {
-            let result = self.fetch_once(topic, partition, offset).await;
+            let result = self
+                .fetch_once(topic, partition, offset, current_leader_epoch)
+                .await;
             if result.is_err() {
                 self.preferred_read_replicas
                     .remove(&(topic.to_owned(), partition));
@@ -759,6 +785,7 @@ impl Consumer {
         topic: &str,
         partition: i32,
         offset: i64,
+        current_leader_epoch: i32,
     ) -> Result<FetchedPartition> {
         let metadata = self.metadata_for_topic(topic).await?;
         let leader = leader_for(&metadata, topic, partition)?;
@@ -795,6 +822,7 @@ impl Consumer {
                             isolation_level: self.config.isolation_level.as_i8(),
                             topic: topic.to_owned(),
                             partition_index: partition,
+                            current_leader_epoch,
                             fetch_offset: offset,
                             max_partition_bytes: self.config.max_partition_bytes,
                             rack_id,
@@ -831,6 +859,7 @@ impl Consumer {
                             isolation_level: self.config.isolation_level.as_i8(),
                             topic: topic.to_owned(),
                             partition_index: partition,
+                            current_leader_epoch,
                             fetch_offset: offset,
                             max_partition_bytes: self.config.max_partition_bytes,
                             rack_id,
@@ -917,6 +946,10 @@ impl Consumer {
             .last()
             .map(|record| record.offset.saturating_add(1))
             .unwrap_or(offset);
+        let leader_epoch = records
+            .last()
+            .map(|record| record.leader_epoch)
+            .filter(|leader_epoch| *leader_epoch >= 0);
         let records = visible_records(&aborted_transactions, &records, self.config.isolation_level)
             .into_iter()
             .map(|record| ConsumerRecord::from_message_set(topic, partition, record))
@@ -925,6 +958,7 @@ impl Consumer {
         Ok(FetchedPartition {
             records,
             next_offset,
+            leader_epoch,
         })
     }
 
@@ -935,6 +969,16 @@ impl Consumer {
             .find(|assignment| assignment.topic == topic && assignment.partition == partition)
         {
             assignment.next_offset = next_offset;
+        }
+    }
+
+    fn update_assignment_leader_epoch(&mut self, topic: &str, partition: i32, leader_epoch: i32) {
+        if let Some(assignment) = self
+            .assignments
+            .iter_mut()
+            .find(|assignment| assignment.topic == topic && assignment.partition == partition)
+        {
+            assignment.leader_epoch = assignment.leader_epoch.max(leader_epoch);
         }
     }
 
@@ -998,6 +1042,7 @@ impl Consumer {
 struct FetchedPartition {
     records: Vec<ConsumerRecord>,
     next_offset: i64,
+    leader_epoch: Option<i32>,
 }
 
 struct PartitionRoute {
@@ -1012,6 +1057,7 @@ pub struct ConsumerAssignment {
     topic: String,
     partition: i32,
     next_offset: i64,
+    leader_epoch: i32,
     paused: bool,
 }
 
@@ -1021,6 +1067,7 @@ impl ConsumerAssignment {
             topic,
             partition,
             next_offset,
+            leader_epoch: -1,
             paused: false,
         }
     }
@@ -1040,6 +1087,14 @@ impl ConsumerAssignment {
         self.next_offset
     }
 
+    /// Returns the latest partition leader epoch observed by this assignment.
+    ///
+    /// The initial value is `-1` until a RecordBatch response provides an
+    /// epoch. Legacy MessageSet responses do not update this value.
+    pub fn leader_epoch(&self) -> i32 {
+        self.leader_epoch
+    }
+
     /// Returns whether fetching is paused for this assignment.
     pub fn is_paused(&self) -> bool {
         self.paused
@@ -1057,6 +1112,7 @@ fn assign_partition(
         .find(|assignment| assignment.topic == topic && assignment.partition == partition)
     {
         assignment.next_offset = offset;
+        assignment.leader_epoch = -1;
         return;
     }
 
@@ -1064,6 +1120,7 @@ fn assign_partition(
         topic,
         partition,
         next_offset: offset,
+        leader_epoch: -1,
         paused: false,
     });
 }
@@ -1537,6 +1594,8 @@ fn can_retry_fetch(error: &Error) -> bool {
                 | BrokerErrorKind::NotLeaderOrFollower
                 | BrokerErrorKind::RequestTimedOut
                 | BrokerErrorKind::ReplicaNotAvailable
+                | BrokerErrorKind::FencedLeaderEpoch
+                | BrokerErrorKind::UnknownLeaderEpoch
         ),
         Error::Io(_)
         | Error::RequestTimedOut { .. }
@@ -1791,6 +1850,26 @@ mod tests {
         assert!(!assignments[0].is_paused());
     }
 
+    #[test]
+    fn tracks_and_resets_assignment_leader_epoch() {
+        let (client_stream, _broker_stream) = tokio::io::duplex(64);
+        let client = Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-leader-epoch-state-test".to_owned()),
+            Some(std::time::Duration::from_millis(500)),
+        );
+        let mut consumer =
+            Consumer::from_assignments(client, ConsumerConfig::new(["localhost:9092"]), Vec::new());
+
+        consumer.assign("orders", 0, 10);
+        assert_eq!(consumer.assignments()[0].leader_epoch(), -1);
+        consumer.update_assignment_leader_epoch("orders", 0, 4);
+        assert_eq!(consumer.assignments()[0].leader_epoch(), 4);
+
+        consumer.assign("orders", 0, 20);
+        assert_eq!(consumer.assignments()[0].leader_epoch(), -1);
+    }
+
     #[tokio::test]
     async fn controls_assignment_position_and_pause_state() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -1868,6 +1947,51 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn sends_assignment_leader_epoch_in_fetch_v12_request() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut socket).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut socket, &api_versions_v3_fetch_v12_response(1)).await;
+
+            let fetch_request = read_frame(&mut socket).await;
+            assert_eq!(&fetch_request[0..4], &[0, 1, 0, 12]);
+            assert!(fetch_request
+                .windows(4)
+                .any(|window| window == [0, 0, 0, 8]));
+            write_frame(&mut socket, &fetch_v12_response_frame(2, -1)).await;
+        });
+        let (client_stream, broker_stream) = tokio::io::duplex(64);
+        let _broker_stream = broker_stream;
+        let client = Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-assignment-leader-epoch-test".to_owned()),
+            Some(std::time::Duration::from_millis(500)),
+        );
+        let config = ConsumerConfig::new([addr.to_string()])
+            .request_timeout_ms(500)
+            .client_rack("rack-a");
+        let mut consumer = Consumer::from_assignments(
+            client,
+            config,
+            vec![ConsumerAssignment::new("orders".to_owned(), 0, 42)],
+        );
+        let mut metadata = metadata_fixture();
+        metadata.brokers[0].host = addr.ip().to_string();
+        metadata.brokers[0].port = i32::from(addr.port());
+        consumer
+            .metadata_cache
+            .insert("orders".to_owned(), metadata);
+        consumer.update_assignment_leader_epoch("orders", 0, 8);
+
+        assert!(consumer.poll().await.unwrap().is_empty());
+        assert_eq!(consumer.assignments()[0].leader_epoch(), 8);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn fetches_offset_for_leader_epoch_from_partition_leader() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -1938,6 +2062,14 @@ mod tests {
             partition: 0,
         }));
         assert!(can_retry_fetch(&Error::MissingBroker { node_id: 2 }));
+        assert!(can_retry_fetch(&Error::Broker {
+            code: 74,
+            context: "fetch orders-0@0".to_owned(),
+        }));
+        assert!(can_retry_fetch(&Error::Broker {
+            code: 75,
+            context: "fetch orders-0@0".to_owned(),
+        }));
         assert!(!can_retry_fetch(&Error::Unsupported("fetch v99")));
     }
 
