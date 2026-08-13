@@ -240,13 +240,13 @@ The follow-up matrix in
 also passed the same operation on the Kafka 3.7.2 three-broker profile, TLS,
 SASL_PLAINTEXT, and SASL_SSL/SCRAM profiles. These checks cover coordinator
 routing through the configured security transports. The secured three-broker
-SASL_SSL/SCRAM profile now holds both Admin OffsetFetch and exact-offset Admin
-OffsetCommit before transmission, stops the group coordinator, and completes
-both operations with `retries=1` after rediscovery in
-[`31697455368`](https://github.com/TaeeunKil/kafrust/actions/runs/31697455368)
-([job](https://github.com/TaeeunKil/kafrust/actions/runs/31697455368/job/94438400510)).
-This qualifies the read-only OffsetFetch and state-idempotent OffsetCommit
-failure-injection paths for that secured three-broker profile; other
+SASL_SSL/SCRAM profile now holds Admin DescribeGroups, OffsetFetch, and
+exact-offset OffsetCommit before transmission, stops the group coordinator,
+and completes all three operations with `retries=1` after rediscovery in
+[`31698102459`](https://github.com/TaeeunKil/kafrust/actions/runs/31698102459)
+([job](https://github.com/TaeeunKil/kafrust/actions/runs/31698102459/job/94440433930)).
+This qualifies the secured coordinator read paths and state-idempotent
+OffsetCommit failure-injection path for that three-broker profile; other
 coordinator-routed mutations remain separate workload-specific gates.
 
 Admin coordinator discovery now retries transient `CoordinatorLoadInProgress`,
@@ -347,7 +347,7 @@ other coordinator-routed writes remain separate qualification items.
 | Apache Kafka 3.7.2 | three-broker KRaft; PLAINTEXT and SASL_SSL SCRAM failover profiles | DescribeProducers v0 leader routing; DescribeTransactions v0 coordinator routing | [`Live Kafka Smoke`, run `31589394777`](https://github.com/TaeeunKil/kafrust/actions/runs/31589394777) on 2026-08-12 | Passing |
 | Apache Kafka 4.3.1 | single-node and three-broker KRaft; three-broker SASL_PLAINTEXT and SASL_SSL/SCRAM | KIP-848 member-aware Admin OffsetFetch v9 and OffsetCommit v9 | [`Live Kafka Smoke`, run `31607006237`](https://github.com/TaeeunKil/kafrust/actions/runs/31607006237) on 2026-08-12 | Passing; plaintext and secured profiles |
 | Apache Kafka 3.7.2 | three-broker KRaft | In-flight leader-routed DeleteRecords v1 and DescribeProducers v0, coordinator-routed DescribeTransactions v0, DescribeGroups v1, OffsetFetch v2, and exact-offset OffsetCommit v2, plus broker-routed DescribeConfigs v1 and ListGroups v1, pre-transmission gates, broker stops, fresh discovery/retry | [`Live Kafka Smoke`, run `31616181960`](https://github.com/TaeeunKil/kafrust/actions/runs/31616181960) on 2026-08-12 | Passing; ListGroups recorded `retries=7` |
-| Apache Kafka 3.7.2 | three-broker KRaft with SASL_SSL/SCRAM-SHA-256 | In-flight coordinator-routed Admin OffsetFetch v2 and exact-offset OffsetCommit v2, coordinator stop, secured rediscovery/retry | [`Live Kafka Smoke`, run `31697455368`](https://github.com/TaeeunKil/kafrust/actions/runs/31697455368) on 2026-08-13 | Passing; both recorded `retries=1` |
+| Apache Kafka 3.7.2 | three-broker KRaft with SASL_SSL/SCRAM-SHA-256 | In-flight coordinator-routed Admin DescribeGroups v1, OffsetFetch v2, and exact-offset OffsetCommit v2, coordinator stop, secured rediscovery/retry | [`Live Kafka Smoke`, run `31698102459`](https://github.com/TaeeunKil/kafrust/actions/runs/31698102459) on 2026-08-13 | Passing; all recorded `retries=1` |
 | Apache Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1 | single-node KRaft; Kafka 3.7.2 also three-broker KRaft; Kafka 3.7.2 TLS, SASL_PLAINTEXT, and SASL_SSL SCRAM single-node profiles | classic AlterConfigs v1 complete-map topic replacement followed by IncrementalAlterConfigs v0 | [Plaintext run `31669906872`](https://github.com/TaeeunKil/kafrust/actions/runs/31669906872); [secured run `31674680581`](https://github.com/TaeeunKil/kafrust/actions/runs/31674680581) on 2026-08-13 | Passing; plaintext and secured admin lifecycle profiles |
 | Apache Kafka 3.7.2 | three-broker KRaft | Metadata v1 `DescribeCluster` and `ListTopics` bootstrap failover after broker 1 stop | [`Live Kafka Smoke`, run `31620595346`](https://github.com/TaeeunKil/kafrust/actions/runs/31620595346) on 2026-08-12 | Passing; `retries=1` for each path |
 | Apache Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1 | single-node KRaft | Produce `acks=0` immediate and batch dispatch | `Live Kafka Smoke`, manual run `31464933145` on 2026-08-11 | Passing; broker acceptance is intentionally unconfirmed |

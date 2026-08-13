@@ -953,11 +953,11 @@ Implemented evidence:
   rediscovery. The default five-attempt budget is configurable through
   `AdminClient::max_retries`, including disabling retries with zero. The
   secured Kafka 3.7.2 three-broker SASL_SSL/SCRAM profile also holds the
-  read-only OffsetFetch and exact-offset OffsetCommit requests before
-  transmission, stops their active group coordinator, and completes both
-  operations with `retries=1` after rediscovery in
-  [`31697455368`](https://github.com/TaeeunKil/kafrust/actions/runs/31697455368)
-  ([job](https://github.com/TaeeunKil/kafrust/actions/runs/31697455368/job/94438400510)).
+  read-only DescribeGroups and OffsetFetch plus exact-offset OffsetCommit
+  requests before transmission, stops their active group coordinator, and
+  completes all three operations with `retries=1` after rediscovery in
+  [`31698102459`](https://github.com/TaeeunKil/kafrust/actions/runs/31698102459)
+  ([job](https://github.com/TaeeunKil/kafrust/actions/runs/31698102459/job/94440433930)).
   Other coordinator-routed mutations remain separate workload-specific gates
   because their post-transmission outcomes are not generally safe to replay.
   The read-only `DescribeProducers v0` path now retries transient leader movement,
