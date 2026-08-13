@@ -2119,14 +2119,16 @@ jobs:
             --replication-factor 3
 
           group_epoch_partition=""
+          group_epoch_broker=""
           for attempt in {1..120}; do
             docker exec kafrust-kafka-multi-1 /opt/kafka/bin/kafka-topics.sh \
               --bootstrap-server kafrust-kafka-multi-1:29092 \
               --describe \
               --topic "$group_epoch_topic" \
               >/tmp/kafrust-group-epoch-topic.log 2>&1 || true
-            group_epoch_partition="$(awk '/Partition:/ && /Leader: 1/ { for (i = 1; i <= NF; i++) if ($i == "Partition:") { print $(i + 1); exit } }' /tmp/kafrust-group-epoch-topic.log)"
-            if [ -n "$group_epoch_partition" ]; then
+            group_epoch_assignment="$(awk '/Partition:/ { partition=""; leader=""; for (i = 1; i <= NF; i++) { if ($i == "Partition:") partition=$(i + 1); if ($i == "Leader:") leader=$(i + 1) } if (partition != "" && leader ~ /^[1-3]$/) { print partition ":" leader; exit } }' /tmp/kafrust-group-epoch-topic.log)"
+            if [ -n "$group_epoch_assignment" ]; then
+              IFS=: read -r group_epoch_partition group_epoch_broker <<<"$group_epoch_assignment"
               break
             fi
             sleep 2
@@ -2134,9 +2136,19 @@ jobs:
 
           if [ -z "$group_epoch_partition" ]; then
             cat /tmp/kafrust-group-epoch-topic.log || true
-            echo "could not find a partition led by broker 1 for group epoch failover"
+            echo "could not find an available partition leader for group epoch failover"
             exit 1
           fi
+
+          case "$group_epoch_broker" in
+            1) group_epoch_probe_broker=2 ;;
+            2) group_epoch_probe_broker=1 ;;
+            3) group_epoch_probe_broker=1 ;;
+            *)
+              echo "unexpected group epoch broker: $group_epoch_broker"
+              exit 1
+              ;;
+          esac
 
           KAFRUST_TOPIC="$group_epoch_topic" \
           KAFRUST_PARTITION="$group_epoch_partition" \
@@ -2176,16 +2188,16 @@ jobs:
             exit 1
           fi
 
-          docker stop kafrust-kafka-multi-1
+          docker stop "kafrust-kafka-multi-${group_epoch_broker}"
           group_epoch_leader_ready=""
           for attempt in {1..60}; do
-            docker exec kafrust-kafka-multi-2 /opt/kafka/bin/kafka-topics.sh \
-              --bootstrap-server kafrust-kafka-multi-2:29092 \
+            docker exec "kafrust-kafka-multi-${group_epoch_probe_broker}" /opt/kafka/bin/kafka-topics.sh \
+              --bootstrap-server "kafrust-kafka-multi-${group_epoch_probe_broker}:29092" \
               --describe \
               --topic "$group_epoch_topic" \
               >/tmp/kafrust-group-epoch-after-stop-topic.log 2>&1 || true
-            if awk -v target="$group_epoch_partition" \
-              '$0 ~ /Partition:/ && $0 ~ ("Partition: " target) && $0 !~ /Leader: 1/ && $0 !~ /Leader: -1|Leader: none/ { found=1 } END { exit !found }' \
+            if awk -v target="$group_epoch_partition" -v stopped="$group_epoch_broker" \
+              '$0 ~ /Partition:/ { partition=""; leader=""; for (i = 1; i <= NF; i++) { if ($i == "Partition:") partition=$(i + 1); if ($i == "Leader:") leader=$(i + 1) } if (partition == target && leader != "" && leader != stopped && leader != "-1" && leader != "none") found=1 } END { exit !found }' \
               /tmp/kafrust-group-epoch-after-stop-topic.log; then
               group_epoch_leader_ready=1
               break
@@ -2216,11 +2228,11 @@ jobs:
           wait "$group_epoch_pid" || group_epoch_status=$?
           cat "$group_epoch_log"
 
-          docker start kafrust-kafka-multi-1
+          docker start "kafrust-kafka-multi-${group_epoch_broker}"
           group_epoch_broker_ready=""
           for attempt in {1..120}; do
-            if docker exec kafrust-kafka-multi-1 /opt/kafka/bin/kafka-broker-api-versions.sh \
-              --bootstrap-server kafrust-kafka-multi-1:29092 \
+            if docker exec "kafrust-kafka-multi-${group_epoch_broker}" /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server "kafrust-kafka-multi-${group_epoch_broker}:29092" \
               >/tmp/kafrust-group-epoch-recovery.log 2>&1; then
               group_epoch_broker_ready=1
               break
@@ -2233,7 +2245,7 @@ jobs:
              ! grep -q "recovered fetch after leader epoch transition" "$group_epoch_log"; then
             cat /tmp/kafrust-group-epoch-after-stop-topic.log || true
             cat /tmp/kafrust-group-epoch-recovery.log || true
-            docker logs kafrust-kafka-multi-1
+            docker logs "kafrust-kafka-multi-${group_epoch_broker}"
             echo "consumer group did not prove automatic leader-epoch recovery"
             exit 1
           fi
