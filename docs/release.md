@@ -292,6 +292,15 @@ exposing the group handle. A focused regression test and all 321 workspace
 tests pass; broader multi-member assignment and failure qualification remain
 separate gates.
 
+The published multi-broker follow-up
+[`31735177161`](https://github.com/TaeeunKil/kafrust/actions/runs/31735177161)
+also passed against the published `0.2.28` artifact. A fresh external project
+observed a three-broker Kafka 3.7.2 cluster, committed a replicated-topic group
+record, stopped its partition leader, waited for leader movement to a replica,
+and then produced and consumed a post-failover record after rejoining with the
+same group ID. This qualifies one published classic group and leader-failover
+workload; it does not claim every multi-broker topology or failure mode.
+
 The following current-main live run
 [`31719615947`](https://github.com/TaeeunKil/kafrust/actions/runs/31719615947)
 also passed the controlled classic consumer-group combined-fault gate in the
