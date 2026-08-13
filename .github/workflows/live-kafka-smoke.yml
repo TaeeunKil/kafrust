@@ -834,24 +834,34 @@ jobs:
       - name: Run KIP-848 SASL consumer-group leader-epoch failover
         run: |
           group_epoch_partition=""
+          group_epoch_broker=""
           for attempt in {1..120}; do
             docker exec kafrust-kafka-kip848-sasl-1 /opt/kafka/bin/kafka-topics.sh \
               --bootstrap-server kafrust-kafka-kip848-sasl-1:29092 \
               --describe \
               --topic "$KAFRUST_TOPIC" \
               >/tmp/kafrust-kip848-sasl-group-epoch-topic.log 2>&1 || true
-            group_epoch_partition="$(awk '/Partition:/ && /Leader: 1/ { for (i = 1; i <= NF; i++) if ($i == "Partition:") { print $(i + 1); exit } }' /tmp/kafrust-kip848-sasl-group-epoch-topic.log)"
-            if [ -n "$group_epoch_partition" ]; then
+            group_epoch_assignment="$(awk '/Partition:/ { partition=""; leader=""; for (i = 1; i <= NF; i++) { if ($i == "Partition:") partition=$(i + 1); if ($i == "Leader:") leader=$(i + 1) } if (partition != "" && leader ~ /^[123]$/) { print partition, leader; exit } }' /tmp/kafrust-kip848-sasl-group-epoch-topic.log)"
+            if [ -n "$group_epoch_assignment" ]; then
+              read -r group_epoch_partition group_epoch_broker <<<"$group_epoch_assignment"
               break
             fi
             sleep 2
           done
 
-          if [ -z "$group_epoch_partition" ]; then
+          if [ -z "$group_epoch_partition" ] || ! [[ "$group_epoch_broker" =~ ^[123]$ ]]; then
             cat /tmp/kafrust-kip848-sasl-group-epoch-topic.log || true
-            echo "could not find a KIP-848 SASL leader-epoch partition led by broker 1"
+            echo "could not find a KIP-848 SASL leader-epoch partition with an elected leader"
             exit 1
           fi
+
+          group_epoch_probe_broker=""
+          for candidate in 1 2 3; do
+            if [ "$candidate" -ne "$group_epoch_broker" ]; then
+              group_epoch_probe_broker="$candidate"
+              break
+            fi
+          done
 
           KAFRUST_PARTITION="$group_epoch_partition" \
           KAFRUST_KEY="kafrust-kip848-sasl-group-epoch-${GITHUB_RUN_ID}" \
@@ -890,16 +900,16 @@ jobs:
             exit 1
           fi
 
-          docker stop kafrust-kafka-kip848-sasl-1
+          docker stop "kafrust-kafka-kip848-sasl-${group_epoch_broker}"
           group_epoch_leader_ready=""
           for attempt in {1..60}; do
-            docker exec kafrust-kafka-kip848-sasl-2 /opt/kafka/bin/kafka-topics.sh \
-              --bootstrap-server kafrust-kafka-kip848-sasl-2:29092 \
+            docker exec "kafrust-kafka-kip848-sasl-${group_epoch_probe_broker}" /opt/kafka/bin/kafka-topics.sh \
+              --bootstrap-server "kafrust-kafka-kip848-sasl-${group_epoch_probe_broker}:29092" \
               --describe \
               --topic "$KAFRUST_TOPIC" \
               >/tmp/kafrust-kip848-sasl-group-epoch-after-stop-topic.log 2>&1 || true
-            if awk -v target="$group_epoch_partition" \
-              '$0 ~ /Partition:/ && $0 ~ ("Partition: " target) && $0 !~ /Leader: 1/ && $0 !~ /Leader: -1|Leader: none/ { found=1 } END { exit !found }' \
+            if awk -v target="$group_epoch_partition" -v stopped="$group_epoch_broker" \
+              '$0 ~ /Partition:/ { partition=""; leader=""; for (i = 1; i <= NF; i++) { if ($i == "Partition:") partition=$(i + 1); if ($i == "Leader:") leader=$(i + 1) } if (partition == target && leader != "" && leader != stopped && leader != "-1" && leader != "none") found=1 } END { exit !found }' \
               /tmp/kafrust-kip848-sasl-group-epoch-after-stop-topic.log; then
               group_epoch_leader_ready=1
               break
@@ -911,11 +921,11 @@ jobs:
           wait "$group_epoch_pid" || group_epoch_status=$?
           cat "$group_epoch_log"
 
-          docker start kafrust-kafka-kip848-sasl-1
+          docker start "kafrust-kafka-kip848-sasl-${group_epoch_broker}"
           group_epoch_broker_ready=""
           for attempt in {1..120}; do
-            if docker exec kafrust-kafka-kip848-sasl-1 /opt/kafka/bin/kafka-broker-api-versions.sh \
-              --bootstrap-server kafrust-kafka-kip848-sasl-1:29092 \
+            if docker exec "kafrust-kafka-kip848-sasl-${group_epoch_broker}" /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server "kafrust-kafka-kip848-sasl-${group_epoch_broker}:29092" \
               >/tmp/kafrust-kip848-sasl-group-epoch-recovery.log 2>&1; then
               group_epoch_broker_ready=1
               break
@@ -928,7 +938,7 @@ jobs:
              ! grep -q "recovered fetch after leader epoch transition" "$group_epoch_log"; then
             cat /tmp/kafrust-kip848-sasl-group-epoch-after-stop-topic.log || true
             cat /tmp/kafrust-kip848-sasl-group-epoch-recovery.log || true
-            docker logs kafrust-kafka-kip848-sasl-1
+            docker logs "kafrust-kafka-kip848-sasl-${group_epoch_broker}"
             echo "KIP-848 SASL consumer group did not prove automatic leader-epoch recovery"
             exit 1
           fi
