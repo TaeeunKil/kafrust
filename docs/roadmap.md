@@ -1994,6 +1994,11 @@ Implemented evidence:
   verification passed after the complete 17-job matrix qualified the Kafka
   3.7.2 three-broker follow-up path in
   [`31671783977`](https://github.com/TaeeunKil/kafrust/actions/runs/31671783977).
+- Release `v0.2.25` broadens Fetch v11/v12 negotiation and broker-scoped session
+  reuse to direct and group consumers without `client_rack`, while retaining
+  v4 fallback for older capability ranges. The complete 17-job matrix passed
+  on commit `f222d05` in
+  [`31673377685`](https://github.com/TaeeunKil/kafrust/actions/runs/31673377685).
 - Classic eager `StickyAssignor` support now has a public
   `ConsumerGroupAssignmentStrategy::Sticky` variant. JoinGroup uses
   Subscription v0 `user_data` with Kafka's previous-assignment schema,

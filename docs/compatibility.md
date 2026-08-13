@@ -96,6 +96,13 @@ qualifies session reuse on the documented rack-aware direct-consumer path; it
 does not claim session reuse for the Fetch v4 fallback or every security and
 topology combination.
 
+Release `v0.2.25` broadens this negotiated Fetch v11/v12 and session path to
+direct and group consumers without `client_rack`; the rack field is empty when
+no rack is configured. The complete 17-job matrix passed at commit `f222d05`
+in [`31673377685`](https://github.com/TaeeunKil/kafrust/actions/runs/31673377685),
+including the supported plaintext, TLS, SASL, KIP-848, and multi-broker paths.
+The v4 fallback remains covered by a focused broker-capability regression test.
+
 Release `v0.2.19` additionally qualifies Fetch v12 forwarding of the last
 fetched partition leader epoch and consumer-group `Earliest`/`Latest` recovery
 when a committed offset is no longer retained. The dedicated offset-reset

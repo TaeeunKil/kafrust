@@ -323,6 +323,8 @@ Fetch v11/v12 requests reuse a broker-scoped fetch session across sequential
 polls; assignment changes, local position controls, reconnects, and fetch errors
 reset that session. Fetch v4 remains a compatibility fallback without a
 fetch-session claim.
+The complete 17-job matrix for the general direct-consumer negotiation passed in
+[`31673377685`](https://github.com/TaeeunKil/kafrust/actions/runs/31673377685).
 The complete 17-job matrix for this session path passed in
 [`31671783977`](https://github.com/TaeeunKil/kafrust/actions/runs/31671783977),
 including the Kafka 3.7.2 three-broker rack-aware follow-up request.

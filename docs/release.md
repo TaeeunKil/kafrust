@@ -164,6 +164,16 @@ including the Kafka 3.7.2 three-broker rack-aware follow-up request. Both
 crates.io package endpoints and docs.rs pages returned HTTP 200, and a fresh
 external project compiled published `kafrust 0.2.24` with `tls`.
 
+The `0.2.25` packages passed Cargo package and publish verification on release
+preparation commit `f222d05`; `kafrust-protocol` was published before
+`kafrust`. The release broadens Fetch v11/v12 negotiation and broker-scoped
+fetch-session reuse to direct and group consumers without `client_rack`, while
+retaining Fetch v4 fallback for older broker capability ranges. The complete
+17-job Live Kafka Smoke matrix passed on the release commit in
+[`31673377685`](https://github.com/TaeeunKil/kafrust/actions/runs/31673377685).
+Both crates.io package endpoints and docs.rs pages returned HTTP 200, and a
+fresh external project compiled published `kafrust 0.2.25` with `tls`.
+
 ## Optional Broker Checks
 
 The default test suite does not require a Kafka broker. Before an alpha tag, run the opt-in examples or tests against a local broker when practical:
