@@ -11,7 +11,7 @@ Tokio-based admin, producer, direct consumer, and alpha classic/KIP-848
 consumer group APIs on top of the companion
 [`kafrust-protocol`](https://docs.rs/kafrust-protocol) wire-format crate.
 
-Current release: `0.2.10`.
+Current release: `0.2.11`.
 
 This crate is alpha. Use it for experiments, local broker checks, simple
 internal tools, and API evaluation. For broad production Kafka workloads that
