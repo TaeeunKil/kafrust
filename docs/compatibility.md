@@ -34,6 +34,13 @@ workflows remain green across the supported broker, security, failover, ACL,
 and KIP-848 profiles; write transport failures after transmission remain
 intentionally single-attempt.
 
+The complete 17-job matrix also passed at commit `ec293d1` in
+[`31665016772`](https://github.com/TaeeunKil/kafrust/actions/runs/31665016772)
+after adding bounded retry handling for retryable DeleteGroups and OffsetDelete
+coordinator responses. The matrix covers their ordinary plaintext, TLS, SASL,
+SCRAM, and KIP-848-adjacent workflows; it does not claim transparent replay
+after a mutation transport failure.
+
 The follow-up complete 17-job matrix in
 [`31627790408`](https://github.com/TaeeunKil/kafrust/actions/runs/31627790408)
 also passed at commit `25d614a` after the ACL authorizer example added bounded

@@ -1944,5 +1944,8 @@ Implemented evidence:
   Focused mock-broker regressions cover transient `NotCoordinator` responses
   and preserve the existing group and partition-level outcomes. Mutation
   transport failures after transmission remain single-attempt because the
-  broker-side result is ambiguous; an in-flight live broker-stop gate remains
-  before a broader replacement claim.
+  broker-side result is ambiguous. The complete 17-job matrix passed this
+  change at commit `ec293d1` in
+  [`31665016772`](https://github.com/TaeeunKil/kafrust/actions/runs/31665016772);
+  transparent replay after a mutation transport failure remains explicitly
+  outside the compatibility claim.
