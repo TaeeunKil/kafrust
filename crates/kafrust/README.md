@@ -535,6 +535,10 @@ Verified high-level paths include:
   available. SCRAM credential administration and partition reassignment are
   available through typed `AdminClient` APIs; both have Kafka 3.7.2 live smoke
   paths, including three-broker reassignment completion polling.
+  Controller-routed preferred and one-shot unclean leader elections are also
+  available through `AdminClient::elect_leaders`; unclean election is an
+  explicit data-loss-sensitive operation and should be used only with a
+  recovery policy.
   Shared request, retry, broker-error, producer, consumer, batch, and
   buffered-queue metrics are available together with high-level operation and
   request spans.
@@ -578,6 +582,7 @@ Available examples include:
 - `find_group_coordinator`
 - `consumer_group_poll`
 - `admin_reassign_partitions`
+- `admin_elect_leaders`
 
 ## Project Docs
 

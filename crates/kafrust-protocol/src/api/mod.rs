@@ -20,6 +20,7 @@ pub mod describe_groups;
 pub mod describe_producers;
 pub mod describe_transactions;
 pub mod describe_user_scram_credentials;
+pub mod elect_leaders;
 pub mod end_txn;
 pub mod fetch;
 pub mod find_coordinator;

@@ -599,6 +599,59 @@ to assert the broker's completed replica assignment. The repository's
 `admin_reassign_partitions` example performs bounded status polling and is
 live-verified on the Kafka 3.7.2 three-broker profile.
 
+## Elect Leaders
+
+`AdminClient::elect_leaders` routes Kafka's ElectLeaders request to the active
+controller and negotiates API v0, v1, or v2. Pass `None` to ask Kafka to
+consider every eligible partition, or pass explicit topic and partition
+filters. A `LeaderElection` must contain at least one partition; an empty
+filter is rejected rather than being confused with the all-partitions form.
+
+```rust
+use kafrust::{
+    AdminClient, ClientConfig, ElectionType, ElectLeadersOptions, LeaderElection,
+};
+use std::time::Duration;
+
+# async fn example() -> kafrust::Result<()> {
+let admin = AdminClient::new(ClientConfig::new([
+    "localhost:19092",
+    "localhost:19093",
+    "localhost:19094",
+]));
+let elections = [LeaderElection::new("orders").partition(0)];
+let result = admin
+    .elect_leaders(
+        Some(&elections),
+        ElectionType::Preferred,
+        ElectLeadersOptions::new().timeout(Duration::from_secs(30)),
+    )
+    .await?;
+
+for topic in result.topics() {
+    for partition in topic.partitions() {
+        println!(
+            "{}-{}: Kafka error {}",
+            topic.name(),
+            partition.partition_index(),
+            partition.error_code(),
+        );
+    }
+}
+# Ok(())
+# }
+```
+
+Preferred elections are safe to repeat as an operational no-op; Kafka may
+return `ELECTION_NOT_NEEDED` (84) when the preferred replica is already the
+leader. `ElectionType::Unclean` is exposed for compatibility with Kafka's
+one-shot unclean election operation, but it can select an out-of-sync replica
+and lose records. Use it only with an explicit recovery policy. API v0 cannot
+represent unclean elections, so kafrust returns `Unsupported` instead of
+silently downgrading that request. The `admin_elect_leaders` example accepts
+`KAFRUST_ELECTION_TYPE=preferred|unclean`, `KAFRUST_ELECTION_TOPIC`,
+`KAFRUST_ELECTION_PARTITION`, and `KAFRUST_ELECTION_ALL`.
+
 ## Create Topics
 
 ```rust

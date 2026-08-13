@@ -50,6 +50,10 @@ use kafrust_protocol::api::describe_transactions::{
 use kafrust_protocol::api::describe_user_scram_credentials::{
     DescribeUserScramCredentialsResponseV0, ScramCredentialInfoV0,
 };
+use kafrust_protocol::api::elect_leaders::{
+    ElectLeadersResponseV0, ElectLeadersResponseV1, ElectLeadersResponseV2,
+    ElectLeadersTopicResultV0, ElectLeadersTopicV0,
+};
 use kafrust_protocol::api::incremental_alter_configs::{
     IncrementalAlterConfigsEntryV0, IncrementalAlterConfigsResourceResponseV0,
     IncrementalAlterConfigsResourceV0,
@@ -533,6 +537,91 @@ impl AdminClient {
             }
         }
         Ok(AlterUserScramCredentialsResult::from_protocol(response))
+    }
+
+    /// Triggers a preferred or unclean leader election through the active
+    /// controller.
+    ///
+    /// Pass `None` for `elections` to ask Kafka to consider every eligible
+    /// partition. A non-empty slice targets the explicitly listed partitions.
+    /// Kafka returns independent topic and partition outcomes; the method does
+    /// not retry after the request is transmitted because an ambiguous retry
+    /// could duplicate a controller-side election request.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.elect_leaders",
+        skip_all,
+        fields(
+            election_count = elections.map_or(0, <[LeaderElection]>::len),
+            election_type = ?election_type
+        ),
+        err
+    )]
+    pub async fn elect_leaders(
+        &self,
+        elections: Option<&[LeaderElection]>,
+        election_type: ElectionType,
+        options: ElectLeadersOptions,
+    ) -> Result<ElectLeadersResult> {
+        if elections.is_some_and(|items| items.iter().any(|item| item.partitions.is_empty())) {
+            return Err(Error::Unsupported(
+                "ElectLeaders topic filters must include at least one partition",
+            ));
+        }
+
+        let mut controller_client = self.controller_client_with_retries().await?;
+        let api_versions = controller_client
+            .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
+            .await?;
+        let Some(version) = api_versions.highest_supported_version(43, 2) else {
+            return Err(Error::Unsupported(
+                "broker does not advertise a supported ElectLeaders API version",
+            ));
+        };
+        let topics = elections.map(|items| {
+            items
+                .iter()
+                .map(LeaderElection::as_protocol)
+                .collect::<Vec<ElectLeadersTopicV0>>()
+        });
+        let timeout_ms = duration_millis_i32(options.timeout);
+
+        let result = match version {
+            0 => {
+                if election_type != ElectionType::Preferred {
+                    return Err(Error::Unsupported(
+                        "unclean leader election requires ElectLeaders v1 or newer",
+                    ));
+                }
+                ElectLeadersResult::from_protocol_v0(
+                    controller_client
+                        .elect_leaders_v0(topics, timeout_ms)
+                        .await?,
+                )
+            }
+            1 => ElectLeadersResult::from_protocol_v1(
+                controller_client
+                    .elect_leaders_v1(election_type.as_i8(), topics, timeout_ms)
+                    .await?,
+            ),
+            _ => ElectLeadersResult::from_protocol_v2(
+                controller_client
+                    .elect_leaders_v2(election_type.as_i8(), topics, timeout_ms)
+                    .await?,
+            ),
+        };
+
+        if result.error_code != 0 {
+            self.config.record_broker_error();
+        }
+        for topic in &result.topics {
+            for partition in &topic.partitions {
+                if partition.error_code != 0 {
+                    self.config.record_broker_error();
+                }
+            }
+        }
+        Ok(result)
     }
 
     /// Starts or cancels partition reassignments on the active controller.
@@ -3675,6 +3764,254 @@ impl AlterUserScramCredentialsResult {
                     username: result.user,
                     error_code: result.error_code,
                     error_message: result.error_message,
+                })
+                .collect(),
+        }
+    }
+}
+
+/// Selects the kind of leader election requested from Kafka.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ElectionType {
+    /// Move leadership to the preferred replica when possible.
+    Preferred,
+    /// Elect the first live replica even when it is not in the ISR.
+    Unclean,
+}
+
+impl ElectionType {
+    fn as_i8(self) -> i8 {
+        match self {
+            Self::Preferred => 0,
+            Self::Unclean => 1,
+        }
+    }
+}
+
+/// A topic and explicit partition set submitted to ElectLeaders.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LeaderElection {
+    topic: String,
+    partitions: Vec<i32>,
+}
+
+impl LeaderElection {
+    /// Creates an empty topic filter. Add at least one partition with
+    /// [`Self::partition`] before submitting it.
+    pub fn new(topic: impl Into<String>) -> Self {
+        Self {
+            topic: topic.into(),
+            partitions: Vec::new(),
+        }
+    }
+
+    /// Adds a partition to this topic filter.
+    pub fn partition(mut self, partition_index: i32) -> Self {
+        self.partitions.push(partition_index);
+        self
+    }
+
+    /// Returns the topic name.
+    pub fn topic(&self) -> &str {
+        &self.topic
+    }
+
+    /// Returns the explicit partition indexes in request order.
+    pub fn partitions(&self) -> &[i32] {
+        &self.partitions
+    }
+
+    fn as_protocol(&self) -> ElectLeadersTopicV0 {
+        ElectLeadersTopicV0 {
+            name: self.topic.clone(),
+            partitions: self.partitions.clone(),
+        }
+    }
+}
+
+/// Options shared by leader election requests.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ElectLeadersOptions {
+    timeout: Duration,
+}
+
+impl ElectLeadersOptions {
+    /// Creates options with a 30-second broker request timeout.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Sets the broker-side election timeout.
+    pub fn timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = timeout;
+        self
+    }
+
+    /// Returns the configured broker request timeout.
+    pub fn request_timeout(&self) -> Duration {
+        self.timeout
+    }
+}
+
+impl Default for ElectLeadersOptions {
+    fn default() -> Self {
+        Self {
+            timeout: Duration::from_secs(30),
+        }
+    }
+}
+
+/// Per-partition outcome returned by ElectLeaders.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ElectLeadersPartitionResult {
+    partition_index: i32,
+    error_code: i16,
+    error_message: Option<String>,
+}
+
+impl ElectLeadersPartitionResult {
+    /// Returns the affected partition index.
+    pub fn partition_index(&self) -> i32 {
+        self.partition_index
+    }
+
+    /// Returns Kafka's raw error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns Kafka's error message, when present.
+    pub fn error_message(&self) -> Option<&str> {
+        self.error_message.as_deref()
+    }
+
+    /// Returns whether Kafka accepted this partition election.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+    }
+
+    /// Returns kafrust's broker error classification, when present.
+    pub fn broker_error_kind(&self) -> Option<BrokerErrorKind> {
+        (self.error_code != 0).then(|| BrokerErrorKind::from_code(self.error_code))
+    }
+}
+
+/// Per-topic outcomes returned by ElectLeaders.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ElectLeadersTopicResult {
+    name: String,
+    partitions: Vec<ElectLeadersPartitionResult>,
+}
+
+impl ElectLeadersTopicResult {
+    /// Returns the topic name.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Returns partition outcomes in broker response order.
+    pub fn partitions(&self) -> &[ElectLeadersPartitionResult] {
+        &self.partitions
+    }
+
+    /// Returns whether every returned partition succeeded.
+    pub fn is_success(&self) -> bool {
+        self.partitions
+            .iter()
+            .all(ElectLeadersPartitionResult::is_success)
+    }
+}
+
+/// Result returned by [`AdminClient::elect_leaders`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ElectLeadersResult {
+    throttle_time: Duration,
+    error_code: i16,
+    error_message: Option<String>,
+    topics: Vec<ElectLeadersTopicResult>,
+}
+
+impl ElectLeadersResult {
+    /// Returns the broker throttle duration.
+    pub fn throttle_time(&self) -> Duration {
+        self.throttle_time
+    }
+
+    /// Returns Kafka's top-level error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns a top-level error message, when the protocol provides one.
+    pub fn error_message(&self) -> Option<&str> {
+        self.error_message.as_deref()
+    }
+
+    /// Returns kafrust's top-level broker error classification, when present.
+    pub fn broker_error_kind(&self) -> Option<BrokerErrorKind> {
+        (self.error_code != 0).then(|| BrokerErrorKind::from_code(self.error_code))
+    }
+
+    /// Returns topic-level partition outcomes.
+    pub fn topics(&self) -> &[ElectLeadersTopicResult] {
+        &self.topics
+    }
+
+    /// Returns whether the request and all returned partition requests succeeded.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0 && self.topics.iter().all(ElectLeadersTopicResult::is_success)
+    }
+
+    /// Returns whether any top-level or partition-level error was reported.
+    pub fn has_errors(&self) -> bool {
+        !self.is_success()
+    }
+
+    fn from_protocol_v0(response: ElectLeadersResponseV0) -> Self {
+        Self::from_protocol_parts(response.throttle_time_ms, 0, None, response.results)
+    }
+
+    fn from_protocol_v1(response: ElectLeadersResponseV1) -> Self {
+        Self::from_protocol_parts(
+            response.throttle_time_ms,
+            response.error_code,
+            None,
+            response.results,
+        )
+    }
+
+    fn from_protocol_v2(response: ElectLeadersResponseV2) -> Self {
+        Self::from_protocol_parts(
+            response.throttle_time_ms,
+            response.error_code,
+            None,
+            response.results,
+        )
+    }
+
+    fn from_protocol_parts(
+        throttle_time_ms: i32,
+        error_code: i16,
+        error_message: Option<String>,
+        results: Vec<ElectLeadersTopicResultV0>,
+    ) -> Self {
+        Self {
+            throttle_time: Duration::from_millis(nonnegative_i32_to_u64(throttle_time_ms)),
+            error_code,
+            error_message,
+            topics: results
+                .into_iter()
+                .map(|topic| ElectLeadersTopicResult {
+                    name: topic.name,
+                    partitions: topic
+                        .partitions
+                        .into_iter()
+                        .map(|partition| ElectLeadersPartitionResult {
+                            partition_index: partition.partition_index,
+                            error_code: partition.error_code,
+                            error_message: partition.error_message,
+                        })
+                        .collect(),
                 })
                 .collect(),
         }
@@ -7246,11 +7583,11 @@ mod tests {
         ClientQuotaFilterComponent, ClientQuotaMatchType, ConfigAlterOperationKind, ConfigSource,
         ConsumerGroupOffset, ConsumerGroupOffsetDelete, ConsumerGroupOffsetQuery,
         CreatePartitionsOptions, CreateTopicsOptions, DeleteRecordsOptions, DeleteRecordsTopic,
-        DeleteTopicsOptions, DescribeConfigsOptions, DescribeProducersTopic,
-        ListTransactionsOptions, NewPartitions, NewTopic, PartitionReassignment,
-        PartitionReassignmentOptions, PartitionReassignmentQuery, ScramCredentialDeletion,
-        ScramCredentialMechanism, ScramCredentialUpsertion, TopicConfigAlteration,
-        TopicConfigResource, TopicConfigUpdate,
+        DeleteTopicsOptions, DescribeConfigsOptions, DescribeProducersTopic, ElectLeadersOptions,
+        ElectionType, LeaderElection, ListTransactionsOptions, NewPartitions, NewTopic,
+        PartitionReassignment, PartitionReassignmentOptions, PartitionReassignmentQuery,
+        ScramCredentialDeletion, ScramCredentialMechanism, ScramCredentialUpsertion,
+        TopicConfigAlteration, TopicConfigResource, TopicConfigUpdate,
     };
     use crate::{BrokerErrorKind, ClientConfig, ClientMetrics, Error};
     use kafrust_protocol::codec::Encoder;
@@ -9407,6 +9744,89 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn routes_elect_leaders_to_controller_with_negotiated_flexible_version() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let metadata_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+            write_frame(&mut bootstrap, &metadata_response(addr.port())).await;
+
+            let (mut controller, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut controller).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut controller, &api_versions_with_elect_leaders(2)).await;
+
+            let elect_request = read_frame(&mut controller).await;
+            assert_eq!(&elect_request[0..4], &[0, 43, 0, 2]);
+            assert!(elect_request
+                .windows(7)
+                .any(|bytes| { bytes == [7, b'o', b'r', b'd', b'e', b'r', b's'] }));
+            write_frame(&mut controller, &elect_leaders_v2_response()).await;
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        );
+        let elections = [LeaderElection::new("orders").partition(0)];
+
+        let result = admin
+            .elect_leaders(
+                Some(&elections),
+                ElectionType::Preferred,
+                ElectLeadersOptions::new().timeout(Duration::from_secs(5)),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(result.throttle_time(), Duration::from_millis(9));
+        assert!(result.is_success());
+        assert_eq!(result.topics()[0].name(), "orders");
+        assert_eq!(result.topics()[0].partitions()[0].partition_index(), 0);
+        assert_eq!(metrics.snapshot().broker_errors, 0);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn falls_back_to_preferred_elect_leaders_v0() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            read_frame(&mut bootstrap).await;
+            write_frame(&mut bootstrap, &metadata_response(addr.port())).await;
+
+            let (mut controller, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut controller).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut controller, &api_versions_with_elect_leaders(0)).await;
+
+            let elect_request = read_frame(&mut controller).await;
+            assert_eq!(&elect_request[0..4], &[0, 43, 0, 0]);
+            write_frame(&mut controller, &elect_leaders_v0_response()).await;
+        });
+        let admin =
+            AdminClient::new(ClientConfig::new([addr.to_string()]).request_timeout_ms(1_000));
+        let elections = [LeaderElection::new("orders").partition(0)];
+
+        let result = admin
+            .elect_leaders(
+                Some(&elections),
+                ElectionType::Preferred,
+                ElectLeadersOptions::new(),
+            )
+            .await
+            .unwrap();
+
+        assert!(result.is_success());
+        assert_eq!(result.topics()[0].partitions()[0].error_code(), 0);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn routes_delete_topics_to_controller_and_preserves_partial_result() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -10260,6 +10680,51 @@ mod tests {
         encoder.write_empty_tagged_fields();
         encoder.write_i32(0); // throttle time
         encoder.write_empty_tagged_fields();
+        encoder.into_bytes()
+    }
+
+    fn api_versions_with_elect_leaders(max_version: i16) -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_i16(0); // success
+        encoder.write_unsigned_varint(2); // one API key
+        encoder.write_i16(43);
+        encoder.write_i16(0);
+        encoder.write_i16(max_version);
+        encoder.write_empty_tagged_fields();
+        encoder.write_i32(0); // throttle time
+        encoder.write_empty_tagged_fields();
+        encoder.into_bytes()
+    }
+
+    fn elect_leaders_v2_response() -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_empty_tagged_fields(); // response header tags
+        encoder.write_i32(9); // throttle time
+        encoder.write_i16(0); // top-level success
+        encoder.write_unsigned_varint(2); // one topic result
+        encoder.write_compact_string("orders").unwrap();
+        encoder.write_unsigned_varint(2); // one partition result
+        encoder.write_i32(0); // partition index
+        encoder.write_i16(0); // success
+        encoder.write_compact_nullable_string(None).unwrap();
+        encoder.write_empty_tagged_fields(); // partition tags
+        encoder.write_empty_tagged_fields(); // topic tags
+        encoder.write_empty_tagged_fields(); // response tags
+        encoder.into_bytes()
+    }
+
+    fn elect_leaders_v0_response() -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_i32(0); // throttle time
+        encoder.write_i32(1); // legacy array count: one topic
+        encoder.write_string("orders").unwrap();
+        encoder.write_i32(1); // legacy array count: one partition
+        encoder.write_i32(0);
+        encoder.write_i16(0);
+        encoder.write_nullable_string(None).unwrap();
         encoder.into_bytes()
     }
 

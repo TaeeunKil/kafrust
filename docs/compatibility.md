@@ -123,6 +123,14 @@ automatic recovery through the bounded OffsetForLeaderEpoch path. This proves
 live direct-consumer leader-epoch failover recovery; group rebalance recovery
 and data-loss/log-retention fault scenarios remain separate claims.
 
+The current development line also implements controller-routed ElectLeaders
+v0-v2 negotiation and typed preferred/unclean election results. Focused wire
+and injected-controller tests pass, and the multi-broker smoke workflow now
+executes the preferred-election example after replica reassignment. This is
+not yet a live compatibility claim until that workflow run completes; unclean
+election remains an explicit, data-loss-sensitive operation and is not part of
+the default smoke gate.
+
 Release `v0.2.19` additionally qualifies Fetch v12 forwarding of the last
 fetched partition leader epoch and consumer-group `Earliest`/`Latest` recovery
 when a committed offset is no longer retained. The dedicated offset-reset

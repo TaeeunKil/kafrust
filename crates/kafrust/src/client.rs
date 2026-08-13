@@ -53,6 +53,10 @@ use kafrust_protocol::api::describe_transactions::{
 use kafrust_protocol::api::describe_user_scram_credentials::{
     DescribeUserScramCredentialsRequestV0, DescribeUserScramCredentialsResponseV0,
 };
+use kafrust_protocol::api::elect_leaders::{
+    ElectLeadersRequestV0, ElectLeadersRequestV1, ElectLeadersRequestV2, ElectLeadersResponseV0,
+    ElectLeadersResponseV1, ElectLeadersResponseV2, ElectLeadersTopicV0,
+};
 use kafrust_protocol::api::end_txn::{EndTxnRequestV0, EndTxnResponseV0};
 use kafrust_protocol::api::fetch::{
     FetchPartitionV11, FetchPartitionV12, FetchPartitionV2, FetchRequestV11, FetchRequestV12,
@@ -601,6 +605,75 @@ impl Client {
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(CreatePartitionsResponseV0::decode_body(&mut decoder)?)
+    }
+
+    /// Sends ElectLeaders v0 to the broker represented by this connection.
+    ///
+    /// Version 0 only supports preferred leader elections. High-level callers
+    /// should prefer [`crate::AdminClient`], which discovers the active
+    /// controller and negotiates the highest supported version.
+    pub async fn elect_leaders_v0(
+        &mut self,
+        topics: Option<Vec<ElectLeadersTopicV0>>,
+        timeout_ms: i32,
+    ) -> Result<ElectLeadersResponseV0> {
+        let request = ElectLeadersRequestV0 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            topics,
+            timeout_ms,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(ElectLeadersResponseV0::decode_body(&mut decoder)?)
+    }
+
+    /// Sends ElectLeaders v1 to the broker represented by this connection.
+    ///
+    /// High-level callers should prefer [`crate::AdminClient`], which
+    /// negotiates the version and routes the request to the controller.
+    pub async fn elect_leaders_v1(
+        &mut self,
+        election_type: i8,
+        topics: Option<Vec<ElectLeadersTopicV0>>,
+        timeout_ms: i32,
+    ) -> Result<ElectLeadersResponseV1> {
+        let request = ElectLeadersRequestV1 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            election_type,
+            topics,
+            timeout_ms,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(ElectLeadersResponseV1::decode_body(&mut decoder)?)
+    }
+
+    /// Sends ElectLeaders v2 to the broker represented by this connection.
+    ///
+    /// Version 2 uses Kafka's flexible request and response schemas. High-level
+    /// callers should prefer [`crate::AdminClient`], which negotiates the
+    /// version and routes the request to the controller.
+    pub async fn elect_leaders_v2(
+        &mut self,
+        election_type: i8,
+        topics: Option<Vec<ElectLeadersTopicV0>>,
+        timeout_ms: i32,
+    ) -> Result<ElectLeadersResponseV2> {
+        let request = ElectLeadersRequestV2 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            election_type,
+            topics,
+            timeout_ms,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(ElectLeadersResponseV2::decode_body(&mut decoder)?)
     }
 
     /// Sends DeleteTopics v3 to the broker represented by this connection.

@@ -1206,6 +1206,12 @@ jobs:
           KAFRUST_REASSIGNMENT_REPLICAS: "3,1,2"
         run: cargo run -p kafrust --example admin_reassign_partitions
 
+      - name: Run multi-broker admin leader election example
+        env:
+          KAFRUST_ELECTION_PARTITION: "0"
+          KAFRUST_ELECTION_TYPE: preferred
+        run: cargo run -p kafrust --example admin_elect_leaders
+
       - name: Run transaction coordinator failover through broker stop
         run: |
           KAFRUST_TRANSACTIONAL_ID="kafrust-transaction-failover-${GITHUB_RUN_ID}" \

@@ -1022,6 +1022,14 @@ Implemented evidence:
   The read-only listing path now re-discovers the controller after transient
   transport, timeout, or retryable broker failures, with focused dropped-request
   coverage; live broker-stop recovery remains a separate release gate.
+- ElectLeaders v0-v2 now exposes negotiated preferred and one-shot unclean
+  leader elections through `AdminClient`. `None` preserves Kafka's all-eligible
+  partition semantics, explicit `LeaderElection` filters preserve per-topic and
+  per-partition results, and v0 rejects unclean requests instead of silently
+  downgrading them. Focused wire and controller-routing tests pass. The
+  multi-broker workflow runs the preferred-election example after reassignment;
+  its live result is still pending and unclean election is deliberately outside
+  the default gate because it can lose records.
 - The `admin_describe_group` example runs after the consumer-group smoke path
   across plaintext, multi-broker, TLS, SASL_PLAINTEXT, and SASL_SSL profiles.
 - The admin lifecycle example waits for asynchronous metadata propagation in
@@ -2037,3 +2045,7 @@ Implemented evidence:
   from 1 to 2 and the assigned direct consumer recovered automatically through
   the OffsetForLeaderEpoch path. Group rebalance recovery and data-loss/log-
   retention fault scenarios remain separate gates.
+- The current development line adds controller-routed ElectLeaders v0-v2
+  negotiation and typed preferred/unclean outcomes. The next release gate is
+  live multi-broker preferred-election verification plus secured controller
+  routing; this does not make unclean election a default-safe operation.

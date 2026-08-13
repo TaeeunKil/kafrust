@@ -84,6 +84,12 @@ pub enum BrokerErrorKind {
     UnknownLeaderEpoch,
     /// Kafka rejected the current fetch session epoch and requires a new session.
     InvalidFetchSessionEpoch,
+    /// Kafka found no eligible replica for the requested leader election.
+    EligibleLeadersNotAvailable,
+    /// Kafka reported that the requested leader is already preferred.
+    ElectionNotNeeded,
+    /// Kafka reported that no partition reassignment is currently active.
+    NoReassignmentInProgress,
 }
 
 impl BrokerErrorKind {
@@ -128,6 +134,9 @@ impl BrokerErrorKind {
             70 => Self::InvalidFetchSessionEpoch,
             86 => Self::GroupSubscribedToTopic,
             90 => Self::ProducerFenced,
+            83 => Self::EligibleLeadersNotAvailable,
+            84 => Self::ElectionNotNeeded,
+            85 => Self::NoReassignmentInProgress,
             _ => Self::Unknown,
         }
     }
@@ -528,6 +537,18 @@ mod tests {
         assert_eq!(
             BrokerErrorKind::from_code(70),
             BrokerErrorKind::InvalidFetchSessionEpoch
+        );
+        assert_eq!(
+            BrokerErrorKind::from_code(83),
+            BrokerErrorKind::EligibleLeadersNotAvailable
+        );
+        assert_eq!(
+            BrokerErrorKind::from_code(84),
+            BrokerErrorKind::ElectionNotNeeded
+        );
+        assert_eq!(
+            BrokerErrorKind::from_code(85),
+            BrokerErrorKind::NoReassignmentInProgress
         );
         assert_eq!(BrokerErrorKind::from_code(999), BrokerErrorKind::Unknown);
     }
