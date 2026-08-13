@@ -4118,6 +4118,9 @@ jobs:
       KAFRUST_BOOTSTRAP_SERVERS: localhost:9096
       KAFRUST_ACL_TOPIC: kafrust-acl-smoke
       KAFRUST_ACL_PRINCIPAL: User:ANONYMOUS
+      KAFRUST_ACL_DISCOVERY_ALLOWED_TOPIC: kafrust-acl-discovery-allowed
+      KAFRUST_ACL_DISCOVERY_DENIED_TOPIC: kafrust-acl-discovery-denied
+      KAFRUST_ACL_DISCOVERY_GROUP: kafrust-acl-discovery-group-${{ github.run_id }}
 
     steps:
       - name: Checkout
@@ -4132,12 +4135,13 @@ jobs:
         run: |
           docker run -d --name kafrust-kafka-acls \
             -p 9096:9092 \
+            -p 9097:9094 \
             -e KAFKA_NODE_ID=1 \
             -e KAFKA_PROCESS_ROLES=broker,controller \
-            -e KAFKA_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 \
-            -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092 \
+            -e KAFKA_LISTENERS=PLAINTEXT://:9092,SASL_PLAINTEXT://:9094,CONTROLLER://:9093 \
+            -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092,SASL_PLAINTEXT://localhost:9094 \
             -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
-            -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
+            -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,SASL_PLAINTEXT:SASL_PLAINTEXT \
             -e KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT \
             -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@localhost:9093 \
             -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
@@ -4147,6 +4151,8 @@ jobs:
             -e KAFKA_AUTHORIZER_CLASS_NAME=org.apache.kafka.metadata.authorizer.StandardAuthorizer \
             -e KAFKA_ALLOW_EVERYONE_IF_NO_ACL_FOUND=false \
             -e KAFKA_SUPER_USERS=User:ANONYMOUS \
+            -e KAFKA_SASL_ENABLED_MECHANISMS=PLAIN \
+            -e 'KAFKA_LISTENER_NAME_SASL_PLAINTEXT_PLAIN_SASL_JAAS_CONFIG=org.apache.kafka.common.security.plain.PlainLoginModule required username="admin" password="admin-secret" user_admin="admin-secret" user_limited="limited-secret";' \
             apache/kafka:3.7.2
 
       - name: Wait for authorizer Kafka
@@ -4171,6 +4177,56 @@ jobs:
 
       - name: Run client quota admin example
         run: cargo run -p kafrust --example admin_client_quotas
+
+      - name: Prepare secured topic discovery fixtures
+        run: |
+          docker exec kafrust-kafka-acls /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server localhost:9092 \
+            --create \
+            --topic "$KAFRUST_ACL_DISCOVERY_ALLOWED_TOPIC" \
+            --partitions 1 \
+            --replication-factor 1
+          docker exec kafrust-kafka-acls /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server localhost:9092 \
+            --create \
+            --topic "$KAFRUST_ACL_DISCOVERY_DENIED_TOPIC" \
+            --partitions 1 \
+            --replication-factor 1
+          docker exec kafrust-kafka-acls /opt/kafka/bin/kafka-acls.sh \
+            --bootstrap-server localhost:9092 \
+            --add \
+            --allow-principal User:limited \
+            --operation Read \
+            --operation Describe \
+            --topic "$KAFRUST_ACL_DISCOVERY_ALLOWED_TOPIC"
+          docker exec kafrust-kafka-acls /opt/kafka/bin/kafka-acls.sh \
+            --bootstrap-server localhost:9092 \
+            --add \
+            --allow-principal User:limited \
+            --operation Read \
+            --group "$KAFRUST_ACL_DISCOVERY_GROUP"
+          printf 'authorized-record\n' | docker exec -i kafrust-kafka-acls \
+            /opt/kafka/bin/kafka-console-producer.sh \
+            --bootstrap-server localhost:9092 \
+            --topic "$KAFRUST_ACL_DISCOVERY_ALLOWED_TOPIC"
+
+      - name: Run secured topic discovery authorization example
+        env:
+          KAFRUST_BOOTSTRAP_SERVERS: localhost:9097
+          KAFRUST_SECURITY_PROTOCOL: sasl_plaintext
+          KAFRUST_SASL_MECHANISM: plain
+          KAFRUST_SASL_USERNAME: limited
+          KAFRUST_SASL_PASSWORD: limited-secret
+          KAFRUST_GROUP_ID: ${{ env.KAFRUST_ACL_DISCOVERY_GROUP }}
+          KAFRUST_TOPIC_PATTERN: ^kafrust-acl-discovery-(allowed|denied)$
+          KAFRUST_REGEX_EXPECTED_TOPICS: ${{ env.KAFRUST_ACL_DISCOVERY_ALLOWED_TOPIC }}
+        run: |
+          output="$(cargo run -p kafrust --example consumer_group_regex 2>&1)"
+          printf '%s\n' "$output"
+          if printf '%s\n' "$output" | grep -q "$KAFRUST_ACL_DISCOVERY_DENIED_TOPIC"; then
+            echo "regex discovery exposed an unauthorized topic"
+            exit 1
+          fi
 
       - name: Dump ACL authorizer Kafka logs
         if: failure()
