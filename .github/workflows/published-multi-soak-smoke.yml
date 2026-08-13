@@ -7,6 +7,10 @@ on:
         description: "Published kafrust version to qualify from crates.io"
         required: true
         default: "0.2.28"
+      kafka_version:
+        description: "Apache Kafka broker image version"
+        required: true
+        default: "4.3.1"
       duration_seconds:
         description: "Soak duration before final drain (minimum 60)"
         required: true
@@ -34,7 +38,7 @@ env:
 
 jobs:
   published-multi-soak:
-    name: Published kafrust ${{ inputs.kafrust_version }} Kafka 4.3.1 ${{ inputs.fault_mode }} multi-broker restart
+    name: Published kafrust ${{ inputs.kafrust_version }} Kafka ${{ inputs.kafka_version }} ${{ inputs.fault_mode }} multi-broker restart
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -47,10 +51,10 @@ jobs:
         with:
           toolchain: "1.81.0"
 
-      - name: Start three-broker Kafka 4.3.1
+      - name: Start three-broker Kafka ${{ inputs.kafka_version }}
         run: |
           docker network create kafrust-published-multi-soak
-          cluster_id="$(docker run --rm apache/kafka:4.3.1 /opt/kafka/bin/kafka-storage.sh random-uuid)"
+          cluster_id="$(docker run --rm apache/kafka:${{ inputs.kafka_version }} /opt/kafka/bin/kafka-storage.sh random-uuid)"
           for node in 1 2 3; do
             external_port=$((19091 + node))
             docker run -d --name "kafrust-published-multi-soak-${node}" \
@@ -70,7 +74,7 @@ jobs:
               -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=3 \
               -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=2 \
               -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 \
-              apache/kafka:4.3.1
+              apache/kafka:${{ inputs.kafka_version }}
           done
 
       - name: Wait for Kafka cluster
