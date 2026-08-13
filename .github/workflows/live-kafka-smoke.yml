@@ -1483,7 +1483,7 @@ jobs:
           KAFRUST_PARTITION="$repeated_partition" \
           KAFRUST_OFFSET=0 \
           KAFRUST_FAILOVER_PAUSE_MS=30000 \
-          cargo run -p kafrust --example consumer_failover \
+          RUST_LOG=kafrust=debug cargo run -p kafrust --example consumer_epoch_failover \
             >/tmp/kafrust-consumer-repeat-failover.log 2>&1 &
           repeat_consumer_pid=$!
 
@@ -1514,6 +1514,15 @@ jobs:
             echo "second leader failover did not reach both pre-stop operations"
             cat /tmp/kafrust-producer-repeat-failover.log || true
             cat /tmp/kafrust-consumer-repeat-failover.log || true
+            kill "$repeat_producer_pid" 2>/dev/null || true
+            kill "$repeat_consumer_pid" 2>/dev/null || true
+            wait "$repeat_producer_pid" || true
+            wait "$repeat_consumer_pid" || true
+            exit 1
+          fi
+          if ! grep -q "recovered fetch after leader epoch transition" /tmp/kafrust-consumer-repeat-failover.log; then
+            cat /tmp/kafrust-consumer-repeat-failover.log
+            echo "assigned consumer did not prove automatic leader-epoch recovery"
             kill "$repeat_producer_pid" 2>/dev/null || true
             kill "$repeat_consumer_pid" 2>/dev/null || true
             wait "$repeat_producer_pid" || true

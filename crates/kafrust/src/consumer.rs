@@ -862,9 +862,19 @@ impl Consumer {
                                 previous_leader_epoch,
                             )
                             .await?;
-                        if epoch_offset.end_offset() >= 0 {
-                            fetch_offset = fetch_offset.min(epoch_offset.end_offset());
+                        let end_offset = epoch_offset.end_offset();
+                        if end_offset >= 0 {
+                            fetch_offset = fetch_offset.min(end_offset);
                         }
+                        debug!(
+                            topic,
+                            partition,
+                            previous_leader_epoch,
+                            current_leader_epoch,
+                            end_offset,
+                            fetch_offset,
+                            "recovered fetch after leader epoch transition"
+                        );
                         request_leader_epoch = current_leader_epoch;
                         recovered_leader_epoch = Some(current_leader_epoch);
                         truncation_checked = true;
