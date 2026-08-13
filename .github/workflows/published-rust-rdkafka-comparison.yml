@@ -43,6 +43,9 @@ jobs:
         with:
           toolchain: stable
 
+      - name: Install rust-rdkafka comparison dependencies
+        run: sudo apt-get update && sudo apt-get install --yes libcurl4-openssl-dev
+
       - name: Start Kafka 4.3.1
         run: |
           docker run -d --name kafrust-rdkafka-comparison \
