@@ -1,0 +1,213 @@
+name: Published Secure Transaction Failover Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      kafrust_version:
+        description: "Published kafrust version to execute from crates.io"
+        required: true
+        default: "0.2.28"
+      kafka_version:
+        description: "Apache Kafka broker image version"
+        required: true
+        default: "3.7.2"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  published-secure-transaction-failover:
+    name: Published kafrust ${{ inputs.kafrust_version }} ${{ inputs.kafka_version }} SASL_SSL transaction failover
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      KAFRUST_BOOTSTRAP_SERVERS: localhost:24092,localhost:24093,localhost:24094
+      KAFRUST_SECURITY_PROTOCOL: sasl_tls
+      KAFRUST_SASL_MECHANISM: scram-sha-256
+      KAFRUST_SASL_USERNAME: kafrust
+      KAFRUST_SASL_PASSWORD: kafrust-secret
+      KAFRUST_TLS_SERVER_NAME: localhost
+      KAFRUST_TLS_ROOT_CERT_DER_PATH: ${{ github.workspace }}/sasl-ssl-transaction/ca.der
+      KAFRUST_TOPIC: kafrust-published-secure-transaction-${{ github.run_id }}
+      KAFRUST_TRANSACTIONAL_ID: kafrust-published-secure-transaction-id-${{ github.run_id }}
+      KAFRUST_FAILOVER_PAUSE_MS: "10000"
+      KAFRUST_MAX_RETRIES: "300"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.81.0"
+
+      - name: Generate shared TLS certificates
+        run: |
+          mkdir -p sasl-ssl-transaction
+          openssl req -x509 -newkey rsa:2048 -days 1 -nodes \
+            -subj "/CN=kafrust-test-ca" \
+            -keyout sasl-ssl-transaction/ca.key \
+            -out sasl-ssl-transaction/ca.crt
+          openssl x509 -in sasl-ssl-transaction/ca.crt -outform DER -out sasl-ssl-transaction/ca.der
+          openssl req -newkey rsa:2048 -nodes \
+            -subj "/CN=localhost" \
+            -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" \
+            -keyout sasl-ssl-transaction/server.key \
+            -out sasl-ssl-transaction/server.csr
+          openssl x509 -req \
+            -in sasl-ssl-transaction/server.csr \
+            -CA sasl-ssl-transaction/ca.crt \
+            -CAkey sasl-ssl-transaction/ca.key \
+            -CAcreateserial \
+            -days 1 \
+            -sha256 \
+            -copy_extensions copy \
+            -out sasl-ssl-transaction/server.crt
+          openssl pkcs12 -export \
+            -in sasl-ssl-transaction/server.crt \
+            -inkey sasl-ssl-transaction/server.key \
+            -certfile sasl-ssl-transaction/ca.crt \
+            -name localhost \
+            -out sasl-ssl-transaction/kafka.server.keystore.p12 \
+            -password pass:kafrust
+          printf kafrust > sasl-ssl-transaction/keystore-password
+          printf kafrust > sasl-ssl-transaction/key-password
+          chmod 644 sasl-ssl-transaction/*
+
+      - name: Write SCRAM broker config
+        run: |
+          cat > sasl-ssl-transaction/kafka_server_jaas.conf <<'EOF'
+          KafkaServer {
+            org.apache.kafka.common.security.scram.ScramLoginModule required
+            username="broker"
+            password="broker-secret";
+          };
+          EOF
+          chmod 644 sasl-ssl-transaction/kafka_server_jaas.conf
+
+      - name: Start three-broker Kafka with SASL_SSL SCRAM
+        run: |
+          docker network create kafrust-published-secure-transaction
+          cluster_id="$(docker run --rm apache/kafka:${{ inputs.kafka_version }} /opt/kafka/bin/kafka-storage.sh random-uuid)"
+          for node in 1 2 3; do
+            external_port=$((24091 + node))
+            docker run -d --name "kafrust-published-secure-transaction-${node}" \
+              --hostname "kafrust-published-secure-transaction-${node}" \
+              --network kafrust-published-secure-transaction \
+              -p "${external_port}:9095" \
+              -v "$PWD/sasl-ssl-transaction:/etc/kafka/secrets:ro" \
+              -e KAFKA_OPTS="-Djava.security.auth.login.config=/etc/kafka/secrets/kafka_server_jaas.conf" \
+              -e KAFKA_CLUSTER_ID="${cluster_id}" \
+              -e KAFKA_NODE_ID="${node}" \
+              -e KAFKA_PROCESS_ROLES=broker,controller \
+              -e KAFKA_LISTENERS=INTERNAL://:29092,SASL_SSL://:9095,CONTROLLER://:9093 \
+              -e KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafrust-published-secure-transaction-${node}:29092,SASL_SSL://localhost:${external_port} \
+              -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+              -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,SASL_SSL:SASL_SSL \
+              -e KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL \
+              -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafrust-published-secure-transaction-1:9093,2@kafrust-published-secure-transaction-2:9093,3@kafrust-published-secure-transaction-3:9093 \
+              -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=3 \
+              -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=3 \
+              -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=2 \
+              -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 \
+              -e KAFKA_SASL_ENABLED_MECHANISMS=SCRAM-SHA-256,SCRAM-SHA-512 \
+              -e KAFKA_SSL_KEYSTORE_FILENAME=kafka.server.keystore.p12 \
+              -e KAFKA_SSL_KEYSTORE_CREDENTIALS=keystore-password \
+              -e KAFKA_SSL_KEY_CREDENTIALS=key-password \
+              -e KAFKA_SSL_KEYSTORE_TYPE=PKCS12 \
+              -e KAFKA_SSL_CLIENT_AUTH=none \
+              apache/kafka:${{ inputs.kafka_version }}
+          done
+
+      - name: Wait for Kafka cluster
+        run: |
+          for attempt in {1..120}; do
+            if docker exec kafrust-published-secure-transaction-1 /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server kafrust-published-secure-transaction-1:29092 \
+              >/tmp/kafrust-published-secure-transaction-probe.log 2>&1; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/kafrust-published-secure-transaction-probe.log || true
+          docker logs kafrust-published-secure-transaction-1
+          docker logs kafrust-published-secure-transaction-2
+          docker logs kafrust-published-secure-transaction-3
+          exit 1
+
+      - name: Create SCRAM user and replicated transaction topic
+        run: |
+          docker exec kafrust-published-secure-transaction-1 /opt/kafka/bin/kafka-configs.sh \
+            --bootstrap-server kafrust-published-secure-transaction-1:29092 \
+            --alter \
+            --add-config 'SCRAM-SHA-256=[iterations=4096,password=kafrust-secret]' \
+            --entity-type users \
+            --entity-name kafrust
+          docker exec kafrust-published-secure-transaction-1 /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server kafrust-published-secure-transaction-1:29092 \
+            --create --topic "$KAFRUST_TOPIC" --partitions 1 --replication-factor 3
+
+      - name: Verify external TLS listeners
+        run: |
+          for port in 24092 24093 24094; do
+            openssl s_client -connect "127.0.0.1:${port}" -servername localhost \
+              -CAfile sasl-ssl-transaction/ca.crt -verify_return_error \
+              </dev/null >/tmp/kafrust-published-secure-transaction-tls-${port}.log 2>&1
+          done
+
+      - name: Create fresh external project
+        env:
+          KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version }}
+        run: |
+          project_dir="$RUNNER_TEMP/kafrust-published-secure-transaction-smoke"
+          if [ "$project_dir" = "$GITHUB_WORKSPACE" ]; then
+            echo "the published secure transaction project must be outside the repository"
+            exit 1
+          fi
+          cargo new --bin "$project_dir"
+          cp .github/published-secure-transaction-failover-smoke/src/main.rs "$project_dir/src/main.rs"
+          sed "s/__KAFRUST_VERSION__/$KAFRUST_PUBLISHED_VERSION/; s/__KAFRUST_FEATURES__/[\"tls\"]/" \
+            .github/published-secure-transaction-failover-smoke/Cargo.toml > "$project_dir/Cargo.toml"
+
+      - name: Run secure transaction through coordinator stop
+        run: |
+          project_dir="$RUNNER_TEMP/kafrust-published-secure-transaction-smoke"
+          log_file="$RUNNER_TEMP/kafrust-published-secure-transaction.log"
+          cargo run --manifest-path "$project_dir/Cargo.toml" >"$log_file" 2>&1 &
+          transaction_pid=$!
+          coordinator_node=""
+          for attempt in {1..120}; do
+            if grep -q 'transaction coordinator node ' "$log_file"; then
+              coordinator_node="$(sed -n 's/.*transaction coordinator node \([0-9][0-9]*\)$/\1/p' "$log_file" | tail -n 1)"
+              break
+            fi
+            if ! kill -0 "$transaction_pid" 2>/dev/null; then
+              cat "$log_file"
+              wait "$transaction_pid"
+            fi
+            sleep 1
+          done
+          if ! [[ "$coordinator_node" =~ ^[123]$ ]]; then
+            cat "$log_file"
+            echo "secure transaction coordinator was not reported"
+            kill "$transaction_pid" 2>/dev/null || true
+            wait "$transaction_pid" || true
+            exit 1
+          fi
+          echo "stopping secure transaction coordinator broker $coordinator_node"
+          docker stop "kafrust-published-secure-transaction-${coordinator_node}"
+          wait "$transaction_pid"
+          cat "$log_file"
+
+      - name: Verify published dependency versions
+        run: |
+          grep -A1 -q 'name = "kafrust"' "$RUNNER_TEMP/kafrust-published-secure-transaction-smoke/Cargo.lock"
+          grep -A1 -q "version = \"${{ inputs.kafrust_version }}\"" "$RUNNER_TEMP/kafrust-published-secure-transaction-smoke/Cargo.lock"
+
+      - name: Dump Kafka diagnostics
+        if: failure()
+        run: |
+          docker logs kafrust-published-secure-transaction-1 || true
+          docker logs kafrust-published-secure-transaction-2 || true
+          docker logs kafrust-published-secure-transaction-3 || true
