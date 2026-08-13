@@ -13,6 +13,9 @@ use kafrust_protocol::api::alter_configs::{
 use kafrust_protocol::api::alter_partition_reassignments::{
     AlterPartitionReassignmentsRequestV0, AlterPartitionReassignmentsResponseV0,
 };
+use kafrust_protocol::api::alter_replica_log_dirs::{
+    AlterReplicaLogDir, AlterReplicaLogDirsRequest, AlterReplicaLogDirsResponse,
+};
 use kafrust_protocol::api::alter_user_scram_credentials::{
     AlterUserScramCredentialsRequestV0, AlterUserScramCredentialsResponseV0,
 };
@@ -897,6 +900,41 @@ impl Client {
             5 => DescribeLogDirsResponse::decode_body_v5(&mut decoder)?,
             _ => return Err(Error::Unsupported("unsupported DescribeLogDirs version")),
         })
+    }
+
+    /// Sends AlterReplicaLogDirs v1 to this broker.
+    ///
+    /// This is a mutating broker-local request. High-level callers should
+    /// select the target broker and negotiate the version before sending it.
+    pub async fn alter_replica_log_dirs_v1(
+        &mut self,
+        dirs: Vec<AlterReplicaLogDir>,
+    ) -> Result<AlterReplicaLogDirsResponse> {
+        let request = AlterReplicaLogDirsRequest {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            dirs,
+        };
+        let response = self.send_request(&request.encode_v1()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(AlterReplicaLogDirsResponse::decode_body_v1(&mut decoder)?)
+    }
+
+    /// Sends AlterReplicaLogDirs v2 to this broker using flexible encoding.
+    pub async fn alter_replica_log_dirs_v2(
+        &mut self,
+        dirs: Vec<AlterReplicaLogDir>,
+    ) -> Result<AlterReplicaLogDirsResponse> {
+        let request = AlterReplicaLogDirsRequest {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            dirs,
+        };
+        let response = self.send_request(&request.encode_v2(2)?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(AlterReplicaLogDirsResponse::decode_body_v2(&mut decoder)?)
     }
 
     /// Sends DescribeAcls v1 to the broker represented by this connection.

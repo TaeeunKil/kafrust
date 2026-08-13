@@ -1040,6 +1040,13 @@ Implemented evidence:
   [`31682889124`](https://github.com/TaeeunKil/kafrust/actions/runs/31682889124),
   including partition size and volume capacity. Secured broker coverage
   remains a separate qualification.
+- AlterReplicaLogDirs v1-v2 now exposes explicit broker-local replica movement
+  through `AdminClient`, groups assignments by destination directory, preserves
+  per-partition broker outcomes, and negotiates the Kafka 3.7 baseline (v1) or
+  flexible schema (v2). Focused wire and injected-broker tests pass. The
+  mutating path retries only connection and ApiVersions discovery before
+  transmission and never replays an ambiguous send; disposable multi-broker
+  live qualification with a second `log.dirs` path is the next gate.
 - The `admin_describe_group` example runs after the consumer-group smoke path
   across plaintext, multi-broker, TLS, SASL_PLAINTEXT, and SASL_SSL profiles.
 - The admin lifecycle example waits for asynchronous metadata propagation in

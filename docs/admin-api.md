@@ -703,6 +703,50 @@ comma-separated broker ID list, plus `KAFRUST_LOG_DIR_TOPIC` and the optional
 operational metadata; they should not be treated as portable filesystem
 locations across clusters.
 
+## Alter Replica Log Directories
+
+`AdminClient::alter_replica_log_dirs` submits broker-local replica storage
+moves. The broker ID is explicit because the destination path is local to that
+broker, and assignments are grouped by destination path before encoding.
+Kafka's v1 baseline and flexible v2 are negotiated from ApiVersions.
+
+```rust
+use kafrust::{AdminClient, ClientConfig, ReplicaLogDirAssignment};
+
+# async fn example() -> kafrust::Result<()> {
+let admin = AdminClient::new(ClientConfig::new(["localhost:9092"]));
+let assignments = [ReplicaLogDirAssignment::new(
+    "orders",
+    0,
+    "/var/lib/kafka-2",
+)];
+let result = admin.alter_replica_log_dirs(1, &assignments).await?;
+if !result.is_success() {
+    for topic in result.topics() {
+        for partition in topic.partitions() {
+            eprintln!(
+                "{}-{} failed with Kafka error {}",
+                topic.name(),
+                partition.partition_index(),
+                partition.error_code(),
+            );
+        }
+    }
+}
+# Ok(())
+# }
+```
+
+This is a mutating operation. kafrust retries only broker connection and
+ApiVersions discovery before transmission; it never replays a request after a
+send-side transport failure because the broker may already have started the
+move. Poll `describe_log_dirs` after the request to observe `is_future`, lag,
+and completion on the destination directory. The
+`admin_alter_replica_log_dirs` example requires
+`KAFRUST_REPLICA_LOG_DIR_BROKER`, `KAFRUST_REPLICA_LOG_DIR_TOPIC`,
+`KAFRUST_REPLICA_LOG_DIR_PARTITION`, and
+`KAFRUST_REPLICA_LOG_DIR_DESTINATION` explicitly.
+
 ## Create Topics
 
 ```rust

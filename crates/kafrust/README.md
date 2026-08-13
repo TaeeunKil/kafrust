@@ -542,6 +542,9 @@ Verified high-level paths include:
   Broker-local storage inspection is available through
   `AdminClient::describe_log_dirs`, including replica size, offset lag, future
   logs, and negotiated volume capacity fields.
+  Broker-local replica movement is available through
+  `AdminClient::alter_replica_log_dirs`; the request is explicitly targeted at
+  one broker and is not replayed after an ambiguous send.
   Shared request, retry, broker-error, producer, consumer, batch, and
   buffered-queue metrics are available together with high-level operation and
   request spans.
@@ -587,6 +590,7 @@ Available examples include:
 - `admin_reassign_partitions`
 - `admin_elect_leaders`
 - `admin_describe_log_dirs`
+- `admin_alter_replica_log_dirs`
 
 ## Project Docs
 

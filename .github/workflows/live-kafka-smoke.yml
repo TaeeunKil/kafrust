@@ -1028,6 +1028,7 @@ jobs:
               -e KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL \
               -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafrust-kafka-multi-1:9093,2@kafrust-kafka-multi-2:9093,3@kafrust-kafka-multi-3:9093 \
               -e KAFKA_BROKER_RACK="${broker_rack}" \
+              -e KAFKA_LOG_DIRS=/tmp/kafka-logs,/tmp/kafka-logs-2 \
               -e KAFKA_REPLICA_SELECTOR_CLASS=org.apache.kafka.common.replica.RackAwareReplicaSelector \
               -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=3 \
               -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=3 \
@@ -1217,6 +1218,31 @@ jobs:
           KAFRUST_LOG_DIR_TOPIC: ${{ env.KAFRUST_TOPIC }}
           KAFRUST_LOG_DIR_PARTITION: "0"
         run: cargo run -p kafrust --example admin_describe_log_dirs
+
+      - name: Move a disposable replica to a second log directory
+        env:
+          KAFRUST_REPLICA_LOG_DIR_BROKER: "1"
+          KAFRUST_REPLICA_LOG_DIR_TOPIC: ${{ env.KAFRUST_TOPIC }}
+          KAFRUST_REPLICA_LOG_DIR_PARTITION: ${{ env.KAFRUST_FAILOVER_PARTITION }}
+          KAFRUST_REPLICA_LOG_DIR_DESTINATION: /tmp/kafka-logs-2
+        run: cargo run -p kafrust --example admin_alter_replica_log_dirs
+
+      - name: Verify replica directory movement completed
+        env:
+          KAFRUST_LOG_DIR_BROKERS: "1"
+          KAFRUST_LOG_DIR_TOPIC: ${{ env.KAFRUST_TOPIC }}
+          KAFRUST_LOG_DIR_PARTITION: ${{ env.KAFRUST_FAILOVER_PARTITION }}
+        run: |
+          for attempt in {1..60}; do
+            output="$(cargo run -p kafrust --example admin_describe_log_dirs 2>&1)"
+            printf '%s\n' "$output"
+            if printf '%s\n' "$output" | grep -q 'future=false path=/tmp/kafka-logs-2'; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "replica directory movement did not complete"
+          exit 1
 
       - name: Run transaction coordinator failover through broker stop
         run: |

@@ -175,6 +175,10 @@ the recovery warning and example.
 cordoned, and volume-capacity state through negotiated DescribeLogDirs v1-v5;
 the API preserves broker-specific results instead of flattening them into
 cluster metadata.
+`alter_replica_log_dirs` adds explicit broker-local replica storage movement
+with negotiated AlterReplicaLogDirs v1-v2 responses and no replay after an
+ambiguous send. Observe completion with `describe_log_dirs` before relying on
+the destination path.
 `describe_cluster` and `list_topics` likewise retry transport and timeout
 failures, and `list_topics` retries transient topic/partition metadata errors
 while preserving final topic-level metadata errors.

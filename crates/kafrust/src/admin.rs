@@ -12,6 +12,9 @@ use kafrust_protocol::api::alter_configs::{
 use kafrust_protocol::api::alter_partition_reassignments::{
     AlterPartitionReassignmentsPartitionV0, AlterPartitionReassignmentsTopicV0,
 };
+use kafrust_protocol::api::alter_replica_log_dirs::{
+    AlterReplicaLogDir, AlterReplicaLogDirTopicResult, AlterReplicaLogDirsResponse,
+};
 use kafrust_protocol::api::alter_user_scram_credentials::{
     AlterUserScramCredentialsDeletionV0, AlterUserScramCredentialsUpsertionV0,
 };
@@ -1159,6 +1162,88 @@ impl AdminClient {
         }
 
         Ok(results)
+    }
+
+    /// Moves selected replica logs to broker-local directories.
+    ///
+    /// AlterReplicaLogDirs is a broker-local mutation, so `broker_id` is
+    /// required and the assignments are sent only to that broker. Connection
+    /// and ApiVersions discovery may be retried before transmission. Once the
+    /// request is sent, a transport failure is returned without replaying the
+    /// mutation because the broker may already have started the move.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.alter_replica_log_dirs",
+        skip_all,
+        fields(broker_id, assignment_count = assignments.len()),
+        err
+    )]
+    pub async fn alter_replica_log_dirs(
+        &self,
+        broker_id: i32,
+        assignments: &[ReplicaLogDirAssignment],
+    ) -> Result<AlterReplicaLogDirsResult> {
+        let metadata = self.metadata_with_admin_retries(Some(Vec::new())).await?;
+        let broker = metadata
+            .brokers
+            .iter()
+            .find(|broker| broker.node_id == broker_id)
+            .ok_or(Error::MissingBroker { node_id: broker_id })?;
+        let endpoint = format!("{}:{}", broker.host, broker.port);
+        let dirs = group_replica_log_dir_assignments(assignments);
+
+        let mut retry = 0;
+        let (mut client, version) = loop {
+            let mut client = match self.config.connect_broker(endpoint.clone()).await {
+                Ok(client) => client,
+                Err(error) if retry < self.max_retries && is_retryable_admin_read_error(&error) => {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
+            let api_versions = match client
+                .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
+                .await
+            {
+                Ok(api_versions) => api_versions,
+                Err(error) if retry < self.max_retries && is_retryable_admin_read_error(&error) => {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
+            let Some(version) = api_versions
+                .highest_supported_version(34, 2)
+                .filter(|version| *version >= 1)
+            else {
+                return Err(Error::Unsupported(
+                    "broker does not advertise AlterReplicaLogDirs v1 or newer",
+                ));
+            };
+            break (client, version);
+        };
+
+        let response = match version {
+            1 => client.alter_replica_log_dirs_v1(dirs).await?,
+            _ => client.alter_replica_log_dirs_v2(dirs).await?,
+        };
+        for topic in &response.results {
+            if topic
+                .partitions
+                .iter()
+                .any(|partition| partition.error_code != 0)
+            {
+                self.config.record_broker_error();
+            }
+        }
+        Ok(AlterReplicaLogDirsResult::from_protocol(
+            broker_id, response,
+        ))
     }
 
     /// Deletes consumer groups through their active coordinators.
@@ -4148,6 +4233,197 @@ impl ElectLeadersResult {
                         .collect(),
                 })
                 .collect(),
+        }
+    }
+}
+
+/// A replica directory movement submitted to AlterReplicaLogDirs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReplicaLogDirAssignment {
+    topic: String,
+    partition_index: i32,
+    destination_log_dir: String,
+}
+
+impl ReplicaLogDirAssignment {
+    /// Creates a movement for one topic partition.
+    pub fn new(
+        topic: impl Into<String>,
+        partition_index: i32,
+        destination_log_dir: impl Into<String>,
+    ) -> Self {
+        Self {
+            topic: topic.into(),
+            partition_index,
+            destination_log_dir: destination_log_dir.into(),
+        }
+    }
+
+    /// Returns the topic name.
+    pub fn topic(&self) -> &str {
+        &self.topic
+    }
+
+    /// Returns the partition index.
+    pub fn partition_index(&self) -> i32 {
+        self.partition_index
+    }
+
+    /// Returns the broker-local destination directory.
+    pub fn destination_log_dir(&self) -> &str {
+        &self.destination_log_dir
+    }
+}
+
+fn group_replica_log_dir_assignments(
+    assignments: &[ReplicaLogDirAssignment],
+) -> Vec<AlterReplicaLogDir> {
+    let mut grouped = BTreeMap::<String, BTreeMap<String, Vec<i32>>>::new();
+    for assignment in assignments {
+        grouped
+            .entry(assignment.destination_log_dir.clone())
+            .or_default()
+            .entry(assignment.topic.clone())
+            .or_default()
+            .push(assignment.partition_index);
+    }
+    grouped
+        .into_iter()
+        .map(|(path, topics)| AlterReplicaLogDir {
+            path,
+            topics: topics
+                .into_iter()
+                .map(|(name, partitions)| {
+                    kafrust_protocol::api::alter_replica_log_dirs::AlterReplicaLogDirTopic {
+                        name,
+                        partitions,
+                    }
+                })
+                .collect(),
+        })
+        .collect()
+}
+
+/// Result returned by [`AdminClient::alter_replica_log_dirs`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AlterReplicaLogDirsResult {
+    broker_id: i32,
+    throttle_time: Duration,
+    topics: Vec<AlterReplicaLogDirsTopicResult>,
+}
+
+impl AlterReplicaLogDirsResult {
+    /// Returns the broker that accepted the movement request.
+    pub fn broker_id(&self) -> i32 {
+        self.broker_id
+    }
+
+    /// Returns the broker throttle duration.
+    pub fn throttle_time(&self) -> Duration {
+        self.throttle_time
+    }
+
+    /// Returns topic-level partition outcomes.
+    pub fn topics(&self) -> &[AlterReplicaLogDirsTopicResult] {
+        &self.topics
+    }
+
+    /// Returns whether every returned partition succeeded.
+    pub fn is_success(&self) -> bool {
+        self.topics
+            .iter()
+            .all(AlterReplicaLogDirsTopicResult::is_success)
+    }
+
+    /// Returns whether any partition movement failed.
+    pub fn has_errors(&self) -> bool {
+        !self.is_success()
+    }
+
+    fn from_protocol(broker_id: i32, response: AlterReplicaLogDirsResponse) -> Self {
+        Self {
+            broker_id,
+            throttle_time: Duration::from_millis(nonnegative_i32_to_u64(response.throttle_time_ms)),
+            topics: response
+                .results
+                .into_iter()
+                .map(AlterReplicaLogDirsTopicResult::from_protocol)
+                .collect(),
+        }
+    }
+}
+
+/// Per-topic outcomes returned by AlterReplicaLogDirs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AlterReplicaLogDirsTopicResult {
+    name: String,
+    partitions: Vec<AlterReplicaLogDirsPartitionResult>,
+}
+
+impl AlterReplicaLogDirsTopicResult {
+    /// Returns the topic name.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Returns partition outcomes in broker response order.
+    pub fn partitions(&self) -> &[AlterReplicaLogDirsPartitionResult] {
+        &self.partitions
+    }
+
+    /// Returns whether all returned partitions succeeded.
+    pub fn is_success(&self) -> bool {
+        self.partitions
+            .iter()
+            .all(AlterReplicaLogDirsPartitionResult::is_success)
+    }
+
+    fn from_protocol(result: AlterReplicaLogDirTopicResult) -> Self {
+        Self {
+            name: result.name,
+            partitions: result
+                .partitions
+                .into_iter()
+                .map(AlterReplicaLogDirsPartitionResult::from_protocol)
+                .collect(),
+        }
+    }
+}
+
+/// One partition outcome returned by AlterReplicaLogDirs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AlterReplicaLogDirsPartitionResult {
+    partition_index: i32,
+    error_code: i16,
+}
+
+impl AlterReplicaLogDirsPartitionResult {
+    /// Returns the partition index.
+    pub fn partition_index(&self) -> i32 {
+        self.partition_index
+    }
+
+    /// Returns Kafka's raw partition error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns whether Kafka accepted this partition movement.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+    }
+
+    /// Returns kafrust's broker error classification, when present.
+    pub fn broker_error_kind(&self) -> Option<BrokerErrorKind> {
+        (self.error_code != 0).then(|| BrokerErrorKind::from_code(self.error_code))
+    }
+
+    fn from_protocol(
+        result: kafrust_protocol::api::alter_replica_log_dirs::AlterReplicaLogDirPartitionResult,
+    ) -> Self {
+        Self {
+            partition_index: result.partition_index,
+            error_code: result.error_code,
         }
     }
 }
@@ -7965,8 +8241,8 @@ mod tests {
         DeleteTopicsOptions, DescribeConfigsOptions, DescribeProducersTopic, ElectLeadersOptions,
         ElectionType, LeaderElection, ListTransactionsOptions, LogDirTopic, NewPartitions,
         NewTopic, PartitionReassignment, PartitionReassignmentOptions, PartitionReassignmentQuery,
-        ScramCredentialDeletion, ScramCredentialMechanism, ScramCredentialUpsertion,
-        TopicConfigAlteration, TopicConfigResource, TopicConfigUpdate,
+        ReplicaLogDirAssignment, ScramCredentialDeletion, ScramCredentialMechanism,
+        ScramCredentialUpsertion, TopicConfigAlteration, TopicConfigResource, TopicConfigUpdate,
     };
     use crate::{BrokerErrorKind, ClientConfig, ClientMetrics, Error};
     use kafrust_protocol::codec::Encoder;
@@ -10252,6 +10528,52 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn alters_replica_log_dirs_on_selected_broker_with_negotiated_v2() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let metadata_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+            write_frame(&mut bootstrap, &metadata_response(addr.port())).await;
+
+            let (mut broker, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut broker).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut broker, &api_versions_with_alter_replica_log_dirs(2)).await;
+
+            let request = read_frame(&mut broker).await;
+            assert_eq!(&request[0..4], &[0, 34, 0, 2]);
+            assert!(request
+                .windows(7)
+                .any(|bytes| { bytes == [7, b'o', b'r', b'd', b'e', b'r', b's'] }));
+            write_frame(&mut broker, &alter_replica_log_dirs_v2_response()).await;
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        );
+        let assignments = [ReplicaLogDirAssignment::new(
+            "orders",
+            0,
+            "/var/lib/kafka-2",
+        )];
+
+        let result = admin.alter_replica_log_dirs(1, &assignments).await.unwrap();
+
+        assert_eq!(result.broker_id(), 1);
+        assert_eq!(result.throttle_time(), Duration::from_millis(11));
+        assert!(result.is_success());
+        assert_eq!(result.topics()[0].name(), "orders");
+        assert_eq!(result.topics()[0].partitions()[0].partition_index(), 0);
+        assert_eq!(result.topics()[0].partitions()[0].error_code(), 0);
+        assert_eq!(metrics.snapshot().broker_errors, 0);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn routes_delete_topics_to_controller_and_preserves_partial_result() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -11136,6 +11458,20 @@ mod tests {
         encoder.into_bytes()
     }
 
+    fn api_versions_with_alter_replica_log_dirs(max_version: i16) -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_i16(0); // success
+        encoder.write_unsigned_varint(2); // one API key
+        encoder.write_i16(34);
+        encoder.write_i16(1);
+        encoder.write_i16(max_version);
+        encoder.write_empty_tagged_fields();
+        encoder.write_i32(0); // throttle time
+        encoder.write_empty_tagged_fields();
+        encoder.into_bytes()
+    }
+
     fn elect_leaders_v2_response() -> Vec<u8> {
         let mut encoder = Encoder::new();
         encoder.write_i32(1); // correlation ID
@@ -11176,6 +11512,22 @@ mod tests {
         encoder.write_i64(100_000);
         encoder.write_i64(90_000);
         encoder.write_bool(false);
+        encoder.write_empty_tagged_fields(); // response tags
+        encoder.into_bytes()
+    }
+
+    fn alter_replica_log_dirs_v2_response() -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_empty_tagged_fields(); // response header tags
+        encoder.write_i32(11); // throttle time
+        encoder.write_unsigned_varint(2); // one topic result
+        encoder.write_compact_string("orders").unwrap();
+        encoder.write_unsigned_varint(2); // one partition result
+        encoder.write_i32(0); // partition index
+        encoder.write_i16(0); // success
+        encoder.write_empty_tagged_fields(); // partition tags
+        encoder.write_empty_tagged_fields(); // topic tags
         encoder.write_empty_tagged_fields(); // response tags
         encoder.into_bytes()
     }

@@ -3,6 +3,7 @@ pub mod add_partitions_to_txn;
 pub mod alter_client_quotas;
 pub mod alter_configs;
 pub mod alter_partition_reassignments;
+pub mod alter_replica_log_dirs;
 pub mod alter_user_scram_credentials;
 pub mod api_versions;
 pub mod consumer_group_heartbeat;
