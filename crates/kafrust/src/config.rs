@@ -572,6 +572,25 @@ impl ClientConfig {
                 reason: "must be greater than zero",
             });
         }
+        if matches!(
+            self.security_protocol,
+            SecurityProtocol::SaslPlaintext | SecurityProtocol::SaslTls
+        ) && self.sasl_credentials.is_none()
+        {
+            return Err(Error::MissingSaslCredentials);
+        }
+        if matches!(
+            self.security_protocol,
+            SecurityProtocol::Tls | SecurityProtocol::SaslTls
+        ) && self
+            .tls_server_name
+            .as_deref()
+            .is_some_and(|server_name| server_name.trim().is_empty())
+        {
+            return Err(Error::InvalidTlsServerName {
+                server: self.tls_server_name.clone().unwrap_or_default(),
+            });
+        }
         Ok(())
     }
 

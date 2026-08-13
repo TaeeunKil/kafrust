@@ -1875,3 +1875,7 @@ Implemented evidence:
   responses from both docs.rs pages. The complete 18-job live matrix passed on
   the release commit in
   [`31655154051`](https://github.com/TaeeunKil/kafrust/actions/runs/31655154051).
+- Shared connection preflight now validates required SASL credentials and
+  explicit TLS server-name overrides before network access. `AdminClient::validate()`
+  exposes the same connection-free check for administrative workflows, with
+  focused tests for missing bootstrap servers, SASL credentials, and TLS names.

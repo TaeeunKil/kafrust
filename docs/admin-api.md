@@ -5,6 +5,11 @@ TLS, SASL, request timeouts, decode limits, and shared metrics apply to admin
 operations. Controller-scoped operations discover the current controller from
 cluster metadata before opening the request connection.
 
+Call `AdminClient::validate()` during startup to check the connection settings
+without opening a broker connection. This includes bootstrap entries, request
+and decode limits, required SASL credentials, and an explicitly configured TLS
+server name.
+
 ## Inspect Cluster and Topics
 
 ```rust

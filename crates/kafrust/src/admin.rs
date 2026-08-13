@@ -97,6 +97,12 @@ impl AdminClient {
         }
     }
 
+    /// Validates the shared connection configuration without opening a broker
+    /// connection.
+    pub fn validate(&self) -> Result<()> {
+        self.config.validate()
+    }
+
     /// Sets the maximum retry attempts for transient coordinator discovery and
     /// coordinator-routed request failures.
     pub fn max_retries(mut self, max_retries: u32) -> Self {
@@ -7099,6 +7105,31 @@ mod tests {
 
         let admin = AdminClient::new(ClientConfig::new(["127.0.0.1:9092"])).max_retries(9);
         assert_eq!(admin.max_retries_ref(), 9);
+    }
+
+    #[test]
+    fn validates_admin_connection_configuration_without_network_access() {
+        assert!(matches!(
+            AdminClient::new(ClientConfig::new(std::iter::empty::<String>())).validate(),
+            Err(Error::MissingBootstrapServer)
+        ));
+        assert!(matches!(
+            AdminClient::new(
+                ClientConfig::new(["127.0.0.1:9092"])
+                    .security_protocol(crate::SecurityProtocol::SaslPlaintext)
+            )
+            .validate(),
+            Err(Error::MissingSaslCredentials)
+        ));
+        assert!(matches!(
+            AdminClient::new(
+                ClientConfig::new(["127.0.0.1:9092"])
+                    .security_protocol(crate::SecurityProtocol::Tls)
+                    .tls_server_name("  ")
+            )
+            .validate(),
+            Err(Error::InvalidTlsServerName { .. })
+        ));
     }
 
     #[tokio::test]
