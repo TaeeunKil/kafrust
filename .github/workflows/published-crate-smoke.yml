@@ -86,6 +86,7 @@ jobs:
       - name: Run published crate producer and consumer
         env:
           KAFRUST_TOPIC: kafrust-published-${{ github.run_id }}
+          KAFRUST_GROUP_ID: kafrust-published-group-${{ github.run_id }}
           KAFRUST_VALUE: published-crate-${{ github.run_id }}
         run: |
           project_dir="$RUNNER_TEMP/kafrust-published-smoke"
