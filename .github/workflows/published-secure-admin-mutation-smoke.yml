@@ -1,0 +1,191 @@
+name: Published Secure Admin Mutation Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      kafrust_version:
+        description: "Published kafrust version to execute from crates.io"
+        required: true
+        default: "0.2.28"
+      kafka_version:
+        description: "Apache Kafka broker image version"
+        required: true
+        default: "3.7.2"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  published-secure-admin-mutation:
+    name: Published kafrust ${{ inputs.kafrust_version }} ${{ inputs.kafka_version }} SASL_SSL Admin mutation
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      KAFRUST_BOOTSTRAP_SERVERS: localhost:25096
+      KAFRUST_SECURITY_PROTOCOL: sasl_tls
+      KAFRUST_SASL_MECHANISM: scram-sha-256
+      KAFRUST_SASL_USERNAME: kafrust
+      KAFRUST_SASL_PASSWORD: kafrust-secret
+      KAFRUST_TLS_SERVER_NAME: localhost
+      KAFRUST_TLS_ROOT_CERT_DER_PATH: ${{ github.workspace }}/sasl-ssl-admin-mutation/ca.der
+      KAFRUST_ALLOWED_TOPIC: kafrust-published-admin-mutation-allowed-${{ github.run_id }}
+      KAFRUST_DENIED_TOPIC: kafrust-published-admin-mutation-denied-${{ github.run_id }}
+      KAFRUST_GROUP_ID: kafrust-published-admin-mutation-group-${{ github.run_id }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.81.0"
+
+      - name: Generate shared TLS certificates
+        run: |
+          mkdir -p sasl-ssl-admin-mutation
+          openssl req -x509 -newkey rsa:2048 -days 1 -nodes \
+            -subj "/CN=kafrust-test-ca" \
+            -keyout sasl-ssl-admin-mutation/ca.key \
+            -out sasl-ssl-admin-mutation/ca.crt
+          openssl x509 -in sasl-ssl-admin-mutation/ca.crt -outform DER -out sasl-ssl-admin-mutation/ca.der
+          openssl req -newkey rsa:2048 -nodes \
+            -subj "/CN=localhost" \
+            -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" \
+            -keyout sasl-ssl-admin-mutation/server.key \
+            -out sasl-ssl-admin-mutation/server.csr
+          openssl x509 -req \
+            -in sasl-ssl-admin-mutation/server.csr \
+            -CA sasl-ssl-admin-mutation/ca.crt \
+            -CAkey sasl-ssl-admin-mutation/ca.key \
+            -CAcreateserial \
+            -days 1 \
+            -sha256 \
+            -copy_extensions copy \
+            -out sasl-ssl-admin-mutation/server.crt
+          openssl pkcs12 -export \
+            -in sasl-ssl-admin-mutation/server.crt \
+            -inkey sasl-ssl-admin-mutation/server.key \
+            -certfile sasl-ssl-admin-mutation/ca.crt \
+            -name localhost \
+            -out sasl-ssl-admin-mutation/kafka.server.keystore.p12 \
+            -password pass:kafrust
+          printf kafrust > sasl-ssl-admin-mutation/keystore-password
+          printf kafrust > sasl-ssl-admin-mutation/key-password
+          chmod 644 sasl-ssl-admin-mutation/*
+
+      - name: Write SCRAM broker config
+        run: |
+          cat > sasl-ssl-admin-mutation/kafka_server_jaas.conf <<'EOF'
+          KafkaServer {
+            org.apache.kafka.common.security.scram.ScramLoginModule required
+            username="broker"
+            password="broker-secret";
+          };
+          EOF
+          chmod 644 sasl-ssl-admin-mutation/kafka_server_jaas.conf
+
+      - name: Start Kafka with StandardAuthorizer and SASL_SSL SCRAM
+        run: |
+          docker run -d --name kafrust-published-secure-admin-mutation \
+            -p 25096:9096 \
+            -v "$PWD/sasl-ssl-admin-mutation:/etc/kafka/secrets:ro" \
+            -e KAFKA_OPTS="-Djava.security.auth.login.config=/etc/kafka/secrets/kafka_server_jaas.conf" \
+            -e KAFKA_NODE_ID=1 \
+            -e KAFKA_PROCESS_ROLES=broker,controller \
+            -e KAFKA_LISTENERS=INTERNAL://:29092,SASL_SSL://:9096,CONTROLLER://:9093 \
+            -e KAFKA_ADVERTISED_LISTENERS=INTERNAL://localhost:29092,SASL_SSL://localhost:25096 \
+            -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+            -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,SASL_SSL:SASL_SSL \
+            -e KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL \
+            -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@localhost:9093 \
+            -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
+            -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1 \
+            -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1 \
+            -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 \
+            -e KAFKA_AUTHORIZER_CLASS_NAME=org.apache.kafka.metadata.authorizer.StandardAuthorizer \
+            -e KAFKA_ALLOW_EVERYONE_IF_NO_ACL_FOUND=false \
+            -e KAFKA_SUPER_USERS=User:ANONYMOUS \
+            -e KAFKA_SASL_ENABLED_MECHANISMS=SCRAM-SHA-256,SCRAM-SHA-512 \
+            -e KAFKA_SSL_KEYSTORE_FILENAME=kafka.server.keystore.p12 \
+            -e KAFKA_SSL_KEYSTORE_CREDENTIALS=keystore-password \
+            -e KAFKA_SSL_KEY_CREDENTIALS=key-password \
+            -e KAFKA_SSL_KEYSTORE_TYPE=PKCS12 \
+            -e KAFKA_SSL_CLIENT_AUTH=none \
+            apache/kafka:${{ inputs.kafka_version }}
+
+      - name: Wait for authorizer Kafka
+        run: |
+          for attempt in {1..120}; do
+            if docker exec kafrust-published-secure-admin-mutation /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server localhost:29092 >/tmp/kafrust-published-secure-admin-mutation-probe.log 2>&1; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/kafrust-published-secure-admin-mutation-probe.log || true
+          docker logs kafrust-published-secure-admin-mutation
+          exit 1
+
+      - name: Create SCRAM user, topics, and restricted ACLs
+        run: |
+          docker exec kafrust-published-secure-admin-mutation /opt/kafka/bin/kafka-configs.sh \
+            --bootstrap-server localhost:29092 \
+            --alter \
+            --add-config 'SCRAM-SHA-256=[iterations=4096,password=kafrust-secret]' \
+            --entity-type users \
+            --entity-name kafrust
+          docker exec kafrust-published-secure-admin-mutation /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server localhost:29092 --create \
+            --topic "$KAFRUST_ALLOWED_TOPIC" --partitions 1 --replication-factor 1
+          docker exec kafrust-published-secure-admin-mutation /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server localhost:29092 --create \
+            --topic "$KAFRUST_DENIED_TOPIC" --partitions 1 --replication-factor 1
+          docker exec kafrust-published-secure-admin-mutation /opt/kafka/bin/kafka-acls.sh \
+            --bootstrap-server localhost:29092 --add --allow-principal User:kafrust \
+            --operation Describe --cluster
+          docker exec kafrust-published-secure-admin-mutation /opt/kafka/bin/kafka-acls.sh \
+            --bootstrap-server localhost:29092 --add --allow-principal User:kafrust \
+            --operation IdempotentWrite --cluster
+          docker exec kafrust-published-secure-admin-mutation /opt/kafka/bin/kafka-acls.sh \
+            --bootstrap-server localhost:29092 --add --allow-principal User:kafrust \
+            --operation Read --operation Write --operation Describe --operation DescribeConfigs --operation AlterConfigs \
+            --topic "$KAFRUST_ALLOWED_TOPIC"
+          docker exec kafrust-published-secure-admin-mutation /opt/kafka/bin/kafka-acls.sh \
+            --bootstrap-server localhost:29092 --add --allow-principal User:kafrust \
+            --operation Read --operation Describe --group "$KAFRUST_GROUP_ID"
+          printf 'authorized-mutation-record\n' | docker exec -i kafrust-published-secure-admin-mutation \
+            /opt/kafka/bin/kafka-console-producer.sh \
+            --bootstrap-server localhost:29092 --topic "$KAFRUST_ALLOWED_TOPIC"
+
+      - name: Verify external TLS listener
+        run: |
+          openssl s_client -connect 127.0.0.1:25096 -servername localhost \
+            -CAfile sasl-ssl-admin-mutation/ca.crt -verify_return_error \
+            </dev/null >/tmp/kafrust-published-secure-admin-mutation-tls.log 2>&1
+
+      - name: Create fresh external project
+        env:
+          KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version }}
+        run: |
+          project_dir="$RUNNER_TEMP/kafrust-published-secure-admin-mutation-smoke"
+          if [ "$project_dir" = "$GITHUB_WORKSPACE" ]; then
+            echo "the published secure Admin mutation project must be outside the repository"
+            exit 1
+          fi
+          cargo new --bin "$project_dir"
+          cp .github/published-secure-admin-mutation-smoke/src/main.rs "$project_dir/src/main.rs"
+          sed "s/__KAFRUST_VERSION__/$KAFRUST_PUBLISHED_VERSION/; s/__KAFRUST_FEATURES__/[\"tls\"]/" \
+            .github/published-secure-admin-mutation-smoke/Cargo.toml > "$project_dir/Cargo.toml"
+
+      - name: Run published restricted Admin mutations and offset paths
+        run: cargo run --manifest-path "$RUNNER_TEMP/kafrust-published-secure-admin-mutation-smoke/Cargo.toml"
+
+      - name: Verify published dependency versions
+        run: |
+          grep -A1 -q 'name = "kafrust"' "$RUNNER_TEMP/kafrust-published-secure-admin-mutation-smoke/Cargo.lock"
+          grep -A1 -q "version = \"${{ inputs.kafrust_version }}\"" "$RUNNER_TEMP/kafrust-published-secure-admin-mutation-smoke/Cargo.lock"
+
+      - name: Dump Kafka diagnostics
+        if: failure()
+        run: docker logs kafrust-published-secure-admin-mutation
