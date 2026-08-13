@@ -1865,7 +1865,12 @@ fn is_leader_epoch_transition_error(error: &Error) -> bool {
     matches!(
         error,
         Error::Broker { code, .. }
-            if matches!(*code, 74 | 75)
+            if matches!(
+                BrokerErrorKind::from_code(*code),
+                BrokerErrorKind::NotLeaderOrFollower
+                    | BrokerErrorKind::FencedLeaderEpoch
+                    | BrokerErrorKind::UnknownLeaderEpoch
+            )
     )
 }
 
@@ -1889,10 +1894,11 @@ fn invalidate_metadata_cache(
 #[allow(clippy::expect_used, clippy::unwrap_used)]
 mod tests {
     use super::{
-        assign_partition, can_retry_fetch, invalidate_metadata_cache, leader_for,
-        limit_fetched_records, offset_for_leader_epoch_partition_response, visible_records,
-        Consumer, ConsumerAssignment, ConsumerConfig, ConsumerRecord, IsolationLevel,
-        OffsetResetPolicy, PartitionWatermarks, SecurityProtocol,
+        assign_partition, can_retry_fetch, invalidate_metadata_cache,
+        is_leader_epoch_transition_error, leader_for, limit_fetched_records,
+        offset_for_leader_epoch_partition_response, visible_records, Consumer, ConsumerAssignment,
+        ConsumerConfig, ConsumerRecord, IsolationLevel, OffsetResetPolicy, PartitionWatermarks,
+        SecurityProtocol,
     };
     use crate::{Client, ClientMetrics, Error};
     use kafrust_protocol::api::fetch::{
@@ -2568,6 +2574,26 @@ mod tests {
             context: "fetch orders-0@0".to_owned(),
         }));
         assert!(!can_retry_fetch(&Error::Unsupported("fetch v99")));
+    }
+
+    #[test]
+    fn classifies_not_leader_as_a_leader_epoch_transition() {
+        assert!(is_leader_epoch_transition_error(&Error::Broker {
+            code: 6,
+            context: "fetch orders-0@0".to_owned(),
+        }));
+        assert!(is_leader_epoch_transition_error(&Error::Broker {
+            code: 74,
+            context: "fetch orders-0@0".to_owned(),
+        }));
+        assert!(is_leader_epoch_transition_error(&Error::Broker {
+            code: 75,
+            context: "fetch orders-0@0".to_owned(),
+        }));
+        assert!(!is_leader_epoch_transition_error(&Error::Broker {
+            code: 1,
+            context: "fetch orders-0@0".to_owned(),
+        }));
     }
 
     #[test]

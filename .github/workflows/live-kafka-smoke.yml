@@ -2429,6 +2429,23 @@ jobs:
             exit 1
           fi
 
+          docker start "kafrust-kafka-multi-${group_epoch_broker}"
+          group_epoch_broker_ready=""
+          for attempt in {1..120}; do
+            if docker exec "kafrust-kafka-multi-${group_epoch_broker}" /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server "kafrust-kafka-multi-${group_epoch_broker}:29092" \
+              >/tmp/kafrust-group-epoch-recovery.log 2>&1; then
+              group_epoch_broker_ready=1
+              break
+            fi
+            sleep 2
+          done
+          if [ -z "$group_epoch_broker_ready" ]; then
+            cat /tmp/kafrust-group-epoch-recovery.log || true
+            docker logs "kafrust-kafka-multi-${group_epoch_broker}"
+            exit 1
+          fi
+
           group_epoch_producer_log=/tmp/kafrust-group-epoch-producer.log
           KAFRUST_TOPIC="$group_epoch_topic" \
           KAFRUST_PARTITION="$group_epoch_partition" \
@@ -2444,18 +2461,6 @@ jobs:
           group_epoch_status=0
           wait "$group_epoch_pid" || group_epoch_status=$?
           cat "$group_epoch_log"
-
-          docker start "kafrust-kafka-multi-${group_epoch_broker}"
-          group_epoch_broker_ready=""
-          for attempt in {1..120}; do
-            if docker exec "kafrust-kafka-multi-${group_epoch_broker}" /opt/kafka/bin/kafka-broker-api-versions.sh \
-              --bootstrap-server "kafrust-kafka-multi-${group_epoch_broker}:29092" \
-              >/tmp/kafrust-group-epoch-recovery.log 2>&1; then
-              group_epoch_broker_ready=1
-              break
-            fi
-            sleep 2
-          done
 
           if [ "$group_epoch_status" -ne 0 ] || [ "$group_epoch_producer_status" -ne 0 ] || \
              [ -z "$group_epoch_broker_ready" ] || \
