@@ -17,12 +17,9 @@ async fn main() -> kafrust::Result<()> {
 
     for broker in &results {
         println!(
-            "broker={} error_code={} total_bytes={} usable_bytes={} cordoned={}",
+            "broker={} error_code={}",
             broker.broker_id(),
             broker.error_code(),
-            broker.total_bytes(),
-            broker.usable_bytes(),
-            broker.is_cordoned(),
         );
         if !broker.is_success() {
             return Err(Error::Broker {
@@ -31,6 +28,13 @@ async fn main() -> kafrust::Result<()> {
             });
         }
         for log_dir in broker.log_dirs() {
+            println!(
+                "  path={} total_bytes={} usable_bytes={} cordoned={}",
+                log_dir.path(),
+                log_dir.total_bytes(),
+                log_dir.usable_bytes(),
+                log_dir.is_cordoned(),
+            );
             if !log_dir.is_success() {
                 return Err(Error::Broker {
                     code: log_dir.error_code(),

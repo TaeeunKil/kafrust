@@ -673,12 +673,14 @@ let admin = AdminClient::new(ClientConfig::new([
 let topics = [LogDirTopic::new("orders").partition(0)];
 let brokers = admin.describe_log_dirs(None, Some(&topics)).await?;
 for broker in brokers {
-    println!(
-        "broker={} usable_bytes={}",
-        broker.broker_id(),
-        broker.usable_bytes(),
-    );
+    println!("broker={}", broker.broker_id());
     for log_dir in broker.log_dirs() {
+        println!(
+            "path={} usable_bytes={} cordoned={}",
+            log_dir.path(),
+            log_dir.usable_bytes(),
+            log_dir.is_cordoned(),
+        );
         for topic in log_dir.topics() {
             for partition in topic.partitions() {
                 println!(

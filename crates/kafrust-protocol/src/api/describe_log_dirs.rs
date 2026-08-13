@@ -59,9 +59,6 @@ pub struct DescribeLogDirsResponse {
     pub throttle_time_ms: i32,
     pub error_code: i16,
     pub results: Vec<DescribeLogDirsResult>,
-    pub total_bytes: i64,
-    pub usable_bytes: i64,
-    pub is_cordoned: bool,
 }
 
 impl DescribeLogDirsResponse {
@@ -91,6 +88,9 @@ pub struct DescribeLogDirsResult {
     pub error_code: i16,
     pub log_dir: String,
     pub topics: Vec<DescribeLogDirsTopicResult>,
+    pub total_bytes: i64,
+    pub usable_bytes: i64,
+    pub is_cordoned: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -135,22 +135,16 @@ fn decode_body(
     };
     let results = if flexible {
         decoder
-            .read_compact_array("describe log dirs results", decode_flexible_result)?
+            .read_compact_array("describe log dirs results", |decoder| {
+                decode_flexible_result(decoder, has_capacity, has_cordoned)
+            })?
             .unwrap_or_default()
     } else {
         decoder
-            .read_array("describe log dirs results", decode_legacy_result)?
+            .read_array("describe log dirs results", |decoder| {
+                decode_legacy_result(decoder, has_capacity, has_cordoned)
+            })?
             .unwrap_or_default()
-    };
-    let (total_bytes, usable_bytes) = if has_capacity {
-        (decoder.read_i64()?, decoder.read_i64()?)
-    } else {
-        (-1, -1)
-    };
-    let is_cordoned = if has_cordoned {
-        decoder.read_bool()?
-    } else {
-        false
     };
     if flexible {
         decoder.read_tagged_fields()?;
@@ -159,19 +153,35 @@ fn decode_body(
         throttle_time_ms,
         error_code,
         results,
-        total_bytes,
-        usable_bytes,
-        is_cordoned,
     })
 }
 
-fn decode_legacy_result(decoder: &mut Decoder<'_>) -> Result<DescribeLogDirsResult> {
+fn decode_legacy_result(
+    decoder: &mut Decoder<'_>,
+    has_capacity: bool,
+    has_cordoned: bool,
+) -> Result<DescribeLogDirsResult> {
     let result = DescribeLogDirsResult {
         error_code: decoder.read_i16()?,
         log_dir: decoder.read_string()?,
         topics: decoder
             .read_array("describe log dirs topics", decode_legacy_topic_result)?
             .unwrap_or_default(),
+        total_bytes: if has_capacity {
+            decoder.read_i64()?
+        } else {
+            -1
+        },
+        usable_bytes: if has_capacity {
+            decoder.read_i64()?
+        } else {
+            -1
+        },
+        is_cordoned: if has_cordoned {
+            decoder.read_bool()?
+        } else {
+            false
+        },
     };
     Ok(result)
 }
@@ -185,13 +195,32 @@ fn decode_legacy_topic_result(decoder: &mut Decoder<'_>) -> Result<DescribeLogDi
     })
 }
 
-fn decode_flexible_result(decoder: &mut Decoder<'_>) -> Result<DescribeLogDirsResult> {
+fn decode_flexible_result(
+    decoder: &mut Decoder<'_>,
+    has_capacity: bool,
+    has_cordoned: bool,
+) -> Result<DescribeLogDirsResult> {
     let result = DescribeLogDirsResult {
         error_code: decoder.read_i16()?,
         log_dir: decoder.read_compact_string()?,
         topics: decoder
             .read_compact_array("describe log dirs topics", decode_flexible_topic_result)?
             .unwrap_or_default(),
+        total_bytes: if has_capacity {
+            decoder.read_i64()?
+        } else {
+            -1
+        },
+        usable_bytes: if has_capacity {
+            decoder.read_i64()?
+        } else {
+            -1
+        },
+        is_cordoned: if has_cordoned {
+            decoder.read_bool()?
+        } else {
+            false
+        },
     };
     decoder.read_tagged_fields()?;
     Ok(result)
@@ -285,10 +314,10 @@ mod tests {
         bytes.write_bool(false);
         bytes.write_empty_tagged_fields();
         bytes.write_empty_tagged_fields();
-        bytes.write_empty_tagged_fields();
         bytes.write_i64(1_000_000);
         bytes.write_i64(900_000);
         bytes.write_bool(false);
+        bytes.write_empty_tagged_fields();
         bytes.write_empty_tagged_fields();
         let encoded = bytes.into_bytes();
         let mut decoder = Decoder::new(&encoded);
@@ -303,9 +332,41 @@ mod tests {
             4096
         );
         assert_eq!(response.results[0].topics[0].partitions[0].offset_lag, 3);
-        assert_eq!(response.total_bytes, 1_000_000);
-        assert_eq!(response.usable_bytes, 900_000);
-        assert!(!response.is_cordoned);
+        assert_eq!(response.results[0].total_bytes, 1_000_000);
+        assert_eq!(response.results[0].usable_bytes, 900_000);
+        assert!(!response.results[0].is_cordoned);
+        assert!(decoder.is_empty());
+    }
+
+    #[test]
+    fn decodes_describe_log_dirs_v5_response_with_multiple_directories() {
+        let mut bytes = Encoder::new();
+        bytes.write_i32(0);
+        bytes.write_i16(0);
+        bytes.write_unsigned_varint(3); // two log directories
+        for (path, total, usable, cordoned) in [
+            ("/var/lib/kafka", 100_i64, 90_i64, false),
+            ("/var/lib/kafka-2", 200_i64, 180_i64, true),
+        ] {
+            bytes.write_i16(0);
+            bytes.write_compact_string(path).unwrap();
+            bytes.write_unsigned_varint(1); // no topics
+            bytes.write_i64(total);
+            bytes.write_i64(usable);
+            bytes.write_bool(cordoned);
+            bytes.write_empty_tagged_fields();
+        }
+        bytes.write_empty_tagged_fields();
+        let encoded = bytes.into_bytes();
+        let mut decoder = Decoder::new(&encoded);
+        let response = DescribeLogDirsResponse::decode_body_v5(&mut decoder).unwrap();
+
+        assert_eq!(response.results.len(), 2);
+        assert_eq!(response.results[0].log_dir, "/var/lib/kafka");
+        assert_eq!(response.results[0].total_bytes, 100);
+        assert_eq!(response.results[1].log_dir, "/var/lib/kafka-2");
+        assert_eq!(response.results[1].usable_bytes, 180);
+        assert!(response.results[1].is_cordoned);
         assert!(decoder.is_empty());
     }
 }

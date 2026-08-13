@@ -4475,9 +4475,6 @@ pub struct DescribeLogDirsBrokerResult {
     throttle_time: Duration,
     error_code: i16,
     log_dirs: Vec<LogDirectoryResult>,
-    total_bytes: i64,
-    usable_bytes: i64,
-    is_cordoned: bool,
 }
 
 impl DescribeLogDirsBrokerResult {
@@ -4506,32 +4503,12 @@ impl DescribeLogDirsBrokerResult {
         &self.log_dirs
     }
 
-    /// Returns total bytes on the broker's log volume, or `-1` when the
-    /// negotiated broker version does not expose volume capacity.
-    pub fn total_bytes(&self) -> i64 {
-        self.total_bytes
-    }
-
-    /// Returns usable bytes on the broker's log volume, or `-1` when
-    /// unavailable.
-    pub fn usable_bytes(&self) -> i64 {
-        self.usable_bytes
-    }
-
-    /// Returns whether the broker has cordoned the log volume.
-    pub fn is_cordoned(&self) -> bool {
-        self.is_cordoned
-    }
-
     /// Returns whether the broker and every returned log directory succeeded.
     pub fn is_success(&self) -> bool {
         self.error_code == 0 && self.log_dirs.iter().all(LogDirectoryResult::is_success)
     }
 
     fn from_protocol(broker_id: i32, response: DescribeLogDirsResponse) -> Self {
-        let total_bytes = response.total_bytes;
-        let usable_bytes = response.usable_bytes;
-        let is_cordoned = response.is_cordoned;
         Self {
             broker_id,
             throttle_time: Duration::from_millis(nonnegative_i32_to_u64(response.throttle_time_ms)),
@@ -4541,9 +4518,6 @@ impl DescribeLogDirsBrokerResult {
                 .into_iter()
                 .map(LogDirectoryResult::from_protocol)
                 .collect(),
-            total_bytes,
-            usable_bytes,
-            is_cordoned,
         }
     }
 }
@@ -4554,6 +4528,9 @@ pub struct LogDirectoryResult {
     error_code: i16,
     path: String,
     topics: Vec<LogDirectoryTopicResult>,
+    total_bytes: i64,
+    usable_bytes: i64,
+    is_cordoned: bool,
 }
 
 impl LogDirectoryResult {
@@ -4565,6 +4542,23 @@ impl LogDirectoryResult {
     /// Returns the absolute log-directory path.
     pub fn path(&self) -> &str {
         &self.path
+    }
+
+    /// Returns total bytes on this log directory's volume, or `-1` when the
+    /// negotiated broker version does not expose volume capacity.
+    pub fn total_bytes(&self) -> i64 {
+        self.total_bytes
+    }
+
+    /// Returns usable bytes on this log directory's volume, or `-1` when
+    /// unavailable.
+    pub fn usable_bytes(&self) -> i64 {
+        self.usable_bytes
+    }
+
+    /// Returns whether this log directory's volume is cordoned.
+    pub fn is_cordoned(&self) -> bool {
+        self.is_cordoned
     }
 
     /// Returns topic storage results in broker response order.
@@ -4593,6 +4587,9 @@ impl LogDirectoryResult {
                 .into_iter()
                 .map(LogDirectoryTopicResult::from_protocol)
                 .collect(),
+            total_bytes: result.total_bytes,
+            usable_bytes: result.usable_bytes,
+            is_cordoned: result.is_cordoned,
         }
     }
 }
@@ -10515,10 +10512,10 @@ mod tests {
         assert_eq!(results.len(), 1);
         assert!(results[0].is_success());
         assert_eq!(results[0].broker_id(), 1);
-        assert_eq!(results[0].total_bytes(), 100_000);
-        assert_eq!(results[0].usable_bytes(), 90_000);
-        assert!(!results[0].is_cordoned());
         assert_eq!(results[0].log_dirs()[0].path(), "/var/lib/kafka");
+        assert_eq!(results[0].log_dirs()[0].total_bytes(), 100_000);
+        assert_eq!(results[0].log_dirs()[0].usable_bytes(), 90_000);
+        assert!(!results[0].log_dirs()[0].is_cordoned());
         assert_eq!(results[0].log_dirs()[0].topics()[0].name(), "orders");
         assert_eq!(
             results[0].log_dirs()[0].topics()[0].partitions()[0].partition_size(),
@@ -11508,10 +11505,10 @@ mod tests {
         encoder.write_bool(false);
         encoder.write_empty_tagged_fields(); // partition tags
         encoder.write_empty_tagged_fields(); // topic tags
-        encoder.write_empty_tagged_fields(); // result tags
         encoder.write_i64(100_000);
         encoder.write_i64(90_000);
         encoder.write_bool(false);
+        encoder.write_empty_tagged_fields(); // result tags
         encoder.write_empty_tagged_fields(); // response tags
         encoder.into_bytes()
     }
