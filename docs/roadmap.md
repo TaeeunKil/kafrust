@@ -2248,6 +2248,14 @@ Implemented evidence:
   Both runs covered disjoint ownership of all six partitions and consumption
   through the published `0.2.28` artifact; broader assignor and failure
   matrices remain separate 1.0 gates.
+- The published secured group-rebalance workflow then passed the same two-member
+  ownership and record-delivery gate with SCRAM-SHA-256 over SASL_SSL. Kafka
+  3.7.2 classic passed in
+  [`31740436499`](https://github.com/TaeeunKil/kafrust/actions/runs/31740436499),
+  and Kafka 4.3.1 KIP-848 passed in
+  [`31740567979`](https://github.com/TaeeunKil/kafrust/actions/runs/31740567979).
+  This closes the published secured multi-member gate; every assignor,
+  security mechanism, and member-failure workload remains outside the claim.
 - The published `0.2.28` seven-profile smoke then added active-group Admin
   inspection and committed-offset reads. Run
   [`31737581786`](https://github.com/TaeeunKil/kafrust/actions/runs/31737581786)

@@ -318,6 +318,17 @@ Both runs observed disjoint ownership of all six topic partitions and consumed
 the partition records through the published `0.2.28` artifact. These are
 representative two-member workloads, not every assignor or failure mode.
 
+The published secured group-rebalance workflow then passed the same two-member
+ownership and record-delivery check with SCRAM-SHA-256 over SASL_SSL. Kafka
+3.7.2 classic passed in
+[`31740436499`](https://github.com/TaeeunKil/kafrust/actions/runs/31740436499),
+and Kafka 4.3.1 KIP-848 passed in
+[`31740567979`](https://github.com/TaeeunKil/kafrust/actions/runs/31740567979).
+Each fresh external project resolved `kafrust 0.2.28` with `tls`, authenticated
+both group members, and verified disjoint six-partition ownership plus record
+delivery. This is representative published secured group evidence, not every
+assignor, security mechanism, or member-failure workload.
+
 The published `0.2.28` seven-profile smoke was rerun after adding active-group
 Admin checks. [`31737581786`](https://github.com/TaeeunKil/kafrust/actions/runs/31737581786)
 passed Kafka 3.7.2 classic, Kafka 4.3.1 KIP-848, SASL_SSL/SCRAM, and all four
