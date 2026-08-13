@@ -1,6 +1,6 @@
 [package]
 name = "kafrust"
-version = "0.2.15"
+version = "0.2.16"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -26,7 +26,7 @@ tls = [
 [dependencies]
 base64 = "0.22"
 hmac = "0.12"
-kafrust-protocol = { version = "0.2.15", path = "../kafrust-protocol" }
+kafrust-protocol = { version = "0.2.16", path = "../kafrust-protocol" }
 pbkdf2 = "0.12"
 rand = "0.8"
 regex = "1"
