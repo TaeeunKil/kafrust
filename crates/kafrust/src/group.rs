@@ -3124,6 +3124,7 @@ fn sticky_assignments_from_owned(
         .map(|member_id| (member_id.clone(), BTreeMap::<String, Vec<i32>>::new()))
         .collect::<BTreeMap<_, _>>();
     let mut owner_by_partition = BTreeMap::<(String, i32), String>::new();
+    let mut invalidated_previous = BTreeSet::<(String, i32)>::new();
     let mut available = BTreeSet::<(String, i32)>::new();
 
     for topics in subscriptions.values() {
@@ -3139,9 +3140,26 @@ fn sticky_assignments_from_owned(
             if !available.contains(partition) {
                 continue;
             }
+            if invalidated_previous.contains(partition) {
+                continue;
+            }
             if let Some(current_owner) = owner_by_partition.get(partition).cloned() {
                 let current_generation = generations.get(&current_owner).copied().unwrap_or(-1);
                 let member_generation = generations.get(member_id).copied().unwrap_or(-1);
+                if member_generation == current_generation {
+                    debug!(
+                        topic = partition.0.as_str(),
+                        partition = partition.1,
+                        first_member_id = current_owner.as_str(),
+                        second_member_id = member_id.as_str(),
+                        generation = member_generation,
+                        "invalidating sticky previous ownership claimed by multiple members"
+                    );
+                    remove_assignment(&mut assigned_by_member, &current_owner, partition);
+                    owner_by_partition.remove(partition);
+                    invalidated_previous.insert(partition.clone());
+                    continue;
+                }
                 if member_generation <= current_generation {
                     continue;
                 }
@@ -5097,6 +5115,41 @@ mod tests {
         let member_c = decode_assignment(&assignments[1].assignment);
         assert_eq!(member_a.assignments[0].partitions, vec![0, 1]);
         assert_eq!(member_c.assignments[0].partitions, vec![2, 3]);
+    }
+
+    #[test]
+    fn sticky_invalidates_duplicate_previous_owners_in_the_same_generation() {
+        let members = vec![
+            sticky_member(
+                "member-a",
+                &["orders"],
+                vec![ConsumerProtocolTopicAssignment {
+                    topic: "orders".to_owned(),
+                    partitions: vec![0, 1],
+                }],
+                Some(9),
+            ),
+            sticky_member(
+                "member-b",
+                &["orders"],
+                vec![ConsumerProtocolTopicAssignment {
+                    topic: "orders".to_owned(),
+                    partitions: vec![0, 2],
+                }],
+                Some(9),
+            ),
+            sticky_member("member-c", &["orders"], Vec::new(), Some(9)),
+        ];
+        let metadata = metadata_fixture("orders", &[0, 1, 2, 3]);
+
+        let assignments = sticky_assignments(&members, &metadata).unwrap();
+
+        let member_a = decode_assignment(&assignments[0].assignment);
+        let member_b = decode_assignment(&assignments[1].assignment);
+        let member_c = decode_assignment(&assignments[2].assignment);
+        assert_eq!(member_a.assignments[0].partitions, vec![1, 3]);
+        assert_eq!(member_b.assignments[0].partitions, vec![2]);
+        assert_eq!(member_c.assignments[0].partitions, vec![0]);
     }
 
     #[test]
