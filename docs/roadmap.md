@@ -2151,6 +2151,13 @@ Implemented evidence:
   [`Published Crate Smoke`, run `31719041843`](https://github.com/TaeeunKil/kafrust/actions/runs/31719041843).
   The lockfile was checked for the requested published client version, so this
   gate does not rely on the workspace path dependency.
+- The complete 17-job run [`31719615947`](https://github.com/TaeeunKil/kafrust/actions/runs/31719615947)
+  adds a controlled combined-fault gate in the Kafka 3.7.2 three-broker
+  plaintext profile. It deliberately colocates the classic group coordinator
+  and target partition leader, stops that broker, writes a post-failover
+  record through the replacement leader, and verifies group rejoin plus
+  consumption of that record. KIP-848, secured, and broader combined-fault
+  combinations remain separate gates.
 - Classic and KIP-848 consumer-group polling now have live leader-epoch
   recovery gates. The complete matrix in
   [`31702236760`](https://github.com/TaeeunKil/kafrust/actions/runs/31702236760)

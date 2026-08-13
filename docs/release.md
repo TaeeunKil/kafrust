@@ -226,6 +226,14 @@ and its matching protocol crate from crates.io, and executed a producer to
 direct-consumer roundtrip against Kafka 3.7.2. This verifies published runtime
 linkage in addition to the earlier compile-only external smoke.
 
+The following current-main live run
+[`31719615947`](https://github.com/TaeeunKil/kafrust/actions/runs/31719615947)
+also passed the controlled classic consumer-group combined-fault gate in the
+Kafka 3.7.2 three-broker profile. The target broker was both coordinator and
+partition leader; after it was stopped, the replacement leader accepted a new
+record and the group rejoined to consume it. This remains a main-branch gate
+and does not modify the published `0.2.27` artifacts.
+
 ## Optional Broker Checks
 
 The default test suite does not require a Kafka broker. Before an alpha tag, run the opt-in examples or tests against a local broker when practical:

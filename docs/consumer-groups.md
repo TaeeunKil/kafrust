@@ -458,3 +458,10 @@ KAFRUST_BOOTSTRAP_SERVERS=localhost:9092 KAFRUST_GROUP_ID=orders-reset KAFRUST_T
 ```
 
 The opt-in broker roundtrip test also covers coordinator discovery when `KAFRUST_BOOTSTRAP_SERVERS` is set.
+
+The group implementation also has a development-only combined-fault smoke path:
+the live matrix can place the target partition leader on the group coordinator,
+stop that one broker, and verify foreground rejoin plus consumption of a record
+written by the replacement leader. This is qualified for the Kafka 3.7.2
+plaintext classic protocol in [`Live Kafka Smoke` run `31719615947`](https://github.com/TaeeunKil/kafrust/actions/runs/31719615947).
+KIP-848 and secured combined-fault behavior are separate compatibility gates.
