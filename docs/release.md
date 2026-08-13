@@ -392,6 +392,18 @@ topic configuration on an unauthorized topic and unauthorized topic create and
 delete operations. This qualifies one published StandardAuthorizer policy,
 not every ACL pattern, Admin API, security provider, or mutation-failure mode.
 
+The published restricted Admin mutation and offset-management workflow passed
+for Kafka 3.7.2 in
+[`31742788549`](https://github.com/TaeeunKil/kafrust/actions/runs/31742788549)
+and Kafka 4.3.1 in
+[`31742924984`](https://github.com/TaeeunKil/kafrust/actions/runs/31742924984).
+Fresh external projects authenticated as the restricted user, successfully
+altered the allowed topic configuration, preserved a denied config mutation,
+committed a group offset, listed it through Admin OffsetFetch, reset it through
+Admin OffsetCommit v2, and consumed from the reset position after rejoin. This
+qualifies representative published mutation and offset policy behavior, not
+every Admin mutation, ACL pattern, provider, or ambiguous failure mode.
+
 The following current-main live run
 [`31719615947`](https://github.com/TaeeunKil/kafrust/actions/runs/31719615947)
 also passed the controlled classic consumer-group combined-fault gate in the

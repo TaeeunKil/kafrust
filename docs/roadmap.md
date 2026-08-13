@@ -2286,6 +2286,17 @@ Implemented evidence:
   outcomes. This closes the representative published StandardAuthorizer
   permission gate; every ACL pattern, Admin API, provider, and mutation-failure
   workload remains outside the 1.0 claim.
+- The published restricted Admin mutation and offset-management workflow passed
+  for Kafka 3.7.2 in
+  [`31742788549`](https://github.com/TaeeunKil/kafrust/actions/runs/31742788549)
+  and Kafka 4.3.1 in
+  [`31742924984`](https://github.com/TaeeunKil/kafrust/actions/runs/31742924984).
+  External `0.2.28` projects authenticated the restricted user, altered an
+  allowed topic config, preserved a denied config mutation, committed and
+  listed a group offset, reset it through Admin OffsetCommit v2, and consumed
+  from the reset position after rejoin. This closes the representative
+  published mutation/offset gate; every Admin mutation, ACL pattern, provider,
+  and ambiguous failure workload remains outside the 1.0 claim.
 - The published secured multi-broker workflow passed both representative
   security and group-protocol combinations. Kafka 3.7.2 classic passed in
   [`31738997447`](https://github.com/TaeeunKil/kafrust/actions/runs/31738997447),
