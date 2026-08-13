@@ -1,0 +1,11 @@
+[package]
+name = "kafrust-published-rust-rdkafka-comparison"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+futures-util = "0.3"
+kafrust = "__KAFRUST_VERSION__"
+rdkafka = { version = "0.39", default-features = false, features = ["cmake-build", "tokio"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }

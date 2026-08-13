@@ -1,0 +1,128 @@
+name: Published rust-rdkafka Comparison
+
+on:
+  workflow_dispatch:
+    inputs:
+      kafrust_version:
+        description: "Published kafrust version to compare from crates.io"
+        required: true
+        default: "0.2.28"
+      record_count:
+        description: "Measured records per implementation"
+        required: true
+        default: "20000"
+      batch_size:
+        description: "Records submitted per producer batch"
+        required: true
+        default: "200"
+      payload_bytes:
+        description: "Payload bytes per record"
+        required: true
+        default: "1024"
+
+env:
+  CARGO_TERM_COLOR: always
+  KAFRUST_BOOTSTRAP_SERVERS: localhost:9092
+  KAFRUST_COMPARISON_RECORDS: ${{ inputs.record_count }}
+  KAFRUST_COMPARISON_BATCH_SIZE: ${{ inputs.batch_size }}
+  KAFRUST_COMPARISON_PAYLOAD_BYTES: ${{ inputs.payload_bytes }}
+
+jobs:
+  compare:
+    name: Published kafrust ${{ inputs.kafrust_version }} versus rust-rdkafka 0.39
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+
+      - name: Start Kafka 4.3.1
+        run: |
+          docker run -d --name kafrust-rdkafka-comparison \
+            -p 9092:9092 \
+            -e KAFKA_NODE_ID=1 \
+            -e KAFKA_PROCESS_ROLES=broker,controller \
+            -e KAFKA_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 \
+            -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092 \
+            -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+            -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
+            -e KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT \
+            -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@localhost:9093 \
+            -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
+            apache/kafka:4.3.1
+
+      - name: Wait for Kafka
+        run: |
+          for attempt in {1..90}; do
+            if docker exec kafrust-rdkafka-comparison /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server localhost:9092 >/tmp/kafrust-rdkafka-probe.log 2>&1; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/kafrust-rdkafka-probe.log || true
+          docker logs kafrust-rdkafka-comparison
+          exit 1
+
+      - name: Create comparison topics
+        run: |
+          for implementation in kafrust rdkafka; do
+            docker exec kafrust-rdkafka-comparison /opt/kafka/bin/kafka-topics.sh \
+              --bootstrap-server localhost:9092 \
+              --create \
+              --topic "kafrust-rdkafka-comparison-${GITHUB_RUN_ID}-${implementation}" \
+              --partitions 1 \
+              --replication-factor 1
+          done
+
+      - name: Create fresh external comparison project
+        env:
+          KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version }}
+        run: |
+          project_dir="$RUNNER_TEMP/kafrust-published-rust-rdkafka-comparison"
+          cargo new --bin "$project_dir"
+          cp .github/published-rust-rdkafka-comparison/src/main.rs "$project_dir/src/main.rs"
+          sed "s/__KAFRUST_VERSION__/$KAFRUST_PUBLISHED_VERSION/" \
+            .github/published-rust-rdkafka-comparison/Cargo.toml > "$project_dir/Cargo.toml"
+
+      - name: Build external comparison project
+        run: cargo build --release --manifest-path "$RUNNER_TEMP/kafrust-published-rust-rdkafka-comparison/Cargo.toml"
+
+      - name: Run identical comparison profiles
+        run: |
+          set -euo pipefail
+          project_dir="$RUNNER_TEMP/kafrust-published-rust-rdkafka-comparison"
+          : > comparison-results.jsonl
+          for implementation in kafrust rdkafka; do
+            KAFRUST_COMPARISON_IMPLEMENTATION="$implementation" \
+              KAFRUST_TOPIC="kafrust-rdkafka-comparison-${GITHUB_RUN_ID}-${implementation}" \
+              cargo run --quiet --release --manifest-path "$project_dir/Cargo.toml" \
+              | tee -a comparison-results.jsonl
+          done
+          test "$(wc -l < comparison-results.jsonl)" -eq 2
+          grep -q '"implementation":"kafrust"' comparison-results.jsonl
+          grep -q '"implementation":"rdkafka"' comparison-results.jsonl
+
+      - name: Verify published and comparison dependency versions
+        run: |
+          grep -A1 -q 'name = "kafrust"' "$RUNNER_TEMP/kafrust-published-rust-rdkafka-comparison/Cargo.lock"
+          grep -A1 -q 'version = "${{ inputs.kafrust_version }}"' "$RUNNER_TEMP/kafrust-published-rust-rdkafka-comparison/Cargo.lock"
+          grep -A1 -q 'name = "rdkafka"' "$RUNNER_TEMP/kafrust-published-rust-rdkafka-comparison/Cargo.lock"
+          grep -A1 -q 'version = "0.39.0"' "$RUNNER_TEMP/kafrust-published-rust-rdkafka-comparison/Cargo.lock"
+
+      - name: Upload comparison results
+        uses: actions/upload-artifact@v6
+        with:
+          name: kafrust-rust-rdkafka-comparison-${{ github.run_id }}
+          path: comparison-results.jsonl
+          retention-days: 90
+
+      - name: Dump Kafka logs
+        if: failure()
+        run: docker logs kafrust-rdkafka-comparison
