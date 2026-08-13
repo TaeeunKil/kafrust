@@ -1,0 +1,227 @@
+name: Published Secure Multi-Broker Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      kafrust_version:
+        description: "Published kafrust version to execute from crates.io"
+        required: true
+        default: "0.2.28"
+      kafka_version:
+        description: "Apache Kafka broker image version"
+        required: true
+        default: "3.7.2"
+      group_protocol:
+        description: "Consumer group protocol: classic or consumer (KIP-848)"
+        required: true
+        default: "classic"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  published-secure-multi-broker:
+    name: Published kafrust ${{ inputs.kafrust_version }} ${{ inputs.kafka_version }} ${{ inputs.group_protocol }} SASL_SSL failover
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      KAFRUST_BOOTSTRAP_SERVERS: localhost:22092,localhost:22093,localhost:22094
+      KAFRUST_SECURITY_PROTOCOL: sasl_tls
+      KAFRUST_SASL_MECHANISM: scram-sha-256
+      KAFRUST_SASL_USERNAME: kafrust
+      KAFRUST_SASL_PASSWORD: kafrust-secret
+      KAFRUST_TLS_SERVER_NAME: localhost
+      KAFRUST_TLS_ROOT_CERT_DER_PATH: ${{ github.workspace }}/sasl-ssl/ca.der
+      KAFRUST_TOPIC: kafrust-published-secure-multi-${{ github.run_id }}
+      KAFRUST_GROUP_ID: kafrust-published-secure-multi-group-${{ github.run_id }}
+      KAFRUST_VALUE: published-secure-multi-${{ github.run_id }}
+      KAFRUST_GROUP_PROTOCOL: ${{ inputs.group_protocol }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.81.0"
+
+      - name: Generate shared TLS certificates
+        run: |
+          mkdir -p sasl-ssl
+          openssl req -x509 -newkey rsa:2048 -days 1 -nodes \
+            -subj "/CN=kafrust-test-ca" \
+            -keyout sasl-ssl/ca.key \
+            -out sasl-ssl/ca.crt
+          openssl x509 -in sasl-ssl/ca.crt -outform DER -out sasl-ssl/ca.der
+          openssl req -newkey rsa:2048 -nodes \
+            -subj "/CN=localhost" \
+            -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" \
+            -keyout sasl-ssl/server.key \
+            -out sasl-ssl/server.csr
+          openssl x509 -req \
+            -in sasl-ssl/server.csr \
+            -CA sasl-ssl/ca.crt \
+            -CAkey sasl-ssl/ca.key \
+            -CAcreateserial \
+            -days 1 \
+            -sha256 \
+            -copy_extensions copy \
+            -out sasl-ssl/server.crt
+          openssl pkcs12 -export \
+            -in sasl-ssl/server.crt \
+            -inkey sasl-ssl/server.key \
+            -certfile sasl-ssl/ca.crt \
+            -name localhost \
+            -out sasl-ssl/kafka.server.keystore.p12 \
+            -password pass:kafrust
+          printf kafrust > sasl-ssl/keystore-password
+          printf kafrust > sasl-ssl/key-password
+          chmod 644 sasl-ssl/*
+
+      - name: Write SCRAM broker config
+        run: |
+          cat > sasl-ssl/kafka_server_jaas.conf <<'EOF'
+          KafkaServer {
+            org.apache.kafka.common.security.scram.ScramLoginModule required
+            username="broker"
+            password="broker-secret";
+          };
+          EOF
+          chmod 644 sasl-ssl/kafka_server_jaas.conf
+
+      - name: Start three-broker Kafka with SASL_SSL SCRAM
+        run: |
+          docker network create kafrust-published-secure-multi
+          cluster_id="$(docker run --rm apache/kafka:${{ inputs.kafka_version }} /opt/kafka/bin/kafka-storage.sh random-uuid)"
+          for node in 1 2 3; do
+            external_port=$((22091 + node))
+            docker run -d --name "kafrust-published-secure-multi-${node}" \
+              --hostname "kafrust-published-secure-multi-${node}" \
+              --network kafrust-published-secure-multi \
+              -p "${external_port}:9095" \
+              -v "$PWD/sasl-ssl:/etc/kafka/secrets:ro" \
+              -e KAFKA_OPTS="-Djava.security.auth.login.config=/etc/kafka/secrets/kafka_server_jaas.conf" \
+              -e KAFKA_CLUSTER_ID="${cluster_id}" \
+              -e KAFKA_NODE_ID="${node}" \
+              -e KAFKA_PROCESS_ROLES=broker,controller \
+              -e KAFKA_LISTENERS=INTERNAL://:29092,SASL_SSL://:9095,CONTROLLER://:9093 \
+              -e KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafrust-published-secure-multi-${node}:29092,SASL_SSL://localhost:${external_port} \
+              -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+              -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,SASL_SSL:SASL_SSL \
+              -e KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL \
+              -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafrust-published-secure-multi-1:9093,2@kafrust-published-secure-multi-2:9093,3@kafrust-published-secure-multi-3:9093 \
+              -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=3 \
+              -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=3 \
+              -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=2 \
+              -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 \
+              -e KAFKA_SASL_ENABLED_MECHANISMS=SCRAM-SHA-256,SCRAM-SHA-512 \
+              -e KAFKA_SSL_KEYSTORE_FILENAME=kafka.server.keystore.p12 \
+              -e KAFKA_SSL_KEYSTORE_CREDENTIALS=keystore-password \
+              -e KAFKA_SSL_KEY_CREDENTIALS=key-password \
+              -e KAFKA_SSL_KEYSTORE_TYPE=PKCS12 \
+              -e KAFKA_SSL_CLIENT_AUTH=none \
+              apache/kafka:${{ inputs.kafka_version }}
+          done
+
+      - name: Wait for Kafka cluster
+        run: |
+          for attempt in {1..120}; do
+            if docker exec kafrust-published-secure-multi-1 /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server kafrust-published-secure-multi-1:29092 \
+              >/tmp/kafrust-published-secure-multi-probe.log 2>&1; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/kafrust-published-secure-multi-probe.log || true
+          docker logs kafrust-published-secure-multi-1
+          docker logs kafrust-published-secure-multi-2
+          docker logs kafrust-published-secure-multi-3
+          exit 1
+
+      - name: Create SCRAM user and replicated topic
+        run: |
+          docker exec kafrust-published-secure-multi-1 /opt/kafka/bin/kafka-configs.sh \
+            --bootstrap-server kafrust-published-secure-multi-1:29092 \
+            --alter \
+            --add-config 'SCRAM-SHA-256=[iterations=4096,password=kafrust-secret]' \
+            --entity-type users \
+            --entity-name kafrust
+          docker exec kafrust-published-secure-multi-1 /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server kafrust-published-secure-multi-1:29092 \
+            --create --topic "$KAFRUST_TOPIC" --partitions 6 --replication-factor 3
+
+      - name: Verify external TLS listeners
+        run: |
+          for port in 22092 22093 22094; do
+            openssl s_client -connect "127.0.0.1:${port}" -servername localhost \
+              -CAfile sasl-ssl/ca.crt -verify_return_error \
+              </dev/null >/tmp/kafrust-published-secure-tls-${port}.log 2>&1
+          done
+
+      - name: Create fresh external project
+        env:
+          KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version }}
+        run: |
+          project_dir="$RUNNER_TEMP/kafrust-published-secure-multi-smoke"
+          if [ "$project_dir" = "$GITHUB_WORKSPACE" ]; then
+            echo "the published secure multi-broker project must be outside the repository"
+            exit 1
+          fi
+          cargo new --bin "$project_dir"
+          cp .github/published-secure-multi-broker-smoke/src/main.rs "$project_dir/src/main.rs"
+          sed "s/__KAFRUST_VERSION__/$KAFRUST_PUBLISHED_VERSION/; s/__KAFRUST_FEATURES__/[\"tls\"]/" \
+            .github/published-secure-multi-broker-smoke/Cargo.toml > "$project_dir/Cargo.toml"
+
+      - name: Choose partition led by broker 1
+        run: |
+          docker exec kafrust-published-secure-multi-1 /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server kafrust-published-secure-multi-1:29092 --describe --topic "$KAFRUST_TOPIC" \
+            | tee /tmp/kafrust-published-secure-multi-topic.log
+          failover_partition="$(awk '/Partition:/ && /Leader: 1/ { for (i = 1; i <= NF; i++) if ($i == "Partition:") { print $(i + 1); exit } }' /tmp/kafrust-published-secure-multi-topic.log)"
+          if [ -z "$failover_partition" ]; then
+            cat /tmp/kafrust-published-secure-multi-topic.log
+            echo "could not find a partition led by broker 1"
+            exit 1
+          fi
+          echo "KAFRUST_PARTITION=${failover_partition}" >> "$GITHUB_ENV"
+
+      - name: Run published secure pre-failover phase
+        env:
+          KAFRUST_PHASE: pre
+        run: cargo run --manifest-path "$RUNNER_TEMP/kafrust-published-secure-multi-smoke/Cargo.toml"
+
+      - name: Stop selected partition leader
+        run: |
+          docker stop kafrust-published-secure-multi-1
+          for attempt in {1..60}; do
+            line="$(docker exec kafrust-published-secure-multi-2 /opt/kafka/bin/kafka-topics.sh \
+              --bootstrap-server kafrust-published-secure-multi-2:29092 --describe --topic "$KAFRUST_TOPIC" \
+              | awk -v partition="$KAFRUST_PARTITION" '$0 ~ /Partition:/ { p=""; l=""; for (i = 1; i <= NF; i++) { if ($i == "Partition:") p=$(i + 1); if ($i == "Leader:") l=$(i + 1) } if (p == partition) print l }')"
+            if [ -n "$line" ] && [ "$line" != "1" ] && [ "$line" != "-1" ]; then
+              echo "partition $KAFRUST_PARTITION moved to leader $line"
+              exit 0
+            fi
+            sleep 2
+          done
+          docker exec kafrust-published-secure-multi-2 /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server kafrust-published-secure-multi-2:29092 --describe --topic "$KAFRUST_TOPIC"
+          exit 1
+
+      - name: Run published secure post-failover phase
+        env:
+          KAFRUST_PHASE: post
+        run: cargo run --manifest-path "$RUNNER_TEMP/kafrust-published-secure-multi-smoke/Cargo.toml"
+
+      - name: Verify published dependency versions
+        run: |
+          grep -A1 -q 'name = "kafrust"' "$RUNNER_TEMP/kafrust-published-secure-multi-smoke/Cargo.lock"
+          grep -A1 -q "version = \"${{ inputs.kafrust_version }}\"" "$RUNNER_TEMP/kafrust-published-secure-multi-smoke/Cargo.lock"
+
+      - name: Dump Kafka diagnostics
+        if: failure()
+        run: |
+          docker logs kafrust-published-secure-multi-1 || true
+          docker logs kafrust-published-secure-multi-2 || true
+          docker logs kafrust-published-secure-multi-3 || true
