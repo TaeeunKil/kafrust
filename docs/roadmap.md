@@ -2211,6 +2211,13 @@ Implemented evidence:
   Snappy, LZ4, and Zstd producer compression against Kafka 3.7.2. This
   qualifies published codec configuration and fetch roundtrips; codec-specific
   throughput and failure qualification remain separate.
+- The published Admin lifecycle gate passed in
+  [`31731934027`](https://github.com/TaeeunKil/kafrust/actions/runs/31731934027).
+  Fresh external projects created a topic with `NewTopic`, verified it through
+  `list_topics` and `describe_topic_configs`, and deleted it through the public
+  `AdminClient` API across the classic, KIP-848, SASL_SSL/SCRAM, and four
+  compression profiles. This is representative Admin runtime evidence, not
+  every Admin API or authorization policy.
 - The complete 17-job run [`31719615947`](https://github.com/TaeeunKil/kafrust/actions/runs/31719615947)
   adds a controlled combined-fault gate in the Kafka 3.7.2 three-broker
   plaintext profile. It deliberately colocates the classic group coordinator

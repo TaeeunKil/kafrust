@@ -270,6 +270,15 @@ LZ4, and Zstd producer compression against Kafka 3.7.2. This confirms the
 published codec configuration and fetch roundtrips; codec-specific throughput
 and failure qualification remain separate.
 
+The published Admin lifecycle gate also passed in
+[`31731934027`](https://github.com/TaeeunKil/kafrust/actions/runs/31731934027).
+Fresh external projects created a topic with `NewTopic`, verified it through
+`list_topics` and `describe_topic_configs`, and deleted it through the public
+`AdminClient` API. The lifecycle passed across the classic, KIP-848,
+SASL_SSL/SCRAM, and four compression profiles; this is representative Admin
+runtime evidence, not a claim that every Admin API and authorization policy is
+interchangeable yet.
+
 The following current-main live run
 [`31719615947`](https://github.com/TaeeunKil/kafrust/actions/runs/31719615947)
 also passed the controlled classic consumer-group combined-fault gate in the
