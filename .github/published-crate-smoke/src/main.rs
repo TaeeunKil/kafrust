@@ -410,8 +410,9 @@ async fn main() -> kafrust::Result<()> {
     }
     if replayed_committed_record || !restored_expected_record {
         println!(
-            "group restore diagnostics: committed_offset={committed_offset}, expected_offset={}, polls={restored_poll_count}, replayed_committed_record={replayed_committed_record}, restored_expected_record={restored_expected_record}",
-            restored_metadata.offset()
+            "group restore diagnostics: assignments={}, committed_offset={committed_offset}, expected_offset={}, polls={restored_poll_count}, replayed_committed_record={replayed_committed_record}, restored_expected_record={restored_expected_record}",
+            restored_group.assignments().len(),
+            restored_metadata.offset(),
         );
         return Err(Error::Unsupported(
             "published crate consumer group did not restore from its committed offset",
