@@ -2240,6 +2240,14 @@ Implemented evidence:
   followed replacement leadership, and consumed a post-failover record after
   KIP-848 rejoin. Published multi-member, secured, and broader fault workloads
   remain separate 1.0 gates.
+- The published group-rebalance fixture then qualified two-member partition
+  ownership and record delivery from crates.io. Kafka 3.7.2 classic passed in
+  [`31736939236`](https://github.com/TaeeunKil/kafrust/actions/runs/31736939236),
+  and Kafka 4.3.1 KIP-848 passed in
+  [`31736362411`](https://github.com/TaeeunKil/kafrust/actions/runs/31736362411).
+  Both runs covered disjoint ownership of all six partitions and consumption
+  through the published `0.2.28` artifact; broader assignor and failure
+  matrices remain separate 1.0 gates.
 - The complete 17-job run [`31719615947`](https://github.com/TaeeunKil/kafrust/actions/runs/31719615947)
   adds a controlled combined-fault gate in the Kafka 3.7.2 three-broker
   plaintext profile. It deliberately colocates the classic group coordinator

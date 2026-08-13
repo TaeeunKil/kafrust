@@ -309,6 +309,15 @@ stop, followed the replacement partition leader, and consumed a post-failover
 record after KIP-848 group rejoin. This is published-artifact evidence for one
 KIP-848 failover workload, not complete multi-member or failure parity.
 
+The published group-rebalance workflow then verified two-member ownership and
+record delivery from fresh external projects. Kafka 3.7.2 classic passed in
+[`31736939236`](https://github.com/TaeeunKil/kafrust/actions/runs/31736939236),
+and Kafka 4.3.1 KIP-848 passed in
+[`31736362411`](https://github.com/TaeeunKil/kafrust/actions/runs/31736362411).
+Both runs observed disjoint ownership of all six topic partitions and consumed
+the partition records through the published `0.2.28` artifact. These are
+representative two-member workloads, not every assignor or failure mode.
+
 The following current-main live run
 [`31719615947`](https://github.com/TaeeunKil/kafrust/actions/runs/31719615947)
 also passed the controlled classic consumer-group combined-fault gate in the
