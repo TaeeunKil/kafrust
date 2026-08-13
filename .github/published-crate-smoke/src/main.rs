@@ -332,7 +332,10 @@ async fn main() -> kafrust::Result<()> {
         ));
     }
 
-    let mut group = configure_security!(ConsumerGroupConfig::new([bootstrap_servers], group_id)
+    let mut group = configure_security!(ConsumerGroupConfig::new(
+        [bootstrap_servers.clone()],
+        group_id.clone(),
+    )
         .client_id("kafrust-published-smoke-group"))
     .group_protocol(group_protocol)
     .max_retries(5)
@@ -350,10 +353,59 @@ async fn main() -> kafrust::Result<()> {
             "published crate consumer group did not read the produced record",
         ));
     }
+
+    let committed_record = group_records
+        .iter()
+        .find(|record| record.topic() == topic && record.value() == Some(value.as_bytes()))
+        .ok_or(Error::Unsupported(
+            "published crate consumer group record was not available for offset commit",
+        ))?;
+    let committed_offset = committed_record.offset();
+    group.commit_record(committed_record)?;
+    group.commit_queued_offsets().await?;
+
+    let restored_value = format!("{value}-after-commit");
+    let restored_metadata = producer
+        .send(
+            ProducerRecord::to(topic.clone())
+                .partition(0)
+                .value(restored_value.as_bytes()),
+        )
+        .await?;
     group.leave().await?;
 
+    let mut restored_group = configure_security!(ConsumerGroupConfig::new(
+        [bootstrap_servers],
+        group_id,
+    )
+        .client_id("kafrust-published-smoke-group-restore"))
+    .group_protocol(group_protocol)
+    .max_retries(5)
+    .max_poll_records(10)
+    .offset_reset_policy(OffsetResetPolicy::Earliest)
+    .subscribe(topic.clone())
+    .join()
+    .await?;
+    let restored_records = restored_group.poll().await?;
+    if restored_records.iter().any(|record| {
+        record.topic() == topic
+            && record.partition() == committed_record.partition()
+            && record.offset() == committed_offset
+            && record.value() == Some(value.as_bytes())
+    }) || !restored_records.iter().any(|record| {
+        record.topic() == topic
+            && record.partition() == restored_metadata.partition()
+            && record.offset() == restored_metadata.offset()
+            && record.value() == Some(restored_value.as_bytes())
+    }) {
+        return Err(Error::Unsupported(
+            "published crate consumer group did not restore from its committed offset",
+        ));
+    }
+    restored_group.leave().await?;
+
     println!(
-        "published kafrust verified admin cluster/topic lifecycle, idempotent producer, transaction commit/abort, read_committed, direct consumer, and group {}-{}@{}",
+        "published kafrust verified admin cluster/topic lifecycle, idempotent producer, transaction commit/abort, read_committed, direct consumer, group read, group commit/restore, and {}-{}@{}",
         metadata.topic(),
         metadata.partition(),
         metadata.offset()
