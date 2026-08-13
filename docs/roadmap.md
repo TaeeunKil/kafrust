@@ -1913,3 +1913,10 @@ Implemented evidence:
   refresh metadata under the bounded fetch retry policy. Automatic offset
   truncation correction and group-level recovery orchestration remain separate
   release gates.
+- Release `v0.2.17` published leader-epoch propagation through consumer fetch
+  state after protocol-first package verification, staged all-feature
+  documentation builds, a fresh external project compile with `tls` and all
+  features, crates.io resolution, and HTTP 200 responses from both docs.rs
+  pages. The complete 17-job live matrix passed on the release preparation
+  commit in
+  [`31660184647`](https://github.com/TaeeunKil/kafrust/actions/runs/31660184647).
