@@ -136,9 +136,11 @@ the default smoke gate.
 
 The current development line also implements broker-local DescribeLogDirs v1-v5
 negotiation with typed replica size, offset lag, future-log, volume-capacity,
-and cordoned-state fields. Focused wire and injected-broker tests pass, and the
-multi-broker workflow includes the filtered example. This remains an
-implementation-level claim until the new live run completes; secured broker
+and cordoned-state fields. Focused wire and injected-broker tests pass. The
+Kafka 3.7.2 three-broker filtered query returned successful responses from all
+three brokers, including `/tmp/kafka-logs` partition size and volume capacity,
+in run [`31682889124`](https://github.com/TaeeunKil/kafrust/actions/runs/31682889124).
+This qualifies plaintext broker routing and response decoding; secured broker
 coverage is a separate qualification.
 
 Release `v0.2.19` additionally qualifies Fetch v12 forwarding of the last
