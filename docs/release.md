@@ -369,6 +369,17 @@ producer recovery plus same-group post-failover consumption. This qualifies a
 representative combined fault, not repeated faults, every security mechanism,
 or the complete 1.0 failure matrix.
 
+The published secured transaction workflow also passed coordinator-stop
+recovery for Kafka 3.7.2 in
+[`31741012713`](https://github.com/TaeeunKil/kafrust/actions/runs/31741012713)
+and Kafka 4.3.1 in
+[`31741137784`](https://github.com/TaeeunKil/kafrust/actions/runs/31741137784).
+Each fresh external project opened a transaction over SASL_SSL/SCRAM-SHA-256,
+stopped the discovered transaction coordinator, committed through the
+replacement, and verified the result with an authenticated `ReadCommitted`
+consumer. This qualifies secured coordinator-stop recovery, not every
+ambiguous outcome, fencing, repeated-fault, or throughput workload.
+
 The following current-main live run
 [`31719615947`](https://github.com/TaeeunKil/kafrust/actions/runs/31719615947)
 also passed the controlled classic consumer-group combined-fault gate in the

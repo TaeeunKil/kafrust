@@ -2268,6 +2268,14 @@ Implemented evidence:
   after that broker was stopped during an open transaction, and verified the
   committed record through `ReadCommitted`. Ambiguous outcomes, fencing, and
   throughput workloads remain separate 1.0 gates.
+- The published secured transaction workflow passed transaction coordinator
+  failover with `ReadCommitted` verification for Kafka 3.7.2 in
+  [`31741012713`](https://github.com/TaeeunKil/kafrust/actions/runs/31741012713)
+  and Kafka 4.3.1 in
+  [`31741137784`](https://github.com/TaeeunKil/kafrust/actions/runs/31741137784).
+  Both fresh external projects opened and committed through SASL_SSL/SCRAM-
+  SHA-256 after stopping the discovered coordinator. Ambiguous outcomes,
+  fencing, repeated faults, and throughput remain separate 1.0 gates.
 - The published secured multi-broker workflow passed both representative
   security and group-protocol combinations. Kafka 3.7.2 classic passed in
   [`31738997447`](https://github.com/TaeeunKil/kafrust/actions/runs/31738997447),
