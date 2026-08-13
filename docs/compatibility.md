@@ -398,8 +398,13 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
   The same lifecycle also passed over TLS with SCRAM-SHA-256 against Kafka
   3.7.2 in the complete matrix
   [`31689260396`](https://github.com/TaeeunKil/kafrust/actions/runs/31689260396).
-  This qualifies the documented single-broker SASL_SSL/SCRAM path; secured
-  multi-broker token failover remains a separate claim.
+  This qualifies the documented single-broker SASL_SSL/SCRAM path. The same
+  create, describe, renew, and immediate-expire lifecycle also passed over
+  three-broker SASL_SSL with SCRAM-SHA-256 in the complete matrix
+  [`31691911558`](https://github.com/TaeeunKil/kafrust/actions/runs/31691911558)
+  (job [`94420894174`](https://github.com/TaeeunKil/kafrust/actions/runs/31691911558/job/94420894174)).
+  Token-authenticated data-plane failover and post-transmission mutation
+  recovery remain separate claims.
 - The read-only `DescribeUserScramCredentials v0` path retries transport,
   timeout, and retryable top-level broker failures within the bounded
   `AdminClient` budget; focused mock-broker coverage verifies a dropped request

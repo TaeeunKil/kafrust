@@ -909,8 +909,13 @@ Implemented evidence:
   recovery remain separate qualification gates. The same lifecycle also
   passed over TLS with SCRAM-SHA-256 on Kafka 3.7.2 in the complete matrix
   [`31689260396`](https://github.com/TaeeunKil/kafrust/actions/runs/31689260396),
-  completing the documented single-broker SASL_SSL/SCRAM gate; secured
-  multi-broker token failover remains separate.
+  completing the documented single-broker SASL_SSL/SCRAM gate. The same
+  create, describe, renew, and immediate-expire lifecycle also passed over
+  three-broker SASL_SSL with SCRAM-SHA-256 in the complete matrix
+  [`31691911558`](https://github.com/TaeeunKil/kafrust/actions/runs/31691911558)
+  (job [`94420894174`](https://github.com/TaeeunKil/kafrust/actions/runs/31691911558/job/94420894174)).
+  Token-authenticated data-plane failover and post-transmission mutation
+  recovery remain separate claims.
 - DescribeGroups v1 discovers each requested group's coordinator independently
   and preserves state, protocol, member identity, raw protocol metadata and
   assignments, per-group errors, throttle time, tracing, and metrics.
