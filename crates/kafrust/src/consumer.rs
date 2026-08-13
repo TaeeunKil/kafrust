@@ -899,6 +899,7 @@ impl Consumer {
                             partition_index: partition,
                             current_leader_epoch,
                             fetch_offset: offset,
+                            last_fetched_epoch: current_leader_epoch,
                             max_partition_bytes: self.config.max_partition_bytes,
                             rack_id,
                         })
@@ -2137,9 +2138,13 @@ mod tests {
 
             let fetch_request = read_frame(&mut socket).await;
             assert_eq!(&fetch_request[0..4], &[0, 1, 0, 12]);
-            assert!(fetch_request
-                .windows(4)
-                .any(|window| window == [0, 0, 0, 8]));
+            assert_eq!(
+                fetch_request
+                    .windows(4)
+                    .filter(|window| *window == [0, 0, 0, 8])
+                    .count(),
+                2
+            );
             write_frame(&mut socket, &fetch_v12_response_frame(2, -1)).await;
         });
         let (client_stream, broker_stream) = tokio::io::duplex(64);
