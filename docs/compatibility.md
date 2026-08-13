@@ -9,7 +9,10 @@ focused tests. The classic and KIP-848 paths are separate selections through
 passes join, assignment, foreground/background heartbeat, v9 offset commit,
 v9 offset fetch, rejoin, and graceful leave behavior. The Kafka 4.3.1
 three-broker profile additionally verifies coordinator broker-stop recovery for
-the foreground group poll path.
+the foreground group poll path. The secured three-broker profile additionally
+passes a repeated coordinator broker-stop sequence, with separate groups
+recovering through different coordinators, in
+[`31695433295`](https://github.com/TaeeunKil/kafrust/actions/runs/31695433295).
 
 ## Current Compatibility Claim
 
@@ -685,6 +688,11 @@ with zero in-flight requests and buffered records.
   the group process completes through the remaining authenticated brokers, and
   the stopped broker is restarted afterward. This path passed in
   [`Live Kafka Smoke` run `31570924845`](https://github.com/TaeeunKil/kafrust/actions/runs/31570924845).
+- The same Kafka 4.3.1 three-broker SASL_SSL/SCRAM KIP-848 profile then ran a
+  second group through another coordinator broker-stop after the first broker
+  had recovered. Both groups completed their poll and leave paths in
+  [`Live Kafka Smoke` run `31695433295`](https://github.com/TaeeunKil/kafrust/actions/runs/31695433295),
+  extending the secured evidence beyond a single coordinator failure.
 - Consumer group assignments without committed offsets resolve
   `OffsetResetPolicy::Earliest` or `Latest` from the partition leader. The same
   policies recover a committed assignment whose offset is below the retained

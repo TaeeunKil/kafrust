@@ -1747,10 +1747,13 @@ Implemented evidence:
   listeners are verified before the active coordinator is stopped, and the
   group completes through the remaining authenticated brokers in
   [`Live Kafka Smoke` run `31570924845`](https://github.com/TaeeunKil/kafrust/actions/runs/31570924845).
-- Broader failure-injection coverage across secured and multi-broker KIP-848
-  deployments remains open beyond the verified Kafka 4.3.1
-  secured coordinator broker-stop paths, including repeated failures and
-  partition-leader faults.
+- The same Kafka 4.3.1 three-broker SASL_SSL/SCRAM KIP-848 profile then ran a
+  second group through another coordinator broker-stop after the first broker
+  had recovered. Both groups completed their poll and leave paths in
+  [`Live Kafka Smoke` run `31695433295`](https://github.com/TaeeunKil/kafrust/actions/runs/31695433295),
+  extending the secured evidence beyond a single coordinator failure.
+- Partition-leader faults and broader KIP-848 failure combinations remain open
+  beyond this repeated coordinator gate.
 - Dynamic and static members can explicitly leave through LeaveGroup v3,
   avoiding session-timeout cleanup after graceful shutdown.
 - Manual `Live Kafka Smoke` run `30065025169` passed graceful LeaveGroup v3 on
