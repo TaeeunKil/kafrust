@@ -214,7 +214,7 @@ async fn produce_rdkafka_batch(
     let deliveries = (0..count)
         .map(|_| {
             producer.send(
-                FutureRecord::to(topic)
+                FutureRecord::<(), [u8]>::to(topic)
                     .partition(PARTITION)
                     .payload(payload),
                 Timeout::Never,
