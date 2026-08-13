@@ -191,8 +191,11 @@ join or rejoin; it is not a broker-side subscription protocol. A synchronous
 `RebalanceListener` now covers the initial join after-snapshot, before/after
 rejoin snapshots, and KIP-848 assignment changes from foreground or background
 heartbeats. The current group implementation supports the classic protocol
-with range or round-robin assignment and an explicitly selected KIP-848
-consumer protocol path.
+with range, round-robin, eager sticky, or cooperative-sticky assignment and an
+explicitly selected KIP-848 consumer protocol path. Select
+`ConsumerGroupAssignmentStrategy::Sticky` for Kafka's eager sticky behavior;
+it is distinct from cooperative-sticky because transfers are applied in the
+same SyncGroup assignment.
 
 For Kafka-style automatic commits, enable
 `ConsumerGroupConfig::enable_auto_commit(true)`. The worker queues the current
@@ -343,6 +346,7 @@ an ambiguous request.
 | Idempotent producer | Candidate; broker-stop recovery is live-verified on the documented three-broker profile, but qualify target-specific ambiguous, fencing, and throughput failures |
 | Direct assigned-partition consumer | Candidate |
 | Classic range-assigned consumer group | Candidate with rebalance testing |
+| Classic eager sticky consumer group | Candidate; previous-assignment user data and focused balance/transfer tests are implemented; qualify target workload rebalance timing |
 | Explicit per-message commit queue | Candidate; `commit_record` coalesces per-partition offsets and `commit_queued_offsets` flushes them under the current generation. The record-fetch and OffsetCommit path is live-verified across Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1, including KIP-848 on 4.3.1, in [`Live Kafka Smoke` run `31561944247`](https://github.com/TaeeunKil/kafrust/actions/runs/31561944247). `spawn_commit_worker` adds bounded interval flush, retry, rejoin synchronization, and explicit shutdown; classic and KIP-848 worker paths are live-qualified in [`Live Kafka Smoke`, run `31563953123`](https://github.com/TaeeunKil/kafrust/actions/runs/31563953123). `split_partition_queue` now provides bounded direct/group per-partition delivery; focused tests and the Kafka 3.7.2 through 4.3.1 live examples in [`31566523106`](https://github.com/TaeeunKil/kafrust/actions/runs/31566523106), including the KIP-848 queue path in [`31566898432`](https://github.com/TaeeunKil/kafrust/actions/runs/31566898432), plus multi-broker coordinator/broker-stop failover in [`31567226615`](https://github.com/TaeeunKil/kafrust/actions/runs/31567226615), cover routing and full-queue position preservation |
 | Regex topic subscription | Verified for initial and explicit rejoin two-topic assignment on Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke, including the corrected KIP-848 path on 4.3.1, in [`Live Kafka Smoke` run `31561944247`](https://github.com/TaeeunKil/kafrust/actions/runs/31561944247); qualify topic-discovery permissions on secured target brokers |
 | TLS, SASL/PLAIN, or SASL/SCRAM-SHA-256 | Candidate on documented profiles |
@@ -352,6 +356,7 @@ an ambiguous request.
 | Non-Tokio runtime or synchronous client | Blocked |
 | Custom partitioner | Candidate; `ProducerConfig::partitioner` covers records without an explicit partition across immediate, batch, and buffered paths |
 | Rebalance callback | Candidate; `RebalanceListener` exposes synchronous initial-join, before/after rejoin, and foreground/background KIP-848 assignment snapshots; qualify target callback timing and cancellation behavior |
+| Classic `sticky` assignor | Candidate; Subscription v0 previous-assignment user data accepts Kafka's v0/v1 schemas and applies eager transfers; qualify target workload callbacks and timing |
 | `cooperative-sticky` assignor and consumer group protocol selection | Candidate on the verified Kafka 3.7.2 three-broker transfer and failure profiles; qualify target workload callbacks and timing |
 | KIP-848 consumer group protocol (`ConsumerGroupHeartbeat`) | Candidate on the verified Kafka 4.3.1 PLAINTEXT profiles, including assignment, foreground/background heartbeat, rejoin, OffsetFetch v9, OffsetCommit v9, leave, and three-broker coordinator broker-stop recovery in [`Live Kafka Smoke` run `31557534371`](https://github.com/TaeeunKil/kafrust/actions/runs/31557534371); qualify target broker and broader failure workloads before production migration |
 | Full librdkafka config passthrough | Blocked by design |

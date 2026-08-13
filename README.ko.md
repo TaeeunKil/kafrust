@@ -192,7 +192,8 @@ async fn main() -> kafrust::Result<()> {
 ### 컨슈머 그룹
 
 현재 consumer group API는 join, sync, heartbeat, poll, offset commit을 지원하는
-알파 classic consumer group 경로입니다.
+알파 classic consumer group 경로입니다. range, round-robin, eager sticky,
+cooperative-sticky assignor와 KIP-848 consumer protocol을 제공합니다.
 
 ```rust
 use kafrust::ConsumerGroupConfig;
@@ -228,7 +229,7 @@ kafrust의 호환성 주장은 실제 broker로 검증된 동작으로 제한합
 - Kafka 3.7.2 multi-broker, TLS, SASL_PLAINTEXT, SASL_SSL/SCRAM 프로필.
 - producer, batch/buffered delivery, 네 가지 compression, idempotence,
   transactions, `read_committed` consumer.
-- classic consumer group, cooperative rebalance, KIP-848 consumer protocol,
+- classic consumer group, sticky/cooperative rebalance, KIP-848 consumer protocol,
   explicit/automatic commit, position and queue controls.
 - typed topic/config/group/ACL/quota/SCRAM/reassignment/offset Admin API.
 

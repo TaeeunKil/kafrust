@@ -1,6 +1,6 @@
 # Consumer Group Direction
 
-Consumer groups are being added incrementally after the direct consumer path. The alpha path supports the classic consumer group protocol with range, round-robin, and an opt-in cooperative-sticky assignor, plus a selectable KIP-848 consumer protocol path.
+Consumer groups are being added incrementally after the direct consumer path. The alpha path supports the classic consumer group protocol with range, round-robin, eager sticky, and an opt-in cooperative-sticky assignor, plus a selectable KIP-848 consumer protocol path.
 
 ```rust
 use kafrust::ConsumerGroupConfig;
@@ -93,12 +93,17 @@ assigned partitions, and builds a direct `Consumer` for fetching records.
 
 The alpha path uses the classic consumer group protocol. Range assignment is
 the default; `ConsumerGroupConfig::assignment_strategy` can select
-`ConsumerGroupAssignmentStrategy::RoundRobin` or
-`ConsumerGroupAssignmentStrategy::CooperativeSticky`. Cooperative sticky
-members advertise Subscription v1 owned partitions and preserve valid
-ownership across staged transfers. Multi-member transfer, member-loss, and
-rollback behavior are live-qualified in the documented three-broker profile,
-while target-workload callback timing still requires qualification.
+`ConsumerGroupAssignmentStrategy::RoundRobin`,
+`ConsumerGroupAssignmentStrategy::Sticky`, or
+`ConsumerGroupAssignmentStrategy::CooperativeSticky`. Eager sticky members
+advertise the previous assignment in Subscription v0 `user_data`, preserve
+valid ownership where possible, rebalance to a deterministic near-even
+assignment, and apply transfers in the current SyncGroup response. Cooperative
+sticky members instead advertise Subscription v1 owned partitions and stage
+transfers across rejoin cycles. The two strategies must not be mixed in one
+classic group. Multi-member cooperative transfer, member-loss, and rollback
+behavior are live-qualified in the documented three-broker profile, while
+target-workload callback timing still requires qualification.
 Assignment state keeps Kafka group ID, member ID, generation ID, topic,
 partition, and next offset visible through the public API.
 
@@ -392,6 +397,13 @@ Current implementation status:
 - Internal range assignment can compute SyncGroup assignment payloads from JoinGroup member subscriptions and topic metadata.
 - Internal round-robin assignment follows sorted member/topic/partition order
   and skips members that do not subscribe to the current topic.
+- Sticky Subscription v0 `user_data` encoding accepts Kafka's version 0 and
+  version 1 previous-assignment schemas, keeps generation metadata when
+  available, and applies eager transfers in the current assignment. Leader-side
+  subscription parsing accepts the append-only classic envelope through
+  versions 0, 1, 2, and 3, including generation and rack fields. Focused tests
+  cover the wire bytes, generation roundtrip, versioned envelope, balance, and
+  immediate transfer behavior.
 - Cooperative-sticky Subscription v1 encoding and staged ownership transfer
   are implemented with focused assignment tests. Kafka 3.7.2 three-broker
   protocol/example coverage passed in `Live Kafka Smoke` run `31464021305`;
@@ -436,7 +448,8 @@ KAFRUST_BOOTSTRAP_SERVERS=localhost:9092 KAFRUST_GROUP_ID=orders-group KAFRUST_T
 
 Add `KAFRUST_GROUP_INSTANCE_ID=orders-reader-1` to run the example as a static
 group member. Set `KAFRUST_ASSIGNMENT_STRATEGY=roundrobin` to select the
-round-robin assignor.
+round-robin assignor, `sticky` to select Kafka's eager sticky assignor, or
+`cooperative-sticky` to select the cooperative assignor.
 
 Run the earliest/latest reset verification example:
 

@@ -321,6 +321,14 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
   [`31474626799`](https://github.com/TaeeunKil/kafrust/actions/runs/31474626799)
   additionally passed multi-member ownership transfer, transient-member
   rollback, and member-loss recovery.
+- The classic eager `sticky` strategy now encodes Kafka's previous-assignment
+  Subscription v0 `user_data` schema, accepts both the legacy v0 and generation-
+  carrying v1 user-data forms, preserves valid ownership, and applies transfers
+  in the current SyncGroup assignment. Leader-side classic subscription parsing
+  accepts the append-only v0-v3 envelope used by Kafka 3.7 through current
+  clients. Focused tests cover wire bytes, generation metadata, balancing, and
+  immediate transfer; a live broker matrix for this new strategy remains
+  pending and is not claimed here.
 - Produce `acks=0` encodes the requested Produce API version, writes and flushes
   the request, and returns unknown-offset metadata without attempting to read a
   response. Immediate and batch examples passed against Kafka 3.7.2, 3.8.1,

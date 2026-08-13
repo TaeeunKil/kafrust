@@ -321,11 +321,12 @@ including live Fetch v12 requests and preferred-replica routing.
 ### Consumer Group
 
 The current consumer group API is an alpha classic or KIP-848 consumer group
-path with dynamic or static membership, range, round-robin, or opt-in
-cooperative-sticky assignment for classic groups, join, heartbeat, poll,
+path with dynamic or static membership, range, round-robin, eager sticky, or
+opt-in cooperative-sticky assignment for classic groups, join, heartbeat, poll,
 offset fetch/commit, explicit leave, and earliest/latest reset for partitions
 that have no committed offset. The
-cooperative-sticky path includes protocol, staged assignment, multi-member
+the sticky path uses Kafka's previous-assignment user data and eager transfer;
+the cooperative-sticky path includes protocol, staged assignment, multi-member
 ownership transfer, transient-member rollback, and member-loss recovery. These
 cooperative failure paths are live-verified in the Kafka `3.7.2` three-broker
 profile. The KIP-848 path, including flexible offset fetch/commit and background

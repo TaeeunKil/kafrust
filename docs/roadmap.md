@@ -1955,3 +1955,13 @@ Implemented evidence:
   and HTTP 200 responses from both docs.rs pages. The complete 17-job live
   matrix remained green in
   [`31665016772`](https://github.com/TaeeunKil/kafrust/actions/runs/31665016772).
+- Classic eager `StickyAssignor` support now has a public
+  `ConsumerGroupAssignmentStrategy::Sticky` variant. JoinGroup uses
+  Subscription v0 `user_data` with Kafka's previous-assignment schema,
+  decodes both legacy v0 and generation-carrying v1 data, preserves valid
+  ownership, and applies transfers eagerly in the current SyncGroup result.
+  Leader-side parsing also accepts the append-only classic subscription
+  envelope through v3. Focused tests cover wire bytes, generation metadata,
+  versioned envelopes, balancing, and member transfer. A live multi-member
+  sticky matrix remains a release gate and is intentionally not claimed by
+  this local implementation milestone.

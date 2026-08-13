@@ -1178,6 +1178,12 @@ jobs:
           KAFRUST_GROUP_ID: kafrust-smoke-cooperative-multi-${{ github.run_id }}
         run: cargo run -p kafrust --example consumer_group_cooperative_multi_member
 
+      - name: Run multi-member eager sticky transfer and recovery example
+        env:
+          KAFRUST_ASSIGNMENT_STRATEGY: sticky
+          KAFRUST_GROUP_ID: kafrust-smoke-sticky-multi-${{ github.run_id }}
+        run: cargo run -p kafrust --example consumer_group_cooperative_multi_member
+
       - name: Run multi-broker admin describe group example
         run: cargo run -p kafrust --example admin_describe_group
 

@@ -19,11 +19,12 @@ async fn main() -> kafrust::Result<()> {
             config.assignment_strategy(match strategy.to_ascii_lowercase().as_str() {
                 "range" => ConsumerGroupAssignmentStrategy::Range,
                 "roundrobin" | "round-robin" => ConsumerGroupAssignmentStrategy::RoundRobin,
+                "sticky" => ConsumerGroupAssignmentStrategy::Sticky,
                 "cooperative-sticky" | "cooperative_sticky" => {
                     ConsumerGroupAssignmentStrategy::CooperativeSticky
                 }
                 _ => return Err(Error::Unsupported(
-                    "KAFRUST_ASSIGNMENT_STRATEGY must be range, roundrobin, or cooperative-sticky",
+                    "KAFRUST_ASSIGNMENT_STRATEGY must be range, roundrobin, sticky, or cooperative-sticky",
                 )),
             });
     }

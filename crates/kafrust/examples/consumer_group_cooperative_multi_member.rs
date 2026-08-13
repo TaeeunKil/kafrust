@@ -25,6 +25,21 @@ async fn run_scenario() -> kafrust::Result<()> {
     let topic = std::env::var("KAFRUST_TOPIC").unwrap_or_else(|_| "kafrust-smoke".to_owned());
     let before_rebalances = Arc::new(AtomicUsize::new(0));
     let after_rebalances = Arc::new(AtomicUsize::new(0));
+    let assignment_strategy = match std::env::var("KAFRUST_ASSIGNMENT_STRATEGY")
+        .unwrap_or_else(|_| "cooperative-sticky".to_owned())
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "sticky" => ConsumerGroupAssignmentStrategy::Sticky,
+        "cooperative-sticky" | "cooperative_sticky" => {
+            ConsumerGroupAssignmentStrategy::CooperativeSticky
+        }
+        _ => {
+            return Err(Error::Unsupported(
+                "KAFRUST_ASSIGNMENT_STRATEGY must be sticky or cooperative-sticky",
+            ))
+        }
+    };
     let before_callback = before_rebalances.clone();
     let after_callback = after_rebalances.clone();
     let config = common::apply_security(
@@ -33,7 +48,7 @@ async fn run_scenario() -> kafrust::Result<()> {
             .session_timeout_ms(6_000)
             .rebalance_timeout_ms(10_000)
             .max_wait_ms(100)
-            .assignment_strategy(ConsumerGroupAssignmentStrategy::CooperativeSticky)
+            .assignment_strategy(assignment_strategy)
             .rebalance_listener(move |event| {
                 match event.phase() {
                     RebalancePhase::Before => {

@@ -24,6 +24,7 @@ use kafrust_protocol::api::offset_fetch::{
     OffsetFetchPartitionResponse, OffsetFetchTopic, OffsetFetchTopicResponse, OffsetFetchTopicV9,
 };
 use kafrust_protocol::api::sync_group::SyncGroupAssignment;
+use kafrust_protocol::codec::{Decoder, Encoder};
 use kafrust_protocol::consumer_group::{
     ConsumerProtocolAssignmentV0, ConsumerProtocolSubscriptionV0, ConsumerProtocolSubscriptionV1,
     ConsumerProtocolTopicAssignment,
@@ -47,6 +48,7 @@ use tracing::{debug, Instrument};
 const PROTOCOL_TYPE: &str = "consumer";
 const RANGE_PROTOCOL: &str = "range";
 const ROUND_ROBIN_PROTOCOL: &str = "roundrobin";
+const STICKY_PROTOCOL: &str = "sticky";
 const COOPERATIVE_STICKY_PROTOCOL: &str = "cooperative-sticky";
 const GROUP_JOIN_RETRY_BACKOFF: Duration = Duration::from_millis(50);
 const GROUP_JOIN_MAX_RETRY_BACKOFF: Duration = Duration::from_secs(1);
@@ -141,6 +143,8 @@ pub enum ConsumerGroupAssignmentStrategy {
     Range,
     /// Distribute all subscribed topic partitions cyclically across members.
     RoundRobin,
+    /// Preserve existing ownership where possible and eagerly transfer partitions.
+    Sticky,
     /// Preserve existing ownership where possible and transfer partitions cooperatively.
     CooperativeSticky,
 }
@@ -150,6 +154,7 @@ impl ConsumerGroupAssignmentStrategy {
         match self {
             Self::Range => RANGE_PROTOCOL,
             Self::RoundRobin => ROUND_ROBIN_PROTOCOL,
+            Self::Sticky => STICKY_PROTOCOL,
             Self::CooperativeSticky => COOPERATIVE_STICKY_PROTOCOL,
         }
     }
@@ -655,13 +660,14 @@ impl ConsumerGroupConfig {
         self,
         owned_partitions: Vec<ConsumerProtocolTopicAssignment>,
     ) -> Result<ConsumerGroup> {
-        self.join_with_member_id(owned_partitions, None).await
+        self.join_with_member_id(owned_partitions, None, None).await
     }
 
     async fn join_with_member_id(
         self,
         owned_partitions: Vec<ConsumerProtocolTopicAssignment>,
         member_id: Option<String>,
+        previous_generation: Option<i32>,
     ) -> Result<ConsumerGroup> {
         if !self.has_subscription() {
             return Err(Error::Unsupported("consumer group without subscriptions"));
@@ -693,7 +699,20 @@ impl ConsumerGroupConfig {
 
             let coordinator_addr = coordinator_addr(&coordinator);
             let mut coordinator_client = self.client.connect_broker(coordinator_addr).await?;
+            let is_rejoin = member_id.is_some();
             let subscription = match self.assignment_strategy {
+                ConsumerGroupAssignmentStrategy::Sticky => ConsumerProtocolSubscriptionV0 {
+                    topics: topics.clone(),
+                    user_data: if is_rejoin {
+                        Some(encode_sticky_user_data(
+                            &owned_partitions,
+                            previous_generation,
+                        )?)
+                    } else {
+                        None
+                    },
+                }
+                .encode()?,
                 ConsumerGroupAssignmentStrategy::CooperativeSticky => {
                     ConsumerProtocolSubscriptionV1 {
                         topics: topics.clone(),
@@ -713,7 +732,6 @@ impl ConsumerGroupConfig {
                 name: self.assignment_strategy.protocol_name().to_owned(),
                 metadata: subscription,
             }];
-            let is_rejoin = member_id.is_some();
             let requested_member_id = member_id.take().unwrap_or_default();
             let joined = if let Some(group_instance_id) = &self.group_instance_id {
                 let response = coordinator_client
@@ -2341,7 +2359,11 @@ impl ConsumerGroup {
         let mut joined = self
             .config
             .clone()
-            .join_with_member_id(owned_partitions, Some(self.member_id.clone()))
+            .join_with_member_id(
+                owned_partitions,
+                Some(self.member_id.clone()),
+                Some(self.generation_id),
+            )
             .await?;
         for (topic, partition) in paused {
             if joined.consumer.position(&topic, partition).is_some() {
@@ -2865,11 +2887,70 @@ fn assignments_for_strategy(
     match protocol_name {
         RANGE_PROTOCOL => range_assignments(members, metadata),
         ROUND_ROBIN_PROTOCOL => round_robin_assignments(members, metadata),
+        STICKY_PROTOCOL => sticky_assignments(members, metadata),
         COOPERATIVE_STICKY_PROTOCOL => cooperative_sticky_assignments(members, metadata),
         _ => Err(Error::Unsupported(
             "consumer group selected an unsupported assignment strategy",
         )),
     }
+}
+
+#[derive(Debug, Default)]
+struct ClassicSubscription {
+    topics: Vec<String>,
+    user_data: Option<Vec<u8>>,
+    owned_partitions: Vec<ConsumerProtocolTopicAssignment>,
+    generation: Option<i32>,
+}
+
+/// Decodes the append-only classic consumer subscription envelope.
+///
+/// Kafka 3.7 added generation metadata as version 2, and newer clients add
+/// rack metadata after it. The assignor-specific sticky data remains inside
+/// `user_data`, so unknown future versions can still be read as long as they
+/// preserve the existing field order.
+fn decode_classic_subscription(bytes: &[u8]) -> Result<ClassicSubscription> {
+    let mut decoder = Decoder::new(bytes);
+    let version = decoder.read_i16()?;
+    if version < 0 {
+        return Err(Error::Unsupported(
+            "consumer group subscription has an invalid version",
+        ));
+    }
+
+    let topics = decoder
+        .read_array("consumer group subscription topics", Decoder::read_string)?
+        .unwrap_or_default();
+    let user_data = decoder.read_nullable_bytes()?;
+    let owned_partitions = if version >= 1 {
+        decoder
+            .read_array("consumer group subscription owned partitions", |decoder| {
+                let topic = decoder.read_string()?;
+                let partitions = decoder
+                    .read_array("consumer group subscription partitions", Decoder::read_i32)?
+                    .unwrap_or_default();
+                Ok(ConsumerProtocolTopicAssignment { topic, partitions })
+            })?
+            .unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+    let generation = if version >= 2 {
+        let generation = decoder.read_i32()?;
+        (generation >= 0).then_some(generation)
+    } else {
+        None
+    };
+    if version >= 3 {
+        let _rack_id = decoder.read_nullable_string()?;
+    }
+
+    Ok(ClassicSubscription {
+        topics,
+        user_data,
+        owned_partitions,
+        generation,
+    })
 }
 
 pub(crate) fn range_assignments(
@@ -2878,7 +2959,7 @@ pub(crate) fn range_assignments(
 ) -> Result<Vec<SyncGroupAssignment>> {
     let mut subscriptions_by_topic = BTreeMap::<String, Vec<String>>::new();
     for member in members {
-        let subscription = ConsumerProtocolSubscriptionV0::decode(&member.metadata)?;
+        let subscription = decode_classic_subscription(&member.metadata)?;
         for topic in &subscription.topics {
             subscriptions_by_topic
                 .entry(topic.clone())
@@ -2915,7 +2996,7 @@ pub(crate) fn round_robin_assignments(
     let mut subscriptions = BTreeMap::<String, BTreeSet<String>>::new();
     let mut subscribed_topics = BTreeSet::new();
     for member in members {
-        let subscription = ConsumerProtocolSubscriptionV0::decode(&member.metadata)?;
+        let subscription = decode_classic_subscription(&member.metadata)?;
         let topics = subscription.topics.into_iter().collect::<BTreeSet<_>>();
         subscribed_topics.extend(topics.iter().cloned());
         subscriptions.insert(member.member_id.clone(), topics);
@@ -2956,6 +3037,44 @@ pub(crate) fn round_robin_assignments(
     encode_member_assignments(assigned_by_member)
 }
 
+/// Builds a deterministic eager sticky assignment from Kafka assignor user data.
+pub(crate) fn sticky_assignments(
+    members: &[JoinGroupMember],
+    metadata: &MetadataResponseV1,
+) -> Result<Vec<SyncGroupAssignment>> {
+    let mut subscriptions = BTreeMap::<String, BTreeSet<String>>::new();
+    let mut owned_by_member = BTreeMap::<String, BTreeSet<(String, i32)>>::new();
+    let mut generations = BTreeMap::<String, i32>::new();
+
+    for member in members {
+        let subscription = decode_classic_subscription(&member.metadata)?;
+        let member_data = decode_sticky_user_data(subscription.user_data.as_deref());
+        subscriptions.insert(
+            member.member_id.clone(),
+            subscription.topics.into_iter().collect(),
+        );
+        owned_by_member.insert(
+            member.member_id.clone(),
+            member_data
+                .partitions
+                .into_iter()
+                .flat_map(|assignment| {
+                    assignment
+                        .partitions
+                        .into_iter()
+                        .map(move |partition| (assignment.topic.clone(), partition))
+                })
+                .collect(),
+        );
+        generations.insert(
+            member.member_id.clone(),
+            member_data.generation.unwrap_or(-1),
+        );
+    }
+
+    sticky_assignments_from_owned(subscriptions, owned_by_member, generations, metadata, false)
+}
+
 /// Builds a deterministic cooperative assignment that keeps valid owned
 /// partitions and stages only ownership transfers between active members.
 pub(crate) fn cooperative_sticky_assignments(
@@ -2964,8 +3083,9 @@ pub(crate) fn cooperative_sticky_assignments(
 ) -> Result<Vec<SyncGroupAssignment>> {
     let mut subscriptions = BTreeMap::<String, BTreeSet<String>>::new();
     let mut owned_by_member = BTreeMap::<String, BTreeSet<(String, i32)>>::new();
+    let mut generations = BTreeMap::<String, i32>::new();
     for member in members {
-        let subscription = ConsumerProtocolSubscriptionV1::decode(&member.metadata)?;
+        let subscription = decode_classic_subscription(&member.metadata)?;
         subscriptions.insert(
             member.member_id.clone(),
             subscription.topics.into_iter().collect(),
@@ -2983,8 +3103,22 @@ pub(crate) fn cooperative_sticky_assignments(
                 })
                 .collect(),
         );
+        generations.insert(
+            member.member_id.clone(),
+            subscription.generation.unwrap_or(-1),
+        );
     }
 
+    sticky_assignments_from_owned(subscriptions, owned_by_member, generations, metadata, true)
+}
+
+fn sticky_assignments_from_owned(
+    subscriptions: BTreeMap<String, BTreeSet<String>>,
+    owned_by_member: BTreeMap<String, BTreeSet<(String, i32)>>,
+    generations: BTreeMap<String, i32>,
+    metadata: &MetadataResponseV1,
+    cooperative: bool,
+) -> Result<Vec<SyncGroupAssignment>> {
     let mut assigned_by_member = subscriptions
         .keys()
         .map(|member_id| (member_id.clone(), BTreeMap::<String, Vec<i32>>::new()))
@@ -3005,8 +3139,13 @@ pub(crate) fn cooperative_sticky_assignments(
             if !available.contains(partition) {
                 continue;
             }
-            if owner_by_partition.contains_key(partition) {
-                continue;
+            if let Some(current_owner) = owner_by_partition.get(partition).cloned() {
+                let current_generation = generations.get(&current_owner).copied().unwrap_or(-1);
+                let member_generation = generations.get(member_id).copied().unwrap_or(-1);
+                if member_generation <= current_generation {
+                    continue;
+                }
+                remove_assignment(&mut assigned_by_member, &current_owner, partition);
             }
             owner_by_partition.insert(partition.clone(), member_id.clone());
             add_assignment(&mut assigned_by_member, member_id, partition);
@@ -3026,7 +3165,7 @@ pub(crate) fn cooperative_sticky_assignments(
             })
             .map(|(member_id, _)| member_id.clone())
             .ok_or(Error::Unsupported(
-                "cooperative assignor found no subscribed member",
+                "sticky assignor found no subscribed member",
             ))?;
         owner_by_partition.insert(partition.clone(), member_id.clone());
         add_assignment(&mut assigned_by_member, &member_id, &partition);
@@ -3038,24 +3177,92 @@ pub(crate) fn cooperative_sticky_assignments(
         &subscriptions,
     );
 
-    let mut transfers = BTreeSet::<(String, i32)>::new();
-    for (partition, new_owner) in &owner_by_partition {
-        if let Some(old_owner) = owned_by_member
-            .iter()
-            .find_map(|(member_id, owned)| owned.contains(partition).then_some(member_id))
-        {
-            if old_owner != new_owner && subscriptions.contains_key(old_owner) {
-                transfers.insert(partition.clone());
+    if cooperative {
+        let mut transfers = BTreeSet::<(String, i32)>::new();
+        for (partition, new_owner) in &owner_by_partition {
+            if let Some(old_owner) = owned_by_member
+                .iter()
+                .find_map(|(member_id, owned)| owned.contains(partition).then_some(member_id))
+            {
+                if old_owner != new_owner && subscriptions.contains_key(old_owner) {
+                    transfers.insert(partition.clone());
+                }
             }
         }
-    }
-    for partition in transfers {
-        if let Some(new_owner) = owner_by_partition.get(&partition) {
-            remove_assignment(&mut assigned_by_member, new_owner, &partition);
+        for partition in transfers {
+            if let Some(new_owner) = owner_by_partition.get(&partition) {
+                remove_assignment(&mut assigned_by_member, new_owner, &partition);
+            }
         }
     }
 
     encode_member_assignments(assigned_by_member)
+}
+
+#[derive(Debug, Default)]
+struct StickyMemberData {
+    partitions: Vec<ConsumerProtocolTopicAssignment>,
+    generation: Option<i32>,
+}
+
+fn encode_sticky_user_data(
+    owned_partitions: &[ConsumerProtocolTopicAssignment],
+    generation: Option<i32>,
+) -> Result<Vec<u8>> {
+    let mut encoder = Encoder::new();
+    encoder.write_array(Some(owned_partitions), |encoder, assignment| {
+        encoder.write_string(&assignment.topic)?;
+        encoder.write_array(
+            Some(assignment.partitions.as_slice()),
+            |encoder, partition| {
+                encoder.write_i32(*partition);
+                Ok(())
+            },
+        )
+    })?;
+    if let Some(generation) = generation {
+        encoder.write_i32(generation);
+    }
+    Ok(encoder.into_bytes())
+}
+
+fn decode_sticky_user_data(user_data: Option<&[u8]>) -> StickyMemberData {
+    let Some(user_data) = user_data else {
+        return StickyMemberData::default();
+    };
+
+    let decoded = (|| -> Result<StickyMemberData> {
+        let mut decoder = Decoder::new(user_data);
+        let partitions = decoder
+            .read_array("sticky assignor topics", |decoder| {
+                let topic = decoder.read_string()?;
+                let partitions = decoder
+                    .read_array("sticky assignor partitions", Decoder::read_i32)?
+                    .unwrap_or_default();
+                Ok(ConsumerProtocolTopicAssignment { topic, partitions })
+            })?
+            .unwrap_or_default();
+        let generation = if decoder.is_empty() {
+            None
+        } else {
+            Some(decoder.read_i32()?)
+        };
+        if !decoder.is_empty() {
+            return Err(Error::Unsupported("invalid sticky assignor user data"));
+        }
+        Ok(StickyMemberData {
+            partitions,
+            generation,
+        })
+    })();
+
+    match decoded {
+        Ok(member_data) => member_data,
+        Err(error) => {
+            debug!(error = %error, "ignoring malformed sticky assignor user data");
+            StickyMemberData::default()
+        }
+    }
 }
 
 fn balance_owned_assignments(
@@ -3214,7 +3421,7 @@ fn cooperative_assignment_requires_rejoin(
 ) -> Result<bool> {
     let mut owned_partitions = BTreeSet::<(String, i32)>::new();
     for member in members {
-        let subscription = ConsumerProtocolSubscriptionV1::decode(&member.metadata)?;
+        let subscription = decode_classic_subscription(&member.metadata)?;
         for owned in subscription.owned_partitions {
             for partition in owned.partitions {
                 owned_partitions.insert((owned.topic.clone(), partition));
@@ -4268,13 +4475,14 @@ mod tests {
     use super::{
         assignments_for_strategy, committed_offset, cooperative_assignment_requires_rejoin,
         cooperative_rejoin_required_for_assignment, cooperative_sticky_assignments,
+        decode_classic_subscription, decode_sticky_user_data, encode_sticky_user_data,
         group_retry_backoff, leave_group_response_error, list_offset, list_offsets_topics,
         member_id_after_join_error, offset_commit_response_error, offset_commit_topics,
         offset_commit_topics_v7, offset_commit_topics_v9, offset_fetch_topics,
         pending_commit_assignments, queue_commit_offset, range_assignments,
         record_consumer_heartbeat_response, round_robin_assignments,
         should_rejoin_after_background_heartbeat, should_rejoin_group, should_retry_commit_worker,
-        should_retry_consumer_join_transport, validate_commit_worker_interval,
+        should_retry_consumer_join_transport, sticky_assignments, validate_commit_worker_interval,
         validate_heartbeat_interval, CommitWorkerLink, CommitWorkerMembership, CommitWorkerState,
         ConsumerGroupAssignmentStrategy, ConsumerGroupConfig, ConsumerGroupHeartbeat,
         ConsumerGroupHeartbeatTopicPartitions, ConsumerGroupProtocol,
@@ -4298,6 +4506,7 @@ mod tests {
     use kafrust_protocol::api::offset_fetch::{
         OffsetFetchPartitionResponse, OffsetFetchTopicResponse,
     };
+    use kafrust_protocol::codec::Encoder;
     use kafrust_protocol::consumer_group::{
         ConsumerProtocolAssignmentV0, ConsumerProtocolSubscriptionV0,
         ConsumerProtocolSubscriptionV1, ConsumerProtocolTopicAssignment,
@@ -4818,6 +5027,142 @@ mod tests {
     }
 
     #[test]
+    fn assigns_partitions_with_eager_sticky_strategy() {
+        let members = vec![
+            sticky_member(
+                "member-a",
+                &["orders"],
+                vec![ConsumerProtocolTopicAssignment {
+                    topic: "orders".to_owned(),
+                    partitions: vec![0, 1],
+                }],
+                Some(4),
+            ),
+            sticky_member(
+                "member-b",
+                &["orders"],
+                vec![ConsumerProtocolTopicAssignment {
+                    topic: "orders".to_owned(),
+                    partitions: vec![2],
+                }],
+                Some(4),
+            ),
+            sticky_member("member-c", &["orders"], Vec::new(), Some(4)),
+        ];
+        let metadata = metadata_fixture("orders", &[0, 1, 2]);
+
+        let assignments = sticky_assignments(&members, &metadata).unwrap();
+
+        assert_eq!(assignments[0].member_id, "member-a");
+        assert_eq!(assignments[1].member_id, "member-b");
+        assert_eq!(assignments[2].member_id, "member-c");
+        let counts = assignments
+            .iter()
+            .map(|assignment| {
+                decode_assignment(&assignment.assignment).assignments[0]
+                    .partitions
+                    .len()
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(counts, vec![1, 1, 1]);
+    }
+
+    #[test]
+    fn eager_sticky_assignment_transfers_partitions_immediately() {
+        let members = vec![
+            sticky_member(
+                "member-a",
+                &["orders"],
+                vec![ConsumerProtocolTopicAssignment {
+                    topic: "orders".to_owned(),
+                    partitions: vec![0, 1],
+                }],
+                Some(8),
+            ),
+            sticky_member(
+                "member-c",
+                &["orders"],
+                vec![ConsumerProtocolTopicAssignment {
+                    topic: "orders".to_owned(),
+                    partitions: vec![2, 3],
+                }],
+                Some(8),
+            ),
+        ];
+        let metadata = metadata_fixture("orders", &[0, 1, 2, 3]);
+
+        let assignments = sticky_assignments(&members, &metadata).unwrap();
+
+        let member_a = decode_assignment(&assignments[0].assignment);
+        let member_c = decode_assignment(&assignments[1].assignment);
+        assert_eq!(member_a.assignments[0].partitions, vec![0, 1]);
+        assert_eq!(member_c.assignments[0].partitions, vec![2, 3]);
+    }
+
+    #[test]
+    fn sticky_user_data_round_trips_with_optional_generation() {
+        let owned = vec![ConsumerProtocolTopicAssignment {
+            topic: "orders".to_owned(),
+            partitions: vec![1, 3],
+        }];
+
+        let encoded = encode_sticky_user_data(&owned, Some(12)).unwrap();
+        let decoded = decode_sticky_user_data(Some(&encoded));
+
+        assert_eq!(decoded.partitions, owned);
+        assert_eq!(decoded.generation, Some(12));
+        assert_eq!(
+            encode_sticky_user_data(&owned, None).unwrap(),
+            [
+                0, 0, 0, 1, // topic assignment count
+                0, 6, b'o', b'r', b'd', b'e', b'r', b's', // topic
+                0, 0, 0, 2, // partition count
+                0, 0, 0, 1, // partition 1
+                0, 0, 0, 3, // partition 3
+            ]
+        );
+    }
+
+    #[test]
+    fn decodes_classic_subscription_versions_with_append_only_fields() {
+        let mut encoder = Encoder::new();
+        encoder.write_i16(3);
+        encoder
+            .write_array(Some(&["orders".to_owned()]), |encoder, topic| {
+                encoder.write_string(topic)
+            })
+            .unwrap();
+        encoder.write_nullable_bytes(Some(&[7, 8])).unwrap();
+        encoder
+            .write_array(
+                Some(&[ConsumerProtocolTopicAssignment {
+                    topic: "orders".to_owned(),
+                    partitions: vec![1, 3],
+                }]),
+                |encoder, assignment| {
+                    encoder.write_string(&assignment.topic)?;
+                    encoder.write_array(
+                        Some(assignment.partitions.as_slice()),
+                        |encoder, partition| {
+                            encoder.write_i32(*partition);
+                            Ok(())
+                        },
+                    )
+                },
+            )
+            .unwrap();
+        encoder.write_i32(12);
+        encoder.write_nullable_string(Some("rack-a")).unwrap();
+
+        let decoded = decode_classic_subscription(&encoder.into_bytes()).unwrap();
+
+        assert_eq!(decoded.topics, vec!["orders"]);
+        assert_eq!(decoded.user_data, Some(vec![7, 8]));
+        assert_eq!(decoded.owned_partitions[0].partitions, vec![1, 3]);
+        assert_eq!(decoded.generation, Some(12));
+    }
+
+    #[test]
     fn assigns_cooperatively_and_preserves_existing_ownership() {
         let members = vec![
             cooperative_member(
@@ -4946,8 +5291,8 @@ mod tests {
 
     #[test]
     fn rejects_unknown_selected_assignment_strategy() {
-        let error =
-            assignments_for_strategy("sticky", &[], &metadata_fixture("orders", &[0])).unwrap_err();
+        let error = assignments_for_strategy("unsupported", &[], &metadata_fixture("orders", &[0]))
+            .unwrap_err();
         assert!(matches!(
             error,
             Error::Unsupported("consumer group selected an unsupported assignment strategy")
@@ -5485,6 +5830,27 @@ mod tests {
             metadata: ConsumerProtocolSubscriptionV0 {
                 topics: topics.iter().map(|topic| (*topic).to_owned()).collect(),
                 user_data: None,
+            }
+            .encode()
+            .unwrap(),
+        }
+    }
+
+    fn sticky_member(
+        member_id: &str,
+        topics: &[&str],
+        owned_partitions: Vec<ConsumerProtocolTopicAssignment>,
+        generation: Option<i32>,
+    ) -> JoinGroupMember {
+        JoinGroupMember {
+            member_id: member_id.to_owned(),
+            metadata: ConsumerProtocolSubscriptionV0 {
+                topics: topics.iter().map(|topic| (*topic).to_owned()).collect(),
+                user_data: if owned_partitions.is_empty() && generation.is_none() {
+                    None
+                } else {
+                    Some(encode_sticky_user_data(&owned_partitions, generation).unwrap())
+                },
             }
             .encode()
             .unwrap(),
