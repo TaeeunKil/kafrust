@@ -82,19 +82,20 @@ async fn run() -> kafrust::Result<()> {
         ));
     }
 
+    let mut seen_records = BTreeSet::new();
     let second_join = tokio::spawn(
         config
             .client_id("kafrust-published-group-rebalance-second")
             .join(),
     );
     while !second_join.is_finished() {
-        first.poll().await?;
+        record_expected_records(&mut seen_records, &topic, first.poll().await?);
     }
     let mut second = second_join
         .await
         .map_err(|_| Error::Unsupported("published group smoke second member task failed"))??;
 
-    wait_for_two_member_coverage(&mut first, &mut second, &topic).await?;
+    wait_for_two_member_coverage(&mut first, &mut second, &topic, seen_records).await?;
     println!(
         "published group rebalance passed protocol={protocol:?} first={} second={} partitions={PARTITION_COUNT}",
         first.member_id(),
@@ -109,23 +110,15 @@ async fn wait_for_two_member_coverage(
     first: &mut ConsumerGroup,
     second: &mut ConsumerGroup,
     topic: &str,
+    mut seen_records: BTreeSet<(String, i32)>,
 ) -> kafrust::Result<()> {
     let expected: BTreeSet<_> = (0..PARTITION_COUNT)
         .map(|partition| (topic.to_owned(), partition))
         .collect();
-    let mut seen_records = BTreeSet::new();
-
     for _ in 0..POLL_ATTEMPTS {
         let (first_records, second_records) = poll_pair(first, second).await?;
-        for record in first_records.into_iter().chain(second_records) {
-            if record.topic() == topic
-                && record.value().is_some_and(|value| {
-                    value == format!("published-group-rebalance-{}", record.partition()).as_bytes()
-                })
-            {
-                seen_records.insert((record.topic().to_owned(), record.partition()));
-            }
-        }
+        record_expected_records(&mut seen_records, topic, first_records);
+        record_expected_records(&mut seen_records, topic, second_records);
 
         let first_partitions = assignment_keys(first);
         let second_partitions = assignment_keys(second);
@@ -152,6 +145,22 @@ async fn wait_for_two_member_coverage(
     Err(Error::Unsupported(
         "published group smoke members did not converge on disjoint ownership and records",
     ))
+}
+
+fn record_expected_records(
+    seen_records: &mut BTreeSet<(String, i32)>,
+    topic: &str,
+    records: impl IntoIterator<Item = kafrust::ConsumerRecord>,
+) {
+    for record in records {
+        if record.topic() == topic
+            && record.value().is_some_and(|value| {
+                value == format!("published-group-rebalance-{}", record.partition()).as_bytes()
+            })
+        {
+            seen_records.insert((record.topic().to_owned(), record.partition()));
+        }
+    }
 }
 
 async fn poll_pair(
