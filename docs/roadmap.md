@@ -1056,8 +1056,11 @@ Implemented evidence:
   per-partition broker outcomes, and negotiates the Kafka 3.7 baseline (v1) or
   flexible schema (v2). Focused wire and injected-broker tests pass. The
   mutating path retries only connection and ApiVersions discovery before
-  transmission and never replays an ambiguous send; disposable multi-broker
-  live qualification with a second `log.dirs` path is the next gate.
+  transmission and never replays an ambiguous send. The Kafka 3.7.2
+  three-broker matrix moved a disposable replica to `/tmp/kafka-logs-2` and
+  observed `future=false` completion in
+  [`31688516207`](https://github.com/TaeeunKil/kafrust/actions/runs/31688516207),
+  completing this configured-cluster gate.
 - The `admin_describe_group` example runs after the consumer-group smoke path
   across plaintext, multi-broker, TLS, SASL_PLAINTEXT, and SASL_SSL profiles.
 - The admin lifecycle example waits for asynchronous metadata propagation in
