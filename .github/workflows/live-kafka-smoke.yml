@@ -1703,6 +1703,84 @@ jobs:
             exit 1
           fi
 
+      - name: Run consumer-group leader-epoch failover
+        run: |
+          group_epoch_partition=""
+          for attempt in {1..120}; do
+            docker exec kafrust-kafka-multi-1 /opt/kafka/bin/kafka-topics.sh \
+              --bootstrap-server kafrust-kafka-multi-1:29092 \
+              --describe \
+              --topic "$KAFRUST_TOPIC" \
+              >/tmp/kafrust-group-epoch-topic.log 2>&1 || true
+            group_epoch_partition="$(awk '/Partition:/ && /Leader: 1/ { for (i = 1; i <= NF; i++) if ($i == "Partition:") { print $(i + 1); exit } }' /tmp/kafrust-group-epoch-topic.log)"
+            if [ -n "$group_epoch_partition" ]; then
+              break
+            fi
+            sleep 2
+          done
+
+          if [ -z "$group_epoch_partition" ]; then
+            cat /tmp/kafrust-group-epoch-topic.log || true
+            echo "could not find a partition led by broker 1 for group epoch failover"
+            exit 1
+          fi
+
+          group_epoch_log=/tmp/kafrust-consumer-group-epoch-failover.log
+          KAFRUST_GROUP_ID="kafrust-group-epoch-failover-${GITHUB_RUN_ID}" \
+          KAFRUST_PARTITION="$group_epoch_partition" \
+          KAFRUST_OFFSET=0 \
+          KAFRUST_FAILOVER_PAUSE_MS=30000 \
+          RUST_LOG=kafrust=debug \
+          cargo run -p kafrust --example consumer_group_epoch_failover \
+            >"$group_epoch_log" 2>&1 &
+          group_epoch_pid=$!
+
+          group_epoch_before_seen=""
+          for attempt in {1..90}; do
+            if grep -q "group epoch failover before polled" "$group_epoch_log"; then
+              group_epoch_before_seen=1
+              break
+            fi
+            if ! kill -0 "$group_epoch_pid" 2>/dev/null; then
+              cat "$group_epoch_log" || true
+              wait "$group_epoch_pid"
+            fi
+            sleep 1
+          done
+
+          if [ -z "$group_epoch_before_seen" ]; then
+            cat "$group_epoch_log" || true
+            echo "consumer group did not reach its pre-stop poll"
+            kill "$group_epoch_pid" 2>/dev/null || true
+            wait "$group_epoch_pid" || true
+            exit 1
+          fi
+
+          docker stop kafrust-kafka-multi-1
+          group_epoch_status=0
+          wait "$group_epoch_pid" || group_epoch_status=$?
+          cat "$group_epoch_log"
+
+          docker start kafrust-kafka-multi-1
+          group_epoch_broker_ready=""
+          for attempt in {1..120}; do
+            if docker exec kafrust-kafka-multi-1 /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server kafrust-kafka-multi-1:29092 \
+              >/tmp/kafrust-group-epoch-recovery.log 2>&1; then
+              group_epoch_broker_ready=1
+              break
+            fi
+            sleep 2
+          done
+
+          if [ "$group_epoch_status" -ne 0 ] || [ -z "$group_epoch_broker_ready" ] || \
+             ! grep -q "recovered fetch after leader epoch transition" "$group_epoch_log"; then
+            cat /tmp/kafrust-group-epoch-recovery.log || true
+            docker logs kafrust-kafka-multi-1
+            echo "consumer group did not prove automatic leader-epoch recovery"
+            exit 1
+          fi
+
       - name: Wait for multi-broker Kafka after broker stop
         run: |
           for attempt in {1..120}; do
