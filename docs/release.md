@@ -226,6 +226,14 @@ and its matching protocol crate from crates.io, and executed a producer to
 direct-consumer roundtrip against Kafka 3.7.2. This verifies published runtime
 linkage in addition to the earlier compile-only external smoke.
 
+The follow-up published runtime smoke
+[`31721075666`](https://github.com/TaeeunKil/kafrust/actions/runs/31721075666)
+expanded that external project to call `AdminClient::describe_cluster`, an
+idempotent producer, a direct consumer, and a classic consumer group against
+Kafka 3.7.2. It resolved both `0.2.27` crates from crates.io and passed without
+a workspace path dependency. This is runtime coverage for representative
+published APIs, not a replacement for the multi-broker and security matrices.
+
 The following current-main live run
 [`31719615947`](https://github.com/TaeeunKil/kafrust/actions/runs/31719615947)
 also passed the controlled classic consumer-group combined-fault gate in the
@@ -291,9 +299,10 @@ After both crates are published:
 
 3. Run the manually dispatched `Published Crate Smoke` workflow with the same
    version. It creates an external project under `$RUNNER_TEMP`, resolves the
-   dependency from crates.io, and executes a producer-to-direct-consumer
-   roundtrip against Kafka 3.7.2. This is stronger than a workspace compile
-   because the smoke project has no path dependency on the repository.
+   dependency from crates.io, and executes representative Admin, idempotent
+   producer, direct-consumer, and classic consumer-group paths against Kafka
+   3.7.2. This is stronger than a workspace compile because the smoke project
+   has no path dependency on the repository.
 4. Confirm docs.rs builds the published documentation for both crates.
 5. Push an annotated release tag and create a GitHub release.
 6. Run the `Live Kafka Smoke` workflow from GitHub Actions against `main`.

@@ -2151,6 +2151,13 @@ Implemented evidence:
   [`Published Crate Smoke`, run `31719041843`](https://github.com/TaeeunKil/kafrust/actions/runs/31719041843).
   The lockfile was checked for the requested published client version, so this
   gate does not rely on the workspace path dependency.
+- The published-crate runtime gate was expanded in
+  [`Published Crate Smoke`, run `31721075666`](https://github.com/TaeeunKil/kafrust/actions/runs/31721075666).
+  A fresh external project resolved `kafrust 0.2.27` and its matching protocol
+  crate from crates.io, then executed `AdminClient::describe_cluster`, an
+  idempotent producer, a direct consumer, and a classic consumer group against
+  Kafka 3.7.2. This qualifies the published public entry points at runtime;
+  it does not replace the broader multi-broker, security, and workload gates.
 - The complete 17-job run [`31719615947`](https://github.com/TaeeunKil/kafrust/actions/runs/31719615947)
   adds a controlled combined-fault gate in the Kafka 3.7.2 three-broker
   plaintext profile. It deliberately colocates the classic group coordinator
