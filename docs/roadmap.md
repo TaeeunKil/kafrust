@@ -2165,6 +2165,16 @@ Implemented evidence:
   record through the replacement leader, and verifies group rejoin plus
   consumption of that record. KIP-848, secured, and broader combined-fault
   combinations remain separate gates.
+- The complete 17-job run
+  [`31723663771`](https://github.com/TaeeunKil/kafrust/actions/runs/31723663771)
+  extends the combined-fault gate to Kafka 4.3.1 plaintext KIP-848. The
+  protocol-selectable combined example colocates the KIP-848 group coordinator
+  and target partition leader, stops that broker, produces through the
+  replacement leader, and verifies group rejoin plus post-failover record
+  consumption. The same run also keeps the Kafka 3.7.2 classic group gate
+  green after its check was narrowed to the observable post-failover record;
+  direct assigned-consumer leader-epoch marker coverage remains a separate
+  gate. Secured combined faults and broader fault matrices remain unclaimed.
 - Classic and KIP-848 consumer-group polling now have live leader-epoch
   recovery gates. The complete matrix in
   [`31702236760`](https://github.com/TaeeunKil/kafrust/actions/runs/31702236760)

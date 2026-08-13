@@ -462,6 +462,9 @@ The opt-in broker roundtrip test also covers coordinator discovery when `KAFRUST
 The group implementation also has a development-only combined-fault smoke path:
 the live matrix can place the target partition leader on the group coordinator,
 stop that one broker, and verify foreground rejoin plus consumption of a record
-written by the replacement leader. This is qualified for the Kafka 3.7.2
-plaintext classic protocol in [`Live Kafka Smoke` run `31719615947`](https://github.com/TaeeunKil/kafrust/actions/runs/31719615947).
-KIP-848 and secured combined-fault behavior are separate compatibility gates.
+written by the replacement leader. The Kafka 3.7.2 plaintext classic path and
+the Kafka 4.3.1 plaintext KIP-848 path are qualified in
+[`Live Kafka Smoke` run `31723663771`](https://github.com/TaeeunKil/kafrust/actions/runs/31723663771).
+The KIP-848 path uses the same protocol-selectable example with
+`KAFRUST_GROUP_PROTOCOL=consumer`. Secured combined-fault behavior remains a
+separate compatibility gate.

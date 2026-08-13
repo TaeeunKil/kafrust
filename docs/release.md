@@ -242,6 +242,15 @@ partition leader; after it was stopped, the replacement leader accepted a new
 record and the group rejoined to consume it. This remains a main-branch gate
 and does not modify the published `0.2.27` artifacts.
 
+The subsequent complete current-main matrix
+[`31723663771`](https://github.com/TaeeunKil/kafrust/actions/runs/31723663771)
+passed all 17 jobs after adding the protocol-selectable combined-fault path.
+It qualified the Kafka 4.3.1 plaintext KIP-848 case where the stopped broker
+was both group coordinator and target partition leader, and verified rejoin
+plus post-failover record consumption. The Kafka 3.7.2 classic group path also
+passed its observable post-failover record check. Secured combined faults and
+broader workload matrices remain outside the release claim.
+
 ## Optional Broker Checks
 
 The default test suite does not require a Kafka broker. Before an alpha tag, run the opt-in examples or tests against a local broker when practical:
