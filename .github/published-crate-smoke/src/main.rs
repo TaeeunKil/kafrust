@@ -1,8 +1,8 @@
 use std::env;
 
 use kafrust::{
-    Acks, AdminClient, ClientConfig, ConsumerConfig, ConsumerGroupConfig, Error, OffsetResetPolicy,
-    ProducerConfig, ProducerRecord,
+    Acks, AdminClient, ClientConfig, ConsumerConfig, ConsumerGroupConfig, ConsumerGroupProtocol,
+    Error, OffsetResetPolicy, ProducerConfig, ProducerRecord,
 };
 
 #[tokio::main]
@@ -15,6 +15,15 @@ async fn main() -> kafrust::Result<()> {
         .map_err(|_| Error::Unsupported("KAFRUST_GROUP_ID is required"))?;
     let value =
         env::var("KAFRUST_VALUE").map_err(|_| Error::Unsupported("KAFRUST_VALUE is required"))?;
+    let group_protocol = match env::var("KAFRUST_GROUP_PROTOCOL").as_deref() {
+        Ok("classic") | Err(_) => ConsumerGroupProtocol::Classic,
+        Ok("consumer") => ConsumerGroupProtocol::Consumer,
+        Ok(_) => {
+            return Err(Error::Unsupported(
+                "KAFRUST_GROUP_PROTOCOL must be classic or consumer",
+            ));
+        }
+    };
 
     let admin = AdminClient::new(
         ClientConfig::new([bootstrap_servers.clone()]).client_id("kafrust-published-smoke-admin"),
@@ -60,6 +69,7 @@ async fn main() -> kafrust::Result<()> {
 
     let mut group = ConsumerGroupConfig::new([bootstrap_servers], group_id)
         .client_id("kafrust-published-smoke-group")
+        .group_protocol(group_protocol)
         .max_retries(5)
         .max_poll_records(10)
         .offset_reset_policy(OffsetResetPolicy::Earliest)

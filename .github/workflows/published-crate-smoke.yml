@@ -14,9 +14,19 @@ env:
 
 jobs:
   published-crate:
-    name: Published kafrust ${{ inputs.kafrust_version }}
+    name: Published kafrust ${{ inputs.kafrust_version }} (${{ matrix.profile }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - profile: kafka-3.7.2-classic
+            kafka_version: 3.7.2
+            group_protocol: classic
+          - profile: kafka-4.3.1-kip848
+            kafka_version: 4.3.1
+            group_protocol: consumer
 
     steps:
       - name: Checkout
@@ -43,7 +53,7 @@ jobs:
             -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1 \
             -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1 \
             -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 \
-            apache/kafka:3.7.2
+            apache/kafka:${{ matrix.kafka_version }}
 
       - name: Wait for Kafka
         run: |
@@ -58,7 +68,7 @@ jobs:
 
       - name: Create external smoke topic
         env:
-          KAFRUST_TOPIC: kafrust-published-${{ github.run_id }}
+          KAFRUST_TOPIC: kafrust-published-${{ matrix.profile }}-${{ github.run_id }}
         run: |
           docker exec kafrust-published-kafka /opt/kafka/bin/kafka-topics.sh \
             --bootstrap-server localhost:9092 \
@@ -85,8 +95,9 @@ jobs:
 
       - name: Run published crate producer and consumer
         env:
-          KAFRUST_TOPIC: kafrust-published-${{ github.run_id }}
-          KAFRUST_GROUP_ID: kafrust-published-group-${{ github.run_id }}
+          KAFRUST_TOPIC: kafrust-published-${{ matrix.profile }}-${{ github.run_id }}
+          KAFRUST_GROUP_ID: kafrust-published-group-${{ matrix.profile }}-${{ github.run_id }}
+          KAFRUST_GROUP_PROTOCOL: ${{ matrix.group_protocol }}
           KAFRUST_VALUE: published-crate-${{ github.run_id }}
         run: |
           project_dir="$RUNNER_TEMP/kafrust-published-smoke"
