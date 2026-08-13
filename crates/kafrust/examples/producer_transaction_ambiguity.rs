@@ -27,15 +27,19 @@ async fn main() -> kafrust::Result<()> {
         )
         .await?;
     let outcome = ambiguous_producer.commit_transaction().await;
-    if !matches!(
-        outcome,
+    match outcome {
         Err(Error::TransactionOutcomeUnknown {
-            operation: "commit"
-        })
-    ) {
-        return Err(Error::Unsupported(
-            "EndTxn response drop did not produce an unknown commit outcome",
-        ));
+            operation: "commit",
+        }) => {}
+        Err(error) => {
+            eprintln!("unexpected commit outcome: {error:?}");
+            return Err(error);
+        }
+        Ok(()) => {
+            return Err(Error::Unsupported(
+                "EndTxn response drop did not produce an unknown commit outcome",
+            ));
+        }
     }
     if ambiguous_producer.transaction_status() != Some(kafrust::TransactionStatus::Defunct) {
         return Err(Error::Unsupported(

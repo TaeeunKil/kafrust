@@ -1518,12 +1518,14 @@ jobs:
       - name: Start EndTxn response-drop proxies
         run: |
           : > /tmp/kafrust-transaction-ambiguity-proxy-pids
+          rm -f /tmp/kafrust-transaction-ambiguity-endtxn-dropped
           for node in 1 2 3; do
             backend_port=$((29091 + node))
             proxy_port=$((39091 + node))
             python3 -u scripts/kafka_endtxn_drop_proxy.py \
               --listen-port "${proxy_port}" \
               --target-port "${backend_port}" \
+              --drop-marker /tmp/kafrust-transaction-ambiguity-endtxn-dropped \
               >/tmp/kafrust-transaction-ambiguity-proxy-${node}.log 2>&1 &
             echo "$!" >> /tmp/kafrust-transaction-ambiguity-proxy-pids
           done

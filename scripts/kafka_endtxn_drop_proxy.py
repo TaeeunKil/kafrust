@@ -3,6 +3,7 @@
 
 import argparse
 import asyncio
+from pathlib import Path
 import struct
 from typing import Optional
 
@@ -29,7 +30,7 @@ async def proxy_connection(
     client_writer: asyncio.StreamWriter,
     target_host: str,
     target_port: int,
-    end_txn_dropped: asyncio.Event,
+    drop_marker: Path,
 ) -> None:
     target_reader, target_writer = await asyncio.open_connection(target_host, target_port)
     request_api_keys: asyncio.Queue[int] = asyncio.Queue()
@@ -51,8 +52,7 @@ async def proxy_connection(
             if body is None:
                 return
             api_key = await request_api_keys.get()
-            if api_key == END_TXN_API_KEY and not end_txn_dropped.is_set():
-                end_txn_dropped.set()
+            if api_key == END_TXN_API_KEY and claim_drop_marker(drop_marker):
                 print("forwarded EndTxn request and dropped its response", flush=True)
                 return
             await write_frame(client_writer, body)
@@ -80,9 +80,8 @@ async def main() -> None:
     parser.add_argument("--listen-port", type=int, required=True)
     parser.add_argument("--target-host", default="127.0.0.1")
     parser.add_argument("--target-port", type=int, required=True)
+    parser.add_argument("--drop-marker", type=Path, required=True)
     args = parser.parse_args()
-
-    end_txn_dropped = asyncio.Event()
 
     async def accept_connection(
         reader: asyncio.StreamReader, writer: asyncio.StreamWriter
@@ -93,7 +92,7 @@ async def main() -> None:
                 writer,
                 args.target_host,
                 args.target_port,
-                end_txn_dropped,
+                args.drop_marker,
             )
         except (ConnectionError, asyncio.IncompleteReadError) as error:
             print(f"proxy connection closed: {error}", flush=True)
@@ -107,6 +106,14 @@ async def main() -> None:
     print(f"listening on {addresses}, forwarding to {args.target_host}:{args.target_port}", flush=True)
     async with server:
         await server.serve_forever()
+
+
+def claim_drop_marker(path: Path) -> bool:
+    try:
+        path.touch(exist_ok=False)
+    except FileExistsError:
+        return False
+    return True
 
 
 if __name__ == "__main__":
