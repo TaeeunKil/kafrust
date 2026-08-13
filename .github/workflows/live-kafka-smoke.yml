@@ -554,6 +554,19 @@ jobs:
 
       - name: Run KIP-848 consumer-group leader-epoch failover
         run: |
+          group_epoch_coordinator_log=/tmp/kafrust-kip848-group-epoch-coordinator.log
+          KAFRUST_GROUP_ID="kafrust-kip848-group-epoch-${GITHUB_RUN_ID}" \
+          KAFRUST_GROUP_PROTOCOL=consumer \
+          KAFRUST_FAILOVER_PAUSE_MS=0 \
+          cargo run -p kafrust --example consumer_group_failover \
+            >"$group_epoch_coordinator_log" 2>&1
+          group_epoch_coordinator="$(sed -n 's/.*coordinator node \([0-9][0-9]*\)$/\1/p' "$group_epoch_coordinator_log" | tail -n 1)"
+          if ! [[ "$group_epoch_coordinator" =~ ^[123]$ ]]; then
+            cat "$group_epoch_coordinator_log" || true
+            echo "KIP-848 group coordinator preflight did not report a valid broker"
+            exit 1
+          fi
+
           group_epoch_partition=""
           group_epoch_broker=""
           for attempt in {1..120}; do
@@ -562,7 +575,7 @@ jobs:
               --describe \
               --topic "$KAFRUST_TOPIC" \
               >/tmp/kafrust-kip848-group-epoch-topic.log 2>&1 || true
-            group_epoch_assignment="$(awk '/Partition:/ { partition=""; leader=""; for (i = 1; i <= NF; i++) { if ($i == "Partition:") partition=$(i + 1); if ($i == "Leader:") leader=$(i + 1) } if (partition != "" && leader ~ /^[123]$/) { print partition, leader; exit } }' /tmp/kafrust-kip848-group-epoch-topic.log)"
+            group_epoch_assignment="$(awk -v coordinator="$group_epoch_coordinator" '/Partition:/ { partition=""; leader=""; for (i = 1; i <= NF; i++) { if ($i == "Partition:") partition=$(i + 1); if ($i == "Leader:") leader=$(i + 1) } if (partition != "" && leader ~ /^[123]$/ && leader != coordinator) { print partition, leader; exit } }' /tmp/kafrust-kip848-group-epoch-topic.log)"
             if [ -n "$group_epoch_assignment" ]; then
               read -r group_epoch_partition group_epoch_broker <<<"$group_epoch_assignment"
               break
@@ -572,7 +585,7 @@ jobs:
 
           if [ -z "$group_epoch_partition" ] || ! [[ "$group_epoch_broker" =~ ^[123]$ ]]; then
             cat /tmp/kafrust-kip848-group-epoch-topic.log || true
-            echo "could not find a KIP-848 leader-epoch partition with an elected leader"
+            echo "could not find a KIP-848 leader-epoch partition whose leader differs from coordinator $group_epoch_coordinator"
             exit 1
           fi
 
@@ -843,6 +856,19 @@ jobs:
 
       - name: Run KIP-848 SASL consumer-group leader-epoch failover
         run: |
+          group_epoch_coordinator_log=/tmp/kafrust-kip848-sasl-group-epoch-coordinator.log
+          KAFRUST_GROUP_ID="kafrust-kip848-sasl-group-epoch-${GITHUB_RUN_ID}" \
+          KAFRUST_GROUP_PROTOCOL=consumer \
+          KAFRUST_FAILOVER_PAUSE_MS=0 \
+          cargo run -p kafrust --example consumer_group_failover \
+            >"$group_epoch_coordinator_log" 2>&1
+          group_epoch_coordinator="$(sed -n 's/.*coordinator node \([0-9][0-9]*\)$/\1/p' "$group_epoch_coordinator_log" | tail -n 1)"
+          if ! [[ "$group_epoch_coordinator" =~ ^[123]$ ]]; then
+            cat "$group_epoch_coordinator_log" || true
+            echo "KIP-848 SASL group coordinator preflight did not report a valid broker"
+            exit 1
+          fi
+
           group_epoch_partition=""
           group_epoch_broker=""
           for attempt in {1..120}; do
@@ -851,7 +877,7 @@ jobs:
               --describe \
               --topic "$KAFRUST_TOPIC" \
               >/tmp/kafrust-kip848-sasl-group-epoch-topic.log 2>&1 || true
-            group_epoch_assignment="$(awk '/Partition:/ { partition=""; leader=""; for (i = 1; i <= NF; i++) { if ($i == "Partition:") partition=$(i + 1); if ($i == "Leader:") leader=$(i + 1) } if (partition != "" && leader ~ /^[123]$/) { print partition, leader; exit } }' /tmp/kafrust-kip848-sasl-group-epoch-topic.log)"
+            group_epoch_assignment="$(awk -v coordinator="$group_epoch_coordinator" '/Partition:/ { partition=""; leader=""; for (i = 1; i <= NF; i++) { if ($i == "Partition:") partition=$(i + 1); if ($i == "Leader:") leader=$(i + 1) } if (partition != "" && leader ~ /^[123]$/ && leader != coordinator) { print partition, leader; exit } }' /tmp/kafrust-kip848-sasl-group-epoch-topic.log)"
             if [ -n "$group_epoch_assignment" ]; then
               read -r group_epoch_partition group_epoch_broker <<<"$group_epoch_assignment"
               break
@@ -861,7 +887,7 @@ jobs:
 
           if [ -z "$group_epoch_partition" ] || ! [[ "$group_epoch_broker" =~ ^[123]$ ]]; then
             cat /tmp/kafrust-kip848-sasl-group-epoch-topic.log || true
-            echo "could not find a KIP-848 SASL leader-epoch partition with an elected leader"
+            echo "could not find a KIP-848 SASL leader-epoch partition whose leader differs from coordinator $group_epoch_coordinator"
             exit 1
           fi
 
