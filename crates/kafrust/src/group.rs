@@ -3622,39 +3622,47 @@ fn offset_commit_topics(assignments: &[ConsumerAssignment]) -> Vec<OffsetCommitT
 }
 
 fn offset_commit_topics_v7(assignments: &[ConsumerAssignment]) -> Vec<OffsetCommitTopicV7> {
-    offset_commit_topics(assignments)
+    let mut topics = BTreeMap::<String, Vec<OffsetCommitPartitionV7>>::new();
+    for assignment in assignments {
+        topics
+            .entry(assignment.topic().to_owned())
+            .or_default()
+            .push(OffsetCommitPartitionV7 {
+                partition_index: assignment.partition(),
+                committed_offset: assignment.next_offset(),
+                committed_leader_epoch: assignment.leader_epoch(),
+                committed_metadata: None,
+            });
+    }
+
+    topics
         .into_iter()
-        .map(|topic| OffsetCommitTopicV7 {
-            name: topic.name,
-            partitions: topic
-                .partitions
-                .into_iter()
-                .map(|partition| OffsetCommitPartitionV7 {
-                    partition_index: partition.partition_index,
-                    committed_offset: partition.committed_offset,
-                    committed_leader_epoch: -1,
-                    committed_metadata: partition.committed_metadata,
-                })
-                .collect(),
+        .map(|(name, mut partitions)| {
+            partitions.sort_by_key(|partition| partition.partition_index);
+            OffsetCommitTopicV7 { name, partitions }
         })
         .collect()
 }
 
 fn offset_commit_topics_v9(assignments: &[ConsumerAssignment]) -> Vec<OffsetCommitTopicV9> {
-    offset_commit_topics(assignments)
+    let mut topics = BTreeMap::<String, Vec<OffsetCommitPartitionV9>>::new();
+    for assignment in assignments {
+        topics
+            .entry(assignment.topic().to_owned())
+            .or_default()
+            .push(OffsetCommitPartitionV9 {
+                partition_index: assignment.partition(),
+                committed_offset: assignment.next_offset(),
+                committed_leader_epoch: assignment.leader_epoch(),
+                committed_metadata: None,
+            });
+    }
+
+    topics
         .into_iter()
-        .map(|topic| OffsetCommitTopicV9 {
-            name: topic.name,
-            partitions: topic
-                .partitions
-                .into_iter()
-                .map(|partition| OffsetCommitPartitionV9 {
-                    partition_index: partition.partition_index,
-                    committed_offset: partition.committed_offset,
-                    committed_leader_epoch: -1,
-                    committed_metadata: partition.committed_metadata,
-                })
-                .collect(),
+        .map(|(name, mut partitions)| {
+            partitions.sort_by_key(|partition| partition.partition_index);
+            OffsetCommitTopicV9 { name, partitions }
         })
         .collect()
 }
@@ -4271,16 +4279,17 @@ mod tests {
         cooperative_rejoin_required_for_assignment, cooperative_sticky_assignments,
         group_retry_backoff, leave_group_response_error, list_offset, list_offsets_topics,
         member_id_after_join_error, offset_commit_response_error, offset_commit_topics,
-        offset_commit_topics_v7, offset_fetch_topics, pending_commit_assignments,
-        queue_commit_offset, range_assignments, record_consumer_heartbeat_response,
-        round_robin_assignments, should_rejoin_after_background_heartbeat, should_rejoin_group,
-        should_retry_commit_worker, should_retry_consumer_join_transport,
-        validate_commit_worker_interval, validate_heartbeat_interval, CommitWorkerLink,
-        CommitWorkerMembership, CommitWorkerState, ConsumerGroupAssignmentStrategy,
-        ConsumerGroupConfig, ConsumerGroupHeartbeat, ConsumerGroupHeartbeatTopicPartitions,
-        ConsumerGroupProtocol, ConsumerProtocolHeartbeatState as ConsumerGroupHeartbeatState,
-        HeartbeatHandleState, IsolationLevel, OffsetResetPolicy, RebalanceEvent, RebalancePhase,
-        SecurityProtocol, DEFAULT_GROUP_MAX_RETRIES, GROUP_JOIN_MAX_RETRY_BACKOFF,
+        offset_commit_topics_v7, offset_commit_topics_v9, offset_fetch_topics,
+        pending_commit_assignments, queue_commit_offset, range_assignments,
+        record_consumer_heartbeat_response, round_robin_assignments,
+        should_rejoin_after_background_heartbeat, should_rejoin_group, should_retry_commit_worker,
+        should_retry_consumer_join_transport, validate_commit_worker_interval,
+        validate_heartbeat_interval, CommitWorkerLink, CommitWorkerMembership, CommitWorkerState,
+        ConsumerGroupAssignmentStrategy, ConsumerGroupConfig, ConsumerGroupHeartbeat,
+        ConsumerGroupHeartbeatTopicPartitions, ConsumerGroupProtocol,
+        ConsumerProtocolHeartbeatState as ConsumerGroupHeartbeatState, HeartbeatHandleState,
+        IsolationLevel, OffsetResetPolicy, RebalanceEvent, RebalancePhase, SecurityProtocol,
+        DEFAULT_GROUP_MAX_RETRIES, GROUP_JOIN_MAX_RETRY_BACKOFF,
     };
     use crate::consumer::ConsumerAssignment;
     use crate::Error;
@@ -5055,11 +5064,12 @@ mod tests {
 
     #[test]
     fn builds_offset_commit_topics_from_current_assignment_offsets() {
-        let assignments = vec![
+        let mut assignments = vec![
             ConsumerAssignment::new("orders".to_owned(), 1, 43),
             ConsumerAssignment::new("orders".to_owned(), 0, 11),
             ConsumerAssignment::new("payments".to_owned(), 0, 7),
         ];
+        assignments[1].set_leader_epoch(4);
 
         let topics = offset_commit_topics(&assignments);
 
@@ -5070,7 +5080,12 @@ mod tests {
 
         let static_topics = offset_commit_topics_v7(&assignments);
         assert_eq!(static_topics[0].partitions[0].committed_offset, 11);
-        assert_eq!(static_topics[0].partitions[0].committed_leader_epoch, -1);
+        assert_eq!(static_topics[0].partitions[0].committed_leader_epoch, 4);
+        let consumer_protocol_topics = offset_commit_topics_v9(&assignments);
+        assert_eq!(
+            consumer_protocol_topics[0].partitions[0].committed_leader_epoch,
+            4
+        );
         assert_eq!(topics[1].name, "payments");
     }
 

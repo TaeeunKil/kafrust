@@ -234,6 +234,11 @@ does not require the requested partition to be in the current assignment. It
 returns the earliest retained offset and the latest log-end offset without
 changing local position or committed offsets.
 
+When a fetched RecordBatch supplies a partition leader epoch, group OffsetCommit
+v7/v9 requests carry that observed epoch instead of always sending `-1`. This
+keeps committed offsets tied to the broker epoch while preserving `-1` for
+legacy MessageSet or otherwise unknown epochs.
+
 ## Polling And Rejoin
 
 `ConsumerGroup::poll` sends a foreground heartbeat before fetching assigned partitions. If that heartbeat reports a rebalance, stale generation, stale member ID, stale coordinator, coordinator connection I/O error, or coordinator request timeout, `poll` rejoins the group before fetching records.

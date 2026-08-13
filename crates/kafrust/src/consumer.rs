@@ -978,7 +978,7 @@ impl Consumer {
             .iter_mut()
             .find(|assignment| assignment.topic == topic && assignment.partition == partition)
         {
-            assignment.leader_epoch = assignment.leader_epoch.max(leader_epoch);
+            assignment.set_leader_epoch(assignment.leader_epoch.max(leader_epoch));
         }
     }
 
@@ -1070,6 +1070,10 @@ impl ConsumerAssignment {
             leader_epoch: -1,
             paused: false,
         }
+    }
+
+    pub(crate) fn set_leader_epoch(&mut self, leader_epoch: i32) {
+        self.leader_epoch = leader_epoch;
     }
 
     /// Returns the Kafka topic name.
