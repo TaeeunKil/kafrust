@@ -71,7 +71,10 @@ async fn main() -> kafrust::Result<()> {
                 .client_id("kafrust-published-secure-multi-soak-producer")
                 .metrics(metrics.clone())
                 .request_timeout_ms(5_000)
-                .acks(Acks::Leader)
+                // The failover gate must only count records that survived
+                // replication; leader-only acknowledgements can be lost when
+                // the leader and a follower stop together.
+                .acks(Acks::All)
                 .max_retries(5)
                 .max_records_per_batch(batch_size)
                 .max_batch_bytes(900 * 1024),
