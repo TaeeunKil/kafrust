@@ -19,6 +19,7 @@ async fn main() -> kafrust::Result<()> {
     let mut group = common::apply_security(
         ConsumerGroupConfig::new(bootstrap_servers, group_id.clone())
             .client_id("kafrust-consumer-group-epoch-failover")
+            .session_timeout_ms(30_000)
             .start_offset(offset)
             .max_retries(5)
             .subscribe(topic.clone()),

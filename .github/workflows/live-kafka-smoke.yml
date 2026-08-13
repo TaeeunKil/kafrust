@@ -1729,7 +1729,7 @@ jobs:
           KAFRUST_GROUP_ID="kafrust-group-epoch-failover-${GITHUB_RUN_ID}" \
           KAFRUST_PARTITION="$group_epoch_partition" \
           KAFRUST_OFFSET=0 \
-          KAFRUST_FAILOVER_PAUSE_MS=30000 \
+          KAFRUST_FAILOVER_PAUSE_MS=10000 \
           RUST_LOG=kafrust=debug \
           cargo run -p kafrust --example consumer_group_epoch_failover \
             >"$group_epoch_log" 2>&1 &
@@ -1757,6 +1757,21 @@ jobs:
           fi
 
           docker stop kafrust-kafka-multi-1
+          group_epoch_leader_ready=""
+          for attempt in {1..60}; do
+            docker exec kafrust-kafka-multi-2 /opt/kafka/bin/kafka-topics.sh \
+              --bootstrap-server kafrust-kafka-multi-2:29092 \
+              --describe \
+              --topic "$KAFRUST_TOPIC" \
+              >/tmp/kafrust-group-epoch-after-stop-topic.log 2>&1 || true
+            if awk -v target="$group_epoch_partition" \
+              '$0 ~ /Partition:/ && $0 ~ ("Partition: " target) && $0 !~ /Leader: 1/ && $0 !~ /Leader: -1|Leader: none/ { found=1 } END { exit !found }' \
+              /tmp/kafrust-group-epoch-after-stop-topic.log; then
+              group_epoch_leader_ready=1
+              break
+            fi
+            sleep 1
+          done
           group_epoch_status=0
           wait "$group_epoch_pid" || group_epoch_status=$?
           cat "$group_epoch_log"
@@ -1773,8 +1788,10 @@ jobs:
             sleep 2
           done
 
-          if [ "$group_epoch_status" -ne 0 ] || [ -z "$group_epoch_broker_ready" ] || \
+          if [ "$group_epoch_status" -ne 0 ] || [ -z "$group_epoch_leader_ready" ] || \
+             [ -z "$group_epoch_broker_ready" ] || \
              ! grep -q "recovered fetch after leader epoch transition" "$group_epoch_log"; then
+            cat /tmp/kafrust-group-epoch-after-stop-topic.log || true
             cat /tmp/kafrust-group-epoch-recovery.log || true
             docker logs kafrust-kafka-multi-1
             echo "consumer group did not prove automatic leader-epoch recovery"
