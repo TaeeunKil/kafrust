@@ -1865,3 +1865,13 @@ Implemented evidence:
   crates.io resolution, and HTTP 200 responses from both docs.rs pages. The
   full 18-job live matrix passed in
   [`31654276817`](https://github.com/TaeeunKil/kafrust/actions/runs/31654276817).
+- Producer idempotence preflight now reports typed `InvalidConfiguration`
+  errors when callers override the required `acks=all` or retry settings after
+  enabling idempotence. Focused tests cover both invalid overrides without
+  opening a broker connection.
+- Release `v0.2.13` published that typed validation correction after
+  protocol-first packaging, staged all-feature docs, a fresh external project
+  compile with `tls` and all features, crates.io resolution, and HTTP 200
+  responses from both docs.rs pages. The complete 18-job live matrix passed on
+  the release commit in
+  [`31655154051`](https://github.com/TaeeunKil/kafrust/actions/runs/31655154051).
