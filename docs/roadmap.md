@@ -2271,6 +2271,15 @@ Implemented evidence:
   This closes one published secured leader-failover gate; coordinator-plus-
   leader colocation, broader security mechanisms, and workload/fault matrices
   remain required before the M21 1.0 replacement claim.
+- The same published workflow then passed the secured coordinator-plus-
+  partition-leader combined fault for Kafka 3.7.2 classic in
+  [`31739763944`](https://github.com/TaeeunKil/kafrust/actions/runs/31739763944)
+  and Kafka 4.3.1 KIP-848 in
+  [`31739927915`](https://github.com/TaeeunKil/kafrust/actions/runs/31739927915).
+  Each run listed the active group's coordinator, selected a partition led by
+  that broker, stopped it, and verified authenticated producer recovery plus
+  same-group post-failover consumption. Repeated faults, broader security
+  mechanisms, and the complete 1.0 failure matrix remain open.
 - The complete 17-job run [`31719615947`](https://github.com/TaeeunKil/kafrust/actions/runs/31719615947)
   adds a controlled combined-fault gate in the Kafka 3.7.2 three-broker
   plaintext profile. It deliberately colocates the classic group coordinator

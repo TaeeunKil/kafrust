@@ -347,6 +347,17 @@ a post-failover record through the replacement leader. This is published
 secured leader-failover evidence, not a claim for every security mechanism,
 coordinator-plus-leader fault combination, or workload profile.
 
+The same workflow then qualified the secured coordinator-plus-partition-leader
+fault. Kafka 3.7.2 classic passed in
+[`31739763944`](https://github.com/TaeeunKil/kafrust/actions/runs/31739763944),
+and Kafka 4.3.1 KIP-848 passed in
+[`31739927915`](https://github.com/TaeeunKil/kafrust/actions/runs/31739927915).
+The fresh published projects listed the active group's coordinator, selected a
+replicated partition led by that broker, stopped it, and verified authenticated
+producer recovery plus same-group post-failover consumption. This qualifies a
+representative combined fault, not repeated faults, every security mechanism,
+or the complete 1.0 failure matrix.
+
 The following current-main live run
 [`31719615947`](https://github.com/TaeeunKil/kafrust/actions/runs/31719615947)
 also passed the controlled classic consumer-group combined-fault gate in the
