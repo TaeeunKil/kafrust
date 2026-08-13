@@ -2129,6 +2129,13 @@ Implemented evidence:
   the same broker-1/2/3 query passed over three-broker SASL_SSL with
   SCRAM-SHA-256 in the complete matrix
   [`31691204180`](https://github.com/TaeeunKil/kafrust/actions/runs/31691204180).
+- Release `v0.2.27` publishes the coordinated protocol and client crates after
+  protocol-first package verification, docs.rs HTTP 200 checks, and a fresh
+  external `kafrust 0.2.27` project with `tls`. The follow-up current-main
+  `Live Kafka Smoke` matrix passed all 17 jobs in
+  [`31716400583`](https://github.com/TaeeunKil/kafrust/actions/runs/31716400583),
+  including heartbeat-preserved classic Kafka 3.7.2 and KIP-848 Kafka 4.3.1
+  leader-epoch recovery over plaintext, SASL/PLAIN, and SASL_SSL/SCRAM.
 - Classic and KIP-848 consumer-group polling now have live leader-epoch
   recovery gates. The complete matrix in
   [`31702236760`](https://github.com/TaeeunKil/kafrust/actions/runs/31702236760)

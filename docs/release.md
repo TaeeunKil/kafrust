@@ -199,6 +199,18 @@ the leader epoch changed from 1 to 2. This qualifies the live direct-consumer
 leader-epoch failover path; group rebalance and data-loss/log-retention
 scenarios remain outside the release claim.
 
+The `0.2.27` packages passed protocol-first Cargo publish verification on
+release preparation commit `d549a96`; `kafrust-protocol` was published before
+`kafrust`. `cargo search` resolved both crates at `0.2.27`, both docs.rs pages
+returned HTTP 200, and a fresh external project compiled published
+`kafrust 0.2.27` with `tls`. The annotated `v0.2.27` tag points to the same
+release preparation commit. A follow-up current-main `Live Kafka Smoke` run
+[`31716400583`](https://github.com/TaeeunKil/kafrust/actions/runs/31716400583)
+passed all 17 jobs, including classic Kafka 3.7.2 and Kafka 4.3.1 KIP-848
+leader-epoch recovery over plaintext, SASL/PLAIN, and SASL_SSL/SCRAM. The
+follow-up workflow and example fixes are on `main`; they do not change the
+already-published `0.2.27` library artifacts.
+
 ## Optional Broker Checks
 
 The default test suite does not require a Kafka broker. Before an alpha tag, run the opt-in examples or tests against a local broker when practical:
