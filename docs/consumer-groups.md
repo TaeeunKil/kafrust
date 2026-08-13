@@ -469,5 +469,7 @@ The KIP-848 path uses the same protocol-selectable example with
 `KAFRUST_GROUP_PROTOCOL=consumer`. The Kafka 3.7.2 classic combined path also
 passed over authenticated `SASL_PLAINTEXT` in
 [`Live Kafka Smoke` run `31725607371`](https://github.com/TaeeunKil/kafrust/actions/runs/31725607371).
-SASL_SSL/SCRAM KIP-848 combined-fault behavior remains a separate
-compatibility gate.
+The Kafka 4.3.1 KIP-848 combined path also passed over authenticated
+`SASL_SSL` with SCRAM-SHA-256 in
+[`Live Kafka Smoke` run `31726636088`](https://github.com/TaeeunKil/kafrust/actions/runs/31726636088).
+Broader transaction and combined-fault matrices remain separate gates.

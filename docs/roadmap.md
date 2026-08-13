@@ -747,6 +747,12 @@ Evidence:
   rejoin. The workflow also made the existing Kafka 4.3.1 SASL_SSL/SCRAM
   KIP-848 leader-epoch check choose its partition leader dynamically.
 - Manual `Live Kafka Smoke` run
+  [`31726636088`](https://github.com/TaeeunKil/kafrust/actions/runs/31726636088)
+  passed all 17 jobs after adding the Kafka 4.3.1 `SASL_SSL` SCRAM KIP-848
+  combined-fault path. The selected broker was both group coordinator and
+  partition leader; after it was stopped, the authenticated replacement
+  leader accepted a record and the KIP-848 group consumed it after rejoin.
+- Manual `Live Kafka Smoke` run
   [`31572745537`](https://github.com/TaeeunKil/kafrust/actions/runs/31572745537)
   passed all 16 jobs on 2026-08-12. Its Kafka 3.7.2 three-broker `SASL_SSL`
   SCRAM job stopped the transaction coordinator, verified that the original

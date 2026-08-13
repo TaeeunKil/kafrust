@@ -259,7 +259,16 @@ leader, then verifying authenticated replacement-leader production and group
 consumption after rejoin. It also removed an execution-order assumption from
 the Kafka 4.3.1 SASL_SSL/SCRAM KIP-848 leader-epoch gate. These are current-main
 qualification results and do not modify the published `0.2.27` artifacts;
-SASL_SSL/SCRAM KIP-848 combined faults remain unclaimed.
+the secured KIP-848 combined gate was qualified in the subsequent matrix below.
+
+The following complete current-main matrix
+[`31726636088`](https://github.com/TaeeunKil/kafrust/actions/runs/31726636088)
+passed all 17 jobs and qualified the Kafka 4.3.1 KIP-848 combined coordinator
+and partition-leader fault over `SASL_SSL` with SCRAM-SHA-256. It stopped the
+selected broker, produced through the authenticated replacement leader, and
+verified group rejoin plus post-failover consumption. This current-main gate
+does not modify the published `0.2.27` artifacts; broader fault and transaction
+matrices remain outside the release claim.
 
 ## Optional Broker Checks
 
