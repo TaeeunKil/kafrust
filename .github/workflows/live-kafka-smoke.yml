@@ -3465,6 +3465,13 @@ jobs:
           echo "secured replica directory movement did not complete"
           exit 1
 
+      - name: Seed secured Admin OffsetCommit topic
+        run: |
+          KAFRUST_PARTITION="$KAFRUST_FAILOVER_PARTITION" \
+          KAFRUST_KEY="kafrust-secured-admin-offset-seed-${GITHUB_RUN_ID}" \
+          KAFRUST_VALUE="secured-admin-offset-seed-${GITHUB_RUN_ID}" \
+          cargo run -p kafrust --features tls --example producer_send
+
       - name: Initialize secured Admin OffsetCommit group coordinator
         env:
           KAFRUST_GROUP_ID: kafrust-secured-admin-offset-${{ github.run_id }}
