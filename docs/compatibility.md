@@ -130,9 +130,11 @@ executes the preferred-election example after replica reassignment. The Kafka
 3.7.2 three-broker path returned a successful preferred election in run
 [`31681439569`](https://github.com/TaeeunKil/kafrust/actions/runs/31681439569),
 qualifying plaintext controller routing and per-partition success decoding.
-Secured controller routing and unclean election remain separate claims; unclean
-election remains an explicit, data-loss-sensitive operation and is not part of
-the default smoke gate.
+The same preferred/no-op path over three-broker SASL_SSL with SCRAM-SHA-256
+passed in the complete matrix
+[`31691204180`](https://github.com/TaeeunKil/kafrust/actions/runs/31691204180).
+Unclean election remains an explicit, data-loss-sensitive operation and is not
+part of the default smoke gate.
 
 The current development line also implements broker-local DescribeLogDirs v1-v5
 negotiation with typed replica size, offset lag, future-log, volume-capacity,
@@ -140,8 +142,10 @@ and cordoned-state fields. Focused wire and injected-broker tests pass. The
 Kafka 3.7.2 three-broker filtered query returned successful responses from all
 three brokers, including `/tmp/kafka-logs` partition size and volume capacity,
 in run [`31682889124`](https://github.com/TaeeunKil/kafrust/actions/runs/31682889124).
-This qualifies plaintext broker routing and response decoding; secured broker
-coverage is a separate qualification.
+The same filtered broker-1/2/3 query passed over three-broker SASL_SSL with
+SCRAM-SHA-256 in the complete matrix
+[`31691204180`](https://github.com/TaeeunKil/kafrust/actions/runs/31691204180),
+qualifying authenticated broker routing and response decoding for this profile.
 
 The current development line also implements broker-local
 AlterReplicaLogDirs v1-v2 negotiation. `AdminClient::alter_replica_log_dirs`
@@ -151,9 +155,12 @@ wire and injected-broker tests pass. The Kafka 3.7.2 three-broker profile in
 the complete matrix moved a disposable replica to `/tmp/kafka-logs-2` and
 observed `future=false` completion in
 [`31688516207`](https://github.com/TaeeunKil/kafrust/actions/runs/31688516207).
-This qualifies the configured multi-broker path; it is not a claim that a
-destination directory is portable across arbitrary clusters, nor that an
-ambiguous mutation send is safe to replay.
+The same configured movement over three-broker SASL_SSL with SCRAM-SHA-256
+passed in the complete matrix
+[`31691204180`](https://github.com/TaeeunKil/kafrust/actions/runs/31691204180).
+This qualifies the tested authenticated multi-broker path; it is not a claim
+that a destination directory is portable across arbitrary clusters, nor that
+an ambiguous mutation send is safe to replay.
 
 Release `v0.2.19` additionally qualifies Fetch v12 forwarding of the last
 fetched partition leader epoch and consumer-group `Earliest`/`Latest` recovery

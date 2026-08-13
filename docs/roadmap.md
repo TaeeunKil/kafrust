@@ -1045,16 +1045,20 @@ Implemented evidence:
   multi-broker workflow runs the preferred-election example after reassignment;
   Kafka 3.7.2 returned partition success in
   [`31681439569`](https://github.com/TaeeunKil/kafrust/actions/runs/31681439569).
-  Secured controller routing remains a separate gate, and unclean election is
-  deliberately outside the default gate because it can lose records.
+  The same preferred/no-op path over three-broker SASL_SSL with SCRAM-SHA-256
+  passed in the complete matrix
+  [`31691204180`](https://github.com/TaeeunKil/kafrust/actions/runs/31691204180).
+  Unclean election is deliberately outside the default gate because it can
+  lose records.
 - DescribeLogDirs v1-v5 now exposes broker-selected log-directory results,
   replica size, offset lag, future-log state, v4+ volume capacity, and v5
   cordoned state. Focused wire and broker-routing tests pass, and the
   multi-broker workflow includes the filtered example. Kafka 3.7.2 returned
   successful filtered responses from all three brokers in
   [`31682889124`](https://github.com/TaeeunKil/kafrust/actions/runs/31682889124),
-  including partition size and volume capacity. Secured broker coverage
-  remains a separate qualification.
+  including partition size and volume capacity. The same broker-1/2/3 query
+  passed over three-broker SASL_SSL with SCRAM-SHA-256 in the complete matrix
+  [`31691204180`](https://github.com/TaeeunKil/kafrust/actions/runs/31691204180).
 - AlterReplicaLogDirs v1-v2 now exposes explicit broker-local replica movement
   through `AdminClient`, groups assignments by destination directory, preserves
   per-partition broker outcomes, and negotiates the Kafka 3.7 baseline (v1) or
@@ -1064,7 +1068,9 @@ Implemented evidence:
   three-broker matrix moved a disposable replica to `/tmp/kafka-logs-2` and
   observed `future=false` completion in
   [`31688516207`](https://github.com/TaeeunKil/kafrust/actions/runs/31688516207),
-  completing this configured-cluster gate.
+  completing this configured-cluster gate. The same configured movement over
+  three-broker SASL_SSL with SCRAM-SHA-256 passed in the complete matrix
+  [`31691204180`](https://github.com/TaeeunKil/kafrust/actions/runs/31691204180).
 - The `admin_describe_group` example runs after the consumer-group smoke path
   across plaintext, multi-broker, TLS, SASL_PLAINTEXT, and SASL_SSL profiles.
 - The admin lifecycle example waits for asynchronous metadata propagation in
@@ -2084,10 +2090,14 @@ Implemented evidence:
   negotiation and typed preferred/unclean outcomes. Plaintext multi-broker
   preferred-election verification is complete in
   [`31681439569`](https://github.com/TaeeunKil/kafrust/actions/runs/31681439569);
-  secured controller routing remains the next release gate. This does not make
-  unclean election a default-safe operation.
+  the same preferred/no-op path over three-broker SASL_SSL with SCRAM-SHA-256
+  passed in the complete matrix
+  [`31691204180`](https://github.com/TaeeunKil/kafrust/actions/runs/31691204180).
+  This does not make unclean election a default-safe operation.
 - The current development line also adds broker-local DescribeLogDirs v1-v5
   negotiation. The plaintext multi-broker filtered query with capacity and
   replica-lag decoding passed in
   [`31682889124`](https://github.com/TaeeunKil/kafrust/actions/runs/31682889124);
-  secured broker coverage remains the next release gate.
+  the same broker-1/2/3 query passed over three-broker SASL_SSL with
+  SCRAM-SHA-256 in the complete matrix
+  [`31691204180`](https://github.com/TaeeunKil/kafrust/actions/runs/31691204180).
