@@ -2010,14 +2010,21 @@ impl Producer {
         sequence_tracker: &mut IdempotentBatchSequenceTracker,
     ) -> Result<Vec<(usize, ProducerBatchRecordOutcome)>> {
         let mut groups = BTreeMap::<ProduceBatchKey, Vec<PreparedBatchRecord<'_>>>::new();
+        let mut metadata_by_topic = BTreeMap::<String, MetadataResponseV1>::new();
         for &index in record_indexes {
             let record = records
                 .get(index)
                 .ok_or(Error::Unsupported("batch record index out of bounds"))?;
-            let metadata = self.metadata_for_topic(record.record.topic()).await?;
-            let partition = self.choose_partition(&record.record, &metadata)?;
-            let leader = leader_for(&metadata, record.record.topic(), partition)?;
-            let broker_addr = broker_addr_for(&metadata, leader)?;
+            let topic = record.record.topic();
+            if !metadata_by_topic.contains_key(topic) {
+                metadata_by_topic.insert(topic.to_owned(), self.metadata_for_topic(topic).await?);
+            }
+            let metadata = metadata_by_topic
+                .get(topic)
+                .ok_or(Error::Unsupported("missing batch topic metadata"))?;
+            let partition = self.choose_partition(&record.record, metadata)?;
+            let leader = leader_for(metadata, record.record.topic(), partition)?;
+            let broker_addr = broker_addr_for(metadata, leader)?;
             groups
                 .entry(ProduceBatchKey {
                     broker_addr,
