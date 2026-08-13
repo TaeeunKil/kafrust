@@ -281,7 +281,16 @@ jobs:
       - name: Run consumer group offset reset example
         env:
           KAFRUST_GROUP_ID: kafrust-offset-reset-${{ matrix.kafka-version }}
-        run: cargo run -p kafrust --example consumer_group_offset_reset
+          KAFRUST_TOPIC: kafrust-offset-reset-${{ matrix.kafka-version }}-${{ github.run_id }}
+        run: |
+          docker exec kafrust-kafka /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server localhost:9092 \
+            --create \
+            --if-not-exists \
+            --topic "$KAFRUST_TOPIC" \
+            --partitions 1 \
+            --replication-factor 1
+          cargo run -p kafrust --example consumer_group_offset_reset
 
       - name: Run consumer position and watermark control example
         env:

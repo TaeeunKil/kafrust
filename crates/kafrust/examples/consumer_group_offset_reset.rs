@@ -44,17 +44,23 @@ async fn main() -> kafrust::Result<()> {
         OffsetResetPolicy::Earliest,
     )
     .await?;
-    let earliest_records = earliest.poll().await?;
-    if !contains_value(&earliest_records, BEFORE_VALUE) {
-        return Err(Error::Unsupported(
-            "earliest offset reset did not return an existing record",
-        ));
-    }
-    let committed_offset = earliest.position(&topic, 0).ok_or(Error::Unsupported(
+    poll_until_value(&mut earliest, BEFORE_VALUE, "earliest offset reset").await?;
+    earliest.leave().await?;
+
+    let committed_group_id = format!("{group_id}-committed-out-of-range");
+    let mut committed = group(
+        bootstrap_servers.clone(),
+        committed_group_id.clone(),
+        &topic,
+        OffsetResetPolicy::Earliest,
+    )
+    .await?;
+    poll_until_value(&mut committed, BEFORE_VALUE, "committed offset setup").await?;
+    let committed_offset = committed.position(&topic, 0).ok_or(Error::Unsupported(
         "earliest group has no partition position",
     ))?;
-    earliest.commit_offsets().await?;
-    earliest.leave().await?;
+    committed.commit_offsets().await?;
+    committed.leave().await?;
 
     let admin = AdminClient::new(common::apply_security(
         ClientConfig::new(bootstrap_servers.clone()).client_id("kafrust-offset-recovery-admin"),
@@ -96,12 +102,17 @@ async fn main() -> kafrust::Result<()> {
 
     let mut recovered = group(
         bootstrap_servers.clone(),
-        format!("{group_id}-committed-out-of-range"),
+        committed_group_id,
         &topic,
         OffsetResetPolicy::Earliest,
     )
     .await?;
-    let recovered_records = recovered.poll().await?;
+    let recovered_records = poll_until_value(
+        &mut recovered,
+        RECOVERED_VALUE,
+        "committed out-of-range offset reset",
+    )
+    .await?;
     if !contains_value(&recovered_records, RECOVERED_VALUE)
         || contains_value(&recovered_records, BEFORE_VALUE)
         || contains_value(&recovered_records, FILLER_VALUE)
@@ -122,7 +133,7 @@ async fn main() -> kafrust::Result<()> {
     producer
         .send(ProducerRecord::to(topic).partition(0).value(AFTER_VALUE))
         .await?;
-    let latest_records = latest.poll().await?;
+    let latest_records = poll_until_value(&mut latest, AFTER_VALUE, "latest offset reset").await?;
     if contains_value(&latest_records, BEFORE_VALUE)
         || !contains_value(&latest_records, AFTER_VALUE)
     {
@@ -157,4 +168,21 @@ fn contains_value(records: &[kafrust::ConsumerRecord], expected: &[u8]) -> bool 
     records
         .iter()
         .any(|record| record.value() == Some(expected))
+}
+
+async fn poll_until_value(
+    group: &mut kafrust::ConsumerGroup,
+    expected: &[u8],
+    description: &str,
+) -> kafrust::Result<Vec<kafrust::ConsumerRecord>> {
+    for _ in 0..20 {
+        let records = group.poll().await?;
+        if contains_value(&records, expected) {
+            return Ok(records);
+        }
+    }
+    eprintln!("{description} did not return the expected record");
+    Err(Error::Unsupported(
+        "consumer group offset reset did not return the expected record",
+    ))
 }
