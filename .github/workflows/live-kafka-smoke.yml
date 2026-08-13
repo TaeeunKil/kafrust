@@ -1520,15 +1520,6 @@ jobs:
             wait "$repeat_consumer_pid" || true
             exit 1
           fi
-          if ! grep -q "recovered fetch after leader epoch transition" /tmp/kafrust-consumer-repeat-failover.log; then
-            cat /tmp/kafrust-consumer-repeat-failover.log
-            echo "assigned consumer did not prove automatic leader-epoch recovery"
-            kill "$repeat_producer_pid" 2>/dev/null || true
-            kill "$repeat_consumer_pid" 2>/dev/null || true
-            wait "$repeat_producer_pid" || true
-            wait "$repeat_consumer_pid" || true
-            exit 1
-          fi
 
           docker stop kafrust-kafka-multi-2
           repeat_cluster_ready=""
@@ -1562,6 +1553,10 @@ jobs:
             cat /tmp/kafrust-multi-repeat-after-stop-topic.log || true
             docker logs kafrust-kafka-multi-1
             docker logs kafrust-kafka-multi-3
+            exit 1
+          fi
+          if ! grep -q "recovered fetch after leader epoch transition" /tmp/kafrust-consumer-repeat-failover.log; then
+            echo "assigned consumer did not prove automatic leader-epoch recovery"
             exit 1
           fi
 
