@@ -1,0 +1,172 @@
+name: Published Secure Multi-Broker Soak Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      kafrust_version:
+        description: "Published kafrust version to qualify from crates.io"
+        required: true
+        default: "0.2.28"
+      duration_seconds:
+        description: "Soak duration before final drain (minimum 60)"
+        required: true
+        default: "120"
+      outage_seconds:
+        description: "Broker 1 outage duration"
+        required: true
+        default: "10"
+
+env:
+  CARGO_TERM_COLOR: always
+  KAFRUST_BOOTSTRAP_SERVERS: localhost:22092,localhost:22093,localhost:22094
+  KAFRUST_SECURITY_PROTOCOL: sasl_tls
+  KAFRUST_SASL_MECHANISM: scram-sha-256
+  KAFRUST_SASL_USERNAME: kafrust
+  KAFRUST_SASL_PASSWORD: kafrust-secret
+  KAFRUST_TLS_SERVER_NAME: localhost
+  KAFRUST_TLS_ROOT_CERT_DER_PATH: ${{ github.workspace }}/sasl-ssl/ca.der
+  KAFRUST_TOPIC: kafrust-published-secure-multi-soak-${{ github.run_id }}
+  KAFRUST_SOAK_SECONDS: ${{ inputs.duration_seconds }}
+  KAFRUST_SOAK_BATCH_SIZE: "100"
+  KAFRUST_SOAK_PAYLOAD_BYTES: "1024"
+
+jobs:
+  published-secure-multi-soak:
+    name: Published kafrust ${{ inputs.kafrust_version }} Kafka 4.3.1 secure multi-broker restart
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.81.0"
+
+      - name: Generate shared TLS certificates
+        run: |
+          mkdir -p sasl-ssl
+          openssl req -x509 -newkey rsa:2048 -days 1 -nodes -subj "/CN=kafrust-test-ca" -keyout sasl-ssl/ca.key -out sasl-ssl/ca.crt
+          openssl x509 -in sasl-ssl/ca.crt -outform DER -out sasl-ssl/ca.der
+          openssl req -newkey rsa:2048 -nodes -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" -keyout sasl-ssl/server.key -out sasl-ssl/server.csr
+          openssl x509 -req -in sasl-ssl/server.csr -CA sasl-ssl/ca.crt -CAkey sasl-ssl/ca.key -CAcreateserial -days 1 -sha256 -copy_extensions copy -out sasl-ssl/server.crt
+          openssl pkcs12 -export -in sasl-ssl/server.crt -inkey sasl-ssl/server.key -certfile sasl-ssl/ca.crt -name localhost -out sasl-ssl/kafka.server.keystore.p12 -password pass:kafrust
+          printf kafrust > sasl-ssl/keystore-password
+          printf kafrust > sasl-ssl/key-password
+          chmod 644 sasl-ssl/*
+
+      - name: Write SCRAM broker config
+        run: |
+          cat > sasl-ssl/kafka_server_jaas.conf <<'EOF'
+          KafkaServer {
+            org.apache.kafka.common.security.scram.ScramLoginModule required
+            username="broker"
+            password="broker-secret";
+          };
+          EOF
+          chmod 644 sasl-ssl/kafka_server_jaas.conf
+
+      - name: Start three-broker Kafka 4.3.1 with SASL_SSL SCRAM
+        run: |
+          docker network create kafrust-published-secure-multi-soak
+          cluster_id="$(docker run --rm apache/kafka:4.3.1 /opt/kafka/bin/kafka-storage.sh random-uuid)"
+          for node in 1 2 3; do
+            external_port=$((22091 + node))
+            docker run -d --name "kafrust-published-secure-multi-soak-${node}" \
+              --hostname "kafrust-published-secure-multi-soak-${node}" \
+              --network kafrust-published-secure-multi-soak \
+              -p "${external_port}:9095" \
+              -v "$PWD/sasl-ssl:/etc/kafka/secrets:ro" \
+              -e KAFKA_OPTS="-Djava.security.auth.login.config=/etc/kafka/secrets/kafka_server_jaas.conf" \
+              -e KAFKA_CLUSTER_ID="${cluster_id}" \
+              -e KAFKA_NODE_ID="${node}" \
+              -e KAFKA_PROCESS_ROLES=broker,controller \
+              -e KAFKA_LISTENERS=INTERNAL://:29092,SASL_SSL://:9095,CONTROLLER://:9093 \
+              -e KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafrust-published-secure-multi-soak-${node}:29092,SASL_SSL://localhost:${external_port} \
+              -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+              -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,SASL_SSL:SASL_SSL \
+              -e KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL \
+              -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafrust-published-secure-multi-soak-1:9093,2@kafrust-published-secure-multi-soak-2:9093,3@kafrust-published-secure-multi-soak-3:9093 \
+              -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=3 \
+              -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=3 \
+              -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=2 \
+              -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 \
+              -e KAFKA_SASL_ENABLED_MECHANISMS=SCRAM-SHA-256,SCRAM-SHA-512 \
+              -e KAFKA_SSL_KEYSTORE_FILENAME=kafka.server.keystore.p12 \
+              -e KAFKA_SSL_KEYSTORE_CREDENTIALS=keystore-password \
+              -e KAFKA_SSL_KEY_CREDENTIALS=key-password \
+              -e KAFKA_SSL_KEYSTORE_TYPE=PKCS12 \
+              -e KAFKA_SSL_CLIENT_AUTH=none \
+              apache/kafka:4.3.1
+          done
+
+      - name: Wait for Kafka cluster
+        run: |
+          for attempt in {1..120}; do
+            if docker exec kafrust-published-secure-multi-soak-1 /opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server kafrust-published-secure-multi-soak-1:29092 >/tmp/kafrust-secure-soak-probe.log 2>&1; then exit 0; fi
+            sleep 2
+          done
+          cat /tmp/kafrust-secure-soak-probe.log || true
+          docker logs kafrust-published-secure-multi-soak-1
+          docker logs kafrust-published-secure-multi-soak-2
+          docker logs kafrust-published-secure-multi-soak-3
+          exit 1
+
+      - name: Create SCRAM user and replicated topic
+        run: |
+          docker exec kafrust-published-secure-multi-soak-1 /opt/kafka/bin/kafka-configs.sh --bootstrap-server kafrust-published-secure-multi-soak-1:29092 --alter --add-config 'SCRAM-SHA-256=[iterations=4096,password=kafrust-secret]' --entity-type users --entity-name kafrust
+          docker exec kafrust-published-secure-multi-soak-1 /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafrust-published-secure-multi-soak-1:29092 --create --topic "$KAFRUST_TOPIC" --partitions 3 --replication-factor 3
+
+      - name: Verify external TLS listeners
+        run: |
+          for port in 22092 22093 22094; do openssl s_client -connect "127.0.0.1:${port}" -servername localhost -CAfile sasl-ssl/ca.crt -verify_return_error </dev/null >/tmp/kafrust-secure-tls-${port}.log 2>&1; done
+
+      - name: Create fresh external project
+        env:
+          KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version }}
+        run: |
+          project_dir="$RUNNER_TEMP/kafrust-published-secure-multi-soak-smoke"
+          cargo new --bin "$project_dir"
+          cp .github/published-secure-multi-soak-smoke/src/main.rs "$project_dir/src/main.rs"
+          sed "s/__KAFRUST_VERSION__/$KAFRUST_PUBLISHED_VERSION/" .github/published-secure-multi-soak-smoke/Cargo.toml > "$project_dir/Cargo.toml"
+
+      - name: Build published secure external soak
+        run: cargo build --release --manifest-path "$RUNNER_TEMP/kafrust-published-secure-multi-soak-smoke/Cargo.toml"
+
+      - name: Run published secure soak with broker restart
+        run: |
+          set -euo pipefail
+          if [ "$KAFRUST_SOAK_SECONDS" -lt 60 ]; then echo "duration_seconds must be at least 60"; exit 1; fi
+          (
+            set -o pipefail
+            cargo run --quiet --release --manifest-path "$RUNNER_TEMP/kafrust-published-secure-multi-soak-smoke/Cargo.toml" | tee published-secure-multi-soak.json
+          ) &
+          soak_pid=$!
+          sleep "$((KAFRUST_SOAK_SECONDS / 3))"
+          docker stop -t 1 kafrust-published-secure-multi-soak-1
+          sleep "${{ inputs.outage_seconds }}"
+          docker start kafrust-published-secure-multi-soak-1
+          wait "$soak_pid"
+          test -s published-secure-multi-soak.json
+          grep -q '"recovered":true' published-secure-multi-soak.json
+
+      - name: Verify published dependency version
+        run: |
+          grep -A1 -q 'name = "kafrust"' "$RUNNER_TEMP/kafrust-published-secure-multi-soak-smoke/Cargo.lock"
+          grep -A1 -q 'version = "${{ inputs.kafrust_version }}"' "$RUNNER_TEMP/kafrust-published-secure-multi-soak-smoke/Cargo.lock"
+
+      - name: Upload published secure soak result
+        uses: actions/upload-artifact@v6
+        with:
+          name: kafrust-published-secure-multi-soak-${{ github.run_id }}
+          path: published-secure-multi-soak.json
+          retention-days: 90
+
+      - name: Dump Kafka diagnostics
+        if: failure()
+        run: |
+          docker logs kafrust-published-secure-multi-soak-1 || true
+          docker logs kafrust-published-secure-multi-soak-2 || true
+          docker logs kafrust-published-secure-multi-soak-3 || true
