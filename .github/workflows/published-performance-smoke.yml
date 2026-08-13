@@ -1,0 +1,116 @@
+name: Published Performance Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      kafrust_version:
+        description: "Published kafrust version to benchmark from crates.io"
+        required: true
+        default: "0.2.28"
+      record_count:
+        description: "Records per external benchmark profile"
+        required: true
+        default: "10000"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  published-performance:
+    name: Published kafrust ${{ inputs.kafrust_version }} Kafka ${{ matrix.kafka_version }} ${{ matrix.compression }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        kafka_version: ["3.7.2", "4.3.1"]
+        compression: ["none", "zstd"]
+    env:
+      KAFRUST_BOOTSTRAP_SERVERS: localhost:25097
+      KAFRUST_TOPIC: kafrust-published-performance-${{ github.run_id }}
+      KAFRUST_RECORDS: ${{ inputs.record_count }}
+      KAFRUST_BATCH_SIZE: "200"
+      KAFRUST_PAYLOAD_BYTES: "1024"
+      KAFRUST_COMPRESSION: ${{ matrix.compression }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.81.0"
+
+      - name: Start Kafka
+        run: |
+          docker run -d --name kafrust-published-performance \
+            -p 25097:9097 \
+            -e KAFKA_NODE_ID=1 \
+            -e KAFKA_PROCESS_ROLES=broker,controller \
+            -e KAFKA_LISTENERS=PLAINTEXT://:9097,CONTROLLER://:9093 \
+            -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:25097 \
+            -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+            -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
+            -e KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT \
+            -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@localhost:9093 \
+            -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
+            apache/kafka:${{ matrix.kafka_version }}
+
+      - name: Wait for Kafka
+        run: |
+          for attempt in {1..90}; do
+            if docker exec kafrust-published-performance /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server localhost:9097 >/tmp/kafrust-published-performance-probe.log 2>&1; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/kafrust-published-performance-probe.log || true
+          docker logs kafrust-published-performance
+          exit 1
+
+      - name: Create benchmark topic
+        run: |
+          docker exec kafrust-published-performance /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server localhost:9097 \
+            --create \
+            --topic "$KAFRUST_TOPIC" \
+            --partitions 1 \
+            --replication-factor 1
+
+      - name: Create fresh external project
+        env:
+          KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version }}
+        run: |
+          project_dir="$RUNNER_TEMP/kafrust-published-performance-smoke"
+          if [ "$project_dir" = "$GITHUB_WORKSPACE" ]; then
+            echo "the published performance project must be outside the repository"
+            exit 1
+          fi
+          cargo new --bin "$project_dir"
+          cp .github/published-performance-smoke/src/main.rs "$project_dir/src/main.rs"
+          sed "s/__KAFRUST_VERSION__/$KAFRUST_PUBLISHED_VERSION/; s/__KAFRUST_FEATURES__/[]/" \
+            .github/published-performance-smoke/Cargo.toml > "$project_dir/Cargo.toml"
+
+      - name: Run published external benchmark
+        run: |
+          cargo run --release --manifest-path "$RUNNER_TEMP/kafrust-published-performance-smoke/Cargo.toml" \
+            | tee published-performance.json
+          grep -q '"records":' published-performance.json
+
+      - name: Verify published dependency versions
+        run: |
+          grep -A1 -q 'name = "kafrust"' "$RUNNER_TEMP/kafrust-published-performance-smoke/Cargo.lock"
+          grep -A1 -q "version = \"${{ inputs.kafrust_version }}\"" "$RUNNER_TEMP/kafrust-published-performance-smoke/Cargo.lock"
+
+      - name: Upload published benchmark result
+        uses: actions/upload-artifact@v6
+        with:
+          name: kafrust-published-performance-${{ matrix.kafka_version }}-${{ matrix.compression }}-${{ github.run_id }}
+          path: published-performance.json
+          retention-days: 90
+
+      - name: Dump Kafka logs
+        if: failure()
+        run: docker logs kafrust-published-performance
