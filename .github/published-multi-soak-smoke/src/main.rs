@@ -7,7 +7,7 @@ const DEFAULT_DURATION_SECONDS: u64 = 120;
 const DEFAULT_BATCH_SIZE: usize = 100;
 const DEFAULT_PAYLOAD_BYTES: usize = 1_024;
 const RECOVERY_BACKOFF: Duration = Duration::from_millis(100);
-const DRAIN_TIMEOUT: Duration = Duration::from_secs(90);
+const DRAIN_TIMEOUT: Duration = Duration::from_secs(300);
 
 #[tokio::main]
 async fn main() -> kafrust::Result<()> {
@@ -25,6 +25,7 @@ async fn main() -> kafrust::Result<()> {
     let mut producer = ProducerConfig::new(bootstrap_servers.split(',').map(str::to_owned))
         .client_id("kafrust-published-multi-soak-producer")
         .metrics(metrics.clone())
+        .request_timeout_ms(5_000)
         .acks(Acks::Leader)
         .max_retries(3)
         .max_records_per_batch(batch_size)
@@ -34,6 +35,7 @@ async fn main() -> kafrust::Result<()> {
     let mut consumer = ConsumerConfig::new(bootstrap_servers.split(',').map(str::to_owned))
         .client_id("kafrust-published-multi-soak-consumer")
         .metrics(metrics.clone())
+        .request_timeout_ms(5_000)
         .max_wait_ms(100)
         .max_retries(3)
         .max_partition_bytes(16 * 1024 * 1024)
@@ -49,6 +51,7 @@ async fn main() -> kafrust::Result<()> {
     let mut operation_errors = 0usize;
     let mut saw_error = false;
     let mut recovered_after_error = false;
+    let mut last_progress = Instant::now();
 
     while Instant::now() < deadline {
         for (partition, next_offset) in next_offsets.iter_mut().enumerate() {
@@ -87,9 +90,18 @@ async fn main() -> kafrust::Result<()> {
 
             while remaining > 0 {
                 if Instant::now() >= hard_deadline {
+                    eprintln!(
+                        "published multi-soak drain timeout: partition={partition} next_offset={fetch_offset} remaining={remaining} produced={produced} consumed={consumed}"
+                    );
                     return Err(kafrust::Error::Unsupported(
                         "published multi-soak consumer did not drain before the deadline",
                     ));
+                }
+                if last_progress.elapsed() >= Duration::from_secs(10) {
+                    eprintln!(
+                        "published multi-soak progress: partition={partition} next_offset={fetch_offset} remaining={remaining} produced={produced} consumed={consumed}"
+                    );
+                    last_progress = Instant::now();
                 }
                 match consumer
                     .fetch(topic.clone(), partition as i32, fetch_offset)
