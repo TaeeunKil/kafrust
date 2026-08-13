@@ -1975,6 +1975,11 @@ Implemented evidence:
   same-generation duplicate-claim invalidation and Kafka-compatible mixed-topic
   candidate ordering. The complete 17-job live matrix passed in
   [`31668518895`](https://github.com/TaeeunKil/kafrust/actions/runs/31668518895).
+- Release `v0.2.23` publishes classic AlterConfigs v1 through the typed
+  `TopicConfigUpdate` API. Package, docs.rs, crates.io, and fresh external
+  `tls` compile verification passed after the complete 17-job matrix qualified
+  the plaintext admin lifecycle and Kafka 3.7.2 three-broker path in
+  [`31669906872`](https://github.com/TaeeunKil/kafrust/actions/runs/31669906872).
 - Classic eager `StickyAssignor` support now has a public
   `ConsumerGroupAssignmentStrategy::Sticky` variant. JoinGroup uses
   Subscription v0 `user_data` with Kafka's previous-assignment schema,
