@@ -124,6 +124,16 @@ published `kafrust 0.2.20` crate with `tls` on Rust 1.81. The complete 17-job
 Live Kafka Smoke matrix passed the Admin retry change on commit `ec293d1` in
 [`31665016772`](https://github.com/TaeeunKil/kafrust/actions/runs/31665016772).
 
+The `0.2.21` packages passed Cargo publish verification on release preparation
+commit `e2859d7`; `kafrust-protocol` was published before `kafrust`. The
+published package metadata resolved with HTTP 200 from crates.io, both docs.rs
+pages returned HTTP 200, and a fresh external project compiled
+`kafrust 0.2.21` with the `tls` feature. The complete 17-job Live Kafka Smoke
+matrix, including the new Kafka 3.7.2 three-broker eager sticky group gate,
+passed in [`31666975512`](https://github.com/TaeeunKil/kafrust/actions/runs/31666975512).
+The external smoke project used the current stable toolchain; the repository's
+Rust 1.81 compatibility remains covered by the required CI job.
+
 ## Optional Broker Checks
 
 The default test suite does not require a Kafka broker. Before an alpha tag, run the opt-in examples or tests against a local broker when practical:

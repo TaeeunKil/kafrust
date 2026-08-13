@@ -1955,6 +1955,12 @@ Implemented evidence:
   and HTTP 200 responses from both docs.rs pages. The complete 17-job live
   matrix remained green in
   [`31665016772`](https://github.com/TaeeunKil/kafrust/actions/runs/31665016772).
+- Release `v0.2.21` published the classic eager StickyAssignor slice after
+  protocol-first package verification, staged all-feature documentation builds,
+  a fresh external project compile with `tls`, crates.io resolution, and HTTP
+  200 responses from both docs.rs pages. The complete 17-job live matrix,
+  including Kafka 3.7.2 three-broker sticky transfer and recovery, passed in
+  [`31666975512`](https://github.com/TaeeunKil/kafrust/actions/runs/31666975512).
 - Classic eager `StickyAssignor` support now has a public
   `ConsumerGroupAssignmentStrategy::Sticky` variant. JoinGroup uses
   Subscription v0 `user_data` with Kafka's previous-assignment schema,
