@@ -126,6 +126,17 @@ automatic recovery through the bounded OffsetForLeaderEpoch path. This proves
 live direct-consumer leader-epoch failover recovery; group rebalance recovery
 and data-loss/log-retention fault scenarios remain separate claims.
 
+The follow-up complete matrix in
+[`31700020132`](https://github.com/TaeeunKil/kafrust/actions/runs/31700020132)
+also qualified the classic `ConsumerGroup` path on the Kafka 3.7.2
+three-broker profile. The gate preserved the group's membership across the
+broker stop, waited for the selected partition's new leader, and verified the
+assigned consumer's automatic OffsetForLeaderEpoch recovery in job
+[`94446655280`](https://github.com/TaeeunKil/kafrust/actions/runs/31700020132/job/94446655280).
+This closes the tested classic group leader-epoch recovery claim; KIP-848
+group-heartbeat recovery and data-loss/log-retention scenarios remain separate
+claims.
+
 The current development line also implements controller-routed ElectLeaders
 v0-v2 negotiation and typed preferred/unclean election results. Focused wire
 and injected-controller tests pass, and the multi-broker smoke workflow now
@@ -359,6 +370,7 @@ other coordinator-routed writes remain separate qualification items.
 | Apache Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1 | complete 17-job KRaft matrix; dedicated offset-reset topic | Fetch v12 last-fetched leader epoch; group `Earliest`/`Latest` reset with committed out-of-range recovery | [`Live Kafka Smoke`, run `31663188419`](https://github.com/TaeeunKil/kafrust/actions/runs/31663188419) on 2026-08-13 | Passing |
 | Apache Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1 | complete 17-job KRaft matrix; plaintext, TLS, SASL, SCRAM, OAUTHBEARER, multi-broker, and KIP-848 profiles | v0.2.26 direct-consumer leader-epoch recovery regression matrix | [`Live Kafka Smoke`, run `31677617186`](https://github.com/TaeeunKil/kafrust/actions/runs/31677617186) on 2026-08-13 | Passing; live log-truncation injection not claimed |
 | Apache Kafka 3.7.2 | three-broker KRaft; repeated leader failover | v0.2.26 direct assigned-consumer automatic leader-epoch recovery after the second leader broker stop | [`Live Kafka Smoke`, run `31679167875`](https://github.com/TaeeunKil/kafrust/actions/runs/31679167875) on 2026-08-13 | Passing; group rebalance and data-loss/log-retention scenarios remain separate |
+| Apache Kafka 3.7.2 | three-broker KRaft | classic `ConsumerGroup` automatic leader-epoch recovery after the assigned partition's leader broker stop | [`Live Kafka Smoke`, run `31700020132`](https://github.com/TaeeunKil/kafrust/actions/runs/31700020132) on 2026-08-13; job [`94446655280`](https://github.com/TaeeunKil/kafrust/actions/runs/31700020132/job/94446655280) | Passing; membership preserved through the tested failover; KIP-848 and data-loss/log-retention scenarios remain separate |
 
 ## Verified Paths
 

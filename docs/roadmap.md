@@ -2121,3 +2121,11 @@ Implemented evidence:
   the same broker-1/2/3 query passed over three-broker SASL_SSL with
   SCRAM-SHA-256 in the complete matrix
   [`31691204180`](https://github.com/TaeeunKil/kafrust/actions/runs/31691204180).
+- Classic consumer-group polling now has a live leader-epoch recovery gate.
+  The Kafka 3.7.2 three-broker job kept the group session alive through the
+  broker stop, waited for the selected partition's new leader, and verified
+  automatic OffsetForLeaderEpoch recovery from the assigned group consumer in
+  [`31700020132`](https://github.com/TaeeunKil/kafrust/actions/runs/31700020132)
+  (job [`94446655280`](https://github.com/TaeeunKil/kafrust/actions/runs/31700020132/job/94446655280)).
+  KIP-848 group-heartbeat recovery and data-loss/log-retention fault scenarios
+  remain separate 1.0 gates.
