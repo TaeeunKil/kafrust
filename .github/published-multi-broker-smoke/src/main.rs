@@ -16,18 +16,21 @@ fn required_i32(name: &str) -> Result<i32, Error> {
 }
 
 fn producer_config(bootstrap_servers: &str) -> ProducerConfig {
-    ProducerConfig::new([bootstrap_servers.to_owned()])
+    ProducerConfig::new(bootstrap_servers.split(',').map(str::to_owned))
         .client_id("kafrust-published-multi-broker-producer")
         .acks(Acks::Leader)
         .enable_idempotence(true)
 }
 
 fn group_config(bootstrap_servers: &str, group_id: &str) -> ConsumerGroupConfig {
-    ConsumerGroupConfig::new([bootstrap_servers.to_owned()], group_id.to_owned())
-        .client_id("kafrust-published-multi-broker-group")
-        .max_retries(10)
-        .max_poll_records(20)
-        .offset_reset_policy(OffsetResetPolicy::Earliest)
+    ConsumerGroupConfig::new(
+        bootstrap_servers.split(',').map(str::to_owned),
+        group_id.to_owned(),
+    )
+    .client_id("kafrust-published-multi-broker-group")
+    .max_retries(10)
+    .max_poll_records(20)
+    .offset_reset_policy(OffsetResetPolicy::Earliest)
 }
 
 async fn run_pre(
