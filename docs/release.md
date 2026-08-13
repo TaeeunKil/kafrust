@@ -110,12 +110,12 @@ passed on the release preparation commit. Update this paragraph after each
 release with the current package and external verification results. None of
 these checks replace broader workload qualification.
 
-The `0.2.19` release candidate adds Fetch v12 last-fetched leader-epoch
-forwarding and group committed-offset recovery qualification. The complete
-17-job Live Kafka Smoke matrix passed on commit `1e5d5c6` in
+The `0.2.19` packages passed Cargo publish verification on release commit
+`6a0c34c`; `kafrust-protocol` was published before `kafrust`. Both docs.rs
+pages returned HTTP 200, and a fresh external project compiled the published
+`kafrust 0.2.19` crate with `tls` on Rust 1.81. The complete 17-job Live Kafka
+Smoke matrix passed on commit `1e5d5c6` in
 [`31663188419`](https://github.com/TaeeunKil/kafrust/actions/runs/31663188419).
-Update this paragraph with the package, docs.rs, and fresh-project results
-after publishing.
 
 ## Optional Broker Checks
 
