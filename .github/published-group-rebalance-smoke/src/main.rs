@@ -143,6 +143,12 @@ async fn wait_for_two_member_coverage(
         }
     }
 
+    eprintln!(
+        "published group smoke final state: first_assignments={:?} second_assignments={:?} seen_records={seen_records:?}",
+        assignment_keys(first),
+        assignment_keys(second),
+    );
+
     Err(Error::Unsupported(
         "published group smoke members did not converge on disjoint ownership and records",
     ))
