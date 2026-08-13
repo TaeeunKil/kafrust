@@ -142,6 +142,10 @@ preserves top-level and per-partition Kafka errors.
 `list_consumer_group_offsets` and `alter_consumer_group_offsets` expose typed
 classic consumer-group offset inspection and administrative reset through the
 group coordinator, preserving partition-level outcomes.
+`delete_consumer_groups` and `delete_consumer_group_offsets` retry transient
+coordinator responses through fresh discovery within the bounded admin retry
+budget; transport failures after mutation transmission remain single-attempt
+because the broker-side outcome is ambiguous.
 CreateTopics v2 and DeleteTopics v3 discover the active controller, retry
 transient discovery failures before transmission, and preserve per-topic
 partial success and error responses. See [Admin API](docs/admin-api.md).

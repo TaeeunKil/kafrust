@@ -1939,3 +1939,10 @@ Implemented evidence:
   committed offsets recovered after the retained log moves past them. The
   complete 17-job live matrix passed on the follow-up commit in
   [`31663188419`](https://github.com/TaeeunKil/kafrust/actions/runs/31663188419).
+- DeleteGroups v1 and OffsetDelete v0 now retry retryable coordinator responses
+  through fresh coordinator discovery within the bounded Admin retry budget.
+  Focused mock-broker regressions cover transient `NotCoordinator` responses
+  and preserve the existing group and partition-level outcomes. Mutation
+  transport failures after transmission remain single-attempt because the
+  broker-side result is ambiguous; an in-flight live broker-stop gate remains
+  before a broader replacement claim.

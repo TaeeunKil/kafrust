@@ -202,6 +202,11 @@ preserves per-group errors. Kafka returns `NonEmptyGroup` when active members
 still belong to a group; members should leave or expire before deletion.
 Deleting a group's last committed offset can remove the empty group first, in
 which case a subsequent DeleteGroups request returns `GroupIdNotFound`.
+Transient coordinator responses such as `CoordinatorLoadInProgress`,
+`CoordinatorNotAvailable`, and `NotCoordinator` are retried through fresh
+coordinator discovery within `AdminClient::max_retries`. A transport failure
+after DeleteGroups is sent is returned instead of being replayed, because the
+broker-side deletion outcome is ambiguous.
 
 ## Delete Consumer Group Offsets
 
@@ -242,7 +247,10 @@ Kafka rejects deletion for a topic while the group is actively subscribed to
 it with error 86 (`GroupSubscribedToTopic`), so stop the group or remove that
 topic from its subscription before deleting committed offsets. A member can
 remain visible until its broker-side session timeout expires after an
-unclean process exit.
+unclean process exit. Retryable coordinator responses are retried with fresh
+discovery within `AdminClient::max_retries`; transport failures after the
+mutation is transmitted remain single-attempt because replaying an ambiguous
+deletion request is not transparent.
 
 ## List And Alter Consumer Group Offsets
 

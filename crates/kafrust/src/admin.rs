@@ -907,8 +907,27 @@ impl AdminClient {
     ) -> Result<Vec<DeleteConsumerGroupResult>> {
         let mut results = Vec::with_capacity(group_ids.len());
         for group_id in group_ids {
-            let mut coordinator = self.group_coordinator_client(group_id).await?;
-            let response = coordinator.delete_groups_v1(vec![group_id.clone()]).await?;
+            let mut retry = 0;
+            let response = loop {
+                let mut coordinator = self.group_coordinator_client(group_id).await?;
+                match coordinator.delete_groups_v1(vec![group_id.clone()]).await {
+                    Ok(response) => {
+                        let retryable = response.results.iter().any(|result| {
+                            result.group_id == *group_id
+                                && is_retryable_admin_coordinator_code(result.error_code)
+                        });
+                        if retry < self.max_retries && retryable {
+                            self.config.record_broker_error();
+                            retry += 1;
+                            self.config.record_retry();
+                            tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                        } else {
+                            break response;
+                        }
+                    }
+                    Err(error) => return Err(error),
+                }
+            };
             let throttle_time =
                 Duration::from_millis(nonnegative_i32_to_u64(response.throttle_time_ms));
             let result = response
@@ -946,16 +965,36 @@ impl AdminClient {
         group_id: &str,
         topics: &[ConsumerGroupOffsetDelete],
     ) -> Result<DeleteConsumerGroupOffsetsResult> {
-        let mut coordinator = self.group_coordinator_client(group_id).await?;
-        let response = coordinator
-            .offset_delete_v0(
-                group_id,
-                topics
-                    .iter()
-                    .map(ConsumerGroupOffsetDelete::as_protocol)
-                    .collect(),
-            )
-            .await?;
+        let request_topics = topics
+            .iter()
+            .map(ConsumerGroupOffsetDelete::as_protocol)
+            .collect::<Vec<_>>();
+        let mut retry = 0;
+        let response = loop {
+            let mut coordinator = self.group_coordinator_client(group_id).await?;
+            match coordinator
+                .offset_delete_v0(group_id, request_topics.clone())
+                .await
+            {
+                Ok(response) => {
+                    let retryable = is_retryable_admin_coordinator_code(response.error_code)
+                        || response.topics.iter().any(|topic| {
+                            topic.partitions.iter().any(|partition| {
+                                is_retryable_admin_coordinator_code(partition.error_code)
+                            })
+                        });
+                    if retry < self.max_retries && retryable {
+                        self.config.record_broker_error();
+                        retry += 1;
+                        self.config.record_retry();
+                        tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    } else {
+                        break response;
+                    }
+                }
+                Err(error) => return Err(error),
+            }
+        };
 
         if response.error_code != 0 {
             self.config.record_broker_error();
@@ -8360,6 +8399,57 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn retries_delete_group_after_transient_broker_error() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let coordinator_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&coordinator_request[0..4], &[0, 10, 0, 1]);
+            write_frame(
+                &mut bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let (mut coordinator, _) = listener.accept().await.unwrap();
+            let delete_request = read_frame(&mut coordinator).await;
+            assert_eq!(&delete_request[0..4], &[0, 42, 0, 1]);
+            write_frame(&mut coordinator, &delete_groups_response_with_error(16)).await;
+
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let coordinator_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&coordinator_request[0..4], &[0, 10, 0, 1]);
+            write_frame(
+                &mut bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let (mut coordinator, _) = listener.accept().await.unwrap();
+            let delete_request = read_frame(&mut coordinator).await;
+            assert_eq!(&delete_request[0..4], &[0, 42, 0, 1]);
+            write_frame(&mut coordinator, &delete_groups_response_with_error(0)).await;
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        );
+
+        let results = admin
+            .delete_consumer_groups(&["orders-group".to_owned()])
+            .await
+            .unwrap();
+
+        assert!(results[0].is_success());
+        assert_eq!(metrics.snapshot().retries, 1);
+        assert_eq!(metrics.snapshot().broker_errors, 1);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn routes_offset_delete_to_coordinator_and_preserves_partition_errors() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -8415,6 +8505,60 @@ mod tests {
             Some(BrokerErrorKind::GroupSubscribedToTopic)
         );
         assert_eq!(result.clone().into_topics().len(), 1);
+        assert_eq!(metrics.snapshot().broker_errors, 1);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn retries_offset_delete_after_transient_broker_error() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let coordinator_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&coordinator_request[0..4], &[0, 10, 0, 1]);
+            write_frame(
+                &mut bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let (mut coordinator, _) = listener.accept().await.unwrap();
+            let delete_request = read_frame(&mut coordinator).await;
+            assert_eq!(&delete_request[0..4], &[0, 47, 0, 0]);
+            write_frame(&mut coordinator, &offset_delete_retryable_response(16)).await;
+
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let coordinator_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&coordinator_request[0..4], &[0, 10, 0, 1]);
+            write_frame(
+                &mut bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let (mut coordinator, _) = listener.accept().await.unwrap();
+            let delete_request = read_frame(&mut coordinator).await;
+            assert_eq!(&delete_request[0..4], &[0, 47, 0, 0]);
+            write_frame(&mut coordinator, &offset_delete_success_response()).await;
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        );
+
+        let result = admin
+            .delete_consumer_group_offsets(
+                "orders-group",
+                &[ConsumerGroupOffsetDelete::new("orders", [0])],
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(result.error_code(), 0);
+        assert_eq!(metrics.snapshot().retries, 1);
         assert_eq!(metrics.snapshot().broker_errors, 1);
         server.await.unwrap();
     }
@@ -10261,13 +10405,58 @@ mod tests {
     }
 
     fn delete_groups_response() -> Vec<u8> {
+        delete_groups_response_with_error(68)
+    }
+
+    fn delete_groups_response_with_error(error_code: i16) -> Vec<u8> {
         vec![
-            0, 0, 0, 1, // correlation ID
-            0, 0, 0, 5, // throttle time
-            0, 0, 0, 1, // result count
-            0, 12, b'o', b'r', b'd', b'e', b'r', b's', b'-', b'g', b'r', b'o', b'u', b'p', 0,
-            68,
-            // non-empty group
+            0,
+            0,
+            0,
+            1, // correlation ID
+            0,
+            0,
+            0,
+            5, // throttle time
+            0,
+            0,
+            0,
+            1, // result count
+            0,
+            12,
+            b'o',
+            b'r',
+            b'd',
+            b'e',
+            b'r',
+            b's',
+            b'-',
+            b'g',
+            b'r',
+            b'o',
+            b'u',
+            b'p',
+            (error_code >> 8) as u8,
+            error_code as u8,
+        ]
+    }
+
+    fn offset_delete_retryable_response(error_code: i16) -> Vec<u8> {
+        vec![
+            0,
+            0,
+            0,
+            1, // correlation ID
+            (error_code >> 8) as u8,
+            error_code as u8,
+            0,
+            0,
+            0,
+            0, // throttle time
+            0,
+            0,
+            0,
+            0, // no topic results
         ]
     }
 
@@ -10283,6 +10472,19 @@ mod tests {
             0, 0, // success
             0, 0, 0, 2, // partition 2
             0, 86, // group subscribed to topic
+        ]
+    }
+
+    fn offset_delete_success_response() -> Vec<u8> {
+        vec![
+            0, 0, 0, 1, // correlation ID
+            0, 0, // top-level success
+            0, 0, 0, 5, // throttle time
+            0, 0, 0, 1, // topic count
+            0, 6, b'o', b'r', b'd', b'e', b'r', b's', // topic name
+            0, 0, 0, 1, // partition count
+            0, 0, 0, 0, // partition 0
+            0, 0, // success
         ]
     }
 
