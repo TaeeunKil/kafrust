@@ -4235,8 +4235,15 @@ jobs:
           KAFRUST_TOPIC_PATTERN: ^kafrust-acl-discovery-(allowed|denied)$
           KAFRUST_REGEX_EXPECTED_TOPICS: ${{ env.KAFRUST_ACL_DISCOVERY_ALLOWED_TOPIC }}
         run: |
+          set +e
           output="$(cargo run -p kafrust --example consumer_group_regex 2>&1)"
+          status=$?
+          set -e
           printf '%s\n' "$output"
+          if [ "$status" -ne 0 ]; then
+            echo "secured topic discovery example failed with status $status"
+            exit "$status"
+          fi
           if printf '%s\n' "$output" | grep -q "$KAFRUST_ACL_DISCOVERY_DENIED_TOPIC"; then
             echo "regex discovery exposed an unauthorized topic"
             exit 1
