@@ -1879,3 +1879,9 @@ Implemented evidence:
   explicit TLS server-name overrides before network access. `AdminClient::validate()`
   exposes the same connection-free check for administrative workflows, with
   focused tests for missing bootstrap servers, SASL credentials, and TLS names.
+- Release `v0.2.14` published the admin preflight API after protocol-first
+  packaging, staged all-feature docs, a fresh external project compile with
+  `tls` and all features, crates.io resolution, and HTTP 200 responses from
+  both docs.rs pages. The complete 17-job live matrix passed on the release
+  commit in
+  [`31656232857`](https://github.com/TaeeunKil/kafrust/actions/runs/31656232857).
