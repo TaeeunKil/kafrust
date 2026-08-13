@@ -448,6 +448,17 @@ final in-flight or buffered records. This is a published plaintext
 multi-broker recovery profile, not secured, simultaneous-loss, or production
 SLO evidence.
 
+The published secured multi-broker soak workflow
+[`31747389166`](https://github.com/TaeeunKil/kafrust/actions/runs/31747389166)
+passed a fresh external `kafrust 0.2.28` project with the `tls` feature against
+Kafka 4.3.1 SASL_SSL/SCRAM-SHA-256. The three-broker, three-replicated-
+partition, 120-second workload stopped broker 1 after one third of the run,
+waited ten seconds, restarted it, and reconciled 2,288,700 records. It
+observed one failed request and 1,001 retries, no high-level operation errors,
+and ended with `recovered=true` plus zero final in-flight or buffered records.
+This is a published secured recovery profile, not simultaneous-loss or
+production SLO evidence.
+
 The following current-main live run
 [`31719615947`](https://github.com/TaeeunKil/kafrust/actions/runs/31719615947)
 also passed the controlled classic consumer-group combined-fault gate in the

@@ -1556,6 +1556,15 @@ completed and both final resource gauges were zero.
   final queue gauges. This closes the published plaintext multi-broker soak
   gate; secured multi-broker soak, simultaneous broker loss, direct
   rust-rdkafka comparison, production SLO, and canary evidence remain open.
+- Published `kafrust 0.2.28` secured multi-broker soak run
+  [`31747389166`](https://github.com/TaeeunKil/kafrust/actions/runs/31747389166)
+  passed Kafka 4.3.1 three-broker KRaft with SASL_SSL/SCRAM-SHA-256 and three
+  replicated partitions. The fresh external `tls` project ran for 120 seconds
+  through a ten-second broker 1 outage, reconciled 2,288,700 records, observed
+  one failed request and 1,001 retries with zero high-level operation errors,
+  and ended with `recovered=true` plus zero final queue gauges. This closes the
+  published secured multi-broker soak gate; simultaneous broker loss, direct
+  rust-rdkafka comparison, production SLO, and canary evidence remain open.
 - Shared metrics count non-zero Kafka error codes handled by authentication,
   producer, transaction, consumer, and consumer-group operations, including
   retry attempts and partial batch failures. This separates protocol-level
@@ -2346,6 +2355,14 @@ Implemented evidence:
   The remaining 1.0 evidence still includes secured multi-broker soak,
   simultaneous broker loss, direct rust-rdkafka comparison, production SLOs,
   and service canary readiness.
+- The published secured multi-broker soak gate then passed in
+  [`31747389166`](https://github.com/TaeeunKil/kafrust/actions/runs/31747389166).
+  A fresh external `0.2.28` project with `tls` survived a ten-second broker
+  outage in a three-broker Kafka 4.3.1 SASL_SSL/SCRAM cluster, reconciled
+  2,288,700 records across three replicated partitions, and ended with zero
+  in-flight and buffered records. Simultaneous broker loss, direct
+  rust-rdkafka comparison, production SLOs, and service canary readiness remain
+  open.
 - The published secured multi-broker workflow passed both representative
   security and group-protocol combinations. Kafka 3.7.2 classic passed in
   [`31738997447`](https://github.com/TaeeunKil/kafrust/actions/runs/31738997447),
