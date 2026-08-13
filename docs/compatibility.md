@@ -88,6 +88,14 @@ retains Fetch v11 and Fetch v4 fallback paths.
 This qualifies the documented rack-aware replica-selection path, not every
 possible rack topology or security combination.
 
+The current rack-aware Fetch session slice passed the complete 17-job matrix in
+[`31671783977`](https://github.com/TaeeunKil/kafrust/actions/runs/31671783977) at
+commit `8615833`. The Kafka 3.7.2 three-broker job issued the initial Fetch v12,
+follow-up Fetch v12 requests, and preferred-replica route successfully. This
+qualifies session reuse on the documented rack-aware direct-consumer path; it
+does not claim session reuse for the Fetch v4 fallback or every security and
+topology combination.
+
 Release `v0.2.19` additionally qualifies Fetch v12 forwarding of the last
 fetched partition leader epoch and consumer-group `Earliest`/`Latest` recovery
 when a committed offset is no longer retained. The dedicated offset-reset
@@ -535,6 +543,10 @@ with zero in-flight requests and buffered records.
   focused wire and injected multi-broker routing tests cover this path. The
   Kafka 3.7.2 three-broker rack-aware profile is also live-qualified in
   [`31640494509`](https://github.com/TaeeunKil/kafrust/actions/runs/31640494509).
+  Rack-aware Fetch v11/v12 requests reuse a broker-scoped session across
+  sequential polls, with session reset on assignment or position changes,
+  reconnects, and fetch errors; this path passed in
+  [`31671783977`](https://github.com/TaeeunKil/kafrust/actions/runs/31671783977).
 - Consumer group join, sync, heartbeat, poll, and offset commit through the alpha classic consumer group path with range assignment.
 - Client-side regex topic subscription resolves Metadata v1 topic names before
   classic or KIP-848 joins and is covered by focused ordering, filtering, and

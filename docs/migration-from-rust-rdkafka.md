@@ -20,7 +20,7 @@ Replace the dependency:
 
 ```toml
 [dependencies]
-kafrust = "0.2.23"
+kafrust = "0.2.24"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
 

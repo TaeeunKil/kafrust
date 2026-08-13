@@ -1580,6 +1580,9 @@ Implemented evidence:
   epoch advancement, and retry classification for `INVALID_FETCH_SESSION_EPOCH`.
   Session state is explicitly discarded on assignment or position changes,
   reconnects, and fetch errors; the v4 fallback remains outside this claim.
+  The complete 17-job matrix, including the Kafka 3.7.2 three-broker
+  rack-aware follow-up request, passed in
+  [`31671783977`](https://github.com/TaeeunKil/kafrust/actions/runs/31671783977).
 - Classic consumer-group JoinGroup retries transient coordinator and membership
   errors; an `UNKNOWN_MEMBER_ID` response clears the stale member id before the
   next attempt. Live smoke run

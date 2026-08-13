@@ -15,7 +15,7 @@ visible in public APIs: bootstrap servers, client IDs, topics, partitions,
 offsets, acknowledgements, metadata refresh, consumer groups, heartbeats, and
 commits.
 
-Current release: `0.2.23`.
+Current release: `0.2.24`.
 
 Use kafrust today for experiments, local broker checks, simple internal tools,
 and API evaluation. For broad production Kafka workloads that need mature
@@ -321,6 +321,9 @@ Rack-aware Fetch v11/v12 requests also reuse a broker-scoped fetch session acros
 sequential polls; assignment changes, local position controls, reconnects, and
 fetch errors reset that session. Fetch v4 remains a compatibility fallback
 without a fetch-session claim.
+The complete 17-job matrix for this session path passed in
+[`31671783977`](https://github.com/TaeeunKil/kafrust/actions/runs/31671783977),
+including the Kafka 3.7.2 three-broker rack-aware follow-up request.
 
 ### Consumer Group
 
@@ -543,8 +546,8 @@ Primary public entry points:
 
 Generated API documentation:
 
-- [`kafrust`](https://docs.rs/kafrust/0.2.23/kafrust/)
-- [`kafrust-protocol`](https://docs.rs/kafrust-protocol/0.2.23/kafrust_protocol/)
+- [`kafrust`](https://docs.rs/kafrust/0.2.24/kafrust/)
+- [`kafrust-protocol`](https://docs.rs/kafrust-protocol/0.2.24/kafrust_protocol/)
 
 ## Documentation
 
