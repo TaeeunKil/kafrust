@@ -177,6 +177,10 @@ async fn main() -> kafrust::Result<()> {
 
     let snapshot = metrics.snapshot();
     if produced != consumed || snapshot.produced_records != snapshot.consumed_records {
+        eprintln!(
+            "secure multi-soak count mismatch: local produced={produced} consumed={consumed}; metrics produced={} consumed={}",
+            snapshot.produced_records, snapshot.consumed_records
+        );
         return Err(Error::Unsupported(
             "secure multi-soak record counts did not reconcile",
         ));
