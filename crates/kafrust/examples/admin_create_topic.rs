@@ -3,7 +3,7 @@ mod common;
 use kafrust::{
     AdminClient, AlterConfigsOptions, ClientConfig, CreatePartitionsOptions, CreateTopicsOptions,
     DeleteTopicsOptions, DescribeConfigsOptions, Error, NewPartitions, NewTopic,
-    TopicConfigAlteration, TopicConfigResource,
+    TopicConfigAlteration, TopicConfigResource, TopicConfigUpdate,
 };
 use std::time::{Duration, Instant};
 
@@ -145,9 +145,28 @@ async fn main() -> kafrust::Result<()> {
     }
     println!("described cleanup.policy={cleanup_policy} for topic {topic}");
 
+    let classic_alter_result = admin
+        .alter_topic_configs(
+            &[TopicConfigUpdate::new(&topic)
+                .set("cleanup.policy", "delete")
+                .set("retention.ms", "60000")],
+            AlterConfigsOptions::new(),
+        )
+        .await?;
+    for resource in classic_alter_result.resources() {
+        if !resource.is_success() {
+            return Err(Error::Broker {
+                code: resource.error_code(),
+                context: format!("classic alter configs for topic {}", resource.name()),
+            });
+        }
+    }
+    wait_for_topic_config_value(&admin, &topic, "retention.ms", "60000").await?;
+    println!("classic-altered retention.ms=60000 for topic {topic}");
+
     let alter_result = admin
         .incremental_alter_topic_configs(
-            &[TopicConfigAlteration::new(&topic).set("retention.ms", "60000")],
+            &[TopicConfigAlteration::new(&topic).set("retention.ms", "120000")],
             AlterConfigsOptions::new(),
         )
         .await?;
@@ -159,8 +178,8 @@ async fn main() -> kafrust::Result<()> {
             });
         }
     }
-    wait_for_topic_config_value(&admin, &topic, "retention.ms", "60000").await?;
-    println!("altered retention.ms=60000 for topic {topic}");
+    wait_for_topic_config_value(&admin, &topic, "retention.ms", "120000").await?;
+    println!("incrementally altered retention.ms=120000 for topic {topic}");
 
     let delete_result = admin
         .delete_topics(&[topic.clone()], DeleteTopicsOptions::new())

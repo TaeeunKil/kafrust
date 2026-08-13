@@ -51,7 +51,8 @@ pub use admin::{
     PartitionReassignmentOptions, PartitionReassignmentPartition, PartitionReassignmentQuery,
     ScramCredentialDeletion, ScramCredentialInfo, ScramCredentialMechanism,
     ScramCredentialUpsertion, ScramUserCredentials, TopicConfigAlteration, TopicConfigResource,
-    TopicListing, TransactionDescription, TransactionDescriptionTopic,
+    TopicConfigUpdate, TopicConfigUpdateEntry, TopicListing, TransactionDescription,
+    TransactionDescriptionTopic,
 };
 pub use client::Client;
 pub use config::{

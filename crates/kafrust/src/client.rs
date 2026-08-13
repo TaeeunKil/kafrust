@@ -7,6 +7,9 @@ use kafrust_protocol::api::add_partitions_to_txn::{
 use kafrust_protocol::api::alter_client_quotas::{
     AlterClientQuotasRequestV0, AlterClientQuotasResponseV0,
 };
+use kafrust_protocol::api::alter_configs::{
+    AlterConfigsRequestV1, AlterConfigsResourceV1, AlterConfigsResponseV1,
+};
 use kafrust_protocol::api::alter_partition_reassignments::{
     AlterPartitionReassignmentsRequestV0, AlterPartitionReassignmentsResponseV0,
 };
@@ -997,6 +1000,28 @@ impl Client {
         Ok(IncrementalAlterConfigsResponseV0::decode_body(
             &mut decoder,
         )?)
+    }
+
+    /// Sends classic AlterConfigs v1 to this broker.
+    ///
+    /// Kafka AlterConfigs v1 is the non-flexible compatibility path. It
+    /// replaces the complete dynamic configuration map for each resource;
+    /// callers should use a null value to remove a key.
+    pub async fn alter_configs_v1(
+        &mut self,
+        resources: Vec<AlterConfigsResourceV1>,
+        validate_only: bool,
+    ) -> Result<AlterConfigsResponseV1> {
+        let request = AlterConfigsRequestV1 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            resources,
+            validate_only,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(AlterConfigsResponseV1::decode_body(&mut decoder)?)
     }
 
     /// Sends InitProducerId v0 for an idempotent or transactional producer session.

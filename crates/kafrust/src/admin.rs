@@ -6,6 +6,9 @@ use std::time::Duration;
 use kafrust_protocol::api::alter_client_quotas::{
     AlterClientQuotasEntityV0, AlterClientQuotasEntryV0, AlterClientQuotasOperationV0,
 };
+use kafrust_protocol::api::alter_configs::{
+    AlterConfigsResourceResponseV1, AlterConfigsResourceV1, AlterableConfigV1,
+};
 use kafrust_protocol::api::alter_partition_reassignments::{
     AlterPartitionReassignmentsPartitionV0, AlterPartitionReassignmentsTopicV0,
 };
@@ -755,6 +758,51 @@ impl AdminClient {
                 .responses
                 .into_iter()
                 .map(AlterConfigResourceResult::from_protocol)
+                .collect(),
+        })
+    }
+
+    /// Replaces dynamic Kafka topic configuration values using AlterConfigs v1.
+    ///
+    /// Unlike [`Self::incremental_alter_topic_configs`], this classic API
+    /// replaces the complete dynamic configuration map represented by each
+    /// resource. A null value removes a dynamic key. Resource-level Kafka
+    /// failures remain in [`AlterConfigsResult`].
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.alter_topic_configs",
+        skip_all,
+        fields(resource_count = resources.len(), validate_only = options.validate_only),
+        err
+    )]
+    pub async fn alter_topic_configs(
+        &self,
+        resources: &[TopicConfigUpdate],
+        options: AlterConfigsOptions,
+    ) -> Result<AlterConfigsResult> {
+        let mut client = self.bootstrap_client_with_retries().await?;
+        let response = client
+            .alter_configs_v1(
+                resources
+                    .iter()
+                    .map(TopicConfigUpdate::as_protocol)
+                    .collect(),
+                options.validate_only,
+            )
+            .await?;
+
+        for resource in &response.responses {
+            if resource.error_code != 0 {
+                self.config.record_broker_error();
+            }
+        }
+
+        Ok(AlterConfigsResult {
+            throttle_time: Duration::from_millis(nonnegative_i32_to_u64(response.throttle_time_ms)),
+            resources: response
+                .responses
+                .into_iter()
+                .map(AlterConfigResourceResult::from_classic_protocol)
                 .collect(),
         })
     }
@@ -4294,6 +4342,90 @@ impl TopicConfigResource {
     }
 }
 
+/// Complete dynamic topic configuration values for one topic in classic
+/// AlterConfigs.
+///
+/// Each builder call adds one key. Supplying `None` through [`Self::delete`]
+/// removes the dynamic value and lets Kafka resolve the configuration from its
+/// lower-precedence source.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TopicConfigUpdate {
+    topic: String,
+    configs: Vec<TopicConfigUpdateEntry>,
+}
+
+impl TopicConfigUpdate {
+    /// Creates an update for one topic.
+    pub fn new(topic: impl Into<String>) -> Self {
+        Self {
+            topic: topic.into(),
+            configs: Vec::new(),
+        }
+    }
+
+    /// Adds a dynamic topic configuration value.
+    pub fn set(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
+        self.configs.push(TopicConfigUpdateEntry {
+            name: name.into(),
+            value: Some(value.into()),
+        });
+        self
+    }
+
+    /// Removes a dynamic topic configuration value.
+    pub fn delete(mut self, name: impl Into<String>) -> Self {
+        self.configs.push(TopicConfigUpdateEntry {
+            name: name.into(),
+            value: None,
+        });
+        self
+    }
+
+    /// Returns the topic name.
+    pub fn topic(&self) -> &str {
+        &self.topic
+    }
+
+    /// Returns configuration entries in request order.
+    pub fn configs(&self) -> &[TopicConfigUpdateEntry] {
+        &self.configs
+    }
+
+    fn as_protocol(&self) -> AlterConfigsResourceV1 {
+        AlterConfigsResourceV1 {
+            resource_type: 2,
+            resource_name: self.topic.clone(),
+            configs: self
+                .configs
+                .iter()
+                .map(|config| AlterableConfigV1 {
+                    name: config.name.clone(),
+                    value: config.value.clone(),
+                })
+                .collect(),
+        }
+    }
+}
+
+/// One configuration entry in a classic [`TopicConfigUpdate`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TopicConfigUpdateEntry {
+    name: String,
+    value: Option<String>,
+}
+
+impl TopicConfigUpdateEntry {
+    /// Returns the configuration key.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Returns the replacement value, or `None` when the key is deleted.
+    pub fn value(&self) -> Option<&str> {
+        self.value.as_deref()
+    }
+}
+
 /// Options for one DescribeConfigs operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct DescribeConfigsOptions {
@@ -4717,7 +4849,7 @@ impl ConfigAlterOperationKind {
     }
 }
 
-/// Options for one IncrementalAlterConfigs operation.
+/// Options shared by classic and incremental AlterConfigs operations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct AlterConfigsOptions {
     validate_only: bool,
@@ -4741,7 +4873,7 @@ impl AlterConfigsOptions {
     }
 }
 
-/// Complete response from one IncrementalAlterConfigs operation.
+/// Complete response from one classic or incremental AlterConfigs operation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AlterConfigsResult {
     throttle_time: Duration,
@@ -4770,7 +4902,7 @@ impl AlterConfigsResult {
     }
 }
 
-/// Outcome for one resource in IncrementalAlterConfigs.
+/// Outcome for one resource in a classic or incremental AlterConfigs operation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AlterConfigResourceResult {
     resource_type: i8,
@@ -4811,6 +4943,15 @@ impl AlterConfigResourceResult {
     }
 
     fn from_protocol(response: IncrementalAlterConfigsResourceResponseV0) -> Self {
+        Self {
+            resource_type: response.resource_type,
+            name: response.resource_name,
+            error_code: response.error_code,
+            error_message: response.error_message,
+        }
+    }
+
+    fn from_classic_protocol(response: AlterConfigsResourceResponseV1) -> Self {
         Self {
             resource_type: response.resource_type,
             name: response.resource_name,
@@ -7109,7 +7250,7 @@ mod tests {
         ListTransactionsOptions, NewPartitions, NewTopic, PartitionReassignment,
         PartitionReassignmentOptions, PartitionReassignmentQuery, ScramCredentialDeletion,
         ScramCredentialMechanism, ScramCredentialUpsertion, TopicConfigAlteration,
-        TopicConfigResource,
+        TopicConfigResource, TopicConfigUpdate,
     };
     use crate::{BrokerErrorKind, ClientConfig, ClientMetrics, Error};
     use kafrust_protocol::codec::Encoder;
@@ -7332,6 +7473,20 @@ mod tests {
 
         let options = AlterConfigsOptions::new().validate_only(true);
         assert!(options.is_validate_only());
+    }
+
+    #[test]
+    fn builds_classic_topic_config_updates_without_exposing_protocol_types() {
+        let update = TopicConfigUpdate::new("orders")
+            .set("retention.ms", "60000")
+            .delete("segment.ms");
+
+        assert_eq!(update.topic(), "orders");
+        assert_eq!(update.configs().len(), 2);
+        assert_eq!(update.configs()[0].name(), "retention.ms");
+        assert_eq!(update.configs()[0].value(), Some("60000"));
+        assert_eq!(update.configs()[1].name(), "segment.ms");
+        assert_eq!(update.configs()[1].value(), None);
     }
 
     #[tokio::test]
@@ -8153,6 +8308,52 @@ mod tests {
         );
         assert_eq!(metrics.snapshot().broker_errors, 1);
         assert_eq!(result.clone().into_resources().len(), 2);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn alters_classic_topic_configs_and_preserves_resource_errors() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut connection, _) = listener.accept().await.unwrap();
+            let request = read_frame(&mut connection).await;
+            assert_eq!(&request[0..4], &[0, 33, 0, 1]);
+            assert_eq!(request.last(), Some(&1));
+            write_frame(&mut connection, &classic_alter_configs_response()).await;
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        );
+
+        let result = admin
+            .alter_topic_configs(
+                &[
+                    TopicConfigUpdate::new("orders").set("retention.ms", "60000"),
+                    TopicConfigUpdate::new("payments").delete("retention.ms"),
+                ],
+                AlterConfigsOptions::new().validate_only(true),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(result.throttle_time(), Duration::from_millis(7));
+        assert!(result.has_errors());
+        assert_eq!(result.resources().len(), 2);
+        assert_eq!(result.resources()[0].resource_type(), 2);
+        assert_eq!(result.resources()[0].name(), "orders");
+        assert!(result.resources()[0].is_success());
+        assert_eq!(result.resources()[1].name(), "payments");
+        assert_eq!(result.resources()[1].error_code(), 40);
+        assert_eq!(result.resources()[1].error_message(), Some("invalid"));
+        assert_eq!(
+            result.resources()[1].broker_error_kind(),
+            Some(BrokerErrorKind::InvalidConfig)
+        );
+        assert_eq!(metrics.snapshot().broker_errors, 1);
         server.await.unwrap();
     }
 
@@ -10341,6 +10542,22 @@ mod tests {
         vec![
             0, 0, 0, 1, // correlation ID
             0, 0, 0, 6, // throttle time
+            0, 0, 0, 2, // response count
+            0, 0, // success
+            0xff, 0xff, // null error message
+            2,    // topic resource
+            0, 6, b'o', b'r', b'd', b'e', b'r', b's', // resource name
+            0, 40, // invalid config
+            0, 7, b'i', b'n', b'v', b'a', b'l', b'i', b'd', // error message
+            2,    // topic resource
+            0, 8, b'p', b'a', b'y', b'm', b'e', b'n', b't', b's', // resource name
+        ]
+    }
+
+    fn classic_alter_configs_response() -> Vec<u8> {
+        vec![
+            0, 0, 0, 1, // correlation ID
+            0, 0, 0, 7, // throttle time
             0, 0, 0, 2, // response count
             0, 0, // success
             0xff, 0xff, // null error message

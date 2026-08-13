@@ -135,6 +135,47 @@ atomically within each resource, but resources can succeed or fail
 independently. `AlterConfigsResult` therefore preserves every resource outcome.
 Use `validate_only(true)` to ask Kafka to validate without applying changes.
 
+## Replace Topic Configurations
+
+```rust
+use kafrust::{
+    AdminClient, AlterConfigsOptions, ClientConfig, TopicConfigUpdate,
+};
+
+# async fn example() -> kafrust::Result<()> {
+let admin = AdminClient::new(ClientConfig::new(["localhost:9092"]));
+let result = admin
+    .alter_topic_configs(
+        &[TopicConfigUpdate::new("orders")
+            .set("cleanup.policy", "delete")
+            .set("retention.ms", "60000")
+            .delete("segment.ms")],
+        AlterConfigsOptions::new(),
+    )
+    .await?;
+
+for resource in result.resources() {
+    if !resource.is_success() {
+        eprintln!(
+            "{}: Kafka error {}: {}",
+            resource.name(),
+            resource.error_code(),
+            resource.error_message().unwrap_or("no broker message")
+        );
+    }
+}
+# Ok(())
+# }
+```
+
+Classic AlterConfigs v1 replaces the complete dynamic configuration map for
+each resource. Include every dynamic key that must remain set; keys omitted
+from the request may return to their lower-precedence value. `delete` sends a
+null value so Kafka removes that dynamic key. Use incremental alterations when
+unrelated dynamic settings must be preserved automatically. Resource failures,
+broker throttle time, and `validate_only(true)` are exposed through the same
+typed `AlterConfigsResult` used by the incremental API.
+
 ## Describe Consumer Groups
 
 ```rust

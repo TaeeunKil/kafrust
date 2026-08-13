@@ -342,6 +342,10 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
 - IncrementalAlterConfigs v0 followed by DescribeConfigs v1 verification.
   Manual run `30061073263` passed this update-and-readback path against Kafka
   3.7.2 and Kafka 4.3.1.
+- Classic AlterConfigs v1 now has a typed `TopicConfigUpdate` API, protocol
+  fixtures, and injected-broker partial-result coverage. The admin lifecycle
+  example exercises complete-map replacement before its incremental update;
+  live broker qualification remains open.
 - Coordinator-routed DescribeGroups v1. Manual run `30061497355` passed this
   path against Kafka 3.7.2 and Kafka 4.3.1 plaintext brokers plus the Kafka
   3.7.2 TLS, SASL_PLAINTEXT, and SASL_SSL profiles.

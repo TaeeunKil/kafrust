@@ -882,6 +882,12 @@ Implemented evidence:
 - IncrementalAlterConfigs v0 exposes Set, Delete, Append, and Subtract
   operations, validate-only mode, resource-level atomicity and partial
   outcomes, broker throttle time, tracing, and broker-error metrics.
+- Classic AlterConfigs v1 exposes a typed `TopicConfigUpdate` builder for
+  complete dynamic topic configuration maps, including null-valued deletion,
+  validate-only mode, resource-level outcomes, broker throttle time, tracing,
+  and broker-error metrics. Focused protocol and injected-broker tests pass;
+  the admin lifecycle example now exercises classic replacement followed by
+  incremental alteration. Live broker qualification remains the next gate.
 - DescribeGroups v1 discovers each requested group's coordinator independently
   and preserves state, protocol, member identity, raw protocol metadata and
   assignments, per-group errors, throttle time, tracing, and metrics.
