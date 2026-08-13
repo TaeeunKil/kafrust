@@ -44,6 +44,7 @@ pub struct ConsumerRecord {
     topic: String,
     partition: i32,
     offset: i64,
+    leader_epoch: i32,
     timestamp_ms: i64,
     key: Option<Vec<u8>>,
     value: Option<Vec<u8>>,
@@ -147,6 +148,7 @@ impl ConsumerRecord {
             topic: topic.to_owned(),
             partition,
             offset: record.offset,
+            leader_epoch: record.leader_epoch,
             timestamp_ms: record.timestamp_ms,
             key: record.key,
             value: record.value,
@@ -171,6 +173,14 @@ impl ConsumerRecord {
     /// Returns the Kafka record offset.
     pub fn offset(&self) -> i64 {
         self.offset
+    }
+
+    /// Returns the Kafka partition leader epoch attached to this record.
+    ///
+    /// Legacy MessageSet records return `-1` because that wire format has no
+    /// leader epoch field.
+    pub fn leader_epoch(&self) -> i32 {
+        self.leader_epoch
     }
 
     /// Returns the Kafka record timestamp in milliseconds since the Unix epoch.
@@ -1622,6 +1632,7 @@ mod tests {
             1,
             MessageSetRecord {
                 offset: 42,
+                leader_epoch: 4,
                 timestamp_ms: 123,
                 key: Some(b"order-1".to_vec()),
                 value: Some(b"created".to_vec()),
@@ -1638,6 +1649,7 @@ mod tests {
         assert_eq!(record.topic(), "orders");
         assert_eq!(record.partition(), 1);
         assert_eq!(record.offset(), 42);
+        assert_eq!(record.leader_epoch(), 4);
         assert_eq!(record.timestamp_ms(), 123);
         assert_eq!(record.key().unwrap(), b"order-1");
         assert_eq!(record.value().unwrap(), b"created");
@@ -2163,6 +2175,7 @@ mod tests {
     fn message(offset: i64) -> MessageSetRecord {
         MessageSetRecord {
             offset,
+            leader_epoch: -1,
             timestamp_ms: 123,
             key: None,
             value: None,
@@ -2176,6 +2189,7 @@ mod tests {
     fn transactional_message(offset: i64, producer_id: i64, control: bool) -> MessageSetRecord {
         MessageSetRecord {
             offset,
+            leader_epoch: -1,
             timestamp_ms: 123,
             key: None,
             value: None,

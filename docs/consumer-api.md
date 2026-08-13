@@ -34,7 +34,8 @@ for header in record.headers() {
 `ConsumerRecordHeader::value()` returns `Option<&[u8]>` because Kafka permits a
 header value to be null. Header order is preserved from the RecordBatch. Legacy
 MessageSet records return an empty header slice because that wire format has no
-record headers.
+record headers. `record.leader_epoch()` returns the RecordBatch partition
+leader epoch, or `-1` for legacy MessageSet records.
 
 To process one assigned partition independently, split it into a bounded
 queue before polling:

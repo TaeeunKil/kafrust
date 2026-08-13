@@ -1885,3 +1885,7 @@ Implemented evidence:
   both docs.rs pages. The complete 17-job live matrix passed on the release
   commit in
   [`31656232857`](https://github.com/TaeeunKil/kafrust/actions/runs/31656232857).
+- Fetch RecordBatch decoding now preserves the partition leader epoch through
+  `ConsumerRecord::leader_epoch()`. Legacy MessageSet records explicitly use
+  `-1`; focused protocol and high-level mapping tests cover both shapes. This
+  preserves the broker state needed for future leader-epoch offset recovery.

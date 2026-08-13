@@ -621,6 +621,9 @@ impl FetchPartitionResponseV2 {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MessageSetRecord {
     pub offset: i64,
+    /// Kafka's partition leader epoch for the enclosing RecordBatch.
+    /// Legacy MessageSet records do not carry an epoch and use `-1`.
+    pub leader_epoch: i32,
     pub timestamp_ms: i64,
     pub key: Option<Vec<u8>>,
     pub value: Option<Vec<u8>>,
@@ -693,6 +696,7 @@ fn decode_message(offset: i64, bytes: &[u8], limits: DecodeLimits) -> Result<Mes
 
     Ok(MessageSetRecord {
         offset,
+        leader_epoch: -1,
         timestamp_ms,
         key,
         value,
@@ -709,7 +713,7 @@ fn decode_record_batch(
     limits: DecodeLimits,
 ) -> Result<Vec<MessageSetRecord>> {
     let mut decoder = Decoder::with_limits(bytes, limits);
-    let _partition_leader_epoch = decoder.read_i32()?;
+    let partition_leader_epoch = decoder.read_i32()?;
     let magic = decoder.read_i8()?;
     if magic != 2 {
         return Err(Error::UnsupportedVersion {
@@ -769,6 +773,7 @@ fn decode_record_batch(
         let record_bytes = record_decoder.read_exact(record_length)?;
         records.push(decode_record(
             base_offset,
+            partition_leader_epoch,
             base_timestamp,
             producer_id,
             attributes,
@@ -782,6 +787,7 @@ fn decode_record_batch(
 
 fn decode_record(
     base_offset: i64,
+    partition_leader_epoch: i32,
     base_timestamp: i64,
     producer_id: i64,
     batch_attributes: i16,
@@ -814,6 +820,7 @@ fn decode_record(
 
     Ok(MessageSetRecord {
         offset: base_offset.saturating_add(i64::from(offset_delta)),
+        leader_epoch: partition_leader_epoch,
         timestamp_ms: base_timestamp.saturating_add(timestamp_delta),
         key,
         value,
@@ -1130,6 +1137,7 @@ mod tests {
         let response = FetchResponseV2::decode_body(&mut decoder).unwrap();
         let record = MessageSetRecord {
             offset: 42,
+            leader_epoch: -1,
             timestamp_ms: 123,
             key: Some(b"order-1".to_vec()),
             value: Some(b"created".to_vec()),
@@ -1242,6 +1250,7 @@ mod tests {
         let response = FetchResponseV2::decode_body(&mut decoder).unwrap();
         let record = MessageSetRecord {
             offset: 42,
+            leader_epoch: 0,
             timestamp_ms: 1_005,
             key: Some(b"order-1".to_vec()),
             value: Some(b"created".to_vec()),
