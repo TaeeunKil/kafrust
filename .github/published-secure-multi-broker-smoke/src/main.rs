@@ -164,6 +164,23 @@ async fn run_pre(
         ));
     }
     group.commit_queued_offsets().await?;
+    let coordinator = AdminClient::new(
+        security.configure_client(
+            ClientConfig::new(bootstrap_servers.split(',').map(str::to_owned))
+                .client_id("kafrust-published-secure-multi-coordinator-admin"),
+        ),
+    )
+    .list_groups()
+    .await?
+    .into_iter()
+    .find(|listing| listing.group_id() == group_id)
+    .ok_or(Error::Unsupported(
+        "published secure multi-broker group coordinator was not listed",
+    ))?;
+    println!(
+        "published secure multi-broker group coordinator node {}",
+        coordinator.coordinator_id()
+    );
     group.leave().await?;
     println!(
         "published secure multi-broker pre-failover committed {}-{}@{}",

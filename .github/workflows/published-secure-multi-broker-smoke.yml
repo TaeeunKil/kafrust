@@ -15,13 +15,21 @@ on:
         description: "Consumer group protocol: classic or consumer (KIP-848)"
         required: true
         default: "classic"
+      fault_mode:
+        description: "Fault mode: partition leader or coordinator-plus-partition leader"
+        required: true
+        default: "leader"
+        type: choice
+        options:
+          - leader
+          - combined
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   published-secure-multi-broker:
-    name: Published kafrust ${{ inputs.kafrust_version }} ${{ inputs.kafka_version }} ${{ inputs.group_protocol }} SASL_SSL failover
+    name: Published kafrust ${{ inputs.kafrust_version }} ${{ inputs.kafka_version }} ${{ inputs.group_protocol }} SASL_SSL ${{ inputs.fault_mode }} failover
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -190,29 +198,92 @@ jobs:
       - name: Run published secure pre-failover phase
         env:
           KAFRUST_PHASE: pre
-        run: cargo run --manifest-path "$RUNNER_TEMP/kafrust-published-secure-multi-smoke/Cargo.toml"
+        run: |
+          if [ "${{ inputs.fault_mode }}" = "combined" ]; then
+            cargo run --manifest-path "$RUNNER_TEMP/kafrust-published-secure-multi-smoke/Cargo.toml" \
+              2>&1 | tee /tmp/kafrust-published-secure-combined-preflight.log
+          else
+            cargo run --manifest-path "$RUNNER_TEMP/kafrust-published-secure-multi-smoke/Cargo.toml"
+          fi
+
+      - name: Choose published secure combined fault target
+        if: inputs.fault_mode == 'combined'
+        run: |
+          combined_coordinator="$(sed -n 's/.*group coordinator node \([0-9][0-9]*\)$/\1/p' \
+            /tmp/kafrust-published-secure-combined-preflight.log | tail -n 1)"
+          if ! [[ "$combined_coordinator" =~ ^[123]$ ]]; then
+            cat /tmp/kafrust-published-secure-combined-preflight.log
+            echo "published secure combined preflight did not report a broker coordinator"
+            exit 1
+          fi
+          docker exec kafrust-published-secure-multi-1 /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server kafrust-published-secure-multi-1:29092 --describe --topic "$KAFRUST_TOPIC" \
+            | tee /tmp/kafrust-published-secure-combined-topic.log
+          combined_assignment="$(awk -v coordinator="$combined_coordinator" '/Partition:/ { partition=""; leader=""; for (i = 1; i <= NF; i++) { if ($i == "Partition:") partition=$(i + 1); if ($i == "Leader:") leader=$(i + 1) } if (partition != "" && leader == coordinator) { print partition, leader; exit } }' \
+            /tmp/kafrust-published-secure-combined-topic.log)"
+          if [ -z "$combined_assignment" ]; then
+            cat /tmp/kafrust-published-secure-combined-topic.log
+            echo "could not find a partition led by the published group coordinator"
+            exit 1
+          fi
+          read -r combined_partition combined_leader <<<"$combined_assignment"
+          combined_probe_broker=""
+          for candidate in 1 2 3; do
+            if [ "$candidate" != "$combined_leader" ]; then
+              combined_probe_broker="$candidate"
+              break
+            fi
+          done
+          echo "KAFRUST_COMBINED_PARTITION=${combined_partition}" >> "$GITHUB_ENV"
+          echo "KAFRUST_COMBINED_BROKER=${combined_leader}" >> "$GITHUB_ENV"
+          echo "KAFRUST_COMBINED_PROBE_BROKER=${combined_probe_broker}" >> "$GITHUB_ENV"
+
+      - name: Run published secure combined pre-failover phase
+        if: inputs.fault_mode == 'combined'
+        env:
+          KAFRUST_PHASE: pre
+          KAFRUST_VALUE: published-secure-combined-before-${{ github.run_id }}
+        run: |
+          KAFRUST_PARTITION="$KAFRUST_COMBINED_PARTITION" \
+            cargo run --manifest-path "$RUNNER_TEMP/kafrust-published-secure-multi-smoke/Cargo.toml"
 
       - name: Stop selected partition leader
         run: |
-          docker stop kafrust-published-secure-multi-1
+          if [ "${{ inputs.fault_mode }}" = "combined" ]; then
+            stopped_broker="$KAFRUST_COMBINED_BROKER"
+            partition="$KAFRUST_COMBINED_PARTITION"
+            probe_broker="$KAFRUST_COMBINED_PROBE_BROKER"
+          else
+            stopped_broker=1
+            partition="$KAFRUST_PARTITION"
+            probe_broker=2
+          fi
+          docker stop "kafrust-published-secure-multi-${stopped_broker}"
           for attempt in {1..60}; do
-            line="$(docker exec kafrust-published-secure-multi-2 /opt/kafka/bin/kafka-topics.sh \
-              --bootstrap-server kafrust-published-secure-multi-2:29092 --describe --topic "$KAFRUST_TOPIC" \
-              | awk -v partition="$KAFRUST_PARTITION" '$0 ~ /Partition:/ { p=""; l=""; for (i = 1; i <= NF; i++) { if ($i == "Partition:") p=$(i + 1); if ($i == "Leader:") l=$(i + 1) } if (p == partition) print l }')"
-            if [ -n "$line" ] && [ "$line" != "1" ] && [ "$line" != "-1" ]; then
-              echo "partition $KAFRUST_PARTITION moved to leader $line"
+            line="$(docker exec "kafrust-published-secure-multi-${probe_broker}" /opt/kafka/bin/kafka-topics.sh \
+              --bootstrap-server "kafrust-published-secure-multi-${probe_broker}:29092" --describe --topic "$KAFRUST_TOPIC" \
+              | awk -v partition="$partition" -v stopped="$stopped_broker" '$0 ~ /Partition:/ { p=""; l=""; for (i = 1; i <= NF; i++) { if ($i == "Partition:") p=$(i + 1); if ($i == "Leader:") l=$(i + 1) } if (p == partition && l != stopped) print l }')"
+            if [ -n "$line" ] && [ "$line" != "-1" ]; then
+              echo "partition $partition moved from broker $stopped_broker to leader $line"
               exit 0
             fi
             sleep 2
           done
-          docker exec kafrust-published-secure-multi-2 /opt/kafka/bin/kafka-topics.sh \
-            --bootstrap-server kafrust-published-secure-multi-2:29092 --describe --topic "$KAFRUST_TOPIC"
+          docker exec "kafrust-published-secure-multi-${probe_broker}" /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server "kafrust-published-secure-multi-${probe_broker}:29092" --describe --topic "$KAFRUST_TOPIC"
           exit 1
 
       - name: Run published secure post-failover phase
         env:
           KAFRUST_PHASE: post
-        run: cargo run --manifest-path "$RUNNER_TEMP/kafrust-published-secure-multi-smoke/Cargo.toml"
+          KAFRUST_VALUE: ${{ inputs.fault_mode == 'combined' && format('published-secure-combined-after-{0}', github.run_id) || format('published-secure-multi-{0}', github.run_id) }}
+        run: |
+          if [ "${{ inputs.fault_mode }}" = "combined" ]; then
+            KAFRUST_PARTITION="$KAFRUST_COMBINED_PARTITION" \
+              cargo run --manifest-path "$RUNNER_TEMP/kafrust-published-secure-multi-smoke/Cargo.toml"
+          else
+            cargo run --manifest-path "$RUNNER_TEMP/kafrust-published-secure-multi-smoke/Cargo.toml"
+          fi
 
       - name: Verify published dependency versions
         run: |
