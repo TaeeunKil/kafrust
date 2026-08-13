@@ -11,8 +11,7 @@ use kafrust_protocol::api::find_coordinator::FindCoordinatorResponseV1;
 use kafrust_protocol::api::join_group::JoinGroupMember;
 use kafrust_protocol::api::leave_group::{LeaveGroupMemberIdentity, LeaveGroupResponseV3};
 use kafrust_protocol::api::list_offsets::{
-    ListOffsetsPartitionV1, ListOffsetsResponseV1, ListOffsetsTopicV1, EARLIEST_TIMESTAMP,
-    LATEST_TIMESTAMP,
+    ListOffsetsPartitionV1, ListOffsetsResponseV1, ListOffsetsTopicV1,
 };
 use kafrust_protocol::api::metadata::{
     MetadataRequestTopicV12, MetadataResponseV1, MetadataResponseV12,
@@ -32,6 +31,7 @@ use kafrust_protocol::consumer_group::{
 
 use crate::client::Client;
 use crate::config::{ClientConfig, OAuthBearerTokenProvider, SecurityProtocol};
+pub use crate::consumer::OffsetResetPolicy;
 use crate::consumer::{
     Consumer, ConsumerAssignment, ConsumerConfig, ConsumerPartitionQueue, ConsumerRecord,
     IsolationLevel, LeaderEpochOffset, PartitionWatermarks,
@@ -151,33 +151,6 @@ impl ConsumerGroupAssignmentStrategy {
             Self::Range => RANGE_PROTOCOL,
             Self::RoundRobin => ROUND_ROBIN_PROTOCOL,
             Self::CooperativeSticky => COOPERATIVE_STICKY_PROTOCOL,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-/// Starting position used when an assigned partition has no committed offset.
-pub enum OffsetResetPolicy {
-    /// Start at the partition's earliest available offset.
-    Earliest,
-    /// Start after the partition's current log end.
-    Latest,
-    /// Start at an explicit absolute offset.
-    Offset(i64),
-}
-
-impl Default for OffsetResetPolicy {
-    fn default() -> Self {
-        Self::Offset(0)
-    }
-}
-
-impl OffsetResetPolicy {
-    fn timestamp(self) -> Option<i64> {
-        match self {
-            Self::Earliest => Some(EARLIEST_TIMESTAMP),
-            Self::Latest => Some(LATEST_TIMESTAMP),
-            Self::Offset(_) => None,
         }
     }
 }
@@ -651,6 +624,7 @@ impl ConsumerGroupConfig {
             .max_poll_records(self.max_poll_records)
             .partition_queue_capacity(self.partition_queue_capacity)
             .isolation_level(self.isolation_level)
+            .offset_reset_policy(self.offset_reset_policy)
     }
 
     /// Joins the group, syncs assignment, and builds a group consumer.

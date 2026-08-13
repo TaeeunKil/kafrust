@@ -8,6 +8,8 @@ pub type Result<T> = core::result::Result<T, Error>;
 pub enum BrokerErrorKind {
     /// An error code that kafrust does not classify yet.
     Unknown,
+    /// Kafka reported that the requested fetch offset is outside the retained log.
+    OffsetOutOfRange,
     /// Kafka reported an unknown topic or partition.
     UnknownTopicOrPartition,
     /// Kafka reported that a partition leader is not currently available.
@@ -86,6 +88,7 @@ impl BrokerErrorKind {
     /// Classifies a Kafka protocol error code.
     pub fn from_code(code: i16) -> Self {
         match code {
+            1 => Self::OffsetOutOfRange,
             3 => Self::UnknownTopicOrPartition,
             5 => Self::LeaderNotAvailable,
             6 => Self::NotLeaderOrFollower,
@@ -454,6 +457,10 @@ mod tests {
         assert_eq!(
             BrokerErrorKind::from_code(3),
             BrokerErrorKind::UnknownTopicOrPartition
+        );
+        assert_eq!(
+            BrokerErrorKind::from_code(1),
+            BrokerErrorKind::OffsetOutOfRange
         );
         assert_eq!(
             BrokerErrorKind::from_code(16),

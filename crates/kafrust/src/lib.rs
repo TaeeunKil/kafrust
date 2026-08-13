@@ -60,13 +60,14 @@ pub use config::{
 };
 pub use consumer::{
     Consumer, ConsumerAssignment, ConsumerConfig, ConsumerPartitionQueue, ConsumerRecord,
-    ConsumerRecordHeader, IsolationLevel, LeaderEpochOffset, PartitionWatermarks,
+    ConsumerRecordHeader, IsolationLevel, LeaderEpochOffset, OffsetResetPolicy,
+    PartitionWatermarks,
 };
 pub use error::{BrokerErrorKind, Error, Result};
 pub use group::{
     ConsumerGroup, ConsumerGroupAssignmentStrategy, ConsumerGroupCommitWorker, ConsumerGroupConfig,
-    ConsumerGroupHeartbeat, ConsumerGroupMetadata, ConsumerGroupProtocol, OffsetResetPolicy,
-    RebalanceEvent, RebalanceListener, RebalancePhase,
+    ConsumerGroupHeartbeat, ConsumerGroupMetadata, ConsumerGroupProtocol, RebalanceEvent,
+    RebalanceListener, RebalancePhase,
 };
 pub use kafrust_protocol as protocol;
 pub use metrics::{ClientMetrics, ClientMetricsSnapshot};

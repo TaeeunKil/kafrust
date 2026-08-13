@@ -93,6 +93,24 @@ Seeking, pausing, or resuming a partition that is not assigned returns
 its active queue; this prevents buffered records from being mixed with a new
 position. Reassigning a partition closes its existing split queue.
 
+When a poll fetch receives Kafka's `OFFSET_OUT_OF_RANGE` response, configure a
+bounded recovery policy if the application wants the assignment to continue:
+
+```rust
+use kafrust::{ConsumerConfig, OffsetResetPolicy};
+
+let mut consumer = ConsumerConfig::new(["localhost:9092"])
+    .offset_reset_policy(OffsetResetPolicy::Earliest)
+    .build()
+    .await?;
+```
+
+`Earliest` resolves the retained low watermark and `Latest` resolves the next
+log-end offset through the partition leader, then retries the fetch once. The
+reset applies only to assigned partitions fetched by `poll`; `Consumer::fetch`
+continues to honor its explicit offset and returns the broker error. The
+default `OffsetResetPolicy::Offset(0)` also preserves that explicit behavior.
+
 ## Partition Watermarks
 
 ```rust

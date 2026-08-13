@@ -42,6 +42,37 @@ impl IsolationLevel {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Starting position used when a consumer has no usable offset.
+pub enum OffsetResetPolicy {
+    /// Start at the partition's earliest retained offset.
+    Earliest,
+    /// Start after the partition's current log end.
+    Latest,
+    /// Start at an explicit absolute offset.
+    Offset(i64),
+}
+
+impl Default for OffsetResetPolicy {
+    fn default() -> Self {
+        Self::Offset(0)
+    }
+}
+
+impl OffsetResetPolicy {
+    pub(crate) fn timestamp(self) -> Option<i64> {
+        match self {
+            Self::Earliest => Some(EARLIEST_TIMESTAMP),
+            Self::Latest => Some(LATEST_TIMESTAMP),
+            Self::Offset(_) => None,
+        }
+    }
+
+    fn is_recovery(self) -> bool {
+        matches!(self, Self::Earliest | Self::Latest)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// Record fetched from a Kafka topic partition.
 pub struct ConsumerRecord {
@@ -591,6 +622,7 @@ impl Consumer {
                     assignment.partition,
                     assignment.next_offset,
                     assignment.leader_epoch,
+                    Some(self.config.offset_reset_policy),
                 )
                 .await?;
             if let Some(leader_epoch) = fetched.leader_epoch {
@@ -734,7 +766,7 @@ impl Consumer {
         let topic = topic.into();
         tracing::Span::current().record("topic", topic.as_str());
         let records = self
-            .fetch_with_progress(&topic, partition, offset, -1)
+            .fetch_with_progress(&topic, partition, offset, -1, None)
             .await?
             .records;
         self.config.client.record_consumed(records.len());
@@ -747,19 +779,47 @@ impl Consumer {
         partition: i32,
         offset: i64,
         current_leader_epoch: i32,
+        offset_reset_policy: Option<OffsetResetPolicy>,
     ) -> Result<FetchedPartition> {
         let mut attempt = 0;
+        let mut fetch_offset = offset;
+        let mut request_leader_epoch = current_leader_epoch;
+        let mut reset_applied = false;
         debug!(topic, partition, offset, "fetching kafka records");
 
         loop {
             let result = self
-                .fetch_once(topic, partition, offset, current_leader_epoch)
+                .fetch_once(topic, partition, fetch_offset, request_leader_epoch)
                 .await;
             if result.is_err() {
                 self.preferred_read_replicas
                     .remove(&(topic.to_owned(), partition));
             }
             match result {
+                Err(error)
+                    if !reset_applied
+                        && offset_reset_policy.is_some_and(OffsetResetPolicy::is_recovery)
+                        && is_offset_out_of_range(&error) =>
+                {
+                    let Some(policy) = offset_reset_policy else {
+                        return Err(error);
+                    };
+                    fetch_offset = self.reset_fetch_offset(topic, partition, policy).await?;
+                    request_leader_epoch = -1;
+                    reset_applied = true;
+                    self.config.client.record_retry();
+                    attempt += 1;
+                }
+                Err(error)
+                    if attempt < self.config.max_retries
+                        && request_leader_epoch >= 0
+                        && is_leader_epoch_transition_error(&error) =>
+                {
+                    request_leader_epoch = -1;
+                    invalidate_metadata_cache(&mut self.metadata_cache, topic);
+                    self.config.client.record_retry();
+                    attempt += 1;
+                }
                 Err(error) if attempt < self.config.max_retries && can_retry_fetch(&error) => {
                     invalidate_metadata_cache(&mut self.metadata_cache, topic);
                     self.config.client.record_retry();
@@ -777,6 +837,21 @@ impl Consumer {
                 }
                 Err(error) => return Err(error),
             }
+        }
+    }
+
+    async fn reset_fetch_offset(
+        &mut self,
+        topic: &str,
+        partition: i32,
+        policy: OffsetResetPolicy,
+    ) -> Result<i64> {
+        match policy {
+            OffsetResetPolicy::Earliest => Ok(self.fetch_watermarks(topic, partition).await?.low),
+            OffsetResetPolicy::Latest => Ok(self.fetch_watermarks(topic, partition).await?.high),
+            OffsetResetPolicy::Offset(_) => Err(Error::Unsupported(
+                "explicit offset reset policy cannot recover an out-of-range fetch",
+            )),
         }
     }
 
@@ -1140,6 +1215,7 @@ pub struct ConsumerConfig {
     max_poll_records: usize,
     partition_queue_capacity: usize,
     isolation_level: IsolationLevel,
+    offset_reset_policy: OffsetResetPolicy,
 }
 
 impl ConsumerConfig {
@@ -1158,6 +1234,7 @@ impl ConsumerConfig {
             max_poll_records: 500,
             partition_queue_capacity: 1024,
             isolation_level: IsolationLevel::ReadUncommitted,
+            offset_reset_policy: OffsetResetPolicy::Offset(0),
         }
     }
 
@@ -1350,6 +1427,21 @@ impl ConsumerConfig {
     /// Returns the configured transaction isolation level.
     pub fn isolation_level_ref(&self) -> IsolationLevel {
         self.isolation_level
+    }
+
+    /// Sets the fallback used when an assigned fetch offset is out of range.
+    ///
+    /// `Earliest` and `Latest` perform one bounded reset through the partition
+    /// leader. `Offset(n)` preserves the explicit-offset behavior and returns
+    /// the broker error instead of silently changing the requested position.
+    pub fn offset_reset_policy(mut self, offset_reset_policy: OffsetResetPolicy) -> Self {
+        self.offset_reset_policy = offset_reset_policy;
+        self
+    }
+
+    /// Returns the configured out-of-range offset policy.
+    pub fn offset_reset_policy_ref(&self) -> OffsetResetPolicy {
+        self.offset_reset_policy
     }
 
     /// Returns the shared client configuration.
@@ -1631,6 +1723,22 @@ fn can_retry_fetch(error: &Error) -> bool {
     }
 }
 
+fn is_offset_out_of_range(error: &Error) -> bool {
+    matches!(
+        error,
+        Error::Broker { code, .. }
+            if BrokerErrorKind::from_code(*code) == BrokerErrorKind::OffsetOutOfRange
+    )
+}
+
+fn is_leader_epoch_transition_error(error: &Error) -> bool {
+    matches!(
+        error,
+        Error::Broker { code, .. }
+            if matches!(*code, 74 | 75)
+    )
+}
+
 fn limit_fetched_records(
     fetched: &mut Vec<ConsumerRecord>,
     current_record_count: usize,
@@ -1654,7 +1762,7 @@ mod tests {
         assign_partition, can_retry_fetch, invalidate_metadata_cache, leader_for,
         limit_fetched_records, offset_for_leader_epoch_partition_response, visible_records,
         Consumer, ConsumerAssignment, ConsumerConfig, ConsumerRecord, IsolationLevel,
-        PartitionWatermarks, SecurityProtocol,
+        OffsetResetPolicy, PartitionWatermarks, SecurityProtocol,
     };
     use crate::{Client, ClientMetrics, Error};
     use kafrust_protocol::api::fetch::{
@@ -1715,6 +1823,10 @@ mod tests {
         assert_eq!(config.max_poll_records_ref(), 10);
         assert_eq!(config.partition_queue_capacity_ref(), 7);
         assert_eq!(config.isolation_level_ref(), IsolationLevel::ReadCommitted);
+        assert_eq!(
+            config.offset_reset_policy_ref(),
+            OffsetResetPolicy::Offset(0)
+        );
     }
 
     #[test]
@@ -1951,6 +2063,69 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn resets_out_of_range_assignment_to_earliest_offset() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut first_socket, _) = listener.accept().await.unwrap();
+            let first_fetch = read_frame(&mut first_socket).await;
+            assert_eq!(&first_fetch[0..4], &[0, 1, 0, 4]);
+            write_frame(&mut first_socket, &fetch_v4_out_of_range_response_frame(1)).await;
+            drop(first_socket);
+
+            let (mut second_socket, _) = listener.accept().await.unwrap();
+            for (correlation_id, timestamp, offset) in [(1, -2_i64, 4_i64), (2, -1_i64, 9_i64)] {
+                let request = read_frame(&mut second_socket).await;
+                assert_eq!(&request[0..4], &[0, 2, 0, 1]);
+                assert_eq!(
+                    i64::from_be_bytes(request[request.len() - 8..].try_into().unwrap()),
+                    timestamp
+                );
+                write_frame(
+                    &mut second_socket,
+                    &list_offsets_response_frame(correlation_id, offset),
+                )
+                .await;
+            }
+            let second_fetch = read_frame(&mut second_socket).await;
+            assert_eq!(&second_fetch[0..4], &[0, 1, 0, 4]);
+            write_frame(
+                &mut second_socket,
+                &fetch_v4_response_frame_with_correlation(3),
+            )
+            .await;
+        });
+        let (client_stream, broker_stream) = tokio::io::duplex(64);
+        let _broker_stream = broker_stream;
+        let client = Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-offset-reset-test".to_owned()),
+            Some(std::time::Duration::from_millis(500)),
+        );
+        let config = ConsumerConfig::new([addr.to_string()])
+            .request_timeout_ms(500)
+            .offset_reset_policy(OffsetResetPolicy::Earliest);
+        let mut consumer = Consumer::from_assignments(
+            client,
+            config,
+            vec![ConsumerAssignment::new("orders".to_owned(), 0, 100)],
+        );
+        let mut metadata = metadata_fixture();
+        metadata.brokers[0].host = addr.ip().to_string();
+        metadata.brokers[0].port = i32::from(addr.port());
+        consumer
+            .metadata_cache
+            .insert("orders".to_owned(), metadata);
+
+        let records = consumer.poll().await.unwrap();
+
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].offset(), 42);
+        assert_eq!(consumer.position("orders", 0), Some(43));
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn sends_assignment_leader_epoch_in_fetch_v12_request() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -2072,6 +2247,10 @@ mod tests {
         }));
         assert!(can_retry_fetch(&Error::Broker {
             code: 75,
+            context: "fetch orders-0@0".to_owned(),
+        }));
+        assert!(!can_retry_fetch(&Error::Broker {
+            code: 1,
             context: "fetch orders-0@0".to_owned(),
         }));
         assert!(!can_retry_fetch(&Error::Unsupported("fetch v99")));
@@ -2574,6 +2753,10 @@ mod tests {
     }
 
     fn fetch_v4_response_frame() -> Vec<u8> {
+        fetch_v4_response_frame_with_correlation(1)
+    }
+
+    fn fetch_v4_response_frame_with_correlation(correlation_id: i32) -> Vec<u8> {
         let mut message = Encoder::new();
         message.write_i32(0);
         message.write_i8(1);
@@ -2590,7 +2773,7 @@ mod tests {
         let records = records.into_bytes();
 
         let mut response = Encoder::new();
-        response.write_i32(1);
+        response.write_i32(correlation_id);
         response.write_i32(0);
         response.write_i32(1);
         response.write_string("orders").unwrap();
@@ -2601,6 +2784,22 @@ mod tests {
         response.write_i64(43);
         response.write_i32(0);
         response.write_bytes(&records).unwrap();
+        response.into_bytes()
+    }
+
+    fn fetch_v4_out_of_range_response_frame(correlation_id: i32) -> Vec<u8> {
+        let mut response = Encoder::new();
+        response.write_i32(correlation_id);
+        response.write_i32(0);
+        response.write_i32(1);
+        response.write_string("orders").unwrap();
+        response.write_i32(1);
+        response.write_i32(0);
+        response.write_i16(1);
+        response.write_i64(-1);
+        response.write_i64(-1);
+        response.write_i32(0);
+        response.write_bytes(&[]).unwrap();
         response.into_bytes()
     }
 
