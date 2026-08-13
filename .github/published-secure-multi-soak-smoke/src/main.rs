@@ -128,10 +128,16 @@ async fn main() -> kafrust::Result<()> {
             let Some(first) = metadata.first() else {
                 return Err(Error::Unsupported("secure soak returned no metadata"));
             };
-            let mut fetch_offset = next_offset.unwrap_or(first.offset());
-            if fetch_offset < 0 {
+            let batch_start = first.offset();
+            if batch_start < 0 {
                 return Err(Error::Unsupported("secure soak requires concrete offsets"));
             }
+            let batch_len = i64::try_from(metadata.len())
+                .map_err(|_| Error::Unsupported("secure soak batch length is too large"))?;
+            let batch_end = batch_start
+                .checked_add(batch_len)
+                .ok_or(Error::Unsupported("secure soak batch offset overflow"))?;
+            let mut fetch_offset = next_offset.unwrap_or(batch_start);
             *next_offset = Some(fetch_offset);
             let mut remaining = metadata.len();
             produced += remaining;
@@ -156,11 +162,20 @@ async fn main() -> kafrust::Result<()> {
                         if saw_error {
                             recovered = true;
                         }
-                        let accepted = records.len().min(remaining);
-                        if let Some(last) = records.get(accepted.saturating_sub(1)) {
+                        if let Some(last) = records.last() {
                             fetch_offset = last.offset().saturating_add(1);
                             *next_offset = Some(fetch_offset);
                         }
+                        // A failed Produce can be present on the surviving
+                        // broker even though Kafka did not acknowledge it.
+                        // Count only records in the acknowledged batch range.
+                        let accepted = records
+                            .iter()
+                            .filter(|record| {
+                                (batch_start..batch_end).contains(&record.offset())
+                            })
+                            .count()
+                            .min(remaining);
                         consumed += accepted;
                         remaining -= accepted;
                     }
@@ -176,7 +191,7 @@ async fn main() -> kafrust::Result<()> {
     }
 
     let snapshot = metrics.snapshot();
-    if produced != consumed || snapshot.produced_records != snapshot.consumed_records {
+    if produced != consumed || snapshot.produced_records != produced {
         eprintln!(
             "secure multi-soak count mismatch: local produced={produced} consumed={consumed}; metrics produced={} consumed={}",
             snapshot.produced_records, snapshot.consumed_records
