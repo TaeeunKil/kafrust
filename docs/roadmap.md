@@ -1843,5 +1843,10 @@ Implemented evidence:
 - Release `v0.2.10` published `kafrust-protocol` before `kafrust` after package
   dry-runs, staged all-feature docs builds, and an external published-crate
   smoke project passed. crates.io resolves both packages at `0.2.10`, both
-  docs.rs pages return HTTP 200, and the release is ready for its Git tag and
-  GitHub release once remote authentication is available.
+  docs.rs pages return HTTP 200, and the Git tag and GitHub release are
+  published from the verified release commit.
+- Fetch RecordBatch decoding now preserves record headers through the public
+  `ConsumerRecord::headers()` API. `ConsumerRecordHeader::value()` retains
+  Kafka's nullable header-value semantics, while legacy MessageSet records
+  continue to expose an empty header list. Focused protocol and high-level
+  mapping tests cover ordered and null-valued headers.

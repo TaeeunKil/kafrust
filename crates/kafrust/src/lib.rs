@@ -60,7 +60,7 @@ pub use config::{
 };
 pub use consumer::{
     Consumer, ConsumerAssignment, ConsumerConfig, ConsumerPartitionQueue, ConsumerRecord,
-    IsolationLevel, PartitionWatermarks,
+    ConsumerRecordHeader, IsolationLevel, PartitionWatermarks,
 };
 pub use error::{BrokerErrorKind, Error, Result};
 pub use group::{

@@ -23,6 +23,19 @@ for record in records {
 }
 ```
 
+Record metadata includes Kafka record headers:
+
+```rust
+for header in record.headers() {
+    println!("{}={:?}", header.key(), header.value());
+}
+```
+
+`ConsumerRecordHeader::value()` returns `Option<&[u8]>` because Kafka permits a
+header value to be null. Header order is preserved from the RecordBatch. Legacy
+MessageSet records return an empty header slice because that wire format has no
+record headers.
+
 To process one assigned partition independently, split it into a bounded
 queue before polling:
 
@@ -123,6 +136,8 @@ additional flush.
 Current implementation status:
 
 - `ConsumerConfig`, `Consumer`, and `ConsumerRecord` are public API types.
+- `ConsumerRecord::headers` exposes RecordBatch headers through
+  `ConsumerRecordHeader`, preserving header order and nullable values.
 - `Consumer::fetch` accepts topic, partition, and offset directly.
 - `Consumer::assign` and `Consumer::poll` provide a stream-like path that advances assigned partition offsets after records are returned.
 - `Consumer::split_partition_queue` and `ConsumerPartitionQueue` provide a

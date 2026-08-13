@@ -47,6 +47,36 @@ pub struct ConsumerRecord {
     timestamp_ms: i64,
     key: Option<Vec<u8>>,
     value: Option<Vec<u8>>,
+    headers: Vec<ConsumerRecordHeader>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+/// Header attached to a fetched Kafka record.
+///
+/// Kafka permits a header value to be null. Use [`Self::value`] to preserve
+/// that distinction instead of treating a null value as an empty byte slice.
+pub struct ConsumerRecordHeader {
+    key: String,
+    value: Option<Vec<u8>>,
+}
+
+impl ConsumerRecordHeader {
+    fn from_protocol(header: kafrust_protocol::api::produce::RecordBatchHeader) -> Self {
+        Self {
+            key: header.key,
+            value: header.value,
+        }
+    }
+
+    /// Returns the header key.
+    pub fn key(&self) -> &str {
+        &self.key
+    }
+
+    /// Returns the nullable header value bytes.
+    pub fn value(&self) -> Option<&[u8]> {
+        self.value.as_deref()
+    }
 }
 
 /// A bounded queue containing records fetched for one topic partition.
@@ -120,6 +150,11 @@ impl ConsumerRecord {
             timestamp_ms: record.timestamp_ms,
             key: record.key,
             value: record.value,
+            headers: record
+                .headers
+                .into_iter()
+                .map(ConsumerRecordHeader::from_protocol)
+                .collect(),
         }
     }
 
@@ -151,6 +186,11 @@ impl ConsumerRecord {
     /// Returns the record value bytes.
     pub fn value(&self) -> Option<&[u8]> {
         self.value.as_deref()
+    }
+
+    /// Returns the headers attached to this record in wire order.
+    pub fn headers(&self) -> &[ConsumerRecordHeader] {
+        &self.headers
     }
 }
 
@@ -1585,6 +1625,10 @@ mod tests {
                 timestamp_ms: 123,
                 key: Some(b"order-1".to_vec()),
                 value: Some(b"created".to_vec()),
+                headers: vec![kafrust_protocol::api::produce::RecordBatchHeader::new(
+                    "source",
+                    Some(b"checkout".to_vec()),
+                )],
                 producer_id: None,
                 transactional: false,
                 control: false,
@@ -1597,6 +1641,9 @@ mod tests {
         assert_eq!(record.timestamp_ms(), 123);
         assert_eq!(record.key().unwrap(), b"order-1");
         assert_eq!(record.value().unwrap(), b"created");
+        assert_eq!(record.headers().len(), 1);
+        assert_eq!(record.headers()[0].key(), "source");
+        assert_eq!(record.headers()[0].value(), Some(&b"checkout"[..]));
     }
 
     #[test]
@@ -2119,6 +2166,7 @@ mod tests {
             timestamp_ms: 123,
             key: None,
             value: None,
+            headers: Vec::new(),
             producer_id: None,
             transactional: false,
             control: false,
@@ -2131,6 +2179,7 @@ mod tests {
             timestamp_ms: 123,
             key: None,
             value: None,
+            headers: Vec::new(),
             producer_id: Some(producer_id),
             transactional: true,
             control,

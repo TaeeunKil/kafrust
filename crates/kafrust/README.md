@@ -273,6 +273,10 @@ async fn main() -> kafrust::Result<()> {
 }
 ```
 
+Fetched records expose Kafka RecordBatch headers through `record.headers()`.
+`ConsumerRecordHeader::value()` returns an optional byte slice because Kafka
+allows null header values; legacy MessageSet records have an empty header list.
+
 For rack-aware reads, set `ConsumerConfig::client_rack("rack-a")` (or the
 matching `ConsumerGroupConfig` builder). Fetch v12 negotiation carries the
 rack ID using the flexible schema and follows Kafka's `preferred_read_replica`

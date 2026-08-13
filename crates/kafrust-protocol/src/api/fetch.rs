@@ -1,3 +1,4 @@
+use crate::api::produce::RecordBatchHeader;
 use crate::codec::{DecodeLimits, Decoder, Encoder};
 use crate::error::{Error, Result};
 use crate::header::RequestHeader;
@@ -623,6 +624,7 @@ pub struct MessageSetRecord {
     pub timestamp_ms: i64,
     pub key: Option<Vec<u8>>,
     pub value: Option<Vec<u8>>,
+    pub headers: Vec<RecordBatchHeader>,
     pub producer_id: Option<i64>,
     pub transactional: bool,
     pub control: bool,
@@ -694,6 +696,7 @@ fn decode_message(offset: i64, bytes: &[u8], limits: DecodeLimits) -> Result<Mes
         timestamp_ms,
         key,
         value,
+        headers: Vec::new(),
         producer_id: None,
         transactional: false,
         control: false,
@@ -801,9 +804,12 @@ fn decode_record(
     let header_count =
         usize::try_from(header_count).map_err(|_| Error::LengthOverflow("record headers"))?;
     decoder.ensure_collection_length("record headers", header_count)?;
+    let mut headers = Vec::with_capacity(header_count);
     for _ in 0..header_count {
-        let _header_key = decoder.read_varint_bytes()?;
-        let _header_value = decoder.read_varint_nullable_bytes()?;
+        let header_key =
+            String::from_utf8(decoder.read_varint_bytes()?).map_err(|_| Error::InvalidUtf8)?;
+        let header_value = decoder.read_varint_nullable_bytes()?;
+        headers.push(RecordBatchHeader::new(header_key, header_value));
     }
 
     Ok(MessageSetRecord {
@@ -811,6 +817,7 @@ fn decode_record(
         timestamp_ms: base_timestamp.saturating_add(timestamp_delta),
         key,
         value,
+        headers,
         producer_id: (producer_id >= 0).then_some(producer_id),
         transactional: batch_attributes & 0x10 != 0,
         control: batch_attributes & 0x20 != 0,
@@ -824,6 +831,7 @@ mod tests {
         FetchPartitionV11, FetchPartitionV12, FetchPartitionV2, FetchRequestV11, FetchRequestV12,
         FetchRequestV2, FetchRequestV4, FetchResponseV11, FetchResponseV12, FetchResponseV2,
         FetchResponseV4, FetchTopicV11, FetchTopicV12, FetchTopicV2, MessageSetRecord,
+        RecordBatchHeader,
     };
     use crate::codec::{Decoder, Encoder};
 
@@ -1125,6 +1133,7 @@ mod tests {
             timestamp_ms: 123,
             key: Some(b"order-1".to_vec()),
             value: Some(b"created".to_vec()),
+            headers: Vec::new(),
             producer_id: None,
             transactional: false,
             control: false,
@@ -1185,7 +1194,14 @@ mod tests {
         record.extend_from_slice(b"order-1");
         write_varint(&mut record, 7);
         record.extend_from_slice(b"created");
-        write_varint(&mut record, 0);
+        write_varint(&mut record, 2);
+        write_varint(&mut record, 6);
+        record.extend_from_slice(b"source");
+        write_varint(&mut record, 8);
+        record.extend_from_slice(b"checkout");
+        write_varint(&mut record, 9);
+        record.extend_from_slice(b"tombstone");
+        write_varint(&mut record, -1);
 
         let mut batch = Encoder::new();
         batch.write_i32(0);
@@ -1229,6 +1245,10 @@ mod tests {
             timestamp_ms: 1_005,
             key: Some(b"order-1".to_vec()),
             value: Some(b"created".to_vec()),
+            headers: vec![
+                RecordBatchHeader::new("source", Some(b"checkout".to_vec())),
+                RecordBatchHeader::new("tombstone", None),
+            ],
             producer_id: Some(7),
             transactional: true,
             control: false,

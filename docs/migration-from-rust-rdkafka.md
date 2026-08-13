@@ -50,6 +50,7 @@ the currently supported settings through typed builders.
 | `auto.offset.reset=earliest` | `.offset_reset_policy(OffsetResetPolicy::Earliest)` | Used only when an assigned partition has no committed offset. |
 | `auto.offset.reset=latest` | `.offset_reset_policy(OffsetResetPolicy::Latest)` | Resolves the current log end from the partition leader during group join. |
 | `isolation.level` | `.isolation_level(IsolationLevel::ReadCommitted)` | Supported by direct and group consumers. |
+| message headers | `ConsumerRecord::headers()` | Returns `ConsumerRecordHeader` values in wire order; `value()` is nullable because Kafka permits null header values. Legacy MessageSet records have no headers. |
 | `max.poll.records` | `.max_poll_records(...)` | Bounds records returned by one poll. |
 | `security.protocol` | `.security_protocol(SecurityProtocol::...)` | Prefer the SASL convenience methods for credentials. |
 | `sasl.mechanism=PLAIN` | `.sasl_plain(username, password)` | Use with SASL_PLAINTEXT or SASL_TLS. |

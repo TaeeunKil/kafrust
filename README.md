@@ -299,6 +299,11 @@ async fn main() -> kafrust::Result<()> {
 }
 ```
 
+Fetched records also expose Kafka RecordBatch headers through
+`record.headers()`. Each `ConsumerRecordHeader` preserves wire order, and its
+`value()` returns `Option<&[u8]>` so null header values remain distinguishable
+from empty values. Legacy MessageSet records expose no headers.
+
 For rack-aware reads, set `ConsumerConfig::client_rack("rack-a")` (or the
 matching `ConsumerGroupConfig` builder). When the selected broker advertises
 Fetch v12, kafrust sends the rack ID using the flexible Fetch schema and follows Kafka's
