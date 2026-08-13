@@ -29,10 +29,10 @@ async def proxy_connection(
     client_writer: asyncio.StreamWriter,
     target_host: str,
     target_port: int,
+    end_txn_dropped: asyncio.Event,
 ) -> None:
     target_reader, target_writer = await asyncio.open_connection(target_host, target_port)
     request_api_keys: asyncio.Queue[int] = asyncio.Queue()
-    drop_end_txn = True
 
     async def forward_requests() -> None:
         while True:
@@ -46,14 +46,13 @@ async def proxy_connection(
             await write_frame(target_writer, body)
 
     async def forward_responses() -> None:
-        nonlocal drop_end_txn
         while True:
             body = await read_frame(target_reader)
             if body is None:
                 return
             api_key = await request_api_keys.get()
-            if api_key == END_TXN_API_KEY and drop_end_txn:
-                drop_end_txn = False
+            if api_key == END_TXN_API_KEY and not end_txn_dropped.is_set():
+                end_txn_dropped.set()
                 print("forwarded EndTxn request and dropped its response", flush=True)
                 return
             await write_frame(client_writer, body)
@@ -83,11 +82,19 @@ async def main() -> None:
     parser.add_argument("--target-port", type=int, required=True)
     args = parser.parse_args()
 
+    end_txn_dropped = asyncio.Event()
+
     async def accept_connection(
         reader: asyncio.StreamReader, writer: asyncio.StreamWriter
     ) -> None:
         try:
-            await proxy_connection(reader, writer, args.target_host, args.target_port)
+            await proxy_connection(
+                reader,
+                writer,
+                args.target_host,
+                args.target_port,
+                end_txn_dropped,
+            )
         except (ConnectionError, asyncio.IncompleteReadError) as error:
             print(f"proxy connection closed: {error}", flush=True)
             writer.close()
