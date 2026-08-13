@@ -901,8 +901,12 @@ Implemented evidence:
   The high-level Admin API negotiates v1-v3 or v1-v2 ranges, routes through the
   active controller, retries only pre-transmission discovery, and redacts HMAC
   values from debug and tracing output. Focused protocol and
-  injected-controller tests pass; the opt-in Kafka 4.3.1 SASL_PLAINTEXT
-  lifecycle smoke is the live release gate.
+  injected-controller tests pass. The Kafka 4.3.1 three-broker
+  SASL_PLAINTEXT lifecycle smoke passed in the complete 17-job matrix at
+  commit `9d3916f` in
+  [`31688516207`](https://github.com/TaeeunKil/kafrust/actions/runs/31688516207).
+  Secured profiles beyond SASL_PLAINTEXT and post-transmission mutation
+  recovery remain separate qualification gates.
 - DescribeGroups v1 discovers each requested group's coordinator independently
   and preserves state, protocol, member identity, raw protocol metadata and
   assignments, per-group errors, throttle time, tracing, and metrics.

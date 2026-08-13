@@ -378,8 +378,13 @@ The Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 plaintext smoke paths cover:
 - Delegation-token create, describe, renew, and expire through `AdminClient`
   use negotiated Kafka API versions, controller routing, and redacted HMAC
   handling. Focused protocol and injected-controller tests pass. The opt-in
-  live lifecycle gate is configured on the Kafka 4.3.1 SASL_PLAINTEXT profile;
-  its broker run is the remaining evidence for this capability.
+  Kafka 4.3.1 SASL_PLAINTEXT lifecycle gate passed in the complete 17-job
+  matrix at commit `9d3916f` in
+  [`31688516207`](https://github.com/TaeeunKil/kafrust/actions/runs/31688516207)
+  (job [`94410181682`](https://github.com/TaeeunKil/kafrust/actions/runs/31688516207/job/94410181682)).
+  The job exercised create, describe, renew, and immediate expire against a
+  three-broker KRaft cluster; secured coverage beyond this SASL_PLAINTEXT
+  profile and post-transmission mutation recovery remain separate claims.
 - The read-only `DescribeUserScramCredentials v0` path retries transport,
   timeout, and retryable top-level broker failures within the bounded
   `AdminClient` budget; focused mock-broker coverage verifies a dropped request
