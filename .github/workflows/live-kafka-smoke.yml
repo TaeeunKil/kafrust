@@ -3409,7 +3409,7 @@ jobs:
         run: >-
           cargo build -p kafrust --example producer_failover
           --example consumer_failover --example producer_transaction_failover
-          --example consumer_group_failover
+          --example consumer_group_failover --example consumer_group_combined_failover
 
       - name: Run SASL transaction coordinator failover
         run: |
@@ -3531,6 +3531,168 @@ jobs:
           if [ "$group_status" -ne 0 ] || [ -z "$coordinator_ready" ]; then
             cat /tmp/kafrust-sasl-group-recovery.log || true
             docker logs "$coordinator_container"
+            exit 1
+          fi
+
+      - name: Prepare SASL combined coordinator and partition leader failover
+        run: |
+          combined_group_id="kafrust-sasl-combined-${GITHUB_RUN_ID}"
+          combined_topic="kafrust-sasl-combined-${GITHUB_RUN_ID}"
+          docker exec kafrust-kafka-sasl-multi-1 /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server kafrust-kafka-sasl-multi-1:29092 \
+            --create \
+            --if-not-exists \
+            --topic "$combined_topic" \
+            --partitions 3 \
+            --replication-factor 3
+
+          preflight_log=/tmp/kafrust-sasl-combined-preflight.log
+          preflight_status=0
+          KAFRUST_GROUP_ID="$combined_group_id" \
+          KAFRUST_GROUP_PROTOCOL=classic \
+          KAFRUST_TOPIC="$combined_topic" \
+          KAFRUST_FAILOVER_PAUSE_MS=0 \
+          cargo run -p kafrust --example consumer_group_failover \
+            >"$preflight_log" 2>&1 || preflight_status=$?
+          combined_coordinator_node="$(sed -n 's/.*coordinator node \([0-9][0-9]*\)$/\1/p' "$preflight_log" | tail -n 1)"
+          if [ "$preflight_status" -ne 0 ] || ! [[ "$combined_coordinator_node" =~ ^[123]$ ]]; then
+            cat "$preflight_log" || true
+            echo "SASL combined-fault preflight did not report a coordinator"
+            exit 1
+          fi
+
+          combined_assignment=""
+          for attempt in {1..120}; do
+            docker exec kafrust-kafka-sasl-multi-1 /opt/kafka/bin/kafka-topics.sh \
+              --bootstrap-server kafrust-kafka-sasl-multi-1:29092 \
+              --describe \
+              --topic "$combined_topic" \
+              >/tmp/kafrust-sasl-combined-topic.log 2>&1 || true
+            combined_assignment="$(awk -v coordinator="$combined_coordinator_node" '/Partition:/ { partition=""; leader=""; for (i = 1; i <= NF; i++) { if ($i == "Partition:") partition=$(i + 1); if ($i == "Leader:") leader=$(i + 1) } if (partition != "" && leader == coordinator) { print partition, leader; exit } }' /tmp/kafrust-sasl-combined-topic.log)"
+            if [ -n "$combined_assignment" ]; then
+              break
+            fi
+            sleep 2
+          done
+
+          if [ -z "$combined_assignment" ]; then
+            cat /tmp/kafrust-sasl-combined-topic.log || true
+            echo "could not find a SASL partition led by the group coordinator"
+            exit 1
+          fi
+          read -r combined_partition combined_leader <<<"$combined_assignment"
+          combined_probe_broker=""
+          for candidate in 1 2 3; do
+            if [ "$candidate" != "$combined_leader" ]; then
+              combined_probe_broker="$candidate"
+              break
+            fi
+          done
+          echo "KAFRUST_SASL_COMBINED_GROUP_ID=$combined_group_id" >> "$GITHUB_ENV"
+          echo "KAFRUST_SASL_COMBINED_TOPIC=$combined_topic" >> "$GITHUB_ENV"
+          echo "KAFRUST_SASL_COMBINED_PARTITION=$combined_partition" >> "$GITHUB_ENV"
+          echo "KAFRUST_SASL_COMBINED_BROKER=$combined_leader" >> "$GITHUB_ENV"
+          echo "KAFRUST_SASL_COMBINED_PROBE_BROKER=$combined_probe_broker" >> "$GITHUB_ENV"
+          KAFRUST_TOPIC="$combined_topic" \
+          KAFRUST_PARTITION="$combined_partition" \
+          KAFRUST_KEY="kafrust-sasl-combined-before-${GITHUB_RUN_ID}" \
+          KAFRUST_VALUE="kafrust-sasl-combined-before-${GITHUB_RUN_ID}" \
+          cargo run -p kafrust --example producer_send
+
+      - name: Run SASL combined coordinator and partition leader failover
+        run: |
+          combined_log=/tmp/kafrust-sasl-combined-failover.log
+          KAFRUST_GROUP_PROTOCOL=classic \
+          KAFRUST_GROUP_ID="$KAFRUST_SASL_COMBINED_GROUP_ID" \
+          KAFRUST_TOPIC="$KAFRUST_SASL_COMBINED_TOPIC" \
+          KAFRUST_PARTITION="$KAFRUST_SASL_COMBINED_PARTITION" \
+          KAFRUST_EXPECTED_VALUE="kafrust-sasl-combined-after-${GITHUB_RUN_ID}" \
+          KAFRUST_FAILOVER_PAUSE_MS=30000 \
+          cargo run -p kafrust --example consumer_group_combined_failover \
+            >"$combined_log" 2>&1 &
+          combined_group_pid=$!
+
+          combined_before_seen=""
+          for attempt in {1..90}; do
+            if grep -q "combined group failover before polled" "$combined_log"; then
+              combined_before_seen=1
+              break
+            fi
+            if ! kill -0 "$combined_group_pid" 2>/dev/null; then
+              cat "$combined_log" || true
+              wait "$combined_group_pid"
+            fi
+            sleep 1
+          done
+          if [ -z "$combined_before_seen" ]; then
+            cat "$combined_log" || true
+            kill "$combined_group_pid" 2>/dev/null || true
+            wait "$combined_group_pid" || true
+            echo "SASL combined-fault consumer group did not reach its pre-stop poll"
+            exit 1
+          fi
+
+          docker stop "kafrust-kafka-sasl-multi-${KAFRUST_SASL_COMBINED_BROKER}"
+          combined_replacement_ready=""
+          for attempt in {1..90}; do
+            docker exec "kafrust-kafka-sasl-multi-${KAFRUST_SASL_COMBINED_PROBE_BROKER}" /opt/kafka/bin/kafka-topics.sh \
+              --bootstrap-server "kafrust-kafka-sasl-multi-${KAFRUST_SASL_COMBINED_PROBE_BROKER}:29092" \
+              --describe \
+              --topic "$KAFRUST_SASL_COMBINED_TOPIC" \
+              >/tmp/kafrust-sasl-combined-after-stop-topic.log 2>&1 || true
+            if awk -v target="$KAFRUST_SASL_COMBINED_PARTITION" -v stopped="$KAFRUST_SASL_COMBINED_BROKER" \
+              '$0 ~ /Partition:/ { partition=""; leader=""; for (i = 1; i <= NF; i++) { if ($i == "Partition:") partition=$(i + 1); if ($i == "Leader:") leader=$(i + 1) } if (partition == target && leader ~ /^[123]$/ && leader != stopped) found=1 } END { exit !found }' \
+              /tmp/kafrust-sasl-combined-after-stop-topic.log; then
+              combined_replacement_ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ -z "$combined_replacement_ready" ]; then
+            cat /tmp/kafrust-sasl-combined-after-stop-topic.log || true
+            cat "$combined_log" || true
+            kill "$combined_group_pid" 2>/dev/null || true
+            wait "$combined_group_pid" || true
+            echo "SASL combined-fault partition did not elect a replacement leader"
+            exit 1
+          fi
+
+          docker start "kafrust-kafka-sasl-multi-${KAFRUST_SASL_COMBINED_BROKER}"
+          combined_broker_ready=""
+          for attempt in {1..120}; do
+            if docker exec "kafrust-kafka-sasl-multi-${KAFRUST_SASL_COMBINED_BROKER}" \
+              /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server "kafrust-kafka-sasl-multi-${KAFRUST_SASL_COMBINED_BROKER}:29092" \
+              >/tmp/kafrust-sasl-combined-recovery.log 2>&1; then
+              combined_broker_ready=1
+              break
+            fi
+            sleep 2
+          done
+          if [ -z "$combined_broker_ready" ]; then
+            cat /tmp/kafrust-sasl-combined-recovery.log || true
+            docker logs "kafrust-kafka-sasl-multi-${KAFRUST_SASL_COMBINED_BROKER}"
+            exit 1
+          fi
+
+          combined_producer_log=/tmp/kafrust-sasl-combined-producer.log
+          KAFRUST_TOPIC="$KAFRUST_SASL_COMBINED_TOPIC" \
+          KAFRUST_PARTITION="$KAFRUST_SASL_COMBINED_PARTITION" \
+          KAFRUST_KEY="kafrust-sasl-combined-after-key-${GITHUB_RUN_ID}" \
+          KAFRUST_VALUE="kafrust-sasl-combined-after-${GITHUB_RUN_ID}" \
+          cargo run -p kafrust --example producer_send \
+            >"$combined_producer_log" 2>&1
+
+          combined_group_status=0
+          wait "$combined_group_pid" || combined_group_status=$?
+          cat "$combined_log"
+          cat "$combined_producer_log"
+          if [ "$combined_group_status" -ne 0 ] || \
+             ! grep -q "kafrust-sasl-combined-after-${GITHUB_RUN_ID}" "$combined_log"; then
+            cat /tmp/kafrust-sasl-combined-after-stop-topic.log || true
+            cat /tmp/kafrust-sasl-combined-recovery.log || true
+            docker logs "kafrust-kafka-sasl-multi-${KAFRUST_SASL_COMBINED_BROKER}"
+            echo "SASL combined coordinator and partition leader failover did not recover"
             exit 1
           fi
 
