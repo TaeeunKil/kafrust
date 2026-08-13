@@ -22,6 +22,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  RUSTUP_TOOLCHAIN: stable
   KAFRUST_BOOTSTRAP_SERVERS: localhost:9092
   KAFRUST_COMPARISON_RECORDS: ${{ inputs.record_count }}
   KAFRUST_COMPARISON_BATCH_SIZE: ${{ inputs.batch_size }}
