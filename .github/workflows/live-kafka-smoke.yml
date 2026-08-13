@@ -2109,12 +2109,21 @@ jobs:
 
       - name: Run consumer-group leader-epoch failover
         run: |
+          group_epoch_topic="kafrust-group-epoch-${GITHUB_RUN_ID}"
+          docker exec kafrust-kafka-multi-1 /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server kafrust-kafka-multi-1:29092 \
+            --create \
+            --if-not-exists \
+            --topic "$group_epoch_topic" \
+            --partitions 1 \
+            --replication-factor 3
+
           group_epoch_partition=""
           for attempt in {1..120}; do
             docker exec kafrust-kafka-multi-1 /opt/kafka/bin/kafka-topics.sh \
               --bootstrap-server kafrust-kafka-multi-1:29092 \
               --describe \
-              --topic "$KAFRUST_TOPIC" \
+              --topic "$group_epoch_topic" \
               >/tmp/kafrust-group-epoch-topic.log 2>&1 || true
             group_epoch_partition="$(awk '/Partition:/ && /Leader: 1/ { for (i = 1; i <= NF; i++) if ($i == "Partition:") { print $(i + 1); exit } }' /tmp/kafrust-group-epoch-topic.log)"
             if [ -n "$group_epoch_partition" ]; then
@@ -2129,8 +2138,15 @@ jobs:
             exit 1
           fi
 
+          KAFRUST_TOPIC="$group_epoch_topic" \
+          KAFRUST_PARTITION="$group_epoch_partition" \
+          KAFRUST_KEY="kafrust-group-epoch-seed-${GITHUB_RUN_ID}" \
+          KAFRUST_VALUE="pre-failover-${GITHUB_RUN_ID}" \
+          cargo run -p kafrust --example producer_send
+
           group_epoch_log=/tmp/kafrust-consumer-group-epoch-failover.log
           KAFRUST_GROUP_ID="kafrust-group-epoch-failover-${GITHUB_RUN_ID}" \
+          KAFRUST_TOPIC="$group_epoch_topic" \
           KAFRUST_PARTITION="$group_epoch_partition" \
           KAFRUST_OFFSET=0 \
           KAFRUST_FAILOVER_PAUSE_MS=30000 \
@@ -2166,7 +2182,7 @@ jobs:
             docker exec kafrust-kafka-multi-2 /opt/kafka/bin/kafka-topics.sh \
               --bootstrap-server kafrust-kafka-multi-2:29092 \
               --describe \
-              --topic "$KAFRUST_TOPIC" \
+              --topic "$group_epoch_topic" \
               >/tmp/kafrust-group-epoch-after-stop-topic.log 2>&1 || true
             if awk -v target="$group_epoch_partition" \
               '$0 ~ /Partition:/ && $0 ~ ("Partition: " target) && $0 !~ /Leader: 1/ && $0 !~ /Leader: -1|Leader: none/ { found=1 } END { exit !found }' \
@@ -2185,6 +2201,7 @@ jobs:
           fi
 
           group_epoch_producer_log=/tmp/kafrust-group-epoch-producer.log
+          KAFRUST_TOPIC="$group_epoch_topic" \
           KAFRUST_PARTITION="$group_epoch_partition" \
           KAFRUST_KEY="kafrust-group-epoch-${GITHUB_RUN_ID}" \
           KAFRUST_VALUE="post-failover-${GITHUB_RUN_ID}" \
