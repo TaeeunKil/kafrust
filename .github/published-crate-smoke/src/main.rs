@@ -2,9 +2,9 @@ use std::{env, fs};
 
 use kafrust::{
     Acks, AdminClient, ClientConfig, Compression, ConsumerConfig, ConsumerGroupConfig,
-    ConsumerGroupProtocol, CreateTopicsOptions, DeleteTopicsOptions, DescribeConfigsOptions, Error,
-    IsolationLevel, NewTopic, OffsetResetPolicy, ProducerConfig, ProducerRecord, SecurityProtocol,
-    TopicConfigResource,
+    ConsumerGroupOffsetQuery, ConsumerGroupProtocol, CreateTopicsOptions, DeleteTopicsOptions,
+    DescribeConfigsOptions, Error, IsolationLevel, NewTopic, OffsetResetPolicy, ProducerConfig,
+    ProducerRecord, SecurityProtocol, TopicConfigResource,
 };
 
 struct SecuritySettings {
@@ -336,7 +336,7 @@ async fn main() -> kafrust::Result<()> {
         [bootstrap_servers.clone()],
         group_id.clone(),
     )
-        .client_id("kafrust-published-smoke-group"))
+    .client_id("kafrust-published-smoke-group"))
     .group_protocol(group_protocol)
     .max_retries(5)
     .max_poll_records(10)
@@ -364,6 +364,77 @@ async fn main() -> kafrust::Result<()> {
     group.commit_record(committed_record)?;
     group.commit_queued_offsets().await?;
 
+    let listed_groups = admin.list_groups().await?;
+    if !listed_groups
+        .iter()
+        .any(|listing| listing.group_id() == group_id)
+    {
+        return Err(Error::Unsupported(
+            "published admin list_groups did not return the active group",
+        ));
+    }
+    let described_group = admin
+        .describe_consumer_groups(std::slice::from_ref(&group_id))
+        .await?
+        .into_iter()
+        .find(|description| description.group_id() == group_id)
+        .ok_or(Error::MissingGroupDescription {
+            group_id: group_id.clone(),
+        })?;
+    if !described_group.is_success() || described_group.members().is_empty() {
+        return Err(Error::Unsupported(
+            "published admin describe_consumer_groups returned an invalid active group",
+        ));
+    }
+
+    let offset_query = [ConsumerGroupOffsetQuery::new(
+        topic.clone(),
+        [committed_record.partition()],
+    )];
+    let committed_offsets = if group_protocol == ConsumerGroupProtocol::Consumer {
+        let metadata = group.metadata();
+        admin
+            .list_consumer_group_offsets_with_member(
+                &group_id,
+                Some(metadata.member_id()),
+                metadata.generation_id(),
+                Some(&offset_query),
+                true,
+            )
+            .await?
+    } else {
+        admin
+            .list_consumer_group_offsets(&group_id, Some(&offset_query))
+            .await?
+    };
+    if committed_offsets.error_code() != 0 {
+        return Err(Error::Broker {
+            code: committed_offsets.error_code(),
+            context: "published admin list consumer group offsets failed".to_owned(),
+        });
+    }
+    let committed_partition = committed_offsets
+        .topics()
+        .iter()
+        .find(|result_topic| result_topic.topic() == topic)
+        .and_then(|result_topic| {
+            result_topic
+                .partitions()
+                .iter()
+                .find(|partition| partition.partition_index() == committed_record.partition())
+        })
+        .ok_or(Error::UnknownTopicOrPartition {
+            topic: topic.clone(),
+            partition: committed_record.partition(),
+        })?;
+    if !committed_partition.is_success()
+        || committed_partition.committed_offset() != committed_record.offset() + 1
+    {
+        return Err(Error::Unsupported(
+            "published admin group offset did not match the committed record",
+        ));
+    }
+
     let restored_value = format!("{value}-after-commit");
     let restored_metadata = producer
         .send(
@@ -374,18 +445,16 @@ async fn main() -> kafrust::Result<()> {
         .await?;
     group.leave().await?;
 
-    let mut restored_group = configure_security!(ConsumerGroupConfig::new(
-        [bootstrap_servers],
-        group_id,
-    )
-        .client_id("kafrust-published-smoke-group-restore"))
-    .group_protocol(group_protocol)
-    .max_retries(5)
-    .max_poll_records(10)
-    .offset_reset_policy(OffsetResetPolicy::Earliest)
-    .subscribe(topic.clone())
-    .join()
-    .await?;
+    let mut restored_group =
+        configure_security!(ConsumerGroupConfig::new([bootstrap_servers], group_id,)
+            .client_id("kafrust-published-smoke-group-restore"))
+        .group_protocol(group_protocol)
+        .max_retries(5)
+        .max_poll_records(10)
+        .offset_reset_policy(OffsetResetPolicy::Earliest)
+        .subscribe(topic.clone())
+        .join()
+        .await?;
     let mut replayed_committed_record = false;
     let mut restored_expected_record = false;
     let mut restored_poll_count = 0;
