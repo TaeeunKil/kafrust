@@ -3130,6 +3130,9 @@ jobs:
       - name: Run TLS consumer group example
         run: cargo run -p kafrust --features tls --example consumer_group_poll
 
+      - name: Run TLS admin topic lifecycle example
+        run: cargo run -p kafrust --features tls --example admin_create_topic
+
       - name: Run TLS admin describe group example
         run: cargo run -p kafrust --features tls --example admin_describe_group
 
@@ -3255,6 +3258,9 @@ jobs:
 
       - name: Run SASL consumer group example
         run: cargo run -p kafrust --example consumer_group_poll
+
+      - name: Run SASL admin topic lifecycle example
+        run: cargo run -p kafrust --example admin_create_topic
 
       - name: Run SASL admin describe group example
         run: cargo run -p kafrust --example admin_describe_group
@@ -3484,6 +3490,9 @@ jobs:
 
       - name: Run SASL_SSL SCRAM consumer group example
         run: cargo run -p kafrust --features tls --example consumer_group_poll
+
+      - name: Run SASL_SSL SCRAM admin topic lifecycle example
+        run: cargo run -p kafrust --features tls --example admin_create_topic
 
       - name: Run SASL_SSL SCRAM admin describe group example
         run: cargo run -p kafrust --features tls --example admin_describe_group
