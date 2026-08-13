@@ -1856,3 +1856,12 @@ Implemented evidence:
   from both docs.rs pages. The complete 18-job Kafka 3.7.2 through 4.3.1
   plaintext, TLS, SASL, OAUTHBEARER, ACL, multi-broker failover, and KIP-848
   matrix passed in [`31653113614`](https://github.com/TaeeunKil/kafrust/actions/runs/31653113614).
+- Public `ConsumerGroupConfig::validate()` now validates the nested client
+  configuration and enabled automatic-commit interval without opening a
+  connection. Regression tests cover missing bootstrap servers and a zero
+  commit interval; `join()` uses the same single preflight path.
+- Release `v0.2.12` published that preflight correction after protocol-first
+  packaging, staged all-feature docs, a fresh external TLS project compile,
+  crates.io resolution, and HTTP 200 responses from both docs.rs pages. The
+  full 18-job live matrix passed in
+  [`31654276817`](https://github.com/TaeeunKil/kafrust/actions/runs/31654276817).

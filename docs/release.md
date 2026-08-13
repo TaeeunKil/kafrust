@@ -98,11 +98,11 @@ cargo doc --manifest-path target/package/kafrust-protocol-<version>/Cargo.toml -
 cargo doc --manifest-path target/package/kafrust-<version>/Cargo.toml --all-features --no-deps
 ```
 
-The `0.2.11` package contents passed both package verification and both
-all-feature package-documentation builds on commit `b9fa14f`. The matching
+The `0.2.12` package contents passed both package verification and both
+all-feature package-documentation builds on commit `0184c65`. The matching
 `kafrust-protocol` and `kafrust` packages were published in that order; both
 docs.rs pages returned HTTP 200 and an external project compiled the published
-`kafrust 0.2.11` crate with all features. Update this paragraph after each
+`kafrust 0.2.12` crate with all features. Update this paragraph after each
 release with the current package and external verification results. None of
 these checks replace live broker qualification.
 
