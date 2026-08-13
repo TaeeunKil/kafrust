@@ -1463,6 +1463,96 @@ jobs:
           fi
           echo "KAFRUST_RACK_PARTITION=${rack_partition}" >> "$GITHUB_ENV"
 
+      - name: Start transaction ambiguity Kafka cluster
+        run: |
+          docker network create kafrust-transaction-ambiguity
+          ambiguity_cluster_id="$(docker run --rm apache/kafka:3.7.2 /opt/kafka/bin/kafka-storage.sh random-uuid)"
+          for node in 1 2 3; do
+            backend_port=$((29091 + node))
+            proxy_port=$((39091 + node))
+            docker run -d --name "kafrust-kafka-ambiguity-${node}" \
+              --network kafrust-transaction-ambiguity \
+              -p "${backend_port}:9092" \
+              -e KAFKA_CLUSTER_ID="${ambiguity_cluster_id}" \
+              -e KAFKA_NODE_ID="${node}" \
+              -e KAFKA_PROCESS_ROLES=broker,controller \
+              -e KAFKA_LISTENERS=INTERNAL://:29092,EXTERNAL://:9092,CONTROLLER://:9093 \
+              -e KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafrust-kafka-ambiguity-${node}:29092,EXTERNAL://localhost:${proxy_port} \
+              -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+              -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT \
+              -e KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL \
+              -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafrust-kafka-ambiguity-1:9093,2@kafrust-kafka-ambiguity-2:9093,3@kafrust-kafka-ambiguity-3:9093 \
+              -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=3 \
+              -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=3 \
+              -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=2 \
+              -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 \
+              apache/kafka:3.7.2
+          done
+
+      - name: Wait for transaction ambiguity Kafka cluster
+        run: |
+          for attempt in {1..120}; do
+            if docker exec kafrust-kafka-ambiguity-1 /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server kafrust-kafka-ambiguity-1:29092 \
+              >/tmp/kafrust-transaction-ambiguity-probe.log 2>&1; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/kafrust-transaction-ambiguity-probe.log || true
+          docker logs kafrust-kafka-ambiguity-1
+          docker logs kafrust-kafka-ambiguity-2
+          docker logs kafrust-kafka-ambiguity-3
+          exit 1
+
+      - name: Create transaction ambiguity topic
+        run: |
+          docker exec kafrust-kafka-ambiguity-1 /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server kafrust-kafka-ambiguity-1:29092 \
+            --create \
+            --if-not-exists \
+            --topic "kafrust-transaction-ambiguity-${GITHUB_RUN_ID}" \
+            --partitions 1 \
+            --replication-factor 3
+
+      - name: Start EndTxn response-drop proxies
+        run: |
+          : > /tmp/kafrust-transaction-ambiguity-proxy-pids
+          for node in 1 2 3; do
+            backend_port=$((29091 + node))
+            proxy_port=$((39091 + node))
+            python3 -u scripts/kafka_endtxn_drop_proxy.py \
+              --listen-port "${proxy_port}" \
+              --target-port "${backend_port}" \
+              >/tmp/kafrust-transaction-ambiguity-proxy-${node}.log 2>&1 &
+            echo "$!" >> /tmp/kafrust-transaction-ambiguity-proxy-pids
+          done
+          for attempt in {1..20}; do
+            if (echo > /dev/tcp/127.0.0.1/39092) >/dev/null 2>&1 && \
+               (echo > /dev/tcp/127.0.0.1/39093) >/dev/null 2>&1 && \
+               (echo > /dev/tcp/127.0.0.1/39094) >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/kafrust-transaction-ambiguity-proxy-*.log
+          exit 1
+
+      - name: Qualify ambiguous EndTxn outcome and read-committed reconciliation
+        env:
+          KAFRUST_BOOTSTRAP_SERVERS: localhost:39092,localhost:39093,localhost:39094
+          KAFRUST_TOPIC: kafrust-transaction-ambiguity-${{ github.run_id }}
+          KAFRUST_TRANSACTIONAL_ID: kafrust-transaction-ambiguity-${{ github.run_id }}
+        run: cargo run -p kafrust --example producer_transaction_ambiguity
+
+      - name: Dump transaction ambiguity diagnostics
+        if: failure()
+        run: |
+          cat /tmp/kafrust-transaction-ambiguity-proxy-*.log || true
+          docker logs kafrust-kafka-ambiguity-1 || true
+          docker logs kafrust-kafka-ambiguity-2 || true
+          docker logs kafrust-kafka-ambiguity-3 || true
+
       - name: Run multi-broker roundtrip
         run: cargo test -p kafrust --test broker_roundtrip -- --nocapture
 
