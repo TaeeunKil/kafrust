@@ -45,7 +45,10 @@ async fn main() -> kafrust::Result<()> {
         group.generation_id(),
         group.assignments().len()
     );
-    let before = group.poll().await?;
+    let mut heartbeat = group
+        .spawn_heartbeat_task(Duration::from_millis(100))
+        .await?;
+    let before = group.poll_with_heartbeat(&mut heartbeat).await?;
     if !before
         .iter()
         .any(|record| record.topic() == topic && record.partition() == partition)
@@ -62,8 +65,9 @@ async fn main() -> kafrust::Result<()> {
         tokio::time::sleep(pause).await;
     }
 
-    let after = group.poll().await?;
+    let after = group.poll_with_heartbeat(&mut heartbeat).await?;
     print_records("group epoch failover after polled", &after)?;
+    heartbeat.stop().await?;
     group.leave().await?;
     println!("group epoch failover left group");
     Ok(())
