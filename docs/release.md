@@ -262,6 +262,14 @@ SASL_SSL/SCRAM with the published `tls` feature. This validates representative
 published transaction semantics, not every transaction failure or throughput
 workload.
 
+The published compression gate passed in
+[`31731421599`](https://github.com/TaeeunKil/kafrust/actions/runs/31731421599).
+Fresh external projects resolved `kafrust 0.2.27` from crates.io and completed
+the same direct, transactional, and `ReadCommitted` paths with Gzip, Snappy,
+LZ4, and Zstd producer compression against Kafka 3.7.2. This confirms the
+published codec configuration and fetch roundtrips; codec-specific throughput
+and failure qualification remain separate.
+
 The following current-main live run
 [`31719615947`](https://github.com/TaeeunKil/kafrust/actions/runs/31719615947)
 also passed the controlled classic consumer-group combined-fault gate in the
@@ -362,11 +370,11 @@ After both crates are published:
 3. Run the manually dispatched `Published Crate Smoke` workflow with the same
    version. It creates external projects under `$RUNNER_TEMP`, resolves the
    dependency from crates.io, and executes representative Admin, idempotent
-   producer, direct-consumer, and consumer-group paths against Kafka 3.7.2
-   classic, Kafka 4.3.1 KIP-848, and Kafka 3.7.2 SASL_SSL/SCRAM profiles. The
-   last profile uses the published `tls` feature. This is stronger than a
-   workspace compile because the smoke projects have no path dependency on the
-   repository.
+  producer, direct-consumer, and consumer-group paths against Kafka 3.7.2
+  classic, Kafka 4.3.1 KIP-848, and Kafka 3.7.2 SASL_SSL/SCRAM profiles. The
+   last profile uses the published `tls` feature; additional matrix profiles
+   exercise Gzip, Snappy, LZ4, and Zstd. This is stronger than a workspace
+   compile because the smoke projects have no path dependency on the repository.
 4. Confirm docs.rs builds the published documentation for both crates.
 5. Push an annotated release tag and create a GitHub release.
 6. Run the `Live Kafka Smoke` workflow from GitHub Actions against `main`.

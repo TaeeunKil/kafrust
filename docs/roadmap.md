@@ -2204,6 +2204,13 @@ Implemented evidence:
   Kafka 4.3.1 KIP-848, and Kafka 3.7.2 SASL_SSL/SCRAM with the published `tls`
   feature. This qualifies representative published transaction semantics, not
   every transaction failure or throughput workload.
+- The published compression matrix passed in
+  [`31731421599`](https://github.com/TaeeunKil/kafrust/actions/runs/31731421599).
+  Fresh external projects resolved `kafrust 0.2.27` from crates.io and
+  completed direct, transactional, and `ReadCommitted` paths with Gzip,
+  Snappy, LZ4, and Zstd producer compression against Kafka 3.7.2. This
+  qualifies published codec configuration and fetch roundtrips; codec-specific
+  throughput and failure qualification remain separate.
 - The complete 17-job run [`31719615947`](https://github.com/TaeeunKil/kafrust/actions/runs/31719615947)
   adds a controlled combined-fault gate in the Kafka 3.7.2 three-broker
   plaintext profile. It deliberately colocates the classic group coordinator

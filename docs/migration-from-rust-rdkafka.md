@@ -347,7 +347,7 @@ an ambiguous request.
 | Workload requirement | Migration status |
 | --- | --- |
 | Tokio producer with keys, values, headers, batching, or buffered delivery | Candidate |
-| Gzip, Snappy, LZ4, or Zstd production | Candidate on verified broker profiles |
+| Gzip, Snappy, LZ4, or Zstd production | Candidate on verified broker profiles; the published `0.2.27` artifact completed external producer/fetch and transactional `ReadCommitted` roundtrips for all four codecs against Kafka 3.7.2 in [`Published Crate Smoke` run `31731421599`](https://github.com/TaeeunKil/kafrust/actions/runs/31731421599). Qualify target-specific throughput, batch sizes, and failure behavior |
 | Idempotent producer | Candidate; broker-stop recovery is live-verified on the documented three-broker profile, but qualify target-specific ambiguous, fencing, and throughput failures |
 | Direct assigned-partition consumer | Candidate |
 | Classic range-assigned consumer group | Candidate with rebalance testing |
