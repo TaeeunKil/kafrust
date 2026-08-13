@@ -18,6 +18,12 @@ Before publishing:
 3. Update roadmap status and any user-facing API direction document affected by the release.
 4. Keep `Cargo.lock` out of the commit unless the repository policy changes.
 
+Never reuse a version that already exists on crates.io. The client and protocol
+crates must use the same new patch version, and the protocol crate must be
+published first. A local workspace build can pass while an isolated client
+package still resolves an older published protocol crate, so the ordered
+registry checks below are part of the release gate.
+
 ## Release Notes
 
 Every GitHub release should use a consistent structure so downstream users can
@@ -210,7 +216,7 @@ Dry-run first:
 
 ```sh
 cargo publish -p kafrust-protocol --dry-run
-cargo publish -p kafrust --dry-run
+cargo publish -p kafrust --dry-run # only after protocol is visible on crates.io
 ```
 
 Publish after dry-runs pass:
@@ -218,6 +224,14 @@ Publish after dry-runs pass:
 ```sh
 cargo publish -p kafrust-protocol
 cargo publish -p kafrust
+```
+
+After publishing `kafrust-protocol`, wait for the crates.io index to expose the
+new version and confirm it resolves before publishing `kafrust`:
+
+```sh
+cargo info kafrust-protocol@<version>
+cargo publish -p kafrust --dry-run
 ```
 
 After publishing, tag the release with a Conventional Commit history summary and include known alpha limits from the roadmap.
