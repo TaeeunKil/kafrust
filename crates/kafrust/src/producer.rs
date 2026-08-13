@@ -3705,10 +3705,17 @@ impl ProducerConfig {
     /// Validates this producer configuration without opening a broker connection.
     pub fn validate(&self) -> Result<()> {
         self.client.validate()?;
-        if self.idempotence && (self.acks != Acks::All || self.max_retries == 0) {
-            return Err(Error::Unsupported(
-                "idempotence requires acks=all and at least one retry",
-            ));
+        if self.idempotence && self.acks != Acks::All {
+            return Err(Error::InvalidConfiguration {
+                field: "acks",
+                reason: "idempotence requires acks=all",
+            });
+        }
+        if self.idempotence && self.max_retries == 0 {
+            return Err(Error::InvalidConfiguration {
+                field: "max_retries",
+                reason: "idempotence requires at least one retry",
+            });
         }
         if self.transactional_id.as_deref() == Some("") {
             return Err(Error::InvalidConfiguration {
@@ -4762,6 +4769,33 @@ mod tests {
         ));
 
         assert!(ProducerConfig::new(["127.0.0.1:1"]).validate().is_ok());
+    }
+
+    #[test]
+    fn validates_idempotence_overrides_with_typed_errors() {
+        let invalid_acks = ProducerConfig::new(["localhost:9092"])
+            .enable_idempotence(true)
+            .acks(Acks::Leader)
+            .validate();
+        assert!(matches!(
+            invalid_acks,
+            Err(Error::InvalidConfiguration {
+                field: "acks",
+                reason: "idempotence requires acks=all"
+            })
+        ));
+
+        let invalid_retries = ProducerConfig::new(["localhost:9092"])
+            .enable_idempotence(true)
+            .max_retries(0)
+            .validate();
+        assert!(matches!(
+            invalid_retries,
+            Err(Error::InvalidConfiguration {
+                field: "max_retries",
+                reason: "idempotence requires at least one retry"
+            })
+        ));
     }
 
     #[test]
