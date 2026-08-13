@@ -1538,15 +1538,23 @@ completed and both final resource gauges were zero.
   measured 43.7k-48.9k producer records/s and 210.6k-268.3k consumer records/s,
   with p50/p95/p99 batch latency recorded, zero retries, and zero final queue
   gauges. This closes the published performance-baseline gate; it does not
-  claim a rust-rdkafka comparison, production SLO, or long-running soak.
+  claim production SLO or long-running soak evidence.
+- The published direct comparison run
+  [`31753172293`](https://github.com/TaeeunKil/kafrust/actions/runs/31753172293)
+  passed a fresh external `kafrust 0.2.28` versus `rust-rdkafka 0.39.0`
+  profile against Kafka 4.3.1. Both used fresh one-partition topics, 2,000
+  1-KiB records, and batches of 100. Kafrust measured 51,834 producer and
+  129,875 consumer records/s; rust-rdkafka measured 48,452 producer and
+  252,306 consumer records/s. This closes the direct benchmark evidence gap,
+  but not API/feature parity, production SLO, or universal performance claims.
 - Published `kafrust 0.2.28` soak run
   [`31744827441`](https://github.com/TaeeunKil/kafrust/actions/runs/31744827441)
   passed Kafka 4.3.1 after a broker stop at one third of a 120-second run and
   a ten-second outage. The fresh external project processed 7,229,000 records,
   observed 173 operation errors, 982 failed requests, and 1,210 retries, then
   recovered with `recovered=true` and zero final queue gauges. This closes the
-  published single-node soak gate; multi-broker soak, direct rust-rdkafka
-  comparison, production SLO, and canary evidence remain open.
+  published single-node soak gate; multi-broker soak, production SLO, and
+  canary evidence remain open.
 - Published `kafrust 0.2.28` multi-broker soak run
   [`31746182158`](https://github.com/TaeeunKil/kafrust/actions/runs/31746182158)
   passed Kafka 4.3.1 three-broker KRaft with three replicated partitions. The
@@ -1554,8 +1562,8 @@ completed and both final resource gauges were zero.
   outage, reconciled 4,918,800 records, observed one operation error, seven
   failed requests, and 1,006 retries, and ended with `recovered=true` plus zero
   final queue gauges. This closes the published plaintext multi-broker soak
-  gate; secured multi-broker soak, simultaneous broker loss, direct
-  rust-rdkafka comparison, production SLO, and canary evidence remain open.
+  gate; secured multi-broker soak, simultaneous broker loss, production SLO,
+  and canary evidence remain open.
 - Published `kafrust 0.2.28` secured multi-broker soak run
   [`31747389166`](https://github.com/TaeeunKil/kafrust/actions/runs/31747389166)
   passed Kafka 4.3.1 three-broker KRaft with SASL_SSL/SCRAM-SHA-256 and three
@@ -1563,8 +1571,8 @@ completed and both final resource gauges were zero.
   through a ten-second broker 1 outage, reconciled 2,288,700 records, observed
   one failed request and 1,001 retries with zero high-level operation errors,
   and ended with `recovered=true` plus zero final queue gauges. This closes the
-  published secured multi-broker soak gate; simultaneous broker loss, direct
-  rust-rdkafka comparison, production SLO, and canary evidence remain open.
+  published secured multi-broker soak gate; simultaneous broker loss,
+  production SLO, and canary evidence remain open.
 - Published `kafrust 0.2.28` simultaneous broker-loss soak run
   [`31748293446`](https://github.com/TaeeunKil/kafrust/actions/runs/31748293446)
   passed Kafka 4.3.1 three-broker KRaft with three replicated partitions. The
@@ -1573,16 +1581,14 @@ completed and both final resource gauges were zero.
   failed request and 999 retries with zero high-level operation errors, and
   ended with `recovered=true` plus zero final queue gauges. This closes the
   published plaintext simultaneous-loss gate; secured simultaneous loss,
-  direct rust-rdkafka comparison, production SLO, and canary evidence remain
-  open.
+  production SLO, and canary evidence remain open.
 - The same published simultaneous-loss gate passed Kafka 3.7.2 in
   [`31748860976`](https://github.com/TaeeunKil/kafrust/actions/runs/31748860976).
   The fresh external `0.2.28` project processed 4,620,200 records across three
   replicated partitions, observed one failed request and 1,008 retries, and
   ended with `recovered=true` plus zero final queue gauges. The paired Kafka
   3.7.2 and 4.3.1 runs qualify the tested plaintext simultaneous-loss behavior;
-  secured simultaneous loss, direct rust-rdkafka comparison, production SLO,
-  and canary evidence remain open.
+  secured simultaneous loss, production SLO, and canary evidence remain open.
 - The published secured simultaneous-loss gate then passed in
   [`31750274774`](https://github.com/TaeeunKil/kafrust/actions/runs/31750274774).
   A fresh external `0.2.28` project with `tls` survived simultaneous
@@ -2374,23 +2380,30 @@ Implemented evidence:
   measured batch p50/p95/p99 latency, and ended with zero retries and zero
   in-flight or buffered records. Producer throughput ranged from 43.7k to
   48.9k records/s and consumer throughput from 210.6k to 268.3k records/s.
-  This is a published baseline for repeatability, not a direct rust-rdkafka
-  comparison, production SLO, or long-running soak result.
+  This is a published baseline for repeatability, not production SLO or
+  long-running soak evidence.
+- The published direct comparison workflow
+  [`31753172293`](https://github.com/TaeeunKil/kafrust/actions/runs/31753172293)
+  passed a fresh external `kafrust 0.2.28` versus `rust-rdkafka 0.39.0` project
+  against Kafka 4.3.1. Both used fresh one-partition topics, 2,000 1-KiB
+  records, and batches of 100. Kafrust measured 51,834 producer and 129,875
+  consumer records/s; rust-rdkafka measured 48,452 producer and 252,306
+  consumer records/s. This closes the direct benchmark evidence gap, but not
+  API/feature parity, production SLO, or universal performance claims.
 - The published single-node soak gate then passed in
   [`31744827441`](https://github.com/TaeeunKil/kafrust/actions/runs/31744827441).
   A fresh external `0.2.28` project ran for 120 seconds against Kafka 4.3.1,
   survived a ten-second broker outage, reconciled 7,229,000 records, and ended
   with `recovered=true` plus zero in-flight and buffered records. The remaining
   claim is deliberately narrow: this does not establish multi-broker soak,
-  direct rust-rdkafka parity, production SLOs, or service canary readiness.
+  production SLOs, or service canary readiness.
 - The published simultaneous-loss gate then passed in
   [`31748293446`](https://github.com/TaeeunKil/kafrust/actions/runs/31748293446).
   A fresh external `0.2.28` project survived simultaneous ten-second outages
   of brokers 1 and 2 in a three-broker Kafka 4.3.1 cluster, reconciled
   4,423,200 records across three replicated partitions, and ended with zero
-  in-flight and buffered records. Secured simultaneous loss, direct
-  rust-rdkafka comparison, production SLOs, and service canary readiness remain
-  open.
+  in-flight and buffered records. Secured simultaneous loss, production SLOs,
+  and service canary readiness remain open.
 - The published secured simultaneous-loss gate then passed in
   [`31750274774`](https://github.com/TaeeunKil/kafrust/actions/runs/31750274774).
   A fresh external `0.2.28` project with `tls` survived simultaneous
@@ -2406,8 +2419,7 @@ Implemented evidence:
   three-broker Kafka 4.3.1 cluster, reconciled 4,918,800 records across three
   replicated partitions, and ended with zero in-flight and buffered records.
   The remaining 1.0 evidence still includes secured multi-broker soak,
-  simultaneous broker loss, direct rust-rdkafka comparison, production SLOs,
-  and service canary readiness.
+  simultaneous broker loss, production SLOs, and service canary readiness.
 - The published secured multi-broker soak gate then passed in
   [`31747389166`](https://github.com/TaeeunKil/kafrust/actions/runs/31747389166).
   A fresh external `0.2.28` project with `tls` survived a ten-second broker

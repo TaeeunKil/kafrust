@@ -427,6 +427,18 @@ zero retries and zero final in-flight or buffered records. This is a published
 baseline for repeatability, not a direct rust-rdkafka comparison or production
 SLO.
 
+The published direct comparison workflow
+[`31753172293`](https://github.com/TaeeunKil/kafrust/actions/runs/31753172293)
+passed a fresh external project using `kafrust 0.2.28` and `rust-rdkafka 0.39.0`
+against Kafka 4.3.1. Both implementations used fresh one-partition topics,
+2,000 1-KiB records, and batches of 100; the kafrust profile used
+`Acks::Leader` and the rust-rdkafka profile used `acks=1`. Kafrust measured
+51,834 producer records/s and 129,875 consumer records/s; rust-rdkafka measured
+48,452 producer records/s and 252,306 consumer records/s. The comparison
+builds `librdkafka` only in this external benchmark project and does not add a C
+dependency to kafrust. This is one reproducible throughput baseline, not API or
+feature parity, production SLO evidence, or a universal performance ranking.
+
 The published soak workflow
 [`31744827441`](https://github.com/TaeeunKil/kafrust/actions/runs/31744827441)
 passed a fresh external `kafrust 0.2.28` project against Kafka 4.3.1. The
