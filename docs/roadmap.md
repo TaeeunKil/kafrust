@@ -2031,5 +2031,9 @@ Implemented evidence:
   current epoch. The complete 17-job matrix passed on code commit `1694889` in
   [`31677617186`](https://github.com/TaeeunKil/kafrust/actions/runs/31677617186).
   Package, docs.rs, crates.io, and fresh external Rust 1.81 `tls` compile
-  checks passed for `0.2.26`. Live log-truncation fault injection and group
-  rebalance recovery remain separate gates.
+  checks passed for `0.2.26`. The follow-up workflow-only live gate passed in
+  [`31679167875`](https://github.com/TaeeunKil/kafrust/actions/runs/31679167875):
+  Kafka 3.7.2 three-broker repeated leader failover moved the observed epoch
+  from 1 to 2 and the assigned direct consumer recovered automatically through
+  the OffsetForLeaderEpoch path. Group rebalance recovery and data-loss/log-
+  retention fault scenarios remain separate gates.

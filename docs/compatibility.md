@@ -114,8 +114,14 @@ fenced or unknown leader epoch. The complete 17-job matrix passed on code
 commit `1694889` in
 [`31677617186`](https://github.com/TaeeunKil/kafrust/actions/runs/31677617186),
 including plaintext, TLS, SASL, SCRAM, OAUTHBEARER, multi-broker, and KIP-848
-profiles. The matrix is a regression gate for the release; it does not claim a
-live log-truncation fault-injection scenario.
+profiles. The follow-up matrix passed on the workflow-only qualification
+commit `0d4f7b7` in
+[`31679167875`](https://github.com/TaeeunKil/kafrust/actions/runs/31679167875):
+the Kafka 3.7.2 three-broker job stopped the second leader after the initial
+direct-consumer poll, observed the leader epoch move from 1 to 2, and verified
+automatic recovery through the bounded OffsetForLeaderEpoch path. This proves
+live direct-consumer leader-epoch failover recovery; group rebalance recovery
+and data-loss/log-retention fault scenarios remain separate claims.
 
 Release `v0.2.19` additionally qualifies Fetch v12 forwarding of the last
 fetched partition leader epoch and consumer-group `Earliest`/`Latest` recovery
@@ -302,6 +308,7 @@ other coordinator-routed writes remain separate qualification items.
 | Apache Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1 | complete 17-job KRaft matrix; plaintext, TLS, SASL, OAUTHBEARER, ACL, multi-broker, and KIP-848 profiles | ListTransactions broker-shard aggregation, topic-ID Produce v13 with name-based v12/v11/v9 fallback, rack-aware Fetch v12, and existing failover gates | [`Live Kafka Smoke`, run `31648660947`](https://github.com/TaeeunKil/kafrust/actions/runs/31648660947) on 2026-08-13 | Passing; Produce selected v13 on Kafka 4.3.1, v11 on 3.8.1/3.9.1, and v9 on 3.7.2; ListTransactions examples returned records on single-node and 3.7.2 multi-broker profiles |
 | Apache Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1 | complete 17-job KRaft matrix; dedicated offset-reset topic | Fetch v12 last-fetched leader epoch; group `Earliest`/`Latest` reset with committed out-of-range recovery | [`Live Kafka Smoke`, run `31663188419`](https://github.com/TaeeunKil/kafrust/actions/runs/31663188419) on 2026-08-13 | Passing |
 | Apache Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1 | complete 17-job KRaft matrix; plaintext, TLS, SASL, SCRAM, OAUTHBEARER, multi-broker, and KIP-848 profiles | v0.2.26 direct-consumer leader-epoch recovery regression matrix | [`Live Kafka Smoke`, run `31677617186`](https://github.com/TaeeunKil/kafrust/actions/runs/31677617186) on 2026-08-13 | Passing; live log-truncation injection not claimed |
+| Apache Kafka 3.7.2 | three-broker KRaft; repeated leader failover | v0.2.26 direct assigned-consumer automatic leader-epoch recovery after the second leader broker stop | [`Live Kafka Smoke`, run `31679167875`](https://github.com/TaeeunKil/kafrust/actions/runs/31679167875) on 2026-08-13 | Passing; group rebalance and data-loss/log-retention scenarios remain separate |
 
 ## Verified Paths
 
@@ -803,9 +810,11 @@ The current compatibility claim does not cover:
   transmitted. Bootstrap connection failures before transmission are retried
   within the bounded AdminClient budget; ambiguous post-transmission outcomes
   remain returned to the caller for explicit reconciliation.
-- Automatic direct-consumer leader-epoch truncation recovery has focused
-  injected-broker coverage but is not yet claimed against a live Kafka broker.
-  Group rebalance recovery after log truncation remains a separate gate.
+- Automatic direct-consumer leader-epoch recovery is live-qualified for the
+  repeated Kafka 3.7.2 three-broker leader-stop path in
+  [`31679167875`](https://github.com/TaeeunKil/kafrust/actions/runs/31679167875).
+  This does not claim group rebalance recovery, arbitrary retention/data-loss
+  scenarios, or transparent recovery for every consumer topology.
 - Kafka APIs that are not listed in the verified paths.
 
 ## Updating Compatibility

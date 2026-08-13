@@ -178,12 +178,20 @@ The `0.2.26` packages passed Cargo package and publish verification on release
 preparation commit `3f917c6`; `kafrust-protocol` was published before
 `kafrust`. The release adds automatic direct-consumer leader-epoch truncation
 recovery after a fenced or unknown leader epoch, with focused injected-broker
-coverage and documented live-qualification limits. The complete 17-job Live
+coverage. The complete 17-job Live
 Kafka Smoke matrix passed on code commit `1694889` in
 [`31677617186`](https://github.com/TaeeunKil/kafrust/actions/runs/31677617186).
 Both crates.io package endpoints and both docs.rs pages returned HTTP 200. A
 fresh external project compiled published `kafrust 0.2.26` with `tls` on Rust
 1.81 MSVC.
+
+The workflow-only follow-up gate in
+[`31679167875`](https://github.com/TaeeunKil/kafrust/actions/runs/31679167875)
+also passed. Its Kafka 3.7.2 three-broker profile stopped the second leader
+after the initial assigned-consumer poll and verified automatic recovery after
+the leader epoch changed from 1 to 2. This qualifies the live direct-consumer
+leader-epoch failover path; group rebalance and data-loss/log-retention
+scenarios remain outside the release claim.
 
 ## Optional Broker Checks
 
