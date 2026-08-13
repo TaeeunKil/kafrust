@@ -134,6 +134,15 @@ passed in [`31666975512`](https://github.com/TaeeunKil/kafrust/actions/runs/3166
 The external smoke project used the current stable toolchain; the repository's
 Rust 1.81 compatibility remains covered by the required CI job.
 
+The `0.2.22` packages passed Cargo publish verification on release preparation
+commit `af52ab9`; `kafrust-protocol` was published before `kafrust`. The
+release contains sticky duplicate-claim invalidation and Kafka-compatible
+mixed-topic candidate ordering. The complete 17-job Live Kafka Smoke matrix,
+including the Kafka 3.7.2 three-broker sticky group path, passed in
+[`31668518895`](https://github.com/TaeeunKil/kafrust/actions/runs/31668518895).
+Both crates.io package endpoints and both published docs.rs pages returned HTTP
+200, and a fresh external project compiled `kafrust 0.2.22` with `tls`.
+
 ## Optional Broker Checks
 
 The default test suite does not require a Kafka broker. Before an alpha tag, run the opt-in examples or tests against a local broker when practical:
