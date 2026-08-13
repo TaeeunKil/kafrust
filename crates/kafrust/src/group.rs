@@ -662,11 +662,7 @@ impl ConsumerGroupConfig {
         err
     )]
     pub async fn join(self) -> Result<ConsumerGroup> {
-        self.client.validate()?;
         self.validate()?;
-        if self.auto_commit {
-            validate_commit_worker_interval(self.auto_commit_interval)?;
-        }
         let mut group = if self.group_protocol == ConsumerGroupProtocol::Consumer {
             if self.assignment_strategy != ConsumerGroupAssignmentStrategy::Range {
                 return Err(Error::Unsupported(
@@ -919,6 +915,7 @@ impl ConsumerGroupConfig {
 
     /// Validates this consumer-group configuration without opening a broker connection.
     pub fn validate(&self) -> Result<()> {
+        self.client.validate()?;
         if self.group_id.trim().is_empty() {
             return Err(Error::InvalidConfiguration {
                 field: "group_id",
@@ -987,6 +984,9 @@ impl ConsumerGroupConfig {
                 field: "max_poll_records",
                 reason: "must be greater than zero",
             });
+        }
+        if self.auto_commit {
+            validate_commit_worker_interval(self.auto_commit_interval)?;
         }
         Ok(())
     }
@@ -4427,6 +4427,27 @@ mod tests {
             .subscribe("orders")
             .validate()
             .is_ok());
+    }
+
+    #[test]
+    fn public_group_validation_checks_client_and_worker_settings() {
+        assert!(matches!(
+            ConsumerGroupConfig::new(std::iter::empty::<&str>(), "orders-group")
+                .subscribe("orders")
+                .validate(),
+            Err(Error::MissingBootstrapServer)
+        ));
+        assert!(matches!(
+            ConsumerGroupConfig::new(["localhost:9092"], "orders-group")
+                .subscribe("orders")
+                .enable_auto_commit(true)
+                .auto_commit_interval_ms(0)
+                .validate(),
+            Err(Error::InvalidConfiguration {
+                field: "auto_commit_interval_ms",
+                reason: "must be greater than zero"
+            })
+        ));
     }
 
     #[test]
