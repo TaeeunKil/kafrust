@@ -4,9 +4,10 @@ use futures_util::future::join_all;
 use kafrust::{Acks, ClientMetrics, ConsumerConfig, ProducerConfig, ProducerRecord};
 use rdkafka::{
     consumer::{BaseConsumer, Consumer as RdkConsumer},
-    producer::{FutureProducer, FutureRecord, Producer as RdkProducer},
+    producer::{FutureProducer, FutureRecord},
     topic_partition_list::{Offset, TopicPartitionList},
-    ClientConfig, Message, Timeout,
+    util::Timeout,
+    ClientConfig, Message,
 };
 
 const PARTITION: i32 = 0;
