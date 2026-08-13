@@ -1592,6 +1592,15 @@ completed and both final resource gauges were zero.
   cluster had only one in-sync broker, then recovered with zero in-flight and
   buffered records. Unclean-election data loss, production SLOs, and canary
   evidence remain separate gates.
+- The same published secured simultaneous-loss gate passed Kafka 3.7.2 in
+  [`31751812178`](https://github.com/TaeeunKil/kafrust/actions/runs/31751812178).
+  The 60-second fresh external `0.2.28` project reconciled 686,700
+  successfully acknowledged records, recorded the expected write rejections
+  while two brokers were unavailable, and ended with `recovered=true` plus
+  zero final in-flight and buffered records. Together the Kafka 3.7.2 and
+  4.3.1 runs close the tested secured simultaneous-loss durability/availability
+  gate; unclean-election data loss, production SLOs, and canary evidence remain
+  separate.
 - Shared metrics count non-zero Kafka error codes handled by authentication,
   producer, transaction, consumer, and consumer-group operations, including
   retry attempts and partial batch failures. This separates protocol-level

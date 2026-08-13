@@ -487,9 +487,14 @@ seconds, and reconciled 2,704,200 successfully acknowledged records after
 recovery. Kafka rejected 282 produce operations while two brokers were down;
 the client recorded two failed requests and three retries, then reported
 `recovered=true` with zero final in-flight or buffered records. This closes the
-tested secured simultaneous-loss durability/availability profile; unclean
-election data loss, production SLOs, and service canary readiness remain
-separate claims.
+tested Kafka 4.3.1 secured simultaneous-loss durability/availability profile.
+The same gate passed Kafka 3.7.2 in
+[`31751812178`](https://github.com/TaeeunKil/kafrust/actions/runs/31751812178)
+with a 60-second run that reconciled 686,700 successfully acknowledged records,
+330 expected write rejections, two failed requests, three retries, and zero
+final in-flight or buffered records. Together these qualify the tested secured
+simultaneous-loss behavior across Kafka 3.7.2 and 4.3.1. Unclean-election data
+loss, production SLOs, and service canary readiness remain separate claims.
 
 The following current-main live run
 [`31719615947`](https://github.com/TaeeunKil/kafrust/actions/runs/31719615947)
