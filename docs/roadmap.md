@@ -1547,6 +1547,15 @@ completed and both final resource gauges were zero.
   recovered with `recovered=true` and zero final queue gauges. This closes the
   published single-node soak gate; multi-broker soak, direct rust-rdkafka
   comparison, production SLO, and canary evidence remain open.
+- Published `kafrust 0.2.28` multi-broker soak run
+  [`31746182158`](https://github.com/TaeeunKil/kafrust/actions/runs/31746182158)
+  passed Kafka 4.3.1 three-broker KRaft with three replicated partitions. The
+  fresh external project ran for 120 seconds through a ten-second broker 1
+  outage, reconciled 4,918,800 records, observed one operation error, seven
+  failed requests, and 1,006 retries, and ended with `recovered=true` plus zero
+  final queue gauges. This closes the published plaintext multi-broker soak
+  gate; secured multi-broker soak, simultaneous broker loss, direct
+  rust-rdkafka comparison, production SLO, and canary evidence remain open.
 - Shared metrics count non-zero Kafka error codes handled by authentication,
   producer, transaction, consumer, and consumer-group operations, including
   retry attempts and partial batch failures. This separates protocol-level
@@ -2329,6 +2338,14 @@ Implemented evidence:
   with `recovered=true` plus zero in-flight and buffered records. The remaining
   claim is deliberately narrow: this does not establish multi-broker soak,
   direct rust-rdkafka parity, production SLOs, or service canary readiness.
+- The published multi-broker soak gate then passed in
+  [`31746182158`](https://github.com/TaeeunKil/kafrust/actions/runs/31746182158).
+  A fresh external `0.2.28` project survived a ten-second broker outage in a
+  three-broker Kafka 4.3.1 cluster, reconciled 4,918,800 records across three
+  replicated partitions, and ended with zero in-flight and buffered records.
+  The remaining 1.0 evidence still includes secured multi-broker soak,
+  simultaneous broker loss, direct rust-rdkafka comparison, production SLOs,
+  and service canary readiness.
 - The published secured multi-broker workflow passed both representative
   security and group-protocol combinations. Kafka 3.7.2 classic passed in
   [`31738997447`](https://github.com/TaeeunKil/kafrust/actions/runs/31738997447),

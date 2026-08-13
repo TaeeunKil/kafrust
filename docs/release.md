@@ -437,6 +437,17 @@ and 1,210 retries, then reported `recovered=true` with zero final in-flight or
 buffered records. This is a published single-node recovery profile, not a
 multi-broker soak or production SLO.
 
+The published multi-broker soak workflow
+[`31746182158`](https://github.com/TaeeunKil/kafrust/actions/runs/31746182158)
+passed a fresh external `kafrust 0.2.28` project against Kafka 4.3.1. The
+three-broker, three-replicated-partition, 120-second workload stopped broker 1
+after one third of the run, waited ten seconds, restarted it, and reconciled
+4,918,800 records across all partitions. It observed one operation error, seven
+failed requests, and 1,006 retries, then reported `recovered=true` with zero
+final in-flight or buffered records. This is a published plaintext
+multi-broker recovery profile, not secured, simultaneous-loss, or production
+SLO evidence.
+
 The following current-main live run
 [`31719615947`](https://github.com/TaeeunKil/kafrust/actions/runs/31719615947)
 also passed the controlled classic consumer-group combined-fault gate in the
