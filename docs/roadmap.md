@@ -1889,3 +1889,9 @@ Implemented evidence:
   `ConsumerRecord::leader_epoch()`. Legacy MessageSet records explicitly use
   `-1`; focused protocol and high-level mapping tests cover both shapes. This
   preserves the broker state needed for future leader-epoch offset recovery.
+- Release `v0.2.15` published the leader-epoch compatibility slice after
+  protocol-first packaging, staged all-feature docs, a fresh external project
+  compile with `tls` and all features, crates.io resolution, and HTTP 200
+  responses from both docs.rs pages. The complete 17-job live matrix passed on
+  the release commit in
+  [`31657464035`](https://github.com/TaeeunKil/kafrust/actions/runs/31657464035).

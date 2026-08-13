@@ -98,13 +98,13 @@ cargo doc --manifest-path target/package/kafrust-protocol-<version>/Cargo.toml -
 cargo doc --manifest-path target/package/kafrust-<version>/Cargo.toml --all-features --no-deps
 ```
 
-The `0.2.14` package contents passed both package verification and both
-all-feature package-documentation builds on commit `2491789`. The matching
+The `0.2.15` package contents passed both package verification and both
+all-feature package-documentation builds on commit `8a371e5`. The matching
 `kafrust-protocol` and `kafrust` packages were published in that order; both
 docs.rs pages returned HTTP 200 and an external project compiled the published
-`kafrust 0.2.14` crate with `tls` and all features. The complete 17-job Live
-Kafka Smoke run [`31656232857`](https://github.com/TaeeunKil/kafrust/actions/runs/31656232857)
-also passed on the release commit `2491789`. Update this paragraph after each
+`kafrust 0.2.15` crate with `tls` and all features. The complete 17-job Live
+Kafka Smoke run [`31657464035`](https://github.com/TaeeunKil/kafrust/actions/runs/31657464035)
+also passed on the release commit `8a371e5`. Update this paragraph after each
 release with the current package and external verification results. None of
 these checks replace broader workload qualification.
 
