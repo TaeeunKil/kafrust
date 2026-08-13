@@ -18,11 +18,12 @@ async fn main() -> kafrust::Result<()> {
     let expected_value = std::env::var("KAFRUST_EXPECTED_VALUE")
         .unwrap_or_else(|_| "kafrust-combined-after".to_owned());
     let pause = parse_duration("KAFRUST_FAILOVER_PAUSE_MS", Duration::ZERO)?;
+    let protocol = group_protocol_from_env()?;
 
     let mut group = common::apply_security(
         ConsumerGroupConfig::new(bootstrap_servers, group_id.clone())
             .client_id("kafrust-consumer-group-combined-failover")
-            .group_protocol(ConsumerGroupProtocol::Classic)
+            .group_protocol(protocol)
             .session_timeout_ms(6_000)
             .rebalance_timeout_ms(10_000)
             .max_wait_ms(100)
@@ -137,6 +138,46 @@ fn parse_duration(name: &'static str, default: Duration) -> kafrust::Result<Dura
         .map(|value| value.unwrap_or(default))
 }
 
+fn group_protocol_from_env() -> kafrust::Result<ConsumerGroupProtocol> {
+    std::env::var("KAFRUST_GROUP_PROTOCOL")
+        .map(|value| parse_group_protocol(&value))
+        .unwrap_or(Ok(ConsumerGroupProtocol::Classic))
+}
+
+fn parse_group_protocol(value: &str) -> kafrust::Result<ConsumerGroupProtocol> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "classic" => Ok(ConsumerGroupProtocol::Classic),
+        "consumer" | "kip-848" => Ok(ConsumerGroupProtocol::Consumer),
+        _ => Err(Error::Unsupported(
+            "KAFRUST_GROUP_PROTOCOL must be classic or consumer",
+        )),
+    }
+}
+
 fn flush_stdout() -> kafrust::Result<()> {
     io::stdout().flush().map_err(Error::from)
+}
+
+#[cfg(test)]
+mod tests {
+    use kafrust::ConsumerGroupProtocol;
+
+    use super::parse_group_protocol;
+
+    #[test]
+    fn parses_classic_and_kip848_protocols() {
+        assert_eq!(
+            parse_group_protocol(" classic ").unwrap(),
+            ConsumerGroupProtocol::Classic
+        );
+        assert_eq!(
+            parse_group_protocol("KIP-848").unwrap(),
+            ConsumerGroupProtocol::Consumer
+        );
+    }
+
+    #[test]
+    fn rejects_unknown_group_protocol() {
+        assert!(parse_group_protocol("unknown").is_err());
+    }
 }
