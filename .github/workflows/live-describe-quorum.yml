@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      KAFRUST_BOOTSTRAP_SERVERS: 127.0.0.1:39092
+      KAFRUST_BOOTSTRAP_SERVERS: 127.0.0.1:39093
 
     steps:
       - name: Checkout
@@ -39,6 +39,7 @@ jobs:
           docker run -d --name kafrust-describe-quorum-broker \
             --network kafrust-describe-quorum \
             -p 39092:9092 \
+            -p 39093:9093 \
             -e KAFKA_CLUSTER_ID="$cluster_id" \
             -e KAFKA_NODE_ID=1 \
             -e KAFKA_PROCESS_ROLES=broker,controller \
