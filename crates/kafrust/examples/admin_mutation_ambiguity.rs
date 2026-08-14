@@ -386,6 +386,7 @@ async fn qualify_alter_consumer_group_offsets(
         .await?;
     let group_id = format!("kafrust-admin-ambiguity-{topic}");
     let expected_offset = 42;
+    wait_for_group_offset_query(admin, &group_id, topic).await?;
     let offsets = [ConsumerGroupOffset::new(topic, 0, expected_offset)];
     let error = match admin
         .alter_consumer_group_offsets(&group_id, &offsets)
@@ -598,6 +599,38 @@ async fn wait_for_group_offset(
         if tokio::time::Instant::now() >= deadline {
             return Err(Error::Unsupported(
                 "ambiguous OffsetCommit reconciliation did not observe the expected offset",
+            ));
+        }
+        tokio::time::sleep(Duration::from_millis(250)).await;
+    }
+}
+
+async fn wait_for_group_offset_query(
+    admin: &AdminClient,
+    group_id: &str,
+    topic: &str,
+) -> kafrust::Result<()> {
+    let query = [ConsumerGroupOffsetQuery::new(topic, [0])];
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(15);
+    loop {
+        let described = admin
+            .list_consumer_group_offsets(group_id, Some(&query))
+            .await?;
+        let ready = described.is_success()
+            && described.topics().iter().any(|candidate| {
+                candidate.topic() == topic
+                    && candidate
+                        .partitions()
+                        .iter()
+                        .any(|partition| partition.partition_index() == 0 && partition.is_success())
+            });
+        if ready {
+            println!("consumer-group offset coordinator is ready for {group_id}");
+            return Ok(());
+        }
+        if tokio::time::Instant::now() >= deadline {
+            return Err(Error::Unsupported(
+                "consumer-group offset query did not become ready before OffsetCommit",
             ));
         }
         tokio::time::sleep(Duration::from_millis(250)).await;
