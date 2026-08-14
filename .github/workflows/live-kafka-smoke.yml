@@ -1501,6 +1501,7 @@ jobs:
           KAFRUST_GROUP_PROTOCOL=consumer \
           KAFRUST_PARTITION="$group_epoch_partition" \
           KAFRUST_OFFSET=0 \
+          KAFRUST_EXPECTED_VALUE="kafrust kip848 scram group epoch post" \
           KAFRUST_FAILOVER_PAUSE_MS=10000 \
           RUST_LOG=kafrust=debug \
           cargo run -p kafrust --features tls --example consumer_group_epoch_failover \
@@ -1545,6 +1546,22 @@ jobs:
             sleep 1
           done
 
+          if [ -z "$group_epoch_leader_ready" ]; then
+            cat /tmp/kafrust-kip848-scram-group-epoch-after-stop-topic.log || true
+            echo "KIP-848 SCRAM group epoch failover did not elect a replacement leader"
+            kill "$group_epoch_pid" 2>/dev/null || true
+            wait "$group_epoch_pid" || true
+            exit 1
+          fi
+
+          group_epoch_producer_log=/tmp/kafrust-kip848-scram-group-epoch-producer.log
+          KAFRUST_PARTITION="$group_epoch_partition" \
+          KAFRUST_KEY="kafrust-kip848-scram-group-epoch-post-${GITHUB_RUN_ID}" \
+          KAFRUST_VALUE="kafrust kip848 scram group epoch post" \
+          cargo run -p kafrust --features tls --example producer_send \
+            >"$group_epoch_producer_log" 2>&1
+          cat "$group_epoch_producer_log"
+
           group_epoch_status=0
           wait "$group_epoch_pid" || group_epoch_status=$?
           cat "$group_epoch_log"
@@ -1561,13 +1578,13 @@ jobs:
             sleep 2
           done
 
-          if [ "$group_epoch_status" -ne 0 ] || [ -z "$group_epoch_leader_ready" ] || \
+          if [ "$group_epoch_status" -ne 0 ] || \
              [ -z "$group_epoch_broker_ready" ] || \
-             ! grep -q "recovered fetch after leader epoch transition" "$group_epoch_log"; then
+             ! grep -q "group epoch failover observed expected post-failover record" "$group_epoch_log"; then
             cat /tmp/kafrust-kip848-scram-group-epoch-after-stop-topic.log || true
             cat /tmp/kafrust-kip848-scram-group-epoch-recovery.log || true
             docker logs "kafrust-kip848-scram-${group_epoch_broker}"
-            echo "KIP-848 SCRAM consumer group did not prove automatic leader-epoch recovery"
+            echo "KIP-848 SCRAM consumer group did not prove post-failover record recovery"
             exit 1
           fi
 
