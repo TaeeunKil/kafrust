@@ -1541,6 +1541,11 @@ fn delivery_error_from_request_error(error: &Error) -> Error {
         Error::InvalidConfiguration { field, reason } => {
             Error::InvalidConfiguration { field, reason }
         }
+        Error::ConsumerGroupAssignmentTimeout { timeout_ms } => {
+            Error::ConsumerGroupAssignmentTimeout {
+                timeout_ms: *timeout_ms,
+            }
+        }
         Error::Unsupported(feature) => Error::Unsupported(feature),
         Error::Io(error) => Error::Io(std::io::Error::new(error.kind(), error.to_string())),
         Error::TaskJoin(_) => Error::Unsupported("buffered producer task join failed"),
@@ -4644,6 +4649,7 @@ fn can_retry_send(error: &Error) -> bool {
         | Error::InvalidTopicPattern { .. }
         | Error::InvalidScramCredential { .. }
         | Error::InvalidConfiguration { .. }
+        | Error::ConsumerGroupAssignmentTimeout { .. }
         | Error::Unsupported(_)
         | Error::TaskJoin(_)
         | Error::Protocol(_) => false,

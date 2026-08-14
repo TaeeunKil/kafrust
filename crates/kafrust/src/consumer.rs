@@ -1853,6 +1853,7 @@ fn can_retry_fetch(error: &Error) -> bool {
         | Error::InvalidTopicPattern { .. }
         | Error::InvalidScramCredential { .. }
         | Error::InvalidConfiguration { .. }
+        | Error::ConsumerGroupAssignmentTimeout { .. }
         | Error::Unsupported(_)
         | Error::TaskJoin(_)
         | Error::Protocol(_) => false,

@@ -113,6 +113,12 @@ target-workload callback timing still requires qualification.
 Assignment state keeps Kafka group ID, member ID, generation ID, topic,
 partition, and next offset visible through the public API.
 
+If a KIP-848 member does not receive an assignment before
+`rebalance_timeout_ms`, `join` returns
+`Error::ConsumerGroupAssignmentTimeout { timeout_ms }`. This is a typed
+deadline failure rather than an unsupported-feature result, so applications
+can distinguish delayed assignment from protocol or broker errors.
+
 ## Rebalance Listener
 
 Applications that need an explicit assignment lifecycle can register a

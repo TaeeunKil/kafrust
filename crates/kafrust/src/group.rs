@@ -1667,9 +1667,7 @@ impl ConsumerGroup {
                 break;
             }
             if time::Instant::now() >= deadline {
-                return Err(Error::Unsupported(
-                    "consumer group assignment was not delivered before the rebalance timeout",
-                ));
+                return Err(Error::ConsumerGroupAssignmentTimeout { timeout_ms });
             }
             time::sleep(Duration::from_millis(50)).await;
         }
