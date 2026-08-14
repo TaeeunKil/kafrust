@@ -24,6 +24,7 @@ on:
           - "create_acls"
           - "delete_acls"
           - "alter_client_quotas"
+          - "alter_user_scram_credentials"
           - "delete_topics"
 
 env:
@@ -54,7 +55,7 @@ jobs:
           cluster_id="$(docker run --rm apache/kafka:${{ inputs.kafka_version }} /opt/kafka/bin/kafka-storage.sh random-uuid)"
           authorizer_args=()
           case "${{ inputs.mutation }}" in
-            create_acls|delete_acls)
+            create_acls|delete_acls|alter_user_scram_credentials)
               authorizer_args=(
                 -e KAFKA_AUTHORIZER_CLASS_NAME=org.apache.kafka.metadata.authorizer.StandardAuthorizer
                 -e KAFKA_ALLOW_EVERYONE_IF_NO_ACL_FOUND=false
@@ -106,6 +107,7 @@ jobs:
             create_acls) drop_api_key=30 ;;
             delete_acls) drop_api_key=31 ;;
             alter_client_quotas) drop_api_key=49 ;;
+            alter_user_scram_credentials) drop_api_key=51 ;;
             delete_topics) drop_api_key=20 ;;
             *) echo "unsupported mutation: ${{ inputs.mutation }}"; exit 1 ;;
           esac
