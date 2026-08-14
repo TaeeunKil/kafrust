@@ -1422,7 +1422,9 @@ Implemented evidence:
 
 - `ClientMetrics` provides shared lock-free counters for started, successful,
   failed, timed-out, cancelled, and in-flight request roundtrips, request and
-  response payload bytes, and total and maximum latency.
+  response payload bytes, and total and maximum latency. Snapshots also expose
+  a fixed upper-bound request latency histogram and approximate percentile
+  queries for p50, p95, and p99 operational checks.
 - `ClientConfig`, `ProducerConfig`, `ConsumerConfig`, and
   `ConsumerGroupConfig` accept a shared metrics handle. Every bootstrap,
   leader, coordinator, TLS, and SASL connection created from that
@@ -1431,8 +1433,8 @@ Implemented evidence:
   `kafka.request` tracing span with API key, API version, correlation ID, and
   request byte count. Payload contents remain excluded.
 - Focused tests cover shared success/failure accounting, timeout
-  classification, byte counters, latency, cancellation cleanup, and in-flight
-  gauge cleanup.
+  classification, byte counters, latency, cancellation cleanup, in-flight
+  gauge cleanup, and percentile bucket selection.
 - The shared metrics snapshot counts actual additional attempts for producer
   sends, partial batch retries, consumer fetches, metadata reconnects,
   idempotent initialization, transactional coordinator operations, and

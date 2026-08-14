@@ -530,7 +530,8 @@ See [Compatibility](docs/compatibility.md) and
   and partition reassignment are available through `AdminClient`. Shared request, retry,
   broker-error, producer,
   consumer, batch, and buffered-queue metrics are available together with
-  high-level operation and `kafka.request` spans.
+  approximate request-latency percentiles and high-level operation and
+  `kafka.request` spans.
 - `acks=0` fire-and-forget sends are supported for immediate and batch
   producer paths. The request is written and flushed without waiting for a
   broker response, so returned offsets are `-1` and broker acceptance or
@@ -553,7 +554,8 @@ Primary public entry points:
   `ConsumerGroupHeartbeat`.
 - `SecurityProtocol`, `SaslMechanism`, and `SaslCredentials` for plaintext,
   TLS, and SASL connection modes.
-- `ClientMetrics` and `ClientMetricsSnapshot` for request-level observability.
+- `ClientMetrics` and `ClientMetricsSnapshot` for request-level observability,
+  including approximate `p50`/`p95`/`p99` latency queries.
 - `ClientConfig::validate`, `ProducerConfig::validate`,
   `ConsumerConfig::validate`, and `ConsumerGroupConfig::validate` for startup
   preflight without opening a broker connection.

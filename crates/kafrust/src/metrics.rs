@@ -3,6 +3,22 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+const LATENCY_BUCKET_UPPER_BOUNDS_NS: [u64; 13] = [
+    1_000_000,
+    5_000_000,
+    10_000_000,
+    25_000_000,
+    50_000_000,
+    100_000_000,
+    250_000_000,
+    500_000_000,
+    1_000_000_000,
+    2_500_000_000,
+    5_000_000_000,
+    10_000_000_000,
+    u64::MAX,
+];
+
 /// Shared, lock-free metrics collected for Kafka client operations.
 ///
 /// Clones refer to the same counters, so a handle obtained from a configuration
@@ -31,6 +47,7 @@ struct ClientMetricsInner {
     in_flight_requests: AtomicU64,
     total_latency_ns: AtomicU64,
     max_latency_ns: AtomicU64,
+    latency_buckets: [AtomicU64; LATENCY_BUCKET_UPPER_BOUNDS_NS.len()],
 }
 
 /// Point-in-time values from [`ClientMetrics`].
@@ -70,6 +87,41 @@ pub struct ClientMetricsSnapshot {
     pub total_latency: Duration,
     /// Highest observed completed or cancelled request latency.
     pub max_latency: Duration,
+    /// Approximate request latency histogram, using the documented upper-bound
+    /// buckets from [`Self::latency_percentile`].
+    pub request_latency_buckets: [u64; LATENCY_BUCKET_UPPER_BOUNDS_NS.len()],
+}
+
+impl ClientMetricsSnapshot {
+    /// Returns an upper-bound latency estimate for a percentile in the range
+    /// `0..=100`.
+    ///
+    /// The result is approximate because the client records counts in fixed
+    /// upper-bound buckets instead of retaining every request duration. It
+    /// returns `None` when no request has completed or when `percentile` is
+    /// greater than 100.
+    pub fn latency_percentile(&self, percentile: u8) -> Option<Duration> {
+        if percentile > 100 {
+            return None;
+        }
+        let sample_count = self
+            .request_latency_buckets
+            .iter()
+            .copied()
+            .fold(0_u64, u64::saturating_add);
+        if sample_count == 0 {
+            return None;
+        }
+        let rank = ((u128::from(sample_count) * u128::from(percentile) + 99) / 100).max(1);
+        let mut cumulative = 0_u128;
+        for (index, count) in self.request_latency_buckets.iter().copied().enumerate() {
+            cumulative += u128::from(count);
+            if cumulative >= rank {
+                return Some(Duration::from_nanos(LATENCY_BUCKET_UPPER_BOUNDS_NS[index]));
+            }
+        }
+        None
+    }
 }
 
 impl ClientMetrics {
@@ -100,6 +152,9 @@ impl ClientMetrics {
                 self.inner.total_latency_ns.load(Ordering::Relaxed),
             ),
             max_latency: Duration::from_nanos(self.inner.max_latency_ns.load(Ordering::Relaxed)),
+            request_latency_buckets: std::array::from_fn(|index| {
+                self.inner.latency_buckets[index].load(Ordering::Relaxed)
+            }),
         }
     }
 
@@ -223,6 +278,11 @@ impl RequestMetricsGuard {
             .inner
             .max_latency_ns
             .fetch_max(latency_ns, Ordering::Relaxed);
+        let bucket = LATENCY_BUCKET_UPPER_BOUNDS_NS
+            .iter()
+            .position(|upper_bound| latency_ns <= *upper_bound)
+            .unwrap_or(LATENCY_BUCKET_UPPER_BOUNDS_NS.len() - 1);
+        self.metrics.inner.latency_buckets[bucket].fetch_add(1, Ordering::Relaxed);
     }
 }
 
@@ -253,7 +313,9 @@ fn duration_nanos(duration: Duration) -> u64 {
 
 #[cfg(test)]
 mod tests {
-    use super::ClientMetrics;
+    use std::time::Duration;
+
+    use super::{ClientMetrics, ClientMetricsSnapshot};
 
     #[test]
     fn shared_handle_records_success_and_failure() {
@@ -280,6 +342,9 @@ mod tests {
         assert_eq!(snapshot.request_bytes, 20);
         assert_eq!(snapshot.response_bytes, 24);
         assert_eq!(snapshot.in_flight_requests, 0);
+        assert_eq!(snapshot.request_latency_buckets.iter().sum::<u64>(), 2);
+        assert!(snapshot.latency_percentile(50).is_some());
+        assert!(snapshot.latency_percentile(99).is_some());
     }
 
     #[test]
@@ -293,5 +358,36 @@ mod tests {
         let snapshot = metrics.snapshot();
         assert_eq!(snapshot.requests_cancelled, 1);
         assert_eq!(snapshot.in_flight_requests, 0);
+        assert_eq!(snapshot.request_latency_buckets.iter().sum::<u64>(), 1);
+    }
+
+    #[test]
+    fn latency_percentile_rejects_invalid_and_empty_queries() {
+        let empty = ClientMetrics::new().snapshot();
+        assert_eq!(empty.latency_percentile(50), None);
+        assert_eq!(empty.latency_percentile(101), None);
+
+        let metrics = ClientMetrics::new();
+        metrics.start_request(0).succeed(0);
+        let snapshot = metrics.snapshot();
+        assert!(snapshot.latency_percentile(0).is_some());
+        assert!(snapshot.latency_percentile(100).is_some());
+    }
+
+    #[test]
+    fn latency_percentile_returns_the_bucket_upper_bound() {
+        let snapshot = ClientMetricsSnapshot {
+            request_latency_buckets: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0],
+            ..ClientMetricsSnapshot::default()
+        };
+
+        assert_eq!(
+            snapshot.latency_percentile(50),
+            Some(Duration::from_secs(5))
+        );
+        assert_eq!(
+            snapshot.latency_percentile(99),
+            Some(Duration::from_secs(5))
+        );
     }
 }
