@@ -616,11 +616,12 @@ jobs:
           cargo run -p kafrust --example producer_send
 
           group_epoch_log=/tmp/kafrust-kip848-consumer-group-epoch-failover.log
+          # Leave enough time for the post-failover producer to reach the replacement leader before the next poll.
           KAFRUST_GROUP_ID="kafrust-kip848-group-epoch-${GITHUB_RUN_ID}" \
           KAFRUST_GROUP_PROTOCOL=consumer \
           KAFRUST_PARTITION="$group_epoch_partition" \
           KAFRUST_OFFSET=0 \
-          KAFRUST_FAILOVER_PAUSE_MS=10000 \
+          KAFRUST_FAILOVER_PAUSE_MS=30000 \
           RUST_LOG=kafrust=debug \
           cargo run -p kafrust --example consumer_group_epoch_failover \
             >"$group_epoch_log" 2>&1 &
@@ -1076,11 +1077,12 @@ jobs:
           cargo run -p kafrust --example producer_send
 
           group_epoch_log=/tmp/kafrust-kip848-sasl-consumer-group-epoch-failover.log
+          # Leave enough time for the post-failover producer to reach the replacement leader before the next poll.
           KAFRUST_GROUP_ID="kafrust-kip848-sasl-group-epoch-${GITHUB_RUN_ID}" \
           KAFRUST_GROUP_PROTOCOL=consumer \
           KAFRUST_PARTITION="$group_epoch_partition" \
           KAFRUST_OFFSET=0 \
-          KAFRUST_FAILOVER_PAUSE_MS=10000 \
+          KAFRUST_FAILOVER_PAUSE_MS=30000 \
           RUST_LOG=kafrust=debug \
           cargo run -p kafrust --example consumer_group_epoch_failover \
             >"$group_epoch_log" 2>&1 &
@@ -1497,12 +1499,13 @@ jobs:
           cargo run -p kafrust --features tls --example producer_send
 
           group_epoch_log=/tmp/kafrust-kip848-scram-consumer-group-epoch-failover.log
+          # Leave enough time for the post-failover producer to reach the replacement leader before the next poll.
           KAFRUST_GROUP_ID="kafrust-kip848-scram-group-epoch-${GITHUB_RUN_ID}" \
           KAFRUST_GROUP_PROTOCOL=consumer \
           KAFRUST_PARTITION="$group_epoch_partition" \
           KAFRUST_OFFSET=0 \
           KAFRUST_EXPECTED_VALUE="kafrust kip848 scram group epoch post" \
-          KAFRUST_FAILOVER_PAUSE_MS=10000 \
+          KAFRUST_FAILOVER_PAUSE_MS=30000 \
           RUST_LOG=kafrust=debug \
           cargo run -p kafrust --features tls --example consumer_group_epoch_failover \
             >"$group_epoch_log" 2>&1 &
