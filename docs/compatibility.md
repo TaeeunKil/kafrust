@@ -43,6 +43,13 @@ consumer-group, transaction, and multi-broker failover profiles; the focused
 shutdown tests additionally verify completion without waiting for a 30-second
 broker request timeout.
 
+The next complete 17-job matrix passed on commit `b96f369` in
+[`31767641781`](https://github.com/TaeeunKil/kafrust/actions/runs/31767641781)
+after exposing delayed KIP-848 assignment expiry as the typed
+`Error::ConsumerGroupAssignmentTimeout` variant. The matrix again passed the
+supported broker, security, ACL, consumer-group, transaction, and multi-broker
+failover profiles, with no regression in the existing live paths.
+
 The current-source direct comparison workflow passed on commit `1528862` in
 [`31767095380`](https://github.com/TaeeunKil/kafrust/actions/runs/31767095380).
 Against Kafka 4.3.1, fresh one-partition topics, 20,000 1-KiB records, and

@@ -94,6 +94,12 @@ coverage toward a release candidate that can be qualified in staging.
   `rust-rdkafka 0.39.0` measured 84,235.49 producer and 220,147.27 consumer
   records/s. This closes the repeatability evidence slice, but does not close
   feature parity, production SLO, or replacement qualification.
+- Delayed KIP-848 assignment expiry now returns the typed
+  `Error::ConsumerGroupAssignmentTimeout { timeout_ms }` variant instead of
+  an `Unsupported` string, allowing callers to distinguish a rebalance
+  deadline from protocol or broker failures. The complete 17-job live matrix
+  passed after this change on commit `b96f369` in
+  [`31767641781`](https://github.com/TaeeunKil/kafrust/actions/runs/31767641781).
 
 ### Exit criteria
 
