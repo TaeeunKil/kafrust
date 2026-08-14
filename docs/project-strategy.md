@@ -39,19 +39,29 @@ That does not make kafrust redundant. kafrust's reason to exist is different:
 - Kafka terminology preserved instead of abstracted away
 
 Pure Rust alternatives also exist. This comparison is a source-documented
-snapshot from 2026-07-24, not an independent benchmark:
+snapshot from 2026-08-14, not an independent benchmark:
 
 - [`krafka`](https://github.com/hupe1980/krafka) is the closest broad
-  pure-Rust competitor. Its 0.13 documentation claims Kafka 3.9+ support,
-  classic and KIP-848 groups, four assignors, static membership, transactions,
-  OAUTHBEARER, AWS MSK IAM, broad Admin coverage, and a controllable fake
-  broker. It is currently ahead of kafrust in feature breadth. Its optional
-  Zstd path requires a C toolchain, while kafrust's supported codecs remain
-  pure Rust. kafrust also verifies an older Kafka 3.7-to-current broker window.
+  pure-Rust competitor. Its current `main` manifest is `0.19.0`, while the
+  latest docs.rs page currently exposes `0.13.0`; those are different release
+  surfaces and must not be treated as the same qualification target. The
+  current README claims Kafka 3.9+ protocol parity, classic and KIP-848
+  groups, ShareConsumer/KIP-932, transactions, OAUTHBEARER, AWS MSK IAM,
+  broad Admin coverage, telemetry, Prometheus metrics, a fault-injecting fake
+  broker, 2,350+ tests, and six fuzz targets. It is currently ahead of kafrust
+  in pure-Rust feature breadth and test infrastructure. Its optional Zstd path
+  requires a C toolchain, while kafrust's supported codecs remain pure Rust.
+  Kafrust also verifies an older Kafka 3.7-to-current broker window.
 - [`rskafka`](https://github.com/influxdata/rskafka) explicitly targets simple
   distributed write-ahead-log workloads. Its README excludes offset tracking,
   consumer groups, and transactions, so it is not pursuing the same broad
   replacement target.
+- [`kafkit-client`](https://docs.rs/kafkit-client/latest/kafkit_client/) is a
+  newer native async Rust client aimed at Kafka 4.0+ and KRaft. Its published
+  `0.1.9` documentation lists KIP-848 groups, ShareConsumer, transactions,
+  Admin, TLS/SASL, compression, and metrics. It deliberately drops classic
+  group and older-broker compatibility, so it is a modern-broker competitor,
+  not a drop-in replacement for every Kafka deployment.
 - [`kafka-rust`](https://github.com/kafka-rust/kafka-rust) provides established
   producer and consumer APIs and is being maintained again, but its documented
   tested broker range currently ends at Kafka 3.1 and it does not claim all
@@ -172,6 +182,50 @@ Required work:
 - migration notes and semver discipline
 
 This tier is where comparisons with `rust-rdkafka` and pure Rust alternatives become meaningful. It should not be promised from the current alpha line. The execution path for this target is tracked in roadmap milestones M13 through M21.
+
+### Current Competitive Gap (2026-08-14)
+
+The published `0.3.0` line has already closed the basic connectivity,
+compression, security, multi-broker recovery, idempotence, transactions,
+Admin MVP, observability, and migration-documentation gates recorded in the
+roadmap. It is still behind the broad pure-Rust competitors in three areas:
+
+- modern protocol breadth: Share Groups/KIP-932, client telemetry/KIP-714,
+  remaining modern Admin and quorum paths, and protocol-parity automation;
+- production hardening: more complete group lifecycle behavior, ambiguous
+  transaction and mutation outcomes, resource ceilings, fuzzing, fault-
+  injected broker coverage, and longer secured multi-broker soaks;
+- adoption surface: stable 1.0 APIs, wider migration compatibility, published
+  examples, and repeatable performance/SLO evidence across representative
+  workloads.
+
+The current `DescribeQuorum` implementation is not counted as complete until
+the controller-listener workflow passes on Kafka 3.7.2 and 4.3.1. Code that
+decodes a response in a unit test is not equivalent to live broker
+compatibility.
+
+### Estimate To Surpass
+
+These are effort ranges, not calendar promises:
+
+- **Match krafka's current feature checklist:** roughly 6-12 months of
+  focused full-time engineering, or about 9-18 calendar months at the current
+  solo-project pace. Share Groups, telemetry, modern protocol parity, and the
+  associated live tests are the largest feature gaps.
+- **Surpass krafka on operational credibility:** roughly 12-24 months. This
+  requires repeatable Kafka 3.7 through current matrices, secured and
+  multi-broker fault injection, fuzzing, soak data, bounded-resource behavior,
+  and migration evidence rather than only more APIs.
+- **Credibly replace rust-rdkafka for broad Rust services:** roughly 18-36
+  months. This includes the compatibility long tail, callback/configuration
+  migration surface, old-broker behavior, production SLOs, and release
+  discipline. Pure Rust should be the advantage; absolute throughput against
+  a mature C client is not a realistic universal success criterion.
+
+The practical "surpassed" gate is therefore: a representative service can
+remove `rust-rdkafka`, compile against kafrust, pass its producer/consumer/
+group/admin/security/transaction tests, survive the documented fault matrix,
+and retain a rollback path. Feature count alone does not satisfy that gate.
 
 ### Kafka Broker Replacement
 
