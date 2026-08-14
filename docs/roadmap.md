@@ -87,6 +87,13 @@ coverage toward a release candidate that can be qualified in staging.
   [`31766439591`](https://github.com/TaeeunKil/kafrust/actions/runs/31766439591).
   This closes the bounded heartbeat-shutdown sub-gate; broader lifecycle,
   member-loss, committed-offset, and long-duration group qualification remain.
+- The repeatable direct comparison gate was rerun against Kafka 4.3.1 using
+  current-source commit `1528862`, 20,000 1-KiB records, and batch size 200 in
+  [`31767095380`](https://github.com/TaeeunKil/kafrust/actions/runs/31767095380).
+  Kafrust measured 49,161.76 producer and 226,166.96 consumer records/s;
+  `rust-rdkafka 0.39.0` measured 84,235.49 producer and 220,147.27 consumer
+  records/s. This closes the repeatability evidence slice, but does not close
+  feature parity, production SLO, or replacement qualification.
 
 ### Exit criteria
 
