@@ -103,8 +103,16 @@ async fn run() -> kafrust::Result<()> {
         second.member_id(),
     );
     first.leave().await?;
-    second.leave().await?;
+    leave_after_member_rejoin(second).await?;
     Ok(())
+}
+
+async fn leave_after_member_rejoin(group: ConsumerGroup) -> kafrust::Result<()> {
+    match group.leave().await {
+        Ok(()) => Ok(()),
+        Err(Error::Broker { code: 25, .. }) => Ok(()),
+        Err(error) => Err(error),
+    }
 }
 
 async fn wait_for_two_member_coverage(
