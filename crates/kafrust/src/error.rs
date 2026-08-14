@@ -296,6 +296,11 @@ pub enum Error {
         /// Rebalance timeout used while waiting for the assignment, in milliseconds.
         timeout_ms: u64,
     },
+    /// An Admin mutation may have reached Kafka but its outcome was not observed.
+    AdminMutationOutcomeUnknown {
+        /// Kafka Admin operation whose response was lost or invalid.
+        operation: &'static str,
+    },
     /// The requested Kafka feature is not implemented by this alpha API yet.
     Unsupported(&'static str),
     /// I/O failure while connecting to or communicating with a broker.
@@ -408,6 +413,10 @@ impl fmt::Display for Error {
                 f,
                 "consumer group assignment was not delivered before the rebalance timeout of {timeout_ms}ms"
             ),
+            Self::AdminMutationOutcomeUnknown { operation } => write!(
+                f,
+                "Kafka Admin mutation {operation} may have been applied; its outcome is unknown"
+            ),
             Self::Unsupported(feature) => write!(f, "unsupported feature: {feature}"),
             Self::Io(error) => write!(f, "I/O error: {error}"),
             Self::TaskJoin(error) => write!(f, "background task join error: {error}"),
@@ -447,6 +456,7 @@ impl std::error::Error for Error {
             | Self::InvalidScramCredential { .. }
             | Self::InvalidConfiguration { .. }
             | Self::ConsumerGroupAssignmentTimeout { .. }
+            | Self::AdminMutationOutcomeUnknown { .. }
             | Self::Unsupported(_) => None,
         }
     }
@@ -583,6 +593,19 @@ mod tests {
         assert_eq!(
             error.to_string(),
             "consumer group assignment was not delivered before the rebalance timeout of 5000ms"
+        );
+        assert!(std::error::Error::source(&error).is_none());
+    }
+
+    #[test]
+    fn displays_admin_mutation_unknown_outcome() {
+        let error = Error::AdminMutationOutcomeUnknown {
+            operation: "CreateTopics",
+        };
+
+        assert_eq!(
+            error.to_string(),
+            "Kafka Admin mutation CreateTopics may have been applied; its outcome is unknown"
         );
         assert!(std::error::Error::source(&error).is_none());
     }

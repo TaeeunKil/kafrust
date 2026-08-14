@@ -94,6 +94,22 @@ const ADMIN_COORDINATOR_MAX_RETRIES: u32 = 5;
 const ADMIN_COORDINATOR_RETRY_BACKOFF_BASE: Duration = Duration::from_millis(50);
 const ADMIN_COORDINATOR_MAX_RETRY_BACKOFF: Duration = Duration::from_millis(800);
 
+fn admin_mutation_error(client: &Client, operation: &'static str, error: Error) -> Error {
+    if client.last_request_may_have_been_transmitted()
+        && matches!(
+            error,
+            Error::Io(_)
+                | Error::RequestTimedOut { .. }
+                | Error::ResponseTooLarge { .. }
+                | Error::Protocol(_)
+        )
+    {
+        Error::AdminMutationOutcomeUnknown { operation }
+    } else {
+        error
+    }
+}
+
 /// Kafka administration client.
 ///
 /// Each controller-scoped operation discovers the active controller through
@@ -297,9 +313,11 @@ impl AdminClient {
     )]
     pub async fn create_acls(&self, bindings: &[AclBinding]) -> Result<CreateAclsResult> {
         let mut client = self.bootstrap_client_with_retries().await?;
-        let response = client
+        let result = client
             .create_acls_v1(bindings.iter().map(AclBinding::as_protocol).collect())
-            .await?;
+            .await;
+        let response =
+            result.map_err(|error| admin_mutation_error(&client, "CreateAcls", error))?;
         for result in &response.results {
             if result.error_code != 0 {
                 self.config.record_broker_error();
@@ -330,9 +348,11 @@ impl AdminClient {
     )]
     pub async fn delete_acls(&self, filters: &[AclFilter]) -> Result<DeleteAclsResult> {
         let mut client = self.bootstrap_client_with_retries().await?;
-        let response = client
+        let result = client
             .delete_acls_v1(filters.iter().map(AclFilter::as_protocol).collect())
-            .await?;
+            .await;
+        let response =
+            result.map_err(|error| admin_mutation_error(&client, "DeleteAcls", error))?;
         for result in &response.filter_results {
             if result.error_code != 0 || result.matching_acls.iter().any(|acl| acl.error_code != 0)
             {
@@ -422,7 +442,7 @@ impl AdminClient {
         validate_only: bool,
     ) -> Result<AlterClientQuotasResult> {
         let mut client = self.bootstrap_client_with_retries().await?;
-        let response = client
+        let result = client
             .alter_client_quotas_v0(
                 alterations
                     .iter()
@@ -430,7 +450,9 @@ impl AdminClient {
                     .collect(),
                 validate_only,
             )
-            .await?;
+            .await;
+        let response =
+            result.map_err(|error| admin_mutation_error(&client, "AlterClientQuotas", error))?;
         for result in &response.entries {
             if result.error_code != 0 {
                 self.config.record_broker_error();
@@ -528,7 +550,7 @@ impl AdminClient {
         upsertions: &[ScramCredentialUpsertion],
     ) -> Result<AlterUserScramCredentialsResult> {
         let mut client = self.controller_client_with_retries().await?;
-        let response = client
+        let result = client
             .alter_user_scram_credentials_v0(
                 deletions
                     .iter()
@@ -539,7 +561,9 @@ impl AdminClient {
                     .map(ScramCredentialUpsertion::as_protocol)
                     .collect(),
             )
-            .await?;
+            .await;
+        let response = result
+            .map_err(|error| admin_mutation_error(&client, "AlterUserScramCredentials", error))?;
         for result in &response.results {
             if result.error_code != 0 {
                 self.config.record_broker_error();
@@ -592,15 +616,17 @@ impl AdminClient {
                 .collect(),
             max_lifetime_ms: options.max_lifetime_ms,
         };
-        let response = match version {
-            1 => client.create_delegation_token_v1(request).await?,
-            2 | 3 => client.create_delegation_token_v2(request, version).await?,
+        let result = match version {
+            1 => client.create_delegation_token_v1(request).await,
+            2 | 3 => client.create_delegation_token_v2(request, version).await,
             _ => {
                 return Err(Error::Unsupported(
                     "unsupported CreateDelegationToken version",
                 ))
             }
         };
+        let response = result
+            .map_err(|error| admin_mutation_error(&client, "CreateDelegationToken", error))?;
         if response.error_code != 0 {
             self.config.record_broker_error();
         }
@@ -696,18 +722,20 @@ impl AdminClient {
             )
             .await?;
         let renew_period_ms = duration_millis_i64(renew_period);
-        let response = match version {
+        let result = match version {
             1 => {
                 client
                     .renew_delegation_token_v1(hmac.to_vec(), renew_period_ms)
-                    .await?
+                    .await
             }
             _ => {
                 client
                     .renew_delegation_token_v2(hmac.to_vec(), renew_period_ms)
-                    .await?
+                    .await
             }
         };
+        let response =
+            result.map_err(|error| admin_mutation_error(&client, "RenewDelegationToken", error))?;
         if response.error_code != 0 {
             self.config.record_broker_error();
         }
@@ -738,18 +766,20 @@ impl AdminClient {
             )
             .await?;
         let expiry_time_period_ms = duration_millis_i64(expiry_time_period);
-        let response = match version {
+        let result = match version {
             1 => {
                 client
                     .expire_delegation_token_v1(hmac.to_vec(), expiry_time_period_ms)
-                    .await?
+                    .await
             }
             _ => {
                 client
                     .expire_delegation_token_v2(hmac.to_vec(), expiry_time_period_ms)
-                    .await?
+                    .await
             }
         };
+        let response = result
+            .map_err(|error| admin_mutation_error(&client, "ExpireDelegationToken", error))?;
         if response.error_code != 0 {
             self.config.record_broker_error();
         }
@@ -810,22 +840,32 @@ impl AdminClient {
                         "unclean leader election requires ElectLeaders v1 or newer",
                     ));
                 }
-                ElectLeadersResult::from_protocol_v0(
-                    controller_client
-                        .elect_leaders_v0(topics, timeout_ms)
-                        .await?,
-                )
+                let response = controller_client
+                    .elect_leaders_v0(topics, timeout_ms)
+                    .await
+                    .map_err(|error| {
+                        admin_mutation_error(&controller_client, "ElectLeaders", error)
+                    })?;
+                ElectLeadersResult::from_protocol_v0(response)
             }
-            1 => ElectLeadersResult::from_protocol_v1(
-                controller_client
+            1 => {
+                let response = controller_client
                     .elect_leaders_v1(election_type.as_i8(), topics, timeout_ms)
-                    .await?,
-            ),
-            _ => ElectLeadersResult::from_protocol_v2(
-                controller_client
+                    .await
+                    .map_err(|error| {
+                        admin_mutation_error(&controller_client, "ElectLeaders", error)
+                    })?;
+                ElectLeadersResult::from_protocol_v1(response)
+            }
+            _ => {
+                let response = controller_client
                     .elect_leaders_v2(election_type.as_i8(), topics, timeout_ms)
-                    .await?,
-            ),
+                    .await
+                    .map_err(|error| {
+                        admin_mutation_error(&controller_client, "ElectLeaders", error)
+                    })?;
+                ElectLeadersResult::from_protocol_v2(response)
+            }
         };
 
         if result.error_code != 0 {
@@ -859,7 +899,7 @@ impl AdminClient {
         options: PartitionReassignmentOptions,
     ) -> Result<AlterPartitionReassignmentsResult> {
         let mut controller_client = self.controller_client_with_retries().await?;
-        let response = controller_client
+        let result = controller_client
             .alter_partition_reassignments_v0(
                 duration_millis_i32(options.timeout),
                 reassignments
@@ -867,7 +907,10 @@ impl AdminClient {
                     .map(PartitionReassignment::as_protocol)
                     .collect(),
             )
-            .await?;
+            .await;
+        let response = result.map_err(|error| {
+            admin_mutation_error(&controller_client, "AlterPartitionReassignments", error)
+        })?;
 
         if response.error_code != 0 {
             self.config.record_broker_error();
@@ -1042,7 +1085,7 @@ impl AdminClient {
         options: AlterConfigsOptions,
     ) -> Result<AlterConfigsResult> {
         let mut client = self.bootstrap_client_with_retries().await?;
-        let response = client
+        let result = client
             .incremental_alter_configs_v0(
                 resources
                     .iter()
@@ -1050,7 +1093,9 @@ impl AdminClient {
                     .collect(),
                 options.validate_only,
             )
-            .await?;
+            .await;
+        let response = result
+            .map_err(|error| admin_mutation_error(&client, "IncrementalAlterConfigs", error))?;
 
         for resource in &response.responses {
             if resource.error_code != 0 {
@@ -1087,7 +1132,7 @@ impl AdminClient {
         options: AlterConfigsOptions,
     ) -> Result<AlterConfigsResult> {
         let mut client = self.bootstrap_client_with_retries().await?;
-        let response = client
+        let result = client
             .alter_configs_v1(
                 resources
                     .iter()
@@ -1095,7 +1140,9 @@ impl AdminClient {
                     .collect(),
                 options.validate_only,
             )
-            .await?;
+            .await;
+        let response =
+            result.map_err(|error| admin_mutation_error(&client, "AlterConfigs", error))?;
 
         for resource in &response.responses {
             if resource.error_code != 0 {
@@ -1441,10 +1488,12 @@ impl AdminClient {
             break (client, version);
         };
 
-        let response = match version {
-            1 => client.alter_replica_log_dirs_v1(dirs).await?,
-            _ => client.alter_replica_log_dirs_v2(dirs).await?,
+        let result = match version {
+            1 => client.alter_replica_log_dirs_v1(dirs).await,
+            _ => client.alter_replica_log_dirs_v2(dirs).await,
         };
+        let response =
+            result.map_err(|error| admin_mutation_error(&client, "AlterReplicaLogDirs", error))?;
         for topic in &response.results {
             if topic
                 .partitions
@@ -1479,7 +1528,10 @@ impl AdminClient {
             let mut retry = 0;
             let response = loop {
                 let mut coordinator = self.group_coordinator_client(group_id).await?;
-                match coordinator.delete_groups_v1(vec![group_id.clone()]).await {
+                let result = coordinator.delete_groups_v1(vec![group_id.clone()]).await;
+                match result
+                    .map_err(|error| admin_mutation_error(&coordinator, "DeleteGroups", error))
+                {
                     Ok(response) => {
                         let retryable = response.results.iter().any(|result| {
                             result.group_id == *group_id
@@ -1541,9 +1593,10 @@ impl AdminClient {
         let mut retry = 0;
         let response = loop {
             let mut coordinator = self.group_coordinator_client(group_id).await?;
-            match coordinator
+            let result = coordinator
                 .offset_delete_v0(group_id, request_topics.clone())
-                .await
+                .await;
+            match result.map_err(|error| admin_mutation_error(&coordinator, "OffsetDelete", error))
             {
                 Ok(response) => {
                     let retryable = is_retryable_admin_coordinator_code(response.error_code)
@@ -1774,10 +1827,10 @@ impl AdminClient {
         let mut retry = 0;
         let response = loop {
             let mut coordinator = self.group_coordinator_client(group_id).await?;
-            match coordinator
+            let result = coordinator
                 .offset_commit_v2(group_id, -1, "", -1, topics.clone())
-                .await
-            {
+                .await;
+            match result {
                 Ok(response) => {
                     let retryable = response.topics.iter().any(|topic| {
                         topic.partitions.iter().any(|partition| {
@@ -1806,7 +1859,9 @@ impl AdminClient {
                     self.config.record_retry();
                     tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
                 }
-                Err(error) => return Err(error),
+                Err(error) => {
+                    return Err(admin_mutation_error(&coordinator, "OffsetCommit", error))
+                }
             }
         };
 
@@ -1867,7 +1922,7 @@ impl AdminClient {
         let mut retry = 0;
         let response = loop {
             let mut coordinator = self.group_coordinator_client(group_id).await?;
-            match coordinator
+            let result = coordinator
                 .offset_commit_v9(
                     group_id,
                     member_epoch,
@@ -1875,8 +1930,8 @@ impl AdminClient {
                     group_instance_id.clone(),
                     topics.clone(),
                 )
-                .await
-            {
+                .await;
+            match result {
                 Ok(response) => {
                     let retryable = response.topics.iter().any(|topic| {
                         topic.partitions.iter().any(|partition| {
@@ -1899,7 +1954,9 @@ impl AdminClient {
                     self.config.record_retry();
                     tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
                 }
-                Err(error) => return Err(error),
+                Err(error) => {
+                    return Err(admin_mutation_error(&coordinator, "OffsetCommit", error))
+                }
             }
         };
 
@@ -2059,13 +2116,15 @@ impl AdminClient {
         options: CreateTopicsOptions,
     ) -> Result<CreateTopicsResult> {
         let mut controller_client = self.controller_client_with_retries().await?;
-        let response = controller_client
+        let result = controller_client
             .create_topics_v2(
                 topics.iter().map(NewTopic::as_protocol).collect(),
                 duration_millis_i32(options.timeout),
                 options.validate_only,
             )
-            .await?;
+            .await;
+        let response = result
+            .map_err(|error| admin_mutation_error(&controller_client, "CreateTopics", error))?;
 
         for topic in &response.topics {
             if topic.error_code != 0 {
@@ -2101,13 +2160,15 @@ impl AdminClient {
         options: CreatePartitionsOptions,
     ) -> Result<CreatePartitionsResult> {
         let mut controller_client = self.controller_client_with_retries().await?;
-        let response = controller_client
+        let result = controller_client
             .create_partitions_v0(
                 topics.iter().map(NewPartitions::as_protocol).collect(),
                 duration_millis_i32(options.timeout),
                 options.validate_only,
             )
-            .await?;
+            .await;
+        let response = result
+            .map_err(|error| admin_mutation_error(&controller_client, "CreatePartitions", error))?;
 
         for topic in &response.results {
             if topic.error_code != 0 {
@@ -2142,9 +2203,11 @@ impl AdminClient {
         options: DeleteTopicsOptions,
     ) -> Result<DeleteTopicsResult> {
         let mut controller_client = self.controller_client_with_retries().await?;
-        let response = controller_client
+        let result = controller_client
             .delete_topics_v3(topic_names.to_vec(), duration_millis_i32(options.timeout))
-            .await?;
+            .await;
+        let response = result
+            .map_err(|error| admin_mutation_error(&controller_client, "DeleteTopics", error))?;
 
         for topic in &response.topics {
             if topic.error_code != 0 {
@@ -8875,7 +8938,8 @@ mod tests {
         ReplicaLogDirAssignment, ScramCredentialDeletion, ScramCredentialMechanism,
         ScramCredentialUpsertion, TopicConfigAlteration, TopicConfigResource, TopicConfigUpdate,
     };
-    use crate::{BrokerErrorKind, ClientConfig, ClientMetrics, Error};
+    use crate::{BrokerErrorKind, Client, ClientConfig, ClientMetrics, Error};
+    use kafrust_protocol::codec::DecodeLimits;
     use kafrust_protocol::codec::Encoder;
     use std::time::Duration;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -8961,6 +9025,56 @@ mod tests {
         assert_eq!(result, 42);
         assert_eq!(attempts, 2);
         assert_eq!(retries, 1);
+    }
+
+    #[tokio::test]
+    async fn classifies_admin_mutation_when_response_is_lost_after_transmission() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(1024);
+        let broker = tokio::spawn(async move {
+            let mut size = [0u8; 4];
+            broker_stream.read_exact(&mut size).await.unwrap();
+            drop(broker_stream);
+        });
+        let mut client = Client::from_stream_with_metrics(
+            Box::new(client_stream),
+            Some("kafrust-admin-ambiguity-test".to_owned()),
+            Some(Duration::from_secs(1)),
+            crate::client::DEFAULT_MAX_RESPONSE_BYTES,
+            DecodeLimits::default(),
+            ClientMetrics::new(),
+        );
+
+        let transport_error = client.api_versions().await.unwrap_err();
+        let error = super::admin_mutation_error(&client, "CreateTopics", transport_error);
+
+        assert!(matches!(
+            error,
+            Error::AdminMutationOutcomeUnknown {
+                operation: "CreateTopics"
+            }
+        ));
+        broker.await.unwrap();
+    }
+
+    #[test]
+    fn preserves_pretransmission_admin_errors() {
+        let error = super::admin_mutation_error(
+            &Client::from_stream(
+                Box::new(tokio::io::duplex(1).0),
+                Some("kafrust-admin-error-test".to_owned()),
+                Some(Duration::from_secs(1)),
+            ),
+            "CreateTopics",
+            Error::Io(std::io::Error::new(
+                std::io::ErrorKind::ConnectionRefused,
+                "not transmitted",
+            )),
+        );
+
+        assert!(matches!(
+            error,
+            Error::Io(error) if error.kind() == std::io::ErrorKind::ConnectionRefused
+        ));
     }
 
     #[test]

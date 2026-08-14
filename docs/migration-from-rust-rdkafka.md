@@ -366,8 +366,13 @@ OffsetCommit v9 with the current member epoch and preserve stale-epoch errors.
 `delete_consumer_groups` and `delete_consumer_group_offsets` retry transient
 coordinator responses through fresh discovery within the bounded Admin retry
 budget. A transport failure after either mutation is transmitted remains
-single-attempt; callers must reconcile the broker-side outcome before replaying
-an ambiguous request.
+single-attempt and returns `Error::AdminMutationOutcomeUnknown { operation }`;
+callers must reconcile the broker-side outcome before replaying an ambiguous
+request. The same typed boundary applies to the other non-idempotent Admin
+mutations, including topic, ACL, quota, SCRAM, delegation-token, config,
+leader-election, reassignment, log-dir, and offset writes. `DeleteRecords` is
+the documented idempotent exception and preserves its retry path, but its final
+partition results still require inspection.
 
 ## Capability Gate
 

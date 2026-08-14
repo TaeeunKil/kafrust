@@ -118,6 +118,14 @@ coverage toward a release candidate that can be qualified in staging.
   deadline from protocol or broker failures. The complete 17-job live matrix
   passed after this change on commit `b96f369` in
   [`31767641781`](https://github.com/TaeeunKil/kafrust/actions/runs/31767641781).
+- Non-idempotent Admin mutations now classify a transport, timeout, response
+  limit, or framing failure after transmission as the typed
+  `Error::AdminMutationOutcomeUnknown { operation }` result instead of asking
+  callers to infer ambiguity from a generic I/O error. Focused duplex-broker
+  tests cover both post-transmission response loss and pre-transmission error
+  preservation; the live authorization and broker-fault qualification for the
+  remaining mutation families is still open. `DeleteRecords` remains the
+  explicit idempotent exception with its existing leader-refresh retry path.
 
 ### Exit criteria
 

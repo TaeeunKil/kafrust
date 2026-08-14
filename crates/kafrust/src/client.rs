@@ -175,11 +175,19 @@ pub struct Client {
     sasl_authenticated_at: Option<std::time::Instant>,
     sasl_authentication_in_progress: bool,
     connection_poisoned: bool,
+    last_request_state: RequestState,
 }
 
 pub(crate) trait BrokerStream: AsyncRead + AsyncWrite + Unpin + Send + Sync {}
 
 impl<T> BrokerStream for T where T: AsyncRead + AsyncWrite + Unpin + Send + Sync {}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RequestState {
+    Idle,
+    Sent,
+    ResponseReceived,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct FetchOneRequestV4 {
@@ -295,7 +303,12 @@ impl Client {
             sasl_authenticated_at: None,
             sasl_authentication_in_progress: false,
             connection_poisoned: false,
+            last_request_state: RequestState::Idle,
         }
+    }
+
+    pub(crate) fn last_request_may_have_been_transmitted(&self) -> bool {
+        !matches!(self.last_request_state, RequestState::Idle)
     }
 
     /// Returns a shared handle to metrics for this client connection.
@@ -2403,8 +2416,13 @@ impl Client {
     }
 
     async fn send_request_no_response(&mut self, request: &[u8]) -> Result<()> {
+        self.last_request_state = RequestState::Idle;
         self.ensure_connection_usable()?;
-        self.maybe_reauthenticate().await?;
+        if let Err(error) = self.maybe_reauthenticate().await {
+            self.last_request_state = RequestState::Idle;
+            return Err(error);
+        }
+        self.last_request_state = RequestState::Idle;
         self.send_request_no_response_traced(request).await
     }
 
@@ -2447,8 +2465,13 @@ impl Client {
     }
 
     async fn send_request(&mut self, request: &[u8]) -> Result<Vec<u8>> {
+        self.last_request_state = RequestState::Idle;
         self.ensure_connection_usable()?;
-        self.maybe_reauthenticate().await?;
+        if let Err(error) = self.maybe_reauthenticate().await {
+            self.last_request_state = RequestState::Idle;
+            return Err(error);
+        }
+        self.last_request_state = RequestState::Idle;
         self.send_request_traced(request).await
     }
 
@@ -2487,6 +2510,7 @@ impl Client {
 
     async fn send_request_no_response_unbounded(&mut self, request: &[u8]) -> Result<()> {
         let frame = encode_frame(request)?;
+        self.last_request_state = RequestState::Sent;
         if let Err(error) = self.stream.write_all(&frame).await {
             self.connection_poisoned = true;
             return Err(error.into());
@@ -2502,6 +2526,7 @@ impl Client {
 
     async fn send_request_unbounded(&mut self, request: &[u8]) -> Result<Vec<u8>> {
         let frame = encode_frame(request)?;
+        self.last_request_state = RequestState::Sent;
         if let Err(error) = self.stream.write_all(&frame).await {
             self.connection_poisoned = true;
             return Err(error.into());
@@ -2549,6 +2574,7 @@ impl Client {
             self.connection_poisoned = true;
             return Err(error.into());
         }
+        self.last_request_state = RequestState::ResponseReceived;
         Ok(response)
     }
 
@@ -2589,6 +2615,7 @@ impl fmt::Debug for Client {
             .field("max_response_bytes", &self.max_response_bytes)
             .field("decode_limits", &self.decode_limits)
             .field("connection_poisoned", &self.connection_poisoned)
+            .field("last_request_state", &self.last_request_state)
             .field("metrics", &self.metrics)
             .finish_non_exhaustive()
     }
@@ -2827,6 +2854,7 @@ mod tests {
         let error = client.api_versions().await.unwrap_err();
 
         assert!(matches!(error, Error::RequestTimedOut { timeout_ms: 5 }));
+        assert!(client.last_request_may_have_been_transmitted());
         let metrics = client.metrics().snapshot();
         assert_eq!(metrics.requests_started, 1);
         assert_eq!(metrics.requests_failed, 1);
@@ -2863,6 +2891,7 @@ mod tests {
             client.api_versions().await,
             Err(Error::RequestTimedOut { timeout_ms: 5 })
         ));
+        assert!(client.last_request_may_have_been_transmitted());
         let error = tokio::time::timeout(Duration::from_millis(20), client.api_versions())
             .await
             .unwrap()

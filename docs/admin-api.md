@@ -10,6 +10,22 @@ without opening a broker connection. This includes bootstrap entries, request
 and decode limits, required SASL credentials, and an explicitly configured TLS
 server name.
 
+## Mutation Outcome Ambiguity
+
+For mutating Admin operations, a transport failure, request timeout, response
+size rejection, or response framing/protocol failure after the request may have
+been transmitted returns `Error::AdminMutationOutcomeUnknown { operation }`.
+The operation is not replayed automatically because Kafka may already have
+applied it. Reconcile with a read operation such as metadata, describe, list,
+or offset inspection, then retry only when the application has established that
+the retry is safe. Broker errors returned in a valid response remain available
+as typed per-operation results and are not converted to this error.
+
+`DeleteRecords` is the explicit exception: deleting before a fixed offset is
+idempotent, so its leader-refresh path may retry the request. Callers must
+still inspect its per-partition results and treat a final transport failure as
+unconfirmed until the log state is checked.
+
 ## Inspect Cluster and Topics
 
 ```rust
