@@ -391,6 +391,10 @@ CreatePartitions passed in
 [`31771635710`](https://github.com/TaeeunKil/kafrust/actions/runs/31771635710)
 and [`31771636082`](https://github.com/TaeeunKil/kafrust/actions/runs/31771636082),
 with reconciliation through the topic's partition count.
+IncrementalAlterConfigs passed in
+[`31771864914`](https://github.com/TaeeunKil/kafrust/actions/runs/31771864914)
+and [`31771865024`](https://github.com/TaeeunKil/kafrust/actions/runs/31771865024),
+with reconciliation through DescribeConfigs.
 
 ## Capability Gate
 

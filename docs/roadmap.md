@@ -169,6 +169,13 @@ coverage toward a release candidate that can be qualified in staging.
   [`31771636082`](https://github.com/TaeeunKil/kafrust/actions/runs/31771636082).
   ACL, quota, SCRAM, config, reassignment, offset, and other mutation families
   remain operation-specific gates.
+- IncrementalAlterConfigs is now qualified by the same current-source gate. It
+  set `retention.ms`, dropped the response, observed
+  `Error::AdminMutationOutcomeUnknown { operation: "IncrementalAlterConfigs" }`,
+  and reconciled the value through DescribeConfigs on Kafka 3.7.2 in
+  [`31771864914`](https://github.com/TaeeunKil/kafrust/actions/runs/31771864914)
+  and Kafka 4.3.1 in
+  [`31771865024`](https://github.com/TaeeunKil/kafrust/actions/runs/31771865024).
 - Published `0.2.30` passed four multi-member group rebalance profiles:
   Kafka 3.7.2 classic in [`31770201899`](https://github.com/TaeeunKil/kafrust/actions/runs/31770201899),
   Kafka 4.3.1 KIP-848 in [`31770201823`](https://github.com/TaeeunKil/kafrust/actions/runs/31770201823),

@@ -159,6 +159,12 @@ mutation. The same current-source gate also qualifies CreatePartitions by
 expanding a topic from one to two partitions before dropping the response, on
 Kafka 3.7.2 in [`31771635710`](https://github.com/TaeeunKil/kafrust/actions/runs/31771635710)
 and Kafka 4.3.1 in [`31771636082`](https://github.com/TaeeunKil/kafrust/actions/runs/31771636082).
+The current-source gate also qualifies IncrementalAlterConfigs by setting
+`retention.ms`, dropping the response, and confirming the value with
+DescribeConfigs on Kafka 3.7.2 in
+[`31771864914`](https://github.com/TaeeunKil/kafrust/actions/runs/31771864914)
+and Kafka 4.3.1 in
+[`31771865024`](https://github.com/TaeeunKil/kafrust/actions/runs/31771865024).
 
 The latest complete matrix in
 [`31624278107`](https://github.com/TaeeunKil/kafrust/actions/runs/31624278107)

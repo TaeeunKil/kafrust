@@ -49,6 +49,12 @@ reconciled the new partition count on Kafka 3.7.2 in
 [`31771635710`](https://github.com/TaeeunKil/kafrust/actions/runs/31771635710)
 and Kafka 4.3.1 in
 [`31771636082`](https://github.com/TaeeunKil/kafrust/actions/runs/31771636082).
+The same gate qualifies `IncrementalAlterConfigs`: it set a topic's
+`retention.ms`, dropped the response, and confirmed the value with
+`DescribeConfigs` on Kafka 3.7.2 in
+[`31771864914`](https://github.com/TaeeunKil/kafrust/actions/runs/31771864914)
+and Kafka 4.3.1 in
+[`31771865024`](https://github.com/TaeeunKil/kafrust/actions/runs/31771865024).
 
 ## Inspect Cluster and Topics
 
