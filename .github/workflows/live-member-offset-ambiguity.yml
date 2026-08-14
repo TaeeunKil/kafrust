@@ -1,0 +1,123 @@
+name: Live KIP-848 Member Offset Ambiguity
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  member-offset-ambiguity:
+    name: Kafka 4.3.1 KIP-848 OffsetCommit response loss
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      KAFRUST_BOOTSTRAP_SERVERS: 127.0.0.1:39095
+      KAFRUST_GROUP_ID: kafrust-member-offset-ambiguity-${{ github.run_id }}
+      KAFRUST_TOPIC: kafrust-member-offset-topic-${{ github.run_id }}
+      KAFRUST_PARTITION: "0"
+      KAFRUST_ADMIN_OFFSET: "42"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.81.0"
+
+      - name: Start Kafka 4.3.1
+        run: |
+          docker network create kafrust-member-offset-ambiguity
+          cluster_id="$(docker run --rm apache/kafka:4.3.1 /opt/kafka/bin/kafka-storage.sh random-uuid)"
+          docker run -d --name kafrust-member-offset-broker \
+            --network kafrust-member-offset-ambiguity \
+            -p 29095:9092 \
+            -e KAFKA_CLUSTER_ID="$cluster_id" \
+            -e KAFKA_NODE_ID=1 \
+            -e KAFKA_PROCESS_ROLES=broker,controller \
+            -e KAFKA_LISTENERS=INTERNAL://:29092,EXTERNAL://:9092,CONTROLLER://:9093 \
+            -e KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafrust-member-offset-broker:29092,EXTERNAL://127.0.0.1:39095 \
+            -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+            -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT \
+            -e KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL \
+            -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafrust-member-offset-broker:9093 \
+            -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
+            -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1 \
+            -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1 \
+            -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 \
+            apache/kafka:4.3.1
+
+      - name: Wait for Kafka
+        run: |
+          for attempt in {1..120}; do
+            if docker exec kafrust-member-offset-broker \
+              /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server kafrust-member-offset-broker:29092 \
+              >/tmp/kafrust-member-offset-probe.log 2>&1; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/kafrust-member-offset-probe.log || true
+          docker logs kafrust-member-offset-broker
+          exit 1
+
+      - name: Create topic
+        run: |
+          docker exec kafrust-member-offset-broker /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server kafrust-member-offset-broker:29092 \
+            --create \
+            --topic "$KAFRUST_TOPIC" \
+            --partitions 1 \
+            --replication-factor 1
+
+      - name: Start OffsetCommit response-drop proxy
+        run: |
+          rm -f /tmp/kafrust-member-offset-dropped
+          python3 -u scripts/kafka_response_drop_proxy.py \
+            --listen-port 39095 \
+            --target-port 29095 \
+            --drop-api-key 8 \
+            --drop-marker /tmp/kafrust-member-offset-dropped \
+            >/tmp/kafrust-member-offset-proxy.log 2>&1 &
+          for attempt in {1..20}; do
+            if (echo > /dev/tcp/127.0.0.1/39095) >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/kafrust-member-offset-proxy.log
+          exit 1
+
+      - name: Run member-aware ambiguity and reconciliation example
+        run: cargo run -p kafrust --example admin_member_offset_ambiguity
+
+      - name: Verify response was dropped
+        run: test -f /tmp/kafrust-member-offset-dropped
+
+      - name: Verify committed offset through Kafka CLI
+        run: |
+          for attempt in {1..30}; do
+            if docker exec kafrust-member-offset-broker /opt/kafka/bin/kafka-consumer-groups.sh \
+              --bootstrap-server kafrust-member-offset-broker:29092 \
+              --group "$KAFRUST_GROUP_ID" \
+              --describe \
+              > /tmp/kafrust-member-offset-after.log 2>&1; then
+              if grep -Eq "[[:space:]]$KAFRUST_TOPIC[[:space:]]+0[[:space:]]+42[[:space:]]" \
+                /tmp/kafrust-member-offset-after.log; then
+                cat /tmp/kafrust-member-offset-after.log
+                exit 0
+              fi
+            fi
+            sleep 1
+          done
+          cat /tmp/kafrust-member-offset-after.log || true
+          exit 1
+
+      - name: Dump diagnostics
+        if: failure()
+        run: |
+          cat /tmp/kafrust-member-offset-proxy.log || true
+          docker logs kafrust-member-offset-broker || true
