@@ -2356,6 +2356,9 @@ impl ConsumerGroup {
                     Some(owned_partitions),
                 )
                 .await?;
+            joined
+                .consumer
+                .restore_assignment_state(&previous_assignments);
             for (topic, partition) in paused {
                 if joined.consumer.position(&topic, partition).is_some() {
                     joined.consumer.pause(&topic, partition)?;
@@ -2399,6 +2402,9 @@ impl ConsumerGroup {
                 Some(self.generation_id),
             )
             .await?;
+        joined
+            .consumer
+            .restore_assignment_state(&previous_assignments);
         for (topic, partition) in paused {
             if joined.consumer.position(&topic, partition).is_some() {
                 joined.consumer.pause(&topic, partition)?;

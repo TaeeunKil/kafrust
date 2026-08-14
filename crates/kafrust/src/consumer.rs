@@ -331,23 +331,13 @@ impl Consumer {
     }
 
     pub(crate) fn replace_assignments(&mut self, mut assignments: Vec<ConsumerAssignment>) {
-        let previous_positions = self
-            .assignments
+        let previous_assignments = self.assignments.clone();
+        let previous_positions = previous_assignments
             .iter()
             .map(|assignment| {
                 (
                     (assignment.topic.clone(), assignment.partition),
                     assignment.next_offset,
-                )
-            })
-            .collect::<BTreeMap<_, _>>();
-        let previous_leader_epochs = self
-            .assignments
-            .iter()
-            .map(|assignment| {
-                (
-                    (assignment.topic.clone(), assignment.partition),
-                    assignment.leader_epoch,
                 )
             })
             .collect::<BTreeMap<_, _>>();
@@ -359,11 +349,6 @@ impl Consumer {
             .collect::<BTreeSet<_>>();
         for assignment in &mut assignments {
             assignment.paused = paused.contains(&(assignment.topic.clone(), assignment.partition));
-            if let Some(previous_epoch) =
-                previous_leader_epochs.get(&(assignment.topic.clone(), assignment.partition))
-            {
-                assignment.leader_epoch = *previous_epoch;
-            }
         }
         assignments.sort_by(|left, right| {
             left.topic
@@ -379,8 +364,29 @@ impl Consumer {
             })
         });
         self.assignments = assignments;
+        self.restore_assignment_state(&previous_assignments);
         self.metadata_cache.clear();
         self.fetch_sessions.clear();
+    }
+
+    pub(crate) fn restore_assignment_state(&mut self, previous_assignments: &[ConsumerAssignment]) {
+        let previous_state = previous_assignments
+            .iter()
+            .map(|assignment| {
+                (
+                    (assignment.topic.clone(), assignment.partition),
+                    (assignment.next_offset, assignment.leader_epoch),
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
+        for assignment in &mut self.assignments {
+            if let Some((next_offset, leader_epoch)) =
+                previous_state.get(&(assignment.topic.clone(), assignment.partition))
+            {
+                assignment.next_offset = *next_offset;
+                assignment.leader_epoch = assignment.leader_epoch.max(*leader_epoch);
+            }
+        }
     }
 
     /// Assigns a topic partition and next offset to fetch.
@@ -2120,6 +2126,45 @@ mod tests {
 
         consumer.assign("orders", 0, 20);
         assert_eq!(consumer.assignments()[0].leader_epoch(), -1);
+    }
+
+    #[test]
+    fn preserves_assignment_state_when_assignments_are_rebuilt() {
+        let (client_stream, _broker_stream) = tokio::io::duplex(64);
+        let (rebuilt_stream, _rebuilt_broker_stream) = tokio::io::duplex(64);
+        let client = Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-assignment-state-test".to_owned()),
+            Some(std::time::Duration::from_millis(500)),
+        );
+        let rebuilt_client = Client::from_stream(
+            Box::new(rebuilt_stream),
+            Some("kafrust-assignment-state-rebuilt-test".to_owned()),
+            Some(std::time::Duration::from_millis(500)),
+        );
+        let config = ConsumerConfig::new(["localhost:9092"]);
+        let mut consumer = Consumer::from_assignments(
+            client,
+            config.clone(),
+            vec![ConsumerAssignment::new("orders".to_owned(), 0, 0)],
+        );
+        consumer.seek("orders", 0, 42).unwrap();
+        consumer.update_assignment_leader_epoch("orders", 0, 7);
+        let previous_assignments = consumer.assignments().to_vec();
+
+        consumer.replace_assignments(vec![ConsumerAssignment::new("orders".to_owned(), 0, 0)]);
+
+        assert_eq!(consumer.position("orders", 0), Some(42));
+        assert_eq!(consumer.assignments()[0].leader_epoch(), 7);
+
+        let mut rebuilt = Consumer::from_assignments(
+            rebuilt_client,
+            config,
+            vec![ConsumerAssignment::new("orders".to_owned(), 0, 0)],
+        );
+        rebuilt.restore_assignment_state(&previous_assignments);
+        assert_eq!(rebuilt.position("orders", 0), Some(42));
+        assert_eq!(rebuilt.assignments()[0].leader_epoch(), 7);
     }
 
     #[tokio::test]
