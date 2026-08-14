@@ -1056,10 +1056,6 @@ impl ConsumerGroupConfig {
                     .collect(),
             ))
             .await?;
-        let has_assignable_partitions = metadata
-            .topics
-            .iter()
-            .any(|topic| topic.error_code == 0 && !topic.partitions.is_empty());
         let topic_ids = topic_ids_for_names(&metadata, &topics).map_err(|error| match error {
             Error::Broker { code, context } => self.client.broker_error(code, context),
             error => error,
@@ -1160,13 +1156,8 @@ impl ConsumerGroupConfig {
             commit_worker: None,
             auto_commit_worker: None,
         };
-        if !consumer_assignment_ready(
-            group.consumer_owned_partitions.as_deref(),
-            has_assignable_partitions,
-        ) {
-            group
-                .wait_for_consumer_assignment(has_assignable_partitions)
-                .await?;
+        if !consumer_assignment_ready(group.consumer_owned_partitions.as_deref(), false) {
+            group.wait_for_consumer_assignment(false).await?;
         }
         group.notify_rebalance(RebalancePhase::After, group.consumer.assignments());
         Ok(group)
@@ -5014,7 +5005,7 @@ mod tests {
     }
 
     #[test]
-    fn waits_for_non_empty_kip_848_assignment_when_partitions_exist() {
+    fn accepts_empty_kip_848_assignment_for_a_member_without_partitions() {
         let empty = [ConsumerGroupHeartbeatTopicPartitions {
             topic_id: [1; 16],
             partitions: Vec::new(),
