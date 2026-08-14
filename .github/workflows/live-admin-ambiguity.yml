@@ -26,6 +26,7 @@ on:
           - "alter_client_quotas"
           - "alter_user_scram_credentials"
           - "create_delegation_token"
+          - "alter_consumer_group_offsets"
           - "delete_topics"
 
 env:
@@ -132,6 +133,7 @@ jobs:
             alter_client_quotas) drop_api_key=49 ;;
             alter_user_scram_credentials) drop_api_key=51 ;;
             create_delegation_token) drop_api_key=38 ;;
+            alter_consumer_group_offsets) drop_api_key=8 ;;
             delete_topics) drop_api_key=20 ;;
             *) echo "unsupported mutation: ${{ inputs.mutation }}"; exit 1 ;;
           esac

@@ -3,11 +3,11 @@ mod common;
 use kafrust::{
     AclBinding, AclFilter, AclOperation, AclPatternType, AclPermissionType, AclResourceType,
     AdminClient, AlterConfigsOptions, ClientConfig, ClientQuotaAlteration, ClientQuotaEntity,
-    ClientQuotaFilter, ClientQuotaFilterComponent, ClientQuotaMatchType,
-    CreateDelegationTokenOptions, CreatePartitionsOptions, CreateTopicsOptions,
-    DelegationTokenPrincipal, DeleteTopicsOptions, DescribeConfigsOptions, Error, NewPartitions,
-    NewTopic, ScramCredentialMechanism, ScramCredentialUpsertion, TopicConfigAlteration,
-    TopicConfigResource, TopicConfigUpdate,
+    ClientQuotaFilter, ClientQuotaFilterComponent, ClientQuotaMatchType, ConsumerGroupOffset,
+    ConsumerGroupOffsetQuery, CreateDelegationTokenOptions, CreatePartitionsOptions,
+    CreateTopicsOptions, DelegationTokenPrincipal, DeleteTopicsOptions, DescribeConfigsOptions,
+    Error, NewPartitions, NewTopic, ScramCredentialMechanism, ScramCredentialUpsertion,
+    TopicConfigAlteration, TopicConfigResource, TopicConfigUpdate,
 };
 use std::time::Duration;
 
@@ -33,10 +33,13 @@ async fn main() -> kafrust::Result<()> {
         "alter_client_quotas" => qualify_alter_client_quotas(&admin).await?,
         "alter_user_scram_credentials" => qualify_alter_user_scram_credentials(&admin).await?,
         "create_delegation_token" => qualify_create_delegation_token(&admin).await?,
+        "alter_consumer_group_offsets" => {
+            qualify_alter_consumer_group_offsets(&admin, &topic).await?
+        }
         "delete_topics" => qualify_delete_topics(&admin, &topic).await?,
         _ => {
             return Err(Error::Unsupported(
-                "KAFRUST_ADMIN_MUTATION must be create_topics, create_partitions, incremental_alter_configs, alter_configs, create_acls, delete_acls, alter_client_quotas, alter_user_scram_credentials, create_delegation_token, or delete_topics",
+                "KAFRUST_ADMIN_MUTATION must be create_topics, create_partitions, incremental_alter_configs, alter_configs, create_acls, delete_acls, alter_client_quotas, alter_user_scram_credentials, create_delegation_token, alter_consumer_group_offsets, or delete_topics",
             ))
         }
     }
@@ -374,6 +377,44 @@ async fn qualify_create_delegation_token(admin: &AdminClient) -> kafrust::Result
     .await
 }
 
+async fn qualify_alter_consumer_group_offsets(
+    admin: &AdminClient,
+    topic: &str,
+) -> kafrust::Result<()> {
+    admin
+        .create_topics(&[NewTopic::new(topic, 1, 1)], CreateTopicsOptions::new())
+        .await?;
+    let group_id = format!("kafrust-admin-ambiguity-{topic}");
+    let expected_offset = 42;
+    let offsets = [ConsumerGroupOffset::new(topic, 0, expected_offset)];
+    let error = match admin
+        .alter_consumer_group_offsets(&group_id, &offsets)
+        .await
+    {
+        Ok(result) if result.is_success() => {
+            return Err(Error::Unsupported(
+                "the response-drop proxy did not make OffsetCommit ambiguous",
+            ))
+        }
+        Ok(_) => {
+            return Err(Error::Unsupported(
+                "OffsetCommit returned a broker error before the response was dropped",
+            ))
+        }
+        Err(error) => error,
+    };
+    if !matches!(
+        error,
+        Error::AdminMutationOutcomeUnknown {
+            operation: "OffsetCommit"
+        }
+    ) {
+        return Err(error);
+    }
+    println!("OffsetCommit response was lost; outcome is explicitly unknown");
+    wait_for_group_offset(admin, &group_id, topic, expected_offset).await
+}
+
 fn ambiguity_acl_binding(topic: &str) -> AclBinding {
     AclBinding::new(
         AclResourceType::Topic,
@@ -521,6 +562,42 @@ async fn wait_for_new_delegation_token(
         if tokio::time::Instant::now() >= deadline {
             return Err(Error::Unsupported(
                 "ambiguous CreateDelegationToken reconciliation did not observe a new token",
+            ));
+        }
+        tokio::time::sleep(Duration::from_millis(250)).await;
+    }
+}
+
+async fn wait_for_group_offset(
+    admin: &AdminClient,
+    group_id: &str,
+    topic: &str,
+    expected_offset: i64,
+) -> kafrust::Result<()> {
+    let query = [ConsumerGroupOffsetQuery::new(topic, [0])];
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(15);
+    loop {
+        let described = admin
+            .list_consumer_group_offsets(group_id, Some(&query))
+            .await?;
+        let visible = described.is_success()
+            && described.topics().iter().any(|candidate| {
+                candidate.topic() == topic
+                    && candidate.partitions().iter().any(|partition| {
+                        partition.partition_index() == 0
+                            && partition.is_success()
+                            && partition.committed_offset() == expected_offset
+                    })
+            });
+        if visible {
+            println!(
+                "reconciled committed offset for group {group_id}: {topic}-0={expected_offset}"
+            );
+            return Ok(());
+        }
+        if tokio::time::Instant::now() >= deadline {
+            return Err(Error::Unsupported(
+                "ambiguous OffsetCommit reconciliation did not observe the expected offset",
             ));
         }
         tokio::time::sleep(Duration::from_millis(250)).await;
