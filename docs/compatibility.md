@@ -169,6 +169,16 @@ Classic AlterConfigs is likewise qualified by replacing `retention.ms`,
 dropping the response, and confirming the setting with DescribeConfigs on
 Kafka 3.7.2 in [`31772009182`](https://github.com/TaeeunKil/kafrust/actions/runs/31772009182)
 and Kafka 4.3.1 in [`31772008771`](https://github.com/TaeeunKil/kafrust/actions/runs/31772008771).
+The same current-source gate qualifies ACL response loss with Kafka's
+`StandardAuthorizer` and an explicitly configured `User:ANONYMOUS` test
+superuser. CreateAcls response loss was reconciled through DescribeAcls on
+Kafka 3.7.2 in [`31772403290`](https://github.com/TaeeunKil/kafrust/actions/runs/31772403290)
+and Kafka 4.3.1 in [`31772403077`](https://github.com/TaeeunKil/kafrust/actions/runs/31772403077);
+DeleteAcls response loss was reconciled by confirming the binding was absent
+on Kafka 3.7.2 in [`31772470761`](https://github.com/TaeeunKil/kafrust/actions/runs/31772470761)
+and Kafka 4.3.1 in [`31772470590`](https://github.com/TaeeunKil/kafrust/actions/runs/31772470590).
+These are operation-specific proofs, not a universal authorization or
+post-transmission guarantee for every Admin mutation.
 
 The latest complete matrix in
 [`31624278107`](https://github.com/TaeeunKil/kafrust/actions/runs/31624278107)

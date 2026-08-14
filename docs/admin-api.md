@@ -61,6 +61,20 @@ Classic `AlterConfigs` is also qualified: it replaced the topic's
 [`31772009182`](https://github.com/TaeeunKil/kafrust/actions/runs/31772009182)
 and Kafka 4.3.1 in
 [`31772008771`](https://github.com/TaeeunKil/kafrust/actions/runs/31772008771).
+The same gate now qualifies ACL mutations with Kafka's
+`StandardAuthorizer` enabled and `User:ANONYMOUS` configured as the test
+superuser. `CreateAcls` dropped its response and reconciled the binding
+through `DescribeAcls` on Kafka 3.7.2 in
+[`31772403290`](https://github.com/TaeeunKil/kafrust/actions/runs/31772403290)
+and Kafka 4.3.1 in
+[`31772403077`](https://github.com/TaeeunKil/kafrust/actions/runs/31772403077).
+`DeleteAcls` dropped its response and reconciled that the binding was gone on
+Kafka 3.7.2 in
+[`31772470761`](https://github.com/TaeeunKil/kafrust/actions/runs/31772470761)
+and Kafka 4.3.1 in
+[`31772470590`](https://github.com/TaeeunKil/kafrust/actions/runs/31772470590).
+These remain operation-specific proofs and do not replace target-policy
+authorization testing.
 
 ## Inspect Cluster and Topics
 

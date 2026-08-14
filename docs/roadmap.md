@@ -183,6 +183,19 @@ coverage toward a release candidate that can be qualified in staging.
   [`31772009182`](https://github.com/TaeeunKil/kafrust/actions/runs/31772009182)
   and Kafka 4.3.1 in
   [`31772008771`](https://github.com/TaeeunKil/kafrust/actions/runs/31772008771).
+- ACL mutation ambiguity is now qualified with Kafka's StandardAuthorizer and
+  an explicit `User:ANONYMOUS` test superuser. CreateAcls response loss was
+  reconciled through DescribeAcls on Kafka 3.7.2 in
+  [`31772403290`](https://github.com/TaeeunKil/kafrust/actions/runs/31772403290)
+  and Kafka 4.3.1 in
+  [`31772403077`](https://github.com/TaeeunKil/kafrust/actions/runs/31772403077).
+  DeleteAcls response loss was reconciled by confirming the binding was gone
+  on Kafka 3.7.2 in
+  [`31772470761`](https://github.com/TaeeunKil/kafrust/actions/runs/31772470761)
+  and Kafka 4.3.1 in
+  [`31772470590`](https://github.com/TaeeunKil/kafrust/actions/runs/31772470590).
+  Quota, SCRAM, delegation-token, reassignment, offset, and other mutation
+  families remain separate operation-specific gates.
 - Published `0.2.30` passed four multi-member group rebalance profiles:
   Kafka 3.7.2 classic in [`31770201899`](https://github.com/TaeeunKil/kafrust/actions/runs/31770201899),
   Kafka 4.3.1 KIP-848 in [`31770201823`](https://github.com/TaeeunKil/kafrust/actions/runs/31770201823),

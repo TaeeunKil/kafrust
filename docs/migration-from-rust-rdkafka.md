@@ -399,6 +399,15 @@ Classic AlterConfigs passed in
 [`31772009182`](https://github.com/TaeeunKil/kafrust/actions/runs/31772009182)
 and [`31772008771`](https://github.com/TaeeunKil/kafrust/actions/runs/31772008771),
 also with DescribeConfigs reconciliation.
+CreateAcls response loss passed with DescribeAcls reconciliation in
+[`31772403290`](https://github.com/TaeeunKil/kafrust/actions/runs/31772403290)
+and [`31772403077`](https://github.com/TaeeunKil/kafrust/actions/runs/31772403077),
+and DeleteAcls response loss passed with absence reconciliation in
+[`31772470761`](https://github.com/TaeeunKil/kafrust/actions/runs/31772470761)
+and [`31772470590`](https://github.com/TaeeunKil/kafrust/actions/runs/31772470590).
+The ACL gates used Kafka StandardAuthorizer with an explicit test superuser;
+repeat authorization and policy checks for the target principal before
+migrating a production workload.
 
 ## Capability Gate
 
