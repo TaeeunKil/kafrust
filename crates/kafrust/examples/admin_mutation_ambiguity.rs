@@ -1,8 +1,9 @@
 use kafrust::{
     AclBinding, AclFilter, AclOperation, AclPatternType, AclPermissionType, AclResourceType,
     AdminClient, AlterConfigsOptions, ClientConfig, ClientQuotaAlteration, ClientQuotaEntity,
-    ClientQuotaFilter, ClientQuotaFilterComponent, ClientQuotaMatchType, CreatePartitionsOptions,
-    CreateTopicsOptions, DeleteTopicsOptions, DescribeConfigsOptions, Error, NewPartitions,
+    ClientQuotaFilter, ClientQuotaFilterComponent, ClientQuotaMatchType,
+    CreateDelegationTokenOptions, CreatePartitionsOptions, CreateTopicsOptions,
+    DelegationTokenPrincipal, DeleteTopicsOptions, DescribeConfigsOptions, Error, NewPartitions,
     NewTopic, ScramCredentialMechanism, ScramCredentialUpsertion, TopicConfigAlteration,
     TopicConfigResource, TopicConfigUpdate,
 };
@@ -30,10 +31,11 @@ async fn main() -> kafrust::Result<()> {
         "delete_acls" => qualify_delete_acls(&admin, &topic).await?,
         "alter_client_quotas" => qualify_alter_client_quotas(&admin).await?,
         "alter_user_scram_credentials" => qualify_alter_user_scram_credentials(&admin).await?,
+        "create_delegation_token" => qualify_create_delegation_token(&admin).await?,
         "delete_topics" => qualify_delete_topics(&admin, &topic).await?,
         _ => {
             return Err(Error::Unsupported(
-                "KAFRUST_ADMIN_MUTATION must be create_topics, create_partitions, incremental_alter_configs, alter_configs, create_acls, delete_acls, alter_client_quotas, alter_user_scram_credentials, or delete_topics",
+                "KAFRUST_ADMIN_MUTATION must be create_topics, create_partitions, incremental_alter_configs, alter_configs, create_acls, delete_acls, alter_client_quotas, alter_user_scram_credentials, create_delegation_token, or delete_topics",
             ))
         }
     }
@@ -325,6 +327,52 @@ async fn qualify_alter_user_scram_credentials(admin: &AdminClient) -> kafrust::R
     wait_for_scram_credential(admin, username, mechanism, 4096).await
 }
 
+async fn qualify_create_delegation_token(admin: &AdminClient) -> kafrust::Result<()> {
+    let before = admin.describe_delegation_tokens(None).await?;
+    if !before.is_success() {
+        return Err(Error::Broker {
+            code: before.error_code(),
+            context: "describe delegation tokens before ambiguity gate".to_owned(),
+        });
+    }
+    let before_ids = before
+        .tokens()
+        .iter()
+        .map(|token| token.token_id().to_owned())
+        .collect::<Vec<_>>();
+    let error = match admin
+        .create_delegation_token(CreateDelegationTokenOptions::new())
+        .await
+    {
+        Ok(result) if result.is_success() => {
+            return Err(Error::Unsupported(
+                "the response-drop proxy did not make CreateDelegationToken ambiguous",
+            ))
+        }
+        Ok(_) => {
+            return Err(Error::Unsupported(
+                "CreateDelegationToken returned a broker error before the response was dropped",
+            ))
+        }
+        Err(error) => error,
+    };
+    if !matches!(
+        error,
+        Error::AdminMutationOutcomeUnknown {
+            operation: "CreateDelegationToken"
+        }
+    ) {
+        return Err(error);
+    }
+    println!("CreateDelegationToken response was lost; outcome is explicitly unknown");
+    wait_for_new_delegation_token(
+        admin,
+        &before_ids,
+        DelegationTokenPrincipal::new("User", "ANONYMOUS"),
+    )
+    .await
+}
+
 fn ambiguity_acl_binding(topic: &str) -> AclBinding {
     AclBinding::new(
         AclResourceType::Topic,
@@ -441,6 +489,37 @@ async fn wait_for_scram_credential(
         if tokio::time::Instant::now() >= deadline {
             return Err(Error::Unsupported(
                 "ambiguous AlterUserScramCredentials reconciliation did not observe the expected credential",
+            ));
+        }
+        tokio::time::sleep(Duration::from_millis(250)).await;
+    }
+}
+
+async fn wait_for_new_delegation_token(
+    admin: &AdminClient,
+    before_ids: &[String],
+    expected_owner: DelegationTokenPrincipal,
+) -> kafrust::Result<()> {
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(15);
+    loop {
+        let described = admin.describe_delegation_tokens(None).await?;
+        if !described.is_success() {
+            return Err(Error::Broker {
+                code: described.error_code(),
+                context: "describe delegation token during ambiguity reconciliation".to_owned(),
+            });
+        }
+        if described.tokens().iter().any(|token| {
+            !before_ids.iter().any(|id| id == token.token_id())
+                && token.owner() == &expected_owner
+                && !token.hmac().is_empty()
+        }) {
+            println!("reconciled applied delegation token without logging its HMAC");
+            return Ok(());
+        }
+        if tokio::time::Instant::now() >= deadline {
+            return Err(Error::Unsupported(
+                "ambiguous CreateDelegationToken reconciliation did not observe a new token",
             ));
         }
         tokio::time::sleep(Duration::from_millis(250)).await;
