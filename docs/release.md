@@ -651,6 +651,9 @@ modify the already-published `0.2.28` artifacts.
   crates.io
 - Fresh external `cargo check` resolved `kafrust 0.2.30` and
   `kafrust-protocol 0.2.30` from crates.io
+- Both published docs.rs pages returned HTTP 200:
+  [`kafrust 0.2.30`](https://docs.rs/kafrust/0.2.30/kafrust/) and
+  [`kafrust-protocol 0.2.30`](https://docs.rs/kafrust-protocol/0.2.30/kafrust_protocol/).
 
 ### Known limits
 
