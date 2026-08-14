@@ -621,6 +621,7 @@ jobs:
           KAFRUST_GROUP_PROTOCOL=consumer \
           KAFRUST_PARTITION="$group_epoch_partition" \
           KAFRUST_OFFSET=0 \
+          KAFRUST_EXPECTED_VALUE="kafrust kip848 group epoch post" \
           KAFRUST_FAILOVER_PAUSE_MS=30000 \
           RUST_LOG=kafrust=debug \
           cargo run -p kafrust --example consumer_group_epoch_failover \
@@ -665,6 +666,15 @@ jobs:
             sleep 1
           done
 
+          group_epoch_producer_log=/tmp/kafrust-kip848-group-epoch-producer.log
+          group_epoch_producer_status=0
+          KAFRUST_PARTITION="$group_epoch_partition" \
+          KAFRUST_KEY="kafrust-kip848-group-epoch-post-${GITHUB_RUN_ID}" \
+          KAFRUST_VALUE="kafrust kip848 group epoch post" \
+          cargo run -p kafrust --example producer_send \
+            >"$group_epoch_producer_log" 2>&1 || group_epoch_producer_status=$?
+          cat "$group_epoch_producer_log"
+
           group_epoch_status=0
           wait "$group_epoch_pid" || group_epoch_status=$?
           cat "$group_epoch_log"
@@ -681,9 +691,10 @@ jobs:
             sleep 2
           done
 
-          if [ "$group_epoch_status" -ne 0 ] || [ -z "$group_epoch_leader_ready" ] || \
+          if [ "$group_epoch_status" -ne 0 ] || [ "$group_epoch_producer_status" -ne 0 ] || \
+             [ -z "$group_epoch_leader_ready" ] || \
              [ -z "$group_epoch_broker_ready" ] || \
-             ! grep -q "recovered fetch after leader epoch transition" "$group_epoch_log"; then
+             ! grep -q "group epoch failover observed expected post-failover record" "$group_epoch_log"; then
             cat /tmp/kafrust-kip848-group-epoch-after-stop-topic.log || true
             cat /tmp/kafrust-kip848-group-epoch-recovery.log || true
             docker logs "kafrust-kafka-kip848-multi-${group_epoch_broker}"
@@ -1082,6 +1093,7 @@ jobs:
           KAFRUST_GROUP_PROTOCOL=consumer \
           KAFRUST_PARTITION="$group_epoch_partition" \
           KAFRUST_OFFSET=0 \
+          KAFRUST_EXPECTED_VALUE="kafrust kip848 sasl group epoch post" \
           KAFRUST_FAILOVER_PAUSE_MS=30000 \
           RUST_LOG=kafrust=debug \
           cargo run -p kafrust --example consumer_group_epoch_failover \
@@ -1126,6 +1138,15 @@ jobs:
             sleep 1
           done
 
+          group_epoch_producer_log=/tmp/kafrust-kip848-sasl-group-epoch-producer.log
+          group_epoch_producer_status=0
+          KAFRUST_PARTITION="$group_epoch_partition" \
+          KAFRUST_KEY="kafrust-kip848-sasl-group-epoch-post-${GITHUB_RUN_ID}" \
+          KAFRUST_VALUE="kafrust kip848 sasl group epoch post" \
+          cargo run -p kafrust --example producer_send \
+            >"$group_epoch_producer_log" 2>&1 || group_epoch_producer_status=$?
+          cat "$group_epoch_producer_log"
+
           group_epoch_status=0
           wait "$group_epoch_pid" || group_epoch_status=$?
           cat "$group_epoch_log"
@@ -1142,9 +1163,10 @@ jobs:
             sleep 2
           done
 
-          if [ "$group_epoch_status" -ne 0 ] || [ -z "$group_epoch_leader_ready" ] || \
+          if [ "$group_epoch_status" -ne 0 ] || [ "$group_epoch_producer_status" -ne 0 ] || \
+             [ -z "$group_epoch_leader_ready" ] || \
              [ -z "$group_epoch_broker_ready" ] || \
-             ! grep -q "recovered fetch after leader epoch transition" "$group_epoch_log"; then
+             ! grep -q "group epoch failover observed expected post-failover record" "$group_epoch_log"; then
             cat /tmp/kafrust-kip848-sasl-group-epoch-after-stop-topic.log || true
             cat /tmp/kafrust-kip848-sasl-group-epoch-recovery.log || true
             docker logs "kafrust-kafka-kip848-sasl-${group_epoch_broker}"
