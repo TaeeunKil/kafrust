@@ -94,7 +94,7 @@ jobs:
             --describe \
             --topic "$KAFRUST_REASSIGNMENT_TOPIC" \
             | tee /tmp/kafrust-reassignment-before.log
-          replicas="$(sed -n 's/.*Replicas: \([^ ]*\).*/\1/p' /tmp/kafrust-reassignment-before.log | head -n 1)"
+          replicas="$(sed -n 's/.*Replicas: \([^[:space:]]*\).*/\1/p' /tmp/kafrust-reassignment-before.log | head -n 1)"
           IFS=',' read -r first second third <<< "$replicas"
           if [ -z "$first" ] || [ -z "$second" ] || [ -z "$third" ]; then
             cat /tmp/kafrust-reassignment-before.log
@@ -145,9 +145,10 @@ jobs:
               --describe \
               --topic "$KAFRUST_REASSIGNMENT_TOPIC" \
               >/tmp/kafrust-reassignment-after.log 2>&1 || true
+            normalized="$(tr '\t' ' ' < /tmp/kafrust-reassignment-after.log | tr -s ' ')"
             if grep -q "Replicas: $KAFRUST_REASSIGNMENT_REPLICAS Isr: $KAFRUST_REASSIGNMENT_REPLICAS" \
-              /tmp/kafrust-reassignment-after.log; then
-              cat /tmp/kafrust-reassignment-after.log
+              <<<"$normalized"; then
+              printf '%s\n' "$normalized"
               exit 0
             fi
             sleep 1
