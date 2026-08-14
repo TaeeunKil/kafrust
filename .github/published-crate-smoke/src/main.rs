@@ -1,4 +1,4 @@
-use std::{env, fs};
+use std::{env, fs, time::Duration};
 
 use kafrust::{
     Acks, AdminClient, ClientConfig, Compression, ConsumerConfig, ConsumerGroupConfig,
@@ -463,7 +463,7 @@ async fn main() -> kafrust::Result<()> {
     let mut replayed_committed_record = false;
     let mut restored_expected_record = false;
     let mut restored_poll_count = 0;
-    for _ in 0..5 {
+    for _ in 0..100 {
         let records = restored_group.poll().await?;
         restored_poll_count += 1;
         replayed_committed_record |= records.iter().any(|record| {
@@ -480,6 +480,9 @@ async fn main() -> kafrust::Result<()> {
         });
         if restored_expected_record {
             break;
+        }
+        if restored_group.assignments().is_empty() {
+            tokio::time::sleep(Duration::from_millis(50)).await;
         }
     }
     if replayed_committed_record || !restored_expected_record {
