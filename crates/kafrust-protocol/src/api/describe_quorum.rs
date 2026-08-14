@@ -239,6 +239,47 @@ mod tests {
     }
 
     #[test]
+    fn encoded_request_round_trips_against_flexible_v0_wire_shape() {
+        let request = DescribeQuorumRequest {
+            correlation_id: 12,
+            client_id: Some("kafrust".to_owned()),
+            topics: vec![DescribeQuorumTopic {
+                name: "__cluster_metadata".to_owned(),
+                partition_indexes: vec![0],
+            }],
+        };
+        let encoded = request.encode(0).unwrap();
+        let mut decoder = Decoder::new(&encoded);
+
+        assert_eq!(decoder.read_i16().unwrap(), API_KEY);
+        assert_eq!(decoder.read_i16().unwrap(), 0);
+        assert_eq!(decoder.read_i32().unwrap(), 12);
+        assert_eq!(
+            decoder.read_nullable_string().unwrap().as_deref(),
+            Some("kafrust")
+        );
+        decoder.read_tagged_fields().unwrap();
+
+        let topics = decoder
+            .read_compact_array("describe quorum request topics", |decoder| {
+                let name = decoder.read_compact_string()?;
+                let partitions = decoder
+                    .read_compact_array("describe quorum request partitions", |decoder| {
+                        decoder.read_i32()
+                    })?
+                    .unwrap_or_default();
+                decoder.read_tagged_fields()?;
+                Ok((name, partitions))
+            })
+            .unwrap()
+            .unwrap();
+        decoder.read_tagged_fields().unwrap();
+
+        assert_eq!(topics, vec![("__cluster_metadata".to_owned(), vec![0])]);
+        assert!(decoder.is_empty());
+    }
+
+    #[test]
     fn decodes_describe_quorum_v2_response_with_nodes_and_replica_state() {
         let mut bytes = Encoder::new();
         bytes.write_i16(0);

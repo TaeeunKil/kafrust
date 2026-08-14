@@ -71,6 +71,13 @@ jobs:
           docker logs kafrust-describe-quorum-broker
           exit 1
 
+      - name: Verify Kafka controller quorum CLI
+        run: |
+          docker exec kafrust-describe-quorum-broker \
+            /opt/kafka/bin/kafka-metadata-quorum.sh \
+            --bootstrap-server kafrust-describe-quorum-broker:9093 \
+            describe --status
+
       - name: Run current-source DescribeQuorum example
         run: cargo run -p kafrust --example admin_describe_quorum
 
