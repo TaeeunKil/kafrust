@@ -55,20 +55,37 @@ jobs:
           docker network create kafrust-admin-ambiguity
           cluster_id="$(docker run --rm apache/kafka:${{ inputs.kafka_version }} /opt/kafka/bin/kafka-storage.sh random-uuid)"
           authorizer_args=()
+          listener_args=(
+            -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+          )
           case "${{ inputs.mutation }}" in
-            create_acls|delete_acls|alter_user_scram_credentials|create_delegation_token)
+            create_acls|delete_acls|alter_user_scram_credentials)
               authorizer_args=(
                 -e KAFKA_AUTHORIZER_CLASS_NAME=org.apache.kafka.metadata.authorizer.StandardAuthorizer
                 -e KAFKA_ALLOW_EVERYONE_IF_NO_ACL_FOUND=false
                 -e KAFKA_SUPER_USERS=User:ANONYMOUS
               )
               ;;
+            create_delegation_token)
+              authorizer_args=(
+                -e KAFKA_AUTHORIZER_CLASS_NAME=org.apache.kafka.metadata.authorizer.StandardAuthorizer
+                -e KAFKA_ALLOW_EVERYONE_IF_NO_ACL_FOUND=false
+                -e KAFKA_SUPER_USERS=User:admin
+                -e KAFKA_DELEGATION_TOKEN_SECRET_KEY=kafrust-ambiguity-delegation-secret
+              )
+              listener_args=(
+                -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:SASL_PLAINTEXT
+                -e KAFKA_SASL_ENABLED_MECHANISMS=PLAIN
+                -e 'KAFKA_LISTENER_NAME_EXTERNAL_PLAIN_SASL_JAAS_CONFIG=org.apache.kafka.common.security.plain.PlainLoginModule required username="broker" password="broker-secret" user_admin="admin-secret";'
+              )
+              {
+                echo KAFRUST_SECURITY_PROTOCOL=sasl_plaintext
+                echo KAFRUST_SASL_MECHANISM=plain
+                echo KAFRUST_SASL_USERNAME=admin
+                echo KAFRUST_SASL_PASSWORD=admin-secret
+              } >> "$GITHUB_ENV"
+              ;;
           esac
-          if [ "${{ inputs.mutation }}" = "create_delegation_token" ]; then
-            authorizer_args+=(
-              -e KAFKA_DELEGATION_TOKEN_SECRET_KEY=kafrust-ambiguity-delegation-secret
-            )
-          fi
           docker run -d --name kafrust-admin-ambiguity-broker \
             --network kafrust-admin-ambiguity \
             -p 29095:9092 \
@@ -78,7 +95,7 @@ jobs:
             -e KAFKA_LISTENERS=INTERNAL://:29092,EXTERNAL://:9092,CONTROLLER://:9093 \
             -e KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafrust-admin-ambiguity-broker:29092,EXTERNAL://127.0.0.1:39095 \
             -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
-            -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT \
+            "${listener_args[@]}" \
             -e KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL \
             -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafrust-admin-ambiguity-broker:9093 \
             -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \

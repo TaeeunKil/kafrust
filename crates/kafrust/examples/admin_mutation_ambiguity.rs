@@ -1,3 +1,5 @@
+mod common;
+
 use kafrust::{
     AclBinding, AclFilter, AclOperation, AclPatternType, AclPermissionType, AclResourceType,
     AdminClient, AlterConfigsOptions, ClientConfig, ClientQuotaAlteration, ClientQuotaEntity,
@@ -11,16 +13,15 @@ use std::time::Duration;
 
 #[tokio::main]
 async fn main() -> kafrust::Result<()> {
-    let bootstrap_servers = std::env::var("KAFRUST_BOOTSTRAP_SERVERS")
-        .map_err(|_| Error::Unsupported("KAFRUST_BOOTSTRAP_SERVERS is required"))?;
+    let bootstrap_servers = common::bootstrap_servers_from_env();
     let topic = std::env::var("KAFRUST_ADMIN_TOPIC")
         .map_err(|_| Error::Unsupported("KAFRUST_ADMIN_TOPIC is required"))?;
     let mutation =
         std::env::var("KAFRUST_ADMIN_MUTATION").unwrap_or_else(|_| "create_topics".into());
-    let admin = AdminClient::new(
-        ClientConfig::new(bootstrap_servers.split(',').map(str::to_owned))
-            .client_id("kafrust-admin-ambiguity-example"),
-    );
+    let config = common::apply_security(
+        ClientConfig::new(bootstrap_servers).client_id("kafrust-admin-ambiguity-example"),
+    )?;
+    let admin = AdminClient::new(config);
 
     match mutation.as_str() {
         "create_topics" => qualify_create_topics(&admin, &topic).await?,
