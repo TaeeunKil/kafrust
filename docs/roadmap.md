@@ -126,6 +126,14 @@ coverage toward a release candidate that can be qualified in staging.
   preservation; the live authorization and broker-fault qualification for the
   remaining mutation families is still open. `DeleteRecords` remains the
   explicit idempotent exception with its existing leader-refresh retry path.
+- The complete 17-job `Live Kafka Smoke` matrix passed for the ambiguity
+  classification change at commit `bb9ad98` in
+  [`31769663509`](https://github.com/TaeeunKil/kafrust/actions/runs/31769663509).
+  Kafka 3.7.2 through 4.3.1 plaintext, TLS, SASL/PLAIN, SASL_SSL/SCRAM,
+  OAUTHBEARER, ACL authorization, multi-broker failover, transaction
+  reconciliation, and KIP-848 paths remained green. This confirms regression
+  compatibility of the existing live workflows; it does not by itself qualify
+  every post-transmission Admin mutation failure mode.
 
 ### Exit criteria
 
