@@ -1518,6 +1518,13 @@ Implemented evidence:
   published 20,000-record Kafka 4.3.1 baselines: 142,018 records/s for
   100-byte payloads, 68,037 for 1-KiB, 3,773 for 10-KiB, and 68,922 for
   1-KiB Zstd. All four profiles completed with zero retries.
+- Latest `main` benchmark run
+  [`31757363941`](https://github.com/TaeeunKil/kafrust/actions/runs/31757363941)
+  published the first JSONL baseline containing request p50/p95/p99
+  upper-bound estimates from `ClientMetricsSnapshot`, alongside the existing
+  high-level batch latency fields. Kafka 4.3.1 completed all four profiles with
+  zero retries; the request values are approximate fixed-bucket measurements,
+  not direct throughput or cross-client parity claims.
 - Newer latest `main` five-minute soak run
 [`31621654970`](https://github.com/TaeeunKil/kafrust/actions/runs/31621654970)
 processed 16,773,500 1-KiB records across a ten-second broker outage, with

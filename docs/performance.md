@@ -61,6 +61,24 @@ with matching operation profiles.
 ## Published Baseline
 
 The latest merged-main benchmark run
+[`31757363941`](https://github.com/TaeeunKil/kafrust/actions/runs/31757363941)
+completed on 2026-08-14 with the Kafka 4.3.1 single-broker profile,
+20,000 records, batches of 200, and a 900-KiB encoded chunk limit. The new
+request percentile fields were emitted for all four profiles and every profile
+completed with zero retries.
+
+| Payload | Compression | Produce records/s | Produce MiB/s | Batch p50 | Batch p95 | Batch p99 | Request p50 | Request p95 | Request p99 | Fetch records/s |
+| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 100 B | none | 136,098 | 12.98 | 1.468 ms | 1.895 ms | 2.354 ms | 5 ms | 5 ms | 10 ms | 683,460 |
+| 1 KiB | none | 64,072 | 62.57 | 2.926 ms | 3.772 ms | 5.870 ms | 5 ms | 5 ms | 5 ms | 370,967 |
+| 10 KiB | none | 3,733 | 36.45 | 52.910 ms | 55.283 ms | 65.096 ms | 5 ms | 5 ms | 5 ms | 98,517 |
+| 1 KiB | Zstd | 71,767 | 70.08 | 2.550 ms | 3.799 ms | 4.623 ms | 1 ms | 5 ms | 5 ms | 516,817 |
+
+The request percentile columns are approximate fixed-bucket upper bounds over
+all Produce, Metadata, and Fetch roundtrips in each run. They are not directly
+comparable to the high-level batch latency columns.
+
+The previous merged-main benchmark run
 [`31574062876`](https://github.com/TaeeunKil/kafrust/actions/runs/31574062876)
 completed on 2026-08-12 with the same Kafka 4.3.1 single-broker profile,
 20,000 records, batches of 200, and a 900-KiB encoded chunk limit.
@@ -76,7 +94,7 @@ These measurements supersede the older selected-profile table below for
 current-main tracking. They are still diagnostic baselines, not claims of
 throughput parity with another Kafka client.
 
-The newer merged-main benchmark run
+An earlier merged-main benchmark run
 [`31621648602`](https://github.com/TaeeunKil/kafrust/actions/runs/31621648602)
 completed with the same profile after the Admin read-retry changes:
 
