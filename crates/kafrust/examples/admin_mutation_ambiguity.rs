@@ -39,10 +39,11 @@ async fn main() -> kafrust::Result<()> {
         "delete_consumer_group_offsets" => {
             qualify_delete_consumer_group_offsets(&admin, &topic).await?
         }
+        "delete_consumer_groups" => qualify_delete_consumer_groups(&admin, &topic).await?,
         "delete_topics" => qualify_delete_topics(&admin, &topic).await?,
         _ => {
             return Err(Error::Unsupported(
-                "KAFRUST_ADMIN_MUTATION must be create_topics, create_partitions, incremental_alter_configs, alter_configs, create_acls, delete_acls, alter_client_quotas, alter_user_scram_credentials, create_delegation_token, alter_consumer_group_offsets, delete_consumer_group_offsets, or delete_topics",
+                "KAFRUST_ADMIN_MUTATION must be create_topics, create_partitions, incremental_alter_configs, alter_configs, create_acls, delete_acls, alter_client_quotas, alter_user_scram_credentials, create_delegation_token, alter_consumer_group_offsets, delete_consumer_group_offsets, delete_consumer_groups, or delete_topics",
             ))
         }
     }
@@ -471,6 +472,56 @@ async fn qualify_delete_consumer_group_offsets(
     wait_for_deleted_group_offset(admin, &group_id, topic).await
 }
 
+async fn qualify_delete_consumer_groups(admin: &AdminClient, topic: &str) -> kafrust::Result<()> {
+    admin
+        .create_topics(&[NewTopic::new(topic, 1, 1)], CreateTopicsOptions::new())
+        .await?;
+    let group_id = format!("kafrust-admin-ambiguity-{topic}");
+    wait_for_group_offset_query(admin, &group_id, topic).await?;
+
+    let expected_offset = 42;
+    let initial = admin
+        .alter_consumer_group_offsets(
+            &group_id,
+            &[ConsumerGroupOffset::new(topic, 0, expected_offset)],
+        )
+        .await?;
+    if !initial.is_success() {
+        return Err(Error::Unsupported(
+            "initial OffsetCommit did not establish the group",
+        ));
+    }
+    wait_for_group_offset(admin, &group_id, topic, expected_offset).await?;
+    wait_for_group_presence(admin, &group_id).await?;
+
+    let error = match admin
+        .delete_consumer_groups(std::slice::from_ref(&group_id))
+        .await
+    {
+        Ok(results) if results.len() == 1 && results[0].is_success() => {
+            return Err(Error::Unsupported(
+                "the response-drop proxy did not make DeleteGroups ambiguous",
+            ))
+        }
+        Ok(_) => {
+            return Err(Error::Unsupported(
+                "DeleteGroups returned a broker error before the response was dropped",
+            ))
+        }
+        Err(error) => error,
+    };
+    if !matches!(
+        error,
+        Error::AdminMutationOutcomeUnknown {
+            operation: "DeleteGroups"
+        }
+    ) {
+        return Err(error);
+    }
+    println!("DeleteGroups response was lost; outcome is explicitly unknown");
+    wait_for_group_absence(admin, &group_id).await
+}
+
 fn ambiguity_acl_binding(topic: &str) -> AclBinding {
     AclBinding::new(
         AclResourceType::Topic,
@@ -719,6 +770,40 @@ async fn wait_for_deleted_group_offset(
         if tokio::time::Instant::now() >= deadline {
             return Err(Error::Unsupported(
                 "ambiguous OffsetDelete reconciliation did not observe the deleted offset",
+            ));
+        }
+        tokio::time::sleep(Duration::from_millis(250)).await;
+    }
+}
+
+async fn wait_for_group_presence(admin: &AdminClient, group_id: &str) -> kafrust::Result<()> {
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(15);
+    loop {
+        let groups = admin.list_groups().await?;
+        if groups.iter().any(|group| group.group_id() == group_id) {
+            println!("consumer group {group_id} is visible before DeleteGroups");
+            return Ok(());
+        }
+        if tokio::time::Instant::now() >= deadline {
+            return Err(Error::Unsupported(
+                "consumer group did not become visible before DeleteGroups",
+            ));
+        }
+        tokio::time::sleep(Duration::from_millis(250)).await;
+    }
+}
+
+async fn wait_for_group_absence(admin: &AdminClient, group_id: &str) -> kafrust::Result<()> {
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(15);
+    loop {
+        let groups = admin.list_groups().await?;
+        if !groups.iter().any(|group| group.group_id() == group_id) {
+            println!("reconciled deleted consumer group {group_id}");
+            return Ok(());
+        }
+        if tokio::time::Instant::now() >= deadline {
+            return Err(Error::Unsupported(
+                "ambiguous DeleteGroups reconciliation did not observe group deletion",
             ));
         }
         tokio::time::sleep(Duration::from_millis(250)).await;

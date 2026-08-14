@@ -28,6 +28,7 @@ on:
           - "create_delegation_token"
           - "alter_consumer_group_offsets"
           - "delete_consumer_group_offsets"
+          - "delete_consumer_groups"
           - "delete_topics"
 
 env:
@@ -136,6 +137,7 @@ jobs:
             create_delegation_token) drop_api_key=38 ;;
             alter_consumer_group_offsets) drop_api_key=8 ;;
             delete_consumer_group_offsets) drop_api_key=47 ;;
+            delete_consumer_groups) drop_api_key=42 ;;
             delete_topics) drop_api_key=20 ;;
             *) echo "unsupported mutation: ${{ inputs.mutation }}"; exit 1 ;;
           esac
