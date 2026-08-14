@@ -51,6 +51,16 @@ jobs:
         run: |
           docker network create kafrust-admin-ambiguity
           cluster_id="$(docker run --rm apache/kafka:${{ inputs.kafka_version }} /opt/kafka/bin/kafka-storage.sh random-uuid)"
+          authorizer_args=()
+          case "${{ inputs.mutation }}" in
+            create_acls|delete_acls)
+              authorizer_args=(
+                -e KAFKA_AUTHORIZER_CLASS_NAME=org.apache.kafka.metadata.authorizer.StandardAuthorizer
+                -e KAFKA_ALLOW_EVERYONE_IF_NO_ACL_FOUND=false
+                -e KAFKA_SUPER_USERS=User:ANONYMOUS
+              )
+              ;;
+          esac
           docker run -d --name kafrust-admin-ambiguity-broker \
             --network kafrust-admin-ambiguity \
             -p 29095:9092 \
@@ -67,6 +77,7 @@ jobs:
             -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1 \
             -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1 \
             -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 \
+            "${authorizer_args[@]}" \
             apache/kafka:${{ inputs.kafka_version }}
 
       - name: Wait for Kafka
