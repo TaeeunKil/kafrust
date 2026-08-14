@@ -30,6 +30,47 @@ The published `0.2.30` artifacts were also exercised from fresh external
 projects in the seven-profile `Published Crate Smoke` run
 [`31762679537`](https://github.com/TaeeunKil/kafrust/actions/runs/31762679537).
 
+## 0.3 Release Target
+
+Status: Planned after the `0.2.30` patch release; implementation continues
+under M21.
+
+`0.3.0` is the next meaningful client milestone, not the complete Kafka
+replacement claim. It is intended to move the current alpha from broad feature
+coverage toward a release candidate that can be qualified in staging.
+
+### Required slices
+
+- Consumer-group lifecycle hardening across classic and KIP-848: initial and
+  delayed assignment delivery, multi-member rebalance and member-loss paths,
+  committed-offset restoration, leader-epoch recovery, and bounded heartbeat
+  shutdown behavior.
+- High-value protocol and Admin completion: close the next documented gaps,
+  preserve typed broker and partition outcomes, and add live mutation and
+  authorization evidence where transport ambiguity matters.
+- Operational qualification: published-crate smoke, docs.rs, repeated
+  multi-broker and secured soak runs, bounded retry/timeout evidence, and a
+  repeatable comparison benchmark against `rust-rdkafka`.
+- Public API and documentation pass: resolve the current alpha API audit,
+  document intentional changes and defaults, compile published examples, and
+  keep the migration guide aligned with the tested compatibility matrix.
+
+### Exit criteria
+
+- Both `0.3.0` crates publish in protocol-first order and resolve from a fresh
+  external project.
+- docs.rs is green for both crates and the complete supported live matrix is
+  green for the release commit.
+- The documented group, Admin, security, compression, idempotent, and
+  transactional workflows pass representative multi-broker or secured gates;
+  remaining unsupported behavior is explicit in the migration guide.
+- No known release-blocking correctness issue remains in the tested paths, and
+  local format, check, test, Clippy, docs, package, and diff gates pass.
+
+`0.3.0` still does not claim complete `rust-rdkafka` parity or Kafka-broker
+replacement. Those claims remain M21/`1.0` work and require broader failure,
+authorization, performance, and production-canary evidence.
+
 ## M0 Foundation
 
 Status: Done.
