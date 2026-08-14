@@ -14,15 +14,23 @@ Status legend:
 
 ## Current Release Qualification
 
-`0.2.30` includes consumer-group assignment-state preservation across classic
-and KIP-848 rejoin paths. The regression test and full local Rust validation
-passed, and the complete 17-job live matrix passed in
+`0.3.0` is published on crates.io in protocol-first order. The complete
+post-publish seven-profile external smoke passed in
+[`31770895344`](https://github.com/TaeeunKil/kafrust/actions/runs/31770895344)
+against Kafka 3.7.2 classic, Kafka 4.3.1 KIP-848, Kafka 3.7.2
+SASL_SSL/SCRAM, and Gzip/Snappy/LZ4/Zstd paths. The release also includes the
+typed Admin mutation ambiguity contract and its current-source response-drop
+qualification.
+
+The preceding `0.2.30` patch release included consumer-group assignment-state
+preservation across classic and KIP-848 rejoin paths. Its full local Rust
+validation passed, and the complete 17-job live matrix passed in
 [`31761642197`](https://github.com/TaeeunKil/kafrust/actions/runs/31761642197)
 against Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1, including plaintext, TLS,
 SASL_PLAINTEXT, SASL_SSL/SCRAM, broker-stop recovery, and KIP-848 failover.
 
-This does not complete the `0.3` or `1.0` replacement goals. Remaining gates
-include tag qualification, broader protocol and Admin coverage, longer
+This completes the `0.3` publication gate, but not the `1.0` replacement
+goal. Remaining gates include broader protocol and Admin coverage, longer
 multi-broker and security soak workloads, public API stabilization, and
 compatibility evidence against the remaining declared limits.
 
@@ -35,8 +43,8 @@ Both published docs.rs pages returned HTTP 200 for
 
 ## 0.3 Release Target
 
-Status: Release candidate prepared after the `0.2.30` patch release; registry
-publication and post-publish smoke remain.
+Status: Published as `0.3.0`; post-publish external smoke passed and both
+docs.rs pages are green.
 
 `0.3.0` is the next meaningful client milestone, not the complete Kafka
 replacement claim. It is intended to move the current alpha from broad feature
@@ -157,13 +165,18 @@ coverage toward a release candidate that can be qualified in staging.
   operation errors, two failed requests, and seven retries in
   [`31770173559`](https://github.com/TaeeunKil/kafrust/actions/runs/31770173559).
   Both recovered with zero in-flight requests and buffered records.
+- Both `0.3.0` crates were published in protocol-first order and resolved from
+  crates.io. The fresh-project smoke in
+  [`31770895344`](https://github.com/TaeeunKil/kafrust/actions/runs/31770895344)
+  passed all seven profiles, including the published TLS and compression
+  features.
 
 ### Exit criteria
 
 - Both `0.3.0` crates publish in protocol-first order and resolve from a fresh
-  external project.
+  external project. **Done.**
 - docs.rs is green for both crates and the complete supported live matrix is
-  green for the release commit.
+  green for the release commit. **Done.**
 - The documented group, Admin, security, compression, idempotent, and
   transactional workflows pass representative multi-broker or secured gates;
   remaining unsupported behavior is explicit in the migration guide.

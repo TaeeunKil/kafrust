@@ -662,6 +662,84 @@ modify the already-published `0.2.28` artifacts.
   transaction and KIP-848 failure matrices, ambiguous post-transmission Admin
   mutations, unclean-election/data-loss behavior, and unlisted Kafka APIs.
 
+## Release 0.3.0
+
+### Summary
+
+- Publish the pure-Rust client and protocol crates at `0.3.0`.
+- Add the typed `Error::AdminMutationOutcomeUnknown { operation }` contract
+  for non-idempotent Admin mutations whose response may have been lost after
+  transmission.
+- Qualify the CreateTopics response-drop and reconciliation path against
+  Kafka 3.7.2 and 4.3.1, while keeping `DeleteRecords` as the explicit
+  idempotent retry exception.
+- Record published-crate evidence for consumer groups, security, compression,
+  multi-broker recovery, and fresh external projects.
+
+### Breaking changes
+
+- The public `Error` enum gained an additive variant. Callers with exhaustive
+  matches must handle `AdminMutationOutcomeUnknown`.
+- A non-idempotent Admin mutation that may have reached the broker now returns
+  the typed ambiguity error instead of a generic transport error. This makes
+  retrying unsafe without reconciliation.
+
+### Migration notes
+
+- On `AdminMutationOutcomeUnknown`, reconcile the requested resource with a
+  read operation before deciding whether to retry. Do not blindly repeat a
+  create, delete, alter, or credential mutation.
+- `DeleteRecords` remains the documented idempotent exception and retains its
+  leader-refresh retry behavior.
+- The release remains pre-1.0; the migration guide is the compatibility
+  authority for unsupported APIs and unqualified broker behaviors.
+
+### Compatibility evidence
+
+- Current-source CreateTopics response-drop qualification passed on Kafka
+  3.7.2 and 4.3.1 in [`31770443512`](https://github.com/TaeeunKil/kafrust/actions/runs/31770443512)
+  and [`31770443484`](https://github.com/TaeeunKil/kafrust/actions/runs/31770443484).
+- Published `0.2.30` Admin and recovery evidence passed in
+  [`31770173365`](https://github.com/TaeeunKil/kafrust/actions/runs/31770173365),
+  [`31770173277`](https://github.com/TaeeunKil/kafrust/actions/runs/31770173277),
+  [`31770173454`](https://github.com/TaeeunKil/kafrust/actions/runs/31770173454),
+  and [`31770173559`](https://github.com/TaeeunKil/kafrust/actions/runs/31770173559).
+- Published group rebalance profiles passed for Kafka 3.7.2 classic,
+  Kafka 4.3.1 KIP-848, and secured variants in
+  [`31770201899`](https://github.com/TaeeunKil/kafrust/actions/runs/31770201899),
+  [`31770201823`](https://github.com/TaeeunKil/kafrust/actions/runs/31770201823),
+  [`31770202151`](https://github.com/TaeeunKil/kafrust/actions/runs/31770202151),
+  and [`31770201859`](https://github.com/TaeeunKil/kafrust/actions/runs/31770201859).
+- The post-publish `0.3.0` fresh-project smoke passed all seven profiles,
+  including Kafka 3.7.2, Kafka 4.3.1 KIP-848, SASL_SSL/SCRAM, and
+  Gzip/Snappy/LZ4/Zstd, in
+  [`31770895344`](https://github.com/TaeeunKil/kafrust/actions/runs/31770895344).
+
+### Verification
+
+- `cargo fmt --all`
+- `cargo check --workspace --all-targets`
+- `cargo test --workspace --all-features`
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- `cargo doc --workspace --all-features --no-deps`
+- `git diff --check`
+- Protocol-first `cargo publish` completed for both crates.
+- Crates.io API resolves `kafrust 0.3.0` and `kafrust-protocol 0.3.0`.
+- Fresh external published-crate smoke passed in
+  [`31770895344`](https://github.com/TaeeunKil/kafrust/actions/runs/31770895344).
+- Both published docs.rs pages returned HTTP 200:
+  [`kafrust 0.3.0`](https://docs.rs/kafrust/0.3.0/kafrust/) and
+  [`kafrust-protocol 0.3.0`](https://docs.rs/kafrust-protocol/0.3.0/kafrust_protocol/).
+
+### Known limits
+
+- This is still an alpha release and does not claim complete `rust-rdkafka`
+  parity or Kafka broker replacement.
+- Every Admin mutation family does not yet have a dedicated live
+  post-transmission fault proof.
+- Broader transaction, OAuth/OIDC, unclean-election/data-loss, production SLO,
+  service-canary, and unlisted Kafka API evidence remain open for 1.0.
+
 ## Optional Broker Checks
 
 The default test suite does not require a Kafka broker. Before an alpha tag, run the opt-in examples or tests against a local broker when practical:

@@ -73,7 +73,7 @@ These tiers define what "usable" and "complete" mean for this project. Dates are
 
 ### Alpha Client
 
-Current state after the v0.3.x release candidate.
+Current state after the published v0.3.0 alpha release.
 
 Expected use:
 
