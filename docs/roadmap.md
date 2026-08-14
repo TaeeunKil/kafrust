@@ -134,6 +134,29 @@ coverage toward a release candidate that can be qualified in staging.
   reconciliation, and KIP-848 paths remained green. This confirms regression
   compatibility of the existing live workflows; it does not by itself qualify
   every post-transmission Admin mutation failure mode.
+- The current-source Admin response-drop gate passed on Kafka 3.7.2 and 4.3.1
+  in [`31770443512`](https://github.com/TaeeunKil/kafrust/actions/runs/31770443512)
+  and [`31770443484`](https://github.com/TaeeunKil/kafrust/actions/runs/31770443484).
+  It forwarded a real CreateTopics request to Kafka, dropped only its response,
+  observed `Error::AdminMutationOutcomeUnknown { operation: "CreateTopics" }`,
+  and reconciled the applied topic through ListTopics. This closes the
+  current-source CreateTopics ambiguity sub-gate; other mutation families still
+  require their own broker-fault evidence.
+- Published `0.2.30` passed four multi-member group rebalance profiles:
+  Kafka 3.7.2 classic in [`31770201899`](https://github.com/TaeeunKil/kafrust/actions/runs/31770201899),
+  Kafka 4.3.1 KIP-848 in [`31770201823`](https://github.com/TaeeunKil/kafrust/actions/runs/31770201823),
+  Kafka 3.7.2 SASL_SSL classic in [`31770202151`](https://github.com/TaeeunKil/kafrust/actions/runs/31770202151),
+  and Kafka 4.3.1 SASL_SSL KIP-848 in [`31770201859`](https://github.com/TaeeunKil/kafrust/actions/runs/31770201859).
+  This strengthens the group lifecycle gate across protocol and security
+  modes; longer member-loss and service-canary behavior remain separate.
+- Published `0.2.30` passed 120-second Kafka 4.3.1 three-broker SASL_SSL
+  recovery soaks. Single-broker loss processed 3,512,100 records with zero
+  operation errors and two retries in
+  [`31770173454`](https://github.com/TaeeunKil/kafrust/actions/runs/31770173454);
+  simultaneous loss of brokers 1 and 2 processed 2,445,000 records with 282
+  operation errors, two failed requests, and seven retries in
+  [`31770173559`](https://github.com/TaeeunKil/kafrust/actions/runs/31770173559).
+  Both recovered with zero in-flight requests and buffered records.
 
 ### Exit criteria
 

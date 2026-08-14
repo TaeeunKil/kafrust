@@ -374,6 +374,13 @@ leader-election, reassignment, log-dir, and offset writes. `DeleteRecords` is
 the documented idempotent exception and preserves its retry path, but its final
 partition results still require inspection.
 
+The current-source CreateTopics response-drop gate demonstrates the migration
+behavior against Kafka 3.7.2 and 4.3.1: the request can be applied even when
+the call returns `AdminMutationOutcomeUnknown`, so an adapter must reconcile
+before issuing a second create request. This is evidence for CreateTopics only;
+do not generalize it to every Admin mutation without a matching operation-level
+qualification.
+
 ## Capability Gate
 
 | Workload requirement | Migration status |

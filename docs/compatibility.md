@@ -146,7 +146,10 @@ SCRAM-SHA-256 profiles. The secured logs confirm CreateTopics,
 DescribeConfigs, classic AlterConfigs, IncrementalAlterConfigs, and
 DeleteTopics over authenticated connections. This qualifies secured Admin
 AlterConfigs for those profiles; post-transmission mutation recovery remains
-unclaimed.
+unclaimed for the published artifact. The current-source `9e390cf` response-
+drop gate separately qualifies typed CreateTopics ambiguity and reconciliation
+on Kafka 3.7.2 and 4.3.1 in [`31770443512`](https://github.com/TaeeunKil/kafrust/actions/runs/31770443512)
+and [`31770443484`](https://github.com/TaeeunKil/kafrust/actions/runs/31770443484).
 
 The latest complete matrix in
 [`31624278107`](https://github.com/TaeeunKil/kafrust/actions/runs/31624278107)

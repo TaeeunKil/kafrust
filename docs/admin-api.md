@@ -26,6 +26,17 @@ idempotent, so its leader-refresh path may retry the request. Callers must
 still inspect its per-partition results and treat a final transport failure as
 unconfirmed until the log state is checked.
 
+The current-source response-drop qualification proves this boundary against a
+real Kafka broker: `CreateTopics` reached Kafka, its response was discarded by
+an intervening proxy, `Error::AdminMutationOutcomeUnknown { operation:
+"CreateTopics" }` was returned, and a follow-up `list_topics` observed the
+applied topic. The gate passed on Kafka 3.7.2 in
+[`31770443512`](https://github.com/TaeeunKil/kafrust/actions/runs/31770443512)
+and Kafka 4.3.1 in
+[`31770443484`](https://github.com/TaeeunKil/kafrust/actions/runs/31770443484).
+This qualifies the CreateTopics path; it is not a claim that every Admin
+mutation has an identical broker-side failure policy.
+
 ## Inspect Cluster and Topics
 
 ```rust
