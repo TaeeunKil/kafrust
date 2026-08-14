@@ -137,6 +137,14 @@ pub(crate) fn bootstrap_servers_from_env() -> Vec<String> {
     parse_bootstrap_servers(&value)
 }
 
+#[allow(dead_code)]
+pub(crate) fn controller_bootstrap_servers_from_env() -> Option<Vec<String>> {
+    std::env::var("KAFRUST_CONTROLLER_BOOTSTRAP_SERVERS")
+        .ok()
+        .map(|value| parse_bootstrap_servers(&value))
+        .filter(|servers| !servers.is_empty())
+}
+
 fn parse_bootstrap_servers(value: &str) -> Vec<String> {
     value
         .split(',')

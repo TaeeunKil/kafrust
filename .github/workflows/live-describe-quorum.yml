@@ -21,7 +21,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      KAFRUST_BOOTSTRAP_SERVERS: 127.0.0.1:39093
+      KAFRUST_BOOTSTRAP_SERVERS: 127.0.0.1:39092
+      KAFRUST_CONTROLLER_BOOTSTRAP_SERVERS: 127.0.0.1:39093
 
     steps:
       - name: Checkout

@@ -276,6 +276,7 @@ impl fmt::Debug for SaslCredentials {
 /// Connection settings shared by low-level clients, producers, and consumers.
 pub struct ClientConfig {
     bootstrap_servers: Vec<String>,
+    controller_bootstrap_servers: Vec<String>,
     client_id: Option<String>,
     client_rack: Option<String>,
     request_timeout: Duration,
@@ -293,6 +294,7 @@ impl ClientConfig {
     pub fn new(bootstrap_servers: impl IntoIterator<Item = impl Into<String>>) -> Self {
         Self {
             bootstrap_servers: bootstrap_servers.into_iter().map(Into::into).collect(),
+            controller_bootstrap_servers: Vec::new(),
             client_id: None,
             client_rack: None,
             request_timeout: Duration::from_millis(DEFAULT_REQUEST_TIMEOUT_MS),
@@ -309,6 +311,21 @@ impl ClientConfig {
     /// Sets the Kafka client ID sent in request headers.
     pub fn client_id(mut self, client_id: impl Into<String>) -> Self {
         self.client_id = Some(client_id.into());
+        self
+    }
+
+    /// Sets optional KRaft controller listener bootstrap servers.
+    ///
+    /// Most Kafka requests use [`Self::new`] bootstrap servers. Controller-only
+    /// APIs such as `DescribeQuorum` may require a separately advertised
+    /// controller listener, so AdminClient uses these addresses when they are
+    /// configured. If omitted, controller-scoped operations retain their
+    /// metadata-discovered broker routing behavior.
+    pub fn controller_bootstrap_servers(
+        mut self,
+        servers: impl IntoIterator<Item = impl Into<String>>,
+    ) -> Self {
+        self.controller_bootstrap_servers = servers.into_iter().map(Into::into).collect();
         self
     }
 
@@ -455,6 +472,11 @@ impl ClientConfig {
         &self.bootstrap_servers
     }
 
+    /// Returns explicitly configured KRaft controller listener bootstrap servers.
+    pub fn controller_bootstrap_servers_ref(&self) -> &[String] {
+        &self.controller_bootstrap_servers
+    }
+
     /// Returns the configured Kafka client ID.
     pub fn client_id_ref(&self) -> Option<&str> {
         self.client_id.as_deref()
@@ -548,6 +570,16 @@ impl ClientConfig {
                 reason: "entries must not be empty",
             });
         }
+        if self
+            .controller_bootstrap_servers
+            .iter()
+            .any(|server| server.trim().is_empty())
+        {
+            return Err(Error::InvalidConfiguration {
+                field: "controller_bootstrap_servers",
+                reason: "entries must not be empty",
+            });
+        }
         if self.request_timeout.is_zero() {
             return Err(Error::InvalidConfiguration {
                 field: "request_timeout_ms",
@@ -598,8 +630,22 @@ impl ClientConfig {
     pub async fn connect(self) -> Result<Client> {
         self.validate()?;
 
+        self.connect_servers(&self.bootstrap_servers).await
+    }
+
+    pub(crate) async fn connect_controller(&self) -> Result<Client> {
+        self.validate()?;
+        let servers = if self.controller_bootstrap_servers.is_empty() {
+            &self.bootstrap_servers
+        } else {
+            &self.controller_bootstrap_servers
+        };
+        self.connect_servers(servers).await
+    }
+
+    async fn connect_servers(&self, servers: &[String]) -> Result<Client> {
         let mut last_error = None;
-        for server in &self.bootstrap_servers {
+        for server in servers {
             match self.connect_broker(server.clone()).await {
                 Ok(client) => return Ok(client),
                 Err(error) => last_error = Some(error),
@@ -974,6 +1020,7 @@ mod tests {
     #[test]
     fn stores_bootstrap_servers_and_client_id() {
         let config = ClientConfig::new(["localhost:9092"])
+            .controller_bootstrap_servers(["controller:9093"])
             .client_id("kafrust-test")
             .client_rack("rack-a")
             .request_timeout_ms(5_000)
@@ -982,6 +1029,10 @@ mod tests {
             .max_decompressed_record_bytes(4 * 1024 * 1024);
 
         assert_eq!(config.bootstrap_servers(), &["localhost:9092".to_owned()]);
+        assert_eq!(
+            config.controller_bootstrap_servers_ref(),
+            &["controller:9093".to_owned()]
+        );
         assert_eq!(config.client_id_ref(), Some("kafrust-test"));
         assert_eq!(config.client_rack_ref(), Some("rack-a"));
         assert_eq!(config.request_timeout(), Duration::from_millis(5_000));
@@ -998,6 +1049,12 @@ mod tests {
     fn rejects_invalid_connection_limits_before_network_access() {
         let cases = [
             (ClientConfig::new([""]).validate(), "bootstrap_servers"),
+            (
+                ClientConfig::new(["localhost:9092"])
+                    .controller_bootstrap_servers([""])
+                    .validate(),
+                "controller_bootstrap_servers",
+            ),
             (
                 ClientConfig::new(["localhost:9092"])
                     .request_timeout_ms(0)

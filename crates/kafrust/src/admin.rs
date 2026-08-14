@@ -114,8 +114,9 @@ fn admin_mutation_error(client: &Client, operation: &'static str, error: Error) 
 
 /// Kafka administration client.
 ///
-/// Each controller-scoped operation discovers the active controller through
-/// cluster metadata before opening the controller connection.
+/// Each controller-scoped operation uses explicitly configured KRaft controller
+/// bootstrap servers when present. Otherwise it discovers the controller
+/// through cluster metadata before opening the controller connection.
 #[derive(Debug, Clone)]
 pub struct AdminClient {
     config: ClientConfig,
@@ -368,7 +369,12 @@ impl AdminClient {
             .collect::<Vec<_>>();
         let mut retry = 0;
         loop {
-            let mut client = match self.config.clone().connect().await {
+            let connection = if self.config.controller_bootstrap_servers_ref().is_empty() {
+                self.config.clone().connect().await
+            } else {
+                self.config.connect_controller().await
+            };
+            let mut client = match connection {
                 Ok(client) => client,
                 Err(error) if retry < self.max_retries && is_retryable_admin_read_error(&error) => {
                     retry += 1;
@@ -2179,6 +2185,9 @@ impl AdminClient {
     }
 
     async fn controller_client(&self) -> Result<Client> {
+        if !self.config.controller_bootstrap_servers_ref().is_empty() {
+            return self.config.connect_controller().await;
+        }
         let metadata = self.metadata_with_admin_retries(Some(Vec::new())).await?;
         let controller = metadata
             .brokers
@@ -10248,7 +10257,9 @@ mod tests {
                 .any(|bytes| bytes == b"__cluster_metadata"));
             write_frame(&mut connection, &describe_quorum_v2_response()).await;
         });
-        let admin = AdminClient::new(ClientConfig::new([addr.to_string()]));
+        let admin = AdminClient::new(
+            ClientConfig::new(["broker:9092"]).controller_bootstrap_servers([addr.to_string()]),
+        );
 
         let result = admin
             .describe_quorum(&[DescribeQuorumTopic::new("__cluster_metadata").partition(0)])

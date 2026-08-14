@@ -4,10 +4,12 @@ use kafrust::{AdminClient, ClientConfig, DescribeQuorumTopic, Error};
 
 #[tokio::main]
 async fn main() -> kafrust::Result<()> {
-    let config = common::apply_security(
-        ClientConfig::new(common::bootstrap_servers_from_env())
-            .client_id("kafrust-admin-describe-quorum-example"),
-    )?;
+    let mut config = ClientConfig::new(common::bootstrap_servers_from_env())
+        .client_id("kafrust-admin-describe-quorum-example");
+    if let Some(servers) = common::controller_bootstrap_servers_from_env() {
+        config = config.controller_bootstrap_servers(servers);
+    }
+    let config = common::apply_security(config)?;
     let admin = AdminClient::new(config);
     let result = admin
         .describe_quorum(&[DescribeQuorumTopic::new("__cluster_metadata").partition(0)])
