@@ -1,5 +1,7 @@
 mod common;
 
+use std::time::Duration;
+
 use kafrust::{ConsumerConfig, Error, IsolationLevel, ProducerConfig, ProducerRecord};
 
 #[tokio::main]
@@ -74,19 +76,36 @@ async fn main() -> kafrust::Result<()> {
     let mut consumer = common::apply_security(
         ConsumerConfig::new(bootstrap_servers)
             .client_id("kafrust-transaction-ambiguity-read-committed")
+            .max_wait_ms(100)
             .isolation_level(IsolationLevel::ReadCommitted),
     )?
     .build()
     .await?;
-    let records = consumer.fetch(&topic, ambiguous.partition(), 0).await?;
-    let ambiguous_count = records
-        .iter()
-        .filter(|record| record.value() == Some(b"ambiguous transaction committed by broker"))
-        .count();
-    let recovery_count = records
-        .iter()
-        .filter(|record| record.value() == Some(b"recovery transaction committed after ambiguity"))
-        .count();
+    // The transaction coordinator can acknowledge the recovery commit before
+    // the data partition's commit marker is visible to a read_committed fetch.
+    // Poll the same offset within a bounded window before treating that as a
+    // reconciliation failure.
+    let mut ambiguous_count = 0;
+    let mut recovery_count = 0;
+    for attempt in 0..20 {
+        let records = consumer.fetch(&topic, ambiguous.partition(), 0).await?;
+        ambiguous_count = records
+            .iter()
+            .filter(|record| record.value() == Some(b"ambiguous transaction committed by broker"))
+            .count();
+        recovery_count = records
+            .iter()
+            .filter(|record| {
+                record.value() == Some(b"recovery transaction committed after ambiguity")
+            })
+            .count();
+        if ambiguous_count == 1 && recovery_count == 1 {
+            break;
+        }
+        if attempt < 19 {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    }
     if ambiguous_count != 1 || recovery_count != 1 {
         return Err(Error::Unsupported(
             "read_committed did not preserve exactly one result for each transaction",
