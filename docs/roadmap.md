@@ -65,9 +65,9 @@ coverage toward a release candidate that can be qualified in staging.
   assigned across rejoin, plus a guard that does not copy position from a
   removed partition when it is later reassigned. The published group smoke
   verifies the same `seek`-then-`rejoin` behavior for Kafka 3.7.2 classic in
-  [`31763714471`](https://github.com/TaeeunKil/kafrust/actions/runs/31763714471)
+  [`31763950353`](https://github.com/TaeeunKil/kafrust/actions/runs/31763950353)
   and Kafka 4.3.1 KIP-848 in
-  [`31763716175`](https://github.com/TaeeunKil/kafrust/actions/runs/31763716175).
+  [`31763952591`](https://github.com/TaeeunKil/kafrust/actions/runs/31763952591).
   This closes the tested position-preservation sub-gate; delayed assignment,
   member-loss, committed-offset, leader-epoch, and shutdown cases remain part
   of the broader 0.3 lifecycle gate.
