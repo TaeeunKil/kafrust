@@ -457,6 +457,9 @@ Broker response frame allocation is limited to `100 MiB` by default. Set
 `ConsumerConfig`, or `ConsumerGroupConfig` when a workload needs a different
 limit. A broker frame length above the configured limit returns
 `Error::ResponseTooLarge { size, max }` before allocating the response payload.
+After a request has been sent, a timeout, transport error, or framing error
+retires that low-level connection. High-level retry paths establish a fresh
+connection rather than risking reuse of a stream with a partial response.
 
 Kafka arrays are limited to `1,000,000` elements and an uncompressed fetched
 record batch is limited to `64 MiB` by default. Configure these limits with

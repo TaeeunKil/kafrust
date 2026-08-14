@@ -156,6 +156,11 @@ use crate::metrics::ClientMetrics;
 pub(crate) const DEFAULT_MAX_RESPONSE_BYTES: usize = 100 * 1024 * 1024;
 
 /// Low-level Kafka request client over a single broker connection.
+///
+/// A connection is permanently marked unusable after a request timeout or a
+/// transport/framing failure. This prevents a later request from consuming
+/// bytes belonging to an earlier partially completed response; high-level
+/// clients create a replacement connection through their retry path.
 pub struct Client {
     stream: Box<dyn BrokerStream>,
     client_id: Option<String>,
@@ -169,6 +174,7 @@ pub struct Client {
     sasl_credentials: Option<SaslCredentials>,
     sasl_authenticated_at: Option<std::time::Instant>,
     sasl_authentication_in_progress: bool,
+    connection_poisoned: bool,
 }
 
 pub(crate) trait BrokerStream: AsyncRead + AsyncWrite + Unpin + Send + Sync {}
@@ -288,6 +294,7 @@ impl Client {
             sasl_credentials: None,
             sasl_authenticated_at: None,
             sasl_authentication_in_progress: false,
+            connection_poisoned: false,
         }
     }
 
@@ -2396,6 +2403,7 @@ impl Client {
     }
 
     async fn send_request_no_response(&mut self, request: &[u8]) -> Result<()> {
+        self.ensure_connection_usable()?;
         self.maybe_reauthenticate().await?;
         self.send_request_no_response_traced(request).await
     }
@@ -2424,6 +2432,8 @@ impl Client {
                 self.send_request_no_response_unbounded(request).await
             };
 
+            self.poison_connection_for_request_error(&result);
+
             RequestTrace::log_finish_no_response(trace, &result);
             span_guard.finish_no_response(&result);
             match &result {
@@ -2437,6 +2447,7 @@ impl Client {
     }
 
     async fn send_request(&mut self, request: &[u8]) -> Result<Vec<u8>> {
+        self.ensure_connection_usable()?;
         self.maybe_reauthenticate().await?;
         self.send_request_traced(request).await
     }
@@ -2460,6 +2471,8 @@ impl Client {
                 self.send_request_unbounded(request).await
             };
 
+            self.poison_connection_for_request_error(&result);
+
             RequestTrace::log_finish(trace, &result);
             span_guard.finish(&result);
             match &result {
@@ -2474,34 +2487,57 @@ impl Client {
 
     async fn send_request_no_response_unbounded(&mut self, request: &[u8]) -> Result<()> {
         let frame = encode_frame(request)?;
-        self.stream.write_all(&frame).await?;
+        if let Err(error) = self.stream.write_all(&frame).await {
+            self.connection_poisoned = true;
+            return Err(error.into());
+        }
         RequestTrace::log_written(RequestTrace::from_request(request));
-        self.stream.flush().await?;
+        if let Err(error) = self.stream.flush().await {
+            self.connection_poisoned = true;
+            return Err(error.into());
+        }
         RequestTrace::log_sent(RequestTrace::from_request(request));
         Ok(())
     }
 
     async fn send_request_unbounded(&mut self, request: &[u8]) -> Result<Vec<u8>> {
         let frame = encode_frame(request)?;
-        self.stream.write_all(&frame).await?;
+        if let Err(error) = self.stream.write_all(&frame).await {
+            self.connection_poisoned = true;
+            return Err(error.into());
+        }
         RequestTrace::log_written(RequestTrace::from_request(request));
-        self.stream.flush().await?;
+        if let Err(error) = self.stream.flush().await {
+            self.connection_poisoned = true;
+            return Err(error.into());
+        }
         RequestTrace::log_sent(RequestTrace::from_request(request));
 
         let mut size = [0u8; 4];
-        self.stream.read_exact(&mut size).await?;
+        if let Err(error) = self.stream.read_exact(&mut size).await {
+            self.connection_poisoned = true;
+            return Err(error.into());
+        }
         let size = i32::from_be_bytes(size);
         if size < 0 {
+            self.connection_poisoned = true;
             return Err(Error::Protocol(kafrust_protocol::Error::NegativeLength {
                 kind: "response frame",
                 length: size,
             }));
         }
 
-        let size = usize::try_from(size).map_err(|_| {
-            Error::Protocol(kafrust_protocol::Error::LengthOverflow("response frame"))
-        })?;
+        let size = match usize::try_from(size) {
+            Ok(size) => size,
+            Err(_) => {
+                self.connection_poisoned = true;
+                return Err(Error::Protocol(kafrust_protocol::Error::LengthOverflow(
+                    "response frame",
+                )));
+            }
+        };
         if size > self.max_response_bytes {
+            self.connection_poisoned = true;
             return Err(Error::ResponseTooLarge {
                 size,
                 max: self.max_response_bytes,
@@ -2509,8 +2545,32 @@ impl Client {
         }
 
         let mut response = vec![0; size];
-        self.stream.read_exact(&mut response).await?;
+        if let Err(error) = self.stream.read_exact(&mut response).await {
+            self.connection_poisoned = true;
+            return Err(error.into());
+        }
         Ok(response)
+    }
+
+    fn ensure_connection_usable(&self) -> Result<()> {
+        if self.connection_poisoned {
+            return Err(Error::Io(std::io::Error::new(
+                std::io::ErrorKind::NotConnected,
+                "broker connection is unusable after a prior request failure",
+            )));
+        }
+        Ok(())
+    }
+
+    fn poison_connection_for_request_error<T>(&mut self, result: &Result<T>) {
+        if matches!(
+            result,
+            Err(Error::Io(_))
+                | Err(Error::RequestTimedOut { .. })
+                | Err(Error::ResponseTooLarge { .. })
+        ) {
+            self.connection_poisoned = true;
+        }
     }
 
     fn next_correlation_id(&mut self) -> i32 {
@@ -2528,6 +2588,7 @@ impl fmt::Debug for Client {
             .field("request_timeout", &self.request_timeout)
             .field("max_response_bytes", &self.max_response_bytes)
             .field("decode_limits", &self.decode_limits)
+            .field("connection_poisoned", &self.connection_poisoned)
             .field("metrics", &self.metrics)
             .finish_non_exhaustive()
     }
@@ -2777,6 +2838,43 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn does_not_reuse_connection_after_request_timeout() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut size = [0u8; 4];
+            socket.read_exact(&mut size).await.unwrap();
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        });
+
+        let mut client = Client::connect_with_request_timeout_and_metrics(
+            addr,
+            Some("kafrust-timeout-reuse-test".to_owned()),
+            Duration::from_millis(5),
+            DEFAULT_MAX_RESPONSE_BYTES,
+            DecodeLimits::default(),
+            ClientMetrics::new(),
+        )
+        .await
+        .unwrap();
+
+        assert!(matches!(
+            client.api_versions().await,
+            Err(Error::RequestTimedOut { timeout_ms: 5 })
+        ));
+        let error = tokio::time::timeout(Duration::from_millis(20), client.api_versions())
+            .await
+            .unwrap()
+            .unwrap_err();
+        assert!(
+            matches!(error, Error::Io(error) if error.kind() == std::io::ErrorKind::NotConnected)
+        );
+
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn rejects_response_frame_before_allocating_over_limit() {
         let (client_stream, mut broker_stream) = tokio::io::duplex(1024);
         let broker = tokio::spawn(async move {
@@ -2807,6 +2905,11 @@ mod tests {
         assert_eq!(snapshot.requests_failed, 1);
         assert_eq!(snapshot.response_bytes, 0);
         assert_eq!(snapshot.in_flight_requests, 0);
+        let reuse_error = client.api_versions().await.unwrap_err();
+        assert!(matches!(
+            reuse_error,
+            Error::Io(error) if error.kind() == std::io::ErrorKind::NotConnected
+        ));
         broker.await.unwrap();
     }
 
