@@ -195,6 +195,14 @@ and Kafka 4.3.1 in
 [`31772992381`](https://github.com/TaeeunKil/kafrust/actions/runs/31772992381).
 This is an operation-specific mutation proof, not a complete credential
 policy or authenticated-channel parity claim.
+The current-source gate also qualifies CreateDelegationToken over authenticated
+SASL/PLAIN. After the response was dropped, DescribeDelegationTokens found a
+new token owned by `User:admin` on Kafka 3.7.2 in
+[`31773884142`](https://github.com/TaeeunKil/kafrust/actions/runs/31773884142)
+and Kafka 4.3.1 in
+[`31773883953`](https://github.com/TaeeunKil/kafrust/actions/runs/31773883953).
+The gate redacts the token HMAC and proves only this mutation's
+reconciliation boundary, not every delegation-token policy or lifecycle path.
 
 The latest complete matrix in
 [`31624278107`](https://github.com/TaeeunKil/kafrust/actions/runs/31624278107)

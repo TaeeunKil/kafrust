@@ -92,6 +92,16 @@ and Kafka 4.3.1 in
 [`31772992381`](https://github.com/TaeeunKil/kafrust/actions/runs/31772992381).
 This proves the mutation/reconciliation boundary only; credential policy and
 authenticated production administration remain target-specific.
+The same response-drop gate now qualifies `CreateDelegationToken` over an
+authenticated SASL/PLAIN channel. It intentionally loses the create response,
+then uses `DescribeDelegationTokens` to find a new token owned by
+`User:admin` on Kafka 3.7.2 in
+[`31773884142`](https://github.com/TaeeunKil/kafrust/actions/runs/31773884142)
+and Kafka 4.3.1 in
+[`31773883953`](https://github.com/TaeeunKil/kafrust/actions/runs/31773883953).
+The gate never logs the token HMAC. This is an operation-specific
+reconciliation proof; token authorization, secret distribution, renewal, and
+expiration policy remain target-specific.
 
 ## Inspect Cluster and Topics
 
