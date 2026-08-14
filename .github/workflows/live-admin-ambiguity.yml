@@ -70,7 +70,7 @@ jobs:
               authorizer_args=(
                 -e KAFKA_AUTHORIZER_CLASS_NAME=org.apache.kafka.metadata.authorizer.StandardAuthorizer
                 -e KAFKA_ALLOW_EVERYONE_IF_NO_ACL_FOUND=false
-                -e KAFKA_SUPER_USERS=User:admin
+                -e 'KAFKA_SUPER_USERS=User:ANONYMOUS;User:admin'
                 -e KAFKA_DELEGATION_TOKEN_SECRET_KEY=kafrust-ambiguity-delegation-secret
               )
               listener_args=(
