@@ -75,7 +75,7 @@ jobs:
         run: |
           docker exec kafrust-describe-quorum-broker \
             /opt/kafka/bin/kafka-metadata-quorum.sh \
-            --bootstrap-server kafrust-describe-quorum-broker:9093 \
+            --bootstrap-server kafrust-describe-quorum-broker:29092 \
             describe --status
 
       - name: Run current-source DescribeQuorum example

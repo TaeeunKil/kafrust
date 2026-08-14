@@ -35,6 +35,7 @@ impl DescribeQuorumRequest {
             encoder.write_compact_string(&topic.name)?;
             encoder.write_compact_array(Some(&topic.partition_indexes), |encoder, index| {
                 encoder.write_i32(*index);
+                encoder.write_empty_tagged_fields();
                 Ok(())
             })?;
             encoder.write_empty_tagged_fields();
@@ -265,7 +266,9 @@ mod tests {
                 let name = decoder.read_compact_string()?;
                 let partitions = decoder
                     .read_compact_array("describe quorum request partitions", |decoder| {
-                        decoder.read_i32()
+                        let index = decoder.read_i32()?;
+                        decoder.read_tagged_fields()?;
+                        Ok(index)
                     })?
                     .unwrap_or_default();
                 decoder.read_tagged_fields()?;
