@@ -1,7 +1,7 @@
 # Migrating from rust-rdkafka
 
 This guide maps common `rust-rdkafka` 0.39 application patterns to kafrust
-0.2.x. It is a staged migration guide, not a drop-in compatibility claim.
+0.3.x. It is a staged migration guide, not a drop-in compatibility claim.
 `rust-rdkafka` wraps librdkafka and has substantially broader production
 coverage. kafrust is a Tokio-based pure Rust client with a smaller, typed
 configuration surface.
@@ -20,7 +20,7 @@ Replace the dependency:
 
 ```toml
 [dependencies]
-kafrust = "0.2.30"
+kafrust = "0.3.0"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
 

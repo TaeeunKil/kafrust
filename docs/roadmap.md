@@ -35,8 +35,8 @@ Both published docs.rs pages returned HTTP 200 for
 
 ## 0.3 Release Target
 
-Status: In progress after the `0.2.30` patch release; implementation continues
-under M21.
+Status: Release candidate prepared after the `0.2.30` patch release; registry
+publication and post-publish smoke remain.
 
 `0.3.0` is the next meaningful client milestone, not the complete Kafka
 replacement claim. It is intended to move the current alpha from broad feature

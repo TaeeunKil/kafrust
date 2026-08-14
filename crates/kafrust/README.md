@@ -11,7 +11,7 @@ Tokio-based admin, producer, direct consumer, and alpha classic/KIP-848
 consumer group APIs on top of the companion
 [`kafrust-protocol`](https://docs.rs/kafrust-protocol) wire-format crate.
 
-Current release: `0.2.30`.
+Current release: `0.3.0`.
 
 This crate is alpha. Use it for experiments, local broker checks, simple
 internal tools, and API evaluation. For broad production Kafka workloads that
@@ -490,7 +490,7 @@ retries.
 
 ## Compatibility
 
-The `0.2.x` alpha line is verified against single-node Apache Kafka `3.7.2`,
+The `0.3.x` alpha line is verified against single-node Apache Kafka `3.7.2`,
 `3.8.1`, `3.9.1`, and `4.3.1` KRaft brokers over `PLAINTEXT`. Secured and
 three-broker profiles are verified against Kafka `3.7.2`.
 

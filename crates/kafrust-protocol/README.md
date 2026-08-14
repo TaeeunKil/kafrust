@@ -26,7 +26,7 @@ tested, and reused where low-level Kafka messages are needed.
 
 ## Implemented Areas
 
-The `0.2.x` protocol surface includes support used by the current high-level
+The `0.3.x` protocol surface includes support used by the current high-level
 client paths:
 
 - primitive Kafka wire types
@@ -105,7 +105,7 @@ Protocol types can exist before a high-level client path is verified against a
 real broker. kafrust compatibility claims are made from the high-level client
 crate and repository docs, not from the presence of protocol structs alone.
 
-The current `0.2.x` client compatibility claim is Apache Kafka `3.7.2`,
+The current `0.3.x` client compatibility claim is Apache Kafka `3.7.2`,
 `3.8.1`, `3.9.1`, and `4.3.1` single-node KRaft over `PLAINTEXT`, with the
 secured and three-broker client profiles verified against Kafka `3.7.2`.
 

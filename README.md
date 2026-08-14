@@ -15,7 +15,7 @@ visible in public APIs: bootstrap servers, client IDs, topics, partitions,
 offsets, acknowledgements, metadata refresh, consumer groups, heartbeats, and
 commits.
 
-Current release: `0.2.30`.
+Current release: `0.3.0`.
 
 Use kafrust today for experiments, local broker checks, simple internal tools,
 and API evaluation. For broad production Kafka workloads that need mature
@@ -413,15 +413,15 @@ brokers.
 
 | kafrust | Broker | Mode | Security | Status |
 | --- | --- | --- | --- | --- |
-| `0.2.x` | Apache Kafka `3.7.2` | single-node KRaft | `PLAINTEXT` | Passing live smoke |
-| `0.2.x` | Apache Kafka `4.3.1` | single-node KRaft | `PLAINTEXT` | Passing live smoke |
-| `0.2.x` | Apache Kafka `3.7.2` | single-node KRaft | `TLS` | Passing live smoke |
-| `0.2.x` | Apache Kafka `3.7.2` | single-node KRaft | `SASL_PLAINTEXT` with SASL/PLAIN | Passing live smoke |
-| `0.2.x` | Apache Kafka `3.7.2` | single-node KRaft | `SASL_SSL` with SCRAM-SHA-256 | Passing live smoke |
-| `0.2.x` | Apache Kafka `3.7.2` | single-node KRaft | `SASL_SSL` with SCRAM-SHA-512 | Passing live smoke |
-| `0.2.x` | Apache Kafka `3.8.1` | single-node KRaft | `PLAINTEXT` | Passing live smoke |
-| `0.2.x` | Apache Kafka `3.9.1` | single-node KRaft | `PLAINTEXT` | Passing live smoke |
-| `0.2.x` | Apache Kafka `3.7.2` | three-broker KRaft | `PLAINTEXT` with broker racks | Passing live smoke |
+| `0.3.x` | Apache Kafka `3.7.2` | single-node KRaft | `PLAINTEXT` | Passing live smoke |
+| `0.3.x` | Apache Kafka `4.3.1` | single-node KRaft | `PLAINTEXT` | Passing live smoke |
+| `0.3.x` | Apache Kafka `3.7.2` | single-node KRaft | `TLS` | Passing live smoke |
+| `0.3.x` | Apache Kafka `3.7.2` | single-node KRaft | `SASL_PLAINTEXT` with SASL/PLAIN | Passing live smoke |
+| `0.3.x` | Apache Kafka `3.7.2` | single-node KRaft | `SASL_SSL` with SCRAM-SHA-256 | Passing live smoke |
+| `0.3.x` | Apache Kafka `3.7.2` | single-node KRaft | `SASL_SSL` with SCRAM-SHA-512 | Passing live smoke |
+| `0.3.x` | Apache Kafka `3.8.1` | single-node KRaft | `PLAINTEXT` | Passing live smoke |
+| `0.3.x` | Apache Kafka `3.9.1` | single-node KRaft | `PLAINTEXT` | Passing live smoke |
+| `0.3.x` | Apache Kafka `3.7.2` | three-broker KRaft | `PLAINTEXT` with broker racks | Passing live smoke |
 
 Verified paths currently include:
 
@@ -571,8 +571,8 @@ Primary public entry points:
 
 Generated API documentation:
 
-- [`kafrust`](https://docs.rs/kafrust/0.2.30/kafrust/)
-- [`kafrust-protocol`](https://docs.rs/kafrust-protocol/0.2.30/kafrust_protocol/)
+- [`kafrust`](https://docs.rs/kafrust/0.3.0/kafrust/)
+- [`kafrust-protocol`](https://docs.rs/kafrust-protocol/0.3.0/kafrust_protocol/)
 
 ## Documentation
 
