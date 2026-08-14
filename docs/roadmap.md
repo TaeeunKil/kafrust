@@ -94,6 +94,13 @@ coverage toward a release candidate that can be qualified in staging.
   `rust-rdkafka 0.39.0` measured 84,235.49 producer and 220,147.27 consumer
   records/s. This closes the repeatability evidence slice, but does not close
   feature parity, production SLO, or replacement qualification.
+- The same comparison passed from a fresh crates.io project resolving
+  published `kafrust 0.2.30` in
+  [`31768138519`](https://github.com/TaeeunKil/kafrust/actions/runs/31768138519).
+  The published artifact measured 51,834.49 producer and 233,242 consumer
+  records/s; `rust-rdkafka 0.39.0` measured 87,752.37 producer and 176,675.91
+  consumer records/s. This closes the published-artifact comparison slice but
+  remains one workload baseline, not feature parity or production SLO evidence.
 - Delayed KIP-848 assignment expiry now returns the typed
   `Error::ConsumerGroupAssignmentTimeout { timeout_ms }` variant instead of
   an `Unsupported` string, allowing callers to distinguish a rebalance
