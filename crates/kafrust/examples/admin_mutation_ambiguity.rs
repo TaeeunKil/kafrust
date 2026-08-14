@@ -369,7 +369,7 @@ async fn qualify_create_delegation_token(admin: &AdminClient) -> kafrust::Result
     wait_for_new_delegation_token(
         admin,
         &before_ids,
-        DelegationTokenPrincipal::new("User", "ANONYMOUS"),
+        DelegationTokenPrincipal::new("User", "admin"),
     )
     .await
 }
