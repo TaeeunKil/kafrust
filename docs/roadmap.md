@@ -201,6 +201,14 @@ coverage toward a release candidate that can be qualified in staging.
   [`31772731963`](https://github.com/TaeeunKil/kafrust/actions/runs/31772731963).
   SCRAM, delegation-token, reassignment, offset, and other mutation families
   remain separate operation-specific gates.
+- AlterUserScramCredentials is now qualified with a deterministic SCRAM-SHA-256
+  test credential. The response was dropped and the mechanism plus iteration
+  count were reconciled through DescribeUserScramCredentials on Kafka 3.7.2 in
+  [`31772992221`](https://github.com/TaeeunKil/kafrust/actions/runs/31772992221)
+  and Kafka 4.3.1 in
+  [`31772992381`](https://github.com/TaeeunKil/kafrust/actions/runs/31772992381).
+  Delegation-token, reassignment, offset, and other mutation families remain
+  separate operation-specific gates.
 - Published `0.2.30` passed four multi-member group rebalance profiles:
   Kafka 3.7.2 classic in [`31770201899`](https://github.com/TaeeunKil/kafrust/actions/runs/31770201899),
   Kafka 4.3.1 KIP-848 in [`31770201823`](https://github.com/TaeeunKil/kafrust/actions/runs/31770201823),

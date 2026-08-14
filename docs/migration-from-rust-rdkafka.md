@@ -414,6 +414,13 @@ reconciliation in
 and [`31772731963`](https://github.com/TaeeunKil/kafrust/actions/runs/31772731963).
 The quota gate verifies one user quota only; repeat it with the target
 principal, quota keys, and broker policy before migration.
+AlterUserScramCredentials response loss passed with
+DescribeUserScramCredentials reconciliation in
+[`31772992221`](https://github.com/TaeeunKil/kafrust/actions/runs/31772992221)
+and [`31772992381`](https://github.com/TaeeunKil/kafrust/actions/runs/31772992381).
+The gate used a deterministic test credential and verifies its mechanism and
+iteration count; repeat credential policy, authentication, and authorization
+checks for the production migration.
 
 ## Capability Gate
 

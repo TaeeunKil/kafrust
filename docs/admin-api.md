@@ -83,6 +83,15 @@ and Kafka 4.3.1 in
 [`31772731963`](https://github.com/TaeeunKil/kafrust/actions/runs/31772731963).
 This is an operation-specific proof; target quota policy and authorization
 must still be qualified for production.
+The same gate qualifies `AlterUserScramCredentials`: it created a deterministic
+SCRAM-SHA-256 credential for a test user, dropped the response, and confirmed
+the mechanism and iteration count through `DescribeUserScramCredentials` on
+Kafka 3.7.2 in
+[`31772992221`](https://github.com/TaeeunKil/kafrust/actions/runs/31772992221)
+and Kafka 4.3.1 in
+[`31772992381`](https://github.com/TaeeunKil/kafrust/actions/runs/31772992381).
+This proves the mutation/reconciliation boundary only; credential policy and
+authenticated production administration remain target-specific.
 
 ## Inspect Cluster and Topics
 

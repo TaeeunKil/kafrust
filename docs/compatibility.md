@@ -187,6 +187,14 @@ and Kafka 4.3.1 in
 [`31772731963`](https://github.com/TaeeunKil/kafrust/actions/runs/31772731963).
 This remains an operation-specific proof and does not establish target quota
 policy or authorization parity.
+The current-source gate also qualifies AlterUserScramCredentials by creating
+an SCRAM-SHA-256 credential, dropping the response, and confirming the
+credential through DescribeUserScramCredentials on Kafka 3.7.2 in
+[`31772992221`](https://github.com/TaeeunKil/kafrust/actions/runs/31772992221)
+and Kafka 4.3.1 in
+[`31772992381`](https://github.com/TaeeunKil/kafrust/actions/runs/31772992381).
+This is an operation-specific mutation proof, not a complete credential
+policy or authenticated-channel parity claim.
 
 The latest complete matrix in
 [`31624278107`](https://github.com/TaeeunKil/kafrust/actions/runs/31624278107)
