@@ -41,6 +41,15 @@ gate, where the stopped broker was both coordinator and partition leader. The
 same matrix also passed the secured Kafka 4.3.1 KIP-848 combined gate over
 SASL_SSL/SCRAM.
 
+The follow-up matrix on commit `0368f68`,
+[`31756119753`](https://github.com/TaeeunKil/kafrust/actions/runs/31756119753),
+passed all 17 jobs after correcting KIP-848 join completion for a member that
+legitimately receives an empty assignment when another member owns the
+available partition. The Kafka 4.3.1 single-node background-heartbeat rejoin
+path now accepts `Some(empty)` as a delivered assignment while still waiting
+for a response when the assignment is `None`. The same run also passed the
+Kafka 4.3.1 multi-broker KIP-848, security, ACL, and failover jobs.
+
 The dedicated ambiguous-EndTxn gate passed in the Kafka 3.7.2 three-broker job
 [`94476744970`](https://github.com/TaeeunKil/kafrust/actions/runs/31708995196/job/94476744970).
 The proxy dropped the first EndTxn response, kafrust reported

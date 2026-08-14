@@ -228,6 +228,11 @@ Known limits:
   explicit commit mode for backward-compatible alpha behavior. The full
   classic and KIP-848 automatic-commit smoke paths passed in
   [`Live Kafka Smoke`, run `31593984640`](https://github.com/TaeeunKil/kafrust/actions/runs/31593984640).
+- KIP-848 join completion now distinguishes a delivered empty assignment from
+  a missing assignment. This matters when a second member joins a group with
+  fewer partitions than members; the live Kafka 4.3.1 background-heartbeat
+  rejoin path passed after this fix in
+  [`Live Kafka Smoke`, run `31756119753`](https://github.com/TaeeunKil/kafrust/actions/runs/31756119753).
 - `Consumer::split_partition_queue` and
   `ConsumerGroup::split_partition_queue` provide bounded per-partition
   delivery through `ConsumerPartitionQueue`. Focused tests cover independent

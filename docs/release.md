@@ -550,6 +550,13 @@ through Admin `DeleteRecords`, `OffsetResetPolicy::Earliest` recovered the group
 and it consumed a post-delete record. This is a current-main compatibility gate,
 not a change to the published `0.2.27` artifacts.
 
+The current-main matrix on commit `0368f68` passed all 17 jobs in
+[`31756119753`](https://github.com/TaeeunKil/kafrust/actions/runs/31756119753).
+It includes the KIP-848 background-heartbeat rejoin correction for valid empty
+member assignments, plus the existing broker, security, ACL, and multi-broker
+failover profiles. This is a current-main qualification result and does not
+modify the already-published `0.2.28` artifacts.
+
 ## Optional Broker Checks
 
 The default test suite does not require a Kafka broker. Before an alpha tag, run the opt-in examples or tests against a local broker when practical:
