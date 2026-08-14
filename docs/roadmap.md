@@ -22,10 +22,13 @@ against Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1, including plaintext, TLS,
 SASL_PLAINTEXT, SASL_SSL/SCRAM, broker-stop recovery, and KIP-848 failover.
 
 This does not complete the `0.3` or `1.0` replacement goals. Remaining gates
-include published-artifact verification for this change, broader protocol and
-Admin coverage, longer multi-broker and security soak workloads, public API
-stabilization, and compatibility evidence against the remaining declared
-limits.
+include docs.rs/tag qualification, broader protocol and Admin coverage,
+longer multi-broker and security soak workloads, public API stabilization, and
+compatibility evidence against the remaining declared limits.
+
+The published `0.2.30` artifacts were also exercised from fresh external
+projects in the seven-profile `Published Crate Smoke` run
+[`31762679537`](https://github.com/TaeeunKil/kafrust/actions/runs/31762679537).
 
 ## M0 Foundation
 

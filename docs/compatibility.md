@@ -26,6 +26,13 @@ consumed an explicit post-failover record, while the consumer preserved its
 in-memory partition position across assignment rebuilds. This is live evidence
 for the tested paths, not a claim of complete Kafka or `rust-rdkafka` parity.
 
+The published `0.2.30` artifacts passed the seven-profile external
+`Published Crate Smoke` run
+[`31762679537`](https://github.com/TaeeunKil/kafrust/actions/runs/31762679537),
+including Kafka 3.7.2 classic, Kafka 4.3.1 KIP-848, SASL_SSL/SCRAM, and all
+four compression codecs. This confirms representative published-artifact
+behavior; it does not expand the broker or workload compatibility claim.
+
 An EndTxn transport failure where the broker outcome cannot be observed is
 reported as `Error::TransactionOutcomeUnknown`, and the producer becomes
 `TransactionStatus::Defunct`. This is an explicit safety boundary; kafrust

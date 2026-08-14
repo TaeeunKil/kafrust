@@ -632,6 +632,11 @@ modify the already-published `0.2.28` artifacts.
   It covered Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1, classic and KIP-848
   groups, plaintext, TLS, SASL_PLAINTEXT, SASL_SSL/SCRAM, and broker-stop
   recovery paths.
+- The published `kafrust-protocol 0.2.30` and `kafrust 0.2.30` artifacts were
+  resolved from crates.io by fresh external projects. The seven-profile
+  `Published Crate Smoke` run [`31762679537`](https://github.com/TaeeunKil/kafrust/actions/runs/31762679537)
+  passed Kafka 3.7.2 classic, Kafka 4.3.1 KIP-848, SASL_SSL/SCRAM, and
+  Gzip/Snappy/LZ4/Zstd paths, including group commit and restore.
 
 ### Verification
 
@@ -641,6 +646,11 @@ modify the already-published `0.2.28` artifacts.
 - `cargo clippy --workspace --all-targets --all-features -- -D warnings`
 - `cargo doc --workspace --all-features --no-deps`
 - `git diff --check`
+- `cargo package -p kafrust-protocol --allow-dirty` before publication
+- `cargo package -p kafrust` after the matching protocol crate was visible on
+  crates.io
+- Fresh external `cargo check` resolved `kafrust 0.2.30` and
+  `kafrust-protocol 0.2.30` from crates.io
 
 ### Known limits
 
