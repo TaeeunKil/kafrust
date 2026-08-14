@@ -58,6 +58,9 @@ use kafrust_protocol::api::describe_log_dirs::{
 use kafrust_protocol::api::describe_producers::{
     DescribeProducersRequestV0, DescribeProducersResponseV0, DescribeProducersTopicV0,
 };
+use kafrust_protocol::api::describe_quorum::{
+    DescribeQuorumRequest, DescribeQuorumResponse, DescribeQuorumTopic,
+};
 use kafrust_protocol::api::describe_topic_partitions::{
     DescribeTopicPartitionsRequestV0, DescribeTopicPartitionsResponseV0,
     DescribeTopicPartitionsTopicV0,
@@ -615,6 +618,49 @@ impl Client {
         let _header = ResponseHeader::decode_v1(&mut decoder)?;
         Ok(DescribeTopicPartitionsResponseV0::decode_body(
             &mut decoder,
+        )?)
+    }
+
+    /// Sends DescribeQuorum v0 to this broker or controller connection.
+    pub async fn describe_quorum_v0(
+        &mut self,
+        topics: Vec<DescribeQuorumTopic>,
+    ) -> Result<DescribeQuorumResponse> {
+        self.describe_quorum(0, topics).await
+    }
+
+    /// Sends DescribeQuorum v1 to this broker or controller connection.
+    pub async fn describe_quorum_v1(
+        &mut self,
+        topics: Vec<DescribeQuorumTopic>,
+    ) -> Result<DescribeQuorumResponse> {
+        self.describe_quorum(1, topics).await
+    }
+
+    /// Sends DescribeQuorum v2 to this broker or controller connection.
+    pub async fn describe_quorum_v2(
+        &mut self,
+        topics: Vec<DescribeQuorumTopic>,
+    ) -> Result<DescribeQuorumResponse> {
+        self.describe_quorum(2, topics).await
+    }
+
+    async fn describe_quorum(
+        &mut self,
+        api_version: i16,
+        topics: Vec<DescribeQuorumTopic>,
+    ) -> Result<DescribeQuorumResponse> {
+        let request = DescribeQuorumRequest {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            topics,
+        };
+        let response = self.send_request(&request.encode(api_version)?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(DescribeQuorumResponse::decode_body(
+            &mut decoder,
+            api_version,
         )?)
     }
 

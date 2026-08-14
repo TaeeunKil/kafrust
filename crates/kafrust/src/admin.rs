@@ -53,6 +53,7 @@ use kafrust_protocol::api::describe_producers::{
     DescribeProducersActiveProducerV0, DescribeProducersPartitionResponseV0,
     DescribeProducersTopicResponseV0,
 };
+use kafrust_protocol::api::describe_quorum::DescribeQuorumResponse;
 use kafrust_protocol::api::describe_topic_partitions::DescribeTopicPartitionsResponseV0;
 use kafrust_protocol::api::describe_transactions::{
     DescribeTransactionsStateV0, DescribeTransactionsTopicV0,
@@ -329,6 +330,99 @@ impl AdminClient {
                         }
                     }
                     return Ok(DescribeTopicPartitionsResult::from_protocol(response));
+                }
+                Err(error) if retry < self.max_retries && is_retryable_admin_read_error(&error) => {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                }
+                Err(error) => return Err(error),
+            }
+        }
+    }
+
+    /// Describes a Kafka metadata quorum and its replica state.
+    ///
+    /// Kafka 3.7 brokers may advertise an earlier DescribeQuorum response
+    /// version; newer brokers can additionally return replica directory UUIDs,
+    /// error messages, and controller listener endpoints through v2.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.describe_quorum",
+        skip_all,
+        fields(topic_count = topics.len()),
+        err
+    )]
+    pub async fn describe_quorum(
+        &self,
+        topics: &[DescribeQuorumTopic],
+    ) -> Result<DescribeQuorumResult> {
+        let request_topics = topics
+            .iter()
+            .map(
+                |topic| kafrust_protocol::api::describe_quorum::DescribeQuorumTopic {
+                    name: topic.name.clone(),
+                    partition_indexes: topic.partition_indexes.clone(),
+                },
+            )
+            .collect::<Vec<_>>();
+        let mut retry = 0;
+        loop {
+            let mut client = match self.config.clone().connect().await {
+                Ok(client) => client,
+                Err(error) if retry < self.max_retries && is_retryable_admin_read_error(&error) => {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
+            let api_versions = match client
+                .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
+                .await
+            {
+                Ok(api_versions) => api_versions,
+                Err(error) if retry < self.max_retries && is_retryable_admin_read_error(&error) => {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
+            let Some(version) = api_versions.highest_supported_version(55, 2) else {
+                return Err(Error::Unsupported(
+                    "broker does not advertise DescribeQuorum",
+                ));
+            };
+            let response = match version {
+                0 => client.describe_quorum_v0(request_topics.clone()).await,
+                1 => client.describe_quorum_v1(request_topics.clone()).await,
+                _ => client.describe_quorum_v2(request_topics.clone()).await,
+            };
+            match response {
+                Ok(response)
+                    if retry < self.max_retries
+                        && is_retryable_admin_read_code(response.error_code) =>
+                {
+                    self.config.record_broker_error();
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                }
+                Ok(response) => {
+                    if response.error_code != 0 {
+                        self.config.record_broker_error();
+                    }
+                    for topic in &response.topics {
+                        for partition in &topic.partitions {
+                            if partition.error_code != 0 {
+                                self.config.record_broker_error();
+                            }
+                        }
+                    }
+                    return Ok(DescribeQuorumResult::from_protocol(response));
                 }
                 Err(error) if retry < self.max_retries && is_retryable_admin_read_error(&error) => {
                     retry += 1;
@@ -6335,6 +6429,322 @@ impl DescribeTopicPartitionsResult {
     }
 }
 
+/// One topic and partition selection for [`AdminClient::describe_quorum`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DescribeQuorumTopic {
+    name: String,
+    partition_indexes: Vec<i32>,
+}
+
+impl DescribeQuorumTopic {
+    /// Creates a quorum query for one topic with no selected partitions.
+    pub fn new(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            partition_indexes: Vec::new(),
+        }
+    }
+
+    /// Adds a partition index to this topic query.
+    pub fn partition(mut self, partition_index: i32) -> Self {
+        self.partition_indexes.push(partition_index);
+        self
+    }
+
+    /// Returns the topic name.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Returns the selected partition indexes.
+    pub fn partition_indexes(&self) -> &[i32] {
+        &self.partition_indexes
+    }
+}
+
+/// Replica state returned by DescribeQuorum.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DescribeQuorumReplicaState {
+    replica_id: i32,
+    replica_directory_id: Option<[u8; 16]>,
+    log_end_offset: i64,
+    last_fetch_timestamp: Option<i64>,
+    last_caught_up_timestamp: Option<i64>,
+}
+
+impl DescribeQuorumReplicaState {
+    /// Returns the replica broker ID.
+    pub fn replica_id(&self) -> i32 {
+        self.replica_id
+    }
+
+    /// Returns the replica directory UUID when supplied by v2.
+    pub fn replica_directory_id(&self) -> Option<[u8; 16]> {
+        self.replica_directory_id
+    }
+
+    /// Returns the replica's last known log end offset.
+    pub fn log_end_offset(&self) -> i64 {
+        self.log_end_offset
+    }
+
+    /// Returns the last fetch timestamp for v1 and newer responses.
+    pub fn last_fetch_timestamp(&self) -> Option<i64> {
+        self.last_fetch_timestamp
+    }
+
+    /// Returns the last caught-up timestamp for v1 and newer responses.
+    pub fn last_caught_up_timestamp(&self) -> Option<i64> {
+        self.last_caught_up_timestamp
+    }
+}
+
+/// One partition returned by DescribeQuorum.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DescribeQuorumPartitionResult {
+    partition_index: i32,
+    error_code: i16,
+    error_message: Option<String>,
+    leader_id: i32,
+    leader_epoch: i32,
+    high_watermark: i64,
+    current_voters: Vec<DescribeQuorumReplicaState>,
+    observers: Vec<DescribeQuorumReplicaState>,
+}
+
+impl DescribeQuorumPartitionResult {
+    /// Returns the partition index.
+    pub fn partition_index(&self) -> i32 {
+        self.partition_index
+    }
+
+    /// Returns the partition error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns the broker error message, when supplied.
+    pub fn error_message(&self) -> Option<&str> {
+        self.error_message.as_deref()
+    }
+
+    /// Returns kafrust's classification for a partition error.
+    pub fn broker_error_kind(&self) -> Option<BrokerErrorKind> {
+        (self.error_code != 0).then(|| BrokerErrorKind::from_code(self.error_code))
+    }
+
+    /// Returns the current quorum leader ID.
+    pub fn leader_id(&self) -> i32 {
+        self.leader_id
+    }
+
+    /// Returns the current quorum leader epoch.
+    pub fn leader_epoch(&self) -> i32 {
+        self.leader_epoch
+    }
+
+    /// Returns the partition high watermark.
+    pub fn high_watermark(&self) -> i64 {
+        self.high_watermark
+    }
+
+    /// Returns current voter replica state.
+    pub fn current_voters(&self) -> &[DescribeQuorumReplicaState] {
+        &self.current_voters
+    }
+
+    /// Returns observer replica state.
+    pub fn observers(&self) -> &[DescribeQuorumReplicaState] {
+        &self.observers
+    }
+
+    /// Returns whether Kafka reported no partition error.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+    }
+}
+
+/// One topic returned by DescribeQuorum.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DescribeQuorumTopicResult {
+    name: String,
+    partitions: Vec<DescribeQuorumPartitionResult>,
+}
+
+impl DescribeQuorumTopicResult {
+    /// Returns the topic name.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Returns partition quorum state.
+    pub fn partitions(&self) -> &[DescribeQuorumPartitionResult] {
+        &self.partitions
+    }
+}
+
+/// One listener endpoint returned by DescribeQuorum v2.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DescribeQuorumListener {
+    name: String,
+    host: String,
+    port: u16,
+}
+
+impl DescribeQuorumListener {
+    /// Returns the listener name.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Returns the listener host.
+    pub fn host(&self) -> &str {
+        &self.host
+    }
+
+    /// Returns the listener port.
+    pub fn port(&self) -> u16 {
+        self.port
+    }
+}
+
+/// One controller node returned by DescribeQuorum v2.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DescribeQuorumNode {
+    node_id: i32,
+    listeners: Vec<DescribeQuorumListener>,
+}
+
+impl DescribeQuorumNode {
+    /// Returns the controller node ID.
+    pub fn node_id(&self) -> i32 {
+        self.node_id
+    }
+
+    /// Returns advertised controller listeners.
+    pub fn listeners(&self) -> &[DescribeQuorumListener] {
+        &self.listeners
+    }
+}
+
+/// Result returned by [`AdminClient::describe_quorum`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DescribeQuorumResult {
+    api_version: i16,
+    error_code: i16,
+    error_message: Option<String>,
+    topics: Vec<DescribeQuorumTopicResult>,
+    nodes: Vec<DescribeQuorumNode>,
+}
+
+impl DescribeQuorumResult {
+    /// Returns the negotiated DescribeQuorum version.
+    pub fn api_version(&self) -> i16 {
+        self.api_version
+    }
+
+    /// Returns the top-level Kafka error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns the top-level broker error message, when supplied.
+    pub fn error_message(&self) -> Option<&str> {
+        self.error_message.as_deref()
+    }
+
+    /// Returns kafrust's classification for a top-level error.
+    pub fn broker_error_kind(&self) -> Option<BrokerErrorKind> {
+        (self.error_code != 0).then(|| BrokerErrorKind::from_code(self.error_code))
+    }
+
+    /// Returns topic quorum results.
+    pub fn topics(&self) -> &[DescribeQuorumTopicResult] {
+        &self.topics
+    }
+
+    /// Returns controller node endpoints included by v2.
+    pub fn nodes(&self) -> &[DescribeQuorumNode] {
+        &self.nodes
+    }
+
+    /// Returns whether all top-level and partition errors are zero.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+            && self.topics.iter().all(|topic| {
+                topic
+                    .partitions
+                    .iter()
+                    .all(DescribeQuorumPartitionResult::is_success)
+            })
+    }
+
+    fn from_protocol(response: DescribeQuorumResponse) -> Self {
+        Self {
+            api_version: response.api_version,
+            error_code: response.error_code,
+            error_message: response.error_message,
+            topics: response
+                .topics
+                .into_iter()
+                .map(|topic| DescribeQuorumTopicResult {
+                    name: topic.name,
+                    partitions: topic
+                        .partitions
+                        .into_iter()
+                        .map(|partition| DescribeQuorumPartitionResult {
+                            partition_index: partition.partition_index,
+                            error_code: partition.error_code,
+                            error_message: partition.error_message,
+                            leader_id: partition.leader_id,
+                            leader_epoch: partition.leader_epoch,
+                            high_watermark: partition.high_watermark,
+                            current_voters: partition
+                                .current_voters
+                                .into_iter()
+                                .map(|replica| DescribeQuorumReplicaState {
+                                    replica_id: replica.replica_id,
+                                    replica_directory_id: replica.replica_directory_id,
+                                    log_end_offset: replica.log_end_offset,
+                                    last_fetch_timestamp: replica.last_fetch_timestamp,
+                                    last_caught_up_timestamp: replica.last_caught_up_timestamp,
+                                })
+                                .collect(),
+                            observers: partition
+                                .observers
+                                .into_iter()
+                                .map(|replica| DescribeQuorumReplicaState {
+                                    replica_id: replica.replica_id,
+                                    replica_directory_id: replica.replica_directory_id,
+                                    log_end_offset: replica.log_end_offset,
+                                    last_fetch_timestamp: replica.last_fetch_timestamp,
+                                    last_caught_up_timestamp: replica.last_caught_up_timestamp,
+                                })
+                                .collect(),
+                        })
+                        .collect(),
+                })
+                .collect(),
+            nodes: response
+                .nodes
+                .into_iter()
+                .map(|node| DescribeQuorumNode {
+                    node_id: node.node_id,
+                    listeners: node
+                        .listeners
+                        .into_iter()
+                        .map(|listener| DescribeQuorumListener {
+                            name: listener.name,
+                            host: listener.host,
+                            port: listener.port,
+                        })
+                        .collect(),
+                })
+                .collect(),
+        }
+    }
+}
+
 /// One Kafka topic whose configuration should be described.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TopicConfigResource {
@@ -9286,12 +9696,12 @@ mod tests {
         ConsumerGroupOffset, ConsumerGroupOffsetDelete, ConsumerGroupOffsetQuery,
         CreateDelegationTokenOptions, CreatePartitionsOptions, CreateTopicsOptions,
         DelegationTokenPrincipal, DeleteRecordsOptions, DeleteRecordsTopic, DeleteTopicsOptions,
-        DescribeConfigsOptions, DescribeProducersTopic, DescribeTopicPartitionsCursor,
-        DescribeTopicPartitionsOptions, ElectLeadersOptions, ElectionType, LeaderElection,
-        ListTransactionsOptions, LogDirTopic, NewPartitions, NewTopic, PartitionReassignment,
-        PartitionReassignmentOptions, PartitionReassignmentQuery, ReplicaLogDirAssignment,
-        ScramCredentialDeletion, ScramCredentialMechanism, ScramCredentialUpsertion,
-        TopicConfigAlteration, TopicConfigResource, TopicConfigUpdate,
+        DescribeConfigsOptions, DescribeProducersTopic, DescribeQuorumTopic,
+        DescribeTopicPartitionsCursor, DescribeTopicPartitionsOptions, ElectLeadersOptions,
+        ElectionType, LeaderElection, ListTransactionsOptions, LogDirTopic, NewPartitions,
+        NewTopic, PartitionReassignment, PartitionReassignmentOptions, PartitionReassignmentQuery,
+        ReplicaLogDirAssignment, ScramCredentialDeletion, ScramCredentialMechanism,
+        ScramCredentialUpsertion, TopicConfigAlteration, TopicConfigResource, TopicConfigUpdate,
     };
     use crate::{BrokerErrorKind, Client, ClientConfig, ClientMetrics, Error};
     use kafrust_protocol::codec::DecodeLimits;
@@ -9818,6 +10228,46 @@ mod tests {
         assert!(
             matches!(error, Error::Unsupported(message) if message.contains("DescribeTopicPartitions"))
         );
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn describes_quorum_with_v2_replica_state_and_nodes() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut connection, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut connection).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut connection, &api_versions_with_describe_quorum(2)).await;
+
+            let describe_request = read_frame(&mut connection).await;
+            assert_eq!(&describe_request[0..4], &[0, 55, 0, 2]);
+            assert!(describe_request
+                .windows("__cluster_metadata".len())
+                .any(|bytes| bytes == b"__cluster_metadata"));
+            write_frame(&mut connection, &describe_quorum_v2_response()).await;
+        });
+        let admin = AdminClient::new(ClientConfig::new([addr.to_string()]));
+
+        let result = admin
+            .describe_quorum(&[DescribeQuorumTopic::new("__cluster_metadata").partition(0)])
+            .await
+            .unwrap();
+
+        assert_eq!(result.api_version(), 2);
+        assert!(result.is_success());
+        assert_eq!(result.topics().len(), 1);
+        let partition = &result.topics()[0].partitions()[0];
+        assert_eq!(partition.leader_id(), 1);
+        assert_eq!(partition.high_watermark(), 42);
+        assert_eq!(partition.current_voters()[0].replica_id(), 1);
+        assert_eq!(
+            partition.current_voters()[0].replica_directory_id(),
+            Some([8; 16])
+        );
+        assert_eq!(result.nodes()[0].node_id(), 1);
+        assert_eq!(result.nodes()[0].listeners()[0].port(), 9093);
         server.await.unwrap();
     }
 
@@ -12772,6 +13222,71 @@ mod tests {
                 encoder.write_i8(1);
                 encoder.write_compact_string("orders")?;
                 encoder.write_i32(1);
+                encoder.write_empty_tagged_fields();
+                Ok(())
+            })
+            .unwrap();
+        encoder.write_empty_tagged_fields();
+        encoder.into_bytes()
+    }
+
+    fn api_versions_with_describe_quorum(max_version: i16) -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_i16(0); // success
+        encoder.write_unsigned_varint(2); // one API key
+        encoder.write_i16(55);
+        encoder.write_i16(0);
+        encoder.write_i16(max_version);
+        encoder.write_empty_tagged_fields();
+        encoder.write_i32(0); // throttle time
+        encoder.write_empty_tagged_fields();
+        encoder.into_bytes()
+    }
+
+    fn describe_quorum_v2_response() -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_empty_tagged_fields(); // response header tags
+        encoder.write_i16(0); // top-level error
+        encoder.write_compact_nullable_string(None).unwrap();
+        encoder
+            .write_compact_array(Some(&[()]), |encoder, ()| {
+                encoder.write_compact_string("__cluster_metadata")?;
+                encoder.write_compact_array(Some(&[()]), |encoder, ()| {
+                    encoder.write_i32(0);
+                    encoder.write_i16(0);
+                    encoder.write_compact_nullable_string(None)?;
+                    encoder.write_i32(1);
+                    encoder.write_i32(4);
+                    encoder.write_i64(42);
+                    encoder.write_compact_array(Some(&[()]), |encoder, ()| {
+                        encoder.write_i32(1);
+                        encoder.write_uuid(&[8; 16]);
+                        encoder.write_i64(42);
+                        encoder.write_i64(100);
+                        encoder.write_i64(101);
+                        encoder.write_empty_tagged_fields();
+                        Ok(())
+                    })?;
+                    encoder.write_compact_array(Some(&[]), |_, ()| Ok(()))?;
+                    encoder.write_empty_tagged_fields();
+                    Ok(())
+                })?;
+                encoder.write_empty_tagged_fields();
+                Ok(())
+            })
+            .unwrap();
+        encoder
+            .write_compact_array(Some(&[()]), |encoder, ()| {
+                encoder.write_i32(1);
+                encoder.write_compact_array(Some(&[()]), |encoder, ()| {
+                    encoder.write_compact_string("CONTROLLER")?;
+                    encoder.write_compact_string("127.0.0.1")?;
+                    encoder.write_i16(9093);
+                    encoder.write_empty_tagged_fields();
+                    Ok(())
+                })?;
                 encoder.write_empty_tagged_fields();
                 Ok(())
             })

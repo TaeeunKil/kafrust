@@ -21,6 +21,7 @@ pub mod describe_configs;
 pub mod describe_groups;
 pub mod describe_log_dirs;
 pub mod describe_producers;
+pub mod describe_quorum;
 pub mod describe_topic_partitions;
 pub mod describe_transactions;
 pub mod describe_user_scram_credentials;
