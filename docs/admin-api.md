@@ -112,6 +112,15 @@ and Kafka 4.3.1 in
 The client does not replay the transmitted mutation. This remains an
 operation-specific proof; OffsetDelete, DeleteGroups, member-aware workloads,
 and target authorization are separate gates.
+The same gate qualifies `OffsetDelete` v0 after first establishing a committed
+offset. It loses the delete response, returns `AdminMutationOutcomeUnknown`,
+and confirms the partition no longer has a committed offset through
+`OffsetFetch` on Kafka 3.7.2 in
+[`31774990676`](https://github.com/TaeeunKil/kafrust/actions/runs/31774990676)
+and Kafka 4.3.1 in
+[`31774990554`](https://github.com/TaeeunKil/kafrust/actions/runs/31774990554).
+This is still an operation-specific proof; DeleteGroups, member-aware
+workloads, and target authorization remain separate gates.
 
 ## Inspect Cluster and Topics
 
