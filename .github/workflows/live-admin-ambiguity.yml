@@ -18,6 +18,7 @@ on:
         type: choice
         options:
           - "create_topics"
+          - "create_partitions"
           - "delete_topics"
 
 env:
@@ -83,6 +84,7 @@ jobs:
           rm -f /tmp/kafrust-admin-ambiguity-dropped
           case "${{ inputs.mutation }}" in
             create_topics) drop_api_key=19 ;;
+            create_partitions) drop_api_key=37 ;;
             delete_topics) drop_api_key=20 ;;
             *) echo "unsupported mutation: ${{ inputs.mutation }}"; exit 1 ;;
           esac
