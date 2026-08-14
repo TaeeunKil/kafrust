@@ -4310,18 +4310,24 @@ async fn run_background_heartbeat(
                     "sending background kafka consumer group heartbeat"
                 );
                 let response = if let Some(group_instance_id) = &group_instance_id {
-                    coordinator
-                        .heartbeat_v3(
+                    tokio::select! {
+                        _ = &mut shutdown => return Ok(()),
+                        response = coordinator.heartbeat_v3(
                             group_id.clone(),
                             generation_id,
                             member_id.clone(),
                             Some(group_instance_id.clone()),
-                        )
-                        .await?
+                        ) => response?,
+                    }
                 } else {
-                    coordinator
-                        .heartbeat_v2(group_id.clone(), generation_id, member_id.clone())
-                        .await?
+                    tokio::select! {
+                        _ = &mut shutdown => return Ok(()),
+                        response = coordinator.heartbeat_v2(
+                            group_id.clone(),
+                            generation_id,
+                            member_id.clone(),
+                        ) => response?,
+                    }
                 };
                 if response.error_code != 0 {
                     return Err(coordinator.broker_error(
@@ -4367,8 +4373,9 @@ async fn run_background_consumer_heartbeat(
             member_epoch,
             "sending background KIP-848 consumer group heartbeat"
         );
-        let response = coordinator
-            .consumer_group_heartbeat_v0(
+        let response = tokio::select! {
+            _ = &mut shutdown => return Ok(()),
+            response = coordinator.consumer_group_heartbeat_v0(
                 group_id.clone(),
                 member_id,
                 member_epoch,
@@ -4378,8 +4385,8 @@ async fn run_background_consumer_heartbeat(
                 Some(config.topics.clone()),
                 config.server_assignor.clone(),
                 owned_partitions,
-            )
-            .await?;
+            ) => response?,
+        };
         if response.error_code != 0 {
             let message = response
                 .error_message
@@ -4631,11 +4638,13 @@ mod tests {
         offset_commit_topics_v7, offset_commit_topics_v9, offset_fetch_topics,
         pending_commit_assignments, queue_commit_offset, range_assignments,
         record_consumer_heartbeat_response, round_robin_assignments,
+        run_background_consumer_heartbeat, run_background_heartbeat,
         should_rejoin_after_background_heartbeat, should_rejoin_group, should_retry_commit_worker,
         should_retry_consumer_join_transport, sticky_assignments, validate_commit_worker_interval,
         validate_heartbeat_interval, CommitWorkerLink, CommitWorkerMembership, CommitWorkerState,
         ConsumerGroupAssignmentStrategy, ConsumerGroupConfig, ConsumerGroupHeartbeat,
         ConsumerGroupHeartbeatTopicPartitions, ConsumerGroupProtocol,
+        ConsumerProtocolHeartbeatConfig,
         ConsumerProtocolHeartbeatState as ConsumerGroupHeartbeatState, HeartbeatHandleState,
         IsolationLevel, OffsetResetPolicy, RebalanceEvent, RebalancePhase, SecurityProtocol,
         DEFAULT_GROUP_MAX_RETRIES, GROUP_JOIN_MAX_RETRY_BACKOFF,
@@ -4666,7 +4675,8 @@ mod tests {
     };
     use std::sync::atomic::AtomicBool;
     use std::sync::Arc;
-    use tokio::sync::{mpsc, Notify};
+    use tokio::io::AsyncReadExt;
+    use tokio::sync::{mpsc, oneshot, Notify};
 
     #[test]
     fn builds_consumer_group_config() {
@@ -5921,6 +5931,103 @@ mod tests {
         assert_eq!(state.member_epoch, 6);
         assert_eq!(state.owned_partitions, Some(updated_assignment));
         assert_eq!(state.assignment_version, 1);
+    }
+
+    #[tokio::test]
+    async fn classic_heartbeat_shutdown_cancels_inflight_request() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(1024);
+        let (request_seen, request_seen_rx) = oneshot::channel();
+        let broker = tokio::spawn(async move {
+            read_heartbeat_request(&mut broker_stream).await;
+            request_seen.send(()).unwrap();
+            std::future::pending::<()>().await;
+        });
+        let mut client = crate::client::Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-heartbeat-shutdown-test".to_owned()),
+            Some(Duration::from_secs(30)),
+        );
+        let (shutdown, shutdown_rx) = oneshot::channel();
+        let task = tokio::spawn(async move {
+            run_background_heartbeat(
+                &mut client,
+                "orders-group".to_owned(),
+                1,
+                "member-a".to_owned(),
+                None,
+                Duration::from_millis(1),
+                shutdown_rx,
+            )
+            .await
+        });
+
+        request_seen_rx.await.unwrap();
+        shutdown.send(()).unwrap();
+        let result = tokio::time::timeout(Duration::from_millis(100), task)
+            .await
+            .unwrap()
+            .unwrap();
+        result.unwrap();
+        broker.abort();
+        let _ = broker.await;
+    }
+
+    #[tokio::test]
+    async fn kip_848_heartbeat_shutdown_cancels_inflight_request() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(1024);
+        let (request_seen, request_seen_rx) = oneshot::channel();
+        let broker = tokio::spawn(async move {
+            read_heartbeat_request(&mut broker_stream).await;
+            request_seen.send(()).unwrap();
+            std::future::pending::<()>().await;
+        });
+        let mut client = crate::client::Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-kip848-heartbeat-shutdown-test".to_owned()),
+            Some(Duration::from_secs(30)),
+        );
+        let state = Arc::new(tokio::sync::Mutex::new(ConsumerGroupHeartbeatState {
+            member_id: "member-a".to_owned(),
+            member_epoch: 1,
+            owned_partitions: None,
+            assignment_version: 0,
+            heartbeat_interval: Duration::from_millis(1),
+        }));
+        let config = ConsumerProtocolHeartbeatConfig {
+            group_instance_id: None,
+            topics: vec!["orders".to_owned()],
+            server_assignor: None,
+            rebalance_timeout_ms: 1_000,
+        };
+        let (shutdown, shutdown_rx) = oneshot::channel();
+        let task = tokio::spawn(async move {
+            run_background_consumer_heartbeat(
+                &mut client,
+                "orders-group".to_owned(),
+                state,
+                config,
+                shutdown_rx,
+            )
+            .await
+        });
+
+        request_seen_rx.await.unwrap();
+        shutdown.send(()).unwrap();
+        let result = tokio::time::timeout(Duration::from_millis(100), task)
+            .await
+            .unwrap()
+            .unwrap();
+        result.unwrap();
+        broker.abort();
+        let _ = broker.await;
+    }
+
+    async fn read_heartbeat_request(stream: &mut tokio::io::DuplexStream) {
+        let mut size = [0u8; 4];
+        stream.read_exact(&mut size).await.unwrap();
+        let size = usize::try_from(i32::from_be_bytes(size)).unwrap();
+        let mut request = vec![0u8; size];
+        stream.read_exact(&mut request).await.unwrap();
     }
 
     #[tokio::test]

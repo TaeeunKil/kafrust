@@ -23,6 +23,12 @@ group.commit_offsets().await?;
 heartbeat.stop().await?;
 ```
 
+`ConsumerGroupHeartbeat::stop` sends cancellation to the background task and
+waits for it to finish. Cancellation also interrupts an in-flight heartbeat
+request, so shutdown does not wait for the broker request timeout when the
+broker has stopped responding. Dropping the handle requests the same shutdown
+and aborts the task as a final cleanup fallback.
+
 Offset fetches and commits are coordinator-scoped Kafka requests. The lower-level `Client` methods remain available for protocol-focused experiments, but the alpha user path is `ConsumerGroupConfig`.
 
 ## Regex Topic Subscription
