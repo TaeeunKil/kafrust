@@ -708,6 +708,9 @@ modify the already-published `0.2.28` artifacts.
 - Current-source IncrementalAlterConfigs response-drop qualification passed on
   Kafka 3.7.2 and 4.3.1 in [`31771864914`](https://github.com/TaeeunKil/kafrust/actions/runs/31771864914)
   and [`31771865024`](https://github.com/TaeeunKil/kafrust/actions/runs/31771865024).
+- Current-source AlterConfigs response-drop qualification passed on Kafka
+  3.7.2 and 4.3.1 in [`31772009182`](https://github.com/TaeeunKil/kafrust/actions/runs/31772009182)
+  and [`31772008771`](https://github.com/TaeeunKil/kafrust/actions/runs/31772008771).
 - Published `0.2.30` Admin and recovery evidence passed in
   [`31770173365`](https://github.com/TaeeunKil/kafrust/actions/runs/31770173365),
   [`31770173277`](https://github.com/TaeeunKil/kafrust/actions/runs/31770173277),

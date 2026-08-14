@@ -395,6 +395,10 @@ IncrementalAlterConfigs passed in
 [`31771864914`](https://github.com/TaeeunKil/kafrust/actions/runs/31771864914)
 and [`31771865024`](https://github.com/TaeeunKil/kafrust/actions/runs/31771865024),
 with reconciliation through DescribeConfigs.
+Classic AlterConfigs passed in
+[`31772009182`](https://github.com/TaeeunKil/kafrust/actions/runs/31772009182)
+and [`31772008771`](https://github.com/TaeeunKil/kafrust/actions/runs/31772008771),
+also with DescribeConfigs reconciliation.
 
 ## Capability Gate
 

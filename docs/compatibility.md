@@ -165,6 +165,10 @@ DescribeConfigs on Kafka 3.7.2 in
 [`31771864914`](https://github.com/TaeeunKil/kafrust/actions/runs/31771864914)
 and Kafka 4.3.1 in
 [`31771865024`](https://github.com/TaeeunKil/kafrust/actions/runs/31771865024).
+Classic AlterConfigs is likewise qualified by replacing `retention.ms`,
+dropping the response, and confirming the setting with DescribeConfigs on
+Kafka 3.7.2 in [`31772009182`](https://github.com/TaeeunKil/kafrust/actions/runs/31772009182)
+and Kafka 4.3.1 in [`31772008771`](https://github.com/TaeeunKil/kafrust/actions/runs/31772008771).
 
 The latest complete matrix in
 [`31624278107`](https://github.com/TaeeunKil/kafrust/actions/runs/31624278107)
