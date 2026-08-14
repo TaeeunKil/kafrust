@@ -101,6 +101,17 @@ coverage toward a release candidate that can be qualified in staging.
   records/s; `rust-rdkafka 0.39.0` measured 87,752.37 producer and 176,675.91
   consumer records/s. This closes the published-artifact comparison slice but
   remains one workload baseline, not feature parity or production SLO evidence.
+- Published `0.2.30` then passed a 300-second single-node broker-restart soak
+  in [`31768319413`](https://github.com/TaeeunKil/kafrust/actions/runs/31768319413),
+  processing 21,597,600 records with 180 operation errors, 954 failed
+  requests, and 1,243 retries before recovery completed with zero in-flight or
+  buffered records.
+- The same published artifact passed a 120-second three-broker plaintext soak
+  in [`31768320764`](https://github.com/TaeeunKil/kafrust/actions/runs/31768320764),
+  processing 4,404,900 records across three replicated partitions with 1
+  operation error, 21 failed requests, and 1,021 retries before recovery
+  completed with zero in-flight or buffered records. Secured soak, simultaneous
+  loss, production SLO, and service-canary evidence remain separate gates.
 - Delayed KIP-848 assignment expiry now returns the typed
   `Error::ConsumerGroupAssignmentTimeout { timeout_ms }` variant instead of
   an `Unsupported` string, allowing callers to distinguish a rebalance
