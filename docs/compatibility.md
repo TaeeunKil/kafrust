@@ -16,6 +16,16 @@ recovering through different coordinators, in
 
 ## Current Compatibility Claim
 
+The complete current-main `Live Kafka Smoke` matrix passed on commit
+`bec93cf` in
+[`31761642197`](https://github.com/TaeeunKil/kafrust/actions/runs/31761642197).
+It verified classic and KIP-848 consumer-group failover after a partition
+leader stop across Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1, including plaintext,
+SASL_PLAINTEXT, and SASL_SSL/SCRAM paths. The KIP-848 checks produced and
+consumed an explicit post-failover record, while the consumer preserved its
+in-memory partition position across assignment rebuilds. This is live evidence
+for the tested paths, not a claim of complete Kafka or `rust-rdkafka` parity.
+
 An EndTxn transport failure where the broker outcome cannot be observed is
 reported as `Error::TransactionOutcomeUnknown`, and the producer becomes
 `TransactionStatus::Defunct`. This is an explicit safety boundary; kafrust

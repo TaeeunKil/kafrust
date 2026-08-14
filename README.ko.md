@@ -14,7 +14,7 @@ kafrust는 `librdkafka` 래핑 없이 Kafka 프로토콜 호환성이 필요한 
 server, client ID, topic, partition, offset, acknowledgement, metadata refresh,
 consumer group, heartbeat, commit 같은 Kafka 개념을 그대로 드러냅니다.
 
-현재 릴리즈: `0.2.29`.
+현재 릴리즈: `0.2.30`.
 
 지금 kafrust는 실험, 로컬 브로커 확인, 단순 내부 도구, API 평가에 적합합니다.
 넓은 범위의 성숙한 production Kafka 기능이 즉시 필요하다면 Rust에서는 여전히
@@ -269,8 +269,8 @@ kafrust의 호환성 주장은 실제 broker로 검증된 동작으로 제한합
 
 생성된 API 문서:
 
-- [`kafrust`](https://docs.rs/kafrust/0.2.29/kafrust/)
-- [`kafrust-protocol`](https://docs.rs/kafrust-protocol/0.2.29/kafrust_protocol/)
+- [`kafrust`](https://docs.rs/kafrust/0.2.30/kafrust/)
+- [`kafrust-protocol`](https://docs.rs/kafrust-protocol/0.2.30/kafrust_protocol/)
 
 ## 문서
 

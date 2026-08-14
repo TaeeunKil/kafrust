@@ -12,6 +12,21 @@ Status legend:
 - In progress: useful slices exist, but exit criteria are not fully met.
 - Planned: not started.
 
+## Current Release Qualification
+
+`0.2.30` includes consumer-group assignment-state preservation across classic
+and KIP-848 rejoin paths. The regression test and full local Rust validation
+passed, and the complete 17-job live matrix passed in
+[`31761642197`](https://github.com/TaeeunKil/kafrust/actions/runs/31761642197)
+against Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1, including plaintext, TLS,
+SASL_PLAINTEXT, SASL_SSL/SCRAM, broker-stop recovery, and KIP-848 failover.
+
+This does not complete the `0.3` or `1.0` replacement goals. Remaining gates
+include published-artifact verification for this change, broader protocol and
+Admin coverage, longer multi-broker and security soak workloads, public API
+stabilization, and compatibility evidence against the remaining declared
+limits.
+
 ## M0 Foundation
 
 Status: Done.

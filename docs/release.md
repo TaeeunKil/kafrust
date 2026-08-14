@@ -603,6 +603,52 @@ modify the already-published `0.2.28` artifacts.
   transaction and KIP-848 failure matrices, ambiguous post-transmission Admin
   mutations, unclean-election/data-loss behavior, and unlisted Kafka APIs.
 
+## Release 0.2.30
+
+### Summary
+
+- Preserve in-memory consumer partition position and leader epoch when a
+  classic or KIP-848 consumer group rebuilds assignments during rejoin.
+- Keep heartbeat-driven assignment replacement consistent with explicit group
+  rejoin behavior, preventing an already-consumed partition from resetting to
+  its committed or configured start offset.
+- Strengthen the live KIP-848 leader-epoch matrix across plaintext,
+  SASL_PLAINTEXT, and SASL_SSL/SCRAM by producing and consuming an explicit
+  post-failover record.
+
+### Breaking changes
+
+- None. The change is internal to consumer-group assignment state handling.
+
+### Migration notes
+
+- None. Existing consumer-group APIs retain their signatures and now preserve
+  the current in-memory position for partitions that remain assigned.
+
+### Compatibility evidence
+
+- The complete 17-job `Live Kafka Smoke` matrix passed on commit `bec93cf` in
+  [`31761642197`](https://github.com/TaeeunKil/kafrust/actions/runs/31761642197).
+  It covered Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1, classic and KIP-848
+  groups, plaintext, TLS, SASL_PLAINTEXT, SASL_SSL/SCRAM, and broker-stop
+  recovery paths.
+
+### Verification
+
+- `cargo fmt --all`
+- `cargo check --workspace --all-targets`
+- `cargo test --workspace --all-features` (324 kafrust tests and 195 protocol tests)
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- `cargo doc --workspace --all-features --no-deps`
+- `git diff --check`
+
+### Known limits
+
+- This is still an alpha release. The compatibility and migration documents
+  retain the explicit limits for production OAuth/OIDC providers, broader
+  transaction and KIP-848 failure matrices, ambiguous post-transmission Admin
+  mutations, unclean-election/data-loss behavior, and unlisted Kafka APIs.
+
 ## Optional Broker Checks
 
 The default test suite does not require a Kafka broker. Before an alpha tag, run the opt-in examples or tests against a local broker when practical:
