@@ -155,7 +155,10 @@ DeleteTopics and confirms deletion through list_topics on Kafka 3.7.2 and
 4.3.1 in [`31771419625`](https://github.com/TaeeunKil/kafrust/actions/runs/31771419625)
 and [`31771419124`](https://github.com/TaeeunKil/kafrust/actions/runs/31771419124).
 These are operation-specific proofs, not a universal claim for every Admin
-mutation.
+mutation. The same current-source gate also qualifies CreatePartitions by
+expanding a topic from one to two partitions before dropping the response, on
+Kafka 3.7.2 in [`31771635710`](https://github.com/TaeeunKil/kafrust/actions/runs/31771635710)
+and Kafka 4.3.1 in [`31771636082`](https://github.com/TaeeunKil/kafrust/actions/runs/31771636082).
 
 The latest complete matrix in
 [`31624278107`](https://github.com/TaeeunKil/kafrust/actions/runs/31624278107)

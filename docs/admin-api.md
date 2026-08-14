@@ -42,7 +42,13 @@ topic was gone. The gate passed on Kafka 3.7.2 in
 and Kafka 4.3.1 in
 [`31771419124`](https://github.com/TaeeunKil/kafrust/actions/runs/31771419124).
 These qualify CreateTopics and DeleteTopics only; they are not a claim that
-every Admin mutation has an identical broker-side failure policy.
+every Admin mutation has an identical broker-side failure policy. The same
+workflow also qualifies `CreatePartitions`: it expanded a real topic from one
+to two partitions, dropped the response, returned the typed ambiguity, and
+reconciled the new partition count on Kafka 3.7.2 in
+[`31771635710`](https://github.com/TaeeunKil/kafrust/actions/runs/31771635710)
+and Kafka 4.3.1 in
+[`31771636082`](https://github.com/TaeeunKil/kafrust/actions/runs/31771636082).
 
 ## Inspect Cluster and Topics
 

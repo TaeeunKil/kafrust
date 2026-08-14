@@ -387,6 +387,10 @@ and [`31770443484`](https://github.com/TaeeunKil/kafrust/actions/runs/3177044348
 DeleteTopics passed in
 [`31771419625`](https://github.com/TaeeunKil/kafrust/actions/runs/31771419625)
 and [`31771419124`](https://github.com/TaeeunKil/kafrust/actions/runs/31771419124).
+CreatePartitions passed in
+[`31771635710`](https://github.com/TaeeunKil/kafrust/actions/runs/31771635710)
+and [`31771636082`](https://github.com/TaeeunKil/kafrust/actions/runs/31771636082),
+with reconciliation through the topic's partition count.
 
 ## Capability Gate
 

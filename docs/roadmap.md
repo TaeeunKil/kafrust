@@ -160,6 +160,15 @@ coverage toward a release candidate that can be qualified in staging.
   This closes the current-source DeleteTopics ambiguity sub-gate; ACL, quota,
   SCRAM, config, reassignment, offset, and other mutation families remain
   operation-specific gates.
+- The same gate now covers CreatePartitions. It expanded a real topic from one
+  to two partitions, dropped the response, observed
+  `Error::AdminMutationOutcomeUnknown { operation: "CreatePartitions" }`, and
+  reconciled the new partition count on Kafka 3.7.2 in
+  [`31771635710`](https://github.com/TaeeunKil/kafrust/actions/runs/31771635710)
+  and Kafka 4.3.1 in
+  [`31771636082`](https://github.com/TaeeunKil/kafrust/actions/runs/31771636082).
+  ACL, quota, SCRAM, config, reassignment, offset, and other mutation families
+  remain operation-specific gates.
 - Published `0.2.30` passed four multi-member group rebalance profiles:
   Kafka 3.7.2 classic in [`31770201899`](https://github.com/TaeeunKil/kafrust/actions/runs/31770201899),
   Kafka 4.3.1 KIP-848 in [`31770201823`](https://github.com/TaeeunKil/kafrust/actions/runs/31770201823),
