@@ -140,6 +140,11 @@ use kafrust_protocol::api::sasl::{
     SaslAuthenticateRequestV1, SaslAuthenticateRequestV2, SaslAuthenticateResponseV1,
     SaslAuthenticateResponseV2, SaslHandshakeRequestV1, SaslHandshakeResponseV1,
 };
+use kafrust_protocol::api::share::{
+    ShareAcknowledgeRequestV1, ShareAcknowledgeResponseV1, ShareAcknowledgeTopicV1,
+    ShareFetchRequestV1, ShareFetchResponseV1, ShareFetchTopicV1, ShareForgottenTopicV1,
+    ShareGroupHeartbeatRequestV1, ShareGroupHeartbeatResponseV1,
+};
 use kafrust_protocol::api::sync_group::{
     SyncGroupAssignment, SyncGroupRequestV2, SyncGroupRequestV3, SyncGroupResponseV2,
 };
@@ -1914,6 +1919,88 @@ impl Client {
         Ok(ConsumerGroupHeartbeatResponseV0::decode_body(&mut decoder)?)
     }
 
+    /// Sends the stable KIP-932 ShareGroupHeartbeat v1 request.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn share_group_heartbeat_v1(
+        &mut self,
+        group_id: impl Into<String>,
+        member_id: impl Into<String>,
+        member_epoch: i32,
+        rack_id: Option<String>,
+        subscribed_topic_names: Option<Vec<String>>,
+    ) -> Result<ShareGroupHeartbeatResponseV1> {
+        let request = ShareGroupHeartbeatRequestV1 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            group_id: group_id.into(),
+            member_id: member_id.into(),
+            member_epoch,
+            rack_id,
+            subscribed_topic_names,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(ShareGroupHeartbeatResponseV1::decode_body(&mut decoder)?)
+    }
+
+    /// Sends the stable KIP-932 ShareFetch v1 request.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn share_fetch_v1(
+        &mut self,
+        group_id: Option<String>,
+        member_id: Option<String>,
+        share_session_epoch: i32,
+        max_wait_ms: i32,
+        min_bytes: i32,
+        max_bytes: i32,
+        max_records: i32,
+        batch_size: i32,
+        topics: Vec<ShareFetchTopicV1>,
+        forgotten_topics: Vec<ShareForgottenTopicV1>,
+    ) -> Result<ShareFetchResponseV1> {
+        let request = ShareFetchRequestV1 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            group_id,
+            member_id,
+            share_session_epoch,
+            max_wait_ms,
+            min_bytes,
+            max_bytes,
+            max_records,
+            batch_size,
+            topics,
+            forgotten_topics,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(ShareFetchResponseV1::decode_body(&mut decoder)?)
+    }
+
+    /// Sends the stable KIP-932 ShareAcknowledge v1 request.
+    pub async fn share_acknowledge_v1(
+        &mut self,
+        group_id: Option<String>,
+        member_id: Option<String>,
+        share_session_epoch: i32,
+        topics: Vec<ShareAcknowledgeTopicV1>,
+    ) -> Result<ShareAcknowledgeResponseV1> {
+        let request = ShareAcknowledgeRequestV1 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            group_id,
+            member_id,
+            share_session_epoch,
+            topics,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(ShareAcknowledgeResponseV1::decode_body(&mut decoder)?)
+    }
+
     /// Sends LeaveGroup v3 for one or more dynamic or static group members.
     pub async fn leave_group_v3(
         &mut self,
@@ -3450,6 +3537,48 @@ mod tests {
 
         assert_eq!(response.error_code, 0);
         assert_eq!(response.member_id.as_deref(), Some("member-a"));
+        assert_eq!(response.member_epoch, 2);
+        assert_eq!(response.heartbeat_interval_ms, 2500);
+        assert!(response.assignment.is_none());
+        broker.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn sends_share_group_heartbeat_v1_over_injected_broker_stream() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(1024);
+        let broker = tokio::spawn(async move {
+            let request = read_test_frame(&mut broker_stream).await;
+            assert_eq!(&request[0..4], &[0, 76, 0, 1]);
+            assert_eq!(&request[4..8], &[0, 0, 0, 1]);
+            assert_eq!(request.last(), Some(&0));
+
+            let mut response = Vec::new();
+            response.extend_from_slice(&[0, 0, 0, 1]); // response correlation id
+            response.push(0); // response header tagged fields
+            response.extend_from_slice(&[0, 0, 0, 0]); // throttle time
+            response.extend_from_slice(&[0, 0]); // error code
+            response.push(0); // null error message
+            response.push(9); // member id length + 1
+            response.extend_from_slice(b"member-1");
+            response.extend_from_slice(&[0, 0, 0, 2]); // member epoch
+            response.extend_from_slice(&2500_i32.to_be_bytes());
+            response.push(0xff); // null nullable assignment struct
+            response.push(0); // response tagged fields
+            write_test_frame(&mut broker_stream, &response).await;
+        });
+        let mut client = Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-share-heartbeat-test".to_owned()),
+            Some(Duration::from_secs(1)),
+        );
+
+        let response = client
+            .share_group_heartbeat_v1("share-orders", "", 0, None, Some(vec!["orders".to_owned()]))
+            .await
+            .unwrap();
+
+        assert_eq!(response.error_code, 0);
+        assert_eq!(response.member_id.as_deref(), Some("member-1"));
         assert_eq!(response.member_epoch, 2);
         assert_eq!(response.heartbeat_interval_ms, 2500);
         assert!(response.assignment.is_none());

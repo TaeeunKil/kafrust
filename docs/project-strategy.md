@@ -189,8 +189,10 @@ compression, security, multi-broker recovery, idempotence, transactions,
 Admin MVP, observability, and migration-documentation gates recorded in the
 roadmap. It is still behind the broad pure-Rust competitors in three areas:
 
-- modern protocol breadth: Share Groups/KIP-932, client telemetry/KIP-714,
-  remaining modern Admin paths, and protocol-parity automation;
+- modern protocol breadth: the high-level Share Consumer/KIP-932 runtime and
+  live qualification (the stable v1 wire types and low-level Client entry
+  points now exist), client telemetry/KIP-714, remaining modern Admin paths,
+  and protocol-parity automation;
 - production hardening: more complete group lifecycle behavior, ambiguous
   transaction and mutation outcomes, resource ceilings, fuzzing, fault-
   injected broker coverage, and longer secured multi-broker soaks;

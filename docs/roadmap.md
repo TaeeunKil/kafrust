@@ -2013,6 +2013,16 @@ Strategic role:
 
 Implemented evidence:
 
+- Stable KIP-932 v1 wire types now cover `ShareGroupHeartbeat` (API key 76),
+  `ShareFetch` (API key 78), and `ShareAcknowledge` (API key 79), including
+  flexible headers, share-session epochs, acknowledgement batches, acquired
+  record ranges, current-leader metadata, node endpoints, and nullable record
+  bytes. The low-level `Client` exposes the heartbeat, fetch, and acknowledge
+  roundtrip entry points. Focused protocol tests and an injected-broker
+  heartbeat test pass. The high-level ShareConsumer lifecycle, record-batch
+  decoding, acknowledgement retry/release semantics, coordinator recovery,
+  and live Kafka qualification remain open. Kafka 4.0 early-access v0 is
+  intentionally excluded because the stable schemas removed it in Kafka 4.1.
 - Flexible `ApiVersions v3` request and response types report broker API
   version ranges, preserve unknown top-level tagged fields, and share a common
   capability lookup with the legacy v0 response. The high-level producer now
