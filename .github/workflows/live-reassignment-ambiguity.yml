@@ -146,8 +146,14 @@ jobs:
               --topic "$KAFRUST_REASSIGNMENT_TOPIC" \
               >/tmp/kafrust-reassignment-after.log 2>&1 || true
             normalized="$(tr '\t' ' ' < /tmp/kafrust-reassignment-after.log | tr -s ' ')"
-            if grep -q "Replicas: $KAFRUST_REASSIGNMENT_REPLICAS Isr: $KAFRUST_REASSIGNMENT_REPLICAS" \
-              <<<"$normalized"; then
+            actual_replicas="$(sed -n "s/.*Partition: $KAFRUST_REASSIGNMENT_PARTITION.*Replicas: \([^[:space:]]*\).*/\1/p" \
+              /tmp/kafrust-reassignment-after.log | head -n 1)"
+            actual_isr="$(sed -n "s/.*Partition: $KAFRUST_REASSIGNMENT_PARTITION.*Isr: \([^[:space:]]*\).*/\1/p" \
+              /tmp/kafrust-reassignment-after.log | head -n 1)"
+            target_isr_set="$(printf '%s\n' "$KAFRUST_REASSIGNMENT_REPLICAS" | tr ',' '\n' | sort -n | paste -sd, -)"
+            actual_isr_set="$(printf '%s\n' "$actual_isr" | tr ',' '\n' | sort -n | paste -sd, -)"
+            if [ "$actual_replicas" = "$KAFRUST_REASSIGNMENT_REPLICAS" ] && \
+              [ "$actual_isr_set" = "$target_isr_set" ]; then
               printf '%s\n' "$normalized"
               exit 0
             fi
