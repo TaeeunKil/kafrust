@@ -210,8 +210,8 @@ reconciles committed offset `42` through OffsetFetch on Kafka 3.7.2 in
 [`31774729128`](https://github.com/TaeeunKil/kafrust/actions/runs/31774729128)
 and Kafka 4.3.1 in
 [`31774729263`](https://github.com/TaeeunKil/kafrust/actions/runs/31774729263).
-This covers one classic offset mutation path only; OffsetDelete, DeleteGroups,
-member-aware failures, and target authorization remain separate qualification.
+This covers one classic offset mutation path only; DeleteGroups, member-aware
+failures, and target authorization remain separate qualification.
 The current-source gate also qualifies OffsetDelete v0 after a committed offset
 is established. The response is dropped, the transmitted delete is classified
 as `AdminMutationOutcomeUnknown` without replay, and OffsetFetch confirms the
@@ -219,7 +219,15 @@ partition offset is gone on Kafka 3.7.2 in
 [`31774990676`](https://github.com/TaeeunKil/kafrust/actions/runs/31774990676)
 and Kafka 4.3.1 in
 [`31774990554`](https://github.com/TaeeunKil/kafrust/actions/runs/31774990554).
-DeleteGroups, member-aware failures, and target authorization remain separate.
+The current-source gate also qualifies DeleteGroups v1 after making the group
+visible through ListGroups. The response is dropped, the transmitted delete
+is classified as `AdminMutationOutcomeUnknown` without replay, and ListGroups
+confirms the group is absent on Kafka 3.7.2 in
+[`31775333815`](https://github.com/TaeeunKil/kafrust/actions/runs/31775333815)
+and Kafka 4.3.1 in
+[`31775333736`](https://github.com/TaeeunKil/kafrust/actions/runs/31775333736).
+Active-member behavior, member-aware failures, and target authorization remain
+separate.
 
 The latest complete matrix in
 [`31624278107`](https://github.com/TaeeunKil/kafrust/actions/runs/31624278107)

@@ -223,16 +223,23 @@ coverage toward a release candidate that can be qualified in staging.
   and Kafka 4.3.1 in
   [`31774729263`](https://github.com/TaeeunKil/kafrust/actions/runs/31774729263).
   The response is dropped, `AdminMutationOutcomeUnknown` is returned without
-  replay, and OffsetFetch reconciles the committed offset. OffsetDelete,
-  DeleteGroups, member-aware failures, and target authorization remain open.
+  replay, and OffsetFetch reconciles the committed offset. DeleteGroups,
+  member-aware failures, and target authorization remain open.
 - Current-source OffsetDelete v0 ambiguity is now qualified after establishing
   an offset on Kafka 3.7.2 in
   [`31774990676`](https://github.com/TaeeunKil/kafrust/actions/runs/31774990676)
   and Kafka 4.3.1 in
   [`31774990554`](https://github.com/TaeeunKil/kafrust/actions/runs/31774990554).
   The response is dropped, the delete is not replayed, and OffsetFetch
-  confirms removal. DeleteGroups, member-aware failures, and target
-  authorization remain open.
+  confirms removal. Member-aware failures and target authorization remain open.
+- Current-source DeleteGroups v1 ambiguity is now qualified after making the
+  group visible through ListGroups on Kafka 3.7.2 in
+  [`31775333815`](https://github.com/TaeeunKil/kafrust/actions/runs/31775333815)
+  and Kafka 4.3.1 in
+  [`31775333736`](https://github.com/TaeeunKil/kafrust/actions/runs/31775333736).
+  The response is dropped, the delete is not replayed, and ListGroups confirms
+  the group disappears. Active-member behavior, member-aware failures, and
+  target authorization remain open.
 - Published `0.2.30` passed four multi-member group rebalance profiles:
   Kafka 3.7.2 classic in [`31770201899`](https://github.com/TaeeunKil/kafrust/actions/runs/31770201899),
   Kafka 4.3.1 KIP-848 in [`31770201823`](https://github.com/TaeeunKil/kafrust/actions/runs/31770201823),

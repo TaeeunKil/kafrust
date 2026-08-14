@@ -110,8 +110,8 @@ committed offset through `OffsetFetch` at `42` on Kafka 3.7.2 in
 and Kafka 4.3.1 in
 [`31774729263`](https://github.com/TaeeunKil/kafrust/actions/runs/31774729263).
 The client does not replay the transmitted mutation. This remains an
-operation-specific proof; OffsetDelete, DeleteGroups, member-aware workloads,
-and target authorization are separate gates.
+operation-specific proof; DeleteGroups, member-aware workloads, and target
+authorization are separate gates.
 The same gate qualifies `OffsetDelete` v0 after first establishing a committed
 offset. It loses the delete response, returns `AdminMutationOutcomeUnknown`,
 and confirms the partition no longer has a committed offset through
@@ -119,8 +119,17 @@ and confirms the partition no longer has a committed offset through
 [`31774990676`](https://github.com/TaeeunKil/kafrust/actions/runs/31774990676)
 and Kafka 4.3.1 in
 [`31774990554`](https://github.com/TaeeunKil/kafrust/actions/runs/31774990554).
-This is still an operation-specific proof; DeleteGroups, member-aware
-workloads, and target authorization remain separate gates.
+This is still an operation-specific proof; member-aware workloads and target
+authorization remain separate gates.
+The same current-source gate qualifies `DeleteGroups` v1 after making the
+group visible through `ListGroups`. It loses the delete response, returns
+`AdminMutationOutcomeUnknown`, and confirms the group disappears through
+`ListGroups` on Kafka 3.7.2 in
+[`31775333815`](https://github.com/TaeeunKil/kafrust/actions/runs/31775333815)
+and Kafka 4.3.1 in
+[`31775333736`](https://github.com/TaeeunKil/kafrust/actions/runs/31775333736).
+This is an operation-specific ambiguity proof; active-member behavior,
+member-aware workloads, and target authorization remain separate gates.
 
 ## Inspect Cluster and Topics
 

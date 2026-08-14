@@ -740,14 +740,21 @@ modify the already-published `0.2.28` artifacts.
   and [`31774729263`](https://github.com/TaeeunKil/kafrust/actions/runs/31774729263).
   OffsetFetch reconciled the committed offset after the client returned
   `AdminMutationOutcomeUnknown` without replaying the transmitted commit;
-  OffsetDelete, DeleteGroups, and member-aware failure coverage remain open.
+  DeleteGroups and member-aware failure coverage remain open.
 - Current-source OffsetDelete v0 response-drop qualification passed after
   establishing an offset on Kafka 3.7.2 and 4.3.1 in
   [`31774990676`](https://github.com/TaeeunKil/kafrust/actions/runs/31774990676)
   and [`31774990554`](https://github.com/TaeeunKil/kafrust/actions/runs/31774990554).
   OffsetFetch confirmed removal after `AdminMutationOutcomeUnknown` without
-  replaying the transmitted delete; DeleteGroups and member-aware failure
-  coverage remain open.
+  replaying the transmitted delete; member-aware failure coverage remains
+  open.
+- Current-source DeleteGroups v1 response-drop qualification passed after
+  making the group visible through ListGroups on Kafka 3.7.2 and 4.3.1 in
+  [`31775333815`](https://github.com/TaeeunKil/kafrust/actions/runs/31775333815)
+  and [`31775333736`](https://github.com/TaeeunKil/kafrust/actions/runs/31775333736).
+  ListGroups confirmed the group disappeared after the client returned
+  `AdminMutationOutcomeUnknown` without replaying the transmitted delete;
+  active-member and member-aware failure coverage remains open.
 - Published `0.2.30` Admin and recovery evidence passed in
   [`31770173365`](https://github.com/TaeeunKil/kafrust/actions/runs/31770173365),
   [`31770173277`](https://github.com/TaeeunKil/kafrust/actions/runs/31770173277),
