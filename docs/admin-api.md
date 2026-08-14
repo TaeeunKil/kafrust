@@ -10,6 +10,24 @@ without opening a broker connection. This includes bootstrap entries, request
 and decode limits, required SASL credentials, and an explicitly configured TLS
 server name.
 
+## DescribeTopicPartitions
+
+`AdminClient::describe_topic_partitions` exposes Kafka's flexible
+`DescribeTopicPartitions` v0 API (API key 75). It returns topic UUIDs,
+partition leaders and epochs, replica/ISR state, eligible leader replica
+fields, offline replicas, authorized-operations bits, and Kafka's paging
+cursor. Use `DescribeTopicPartitionsOptions::with_cursor` to continue from a
+previous `next_cursor` and `with_response_partition_limit` to bound one page.
+
+This API is capability-negotiated. A broker that does not advertise API 75
+returns `Error::Unsupported`; callers supporting Kafka 3.7-era brokers should
+fall back to `list_topics` or the Metadata API rather than assuming the newer
+response shape. The current-source gate passed the expected unsupported path
+on Kafka 3.7.2 in
+[`31778114684`](https://github.com/TaeeunKil/kafrust/actions/runs/31778114684)
+and full response decoding on Kafka 4.3.1 in
+[`31778116310`](https://github.com/TaeeunKil/kafrust/actions/runs/31778116310).
+
 ## Mutation Outcome Ambiguity
 
 For mutating Admin operations, a transport failure, request timeout, response

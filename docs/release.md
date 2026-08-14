@@ -741,6 +741,11 @@ modify the already-published `0.2.28` artifacts.
   OffsetFetch reconciled the committed offset after the client returned
   `AdminMutationOutcomeUnknown` without replaying the transmitted commit;
   DeleteGroups and member-aware failure coverage remain open.
+- Current-source flexible `DescribeTopicPartitions` v0 qualification passed on
+  commit `d833f9f`: Kafka 3.7.2 returned the expected unsupported capability
+  result in [`31778114684`](https://github.com/TaeeunKil/kafrust/actions/runs/31778114684),
+  and Kafka 4.3.1 decoded topic UUID, partition state, nullable fields, and the
+  next cursor in [`31778116310`](https://github.com/TaeeunKil/kafrust/actions/runs/31778116310).
 - Current-source OffsetDelete v0 response-drop qualification passed after
   establishing an offset on Kafka 3.7.2 and 4.3.1 in
   [`31774990676`](https://github.com/TaeeunKil/kafrust/actions/runs/31774990676)

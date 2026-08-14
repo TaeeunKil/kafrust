@@ -61,6 +61,7 @@ the currently supported settings through typed builders.
 | `sasl.mechanism=OAUTHBEARER` | `.sasl_oauthbearer(token)`, `.sasl_oauthbearer_with_username(username, token)`, or the matching `*_provider` builder | Live verified against Kafka 3.7.2's built-in validator and a signed local OIDC/JWKS fixture, including Java client, static-token, and provider-backed paths in [`Live Kafka Smoke` OIDC job 31584760474`](https://github.com/TaeeunKil/kafrust/actions/runs/31584760474/job/94078116567). OAUTHBEARER uses flexible `SaslAuthenticate v2`; external provider-specific behavior remains open. |
 | delegation token lifecycle | `AdminClient::create_delegation_token`, `describe_delegation_tokens`, `renew_delegation_token`, `expire_delegation_token` | Requires an authenticated SASL or mutual-TLS channel and a broker-side delegation-token secret. The HMAC is credential material and is redacted from `Debug` and tracing. The lifecycle example is opt-in; qualify it against the target broker and authorization policy. |
 | statistics callback | `ClientMetrics::snapshot()` | kafrust exposes counters/gauges and tracing, not librdkafka statistics JSON. |
+| topic partition metadata | `AdminClient::describe_topic_partitions` | Uses flexible DescribeTopicPartitions v0 and returns topic UUID, partition leader/ISR state, and a paging cursor. On brokers that do not advertise API 75, handle `Error::Unsupported` and fall back to `list_topics` or Metadata. |
 
 Configuration is validated before kafrust opens a broker connection. Invalid
 timeouts, response or decode limits, fetch limits, empty group subscriptions,
@@ -300,6 +301,7 @@ kafrust currently provides:
 - transactional ID state inspection with coordinator-routed DescribeTransactions
 - topic partition expansion with automatic or explicit replica assignment
 - controller-routed partition reassignment and bounded in-progress status polling
+- flexible topic partition metadata with topic UUIDs, partition state, and paging
 
 The published `kafrust 0.2.28` artifact passed a fresh external Admin lifecycle
 in [`Published Crate Smoke` run `31731934027`](https://github.com/TaeeunKil/kafrust/actions/runs/31731934027):
@@ -345,6 +347,11 @@ against Kafka 3.7.2 StandardAuthorizer in `Live Kafka Smoke` run
 actual broker permissions and quota policy.
 
 See [Admin API](admin-api.md) for typed request and response examples.
+
+`AdminClient::describe_topic_partitions` is a newer-broker path rather than a
+drop-in replacement for every `Metadata` call. It is live-qualified on Kafka
+4.3.1 and returns `Error::Unsupported` on Kafka 3.7.2 when API 75 is absent; an
+adapter that supports both versions should select the fallback explicitly.
 
 `AdminClient::describe_cluster` and `AdminClient::list_topics` retry metadata
 transport and timeout failures within the bounded retry budget. `list_topics`

@@ -26,6 +26,15 @@ consumed an explicit post-failover record, while the consumer preserved its
 in-memory partition position across assignment rebuilds. This is live evidence
 for the tested paths, not a claim of complete Kafka or `rust-rdkafka` parity.
 
+The current-source `DescribeTopicPartitions` qualification passed on commit
+`d833f9f`: Kafka 3.7.2 correctly returned the explicit unsupported capability
+result, while Kafka 4.3.1 returned and decoded topic UUID, partition leader/ISR,
+nullable replica-state fields, and the next paging cursor. The runs were
+[`31778114684`](https://github.com/TaeeunKil/kafrust/actions/runs/31778114684)
+and [`31778116310`](https://github.com/TaeeunKil/kafrust/actions/runs/31778116310).
+This qualifies that API path only; it does not expand the complete Kafka API
+or `rust-rdkafka` parity claim.
+
 The complete 17-job `Live Kafka Smoke` matrix also passed on the current
 connection-lifecycle hardening commit `e0e7e03` in
 [`31765585666`](https://github.com/TaeeunKil/kafrust/actions/runs/31765585666).

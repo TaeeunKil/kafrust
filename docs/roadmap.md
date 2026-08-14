@@ -68,6 +68,15 @@ coverage toward a release candidate that can be qualified in staging.
 
 ### Progress Recorded
 
+- Flexible `DescribeTopicPartitions` v0 is now implemented through the typed
+  protocol and `AdminClient` layers, including topic UUIDs, partition leader/
+  ISR state, nullable ELR fields, authorized operations, and paging cursors.
+  The current-source compatibility gate passed the expected Kafka 3.7.2
+  capability fallback and Kafka 4.3.1 full decode in
+  [`31778114684`](https://github.com/TaeeunKil/kafrust/actions/runs/31778114684)
+  and [`31778116310`](https://github.com/TaeeunKil/kafrust/actions/runs/31778116310).
+  Broader unimplemented modern APIs such as quorum, telemetry, and share-group
+  surfaces remain open.
 - The first consumer-group lifecycle slice now has a focused regression test
   for retaining an explicit local position when a topic partition remains
   assigned across rejoin, plus a guard that does not copy position from a
