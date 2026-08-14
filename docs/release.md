@@ -763,6 +763,13 @@ modify the already-published `0.2.28` artifacts.
   transmitted request, then reconciled completion through
   `ListPartitionReassignments` and final replica metadata; authorization,
   cancellation, broker-loss, and data-movement coverage remain open.
+- Current-source KIP-848 member-aware `OffsetCommit` v9 response-drop
+  qualification passed on Kafka 4.3.1 in
+  [`31777089953`](https://github.com/TaeeunKil/kafrust/actions/runs/31777089953).
+  A joined member received `AdminMutationOutcomeUnknown` without replaying the
+  transmitted commit, and member-aware OffsetFetch plus the Kafka CLI
+  reconciled offset `42`; active-member deletion, member-aware offset deletion,
+  and target authorization remain open.
 - Published `0.2.30` Admin and recovery evidence passed in
   [`31770173365`](https://github.com/TaeeunKil/kafrust/actions/runs/31770173365),
   [`31770173277`](https://github.com/TaeeunKil/kafrust/actions/runs/31770173277),

@@ -239,6 +239,15 @@ and Kafka 4.3.1 passed in
 The final metadata check requires the requested `Replicas` order and the same
 broker set in `Isr`; ISR order is not treated as significant. Authorization,
 cancellation, broker-loss, and data-movement qualification remain separate.
+The current-source KIP-848 member-aware gate also qualifies `OffsetCommit` v9
+on Kafka 4.3.1 in
+[`31777089953`](https://github.com/TaeeunKil/kafrust/actions/runs/31777089953)
+(job [`94694703630`](https://github.com/TaeeunKil/kafrust/actions/runs/31777089953/job/94694703630)).
+It drops the commit response after transmission, returns
+`AdminMutationOutcomeUnknown` without replay, and reconciles offset `42`
+through member-aware OffsetFetch and the Kafka consumer-groups CLI. Active
+member deletion, member-aware offset deletion, and target authorization remain
+separate.
 
 The latest complete matrix in
 [`31624278107`](https://github.com/TaeeunKil/kafrust/actions/runs/31624278107)

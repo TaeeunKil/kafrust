@@ -249,6 +249,13 @@ coverage toward a release candidate that can be qualified in staging.
   replay, and `ListPartitionReassignments` plus final metadata reconcile the
   target replica order and ISR broker set. Authorization, cancellation,
   broker-loss, and data-movement qualification remain open.
+- Current-source KIP-848 member-aware `OffsetCommit` v9 ambiguity is now
+  qualified on Kafka 4.3.1 in
+  [`31777089953`](https://github.com/TaeeunKil/kafrust/actions/runs/31777089953).
+  A joined member's commit response is dropped, `AdminMutationOutcomeUnknown`
+  is returned without replay, and member-aware OffsetFetch plus the Kafka CLI
+  reconcile offset `42`. Active-member deletion, member-aware offset deletion,
+  and target authorization remain open.
 - Published `0.2.30` passed four multi-member group rebalance profiles:
   Kafka 3.7.2 classic in [`31770201899`](https://github.com/TaeeunKil/kafrust/actions/runs/31770201899),
   Kafka 4.3.1 KIP-848 in [`31770201823`](https://github.com/TaeeunKil/kafrust/actions/runs/31770201823),

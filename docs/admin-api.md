@@ -140,6 +140,14 @@ and Kafka 4.3.1 passed in
 The final check compares the requested replica order and the ISR broker set;
 Kafka may report ISR members in a different order. Authorization, cancellation,
 broker-loss, and data-movement qualification remain separate gates.
+The current-source KIP-848 member-aware gate also qualifies `OffsetCommit` v9.
+It joins a real consumer-protocol member, drops the member-aware commit
+response, returns `AdminMutationOutcomeUnknown` without replay, and reconciles
+the committed offset through member-aware `OffsetFetch` on Kafka 4.3.1 in
+[`31777089953`](https://github.com/TaeeunKil/kafrust/actions/runs/31777089953).
+The job also confirms offset `42` through Kafka's consumer-groups CLI; active
+member deletion, member-aware offset deletion, and target authorization remain
+separate gates.
 
 ## Inspect Cluster and Topics
 
