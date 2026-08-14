@@ -203,8 +203,11 @@ instead of silently moving the committed position.
 `ConsumerGroup` exposes `position`, `seek`, `pause`, and `resume` for its
 current assignment. These operations change local fetch state and do not send
 offset commits. Pause state survives a group rejoin when this member keeps the
-same topic partition; a seek position is replaced by the broker-committed or
-configured reset position after a rejoin.
+same topic partition, and a seek position is preserved when that partition
+remains assigned across an automatic or explicit rejoin. A newly assigned
+partition starts from its broker-committed offset or configured reset policy;
+local position is not copied from a partition that was removed and later
+reassigned.
 
 ```rust
 let assignment = group.assignments().first().unwrap();

@@ -2167,6 +2167,28 @@ mod tests {
         assert_eq!(rebuilt.assignments()[0].leader_epoch(), 7);
     }
 
+    #[test]
+    fn does_not_restore_position_for_removed_and_reassigned_partition() {
+        let (client_stream, _broker_stream) = tokio::io::duplex(64);
+        let client = Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-assignment-reset-test".to_owned()),
+            Some(std::time::Duration::from_millis(500)),
+        );
+        let config = ConsumerConfig::new(["localhost:9092"]);
+        let mut consumer = Consumer::from_assignments(
+            client,
+            config,
+            vec![ConsumerAssignment::new("orders".to_owned(), 0, 0)],
+        );
+        consumer.seek("orders", 0, 42).unwrap();
+
+        consumer.replace_assignments(vec![ConsumerAssignment::new("payments".to_owned(), 0, 7)]);
+        consumer.replace_assignments(vec![ConsumerAssignment::new("orders".to_owned(), 0, 0)]);
+
+        assert_eq!(consumer.position("orders", 0), Some(0));
+    }
+
     #[tokio::test]
     async fn controls_assignment_position_and_pause_state() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();

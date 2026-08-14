@@ -96,6 +96,7 @@ async fn run() -> kafrust::Result<()> {
         .map_err(|_| Error::Unsupported("published group smoke second member task failed"))??;
 
     wait_for_two_member_coverage(&mut first, &mut second, &topic, seen_records).await?;
+    verify_position_survives_rejoin(&mut first, &topic).await?;
     println!(
         "published group rebalance passed protocol={protocol:?} first={} second={} partitions={PARTITION_COUNT}",
         first.member_id(),
@@ -145,6 +146,35 @@ async fn wait_for_two_member_coverage(
     Err(Error::Unsupported(
         "published group smoke members did not converge on disjoint ownership and records",
     ))
+}
+
+async fn verify_position_survives_rejoin(
+    group: &mut ConsumerGroup,
+    topic: &str,
+) -> kafrust::Result<()> {
+    let assignment = group
+        .assignments()
+        .iter()
+        .find(|assignment| assignment.topic() == topic)
+        .ok_or(Error::Unsupported(
+            "published group smoke has no partition for position rejoin check",
+        ))?;
+    let partition = assignment.partition();
+    let previous_position = assignment.next_offset();
+    if previous_position <= 0 {
+        return Err(Error::Unsupported(
+            "published group smoke did not advance a position before rejoin",
+        ));
+    }
+
+    group.seek(topic, partition, 0)?;
+    group.rejoin().await?;
+    if group.position(topic, partition) != Some(0) {
+        return Err(Error::Unsupported(
+            "published group smoke lost an explicit seek across rejoin",
+        ));
+    }
+    Ok(())
 }
 
 fn record_expected_records(

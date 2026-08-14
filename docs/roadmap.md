@@ -58,6 +58,20 @@ coverage toward a release candidate that can be qualified in staging.
   document intentional changes and defaults, compile published examples, and
   keep the migration guide aligned with the tested compatibility matrix.
 
+### Progress Recorded
+
+- The first consumer-group lifecycle slice now has a focused regression test
+  for retaining an explicit local position when a topic partition remains
+  assigned across rejoin, plus a guard that does not copy position from a
+  removed partition when it is later reassigned. The published group smoke
+  verifies the same `seek`-then-`rejoin` behavior for Kafka 3.7.2 classic in
+  [`31763714471`](https://github.com/TaeeunKil/kafrust/actions/runs/31763714471)
+  and Kafka 4.3.1 KIP-848 in
+  [`31763716175`](https://github.com/TaeeunKil/kafrust/actions/runs/31763716175).
+  This closes the tested position-preservation sub-gate; delayed assignment,
+  member-loss, committed-offset, leader-epoch, and shutdown cases remain part
+  of the broader 0.3 lifecycle gate.
+
 ### Exit criteria
 
 - Both `0.3.0` crates publish in protocol-first order and resolve from a fresh
