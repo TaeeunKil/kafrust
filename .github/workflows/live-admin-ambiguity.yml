@@ -23,6 +23,7 @@ on:
           - "alter_configs"
           - "create_acls"
           - "delete_acls"
+          - "alter_client_quotas"
           - "delete_topics"
 
 env:
@@ -104,6 +105,7 @@ jobs:
             alter_configs) drop_api_key=33 ;;
             create_acls) drop_api_key=30 ;;
             delete_acls) drop_api_key=31 ;;
+            alter_client_quotas) drop_api_key=49 ;;
             delete_topics) drop_api_key=20 ;;
             *) echo "unsupported mutation: ${{ inputs.mutation }}"; exit 1 ;;
           esac
