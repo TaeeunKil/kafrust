@@ -403,8 +403,11 @@ impl AdminClient {
                 ));
             };
             let response = match version {
-                0 => client.describe_quorum_v0(request_topics.clone()).await,
-                1 => client.describe_quorum_v1(request_topics.clone()).await,
+                // Kafka 3.7 advertises v1, but the request wire shape is
+                // identical to v0. Use v0 below the v2 response additions so
+                // older controller listeners receive the original request
+                // shape while preserving the version-appropriate response.
+                0 | 1 => client.describe_quorum_v0(request_topics.clone()).await,
                 _ => client.describe_quorum_v2(request_topics.clone()).await,
             };
             match response {
