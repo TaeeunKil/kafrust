@@ -240,6 +240,15 @@ coverage toward a release candidate that can be qualified in staging.
   The response is dropped, the delete is not replayed, and ListGroups confirms
   the group disappears. Active-member behavior, member-aware failures, and
   target authorization remain open.
+- Current-source `AlterPartitionReassignments` v0 ambiguity is now qualified
+  on Kafka 3.7.2 in
+  [`31776694068`](https://github.com/TaeeunKil/kafrust/actions/runs/31776694068)
+  and Kafka 4.3.1 in
+  [`31776695970`](https://github.com/TaeeunKil/kafrust/actions/runs/31776695970).
+  The response is dropped, `AdminMutationOutcomeUnknown` is returned without
+  replay, and `ListPartitionReassignments` plus final metadata reconcile the
+  target replica order and ISR broker set. Authorization, cancellation,
+  broker-loss, and data-movement qualification remain open.
 - Published `0.2.30` passed four multi-member group rebalance profiles:
   Kafka 3.7.2 classic in [`31770201899`](https://github.com/TaeeunKil/kafrust/actions/runs/31770201899),
   Kafka 4.3.1 KIP-848 in [`31770201823`](https://github.com/TaeeunKil/kafrust/actions/runs/31770201823),

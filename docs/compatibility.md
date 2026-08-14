@@ -228,6 +228,17 @@ and Kafka 4.3.1 in
 [`31775333736`](https://github.com/TaeeunKil/kafrust/actions/runs/31775333736).
 Active-member behavior, member-aware failures, and target authorization remain
 separate.
+The current-source gate also qualifies `AlterPartitionReassignments` v0. It
+drops the real response after transmission, returns
+`AdminMutationOutcomeUnknown` without replay, and reconciles the completed
+replica movement through `ListPartitionReassignments` and final topic
+metadata. Kafka 3.7.2 passed in
+[`31776694068`](https://github.com/TaeeunKil/kafrust/actions/runs/31776694068)
+and Kafka 4.3.1 passed in
+[`31776695970`](https://github.com/TaeeunKil/kafrust/actions/runs/31776695970).
+The final metadata check requires the requested `Replicas` order and the same
+broker set in `Isr`; ISR order is not treated as significant. Authorization,
+cancellation, broker-loss, and data-movement qualification remain separate.
 
 The latest complete matrix in
 [`31624278107`](https://github.com/TaeeunKil/kafrust/actions/runs/31624278107)

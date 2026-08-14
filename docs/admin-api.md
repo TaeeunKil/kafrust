@@ -130,6 +130,16 @@ and Kafka 4.3.1 in
 [`31775333736`](https://github.com/TaeeunKil/kafrust/actions/runs/31775333736).
 This is an operation-specific ambiguity proof; active-member behavior,
 member-aware workloads, and target authorization remain separate gates.
+The same current-source gate qualifies `AlterPartitionReassignments` v0. It
+submits a real three-broker reassignment, drops the response, returns
+`AdminMutationOutcomeUnknown`, and reconciles completion through
+`ListPartitionReassignments` plus final topic metadata. Kafka 3.7.2 passed in
+[`31776694068`](https://github.com/TaeeunKil/kafrust/actions/runs/31776694068)
+and Kafka 4.3.1 passed in
+[`31776695970`](https://github.com/TaeeunKil/kafrust/actions/runs/31776695970).
+The final check compares the requested replica order and the ISR broker set;
+Kafka may report ISR members in a different order. Authorization, cancellation,
+broker-loss, and data-movement qualification remain separate gates.
 
 ## Inspect Cluster and Topics
 
