@@ -11,18 +11,27 @@ on:
         options:
           - "3.7.2"
           - "4.3.1"
+      mutation:
+        description: "Admin mutation whose first response should be dropped"
+        required: true
+        default: "create_topics"
+        type: choice
+        options:
+          - "create_topics"
+          - "delete_topics"
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   admin-ambiguity:
-    name: Kafka ${{ inputs.kafka_version }} Admin mutation response loss
+    name: Kafka ${{ inputs.kafka_version }} ${{ inputs.mutation }} response loss
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
       KAFRUST_BOOTSTRAP_SERVERS: 127.0.0.1:39095
       KAFRUST_ADMIN_TOPIC: kafrust-admin-ambiguity-${{ github.run_id }}
+      KAFRUST_ADMIN_MUTATION: ${{ inputs.mutation }}
 
     steps:
       - name: Checkout
@@ -72,10 +81,15 @@ jobs:
       - name: Start response-drop proxy
         run: |
           rm -f /tmp/kafrust-admin-ambiguity-dropped
+          case "${{ inputs.mutation }}" in
+            create_topics) drop_api_key=19 ;;
+            delete_topics) drop_api_key=20 ;;
+            *) echo "unsupported mutation: ${{ inputs.mutation }}"; exit 1 ;;
+          esac
           python3 -u scripts/kafka_response_drop_proxy.py \
             --listen-port 39095 \
             --target-port 29095 \
-            --drop-api-key 19 \
+            --drop-api-key "$drop_api_key" \
             --drop-marker /tmp/kafrust-admin-ambiguity-dropped \
             >/tmp/kafrust-admin-ambiguity-proxy.log 2>&1 &
           for attempt in {1..20}; do
