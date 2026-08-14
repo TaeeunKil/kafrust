@@ -102,6 +102,16 @@ and Kafka 4.3.1 in
 The gate never logs the token HMAC. This is an operation-specific
 reconciliation proof; token authorization, secret distribution, renewal, and
 expiration policy remain target-specific.
+The current-source response-drop gate also qualifies administrative
+`OffsetCommit` v2. It waits for the group coordinator to become ready, loses
+the commit response, returns `AdminMutationOutcomeUnknown`, and confirms the
+committed offset through `OffsetFetch` at `42` on Kafka 3.7.2 in
+[`31774729128`](https://github.com/TaeeunKil/kafrust/actions/runs/31774729128)
+and Kafka 4.3.1 in
+[`31774729263`](https://github.com/TaeeunKil/kafrust/actions/runs/31774729263).
+The client does not replay the transmitted mutation. This remains an
+operation-specific proof; OffsetDelete, DeleteGroups, member-aware workloads,
+and target authorization are separate gates.
 
 ## Inspect Cluster and Topics
 

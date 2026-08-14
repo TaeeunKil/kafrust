@@ -203,6 +203,15 @@ and Kafka 4.3.1 in
 [`31773883953`](https://github.com/TaeeunKil/kafrust/actions/runs/31773883953).
 The gate redacts the token HMAC and proves only this mutation's
 reconciliation boundary, not every delegation-token policy or lifecycle path.
+The current-source gate also qualifies administrative OffsetCommit v2 after
+waiting for coordinator readiness. It drops the response, surfaces
+`AdminMutationOutcomeUnknown` without replaying the transmitted request, and
+reconciles committed offset `42` through OffsetFetch on Kafka 3.7.2 in
+[`31774729128`](https://github.com/TaeeunKil/kafrust/actions/runs/31774729128)
+and Kafka 4.3.1 in
+[`31774729263`](https://github.com/TaeeunKil/kafrust/actions/runs/31774729263).
+This covers one classic offset mutation path only; OffsetDelete, DeleteGroups,
+member-aware failures, and target authorization remain separate qualification.
 
 The latest complete matrix in
 [`31624278107`](https://github.com/TaeeunKil/kafrust/actions/runs/31624278107)

@@ -734,6 +734,13 @@ modify the already-published `0.2.28` artifacts.
   with DescribeDelegationTokens reconciliation of a new `User:admin` token.
   The gate does not log its HMAC and does not claim target policy or complete
   renewal/expiration failure coverage.
+- Current-source administrative OffsetCommit v2 response-drop qualification
+  passed after coordinator readiness on Kafka 3.7.2 and 4.3.1 in
+  [`31774729128`](https://github.com/TaeeunKil/kafrust/actions/runs/31774729128)
+  and [`31774729263`](https://github.com/TaeeunKil/kafrust/actions/runs/31774729263).
+  OffsetFetch reconciled the committed offset after the client returned
+  `AdminMutationOutcomeUnknown` without replaying the transmitted commit;
+  OffsetDelete, DeleteGroups, and member-aware failure coverage remain open.
 - Published `0.2.30` Admin and recovery evidence passed in
   [`31770173365`](https://github.com/TaeeunKil/kafrust/actions/runs/31770173365),
   [`31770173277`](https://github.com/TaeeunKil/kafrust/actions/runs/31770173277),

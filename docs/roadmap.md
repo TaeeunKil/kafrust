@@ -217,6 +217,14 @@ coverage toward a release candidate that can be qualified in staging.
   The gate confirms a new `User:admin` token through
   `DescribeDelegationTokens` without logging its HMAC; token policy, renewal,
   expiration, and other mutation families remain separate gates.
+- Current-source administrative OffsetCommit v2 ambiguity is now qualified
+  after coordinator readiness on Kafka 3.7.2 in
+  [`31774729128`](https://github.com/TaeeunKil/kafrust/actions/runs/31774729128)
+  and Kafka 4.3.1 in
+  [`31774729263`](https://github.com/TaeeunKil/kafrust/actions/runs/31774729263).
+  The response is dropped, `AdminMutationOutcomeUnknown` is returned without
+  replay, and OffsetFetch reconciles the committed offset. OffsetDelete,
+  DeleteGroups, member-aware failures, and target authorization remain open.
 - Published `0.2.30` passed four multi-member group rebalance profiles:
   Kafka 3.7.2 classic in [`31770201899`](https://github.com/TaeeunKil/kafrust/actions/runs/31770201899),
   Kafka 4.3.1 KIP-848 in [`31770201823`](https://github.com/TaeeunKil/kafrust/actions/runs/31770201823),
