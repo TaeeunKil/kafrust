@@ -80,6 +80,13 @@ coverage toward a release candidate that can be qualified in staging.
   [`31765585666`](https://github.com/TaeeunKil/kafrust/actions/runs/31765585666),
   including Kafka 3.7.2 multi-broker failover, secured failover, and Kafka
   4.3.1 KIP-848 paths.
+- Background classic and KIP-848 heartbeat tasks now cancel an in-flight
+  heartbeat request when stopped instead of waiting for the broker request
+  timeout. Focused duplex-broker regression tests cover both protocols, and
+  the complete 17-job matrix passed on commit `9f96bf1` in
+  [`31766439591`](https://github.com/TaeeunKil/kafrust/actions/runs/31766439591).
+  This closes the bounded heartbeat-shutdown sub-gate; broader lifecycle,
+  member-loss, committed-offset, and long-duration group qualification remain.
 
 ### Exit criteria
 

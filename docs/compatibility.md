@@ -35,6 +35,14 @@ consumer groups, transaction ambiguity handling, and multi-broker failover.
 This is evidence that retiring a low-level connection after transport or
 framing failure does not regress the tested reconnect and recovery paths.
 
+The follow-up complete 17-job matrix passed on commit `9f96bf1` in
+[`31766439591`](https://github.com/TaeeunKil/kafrust/actions/runs/31766439591)
+after making classic and KIP-848 background heartbeat shutdown cancel
+in-flight requests. The matrix covered the same supported broker, security,
+consumer-group, transaction, and multi-broker failover profiles; the focused
+shutdown tests additionally verify completion without waiting for a 30-second
+broker request timeout.
+
 The published `0.2.30` artifacts passed the seven-profile external
 `Published Crate Smoke` run
 [`31762679537`](https://github.com/TaeeunKil/kafrust/actions/runs/31762679537),
