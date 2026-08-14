@@ -128,10 +128,18 @@ jobs:
         run: |
           grep -A1 -q 'name = "kafrust"' "$RUNNER_TEMP/kafrust-published-rust-rdkafka-comparison/Cargo.lock"
           if [ "${{ inputs.kafrust_source }}" = "true" ]; then
-            grep -A1 -q 'version = "0.2.28"' "$RUNNER_TEMP/kafrust-published-rust-rdkafka-comparison/Cargo.lock"
+            expected_kafrust_version="$(
+              cargo metadata \
+                --manifest-path "$GITHUB_WORKSPACE/Cargo.toml" \
+                --no-deps \
+                --format-version 1 \
+                | jq -r '.packages[] | select(.name == "kafrust") | .version'
+            )"
           else
-            grep -A1 -q 'version = "${{ inputs.kafrust_version }}"' "$RUNNER_TEMP/kafrust-published-rust-rdkafka-comparison/Cargo.lock"
+            expected_kafrust_version="${{ inputs.kafrust_version }}"
           fi
+          test -n "$expected_kafrust_version"
+          grep -A1 -q "version = \"$expected_kafrust_version\"" "$RUNNER_TEMP/kafrust-published-rust-rdkafka-comparison/Cargo.lock"
           grep -A1 -q 'name = "rdkafka"' "$RUNNER_TEMP/kafrust-published-rust-rdkafka-comparison/Cargo.lock"
           grep -A1 -q 'version = "0.39.0"' "$RUNNER_TEMP/kafrust-published-rust-rdkafka-comparison/Cargo.lock"
 
