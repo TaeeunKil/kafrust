@@ -34,8 +34,15 @@ applied topic. The gate passed on Kafka 3.7.2 in
 [`31770443512`](https://github.com/TaeeunKil/kafrust/actions/runs/31770443512)
 and Kafka 4.3.1 in
 [`31770443484`](https://github.com/TaeeunKil/kafrust/actions/runs/31770443484).
-This qualifies the CreateTopics path; it is not a claim that every Admin
-mutation has an identical broker-side failure policy.
+The same current-source gate now qualifies `DeleteTopics`: the topic was
+created, the delete request reached Kafka, its response was discarded, the
+typed `DeleteTopics` ambiguity was returned, and `list_topics` confirmed the
+topic was gone. The gate passed on Kafka 3.7.2 in
+[`31771419625`](https://github.com/TaeeunKil/kafrust/actions/runs/31771419625)
+and Kafka 4.3.1 in
+[`31771419124`](https://github.com/TaeeunKil/kafrust/actions/runs/31771419124).
+These qualify CreateTopics and DeleteTopics only; they are not a claim that
+every Admin mutation has an identical broker-side failure policy.
 
 ## Inspect Cluster and Topics
 

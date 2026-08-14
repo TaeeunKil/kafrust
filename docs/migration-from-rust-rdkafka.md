@@ -377,9 +377,16 @@ partition results still require inspection.
 The current-source CreateTopics response-drop gate demonstrates the migration
 behavior against Kafka 3.7.2 and 4.3.1: the request can be applied even when
 the call returns `AdminMutationOutcomeUnknown`, so an adapter must reconcile
-before issuing a second create request. This is evidence for CreateTopics only;
-do not generalize it to every Admin mutation without a matching operation-level
-qualification.
+before issuing a second create request. A matching DeleteTopics gate confirms
+the same rule for deletion and requires a list operation to verify that the
+topic is gone. These are evidence for those two operations only; do not
+generalize them to every Admin mutation without matching operation-level
+qualification. CreateTopics passed in
+[`31770443512`](https://github.com/TaeeunKil/kafrust/actions/runs/31770443512)
+and [`31770443484`](https://github.com/TaeeunKil/kafrust/actions/runs/31770443484);
+DeleteTopics passed in
+[`31771419625`](https://github.com/TaeeunKil/kafrust/actions/runs/31771419625)
+and [`31771419124`](https://github.com/TaeeunKil/kafrust/actions/runs/31771419124).
 
 ## Capability Gate
 

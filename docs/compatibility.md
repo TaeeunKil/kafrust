@@ -150,6 +150,12 @@ unclaimed for the published artifact. The current-source `9e390cf` response-
 drop gate separately qualifies typed CreateTopics ambiguity and reconciliation
 on Kafka 3.7.2 and 4.3.1 in [`31770443512`](https://github.com/TaeeunKil/kafrust/actions/runs/31770443512)
 and [`31770443484`](https://github.com/TaeeunKil/kafrust/actions/runs/31770443484).
+The follow-up `d73511c` gate applies the same response-drop proxy to
+DeleteTopics and confirms deletion through list_topics on Kafka 3.7.2 and
+4.3.1 in [`31771419625`](https://github.com/TaeeunKil/kafrust/actions/runs/31771419625)
+and [`31771419124`](https://github.com/TaeeunKil/kafrust/actions/runs/31771419124).
+These are operation-specific proofs, not a universal claim for every Admin
+mutation.
 
 The latest complete matrix in
 [`31624278107`](https://github.com/TaeeunKil/kafrust/actions/runs/31624278107)

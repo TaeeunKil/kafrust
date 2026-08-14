@@ -150,6 +150,16 @@ coverage toward a release candidate that can be qualified in staging.
   and reconciled the applied topic through ListTopics. This closes the
   current-source CreateTopics ambiguity sub-gate; other mutation families still
   require their own broker-fault evidence.
+- The reusable current-source response-drop gate now also covers DeleteTopics.
+  It created a topic, dropped the real DeleteTopics response, observed
+  `Error::AdminMutationOutcomeUnknown { operation: "DeleteTopics" }`, and
+  reconciled the deletion through ListTopics on Kafka 3.7.2 in
+  [`31771419625`](https://github.com/TaeeunKil/kafrust/actions/runs/31771419625)
+  and Kafka 4.3.1 in
+  [`31771419124`](https://github.com/TaeeunKil/kafrust/actions/runs/31771419124).
+  This closes the current-source DeleteTopics ambiguity sub-gate; ACL, quota,
+  SCRAM, config, reassignment, offset, and other mutation families remain
+  operation-specific gates.
 - Published `0.2.30` passed four multi-member group rebalance profiles:
   Kafka 3.7.2 classic in [`31770201899`](https://github.com/TaeeunKil/kafrust/actions/runs/31770201899),
   Kafka 4.3.1 KIP-848 in [`31770201823`](https://github.com/TaeeunKil/kafrust/actions/runs/31770201823),
