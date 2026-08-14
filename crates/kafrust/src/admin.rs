@@ -1852,13 +1852,6 @@ impl AdminClient {
                         break response;
                     }
                 }
-                Err(error)
-                    if retry < self.max_retries && is_retryable_admin_coordinator_error(&error) =>
-                {
-                    retry += 1;
-                    self.config.record_retry();
-                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
-                }
                 Err(error) => {
                     return Err(admin_mutation_error(&coordinator, "OffsetCommit", error))
                 }
@@ -1884,9 +1877,9 @@ impl AdminClient {
     ///
     /// `member_id`, `member_epoch`, and `group_instance_id` must describe the
     /// current joined member when the broker enforces consumer-protocol
-    /// membership. The exact offset and metadata values are repeated on a
-    /// transient coordinator failure; a stale member epoch is returned rather
-    /// than retried with an identity that may no longer be valid.
+    /// membership. Retryable broker responses are retried with the same offset
+    /// values; a transport failure after transmission is returned as an
+    /// ambiguous mutation outcome rather than replayed.
     #[tracing::instrument(
         level = "debug",
         name = "kafka.admin.alter_consumer_group_offsets_with_member",
@@ -1946,13 +1939,6 @@ impl AdminClient {
                     } else {
                         break response;
                     }
-                }
-                Err(error)
-                    if retry < self.max_retries && is_retryable_admin_coordinator_error(&error) =>
-                {
-                    retry += 1;
-                    self.config.record_retry();
-                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
                 }
                 Err(error) => {
                     return Err(admin_mutation_error(&coordinator, "OffsetCommit", error))
@@ -10865,7 +10851,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn retries_consumer_group_offset_commit_after_coordinator_disconnect() {
+    async fn classifies_consumer_group_offset_commit_disconnect_as_unknown() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
         let server = tokio::spawn(async move {
@@ -10885,23 +10871,6 @@ mod tests {
                 .windows(4)
                 .any(|bytes| bytes == [0xff, 0xff, 0xff, 0xff]));
             drop(coordinator);
-
-            let (mut bootstrap, _) = listener.accept().await.unwrap();
-            let coordinator_request = read_frame(&mut bootstrap).await;
-            assert_eq!(&coordinator_request[0..4], &[0, 10, 0, 1]);
-            write_frame(
-                &mut bootstrap,
-                &find_group_coordinator_response(addr.port()),
-            )
-            .await;
-
-            let (mut coordinator, _) = listener.accept().await.unwrap();
-            let commit_request = read_frame(&mut coordinator).await;
-            assert_eq!(&commit_request[0..4], &[0, 8, 0, 2]);
-            assert!(commit_request
-                .windows(4)
-                .any(|bytes| bytes == [0xff, 0xff, 0xff, 0xff]));
-            write_frame(&mut coordinator, &offset_commit_response()).await;
         });
         let metrics = ClientMetrics::new();
         let admin = AdminClient::new(
@@ -10910,15 +10879,20 @@ mod tests {
                 .metrics(metrics.clone()),
         );
 
-        let altered = admin
+        let error = admin
             .alter_consumer_group_offsets(
                 "orders-group",
                 &[ConsumerGroupOffset::new("orders", 0, 42)],
             )
             .await
-            .unwrap();
-        assert!(altered.is_success());
-        assert_eq!(metrics.snapshot().retries, 1);
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            Error::AdminMutationOutcomeUnknown {
+                operation: "OffsetCommit"
+            }
+        ));
+        assert_eq!(metrics.snapshot().retries, 0);
         server.await.unwrap();
     }
 
