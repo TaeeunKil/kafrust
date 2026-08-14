@@ -1,7 +1,7 @@
 use kafrust::{
     AdminClient, AlterConfigsOptions, ClientConfig, CreatePartitionsOptions, CreateTopicsOptions,
     DeleteTopicsOptions, DescribeConfigsOptions, Error, NewPartitions, NewTopic,
-    TopicConfigAlteration, TopicConfigResource,
+    TopicConfigAlteration, TopicConfigResource, TopicConfigUpdate,
 };
 use std::time::Duration;
 
@@ -22,10 +22,11 @@ async fn main() -> kafrust::Result<()> {
         "create_topics" => qualify_create_topics(&admin, &topic).await?,
         "create_partitions" => qualify_create_partitions(&admin, &topic).await?,
         "incremental_alter_configs" => qualify_incremental_alter_configs(&admin, &topic).await?,
+        "alter_configs" => qualify_alter_configs(&admin, &topic).await?,
         "delete_topics" => qualify_delete_topics(&admin, &topic).await?,
         _ => {
             return Err(Error::Unsupported(
-                "KAFRUST_ADMIN_MUTATION must be create_topics, create_partitions, incremental_alter_configs, or delete_topics",
+                "KAFRUST_ADMIN_MUTATION must be create_topics, create_partitions, incremental_alter_configs, alter_configs, or delete_topics",
             ))
         }
     }
@@ -155,6 +156,39 @@ async fn qualify_incremental_alter_configs(
     }
     println!("IncrementalAlterConfigs response was lost; outcome is explicitly unknown");
     wait_for_topic_config_value(admin, topic, "retention.ms", "120000").await
+}
+
+async fn qualify_alter_configs(admin: &AdminClient, topic: &str) -> kafrust::Result<()> {
+    admin
+        .create_topics(&[NewTopic::new(topic, 1, 1)], CreateTopicsOptions::new())
+        .await?;
+    let updates = [TopicConfigUpdate::new(topic).set("retention.ms", "180000")];
+    let error = match admin
+        .alter_topic_configs(&updates, AlterConfigsOptions::new())
+        .await
+    {
+        Ok(result) if !result.has_errors() => {
+            return Err(Error::Unsupported(
+                "the response-drop proxy did not make AlterConfigs ambiguous",
+            ))
+        }
+        Ok(_) => {
+            return Err(Error::Unsupported(
+                "AlterConfigs returned a broker error before the response was dropped",
+            ))
+        }
+        Err(error) => error,
+    };
+    if !matches!(
+        error,
+        Error::AdminMutationOutcomeUnknown {
+            operation: "AlterConfigs"
+        }
+    ) {
+        return Err(error);
+    }
+    println!("AlterConfigs response was lost; outcome is explicitly unknown");
+    wait_for_topic_config_value(admin, topic, "retention.ms", "180000").await
 }
 
 async fn wait_for_topic_config_value(
