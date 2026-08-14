@@ -58,6 +58,10 @@ use kafrust_protocol::api::describe_log_dirs::{
 use kafrust_protocol::api::describe_producers::{
     DescribeProducersRequestV0, DescribeProducersResponseV0, DescribeProducersTopicV0,
 };
+use kafrust_protocol::api::describe_topic_partitions::{
+    DescribeTopicPartitionsRequestV0, DescribeTopicPartitionsResponseV0,
+    DescribeTopicPartitionsTopicV0,
+};
 use kafrust_protocol::api::describe_transactions::{
     DescribeTransactionsRequestV0, DescribeTransactionsResponseV0,
 };
@@ -588,6 +592,30 @@ impl Client {
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v1(&mut decoder)?;
         Ok(MetadataResponseV12::decode_body(&mut decoder)?)
+    }
+
+    /// Sends DescribeTopicPartitions v0 to the broker represented by this connection.
+    pub async fn describe_topic_partitions_v0(
+        &mut self,
+        topics: Vec<DescribeTopicPartitionsTopicV0>,
+        response_partition_limit: i32,
+        cursor: Option<
+            kafrust_protocol::api::describe_topic_partitions::DescribeTopicPartitionsCursorV0,
+        >,
+    ) -> Result<DescribeTopicPartitionsResponseV0> {
+        let request = DescribeTopicPartitionsRequestV0 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            topics,
+            response_partition_limit,
+            cursor,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(DescribeTopicPartitionsResponseV0::decode_body(
+            &mut decoder,
+        )?)
     }
 
     /// Sends CreateTopics v2 to the broker represented by this connection.

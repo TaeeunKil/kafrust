@@ -53,6 +53,7 @@ use kafrust_protocol::api::describe_producers::{
     DescribeProducersActiveProducerV0, DescribeProducersPartitionResponseV0,
     DescribeProducersTopicResponseV0,
 };
+use kafrust_protocol::api::describe_topic_partitions::DescribeTopicPartitionsResponseV0;
 use kafrust_protocol::api::describe_transactions::{
     DescribeTransactionsStateV0, DescribeTransactionsTopicV0,
 };
@@ -240,6 +241,103 @@ impl AdminClient {
             .into_iter()
             .map(TopicListing::from_protocol)
             .collect())
+    }
+
+    /// Describes topic partitions through Kafka's flexible DescribeTopicPartitions v0 API.
+    ///
+    /// The API is advertised by newer brokers and is not available on Kafka
+    /// 3.7-era brokers. Callers targeting older brokers should use
+    /// [`Self::list_topics`] and metadata APIs as their compatibility fallback.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.describe_topic_partitions",
+        skip_all,
+        fields(topic_count = topics.len(), partition_limit = options.response_partition_limit),
+        err
+    )]
+    pub async fn describe_topic_partitions(
+        &self,
+        topics: &[String],
+        options: DescribeTopicPartitionsOptions,
+    ) -> Result<DescribeTopicPartitionsResult> {
+        let request_topics = topics
+            .iter()
+            .map(|name| {
+                kafrust_protocol::api::describe_topic_partitions::DescribeTopicPartitionsTopicV0 {
+                    name: name.clone(),
+                }
+            })
+            .collect::<Vec<_>>();
+        let mut retry = 0;
+        loop {
+            let mut client = match self.config.clone().connect().await {
+                Ok(client) => client,
+                Err(error) if retry < self.max_retries && is_retryable_admin_read_error(&error) => {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
+            let api_versions = match client
+                .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
+                .await
+            {
+                Ok(api_versions) => api_versions,
+                Err(error) if retry < self.max_retries && is_retryable_admin_read_error(&error) => {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
+            let Some(version) = api_versions.highest_supported_version(75, 0) else {
+                return Err(Error::Unsupported(
+                    "broker does not advertise DescribeTopicPartitions v0",
+                ));
+            };
+            if version != 0 {
+                return Err(Error::Unsupported(
+                    "unsupported DescribeTopicPartitions version",
+                ));
+            }
+            match client
+                .describe_topic_partitions_v0(
+                    request_topics.clone(),
+                    options.response_partition_limit,
+                    options.cursor.as_ref().map(|cursor| {
+                        kafrust_protocol::api::describe_topic_partitions::
+                            DescribeTopicPartitionsCursorV0 {
+                            topic_name: cursor.topic_name.clone(),
+                            partition_index: cursor.partition_index,
+                        }
+                    }),
+                )
+                .await
+            {
+                Ok(response) => {
+                    for topic in &response.topics {
+                        if topic.error_code != 0 {
+                            self.config.record_broker_error();
+                        }
+                        for partition in &topic.partitions {
+                            if partition.error_code != 0 {
+                                self.config.record_broker_error();
+                            }
+                        }
+                    }
+                    return Ok(DescribeTopicPartitionsResult::from_protocol(response));
+                }
+                Err(error) if retry < self.max_retries && is_retryable_admin_read_error(&error) => {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                }
+                Err(error) => return Err(error),
+            }
+        }
     }
 
     /// Lists ACL bindings matching a Kafka ACL filter using DescribeAcls v1.
@@ -5967,6 +6065,276 @@ impl TopicListing {
     }
 }
 
+/// Cursor for paging through DescribeTopicPartitions results.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DescribeTopicPartitionsCursor {
+    topic_name: String,
+    partition_index: i32,
+}
+
+impl DescribeTopicPartitionsCursor {
+    /// Creates a cursor starting at the given topic and partition.
+    pub fn new(topic_name: impl Into<String>, partition_index: i32) -> Self {
+        Self {
+            topic_name: topic_name.into(),
+            partition_index,
+        }
+    }
+
+    /// Returns the topic name at the cursor.
+    pub fn topic_name(&self) -> &str {
+        &self.topic_name
+    }
+
+    /// Returns the partition index at the cursor.
+    pub fn partition_index(&self) -> i32 {
+        self.partition_index
+    }
+}
+
+/// Options controlling a DescribeTopicPartitions request.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DescribeTopicPartitionsOptions {
+    response_partition_limit: i32,
+    cursor: Option<DescribeTopicPartitionsCursor>,
+}
+
+impl Default for DescribeTopicPartitionsOptions {
+    fn default() -> Self {
+        Self {
+            response_partition_limit: 2_000,
+            cursor: None,
+        }
+    }
+}
+
+impl DescribeTopicPartitionsOptions {
+    /// Creates options using Kafka's default partition limit of 2000.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Sets the maximum number of partitions returned by the broker.
+    pub fn with_response_partition_limit(mut self, limit: i32) -> Self {
+        self.response_partition_limit = limit;
+        self
+    }
+
+    /// Sets the starting cursor for a paged request.
+    pub fn with_cursor(mut self, cursor: DescribeTopicPartitionsCursor) -> Self {
+        self.cursor = Some(cursor);
+        self
+    }
+
+    /// Returns the requested response partition limit.
+    pub fn response_partition_limit(&self) -> i32 {
+        self.response_partition_limit
+    }
+
+    /// Returns the optional paging cursor.
+    pub fn cursor(&self) -> Option<&DescribeTopicPartitionsCursor> {
+        self.cursor.as_ref()
+    }
+}
+
+/// One partition returned by DescribeTopicPartitions.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DescribeTopicPartitionsPartition {
+    error_code: i16,
+    partition_index: i32,
+    leader_id: i32,
+    leader_epoch: i32,
+    replica_nodes: Vec<i32>,
+    isr_nodes: Vec<i32>,
+    eligible_leader_replicas: Option<Vec<i32>>,
+    last_known_elr: Option<Vec<i32>>,
+    offline_replicas: Vec<i32>,
+}
+
+impl DescribeTopicPartitionsPartition {
+    /// Returns Kafka's partition-level error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns kafrust's classification for a partition error.
+    pub fn broker_error_kind(&self) -> Option<BrokerErrorKind> {
+        (self.error_code != 0).then(|| BrokerErrorKind::from_code(self.error_code))
+    }
+
+    /// Returns the partition index.
+    pub fn partition_index(&self) -> i32 {
+        self.partition_index
+    }
+
+    /// Returns the current leader broker ID.
+    pub fn leader_id(&self) -> i32 {
+        self.leader_id
+    }
+
+    /// Returns the leader epoch.
+    pub fn leader_epoch(&self) -> i32 {
+        self.leader_epoch
+    }
+
+    /// Returns all replica broker IDs.
+    pub fn replica_nodes(&self) -> &[i32] {
+        &self.replica_nodes
+    }
+
+    /// Returns in-sync replica broker IDs.
+    pub fn isr_nodes(&self) -> &[i32] {
+        &self.isr_nodes
+    }
+
+    /// Returns Kafka's eligible leader replica set when present.
+    pub fn eligible_leader_replicas(&self) -> Option<&[i32]> {
+        self.eligible_leader_replicas.as_deref()
+    }
+
+    /// Returns Kafka's last known eligible leader replica set when present.
+    pub fn last_known_elr(&self) -> Option<&[i32]> {
+        self.last_known_elr.as_deref()
+    }
+
+    /// Returns replicas Kafka currently marks offline.
+    pub fn offline_replicas(&self) -> &[i32] {
+        &self.offline_replicas
+    }
+
+    /// Returns whether Kafka reported no partition-level error.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+    }
+}
+
+/// One topic returned by DescribeTopicPartitions.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DescribeTopicPartitionsTopic {
+    error_code: i16,
+    name: Option<String>,
+    topic_id: [u8; 16],
+    is_internal: bool,
+    partitions: Vec<DescribeTopicPartitionsPartition>,
+    topic_authorized_operations: i32,
+}
+
+impl DescribeTopicPartitionsTopic {
+    /// Returns Kafka's topic-level error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns kafrust's classification for a topic error.
+    pub fn broker_error_kind(&self) -> Option<BrokerErrorKind> {
+        (self.error_code != 0).then(|| BrokerErrorKind::from_code(self.error_code))
+    }
+
+    /// Returns the optional topic name included by Kafka.
+    pub fn name(&self) -> Option<&str> {
+        self.name.as_deref()
+    }
+
+    /// Returns the Kafka topic UUID.
+    pub fn topic_id(&self) -> [u8; 16] {
+        self.topic_id
+    }
+
+    /// Returns whether Kafka marks this as an internal topic.
+    pub fn is_internal(&self) -> bool {
+        self.is_internal
+    }
+
+    /// Returns partition descriptions included in this response page.
+    pub fn partitions(&self) -> &[DescribeTopicPartitionsPartition] {
+        &self.partitions
+    }
+
+    /// Returns Kafka's topic authorized-operations bitfield.
+    pub fn topic_authorized_operations(&self) -> i32 {
+        self.topic_authorized_operations
+    }
+
+    /// Returns whether Kafka reported no topic-level error.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+    }
+}
+
+/// Result returned by [`AdminClient::describe_topic_partitions`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DescribeTopicPartitionsResult {
+    throttle_time: Duration,
+    topics: Vec<DescribeTopicPartitionsTopic>,
+    next_cursor: Option<DescribeTopicPartitionsCursor>,
+}
+
+impl DescribeTopicPartitionsResult {
+    /// Returns the broker throttle duration.
+    pub fn throttle_time(&self) -> Duration {
+        self.throttle_time
+    }
+
+    /// Returns topic descriptions in the response page.
+    pub fn topics(&self) -> &[DescribeTopicPartitionsTopic] {
+        &self.topics
+    }
+
+    /// Returns Kafka's next page cursor, when more partitions are available.
+    pub fn next_cursor(&self) -> Option<&DescribeTopicPartitionsCursor> {
+        self.next_cursor.as_ref()
+    }
+
+    /// Returns whether all topic and partition entries succeeded.
+    pub fn is_success(&self) -> bool {
+        self.topics.iter().all(|topic| {
+            topic.is_success()
+                && topic
+                    .partitions
+                    .iter()
+                    .all(DescribeTopicPartitionsPartition::is_success)
+        })
+    }
+
+    fn from_protocol(response: DescribeTopicPartitionsResponseV0) -> Self {
+        Self {
+            throttle_time: Duration::from_millis(nonnegative_i32_to_u64(response.throttle_time_ms)),
+            topics: response
+                .topics
+                .into_iter()
+                .map(|topic| DescribeTopicPartitionsTopic {
+                    error_code: topic.error_code,
+                    name: topic.name,
+                    topic_id: topic.topic_id,
+                    is_internal: topic.is_internal,
+                    partitions: topic
+                        .partitions
+                        .into_iter()
+                        .map(|partition| DescribeTopicPartitionsPartition {
+                            error_code: partition.error_code,
+                            partition_index: partition.partition_index,
+                            leader_id: partition.leader_id,
+                            leader_epoch: partition.leader_epoch,
+                            replica_nodes: partition.replica_nodes,
+                            isr_nodes: partition.isr_nodes,
+                            eligible_leader_replicas: partition.eligible_leader_replicas,
+                            last_known_elr: partition.last_known_elr,
+                            offline_replicas: partition.offline_replicas,
+                        })
+                        .collect(),
+                    topic_authorized_operations: topic.topic_authorized_operations,
+                })
+                .collect(),
+            next_cursor: response
+                .next_cursor
+                .map(|cursor| DescribeTopicPartitionsCursor {
+                    topic_name: cursor.topic_name,
+                    partition_index: cursor.partition_index,
+                }),
+        }
+    }
+}
+
 /// One Kafka topic whose configuration should be described.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TopicConfigResource {
@@ -8918,11 +9286,12 @@ mod tests {
         ConsumerGroupOffset, ConsumerGroupOffsetDelete, ConsumerGroupOffsetQuery,
         CreateDelegationTokenOptions, CreatePartitionsOptions, CreateTopicsOptions,
         DelegationTokenPrincipal, DeleteRecordsOptions, DeleteRecordsTopic, DeleteTopicsOptions,
-        DescribeConfigsOptions, DescribeProducersTopic, ElectLeadersOptions, ElectionType,
-        LeaderElection, ListTransactionsOptions, LogDirTopic, NewPartitions, NewTopic,
-        PartitionReassignment, PartitionReassignmentOptions, PartitionReassignmentQuery,
-        ReplicaLogDirAssignment, ScramCredentialDeletion, ScramCredentialMechanism,
-        ScramCredentialUpsertion, TopicConfigAlteration, TopicConfigResource, TopicConfigUpdate,
+        DescribeConfigsOptions, DescribeProducersTopic, DescribeTopicPartitionsCursor,
+        DescribeTopicPartitionsOptions, ElectLeadersOptions, ElectionType, LeaderElection,
+        ListTransactionsOptions, LogDirTopic, NewPartitions, NewTopic, PartitionReassignment,
+        PartitionReassignmentOptions, PartitionReassignmentQuery, ReplicaLogDirAssignment,
+        ScramCredentialDeletion, ScramCredentialMechanism, ScramCredentialUpsertion,
+        TopicConfigAlteration, TopicConfigResource, TopicConfigUpdate,
     };
     use crate::{BrokerErrorKind, Client, ClientConfig, ClientMetrics, Error};
     use kafrust_protocol::codec::DecodeLimits;
@@ -9372,6 +9741,83 @@ mod tests {
         assert_eq!(result[1].error_code(), 3);
         assert_eq!(metrics.snapshot().retries, 1);
         assert_eq!(metrics.snapshot().broker_errors, 2);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn describes_topic_partitions_with_cursor_and_partition_state() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut connection, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut connection).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(
+                &mut connection,
+                &api_versions_with_describe_topic_partitions(),
+            )
+            .await;
+
+            let describe_request = read_frame(&mut connection).await;
+            assert_eq!(&describe_request[0..4], &[0, 75, 0, 0]);
+            assert!(describe_request.windows(6).any(|bytes| bytes == b"orders"));
+            write_frame(&mut connection, &describe_topic_partitions_response()).await;
+        });
+        let admin = AdminClient::new(ClientConfig::new([addr.to_string()]));
+
+        let result = admin
+            .describe_topic_partitions(
+                &["orders".to_owned()],
+                DescribeTopicPartitionsOptions::new()
+                    .with_response_partition_limit(10)
+                    .with_cursor(DescribeTopicPartitionsCursor::new("orders", 0)),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(result.throttle_time(), Duration::from_millis(4));
+        assert_eq!(result.topics().len(), 1);
+        let topic = &result.topics()[0];
+        assert_eq!(topic.name(), Some("orders"));
+        assert_eq!(topic.topic_id(), [7; 16]);
+        assert!(topic.is_success());
+        assert_eq!(topic.partitions().len(), 1);
+        assert_eq!(topic.partitions()[0].leader_id(), 1);
+        assert_eq!(topic.partitions()[0].replica_nodes(), &[1]);
+        assert_eq!(topic.partitions()[0].offline_replicas(), &[]);
+        assert_eq!(
+            result
+                .next_cursor()
+                .map(DescribeTopicPartitionsCursor::topic_name),
+            Some("orders")
+        );
+        assert!(result.is_success());
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn rejects_describe_topic_partitions_when_broker_does_not_advertise_it() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut connection, _) = listener.accept().await.unwrap();
+            let request = read_frame(&mut connection).await;
+            assert_eq!(&request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut connection, &api_versions_with_describe_log_dirs(5)).await;
+        });
+        let admin = AdminClient::new(ClientConfig::new([addr.to_string()]));
+
+        let error = admin
+            .describe_topic_partitions(
+                &["orders".to_owned()],
+                DescribeTopicPartitionsOptions::new(),
+            )
+            .await
+            .unwrap_err();
+
+        assert!(
+            matches!(error, Error::Unsupported(message) if message.contains("DescribeTopicPartitions"))
+        );
         server.await.unwrap();
     }
 
@@ -12264,6 +12710,72 @@ mod tests {
         encoder.write_i16(max_version);
         encoder.write_empty_tagged_fields();
         encoder.write_i32(0); // throttle time
+        encoder.write_empty_tagged_fields();
+        encoder.into_bytes()
+    }
+
+    fn api_versions_with_describe_topic_partitions() -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_i16(0); // success
+        encoder.write_unsigned_varint(2); // one API key
+        encoder.write_i16(75);
+        encoder.write_i16(0);
+        encoder.write_i16(0);
+        encoder.write_empty_tagged_fields();
+        encoder.write_i32(0); // throttle time
+        encoder.write_empty_tagged_fields();
+        encoder.into_bytes()
+    }
+
+    fn describe_topic_partitions_response() -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_empty_tagged_fields(); // response header tags
+        encoder.write_i32(4); // throttle time
+        encoder
+            .write_compact_array(Some(&[()]), |encoder, ()| {
+                encoder.write_i16(0);
+                encoder.write_compact_nullable_string(Some("orders"))?;
+                encoder.write_uuid(&[7; 16]);
+                encoder.write_bool(false);
+                encoder.write_compact_array(Some(&[()]), |encoder, ()| {
+                    encoder.write_i16(0);
+                    encoder.write_i32(0);
+                    encoder.write_i32(1);
+                    encoder.write_i32(8);
+                    encoder.write_compact_array(Some(&[1_i32]), |encoder, value| {
+                        encoder.write_i32(*value);
+                        Ok(())
+                    })?;
+                    encoder.write_compact_array(Some(&[1_i32]), |encoder, value| {
+                        encoder.write_i32(*value);
+                        Ok(())
+                    })?;
+                    encoder.write_compact_array(None, |encoder, value: &i32| {
+                        encoder.write_i32(*value);
+                        Ok(())
+                    })?;
+                    encoder.write_compact_array(None, |encoder, value: &i32| {
+                        encoder.write_i32(*value);
+                        Ok(())
+                    })?;
+                    encoder.write_compact_array(Some(&[]), |encoder, value: &i32| {
+                        encoder.write_i32(*value);
+                        Ok(())
+                    })?;
+                    encoder.write_empty_tagged_fields();
+                    Ok(())
+                })?;
+                encoder.write_i32(-2147483648);
+                encoder.write_empty_tagged_fields();
+                encoder.write_i8(1);
+                encoder.write_compact_string("orders")?;
+                encoder.write_i32(1);
+                encoder.write_empty_tagged_fields();
+                Ok(())
+            })
+            .unwrap();
         encoder.write_empty_tagged_fields();
         encoder.into_bytes()
     }

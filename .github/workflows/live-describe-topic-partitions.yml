@@ -1,0 +1,88 @@
+name: Live DescribeTopicPartitions Compatibility
+
+on:
+  workflow_dispatch:
+    inputs:
+      kafka_version:
+        description: Kafka version to qualify
+        required: true
+        type: choice
+        default: 4.3.1
+        options:
+          - "3.7.2"
+          - "4.3.1"
+
+permissions:
+  contents: read
+
+jobs:
+  describe-topic-partitions:
+    name: Kafka ${{ inputs.kafka_version }} DescribeTopicPartitions
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      KAFRUST_BOOTSTRAP_SERVERS: 127.0.0.1:39092
+      KAFRUST_TOPIC: kafrust-describe-topic-partitions-${{ github.run_id }}
+      KAFRUST_EXPECT_UNSUPPORTED: ${{ inputs.kafka_version == '3.7.2' && 'true' || 'false' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.81.0"
+
+      - name: Start Kafka
+        run: |
+          docker network create kafrust-describe-topic-partitions
+          cluster_id="$(docker run --rm apache/kafka:${{ inputs.kafka_version }} /opt/kafka/bin/kafka-storage.sh random-uuid)"
+          docker run -d --name kafrust-describe-topic-partitions-broker \
+            --network kafrust-describe-topic-partitions \
+            -p 39092:9092 \
+            -e KAFKA_CLUSTER_ID="$cluster_id" \
+            -e KAFKA_NODE_ID=1 \
+            -e KAFKA_PROCESS_ROLES=broker,controller \
+            -e KAFKA_LISTENERS=INTERNAL://:29092,EXTERNAL://:9092,CONTROLLER://:9093 \
+            -e KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafrust-describe-topic-partitions-broker:29092,EXTERNAL://127.0.0.1:39092 \
+            -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+            -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT \
+            -e KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL \
+            -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafrust-describe-topic-partitions-broker:9093 \
+            -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
+            -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1 \
+            -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1 \
+            -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 \
+            apache/kafka:${{ inputs.kafka_version }}
+
+      - name: Wait for Kafka
+        run: |
+          for attempt in {1..90}; do
+            if docker exec kafrust-describe-topic-partitions-broker \
+              /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server kafrust-describe-topic-partitions-broker:29092 \
+              >/tmp/kafrust-describe-topic-partitions-ready.log 2>&1; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/kafrust-describe-topic-partitions-ready.log || true
+          docker logs kafrust-describe-topic-partitions-broker
+          exit 1
+
+      - name: Create topic
+        run: |
+          docker exec kafrust-describe-topic-partitions-broker /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server kafrust-describe-topic-partitions-broker:29092 \
+            --create \
+            --topic "$KAFRUST_TOPIC" \
+            --partitions 2 \
+            --replication-factor 1
+
+      - name: Run current-source DescribeTopicPartitions example
+        run: cargo run -p kafrust --example admin_describe_topic_partitions
+
+      - name: Dump diagnostics
+        if: failure()
+        run: docker logs kafrust-describe-topic-partitions-broker || true
