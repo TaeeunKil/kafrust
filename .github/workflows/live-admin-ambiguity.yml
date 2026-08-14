@@ -1,0 +1,100 @@
+name: Live Admin Mutation Ambiguity
+
+on:
+  workflow_dispatch:
+    inputs:
+      kafka_version:
+        description: "Apache Kafka broker image version"
+        required: true
+        default: "3.7.2"
+        type: choice
+        options:
+          - "3.7.2"
+          - "4.3.1"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  admin-ambiguity:
+    name: Kafka ${{ inputs.kafka_version }} Admin mutation response loss
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      KAFRUST_BOOTSTRAP_SERVERS: 127.0.0.1:39095
+      KAFRUST_ADMIN_TOPIC: kafrust-admin-ambiguity-${{ github.run_id }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.81.0"
+
+      - name: Start single-broker Kafka
+        run: |
+          docker network create kafrust-admin-ambiguity
+          cluster_id="$(docker run --rm apache/kafka:${{ inputs.kafka_version }} /opt/kafka/bin/kafka-storage.sh random-uuid)"
+          docker run -d --name kafrust-admin-ambiguity-broker \
+            --network kafrust-admin-ambiguity \
+            -p 29095:9092 \
+            -e KAFKA_CLUSTER_ID="$cluster_id" \
+            -e KAFKA_NODE_ID=1 \
+            -e KAFKA_PROCESS_ROLES=broker,controller \
+            -e KAFKA_LISTENERS=INTERNAL://:29092,EXTERNAL://:9092,CONTROLLER://:9093 \
+            -e KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafrust-admin-ambiguity-broker:29092,EXTERNAL://127.0.0.1:39095 \
+            -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+            -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT \
+            -e KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL \
+            -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafrust-admin-ambiguity-broker:9093 \
+            -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
+            -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1 \
+            -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1 \
+            -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 \
+            apache/kafka:${{ inputs.kafka_version }}
+
+      - name: Wait for Kafka
+        run: |
+          for attempt in {1..120}; do
+            if docker exec kafrust-admin-ambiguity-broker /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server kafrust-admin-ambiguity-broker:29092 \
+              >/tmp/kafrust-admin-ambiguity-probe.log 2>&1; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/kafrust-admin-ambiguity-probe.log || true
+          docker logs kafrust-admin-ambiguity-broker
+          exit 1
+
+      - name: Start response-drop proxy
+        run: |
+          rm -f /tmp/kafrust-admin-ambiguity-dropped
+          python3 -u scripts/kafka_response_drop_proxy.py \
+            --listen-port 39095 \
+            --target-port 29095 \
+            --drop-api-key 19 \
+            --drop-marker /tmp/kafrust-admin-ambiguity-dropped \
+            >/tmp/kafrust-admin-ambiguity-proxy.log 2>&1 &
+          for attempt in {1..20}; do
+            if (echo > /dev/tcp/127.0.0.1/39095) >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/kafrust-admin-ambiguity-proxy.log
+          exit 1
+
+      - name: Run current-source ambiguity and reconciliation example
+        run: cargo run -p kafrust --example admin_mutation_ambiguity
+
+      - name: Verify response was dropped
+        run: test -f /tmp/kafrust-admin-ambiguity-dropped
+
+      - name: Dump diagnostics
+        if: failure()
+        run: |
+          cat /tmp/kafrust-admin-ambiguity-proxy.log || true
+          docker logs kafrust-admin-ambiguity-broker || true
