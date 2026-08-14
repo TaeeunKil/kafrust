@@ -1156,6 +1156,17 @@ impl ConsumerGroupConfig {
             commit_worker: None,
             auto_commit_worker: None,
         };
+        // Kafka can return an empty assignment during the initial KIP-848
+        // heartbeat before delivering a single member's partitions. Probe one
+        // follow-up heartbeat, then accept a stable empty assignment because a
+        // different member may legitimately own every subscribed partition.
+        if group
+            .consumer_owned_partitions
+            .as_deref()
+            .is_some_and(|assignments| !consumer_assignment_has_partitions(assignments))
+        {
+            group.heartbeat_consumer().await?;
+        }
         if !consumer_assignment_ready(group.consumer_owned_partitions.as_deref(), false) {
             group.wait_for_consumer_assignment(false).await?;
         }
@@ -1580,11 +1591,16 @@ fn consumer_assignment_ready(
     require_partitions: bool,
 ) -> bool {
     assignments.is_some_and(|assignments| {
-        !require_partitions
-            || assignments
-                .iter()
-                .any(|assignment| !assignment.partitions.is_empty())
+        !require_partitions || consumer_assignment_has_partitions(assignments)
     })
+}
+
+fn consumer_assignment_has_partitions(
+    assignments: &[ConsumerGroupHeartbeatTopicPartitions],
+) -> bool {
+    assignments
+        .iter()
+        .any(|assignment| !assignment.partitions.is_empty())
 }
 
 impl ConsumerGroup {
@@ -5019,6 +5035,8 @@ mod tests {
         assert!(consumer_assignment_ready(Some(&empty), false));
         assert!(consumer_assignment_ready(Some(&assigned), true));
         assert!(!consumer_assignment_ready(None, true));
+        assert!(!super::consumer_assignment_has_partitions(&empty));
+        assert!(super::consumer_assignment_has_partitions(&assigned));
     }
 
     #[test]
