@@ -1,0 +1,165 @@
+name: Live Partition Reassignment Ambiguity
+
+on:
+  workflow_dispatch:
+    inputs:
+      kafka_version:
+        description: Kafka version to qualify
+        required: true
+        type: choice
+        default: 3.7.2
+        options:
+          - "3.7.2"
+          - "4.3.1"
+
+permissions:
+  contents: read
+
+jobs:
+  reassignment-ambiguity:
+    name: Kafka ${{ inputs.kafka_version }} reassignment response loss
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      KAFRUST_BOOTSTRAP_SERVERS: 127.0.0.1:39092,127.0.0.1:39093,127.0.0.1:39094
+      KAFRUST_REASSIGNMENT_TOPIC: kafrust-reassignment-ambiguity-${{ github.run_id }}
+      KAFRUST_REASSIGNMENT_PARTITION: "0"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.81.0"
+
+      - name: Start three-broker Kafka
+        run: |
+          docker network create kafrust-reassignment
+          cluster_id="$(docker run --rm apache/kafka:${{ inputs.kafka_version }} /opt/kafka/bin/kafka-storage.sh random-uuid)"
+          for node in 1 2 3; do
+            broker_port=$((29091 + node))
+            proxy_port=$((39091 + node))
+            docker run -d --name "kafrust-reassignment-broker-${node}" \
+              --network kafrust-reassignment \
+              -p "${broker_port}:9092" \
+              -e KAFKA_CLUSTER_ID="$cluster_id" \
+              -e KAFKA_NODE_ID="$node" \
+              -e KAFKA_PROCESS_ROLES=broker,controller \
+              -e KAFKA_LISTENERS=INTERNAL://:29092,EXTERNAL://:9092,CONTROLLER://:9093 \
+              -e KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafrust-reassignment-broker-${node}:29092,EXTERNAL://127.0.0.1:${proxy_port} \
+              -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+              -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT \
+              -e KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL \
+              -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafrust-reassignment-broker-1:9093,2@kafrust-reassignment-broker-2:9093,3@kafrust-reassignment-broker-3:9093 \
+              -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=3 \
+              -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=3 \
+              -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=2 \
+              -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 \
+              apache/kafka:${{ inputs.kafka_version }}
+          done
+
+      - name: Wait for Kafka
+        run: |
+          for attempt in {1..120}; do
+            ready=1
+            for node in 1 2 3; do
+              if ! docker exec "kafrust-reassignment-broker-${node}" \
+                /opt/kafka/bin/kafka-broker-api-versions.sh \
+                --bootstrap-server "kafrust-reassignment-broker-${node}:29092" \
+                >/tmp/kafrust-reassignment-probe.log 2>&1; then
+                ready=0
+              fi
+            done
+            if [ "$ready" -eq 1 ]; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/kafrust-reassignment-probe.log || true
+          for node in 1 2 3; do docker logs "kafrust-reassignment-broker-${node}"; done
+          exit 1
+
+      - name: Create topic and choose a different replica order
+        run: |
+          docker exec kafrust-reassignment-broker-1 /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server kafrust-reassignment-broker-1:29092 \
+            --create \
+            --topic "$KAFRUST_REASSIGNMENT_TOPIC" \
+            --partitions 1 \
+            --replication-factor 3
+          docker exec kafrust-reassignment-broker-1 /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server kafrust-reassignment-broker-1:29092 \
+            --describe \
+            --topic "$KAFRUST_REASSIGNMENT_TOPIC" \
+            | tee /tmp/kafrust-reassignment-before.log
+          replicas="$(sed -n 's/.*Replicas: \([^ ]*\).*/\1/p' /tmp/kafrust-reassignment-before.log | head -n 1)"
+          IFS=',' read -r first second third <<< "$replicas"
+          if [ -z "$first" ] || [ -z "$second" ] || [ -z "$third" ]; then
+            cat /tmp/kafrust-reassignment-before.log
+            echo "could not parse the initial three-broker replica order"
+            exit 1
+          fi
+          target="$third,$first,$second"
+          echo "KAFRUST_REASSIGNMENT_REPLICAS=$target" >> "$GITHUB_ENV"
+          echo "selected reassignment target: $target"
+
+      - name: Start response-drop proxies
+        run: |
+          rm -f /tmp/kafrust-reassignment-dropped
+          for node in 1 2 3; do
+            listen_port=$((39091 + node))
+            target_port=$((29091 + node))
+            python3 -u scripts/kafka_response_drop_proxy.py \
+              --listen-port "$listen_port" \
+              --target-port "$target_port" \
+              --drop-api-key 45 \
+              --drop-marker /tmp/kafrust-reassignment-dropped \
+              >/tmp/kafrust-reassignment-proxy-${node}.log 2>&1 &
+          done
+          for attempt in {1..30}; do
+            ready=1
+            for port in 39092 39093 39094; do
+              if ! (echo >/dev/tcp/127.0.0.1/$port) >/dev/null 2>&1; then
+                ready=0
+              fi
+            done
+            if [ "$ready" -eq 1 ]; then
+              exit 0
+            fi
+            sleep 1
+          done
+          for node in 1 2 3; do cat "/tmp/kafrust-reassignment-proxy-${node}.log" || true; done
+          exit 1
+
+      - name: Run current-source reassignment ambiguity example
+        run: cargo run -p kafrust --example admin_reassignment_ambiguity
+
+      - name: Verify response was dropped and replica movement completed
+        run: |
+          test -f /tmp/kafrust-reassignment-dropped
+          for attempt in {1..90}; do
+            docker exec kafrust-reassignment-broker-1 /opt/kafka/bin/kafka-topics.sh \
+              --bootstrap-server kafrust-reassignment-broker-1:29092 \
+              --describe \
+              --topic "$KAFRUST_REASSIGNMENT_TOPIC" \
+              >/tmp/kafrust-reassignment-after.log 2>&1 || true
+            if grep -q "Replicas: $KAFRUST_REASSIGNMENT_REPLICAS Isr: $KAFRUST_REASSIGNMENT_REPLICAS" \
+              /tmp/kafrust-reassignment-after.log; then
+              cat /tmp/kafrust-reassignment-after.log
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/kafrust-reassignment-after.log || true
+          echo "replica reassignment did not reach the target replica and ISR order"
+          exit 1
+
+      - name: Dump diagnostics
+        if: failure()
+        run: |
+          for node in 1 2 3; do
+            cat "/tmp/kafrust-reassignment-proxy-${node}.log" || true
+            docker logs "kafrust-reassignment-broker-${node}" || true
+          done
