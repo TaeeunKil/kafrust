@@ -191,7 +191,7 @@ Admin MVP, observability, and migration-documentation gates recorded in the
 roadmap. It is still behind the broad pure-Rust competitors in three areas:
 
 - modern protocol breadth: Share Groups/KIP-932, client telemetry/KIP-714,
-  remaining modern Admin and quorum paths, and protocol-parity automation;
+  remaining modern Admin paths, and protocol-parity automation;
 - production hardening: more complete group lifecycle behavior, ambiguous
   transaction and mutation outcomes, resource ceilings, fuzzing, fault-
   injected broker coverage, and longer secured multi-broker soaks;
@@ -199,10 +199,9 @@ roadmap. It is still behind the broad pure-Rust competitors in three areas:
   examples, and repeatable performance/SLO evidence across representative
   workloads.
 
-The current `DescribeQuorum` implementation is not counted as complete until
-the controller-listener workflow passes on Kafka 3.7.2 and 4.3.1. Code that
-decodes a response in a unit test is not equivalent to live broker
-compatibility.
+`DescribeQuorum` is now live-qualified through the explicit controller-listener
+path on Kafka 3.7.2 and 4.3.1. The remaining gap is broader modern Admin and
+KRaft controller coverage, not this API's basic request/response path.
 
 ### Estimate To Surpass
 

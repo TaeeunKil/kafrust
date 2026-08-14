@@ -75,8 +75,14 @@ coverage toward a release candidate that can be qualified in staging.
   capability fallback and Kafka 4.3.1 full decode in
   [`31778114684`](https://github.com/TaeeunKil/kafrust/actions/runs/31778114684)
   and [`31778116310`](https://github.com/TaeeunKil/kafrust/actions/runs/31778116310).
-  Broader unimplemented modern APIs such as quorum, telemetry, and share-group
-  surfaces remain open.
+- `DescribeQuorum` is now implemented through the typed protocol, low-level
+  client, and controller-aware `AdminClient` layers. Its current-source live
+  gate passed Kafka 3.7.2 with negotiated v0 and Kafka 4.3.1 with negotiated v2,
+  including the explicit controller-listener workflow, in
+  [`31781263986`](https://github.com/TaeeunKil/kafrust/actions/runs/31781263986)
+  and [`31781264035`](https://github.com/TaeeunKil/kafrust/actions/runs/31781264035).
+  Remaining modern gaps include Share Groups/KIP-932, client telemetry/KIP-714,
+  and broader Admin/controller protocol coverage.
 - The first consumer-group lifecycle slice now has a focused regression test
   for retaining an explicit local position when a topic partition remains
   assigned across rejoin, plus a guard that does not copy position from a

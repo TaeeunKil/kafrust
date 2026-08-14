@@ -35,6 +35,17 @@ and [`31778116310`](https://github.com/TaeeunKil/kafrust/actions/runs/3177811631
 This qualifies that API path only; it does not expand the complete Kafka API
 or `rust-rdkafka` parity claim.
 
+The current-source `DescribeQuorum` qualification passed on commit `1ffa9c8`
+against Kafka 3.7.2 and 4.3.1 in
+[`31781263986`](https://github.com/TaeeunKil/kafrust/actions/runs/31781263986)
+and [`31781264035`](https://github.com/TaeeunKil/kafrust/actions/runs/31781264035).
+The example connected through the explicitly configured controller listener,
+negotiated v0 on Kafka 3.7.2 and v2 on Kafka 4.3.1, and decoded the metadata
+quorum leader, high watermark, voters, observers, and v2 node listener data.
+The same jobs also checked the Kafka quorum CLI through the broker listener;
+this is a `DescribeQuorum` qualification, not a claim of complete KRaft admin
+or controller protocol coverage.
+
 The complete 17-job `Live Kafka Smoke` matrix also passed on the current
 connection-lifecycle hardening commit `e0e7e03` in
 [`31765585666`](https://github.com/TaeeunKil/kafrust/actions/runs/31765585666).

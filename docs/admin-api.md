@@ -28,6 +28,23 @@ on Kafka 3.7.2 in
 and full response decoding on Kafka 4.3.1 in
 [`31778116310`](https://github.com/TaeeunKil/kafrust/actions/runs/31778116310).
 
+## DescribeQuorum
+
+`AdminClient::describe_quorum` exposes Kafka's flexible `DescribeQuorum` API
+(API key 55) for KRaft metadata quorum inspection. It negotiates v0 through v2,
+preserves the response version in `DescribeQuorumResult`, and exposes typed
+leader, epoch, high-watermark, voter, observer, replica-directory, and
+controller-listener fields where the broker version provides them.
+
+When a deployment exposes a controller listener separately, configure it with
+`ClientConfig::controller_bootstrap_servers`. The example and live workflow use
+that path explicitly. Kafka 3.7.2 selected v0 and Kafka 4.3.1 selected v2 in
+the current-source qualification runs
+[`31781263986`](https://github.com/TaeeunKil/kafrust/actions/runs/31781263986)
+and [`31781264035`](https://github.com/TaeeunKil/kafrust/actions/runs/31781264035).
+The protocol request includes tagged fields at the partition, topic, and
+top-level boundaries; focused tests keep this flexible wire shape auditable.
+
 ## Mutation Outcome Ambiguity
 
 For mutating Admin operations, a transport failure, request timeout, response

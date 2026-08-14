@@ -139,6 +139,10 @@ routes each group to its coordinator and retains per-group errors.
 or explicit topic expansion. `delete_consumer_group_offsets` routes
 OffsetDelete v0 to the coordinator and
 preserves top-level and per-partition Kafka errors.
+`describe_quorum` inspects the KRaft metadata quorum through negotiated
+DescribeQuorum v0-v2; set `ClientConfig::controller_bootstrap_servers` when the
+controller listener is advertised separately. Kafka 3.7.2 and 4.3.1 are live-
+qualified through the controller-listener workflow.
 `list_consumer_group_offsets` and `alter_consumer_group_offsets` expose typed
 classic consumer-group offset inspection and administrative reset through the
 group coordinator, preserving partition-level outcomes.
