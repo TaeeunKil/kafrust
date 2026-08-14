@@ -35,7 +35,7 @@ Both published docs.rs pages returned HTTP 200 for
 
 ## 0.3 Release Target
 
-Status: Planned after the `0.2.30` patch release; implementation continues
+Status: In progress after the `0.2.30` patch release; implementation continues
 under M21.
 
 `0.3.0` is the next meaningful client milestone, not the complete Kafka
@@ -71,6 +71,15 @@ coverage toward a release candidate that can be qualified in staging.
   This closes the tested position-preservation sub-gate; delayed assignment,
   member-loss, committed-offset, leader-epoch, and shutdown cases remain part
   of the broader 0.3 lifecycle gate.
+- The low-level broker connection now retires itself after a request timeout,
+  transport failure, or invalid/oversized response frame. A focused regression
+  test proves a later request cannot consume stale bytes from the failed
+  stream, while high-level retry paths establish a replacement connection.
+  The full local validation and complete 17-job `Live Kafka Smoke` matrix
+  passed for commit `e0e7e03` in
+  [`31765585666`](https://github.com/TaeeunKil/kafrust/actions/runs/31765585666),
+  including Kafka 3.7.2 multi-broker failover, secured failover, and Kafka
+  4.3.1 KIP-848 paths.
 
 ### Exit criteria
 

@@ -26,6 +26,15 @@ consumed an explicit post-failover record, while the consumer preserved its
 in-memory partition position across assignment rebuilds. This is live evidence
 for the tested paths, not a claim of complete Kafka or `rust-rdkafka` parity.
 
+The complete 17-job `Live Kafka Smoke` matrix also passed on the current
+connection-lifecycle hardening commit `e0e7e03` in
+[`31765585666`](https://github.com/TaeeunKil/kafrust/actions/runs/31765585666).
+The run covered Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1, TLS, SASL/PLAIN,
+SASL/SCRAM, OAUTHBEARER validation, ACL administration, classic and KIP-848
+consumer groups, transaction ambiguity handling, and multi-broker failover.
+This is evidence that retiring a low-level connection after transport or
+framing failure does not regress the tested reconnect and recovery paths.
+
 The published `0.2.30` artifacts passed the seven-profile external
 `Published Crate Smoke` run
 [`31762679537`](https://github.com/TaeeunKil/kafrust/actions/runs/31762679537),
