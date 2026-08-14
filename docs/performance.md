@@ -17,6 +17,8 @@ The example prints one JSON object containing:
 - producer and consumer records per second
 - producer and consumer MiB per second
 - Produce batch p50, p95, and p99 latency
+- Kafka request roundtrip p50, p95, and p99 upper-bound estimates from
+  `ClientMetricsSnapshot`
 - broker request and high-level retry counts
 - record count, batch size, payload size, and compression
 
@@ -49,7 +51,12 @@ artifact.
 Compare runs only when the runner class, Kafka version, record count, batch
 size, and compression match. Shared GitHub runners are useful for detecting
 large regressions, but their results are not stable enough for small percentage
-claims.
+claims. `batch_p50_ms`, `batch_p95_ms`, and `batch_p99_ms` measure the complete
+high-level Produce call. `request_p50_ms`, `request_p95_ms`, and
+`request_p99_ms` are fixed-bucket upper-bound estimates for all Kafka request
+roundtrips recorded by the shared metrics handle, including Produce, Metadata,
+and Fetch requests. The request values are approximate and should be compared
+with matching operation profiles.
 
 ## Published Baseline
 

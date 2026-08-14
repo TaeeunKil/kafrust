@@ -1463,10 +1463,11 @@ Implemented evidence:
   commit. Existing `kafka.request` spans nest under these operation spans, and
   all fields exclude record and protocol payload contents.
 - The `throughput_benchmark` live example measures end-to-end batch Produce and
-  offset-based Fetch throughput, Produce batch p50/p95/p99 latency, request
-  counts, and retries. The manual `Kafka Benchmark` workflow runs selected
-  payload and compression profiles against Kafka 4.3.1 and uploads JSONL
-  results for comparison.
+  offset-based Fetch throughput, Produce batch p50/p95/p99 latency, fixed-
+  bucket Kafka request p50/p95/p99 upper-bound estimates, request counts, and
+  retries. The manual `Kafka Benchmark` workflow runs selected payload and
+  compression profiles against Kafka 4.3.1 and uploads JSONL results for
+  comparison.
 - Manual benchmark run `30057817575` published the first selected-profile
   baseline on 2026-07-24. The 1-KiB profiles reached 47,883 records/s
   uncompressed and 50,555 records/s with Zstd on a GitHub-hosted runner.

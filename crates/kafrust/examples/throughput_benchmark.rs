@@ -123,6 +123,8 @@ async fn main() -> kafrust::Result<()> {
             "\"produce_seconds\":{:.6},\"produce_records_per_second\":{:.2},",
             "\"produce_mib_per_second\":{:.2},\"batch_p50_ms\":{:.3},",
             "\"batch_p95_ms\":{:.3},\"batch_p99_ms\":{:.3},",
+            "\"request_p50_ms\":{:.3},\"request_p95_ms\":{:.3},",
+            "\"request_p99_ms\":{:.3},",
             "\"consume_seconds\":{:.6},\"consume_records_per_second\":{:.2},",
             "\"consume_mib_per_second\":{:.2},\"requests\":{},\"retries\":{}}}"
         ),
@@ -138,6 +140,9 @@ async fn main() -> kafrust::Result<()> {
         percentile_ms(&batch_latencies, 50),
         percentile_ms(&batch_latencies, 95),
         percentile_ms(&batch_latencies, 99),
+        request_percentile_ms(&snapshot, 50),
+        request_percentile_ms(&snapshot, 95),
+        request_percentile_ms(&snapshot, 99),
         consume_elapsed.as_secs_f64(),
         rate(consumed, consume_elapsed),
         mib_rate(consumed_bytes, consume_elapsed),
@@ -196,9 +201,16 @@ fn percentile_ms(sorted: &[Duration], percentile: usize) -> f64 {
     sorted.get(index).copied().unwrap_or_default().as_secs_f64() * 1_000.0
 }
 
+fn request_percentile_ms(snapshot: &kafrust::ClientMetricsSnapshot, percentile: u8) -> f64 {
+    snapshot
+        .latency_percentile(percentile)
+        .map_or(0.0, |latency| latency.as_secs_f64() * 1_000.0)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{percentile_ms, rate};
+    use super::{percentile_ms, rate, request_percentile_ms};
+    use kafrust::ClientMetricsSnapshot;
     use std::time::Duration;
 
     #[test]
@@ -217,5 +229,16 @@ mod tests {
     #[test]
     fn computes_record_rate() {
         assert_eq!(rate(1_000, Duration::from_secs(2)), 500.0);
+    }
+
+    #[test]
+    fn reports_request_percentiles_from_client_metrics() {
+        let snapshot = ClientMetricsSnapshot {
+            request_latency_buckets: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0],
+            ..ClientMetricsSnapshot::default()
+        };
+
+        assert_eq!(request_percentile_ms(&snapshot, 50), 5_000.0);
+        assert_eq!(request_percentile_ms(&snapshot, 99), 5_000.0);
     }
 }
