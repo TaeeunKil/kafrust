@@ -408,6 +408,12 @@ and [`31772470590`](https://github.com/TaeeunKil/kafrust/actions/runs/3177247059
 The ACL gates used Kafka StandardAuthorizer with an explicit test superuser;
 repeat authorization and policy checks for the target principal before
 migrating a production workload.
+AlterClientQuotas response loss also passed with DescribeClientQuotas
+reconciliation in
+[`31772731756`](https://github.com/TaeeunKil/kafrust/actions/runs/31772731756)
+and [`31772731963`](https://github.com/TaeeunKil/kafrust/actions/runs/31772731963).
+The quota gate verifies one user quota only; repeat it with the target
+principal, quota keys, and broker policy before migration.
 
 ## Capability Gate
 

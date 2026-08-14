@@ -179,6 +179,14 @@ on Kafka 3.7.2 in [`31772470761`](https://github.com/TaeeunKil/kafrust/actions/r
 and Kafka 4.3.1 in [`31772470590`](https://github.com/TaeeunKil/kafrust/actions/runs/31772470590).
 These are operation-specific proofs, not a universal authorization or
 post-transmission guarantee for every Admin mutation.
+The current-source gate also qualifies AlterClientQuotas by setting
+`producer_byte_rate`, dropping the response, and confirming the value through
+DescribeClientQuotas on Kafka 3.7.2 in
+[`31772731756`](https://github.com/TaeeunKil/kafrust/actions/runs/31772731756)
+and Kafka 4.3.1 in
+[`31772731963`](https://github.com/TaeeunKil/kafrust/actions/runs/31772731963).
+This remains an operation-specific proof and does not establish target quota
+policy or authorization parity.
 
 The latest complete matrix in
 [`31624278107`](https://github.com/TaeeunKil/kafrust/actions/runs/31624278107)

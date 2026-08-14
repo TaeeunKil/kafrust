@@ -75,6 +75,14 @@ and Kafka 4.3.1 in
 [`31772470590`](https://github.com/TaeeunKil/kafrust/actions/runs/31772470590).
 These remain operation-specific proofs and do not replace target-policy
 authorization testing.
+The same response-drop gate now qualifies `AlterClientQuotas`: it set the
+`producer_byte_rate` quota for a user, dropped the response, and confirmed the
+applied value through `DescribeClientQuotas` on Kafka 3.7.2 in
+[`31772731756`](https://github.com/TaeeunKil/kafrust/actions/runs/31772731756)
+and Kafka 4.3.1 in
+[`31772731963`](https://github.com/TaeeunKil/kafrust/actions/runs/31772731963).
+This is an operation-specific proof; target quota policy and authorization
+must still be qualified for production.
 
 ## Inspect Cluster and Topics
 
