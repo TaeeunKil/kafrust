@@ -21,6 +21,8 @@ on:
           - "create_partitions"
           - "incremental_alter_configs"
           - "alter_configs"
+          - "create_acls"
+          - "delete_acls"
           - "delete_topics"
 
 env:
@@ -89,6 +91,8 @@ jobs:
             create_partitions) drop_api_key=37 ;;
             incremental_alter_configs) drop_api_key=44 ;;
             alter_configs) drop_api_key=33 ;;
+            create_acls) drop_api_key=30 ;;
+            delete_acls) drop_api_key=31 ;;
             delete_topics) drop_api_key=20 ;;
             *) echo "unsupported mutation: ${{ inputs.mutation }}"; exit 1 ;;
           esac

@@ -1,4 +1,5 @@
 use kafrust::{
+    AclBinding, AclFilter, AclOperation, AclPatternType, AclPermissionType, AclResourceType,
     AdminClient, AlterConfigsOptions, ClientConfig, CreatePartitionsOptions, CreateTopicsOptions,
     DeleteTopicsOptions, DescribeConfigsOptions, Error, NewPartitions, NewTopic,
     TopicConfigAlteration, TopicConfigResource, TopicConfigUpdate,
@@ -23,10 +24,12 @@ async fn main() -> kafrust::Result<()> {
         "create_partitions" => qualify_create_partitions(&admin, &topic).await?,
         "incremental_alter_configs" => qualify_incremental_alter_configs(&admin, &topic).await?,
         "alter_configs" => qualify_alter_configs(&admin, &topic).await?,
+        "create_acls" => qualify_create_acls(&admin, &topic).await?,
+        "delete_acls" => qualify_delete_acls(&admin, &topic).await?,
         "delete_topics" => qualify_delete_topics(&admin, &topic).await?,
         _ => {
             return Err(Error::Unsupported(
-                "KAFRUST_ADMIN_MUTATION must be create_topics, create_partitions, incremental_alter_configs, alter_configs, or delete_topics",
+                "KAFRUST_ADMIN_MUTATION must be create_topics, create_partitions, incremental_alter_configs, alter_configs, create_acls, delete_acls, or delete_topics",
             ))
         }
     }
@@ -189,6 +192,121 @@ async fn qualify_alter_configs(admin: &AdminClient, topic: &str) -> kafrust::Res
     }
     println!("AlterConfigs response was lost; outcome is explicitly unknown");
     wait_for_topic_config_value(admin, topic, "retention.ms", "180000").await
+}
+
+async fn qualify_create_acls(admin: &AdminClient, topic: &str) -> kafrust::Result<()> {
+    let binding = ambiguity_acl_binding(topic);
+    let error = match admin.create_acls(std::slice::from_ref(&binding)).await {
+        Ok(result) if !result.has_errors() => {
+            return Err(Error::Unsupported(
+                "the response-drop proxy did not make CreateAcls ambiguous",
+            ))
+        }
+        Ok(_) => {
+            return Err(Error::Unsupported(
+                "CreateAcls returned a broker error before the response was dropped",
+            ))
+        }
+        Err(error) => error,
+    };
+    if !matches!(
+        error,
+        Error::AdminMutationOutcomeUnknown {
+            operation: "CreateAcls"
+        }
+    ) {
+        return Err(error);
+    }
+    println!("CreateAcls response was lost; outcome is explicitly unknown");
+    let filter = ambiguity_acl_filter(topic);
+    wait_for_acl_state(admin, &filter, &binding, true).await
+}
+
+async fn qualify_delete_acls(admin: &AdminClient, topic: &str) -> kafrust::Result<()> {
+    let binding = ambiguity_acl_binding(topic);
+    admin.create_acls(std::slice::from_ref(&binding)).await?;
+    let filter = ambiguity_acl_filter(topic);
+    let error = match admin.delete_acls(std::slice::from_ref(&filter)).await {
+        Ok(result) if !result.has_errors() => {
+            return Err(Error::Unsupported(
+                "the response-drop proxy did not make DeleteAcls ambiguous",
+            ))
+        }
+        Ok(_) => {
+            return Err(Error::Unsupported(
+                "DeleteAcls returned a broker error before the response was dropped",
+            ))
+        }
+        Err(error) => error,
+    };
+    if !matches!(
+        error,
+        Error::AdminMutationOutcomeUnknown {
+            operation: "DeleteAcls"
+        }
+    ) {
+        return Err(error);
+    }
+    println!("DeleteAcls response was lost; outcome is explicitly unknown");
+    wait_for_acl_state(admin, &filter, &binding, false).await
+}
+
+fn ambiguity_acl_binding(topic: &str) -> AclBinding {
+    AclBinding::new(
+        AclResourceType::Topic,
+        topic,
+        AclPatternType::Literal,
+        "User:kafrust-ambiguity",
+        "*",
+        AclOperation::Read,
+        AclPermissionType::Allow,
+    )
+}
+
+fn ambiguity_acl_filter(topic: &str) -> AclFilter {
+    AclFilter::any()
+        .resource_type(AclResourceType::Topic)
+        .resource_name(topic)
+        .pattern_type(AclPatternType::Literal)
+        .principal("User:kafrust-ambiguity")
+        .host("*")
+        .operation(AclOperation::Read)
+        .permission_type(AclPermissionType::Allow)
+}
+
+async fn wait_for_acl_state(
+    admin: &AdminClient,
+    filter: &AclFilter,
+    binding: &AclBinding,
+    expected_present: bool,
+) -> kafrust::Result<()> {
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(15);
+    loop {
+        let described = admin.describe_acls(filter).await?;
+        if !described.is_success() {
+            return Err(Error::Broker {
+                code: described.error_code(),
+                context: "describe ACL during ambiguity reconciliation".to_owned(),
+            });
+        }
+        let present = described
+            .bindings()
+            .iter()
+            .any(|candidate| candidate == binding);
+        if present == expected_present {
+            println!(
+                "reconciled ACL state for topic {topic}",
+                topic = binding.resource_name()
+            );
+            return Ok(());
+        }
+        if tokio::time::Instant::now() >= deadline {
+            return Err(Error::Unsupported(
+                "ambiguous ACL mutation reconciliation did not observe the expected state",
+            ));
+        }
+        tokio::time::sleep(Duration::from_millis(250)).await;
+    }
 }
 
 async fn wait_for_topic_config_value(
