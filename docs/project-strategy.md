@@ -42,10 +42,9 @@ Pure Rust alternatives also exist. This comparison is a source-documented
 snapshot from 2026-08-14, not an independent benchmark:
 
 - [`krafka`](https://github.com/hupe1980/krafka) is the closest broad
-  pure-Rust competitor. Its current `main` manifest is `0.19.0`, while the
-  latest docs.rs page currently exposes `0.13.0`; those are different release
-  surfaces and must not be treated as the same qualification target. The
-  current README claims Kafka 3.9+ protocol parity, classic and KIP-848
+  pure-Rust competitor. Its current `main` manifest and docs.rs page are both
+  `0.19.0` as of this snapshot. The current README claims Kafka 3.9+
+  protocol parity, classic and KIP-848
   groups, ShareConsumer/KIP-932, transactions, OAUTHBEARER, AWS MSK IAM,
   broad Admin coverage, telemetry, Prometheus metrics, a fault-injecting fake
   broker, 2,350+ tests, and six fuzz targets. It is currently ahead of kafrust
