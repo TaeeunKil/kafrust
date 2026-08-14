@@ -557,6 +557,52 @@ member assignments, plus the existing broker, security, ACL, and multi-broker
 failover profiles. This is a current-main qualification result and does not
 modify the already-published `0.2.28` artifacts.
 
+## Release 0.2.29
+
+### Summary
+
+- Add fixed-bucket request latency histograms to `ClientMetricsSnapshot`.
+- Add `latency_percentile(50)`, `(95)`, and `(99)` upper-bound estimates for
+  operational tail-latency checks.
+- Include request p50/p95/p99 fields in the live throughput benchmark JSON and
+  record a fresh Kafka 4.3.1 baseline.
+
+### Breaking changes
+
+- `ClientMetricsSnapshot` now includes the public
+  `request_latency_buckets` field. Downstream exhaustive struct literals must
+  initialize it, or use `..ClientMetricsSnapshot::default()`.
+
+### Migration notes
+
+- Existing metrics consumers can continue using all prior fields. Use
+  `snapshot.latency_percentile(50)`, `(95)`, or `(99)` for approximate request
+  roundtrip tail estimates; the result is an upper bound from fixed buckets,
+  not an exact retained sample.
+
+### Compatibility evidence
+
+- Current-main Kafka 4.3.1 benchmark run
+  [`31757363941`](https://github.com/TaeeunKil/kafrust/actions/runs/31757363941)
+  passed all four payload/compression profiles with zero retries and emitted
+  the new request percentile fields.
+
+### Verification
+
+- `cargo fmt --all`
+- `cargo check --workspace --all-targets`
+- `cargo test --workspace --all-features` (323 kafrust tests and 195 protocol tests)
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- `cargo doc --workspace --all-features --no-deps`
+- `git diff --check`
+
+### Known limits
+
+- This is still an alpha release. The compatibility and migration documents
+  retain the explicit limits for production OAuth/OIDC providers, broader
+  transaction and KIP-848 failure matrices, ambiguous post-transmission Admin
+  mutations, unclean-election/data-loss behavior, and unlisted Kafka APIs.
+
 ## Optional Broker Checks
 
 The default test suite does not require a Kafka broker. Before an alpha tag, run the opt-in examples or tests against a local broker when practical:
