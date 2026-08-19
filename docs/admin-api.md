@@ -63,6 +63,17 @@ The Kafka 4.3.1 ShareConsumer smoke also keeps a member active while calling
 this method and verifies the returned group and member state in
 [`32223573332`](https://github.com/TaeeunKil/kafrust/actions/runs/32223573332).
 
+`AdminClient::alter_share_group_offsets` and
+`AdminClient::delete_share_group_offsets` cover Kafka's flexible v0 APIs 91
+and 92. Both operations require an empty share group, preserve top-level and
+per-topic or per-partition errors, and classify a post-transmission transport
+failure as `AdminMutationOutcomeUnknown` without replay. The Kafka 4.3.1
+smoke sets and then deletes a real share-group offset in
+[`32224302754`](https://github.com/TaeeunKil/kafrust/actions/runs/32224302754).
+
+Share-group offset listing and share-group deletion are separate remaining
+Admin parity slices.
+
 ```rust
 use kafrust::{AdminClient, ClientConfig};
 

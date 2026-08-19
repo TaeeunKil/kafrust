@@ -85,9 +85,11 @@ coverage toward a release candidate that can be qualified in staging.
   bits. Focused wire, injected-broker, and Admin routing tests pass; the Kafka
   4.3.1 live ShareConsumer smoke now also inspects its active group through
   this API in [`32223573332`](https://github.com/TaeeunKil/kafrust/actions/runs/32223573332).
-  This closes the first Share Group Admin inspection slice, while
-  Share Group offset mutation/listing and long-running operational evidence
-  remain open.
+  Share Group offset mutation APIs 91 and 92 are also implemented with typed
+  top-level and per-topic/per-partition results; the Kafka 4.3.1 set/delete
+  gate passed in [`32224302754`](https://github.com/TaeeunKil/kafrust/actions/runs/32224302754).
+  Share Group offset listing, group deletion, and long-running operational
+  evidence remain open.
 - Flexible `DescribeTopicPartitions` v0 is now implemented through the typed
   protocol and `AdminClient` layers, including topic UUIDs, partition leader/
   ISR state, nullable ELR fields, authorized operations, and paging cursors.
