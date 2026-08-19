@@ -59,6 +59,10 @@ does not claim compatibility with Kafka 4.0's removed early-access v0. Read
 errors and retryable coordinator responses use the same bounded recovery policy
 as the other coordinator-scoped Admin reads.
 
+The Kafka 4.3.1 ShareConsumer smoke also keeps a member active while calling
+this method and verifies the returned group and member state in
+[`32223573332`](https://github.com/TaeeunKil/kafrust/actions/runs/32223573332).
+
 ```rust
 use kafrust::{AdminClient, ClientConfig};
 

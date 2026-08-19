@@ -84,7 +84,8 @@ coverage toward a release candidate that can be qualified in staging.
   details, subscribed topics, assignments, topic UUIDs, and authorization
   bits. Focused wire, injected-broker, and Admin routing tests pass; the Kafka
   4.3.1 live ShareConsumer smoke now also inspects its active group through
-  this API. This closes the first Share Group Admin inspection slice, while
+  this API in [`32223573332`](https://github.com/TaeeunKil/kafrust/actions/runs/32223573332).
+  This closes the first Share Group Admin inspection slice, while
   Share Group offset mutation/listing and long-running operational evidence
   remain open.
 - Flexible `DescribeTopicPartitions` v0 is now implemented through the typed
