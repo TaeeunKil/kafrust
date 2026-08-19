@@ -656,6 +656,7 @@ where
             self.record_throttle(response.throttle_time_ms);
             if response.error_code != 0 {
                 if response.error_code == THROTTLING_QUOTA_EXCEEDED && attempt < 2 {
+                    self.defer_for_retry_interval();
                     self.wait_for_throttle().await;
                     continue;
                 }
@@ -759,6 +760,7 @@ where
                     code: THROTTLING_QUOTA_EXCEEDED,
                     ..
                 }) if attempt < 2 => {
+                    self.defer_for_retry_interval();
                     self.wait_for_throttle().await;
                 }
                 result => return result,
@@ -811,6 +813,12 @@ where
             .await?;
         self.record_throttle(response.throttle_time_ms);
         if response.error_code != 0 {
+            if response.error_code == UNKNOWN_SUBSCRIPTION_ID
+                || response.error_code == UNSUPPORTED_COMPRESSION_TYPE
+                || response.error_code == THROTTLING_QUOTA_EXCEEDED
+            {
+                self.defer_for(subscription.push_interval);
+            }
             if response.error_code == TELEMETRY_TOO_LARGE {
                 return Err(Error::TelemetryPayloadTooLarge {
                     size: payload_bytes,
@@ -831,11 +839,25 @@ where
         let Ok(throttle_time_ms) = u64::try_from(throttle_time_ms) else {
             return;
         };
-        let until = Instant::now() + Duration::from_millis(throttle_time_ms);
+        self.defer_for(Duration::from_millis(throttle_time_ms));
+    }
+
+    fn defer_for(&mut self, delay: Duration) {
+        let until = Instant::now() + delay;
         self.throttle_until = Some(
             self.throttle_until
                 .map_or(until, |current| current.max(until)),
         );
+    }
+
+    fn defer_for_retry_interval(&mut self) {
+        let delay = self
+            .subscription
+            .as_ref()
+            .map_or(Duration::from_secs(1), |subscription| {
+                subscription.push_interval.max(Duration::from_millis(1))
+            });
+        self.defer_for(delay);
     }
 
     async fn wait_for_throttle(&mut self) {
