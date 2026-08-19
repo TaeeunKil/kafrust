@@ -30,7 +30,7 @@ jobs:
       - name: Verify telemetry plugin is in the broker classpath
         run: |
           docker run --rm kafrust-kafka-telemetry \
-            sh -c 'test -r /opt/kafka/libs/kafrust-telemetry.jar && jar tf /opt/kafka/libs/kafrust-telemetry.jar | grep -q com/kafrust/KafrustTelemetryReporter.class'
+            sh -c 'test -r /opt/kafka/libs/kafrust-telemetry.jar && grep -a -q KafrustTelemetryReporter /opt/kafka/libs/kafrust-telemetry.jar'
 
       - name: Start Kafka with telemetry plugin
         run: |
