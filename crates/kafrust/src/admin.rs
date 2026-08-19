@@ -93,6 +93,12 @@ use kafrust_protocol::api::share_group_describe::{
     DescribedShareGroup, DescribedShareGroupMember, ShareGroupDescribeAssignment,
     ShareGroupDescribeTopicPartitions,
 };
+use kafrust_protocol::api::share_group_offsets::{
+    AlterShareGroupOffsetsPartitionV0, AlterShareGroupOffsetsResponseV0,
+    AlterShareGroupOffsetsTopicResultV0, AlterShareGroupOffsetsTopicV0,
+    DeleteShareGroupOffsetsResponseV0, DeleteShareGroupOffsetsTopicResultV0,
+    DeleteShareGroupOffsetsTopicV0,
+};
 
 use crate::client::Client;
 use crate::config::ClientConfig;
@@ -1646,6 +1652,174 @@ impl AdminClient {
             ));
         }
         Ok(descriptions)
+    }
+
+    /// Sets share-group offsets through AlterShareGroupOffsets.
+    ///
+    /// Kafka requires the share group to be empty for this operation. Results
+    /// are preserved at both the top-level and partition levels. A transport
+    /// failure after transmission is returned as
+    /// [`Error::AdminMutationOutcomeUnknown`] and is never replayed.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.alter_share_group_offsets",
+        skip_all,
+        fields(group_id, offset_count = offsets.len()),
+        err
+    )]
+    pub async fn alter_share_group_offsets(
+        &self,
+        group_id: &str,
+        offsets: &[ShareGroupOffset],
+    ) -> Result<AlterShareGroupOffsetsResult> {
+        let mut topics = BTreeMap::new();
+        for offset in offsets {
+            topics
+                .entry(offset.topic.clone())
+                .or_insert_with(Vec::new)
+                .push(AlterShareGroupOffsetsPartitionV0 {
+                    partition_index: offset.partition,
+                    start_offset: offset.offset,
+                });
+        }
+        let topics: Vec<AlterShareGroupOffsetsTopicV0> = topics
+            .into_iter()
+            .map(|(topic_name, partitions)| AlterShareGroupOffsetsTopicV0 {
+                topic_name,
+                partitions,
+            })
+            .collect();
+
+        let mut retry = 0;
+        let response = loop {
+            let mut coordinator = self.group_coordinator_client(group_id).await?;
+            let api_versions = match coordinator
+                .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
+                .await
+            {
+                Ok(api_versions) => api_versions,
+                Err(error)
+                    if retry < self.max_retries && is_retryable_admin_coordinator_error(&error) =>
+                {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
+            if api_versions.highest_supported_version(91, 0).is_none() {
+                return Err(Error::Unsupported(
+                    "broker does not advertise AlterShareGroupOffsets v0",
+                ));
+            }
+            let response = coordinator
+                .alter_share_group_offsets_v0(group_id, topics.clone())
+                .await
+                .map_err(|error| {
+                    admin_mutation_error(&coordinator, "AlterShareGroupOffsets", error)
+                })?;
+            let retryable = is_retryable_admin_coordinator_code(response.error_code)
+                || response.responses.iter().any(|topic| {
+                    topic
+                        .partitions
+                        .iter()
+                        .any(|partition| is_retryable_admin_coordinator_code(partition.error_code))
+                });
+            if retry < self.max_retries && retryable {
+                self.config.record_broker_error();
+                retry += 1;
+                self.config.record_retry();
+                tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                continue;
+            }
+            break response;
+        };
+        if response.error_code != 0 {
+            self.config.record_broker_error();
+        }
+        for topic in &response.responses {
+            if topic
+                .partitions
+                .iter()
+                .any(|partition| partition.error_code != 0)
+            {
+                self.config.record_broker_error();
+            }
+        }
+        Ok(AlterShareGroupOffsetsResult::from_protocol(response))
+    }
+
+    /// Deletes share-group offsets for the selected topics.
+    ///
+    /// Kafka requires the share group to be empty for this operation. A
+    /// transmitted request is not replayed after an ambiguous transport
+    /// failure.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.delete_share_group_offsets",
+        skip_all,
+        fields(group_id, topic_count = topics.len()),
+        err
+    )]
+    pub async fn delete_share_group_offsets(
+        &self,
+        group_id: &str,
+        topics: &[String],
+    ) -> Result<DeleteShareGroupOffsetsResult> {
+        let topics: Vec<DeleteShareGroupOffsetsTopicV0> = topics
+            .iter()
+            .cloned()
+            .map(|topic_name| DeleteShareGroupOffsetsTopicV0 { topic_name })
+            .collect();
+        let mut retry = 0;
+        let response = loop {
+            let mut coordinator = self.group_coordinator_client(group_id).await?;
+            let api_versions = match coordinator
+                .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
+                .await
+            {
+                Ok(api_versions) => api_versions,
+                Err(error)
+                    if retry < self.max_retries && is_retryable_admin_coordinator_error(&error) =>
+                {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
+            if api_versions.highest_supported_version(92, 0).is_none() {
+                return Err(Error::Unsupported(
+                    "broker does not advertise DeleteShareGroupOffsets v0",
+                ));
+            }
+            let response = coordinator
+                .delete_share_group_offsets_v0(group_id, topics.clone())
+                .await
+                .map_err(|error| {
+                    admin_mutation_error(&coordinator, "DeleteShareGroupOffsets", error)
+                })?;
+            if retry < self.max_retries && is_retryable_admin_coordinator_code(response.error_code)
+            {
+                self.config.record_broker_error();
+                retry += 1;
+                self.config.record_retry();
+                tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                continue;
+            }
+            break response;
+        };
+        if response.error_code != 0 {
+            self.config.record_broker_error();
+        }
+        for topic in &response.responses {
+            if topic.error_code != 0 {
+                self.config.record_broker_error();
+            }
+        }
+        Ok(DeleteShareGroupOffsetsResult::from_protocol(response))
     }
 
     /// Lists Kafka groups by querying every broker in the cluster.
@@ -8169,6 +8343,275 @@ impl ShareGroupTopicPartitions {
     }
 }
 
+/// One share-group offset to set administratively.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShareGroupOffset {
+    topic: String,
+    partition: i32,
+    offset: i64,
+}
+
+impl ShareGroupOffset {
+    /// Creates a share-group offset update.
+    pub fn new(topic: impl Into<String>, partition: i32, offset: i64) -> Self {
+        Self {
+            topic: topic.into(),
+            partition,
+            offset,
+        }
+    }
+
+    /// Returns the topic name.
+    pub fn topic(&self) -> &str {
+        &self.topic
+    }
+
+    /// Returns the partition index.
+    pub fn partition(&self) -> i32 {
+        self.partition
+    }
+
+    /// Returns the share-partition start offset.
+    pub fn offset(&self) -> i64 {
+        self.offset
+    }
+}
+
+/// Complete result from AlterShareGroupOffsets.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AlterShareGroupOffsetsResult {
+    error_code: i16,
+    error_message: Option<String>,
+    throttle_time: Duration,
+    topics: Vec<AlterShareGroupOffsetsTopicResult>,
+}
+
+impl AlterShareGroupOffsetsResult {
+    /// Returns the top-level broker error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns the top-level broker error message, when supplied.
+    pub fn error_message(&self) -> Option<&str> {
+        self.error_message.as_deref()
+    }
+
+    /// Returns the broker throttle time.
+    pub fn throttle_time(&self) -> Duration {
+        self.throttle_time
+    }
+
+    /// Returns per-topic offset results.
+    pub fn topics(&self) -> &[AlterShareGroupOffsetsTopicResult] {
+        &self.topics
+    }
+
+    /// Returns whether the top-level and all partition results succeeded.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+            && self
+                .topics
+                .iter()
+                .all(AlterShareGroupOffsetsTopicResult::is_success)
+    }
+
+    fn from_protocol(response: AlterShareGroupOffsetsResponseV0) -> Self {
+        Self {
+            error_code: response.error_code,
+            error_message: response.error_message,
+            throttle_time: Duration::from_millis(nonnegative_i32_to_u64(response.throttle_time_ms)),
+            topics: response
+                .responses
+                .into_iter()
+                .map(AlterShareGroupOffsetsTopicResult::from_protocol)
+                .collect(),
+        }
+    }
+}
+
+/// Result for one topic returned by AlterShareGroupOffsets.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AlterShareGroupOffsetsTopicResult {
+    topic_name: String,
+    topic_id: [u8; 16],
+    partitions: Vec<AlterShareGroupOffsetsPartitionResult>,
+}
+
+impl AlterShareGroupOffsetsTopicResult {
+    /// Returns the topic name.
+    pub fn topic_name(&self) -> &str {
+        &self.topic_name
+    }
+
+    /// Returns the Kafka topic UUID.
+    pub fn topic_id(&self) -> &[u8; 16] {
+        &self.topic_id
+    }
+
+    /// Returns per-partition results.
+    pub fn partitions(&self) -> &[AlterShareGroupOffsetsPartitionResult] {
+        &self.partitions
+    }
+
+    /// Returns whether all partitions in this topic succeeded.
+    pub fn is_success(&self) -> bool {
+        self.partitions
+            .iter()
+            .all(AlterShareGroupOffsetsPartitionResult::is_success)
+    }
+
+    fn from_protocol(topic: AlterShareGroupOffsetsTopicResultV0) -> Self {
+        Self {
+            topic_name: topic.topic_name,
+            topic_id: topic.topic_id,
+            partitions: topic
+                .partitions
+                .into_iter()
+                .map(AlterShareGroupOffsetsPartitionResult::from_protocol)
+                .collect(),
+        }
+    }
+}
+
+/// Result for one partition returned by AlterShareGroupOffsets.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AlterShareGroupOffsetsPartitionResult {
+    partition: i32,
+    error_code: i16,
+    error_message: Option<String>,
+}
+
+impl AlterShareGroupOffsetsPartitionResult {
+    /// Returns the partition index.
+    pub fn partition(&self) -> i32 {
+        self.partition
+    }
+
+    /// Returns the partition error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns the partition error message, when supplied.
+    pub fn error_message(&self) -> Option<&str> {
+        self.error_message.as_deref()
+    }
+
+    /// Returns whether Kafka accepted this partition update.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+    }
+
+    fn from_protocol(
+        partition: kafrust_protocol::api::share_group_offsets::AlterShareGroupOffsetsPartitionResultV0,
+    ) -> Self {
+        Self {
+            partition: partition.partition_index,
+            error_code: partition.error_code,
+            error_message: partition.error_message,
+        }
+    }
+}
+
+/// Complete result from DeleteShareGroupOffsets.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeleteShareGroupOffsetsResult {
+    error_code: i16,
+    error_message: Option<String>,
+    throttle_time: Duration,
+    topics: Vec<DeleteShareGroupOffsetsTopicResult>,
+}
+
+impl DeleteShareGroupOffsetsResult {
+    /// Returns the top-level broker error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns the top-level broker error message, when supplied.
+    pub fn error_message(&self) -> Option<&str> {
+        self.error_message.as_deref()
+    }
+
+    /// Returns the broker throttle time.
+    pub fn throttle_time(&self) -> Duration {
+        self.throttle_time
+    }
+
+    /// Returns per-topic deletion results.
+    pub fn topics(&self) -> &[DeleteShareGroupOffsetsTopicResult] {
+        &self.topics
+    }
+
+    /// Returns whether the top-level and all topic results succeeded.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+            && self
+                .topics
+                .iter()
+                .all(DeleteShareGroupOffsetsTopicResult::is_success)
+    }
+
+    fn from_protocol(response: DeleteShareGroupOffsetsResponseV0) -> Self {
+        Self {
+            error_code: response.error_code,
+            error_message: response.error_message,
+            throttle_time: Duration::from_millis(nonnegative_i32_to_u64(response.throttle_time_ms)),
+            topics: response
+                .responses
+                .into_iter()
+                .map(DeleteShareGroupOffsetsTopicResult::from_protocol)
+                .collect(),
+        }
+    }
+}
+
+/// Result for one topic returned by DeleteShareGroupOffsets.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeleteShareGroupOffsetsTopicResult {
+    topic_name: String,
+    topic_id: [u8; 16],
+    error_code: i16,
+    error_message: Option<String>,
+}
+
+impl DeleteShareGroupOffsetsTopicResult {
+    /// Returns the topic name.
+    pub fn topic_name(&self) -> &str {
+        &self.topic_name
+    }
+
+    /// Returns the Kafka topic UUID.
+    pub fn topic_id(&self) -> &[u8; 16] {
+        &self.topic_id
+    }
+
+    /// Returns the topic error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns the topic error message, when supplied.
+    pub fn error_message(&self) -> Option<&str> {
+        self.error_message.as_deref()
+    }
+
+    /// Returns whether Kafka deleted this topic's share offsets.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+    }
+
+    fn from_protocol(topic: DeleteShareGroupOffsetsTopicResultV0) -> Self {
+        Self {
+            topic_name: topic.topic_name,
+            topic_id: topic.topic_id,
+            error_code: topic.error_code,
+            error_message: topic.error_message,
+        }
+    }
+}
+
 /// One member in a Kafka consumer group description.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConsumerGroupMember {
@@ -11824,6 +12267,66 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn routes_share_group_offset_mutations_to_coordinator() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let coordinator_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&coordinator_request[0..4], &[0, 10, 0, 1]);
+            write_frame(
+                &mut bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+            let (mut coordinator, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut coordinator).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut coordinator, &api_versions_with_share_group_offsets()).await;
+            let alter_request = read_frame(&mut coordinator).await;
+            assert_eq!(&alter_request[0..4], &[0, 91, 0, 0]);
+            write_frame(&mut coordinator, &alter_share_group_offsets_response()).await;
+
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let coordinator_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&coordinator_request[0..4], &[0, 10, 0, 1]);
+            write_frame(
+                &mut bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+            let (mut coordinator, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut coordinator).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut coordinator, &api_versions_with_share_group_offsets()).await;
+            let delete_request = read_frame(&mut coordinator).await;
+            assert_eq!(&delete_request[0..4], &[0, 92, 0, 0]);
+            write_frame(&mut coordinator, &delete_share_group_offsets_response()).await;
+        });
+        let admin =
+            AdminClient::new(ClientConfig::new([addr.to_string()]).request_timeout_ms(1_000));
+
+        let altered = admin
+            .alter_share_group_offsets(
+                "share-orders",
+                &[super::ShareGroupOffset::new("orders", 0, 42)],
+            )
+            .await
+            .unwrap();
+        assert!(altered.is_success());
+        assert_eq!(altered.topics()[0].topic_name(), "orders");
+        assert_eq!(altered.topics()[0].partitions()[0].partition(), 0);
+
+        let deleted = admin
+            .delete_share_group_offsets("share-orders", &["orders".to_owned()])
+            .await
+            .unwrap();
+        assert!(deleted.is_success());
+        assert_eq!(deleted.topics()[0].topic_name(), "orders");
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn retries_modern_consumer_group_describe_after_coordinator_disconnect() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -14056,6 +14559,69 @@ mod tests {
                     Ok(())
                 })?;
                 encoder.write_i32(-2147483648);
+                encoder.write_empty_tagged_fields();
+                Ok(())
+            })
+            .unwrap();
+        encoder.write_empty_tagged_fields();
+        encoder.into_bytes()
+    }
+
+    fn api_versions_with_share_group_offsets() -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_i16(0); // success
+        encoder.write_unsigned_varint(3); // two API keys
+        for api_key in [91_i16, 92_i16] {
+            encoder.write_i16(api_key);
+            encoder.write_i16(0);
+            encoder.write_i16(0);
+            encoder.write_empty_tagged_fields();
+        }
+        encoder.write_i32(0); // throttle time
+        encoder.write_empty_tagged_fields();
+        encoder.into_bytes()
+    }
+
+    fn alter_share_group_offsets_response() -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_empty_tagged_fields(); // response header tags
+        encoder.write_i32(4); // throttle time
+        encoder.write_i16(0);
+        encoder.write_compact_nullable_string(None).unwrap();
+        encoder
+            .write_compact_array(Some(&[()]), |encoder, ()| {
+                encoder.write_compact_string("orders")?;
+                encoder.write_uuid(&[7; 16]);
+                encoder.write_compact_array(Some(&[()]), |encoder, ()| {
+                    encoder.write_i32(0);
+                    encoder.write_i16(0);
+                    encoder.write_compact_nullable_string(None)?;
+                    encoder.write_empty_tagged_fields();
+                    Ok(())
+                })?;
+                encoder.write_empty_tagged_fields();
+                Ok(())
+            })
+            .unwrap();
+        encoder.write_empty_tagged_fields();
+        encoder.into_bytes()
+    }
+
+    fn delete_share_group_offsets_response() -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_empty_tagged_fields(); // response header tags
+        encoder.write_i32(4); // throttle time
+        encoder.write_i16(0);
+        encoder.write_compact_nullable_string(None).unwrap();
+        encoder
+            .write_compact_array(Some(&[()]), |encoder, ()| {
+                encoder.write_compact_string("orders")?;
+                encoder.write_uuid(&[7; 16]);
+                encoder.write_i16(0);
+                encoder.write_compact_nullable_string(None)?;
                 encoder.write_empty_tagged_fields();
                 Ok(())
             })

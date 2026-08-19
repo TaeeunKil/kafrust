@@ -3,7 +3,7 @@
 use kafrust::protocol::api::find_coordinator::FindCoordinatorResponseV1;
 use kafrust::{
     AdminClient, ClientConfig, SecurityProtocol, ShareAcknowledgementType, ShareAcquireMode,
-    ShareConsumerConfig,
+    ShareConsumerConfig, ShareGroupOffset,
 };
 use tokio::time::{sleep, Duration, Instant};
 
@@ -180,6 +180,45 @@ async fn share_consumer_roundtrip_when_broker_is_configured() {
         .close()
         .await
         .expect("ShareConsumer should leave the share group cleanly");
+}
+
+#[tokio::test]
+async fn share_group_offset_mutations_when_broker_is_configured() {
+    let Some(topic) = std::env::var("KAFRUST_SHARE_TOPIC").ok() else {
+        eprintln!("skipping share group offset mutation; set KAFRUST_SHARE_TOPIC to run it");
+        return;
+    };
+    let Some(bootstrap) = std::env::var("KAFRUST_BOOTSTRAP_SERVERS").ok() else {
+        eprintln!("skipping share group offset mutation; set KAFRUST_BOOTSTRAP_SERVERS to run it");
+        return;
+    };
+    let group_id = std::env::var("KAFRUST_SHARE_GROUP_ID")
+        .unwrap_or_else(|_| "kafrust-share-offset-smoke".to_owned());
+    let admin = AdminClient::new(
+        client_config_from_env(
+            parse_bootstrap_servers(&bootstrap),
+            "kafrust-share-offset-admin",
+        )
+        .expect("valid share offset admin test configuration"),
+    );
+
+    let altered = admin
+        .alter_share_group_offsets(&group_id, &[ShareGroupOffset::new(topic.clone(), 0, 0)])
+        .await
+        .expect("AlterShareGroupOffsets should succeed for an empty share group");
+    assert!(
+        altered.is_success(),
+        "share offset alter failed: {altered:?}"
+    );
+
+    let deleted = admin
+        .delete_share_group_offsets(&group_id, &[topic])
+        .await
+        .expect("DeleteShareGroupOffsets should succeed for an empty share group");
+    assert!(
+        deleted.is_success(),
+        "share offset delete failed: {deleted:?}"
+    );
 }
 
 #[tokio::test]

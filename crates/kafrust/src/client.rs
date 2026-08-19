@@ -153,6 +153,11 @@ use kafrust_protocol::api::share::{
 use kafrust_protocol::api::share_group_describe::{
     ShareGroupDescribeRequestV1, ShareGroupDescribeResponseV1,
 };
+use kafrust_protocol::api::share_group_offsets::{
+    AlterShareGroupOffsetsRequestV0, AlterShareGroupOffsetsResponseV0,
+    AlterShareGroupOffsetsTopicV0, DeleteShareGroupOffsetsRequestV0,
+    DeleteShareGroupOffsetsResponseV0, DeleteShareGroupOffsetsTopicV0,
+};
 use kafrust_protocol::api::sync_group::{
     SyncGroupAssignment, SyncGroupRequestV2, SyncGroupRequestV3, SyncGroupResponseV2,
 };
@@ -1454,6 +1459,44 @@ impl Client {
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v1(&mut decoder)?;
         Ok(ShareGroupDescribeResponseV1::decode_body(&mut decoder)?)
+    }
+
+    /// Sends AlterShareGroupOffsets v0 to this share-group coordinator.
+    pub async fn alter_share_group_offsets_v0(
+        &mut self,
+        group_id: impl Into<String>,
+        topics: Vec<AlterShareGroupOffsetsTopicV0>,
+    ) -> Result<AlterShareGroupOffsetsResponseV0> {
+        let request = AlterShareGroupOffsetsRequestV0 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            group_id: group_id.into(),
+            topics,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(AlterShareGroupOffsetsResponseV0::decode_body(&mut decoder)?)
+    }
+
+    /// Sends DeleteShareGroupOffsets v0 to this share-group coordinator.
+    pub async fn delete_share_group_offsets_v0(
+        &mut self,
+        group_id: impl Into<String>,
+        topics: Vec<DeleteShareGroupOffsetsTopicV0>,
+    ) -> Result<DeleteShareGroupOffsetsResponseV0> {
+        let request = DeleteShareGroupOffsetsRequestV0 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            group_id: group_id.into(),
+            topics,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(DeleteShareGroupOffsetsResponseV0::decode_body(
+            &mut decoder,
+        )?)
     }
 
     /// Sends ListGroups v1 to the broker represented by this connection.
@@ -3891,6 +3934,79 @@ mod tests {
 
         assert_eq!(response.throttle_time_ms, 0);
         assert!(response.groups.is_empty());
+        broker.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn sends_share_group_offset_mutations_over_injected_broker_stream() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(2048);
+        let broker = tokio::spawn(async move {
+            let alter_request = read_test_frame(&mut broker_stream).await;
+            let mut decoder = Decoder::new(&alter_request);
+            assert_eq!(decoder.read_i16().unwrap(), 91);
+            assert_eq!(decoder.read_i16().unwrap(), 0);
+            assert_eq!(decoder.read_i32().unwrap(), 1);
+            assert_eq!(
+                decoder.read_nullable_string().unwrap(),
+                Some("kafrust-admin".to_owned())
+            );
+            assert_eq!(decoder.read_tagged_fields().unwrap(), Vec::new());
+            assert_eq!(decoder.read_compact_string().unwrap(), "share-orders");
+            assert_eq!(decoder.read_unsigned_varint().unwrap(), 1);
+            assert_eq!(decoder.read_tagged_fields().unwrap(), Vec::new());
+            let mut response = Encoder::new();
+            response.write_i32(1);
+            response.write_empty_tagged_fields();
+            response.write_i32(0);
+            response.write_i16(0);
+            response.write_compact_nullable_string(None).unwrap();
+            response
+                .write_compact_array::<i8>(Some(&[]), |_, _| Ok(()))
+                .unwrap();
+            response.write_empty_tagged_fields();
+            write_test_frame(&mut broker_stream, &response.into_bytes()).await;
+
+            let delete_request = read_test_frame(&mut broker_stream).await;
+            let mut decoder = Decoder::new(&delete_request);
+            assert_eq!(decoder.read_i16().unwrap(), 92);
+            assert_eq!(decoder.read_i16().unwrap(), 0);
+            assert_eq!(decoder.read_i32().unwrap(), 2);
+            assert_eq!(
+                decoder.read_nullable_string().unwrap(),
+                Some("kafrust-admin".to_owned())
+            );
+            assert_eq!(decoder.read_tagged_fields().unwrap(), Vec::new());
+            assert_eq!(decoder.read_compact_string().unwrap(), "share-orders");
+            assert_eq!(decoder.read_unsigned_varint().unwrap(), 1);
+            assert_eq!(decoder.read_tagged_fields().unwrap(), Vec::new());
+            let mut response = Encoder::new();
+            response.write_i32(2);
+            response.write_empty_tagged_fields();
+            response.write_i32(0);
+            response.write_i16(0);
+            response.write_compact_nullable_string(None).unwrap();
+            response
+                .write_compact_array::<i8>(Some(&[]), |_, _| Ok(()))
+                .unwrap();
+            response.write_empty_tagged_fields();
+            write_test_frame(&mut broker_stream, &response.into_bytes()).await;
+        });
+        let mut client = Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-admin".to_owned()),
+            Some(Duration::from_secs(1)),
+        );
+
+        let alter = client
+            .alter_share_group_offsets_v0("share-orders", Vec::new())
+            .await
+            .unwrap();
+        assert_eq!(alter.error_code, 0);
+        let delete = client
+            .delete_share_group_offsets_v0("share-orders", Vec::new())
+            .await
+            .unwrap();
+        assert_eq!(delete.error_code, 0);
         broker.await.unwrap();
     }
 
