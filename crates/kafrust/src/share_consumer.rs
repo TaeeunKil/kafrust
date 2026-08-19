@@ -714,7 +714,16 @@ impl ShareConsumer {
         let Some(task) = self.heartbeat_task.take() else {
             return Ok(());
         };
-        task.stop().await
+        let state = task.state.clone();
+        let result = task.stop().await;
+        let state = state.lock().await.clone();
+        self.member_id = state.member_id;
+        self.member_epoch = state.member_epoch;
+        self.heartbeat_interval = state.heartbeat_interval;
+        self.assignment = state.assignment;
+        self.needs_assignment_heartbeat = self.assignment.is_empty();
+        self.next_heartbeat = Instant::now() + self.heartbeat_interval;
+        result
     }
 
     /// Polls the currently assigned share partitions.
@@ -891,10 +900,22 @@ impl ShareConsumer {
         self.share_sessions.clear();
 
         if !self.member_id.is_empty() && self.member_epoch >= 0 {
+            self.leave_share_group().await?;
+        }
+        self.closed = true;
+        Ok(())
+    }
+
+    async fn leave_share_group(&mut self) -> Result<()> {
+        let mut attempt = 0;
+        loop {
+            if self.coordinator.is_none() {
+                self.reconnect_coordinator().await?;
+            }
             let mut coordinator = self.coordinator.take().ok_or(Error::Unsupported(
                 "share coordinator connection is unavailable",
             ))?;
-            let response = coordinator
+            let result = coordinator
                 .share_group_heartbeat_v1(
                     self.config.group_id.clone(),
                     self.member_id.clone(),
@@ -902,17 +923,33 @@ impl ShareConsumer {
                     self.config.client.client_rack_ref().map(str::to_owned),
                     Some(self.config.topics.clone()),
                 )
-                .await?;
-            self.coordinator = Some(coordinator);
-            if response.error_code != 0 {
-                return Err(self.config.client.broker_error(
-                    response.error_code,
-                    format!("leave share group {}", self.config.group_id),
-                ));
+                .await;
+            match result {
+                Ok(response) if response.error_code == 0 => {
+                    self.coordinator = Some(coordinator);
+                    return Ok(());
+                }
+                Ok(response) => {
+                    let error = self.config.client.broker_error(
+                        response.error_code,
+                        format!("leave share group {}", self.config.group_id),
+                    );
+                    if attempt >= self.config.max_retries
+                        || !is_retryable_share_error(response.error_code)
+                    {
+                        self.coordinator = Some(coordinator);
+                        return Err(error);
+                    }
+                }
+                Err(error) if attempt >= self.config.max_retries => return Err(error),
+                Err(_error) => {}
             }
+            attempt += 1;
+            self.config.client.record_retry();
+            self.coordinator = None;
+            tokio::time::sleep(share_retry_backoff(attempt)).await;
+            self.reconnect_coordinator().await?;
         }
-        self.closed = true;
-        Ok(())
     }
 
     async fn observe_heartbeat_task(&mut self) -> Result<()> {
