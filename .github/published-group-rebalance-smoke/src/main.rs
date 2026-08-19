@@ -101,6 +101,7 @@ async fn run() -> kafrust::Result<()> {
     let mut seen_records = BTreeSet::new();
     let second_join = tokio::spawn(
         config
+            .clone()
             .client_id("kafrust-published-group-rebalance-second")
             .join(),
     );
@@ -120,9 +121,9 @@ async fn run() -> kafrust::Result<()> {
     }
     verify_member_departure_rejoin(&mut first, &topic).await?;
     let first_member_id = first.member_id().to_owned();
-    first.leave().await?;
+    verify_committed_offset_restore(&config, first, &topic).await?;
     println!(
-        "published group smoke member-departure recovery passed protocol={protocol:?} exit={} first={} partitions={PARTITION_COUNT}",
+        "published group smoke member-departure and committed-offset recovery passed protocol={protocol:?} exit={} first={} partitions={PARTITION_COUNT}",
         if abrupt_member_exit { "drop" } else { "leave" },
         first_member_id,
     );
@@ -224,6 +225,63 @@ async fn verify_member_departure_rejoin(
 
     Err(Error::Unsupported(
         "published group smoke did not recover all partitions after member departure",
+    ))
+}
+
+async fn verify_committed_offset_restore(
+    config: &ConsumerGroupConfig,
+    mut group: ConsumerGroup,
+    topic: &str,
+) -> kafrust::Result<()> {
+    consume_all_assigned_records(&mut group, topic).await?;
+    group.commit_offsets().await?;
+    group.leave().await?;
+
+    let mut replacement = config
+        .clone()
+        .client_id("kafrust-published-group-rebalance-restored")
+        .join()
+        .await?;
+    for _ in 0..POLL_ATTEMPTS {
+        if !replacement.poll().await?.is_empty() {
+            return Err(Error::Unsupported(
+                "published group smoke replayed a record after committed offset restore",
+            ));
+        }
+        if replacement.assignments().len() == PARTITION_COUNT as usize
+            && replacement
+                .assignments()
+                .iter()
+                .all(|assignment| assignment.next_offset() >= 1)
+        {
+            replacement.leave().await?;
+            return Ok(());
+        }
+    }
+
+    Err(Error::Unsupported(
+        "published group smoke did not restore committed offsets for every partition",
+    ))
+}
+
+async fn consume_all_assigned_records(
+    group: &mut ConsumerGroup,
+    topic: &str,
+) -> kafrust::Result<()> {
+    let expected: BTreeSet<_> = (0..PARTITION_COUNT)
+        .map(|partition| (topic.to_owned(), partition))
+        .collect();
+    let mut seen_records = BTreeSet::new();
+
+    for _ in 0..POLL_ATTEMPTS {
+        record_expected_records(&mut seen_records, topic, group.poll().await?);
+        if seen_records == expected {
+            return Ok(());
+        }
+    }
+
+    Err(Error::Unsupported(
+        "published group smoke did not consume every record before offset commit",
     ))
 }
 
