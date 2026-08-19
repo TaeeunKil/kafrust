@@ -3,7 +3,7 @@
 use crate::client::Client;
 use crate::config::{ClientConfig, OAuthBearerTokenProvider, SecurityProtocol};
 use crate::consumer::ConsumerRecord;
-use crate::error::{Error, Result};
+use crate::error::{BrokerErrorKind, Error, Result};
 use crate::metrics::ClientMetrics;
 use kafrust_protocol::api::api_versions::ApiVersionsResponseV3;
 use kafrust_protocol::api::metadata::{MetadataRequestTopicV12, MetadataResponseV12};
@@ -1165,7 +1165,9 @@ impl ShareConsumer {
     fn apply_share_partition_leaders(&mut self, response: &share::ShareFetchResponseV1) {
         for topic in &response.responses {
             for partition in &topic.partitions {
-                if partition.current_leader.leader_id >= 0 {
+                if is_share_leader_error(partition.error_code)
+                    && partition.current_leader.leader_id >= 0
+                {
                     self.partition_leaders.insert(
                         SharePartitionKey {
                             topic_id: topic.topic_id,
@@ -1281,7 +1283,7 @@ impl ShareConsumer {
                     self.acquisition_lock_timeout_ms = Some(response.acquisition_lock_timeout_ms);
                     self.update_share_endpoints(&response.node_endpoints);
                     self.apply_share_partition_leaders(&response);
-                    let records = self.decode_share_records(&response)?;
+                    let records = self.decode_share_records(&response, broker_id)?;
                     let next_epoch = advance_share_epoch(request_epoch);
                     self.share_sessions.insert(
                         broker_id,
@@ -1324,6 +1326,7 @@ impl ShareConsumer {
     fn decode_share_records(
         &mut self,
         response: &share::ShareFetchResponseV1,
+        broker_id: i32,
     ) -> Result<Vec<ShareRecord>> {
         let mut records = Vec::new();
         for topic_response in &response.responses {
@@ -1336,13 +1339,17 @@ impl ShareConsumer {
                     partition: -1,
                 })?;
             for partition_response in &topic_response.partitions {
-                self.partition_leaders.insert(
-                    SharePartitionKey {
-                        topic_id: topic_response.topic_id,
-                        partition: partition_response.partition_index,
-                    },
-                    partition_response.current_leader.leader_id,
-                );
+                if is_share_leader_error(partition_response.error_code)
+                    && partition_response.current_leader.leader_id >= 0
+                {
+                    self.partition_leaders.insert(
+                        SharePartitionKey {
+                            topic_id: topic_response.topic_id,
+                            partition: partition_response.partition_index,
+                        },
+                        partition_response.current_leader.leader_id,
+                    );
+                }
                 let Some(record_bytes) = partition_response.records.as_deref() else {
                     continue;
                 };
@@ -1370,7 +1377,7 @@ impl ShareConsumer {
                     let share_record = ShareRecord {
                         record,
                         topic_id: topic_response.topic_id,
-                        broker_id: partition_response.current_leader.leader_id,
+                        broker_id,
                         delivery_count: acquired.delivery_count,
                     };
                     if self.renewed_records.remove(&key).is_some() {
@@ -1381,14 +1388,14 @@ impl ShareConsumer {
                                 offset: share_record.offset(),
                             }
                         })?;
-                        pending.broker_id = partition_response.current_leader.leader_id;
+                        pending.broker_id = broker_id;
                         pending.acknowledgement = None;
                         pending.record = share_record.clone();
                     } else {
                         match self.pending.entry(key) {
                             std::collections::btree_map::Entry::Vacant(entry) => {
                                 entry.insert(PendingRecord {
-                                    broker_id: partition_response.current_leader.leader_id,
+                                    broker_id,
                                     acknowledgement: None,
                                     record: share_record.clone(),
                                 });
@@ -2103,6 +2110,13 @@ fn first_share_partition_error(response: &share::ShareFetchResponseV1) -> Option
         .find_map(|partition| (partition.error_code != 0).then_some(partition.error_code))
 }
 
+fn is_share_leader_error(code: i16) -> bool {
+    matches!(
+        BrokerErrorKind::from_code(code),
+        BrokerErrorKind::NotLeaderOrFollower | BrokerErrorKind::FencedLeaderEpoch
+    )
+}
+
 fn first_share_fetch_acknowledgement_error(response: &share::ShareFetchResponseV1) -> Option<i16> {
     response
         .responses
@@ -2375,7 +2389,13 @@ mod tests {
             share_sessions: BTreeMap::new(),
             assignment: BTreeSet::new(),
             topic_names: BTreeMap::from([([5; 16], "orders".to_owned())]),
-            partition_leaders: BTreeMap::new(),
+            partition_leaders: BTreeMap::from([(
+                SharePartitionKey {
+                    topic_id: [5; 16],
+                    partition: 0,
+                },
+                1,
+            )]),
             pending: BTreeMap::new(),
             renewed_records: BTreeMap::new(),
             member_id: "member-1".to_owned(),
@@ -2421,7 +2441,7 @@ mod tests {
                     acknowledgement_error_code: 0,
                     acknowledgement_error_message: None,
                     current_leader: ShareLeaderIdAndEpochV1 {
-                        leader_id: 1,
+                        leader_id: 0,
                         leader_epoch: 2,
                     },
                     records: Some(records.into_bytes()),
@@ -2452,7 +2472,7 @@ mod tests {
                 .unwrap(),
             1
         );
-        let decoded = consumer.decode_share_records(&response).unwrap();
+        let decoded = consumer.decode_share_records(&response, 1).unwrap();
         assert_eq!(decoded.len(), 1);
         assert_eq!(decoded[0].topic(), "orders");
         assert_eq!(decoded[0].offset(), 10);
@@ -2463,7 +2483,7 @@ mod tests {
         consumer.pending.get_mut(&key).unwrap().acknowledgement = None;
         let mut redelivery = response.clone();
         redelivery.responses[0].partitions[0].acquired_records[0].delivery_count = 3;
-        let redelivered = consumer.decode_share_records(&redelivery).unwrap();
+        let redelivered = consumer.decode_share_records(&redelivery, 1).unwrap();
         assert_eq!(redelivered.len(), 1);
         assert_eq!(redelivered[0].delivery_count(), 3);
         assert!(consumer.renewed_records.is_empty());
@@ -2878,7 +2898,7 @@ mod tests {
             }],
             node_endpoints: Vec::new(),
         };
-        let records = consumer.decode_share_records(&response).unwrap();
+        let records = consumer.decode_share_records(&response, 1).unwrap();
         consumer
             .acknowledge(&records[0], ShareAcknowledgementType::Renew)
             .unwrap();
