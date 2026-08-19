@@ -97,13 +97,14 @@ async fn run() -> kafrust::Result<()> {
 
     wait_for_two_member_coverage(&mut first, &mut second, &topic, seen_records).await?;
     verify_position_survives_rejoin(&mut first, &topic).await?;
-    println!(
-        "published group rebalance passed protocol={protocol:?} first={} second={} partitions={PARTITION_COUNT}",
-        first.member_id(),
-        second.member_id(),
-    );
-    first.leave().await?;
     leave_after_member_rejoin(second).await?;
+    verify_member_departure_rejoin(&mut first, &topic).await?;
+    let first_member_id = first.member_id().to_owned();
+    first.leave().await?;
+    println!(
+        "published group smoke member-departure recovery passed protocol={protocol:?} first={} partitions={PARTITION_COUNT}",
+        first_member_id,
+    );
     Ok(())
 }
 
@@ -183,6 +184,26 @@ async fn verify_position_survives_rejoin(
         ));
     }
     Ok(())
+}
+
+async fn verify_member_departure_rejoin(
+    group: &mut ConsumerGroup,
+    topic: &str,
+) -> kafrust::Result<()> {
+    let expected: BTreeSet<_> = (0..PARTITION_COUNT)
+        .map(|partition| (topic.to_owned(), partition))
+        .collect();
+
+    for _ in 0..POLL_ATTEMPTS {
+        let _ = group.poll().await?;
+        if assignment_keys(group) == expected {
+            return Ok(());
+        }
+    }
+
+    Err(Error::Unsupported(
+        "published group smoke did not recover all partitions after member departure",
+    ))
 }
 
 fn record_expected_records(
