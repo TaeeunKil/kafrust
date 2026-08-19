@@ -1277,6 +1277,7 @@ impl ShareConsumer {
                 Err(_error) if attempt < self.config.max_retries => {
                     attempt += 1;
                     self.config.client.record_retry();
+                    tokio::time::sleep(share_retry_backoff(attempt)).await;
                     self.share_sessions.remove(&broker_id);
                     self.refresh_metadata().await?;
                     let leaders = self.share_fetch_partition_leaders(&desired)?;
@@ -1331,6 +1332,7 @@ impl ShareConsumer {
                         {
                             attempt += 1;
                             self.config.client.record_retry();
+                            tokio::time::sleep(share_retry_backoff(attempt)).await;
                             self.broker_clients.insert(broker_id, broker);
                             self.share_sessions.remove(&broker_id);
                             self.refresh_metadata().await?;
@@ -1379,6 +1381,7 @@ impl ShareConsumer {
                     {
                         attempt += 1;
                         self.config.client.record_retry();
+                        tokio::time::sleep(share_retry_backoff(attempt)).await;
                         self.broker_clients.insert(broker_id, broker);
                         self.share_sessions.remove(&broker_id);
                         self.refresh_metadata().await?;
@@ -1402,6 +1405,7 @@ impl ShareConsumer {
                 Err(_error) if attempt < self.config.max_retries => {
                     attempt += 1;
                     self.config.client.record_retry();
+                    tokio::time::sleep(share_retry_backoff(attempt)).await;
                     self.share_sessions.remove(&broker_id);
                     self.refresh_metadata().await?;
                     let leaders = self.share_fetch_partition_leaders(&desired)?;
