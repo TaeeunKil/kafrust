@@ -619,6 +619,46 @@ impl ShareConsumer {
         self.acquisition_lock_timeout_ms
     }
 
+    /// Returns the number of acknowledgements whose broker outcome is unknown.
+    ///
+    /// An unknown outcome is created when a ShareAcknowledge request may have
+    /// reached Kafka but its response was not observed. Such records are never
+    /// replayed automatically.
+    pub fn pending_acknowledgement_reconciliation_count(&self) -> usize {
+        self.pending
+            .values()
+            .filter(|pending| pending.acknowledgement_outcome_unknown)
+            .count()
+    }
+
+    /// Reopens share sessions for acknowledgements whose outcome is unknown.
+    ///
+    /// KIP-932 does not expose a read API for an individual acknowledgement.
+    /// The affected broker connections and sessions are therefore discarded;
+    /// the next [`Self::poll`] observes Kafka's authoritative result. A record
+    /// that was not acknowledged is returned again and can then be explicitly
+    /// acknowledged. Until that happens, [`Self::commit`] continues to return
+    /// [`Error::ShareAcknowledgementOutcomeUnknown`].
+    pub async fn reconcile_acknowledgement_outcomes(&mut self) -> Result<()> {
+        if self.closed {
+            return Err(Error::Unsupported("share consumer is closed"));
+        }
+        self.observe_heartbeat_task().await?;
+        self.sync_heartbeat_state().await;
+
+        let broker_ids = self
+            .pending
+            .values()
+            .filter(|pending| pending.acknowledgement_outcome_unknown)
+            .map(|pending| pending.broker_id)
+            .collect::<BTreeSet<_>>();
+        for broker_id in broker_ids {
+            self.share_sessions.remove(&broker_id);
+            self.broker_clients.remove(&broker_id);
+        }
+        Ok(())
+    }
+
     /// Sends a heartbeat immediately instead of waiting for the next poll.
     pub async fn heartbeat(&mut self) -> Result<()> {
         self.observe_heartbeat_task().await?;
@@ -840,6 +880,11 @@ impl ShareConsumer {
                 offset: record.offset(),
             });
         };
+        if pending.acknowledgement_outcome_unknown {
+            return Err(Error::ShareAcknowledgementOutcomeUnknown {
+                broker_id: pending.broker_id,
+            });
+        }
         if pending.acknowledgement.is_some() {
             return Err(Error::ShareRecordAlreadyAcknowledged {
                 topic: record.topic().to_owned(),
@@ -865,7 +910,9 @@ impl ShareConsumer {
             .pending
             .iter()
             .filter(|(key, record)| {
-                record.acknowledgement.is_none() && !self.renewed_records.contains_key(*key)
+                !record.acknowledgement_outcome_unknown
+                    && record.acknowledgement.is_none()
+                    && !self.renewed_records.contains_key(*key)
             })
             .count();
         if unacknowledged > 0 {
@@ -883,7 +930,7 @@ impl ShareConsumer {
         }
         self.stop_heartbeat_task().await?;
         for pending in self.pending.values_mut() {
-            if pending.acknowledgement.is_none() {
+            if pending.acknowledgement.is_none() && !pending.acknowledgement_outcome_unknown {
                 pending.acknowledgement = Some(ShareAcknowledgementType::Release);
             }
         }
@@ -992,7 +1039,9 @@ impl ShareConsumer {
                 .pending
                 .iter()
                 .filter(|(key, record)| {
-                    record.acknowledgement.is_none() && !self.renewed_records.contains_key(key)
+                    !record.acknowledgement_outcome_unknown
+                        && record.acknowledgement.is_none()
+                        && !self.renewed_records.contains_key(key)
                 })
                 .count();
             if count > 0 {
@@ -1502,6 +1551,7 @@ impl ShareConsumer {
                         })?;
                         pending.broker_id = broker_id;
                         pending.acknowledgement = None;
+                        pending.acknowledgement_outcome_unknown = false;
                         pending.record = share_record.clone();
                     } else {
                         match self.pending.entry(key) {
@@ -1509,15 +1559,23 @@ impl ShareConsumer {
                                 entry.insert(PendingRecord {
                                     broker_id,
                                     acknowledgement: None,
+                                    acknowledgement_outcome_unknown: false,
                                     record: share_record.clone(),
                                 });
                             }
-                            std::collections::btree_map::Entry::Occupied(_) => {
-                                return Err(Error::ShareRecordAlreadyAcknowledged {
-                                    topic: topic_name.clone(),
-                                    partition: share_record.partition(),
-                                    offset: share_record.offset(),
-                                });
+                            std::collections::btree_map::Entry::Occupied(mut entry) => {
+                                let pending = entry.get_mut();
+                                if !pending.acknowledgement_outcome_unknown {
+                                    return Err(Error::ShareRecordAlreadyAcknowledged {
+                                        topic: topic_name.clone(),
+                                        partition: share_record.partition(),
+                                        offset: share_record.offset(),
+                                    });
+                                }
+                                pending.broker_id = broker_id;
+                                pending.acknowledgement = None;
+                                pending.acknowledgement_outcome_unknown = false;
+                                pending.record = share_record.clone();
                             }
                         }
                     }
@@ -1531,6 +1589,15 @@ impl ShareConsumer {
     async fn commit_pending_acknowledgements(&mut self, renew_via_fetch: bool) -> Result<()> {
         if self.pending.is_empty() {
             return Ok(());
+        }
+        if let Some(pending) = self
+            .pending
+            .values()
+            .find(|pending| pending.acknowledgement_outcome_unknown)
+        {
+            return Err(Error::ShareAcknowledgementOutcomeUnknown {
+                broker_id: pending.broker_id,
+            });
         }
         let mut grouped = BTreeMap::<i32, BTreeMap<SharePartitionKey, Vec<(i64, i8)>>>::new();
         for (key, pending) in &self.pending {
@@ -1636,6 +1703,20 @@ impl ShareConsumer {
                 Ok(response) => response,
                 Err(error) => {
                     let error = share_acknowledgement_error(&broker, broker_id, error);
+                    if let Error::ShareAcknowledgementOutcomeUnknown { .. } = error {
+                        for (partition, offsets) in &partitions {
+                            for (offset, _) in offsets {
+                                let key = ShareRecordKey {
+                                    topic_id: partition.topic_id,
+                                    partition: partition.partition,
+                                    offset: *offset,
+                                };
+                                if let Some(pending) = self.pending.get_mut(&key) {
+                                    pending.acknowledgement_outcome_unknown = true;
+                                }
+                            }
+                        }
+                    }
                     if !matches!(error, Error::ShareAcknowledgementOutcomeUnknown { .. }) {
                         self.broker_clients.insert(broker_id, broker);
                     }
@@ -1802,6 +1883,7 @@ impl ShareRecordKey {
 struct PendingRecord {
     broker_id: i32,
     acknowledgement: Option<ShareAcknowledgementType>,
+    acknowledgement_outcome_unknown: bool,
     record: ShareRecord,
 }
 
@@ -2613,6 +2695,10 @@ mod tests {
             consumer.pending[&key].acknowledgement,
             Some(ShareAcknowledgementType::Accept)
         );
+        assert!(consumer.pending[&key].acknowledgement_outcome_unknown);
+        assert_eq!(consumer.pending_acknowledgement_reconciliation_count(), 1);
+        consumer.reconcile_acknowledgement_outcomes().await.unwrap();
+        assert!(consumer.share_sessions.is_empty());
         assert!(!consumer.broker_clients.contains_key(&1));
         broker_task.await.unwrap();
     }
@@ -2736,6 +2822,23 @@ mod tests {
             .pending
             .values()
             .all(|pending| { pending.acknowledgement == Some(ShareAcknowledgementType::Accept) }));
+
+        consumer
+            .pending
+            .get_mut(&key)
+            .unwrap()
+            .acknowledgement_outcome_unknown = true;
+        assert_eq!(consumer.pending_acknowledgement_reconciliation_count(), 1);
+        consumer.reconcile_acknowledgement_outcomes().await.unwrap();
+        let mut ambiguous_redelivery = response;
+        ambiguous_redelivery.responses[0].partitions[0].acquired_records[0].delivery_count = 4;
+        let reconciled = consumer
+            .decode_share_records(&ambiguous_redelivery, 1)
+            .unwrap();
+        assert_eq!(reconciled.len(), 1);
+        assert_eq!(reconciled[0].delivery_count(), 4);
+        assert_eq!(consumer.pending_acknowledgement_reconciliation_count(), 0);
+        assert_eq!(consumer.pending[&key].acknowledgement, None);
     }
 
     #[tokio::test]
