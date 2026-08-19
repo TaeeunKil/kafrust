@@ -89,6 +89,10 @@ use kafrust_protocol::api::offset_delete::{
 use kafrust_protocol::api::offset_fetch::{
     OffsetFetchGroupResponse, OffsetFetchTopic, OffsetFetchTopicResponse, OffsetFetchTopicV9,
 };
+use kafrust_protocol::api::share_group_describe::{
+    DescribedShareGroup, DescribedShareGroupMember, ShareGroupDescribeAssignment,
+    ShareGroupDescribeTopicPartitions,
+};
 
 use crate::client::Client;
 use crate::config::ClientConfig;
@@ -1537,6 +1541,106 @@ impl AdminClient {
                 self.config.record_broker_error();
             }
             descriptions.push(ModernConsumerGroupDescription::from_protocol(
+                group,
+                Duration::from_millis(nonnegative_i32_to_u64(throttle_time_ms)),
+            ));
+        }
+        Ok(descriptions)
+    }
+
+    /// Describes KIP-932 share groups through ShareGroupDescribe.
+    ///
+    /// Share groups are coordinator-owned, so each group is resolved and
+    /// queried independently. Kafka 4.1+ exposes the stable v1 wire shape.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.describe_share_groups",
+        skip_all,
+        fields(group_count = group_ids.len(), include_authorized_operations),
+        err
+    )]
+    pub async fn describe_share_groups(
+        &self,
+        group_ids: &[String],
+        include_authorized_operations: bool,
+    ) -> Result<Vec<ShareGroupDescription>> {
+        let mut descriptions = Vec::with_capacity(group_ids.len());
+        for group_id in group_ids {
+            let mut retry = 0;
+            let (throttle_time_ms, group) = loop {
+                let mut coordinator = self.group_coordinator_client(group_id).await?;
+                let api_versions = match coordinator
+                    .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
+                    .await
+                {
+                    Ok(api_versions) => api_versions,
+                    Err(error)
+                        if retry < self.max_retries
+                            && is_retryable_admin_coordinator_error(&error) =>
+                    {
+                        retry += 1;
+                        self.config.record_retry();
+                        tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                        continue;
+                    }
+                    Err(error) => return Err(error),
+                };
+                let Some(version) = api_versions
+                    .highest_supported_version(77, 1)
+                    .filter(|version| *version >= 1)
+                else {
+                    return Err(Error::Unsupported(
+                        "broker does not advertise ShareGroupDescribe v1",
+                    ));
+                };
+                let response = match version {
+                    1 => {
+                        coordinator
+                            .share_group_describe_v1(
+                                vec![group_id.clone()],
+                                include_authorized_operations,
+                            )
+                            .await
+                    }
+                    _ => return Err(Error::Unsupported("unsupported ShareGroupDescribe version")),
+                };
+                let response = match response {
+                    Ok(response) => response,
+                    Err(error)
+                        if retry < self.max_retries
+                            && is_retryable_admin_coordinator_error(&error) =>
+                    {
+                        retry += 1;
+                        self.config.record_retry();
+                        tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                        continue;
+                    }
+                    Err(error) => return Err(error),
+                };
+                let throttle_time_ms = response.throttle_time_ms;
+                let group = response
+                    .groups
+                    .into_iter()
+                    .find(|group| group.group_id == *group_id);
+                let Some(group) = group else {
+                    return Err(Error::MissingGroupDescription {
+                        group_id: group_id.clone(),
+                    });
+                };
+                if retry < self.max_retries && is_retryable_admin_coordinator_code(group.error_code)
+                {
+                    self.config.record_broker_error();
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    continue;
+                }
+                break (throttle_time_ms, group);
+            };
+            if group.error_code != 0 {
+                self.config.record_broker_error();
+            }
+            descriptions.push(ShareGroupDescription::from_protocol(
                 group,
                 Duration::from_millis(nonnegative_i32_to_u64(throttle_time_ms)),
             ));
@@ -7857,6 +7961,214 @@ impl ModernConsumerGroupTopicPartitions {
     }
 }
 
+/// Description returned by Kafka's stable ShareGroupDescribe API.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShareGroupDescription {
+    group_id: String,
+    error_code: i16,
+    error_message: Option<String>,
+    state: String,
+    group_epoch: i32,
+    assignment_epoch: i32,
+    assignor_name: String,
+    members: Vec<ShareGroupMember>,
+    authorized_operations: i32,
+    throttle_time: Duration,
+}
+
+impl ShareGroupDescription {
+    /// Returns the share group ID.
+    pub fn group_id(&self) -> &str {
+        &self.group_id
+    }
+
+    /// Returns Kafka's current share group state string.
+    pub fn state(&self) -> &str {
+        &self.state
+    }
+
+    /// Returns the group's current epoch.
+    pub fn group_epoch(&self) -> i32 {
+        self.group_epoch
+    }
+
+    /// Returns the group's assignment epoch.
+    pub fn assignment_epoch(&self) -> i32 {
+        self.assignment_epoch
+    }
+
+    /// Returns the selected server-side assignor.
+    pub fn assignor_name(&self) -> &str {
+        &self.assignor_name
+    }
+
+    /// Returns current members in broker response order.
+    pub fn members(&self) -> &[ShareGroupMember] {
+        &self.members
+    }
+
+    /// Returns Kafka's authorized-operations bitfield.
+    pub fn authorized_operations(&self) -> i32 {
+        self.authorized_operations
+    }
+
+    /// Returns whether Kafka described this share group successfully.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+    }
+
+    /// Returns Kafka's raw group error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns Kafka's optional group error message.
+    pub fn error_message(&self) -> Option<&str> {
+        self.error_message.as_deref()
+    }
+
+    /// Returns the coordinator's throttle time for this request.
+    pub fn throttle_time(&self) -> Duration {
+        self.throttle_time
+    }
+
+    fn from_protocol(group: DescribedShareGroup, throttle_time: Duration) -> Self {
+        Self {
+            group_id: group.group_id,
+            error_code: group.error_code,
+            error_message: group.error_message,
+            state: group.group_state,
+            group_epoch: group.group_epoch,
+            assignment_epoch: group.assignment_epoch,
+            assignor_name: group.assignor_name,
+            members: group
+                .members
+                .into_iter()
+                .map(ShareGroupMember::from_protocol)
+                .collect(),
+            authorized_operations: group.authorized_operations,
+            throttle_time,
+        }
+    }
+}
+
+/// One member returned by Kafka's ShareGroupDescribe API.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShareGroupMember {
+    member_id: String,
+    rack_id: Option<String>,
+    member_epoch: i32,
+    client_id: String,
+    client_host: String,
+    subscribed_topic_names: Vec<String>,
+    assignment: ShareGroupAssignment,
+}
+
+impl ShareGroupMember {
+    /// Returns the member ID.
+    pub fn member_id(&self) -> &str {
+        &self.member_id
+    }
+
+    /// Returns the rack ID, when configured.
+    pub fn rack_id(&self) -> Option<&str> {
+        self.rack_id.as_deref()
+    }
+
+    /// Returns the member epoch.
+    pub fn member_epoch(&self) -> i32 {
+        self.member_epoch
+    }
+
+    /// Returns the member's client ID.
+    pub fn client_id(&self) -> &str {
+        &self.client_id
+    }
+
+    /// Returns the member's client host.
+    pub fn client_host(&self) -> &str {
+        &self.client_host
+    }
+
+    /// Returns the topics explicitly subscribed by the member.
+    pub fn subscribed_topic_names(&self) -> &[String] {
+        &self.subscribed_topic_names
+    }
+
+    /// Returns the member's current assignment.
+    pub fn assignment(&self) -> &ShareGroupAssignment {
+        &self.assignment
+    }
+
+    fn from_protocol(member: DescribedShareGroupMember) -> Self {
+        Self {
+            member_id: member.member_id,
+            rack_id: member.rack_id,
+            member_epoch: member.member_epoch,
+            client_id: member.client_id,
+            client_host: member.client_host,
+            subscribed_topic_names: member.subscribed_topic_names,
+            assignment: ShareGroupAssignment::from_protocol(member.assignment),
+        }
+    }
+}
+
+/// Topic-partition assignment returned by ShareGroupDescribe.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShareGroupAssignment {
+    topic_partitions: Vec<ShareGroupTopicPartitions>,
+}
+
+impl ShareGroupAssignment {
+    /// Returns assigned topic-partition entries.
+    pub fn topic_partitions(&self) -> &[ShareGroupTopicPartitions] {
+        &self.topic_partitions
+    }
+
+    fn from_protocol(assignment: ShareGroupDescribeAssignment) -> Self {
+        Self {
+            topic_partitions: assignment
+                .topic_partitions
+                .into_iter()
+                .map(ShareGroupTopicPartitions::from_protocol)
+                .collect(),
+        }
+    }
+}
+
+/// One topic's partitions in a share-group assignment.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShareGroupTopicPartitions {
+    topic_id: [u8; 16],
+    topic_name: String,
+    partitions: Vec<i32>,
+}
+
+impl ShareGroupTopicPartitions {
+    /// Returns the Kafka topic UUID.
+    pub fn topic_id(&self) -> &[u8; 16] {
+        &self.topic_id
+    }
+
+    /// Returns the topic name.
+    pub fn topic_name(&self) -> &str {
+        &self.topic_name
+    }
+
+    /// Returns assigned partition indexes.
+    pub fn partitions(&self) -> &[i32] {
+        &self.partitions
+    }
+
+    fn from_protocol(topic: ShareGroupDescribeTopicPartitions) -> Self {
+        Self {
+            topic_id: topic.topic_id,
+            topic_name: topic.topic_name,
+            partitions: topic.partitions,
+        }
+    }
+}
+
 /// One member in a Kafka consumer group description.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConsumerGroupMember {
@@ -11457,6 +11769,61 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn routes_share_group_describe_to_coordinator() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let coordinator_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&coordinator_request[0..4], &[0, 10, 0, 1]);
+            write_frame(
+                &mut bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let (mut coordinator, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut coordinator).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut coordinator, &api_versions_with_share_group_describe()).await;
+
+            let describe_request = read_frame(&mut coordinator).await;
+            assert_eq!(&describe_request[0..4], &[0, 77, 0, 1]);
+            write_frame(&mut coordinator, &share_group_describe_response()).await;
+        });
+        let admin =
+            AdminClient::new(ClientConfig::new([addr.to_string()]).request_timeout_ms(1_000));
+
+        let descriptions = admin
+            .describe_share_groups(&["share-orders".to_owned()], true)
+            .await
+            .unwrap();
+
+        assert_eq!(descriptions.len(), 1);
+        let description = &descriptions[0];
+        assert_eq!(description.group_id(), "share-orders");
+        assert_eq!(description.state(), "Stable");
+        assert_eq!(description.group_epoch(), 4);
+        assert_eq!(description.assignment_epoch(), 5);
+        assert_eq!(description.assignor_name(), "uniform");
+        assert_eq!(description.authorized_operations(), -2147483648);
+        assert_eq!(description.members().len(), 1);
+        let member = &description.members()[0];
+        assert_eq!(member.member_id(), "member-1");
+        assert_eq!(member.rack_id(), Some("rack-a"));
+        assert_eq!(member.member_epoch(), 7);
+        assert_eq!(
+            member.assignment().topic_partitions()[0].topic_name(),
+            "orders"
+        );
+        assert_eq!(
+            member.assignment().topic_partitions()[0].partitions(),
+            [0, 2]
+        );
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn retries_modern_consumer_group_describe_after_coordinator_disconnect() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -13629,6 +13996,70 @@ mod tests {
         encoder.write_i16(1);
         encoder.write_empty_tagged_fields();
         encoder.write_i32(0); // throttle time
+        encoder.write_empty_tagged_fields();
+        encoder.into_bytes()
+    }
+
+    fn api_versions_with_share_group_describe() -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_i16(0); // success
+        encoder.write_unsigned_varint(2); // one API key
+        encoder.write_i16(77);
+        encoder.write_i16(1);
+        encoder.write_i16(1);
+        encoder.write_empty_tagged_fields();
+        encoder.write_i32(0); // throttle time
+        encoder.write_empty_tagged_fields();
+        encoder.into_bytes()
+    }
+
+    fn share_group_describe_response() -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_empty_tagged_fields(); // response header tags
+        encoder.write_i32(4); // throttle time
+        encoder
+            .write_compact_array(Some(&[()]), |encoder, ()| {
+                encoder.write_i16(0);
+                encoder.write_compact_nullable_string(Some("ok"))?;
+                encoder.write_compact_string("share-orders")?;
+                encoder.write_compact_string("Stable")?;
+                encoder.write_i32(4);
+                encoder.write_i32(5);
+                encoder.write_compact_string("uniform")?;
+                encoder.write_compact_array(Some(&[()]), |encoder, ()| {
+                    encoder.write_compact_string("member-1")?;
+                    encoder.write_compact_nullable_string(Some("rack-a"))?;
+                    encoder.write_i32(7);
+                    encoder.write_compact_string("client-1")?;
+                    encoder.write_compact_string("/127.0.0.1")?;
+                    encoder
+                        .write_compact_array(Some(&["orders".to_owned()]), |encoder, topic| {
+                            encoder.write_compact_string(topic)
+                        })?;
+                    encoder.write_compact_array(Some(&[()]), |encoder, ()| {
+                        encoder.write_uuid(&[7; 16]);
+                        encoder.write_compact_string("orders")?;
+                        encoder.write_compact_array(
+                            Some(&[0_i32, 2_i32]),
+                            |encoder, partition| {
+                                encoder.write_i32(*partition);
+                                Ok(())
+                            },
+                        )?;
+                        encoder.write_empty_tagged_fields();
+                        Ok(())
+                    })?;
+                    encoder.write_empty_tagged_fields();
+                    encoder.write_empty_tagged_fields();
+                    Ok(())
+                })?;
+                encoder.write_i32(-2147483648);
+                encoder.write_empty_tagged_fields();
+                Ok(())
+            })
+            .unwrap();
         encoder.write_empty_tagged_fields();
         encoder.into_bytes()
     }

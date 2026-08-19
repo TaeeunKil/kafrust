@@ -45,6 +45,39 @@ and [`31781264035`](https://github.com/TaeeunKil/kafrust/actions/runs/3178126403
 The protocol request includes tagged fields at the partition, topic, and
 top-level boundaries; focused tests keep this flexible wire shape auditable.
 
+## Describe Share Groups
+
+`AdminClient::describe_share_groups` exposes Kafka's stable KIP-932
+`ShareGroupDescribe` v1 API (API key 77). It routes each group ID to its active
+coordinator, negotiates the capability before sending the request, and returns
+typed group state, group and assignment epochs, assignor, authorized
+operations, member identity, subscribed topics, and assigned topic partitions.
+
+The response is flexible and includes topic UUIDs as well as topic names. The
+method returns `Error::Unsupported` when the broker does not advertise v1; it
+does not claim compatibility with Kafka 4.0's removed early-access v0. Read
+errors and retryable coordinator responses use the same bounded recovery policy
+as the other coordinator-scoped Admin reads.
+
+```rust
+use kafrust::{AdminClient, ClientConfig};
+
+# async fn example() -> kafrust::Result<()> {
+let admin = AdminClient::new(ClientConfig::new(["localhost:9092"]));
+let groups = admin
+    .describe_share_groups(&["orders-share".to_owned()], true)
+    .await?;
+
+for group in groups {
+    println!("{}: {}", group.group_id(), group.state());
+    for member in group.members() {
+        println!("member {} on {}", member.member_id(), member.client_host());
+    }
+}
+# Ok(())
+# }
+```
+
 ## Mutation Outcome Ambiguity
 
 For mutating Admin operations, a transport failure, request timeout, response

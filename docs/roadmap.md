@@ -78,6 +78,15 @@ coverage toward a release candidate that can be qualified in staging.
 
 ### Progress Recorded
 
+- Stable `ShareGroupDescribe` v1 (API key 77) is now implemented through the
+  typed protocol, low-level `Client`, and coordinator-aware `AdminClient`
+  layers. The public result preserves share-group state and epochs, member
+  details, subscribed topics, assignments, topic UUIDs, and authorization
+  bits. Focused wire, injected-broker, and Admin routing tests pass; the Kafka
+  4.3.1 live ShareConsumer smoke now also inspects its active group through
+  this API. This closes the first Share Group Admin inspection slice, while
+  Share Group offset mutation/listing and long-running operational evidence
+  remain open.
 - Flexible `DescribeTopicPartitions` v0 is now implemented through the typed
   protocol and `AdminClient` layers, including topic UUIDs, partition leader/
   ISR state, nullable ELR fields, authorized operations, and paging cursors.

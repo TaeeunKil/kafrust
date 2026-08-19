@@ -2,7 +2,8 @@
 
 use kafrust::protocol::api::find_coordinator::FindCoordinatorResponseV1;
 use kafrust::{
-    ClientConfig, SecurityProtocol, ShareAcknowledgementType, ShareAcquireMode, ShareConsumerConfig,
+    AdminClient, ClientConfig, SecurityProtocol, ShareAcknowledgementType, ShareAcquireMode,
+    ShareConsumerConfig,
 };
 use tokio::time::{sleep, Duration, Instant};
 
@@ -76,14 +77,15 @@ async fn share_consumer_roundtrip_when_broker_is_configured() {
     };
     let group_id = std::env::var("KAFRUST_SHARE_GROUP_ID")
         .unwrap_or_else(|_| "kafrust-share-smoke".to_owned());
-    let mut consumer = ShareConsumerConfig::new(parse_bootstrap_servers(&bootstrap), group_id)
-        .subscribe(topic)
-        .max_wait_ms(100)
-        .max_retries(10)
-        .acquire_mode(ShareAcquireMode::RecordLimit)
-        .build()
-        .await
-        .expect("ShareConsumer should connect to the configured Kafka broker");
+    let mut consumer =
+        ShareConsumerConfig::new(parse_bootstrap_servers(&bootstrap), group_id.clone())
+            .subscribe(topic)
+            .max_wait_ms(100)
+            .max_retries(10)
+            .acquire_mode(ShareAcquireMode::RecordLimit)
+            .build()
+            .await
+            .expect("ShareConsumer should connect to the configured Kafka broker");
     let deadline = Instant::now() + Duration::from_secs(30);
     loop {
         let records = consumer
@@ -108,6 +110,23 @@ async fn share_consumer_roundtrip_when_broker_is_configured() {
                 .find(|candidate| candidate.offset() == offset)
                 .expect("renewed record should be returned by the next poll");
             assert!(consumer.acquisition_lock_timeout_ms().is_some());
+
+            let admin = AdminClient::new(
+                client_config_from_env(parse_bootstrap_servers(&bootstrap), "kafrust-share-admin")
+                    .expect("valid share admin test configuration"),
+            );
+            let descriptions = admin
+                .describe_share_groups(&[group_id.clone()], true)
+                .await
+                .expect("ShareGroupDescribe should inspect the active share group");
+            assert_eq!(descriptions.len(), 1);
+            assert_eq!(descriptions[0].group_id(), group_id);
+            assert!(descriptions[0].is_success());
+            assert!(
+                !descriptions[0].members().is_empty(),
+                "ShareGroupDescribe should expose the active member"
+            );
+
             let record_to_complete = if std::env::var_os("KAFRUST_SHARE_TEST_EXPIRY").is_some() {
                 let lock_timeout_ms = consumer
                     .acquisition_lock_timeout_ms()

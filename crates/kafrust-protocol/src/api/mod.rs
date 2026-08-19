@@ -47,6 +47,7 @@ pub mod offset_for_leader_epoch;
 pub mod produce;
 pub mod sasl;
 pub mod share;
+pub mod share_group_describe;
 pub mod sync_group;
 pub mod telemetry;
 pub mod txn_offset_commit;

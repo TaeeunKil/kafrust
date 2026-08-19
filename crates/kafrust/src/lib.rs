@@ -66,9 +66,10 @@ pub use admin::{
     OngoingPartitionReassignment, OngoingPartitionReassignmentTopic, PartitionReassignment,
     PartitionReassignmentOptions, PartitionReassignmentPartition, PartitionReassignmentQuery,
     ReplicaLogDirAssignment, ScramCredentialDeletion, ScramCredentialInfo,
-    ScramCredentialMechanism, ScramCredentialUpsertion, ScramUserCredentials,
-    TopicConfigAlteration, TopicConfigResource, TopicConfigUpdate, TopicConfigUpdateEntry,
-    TopicListing, TransactionDescription, TransactionDescriptionTopic,
+    ScramCredentialMechanism, ScramCredentialUpsertion, ScramUserCredentials, ShareGroupAssignment,
+    ShareGroupDescription, ShareGroupMember, ShareGroupTopicPartitions, TopicConfigAlteration,
+    TopicConfigResource, TopicConfigUpdate, TopicConfigUpdateEntry, TopicListing,
+    TransactionDescription, TransactionDescriptionTopic,
 };
 pub use client::Client;
 pub use config::{
