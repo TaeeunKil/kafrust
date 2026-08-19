@@ -254,11 +254,33 @@ async fn share_consumer_active_heartbeat_failover_when_broker_is_configured() {
     let pre_value = std::env::var("KAFRUST_SHARE_PRE_VALUE")
         .expect("KAFRUST_SHARE_PRE_VALUE should be set")
         .into_bytes();
-    let post_value = std::env::var("KAFRUST_SHARE_VALUE")
-        .expect("KAFRUST_SHARE_VALUE should be set")
-        .into_bytes();
     let ready_file = std::env::var("KAFRUST_SHARE_HEARTBEAT_READY_FILE")
         .expect("KAFRUST_SHARE_HEARTBEAT_READY_FILE should be set");
+    let cycles = std::env::var("KAFRUST_SHARE_HEARTBEAT_CYCLES")
+        .ok()
+        .map(|value| {
+            value
+                .parse::<usize>()
+                .expect("KAFRUST_SHARE_HEARTBEAT_CYCLES should be an integer")
+        })
+        .unwrap_or(1);
+    assert!(
+        cycles > 0,
+        "ShareConsumer heartbeat failover needs one cycle"
+    );
+    let post_values = if let Ok(prefix) = std::env::var("KAFRUST_SHARE_HEARTBEAT_VALUE_PREFIX") {
+        (1..=cycles)
+            .map(|cycle| format!("{prefix}{cycle}").into_bytes())
+            .collect::<Vec<_>>()
+    } else {
+        assert_eq!(
+            cycles, 1,
+            "KAFRUST_SHARE_HEARTBEAT_VALUE_PREFIX is required for repeated cycles"
+        );
+        vec![std::env::var("KAFRUST_SHARE_VALUE")
+            .expect("KAFRUST_SHARE_VALUE should be set")
+            .into_bytes()]
+    };
 
     let mut consumer = ShareConsumerConfig::new(parse_bootstrap_servers(&bootstrap), group_id)
         .subscribe(topic.clone())
@@ -300,52 +322,72 @@ async fn share_consumer_active_heartbeat_failover_when_broker_is_configured() {
         .await
         .expect("ShareConsumer heartbeat task should start before broker failure");
     sleep(Duration::from_millis(750)).await;
-    std::fs::write(&ready_file, b"heartbeat-running\n")
-        .expect("ShareConsumer heartbeat readiness marker should be writable");
 
-    loop {
-        let records = consumer
-            .poll()
-            .await
-            .expect("ShareConsumer should recover its fetch path after coordinator failover");
-        if let Some(record) = records.iter().find(|record| {
-            record.topic() == topic
-                && record.partition() == partition
-                && record.value() == Some(post_value.as_slice())
-        }) {
-            consumer
-                .acknowledge(record, ShareAcknowledgementType::Accept)
-                .expect("ShareConsumer should accept the post-heartbeat record locally");
-            consumer
-                .commit()
+    for cycle in 1..=cycles {
+        let cycle_ready_file = format!("{ready_file}-{cycle}-ready");
+        let cycle_recovered_file = format!("{ready_file}-{cycle}-recovered");
+        std::fs::write(&cycle_ready_file, b"heartbeat-running\n")
+            .expect("ShareConsumer heartbeat readiness marker should be writable");
+        let expected_value = &post_values[cycle - 1];
+        let deadline = Instant::now() + Duration::from_secs(90);
+        loop {
+            let records = consumer
+                .poll()
                 .await
-                .expect("ShareConsumer should commit the post-heartbeat acknowledgement");
+                .expect("ShareConsumer should recover its fetch path after coordinator failover");
+            if let Some(record) = records.iter().find(|record| {
+                record.topic() == topic
+                    && record.partition() == partition
+                    && record.value() == Some(expected_value.as_slice())
+            }) {
+                consumer
+                    .acknowledge(record, ShareAcknowledgementType::Accept)
+                    .expect("ShareConsumer should accept the post-heartbeat record locally");
+                consumer
+                    .commit()
+                    .await
+                    .expect("ShareConsumer should commit the post-heartbeat acknowledgement");
+                assert!(
+                    !consumer.heartbeat_task_is_finished(),
+                    "ShareConsumer heartbeat task should remain alive after coordinator failover"
+                );
+                std::fs::write(&cycle_recovered_file, b"acknowledged\n")
+                    .expect("ShareConsumer recovery marker should be writable");
+                println!(
+                    "share consumer heartbeat cycle {cycle} received {}-{}@{}",
+                    record.topic(),
+                    record.partition(),
+                    record.offset()
+                );
+                break;
+            }
             assert!(
-                !consumer.heartbeat_task_is_finished(),
-                "ShareConsumer heartbeat task should remain alive after coordinator failover"
+                Instant::now() < deadline,
+                "ShareConsumer did not receive heartbeat cycle {cycle} record before the deadline"
             );
-            consumer
-                .stop_heartbeat_task()
-                .await
-                .expect("ShareConsumer heartbeat task should stop cleanly after failover");
-            consumer
-                .close()
-                .await
-                .expect("ShareConsumer should leave the heartbeat failover group cleanly");
-            println!(
-                "share consumer heartbeat failover received {}-{}@{}",
-                record.topic(),
-                record.partition(),
-                record.offset()
-            );
-            return;
+            sleep(Duration::from_millis(100)).await;
         }
-        assert!(
-            Instant::now() < deadline,
-            "ShareConsumer did not receive the post-heartbeat record before the deadline"
-        );
-        sleep(Duration::from_millis(100)).await;
+
+        if cycle < cycles {
+            let continue_file = format!("{ready_file}-{cycle}-continue");
+            while !std::path::Path::new(&continue_file).exists() {
+                assert!(
+                    Instant::now() < deadline,
+                    "workflow did not authorize the next heartbeat failover cycle"
+                );
+                sleep(Duration::from_millis(100)).await;
+            }
+        }
     }
+
+    consumer
+        .stop_heartbeat_task()
+        .await
+        .expect("ShareConsumer heartbeat task should stop cleanly after failover");
+    consumer
+        .close()
+        .await
+        .expect("ShareConsumer should leave the heartbeat failover group cleanly");
 }
 
 fn security_protocol_from_env() -> SecurityProtocol {
