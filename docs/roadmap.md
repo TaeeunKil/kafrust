@@ -44,6 +44,15 @@ goal. Remaining gates include broader protocol and Admin coverage, longer
 multi-broker and security soak workloads, public API stabilization, and
 compatibility evidence against the remaining declared limits.
 
+The published `0.3.0` artifact also passed a 600-second Kafka 4.3.1
+three-broker soak with brokers 1 and 2 stopped simultaneously in
+[`32230130048`](https://github.com/TaeeunKil/kafrust/actions/runs/32230130048).
+The run processed 27,810,300 records with five failed requests and 2,475
+retries, recovered successfully, and ended with zero in-flight requests and
+zero buffered records. This closes the published simultaneous-loss soak
+slice; repeated runs, secured variants, and longer-duration evidence remain
+open.
+
 The verification-hardening slice now includes a standalone pure-Rust fuzz
 workspace with six libFuzzer targets covering primitive/flexible decoding,
 framing, classic and modern group descriptions, share-group offsets, and all
