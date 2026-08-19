@@ -1,0 +1,62 @@
+[package]
+name = "kafrust-fuzz"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+kafrust-protocol = { path = "../crates/kafrust-protocol" }
+libfuzzer-sys = "0.4"
+
+# Keep the fuzz workspace buildable with the repository MSRV. Newer `cc`
+# releases pull a `jobserver` release that requires Edition 2024.
+[build-dependencies]
+cc = "=1.0.83"
+jobserver = "=0.1.25"
+
+[[bin]]
+name = "codec"
+path = "fuzz_targets/codec.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "frame"
+path = "fuzz_targets/frame.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "api_versions_response"
+path = "fuzz_targets/api_versions_response.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "group_describe_response"
+path = "fuzz_targets/group_describe_response.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "share_group_offsets_response"
+path = "fuzz_targets/share_group_offsets_response.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "compression"
+path = "fuzz_targets/compression.rs"
+test = false
+doc = false
+bench = false

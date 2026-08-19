@@ -1,0 +1,39 @@
+name: Fuzz Check
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  compile-fuzz-targets:
+    name: Compile libFuzzer targets
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: fuzz
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install nightly Rust
+        run: rustup toolchain install nightly --profile minimal
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+
+      - name: Compile all fuzz targets
+        run: |
+          for target in \
+            codec \
+            frame \
+            api_versions_response \
+            group_describe_response \
+            share_group_offsets_response \
+            compression; do
+            cargo +nightly fuzz check "$target"
+          done

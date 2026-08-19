@@ -77,6 +77,29 @@ pub fn compress_bytes(compression: RecordBatchCompression, records: &[u8]) -> Re
     }
 }
 
+/// Decompresses a Kafka-compatible codec payload with an explicit output limit.
+///
+/// The limit is checked before and during decompression so callers handling
+/// untrusted broker data can bound memory growth. The returned bytes contain
+/// only the decompressed payload; record-batch framing remains the caller's
+/// responsibility.
+pub fn decompress_bytes(
+    compression: RecordBatchCompression,
+    records: &[u8],
+    max_decompressed_bytes: usize,
+) -> Result<Vec<u8>> {
+    match compression {
+        RecordBatchCompression::None => {
+            ensure_decompressed_output_limit(records.len(), max_decompressed_bytes)?;
+            Ok(records.to_vec())
+        }
+        RecordBatchCompression::Gzip => gzip_decompress(records, max_decompressed_bytes),
+        RecordBatchCompression::Snappy => snappy_decompress(records, max_decompressed_bytes),
+        RecordBatchCompression::Lz4 => lz4_decompress_with_limit(records, max_decompressed_bytes),
+        RecordBatchCompression::Zstd => zstd_decompress_with_limit(records, max_decompressed_bytes),
+    }
+}
+
 pub(crate) fn compress_record_batch_records(
     compression: RecordBatchCompression,
     records: &[u8],
@@ -97,16 +120,7 @@ pub(crate) fn decompress_record_batch_records_with_limit(
     records: &[u8],
     max_decompressed_bytes: usize,
 ) -> Result<Vec<u8>> {
-    match compression {
-        RecordBatchCompression::None => {
-            ensure_decompressed_output_limit(records.len(), max_decompressed_bytes)?;
-            Ok(records.to_vec())
-        }
-        RecordBatchCompression::Gzip => gzip_decompress(records, max_decompressed_bytes),
-        RecordBatchCompression::Snappy => snappy_decompress(records, max_decompressed_bytes),
-        RecordBatchCompression::Lz4 => lz4_decompress_with_limit(records, max_decompressed_bytes),
-        RecordBatchCompression::Zstd => zstd_decompress_with_limit(records, max_decompressed_bytes),
-    }
+    decompress_bytes(compression, records, max_decompressed_bytes)
 }
 
 fn gzip_compress(records: &[u8]) -> Result<Vec<u8>> {
@@ -381,12 +395,30 @@ fn snappy_error(reason: String) -> Error {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::{
-        compress_record_batch_records, decompress_record_batch_records,
-        decompress_record_batch_records_with_limit, lz4_decompress_with_limit,
-        zstd_decompress_with_limit, RecordBatchCompression, MAX_DECOMPRESSED_RECORD_BYTES,
-        XERIAL_SNAPPY_HEADER, ZSTD_MAGIC,
+        compress_bytes, compress_record_batch_records, decompress_bytes,
+        decompress_record_batch_records, decompress_record_batch_records_with_limit,
+        lz4_decompress_with_limit, zstd_decompress_with_limit, RecordBatchCompression,
+        MAX_DECOMPRESSED_RECORD_BYTES, XERIAL_SNAPPY_HEADER, ZSTD_MAGIC,
     };
     use crate::error::Error;
+
+    #[test]
+    fn public_codec_helpers_roundtrip_all_codecs_with_explicit_limit() {
+        let records = b"kafrust codec regression";
+        let codecs = [
+            RecordBatchCompression::None,
+            RecordBatchCompression::Gzip,
+            RecordBatchCompression::Snappy,
+            RecordBatchCompression::Lz4,
+            RecordBatchCompression::Zstd,
+        ];
+
+        for codec in codecs {
+            let compressed = compress_bytes(codec, records).unwrap();
+            let decompressed = decompress_bytes(codec, &compressed, 8 * 1024 * 1024).unwrap();
+            assert_eq!(decompressed, records, "codec {}", codec.name());
+        }
+    }
 
     #[test]
     fn snappy_xerial_roundtrip_spans_multiple_blocks() {

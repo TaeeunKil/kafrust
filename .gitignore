@@ -2,3 +2,8 @@
 .tools/
 **/*.rs.bk
 Cargo.lock
+
+# The standalone fuzz workspace is a binary harness; keep its lockfile for
+# reproducible MSRV-compatible fuzz builds.
+!fuzz/Cargo.lock
+fuzz/target/

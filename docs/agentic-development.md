@@ -91,3 +91,22 @@ Do not record every intermediate idea. If a note will not help a future contribu
 ## Current Operating Principle
 
 The first implementation phase should favor correctness and auditability over API breadth. Build the protocol and connection layers in small steps, with tests that make wire behavior explicit.
+
+## Fuzzing
+
+The standalone [`fuzz/`](../fuzz/) workspace contains libFuzzer targets for
+the public protocol decoders and all supported compression codecs. It is kept
+outside the normal workspace so ordinary MSRV builds do not require nightly
+Rust or libFuzzer.
+
+Run a target locally with:
+
+```text
+cargo +nightly fuzz run frame
+```
+
+Malformed input is expected to return a typed error. A crash or sanitizer
+finding must be reduced to a deterministic protocol regression test before
+the fuzz target is considered healthy. The scheduled/manual `Fuzz Check`
+workflow compiles every target; long fuzz campaigns remain a separate
+resource-bounded operation.

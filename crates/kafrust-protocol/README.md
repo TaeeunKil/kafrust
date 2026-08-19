@@ -34,6 +34,8 @@ client paths:
 - tagged fields
 - request and response headers
 - frame encoding and decoding
+- bounded pure-Rust compression and decompression helpers for gzip, snappy,
+  lz4, and zstd record payloads
 - `ApiVersions v0`
 - `Metadata v1`
 - `Metadata v12` with topic UUIDs (KIP-848 assignment support)

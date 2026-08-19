@@ -44,6 +44,13 @@ goal. Remaining gates include broader protocol and Admin coverage, longer
 multi-broker and security soak workloads, public API stabilization, and
 compatibility evidence against the remaining declared limits.
 
+The verification-hardening slice now includes a standalone pure-Rust fuzz
+workspace with six libFuzzer targets covering primitive/flexible decoding,
+framing, classic and modern group descriptions, share-group offsets, and all
+five supported compression codecs. The targets compile with the repository
+MSRV after pinning their fuzz-only build dependencies; crash corpus reduction,
+scheduled campaigns, and fault-injecting broker coverage remain open.
+
 The published `0.2.30` artifacts were also exercised from fresh external
 projects in the seven-profile `Published Crate Smoke` run
 [`31762679537`](https://github.com/TaeeunKil/kafrust/actions/runs/31762679537).
@@ -93,6 +100,11 @@ coverage toward a release candidate that can be qualified in staging.
    coordinator-routing tests. The combined Kafka 4.3.1 live lifecycle gate
    passed in [`32225957928`](https://github.com/TaeeunKil/kafrust/actions/runs/32225957928);
    long-running operational evidence remains open.
+- A standalone `fuzz/` workspace now provides six libFuzzer targets and a
+  manual/weekly compile workflow. The public bounded compression helpers have
+  an all-codec roundtrip regression test. This closes the initial fuzz-harness
+  scaffolding slice; corpus growth, minimized crash regressions, and sustained
+  campaigns remain part of the production-hardening gate.
 - Flexible `DescribeTopicPartitions` v0 is now implemented through the typed
   protocol and `AdminClient` layers, including topic UUIDs, partition leader/
   ISR state, nullable ELR fields, authorized operations, and paging cursors.

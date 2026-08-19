@@ -227,7 +227,8 @@ behind the broad pure-Rust competitors in three areas:
   OTLP generation now exist, but live broker telemetry remains), remaining
   modern Admin paths, and protocol-parity automation;
 - production hardening: more complete group lifecycle behavior, ambiguous
-  transaction and mutation outcomes, resource ceilings, fuzzing, fault-
+  transaction and mutation outcomes, resource ceilings, fuzz campaign depth,
+  fault-
   injected broker coverage, longer secured multi-broker soaks, and
   assignment/rebalance fault matrices;
 - adoption surface: stable 1.0 APIs, wider migration compatibility, published
