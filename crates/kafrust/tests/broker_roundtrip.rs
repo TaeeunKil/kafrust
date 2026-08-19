@@ -79,7 +79,7 @@ async fn share_consumer_roundtrip_when_broker_is_configured() {
     let mut consumer = ShareConsumerConfig::new(parse_bootstrap_servers(&bootstrap), group_id)
         .subscribe(topic)
         .max_wait_ms(100)
-        .max_retries(3)
+        .max_retries(10)
         .acquire_mode(ShareAcquireMode::RecordLimit)
         .build()
         .await

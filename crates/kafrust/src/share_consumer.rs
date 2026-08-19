@@ -1009,6 +1009,7 @@ impl ShareConsumer {
             }
             attempt += 1;
             self.config.client.record_retry();
+            tokio::time::sleep(share_retry_backoff(attempt)).await;
             self.reconnect_coordinator().await?;
         }
     }
