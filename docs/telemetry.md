@@ -25,11 +25,15 @@ Implemented:
 - local and broker-advertised payload ceilings;
 - one same-connection refresh/retry for `UNKNOWN_SUBSCRIPTION_ID` and
   `UNSUPPORTED_COMPRESSION_TYPE`;
+- broker-negotiated gzip, Snappy, LZ4, and Zstd payload compression using the
+  protocol crate's pure Rust codecs;
 - KIP-714 jittered push scheduling and a shutdown-triggered terminating push.
 
 The runtime accepts raw OTLP MetricsData v1 protobuf bytes from the provider. It
-does not yet ship a built-in OTLP serializer or compression codec; the current
-provider path therefore requires the broker to accept uncompressed payloads.
+compresses those bytes with the strongest codec accepted by the broker, using
+Zstd, LZ4, Snappy, Gzip, then uncompressed as the preference order. It does not
+yet ship a built-in OTLP serializer, so applications still provide the
+MetricsData v1 protobuf bytes.
 The scheduler is deliberately bounded to one in-flight push on one persistent
 connection. It does not queue unbounded payloads or silently split a payload
 that exceeds the broker limit.
@@ -83,14 +87,14 @@ if !subscription.requested_metrics.is_empty() {
 The all-zero UUID requests a broker-assigned client instance ID. The returned
 ID must be reused for later subscription and push requests. `metrics_data` is
 expected to be an OpenTelemetry MetricsData v1 protobuf payload. The low-level
-method accepts a compression identifier, while the high-level runtime currently
-selects only uncompressed payloads.
+method accepts a compression identifier, while the high-level runtime selects
+and applies a broker-accepted codec automatically.
 
 ## Release Gate
 
 Before KIP-714 can count as a production replacement feature, kafrust must add
-a built-in OTLP metrics provider or a documented integration package, codec
-support for every broker-accepted compression mode, metrics-to-OTLP mapping
-from kafrust's own counters, and a Kafka KRaft live test with an enabled client
-telemetry plugin. The live gate must cover subscription changes, throttling,
-`UNKNOWN_SUBSCRIPTION_ID`, payload-limit handling, and terminating pushes.
+a built-in OTLP metrics provider or a documented integration package,
+metrics-to-OTLP mapping from kafrust's own counters, and a Kafka KRaft live test
+with an enabled client telemetry plugin. The live gate must cover subscription
+changes, throttling, `UNKNOWN_SUBSCRIPTION_ID`, payload-limit handling,
+compression, and terminating pushes.

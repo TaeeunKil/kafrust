@@ -216,10 +216,10 @@ behind the broad pure-Rust competitors in three areas:
   [run 32216383214](https://github.com/TaeeunKil/kafrust/actions/runs/32216383214);
   repeated multi-broker recovery, expiry/reconciliation soak, and ambiguous
   acknowledgement reconciliation remain open),
-  KIP-714 beyond the new low-level wire path (the high-level provider and
-  scheduler now exist, but built-in OTLP generation, compression, and live
-  broker telemetry remain), remaining modern Admin paths, and protocol-parity
-  automation;
+  KIP-714 beyond the new low-level wire path (the high-level provider,
+  scheduler, and broker-negotiated pure-Rust compression now exist, but
+  built-in OTLP generation and live broker telemetry remain), remaining modern
+  Admin paths, and protocol-parity automation;
 - production hardening: more complete group lifecycle behavior, ambiguous
   transaction and mutation outcomes, resource ceilings, fuzzing, fault-
   injected broker coverage, repeated heartbeat/coordinator failure tests, and

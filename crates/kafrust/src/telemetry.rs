@@ -6,6 +6,7 @@ use crate::error::{Error, Result};
 use kafrust_protocol::api::telemetry::{
     GET_TELEMETRY_SUBSCRIPTIONS_API_KEY, PUSH_TELEMETRY_API_KEY,
 };
+use kafrust_protocol::record_batch::{compress_bytes, RecordBatchCompression};
 use rand::Rng;
 use std::time::Duration;
 use tokio::sync::watch;
@@ -13,7 +14,6 @@ use tokio::sync::watch;
 const UNKNOWN_SUBSCRIPTION_ID: i16 = 117;
 const TELEMETRY_TOO_LARGE: i16 = 118;
 const UNSUPPORTED_COMPRESSION_TYPE: i16 = 76;
-const NO_COMPRESSION: i8 = 0;
 
 /// Supplies an OpenTelemetry MetricsData payload for a broker subscription.
 ///
@@ -316,7 +316,7 @@ where
                 "telemetry subscription is not initialized",
             ))?
             .clone();
-        let compression_type = select_compression(&subscription.accepted_compression_types)?;
+        let compression = select_compression(&subscription.accepted_compression_types)?;
         let metrics = self.provider.collect(
             &subscription.requested_metrics,
             subscription.delta_temporality,
@@ -332,13 +332,20 @@ where
             });
         }
         let payload_bytes = metrics.len();
+        let metrics = compress_bytes(compression, &metrics)?;
+        if metrics.len() > max_payload_bytes {
+            return Err(Error::TelemetryPayloadTooLarge {
+                size: metrics.len(),
+                max: max_payload_bytes,
+            });
+        }
         let response = self
             .client
             .push_telemetry_v0(
                 subscription.client_instance_id,
                 subscription.subscription_id,
                 terminating,
-                compression_type,
+                compression.attributes() as i8,
                 metrics,
             )
             .await?;
@@ -360,14 +367,19 @@ where
     }
 }
 
-fn select_compression(accepted: &[i8]) -> Result<i8> {
-    if accepted.contains(&NO_COMPRESSION) {
-        Ok(NO_COMPRESSION)
-    } else {
-        Err(Error::Unsupported(
-            "telemetry provider currently emits uncompressed OTLP payloads",
-        ))
-    }
+fn select_compression(accepted: &[i8]) -> Result<RecordBatchCompression> {
+    [
+        RecordBatchCompression::Zstd,
+        RecordBatchCompression::Lz4,
+        RecordBatchCompression::Snappy,
+        RecordBatchCompression::Gzip,
+        RecordBatchCompression::None,
+    ]
+    .into_iter()
+    .find(|compression| accepted.contains(&(compression.attributes() as i8)))
+    .ok_or(Error::Unsupported(
+        "telemetry subscription has no supported compression type",
+    ))
 }
 
 fn jittered_interval(interval: Duration, enabled: bool) -> Duration {
@@ -393,7 +405,8 @@ mod tests {
     use super::{jittered_interval, select_compression, TelemetryConfig, TelemetryMetricsProvider};
     use crate::client::Client;
     use crate::error::Error;
-    use kafrust_protocol::codec::Encoder;
+    use kafrust_protocol::codec::{Decoder, Encoder};
+    use kafrust_protocol::record_batch::RecordBatchCompression;
     use std::time::Duration;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -413,9 +426,16 @@ mod tests {
     }
 
     #[test]
-    fn selects_only_uncompressed_payloads_until_codecs_exist() {
-        assert_eq!(select_compression(&[0, 2]).unwrap(), 0);
-        assert!(select_compression(&[2, 3]).is_err());
+    fn selects_the_strongest_supported_telemetry_codec() {
+        assert_eq!(
+            select_compression(&[0, 2]).unwrap(),
+            RecordBatchCompression::Snappy
+        );
+        assert_eq!(
+            select_compression(&[1, 3]).unwrap(),
+            RecordBatchCompression::Lz4
+        );
+        assert!(select_compression(&[5]).is_err());
     }
 
     #[test]
@@ -468,6 +488,7 @@ mod tests {
             let mut subscription = vec![0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0];
             subscription.extend_from_slice(&[7; 16]);
             subscription.extend_from_slice(&4_i32.to_be_bytes());
+            subscription.push(3);
             subscription.push(2);
             subscription.push(0);
             subscription.extend_from_slice(&50_i32.to_be_bytes());
@@ -480,6 +501,19 @@ mod tests {
 
             let request = read_frame(&mut broker_stream).await;
             assert_eq!(i16::from_be_bytes([request[0], request[1]]), 72);
+            let mut decoder = Decoder::new(&request);
+            decoder.read_i16().unwrap();
+            decoder.read_i16().unwrap();
+            decoder.read_i32().unwrap();
+            decoder.read_nullable_string().unwrap();
+            decoder.read_tagged_fields().unwrap();
+            decoder.read_uuid().unwrap();
+            assert_eq!(decoder.read_i32().unwrap(), 4);
+            assert!(!decoder.read_bool().unwrap());
+            assert_eq!(decoder.read_i8().unwrap(), 2);
+            let metrics = decoder.read_compact_bytes().unwrap();
+            assert!(metrics.len() > 3);
+            decoder.read_tagged_fields().unwrap();
             let mut response = Encoder::new();
             response.write_i32(3);
             response.write_empty_tagged_fields();

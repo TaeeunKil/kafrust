@@ -461,9 +461,10 @@ See [Share Consumer](docs/share-consumer.md) for the exact alpha contract.
 KIP-714 client telemetry is available through the low-level `Client` methods
 and a high-level `TelemetryClient` that negotiates broker support, keeps the
 subscription state, bounds payloads, retries an outdated subscription, applies
-push-interval jitter, and sends a terminating push during shutdown. The
-application supplies an OTLP MetricsData provider; built-in OTLP serialization,
-non-zero compression, and live broker-plugin qualification remain in progress.
+push-interval jitter, compresses OTLP payloads with the strongest broker-
+accepted pure-Rust codec, and sends a terminating push during shutdown. The
+application supplies an OTLP MetricsData provider; built-in OTLP serialization
+and live broker-plugin qualification remain in progress.
 See [Client Telemetry](docs/telemetry.md).
 
 ## Compatibility

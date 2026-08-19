@@ -61,10 +61,13 @@ impl RecordBatchCompression {
     }
 }
 
-pub(crate) fn compress_record_batch_records(
-    compression: RecordBatchCompression,
-    records: &[u8],
-) -> Result<Vec<u8>> {
+/// Compresses an arbitrary payload with a Kafka-compatible codec.
+///
+/// The implementation is shared by record-batch encoding and higher-level
+/// protocol payloads such as KIP-714 telemetry. The returned bytes contain
+/// only the codec payload; callers remain responsible for framing and for
+/// declaring the codec on the wire.
+pub fn compress_bytes(compression: RecordBatchCompression, records: &[u8]) -> Result<Vec<u8>> {
     match compression {
         RecordBatchCompression::None => Ok(records.to_vec()),
         RecordBatchCompression::Gzip => gzip_compress(records),
@@ -72,6 +75,13 @@ pub(crate) fn compress_record_batch_records(
         RecordBatchCompression::Lz4 => lz4_compress(records),
         RecordBatchCompression::Zstd => zstd_compress(records),
     }
+}
+
+pub(crate) fn compress_record_batch_records(
+    compression: RecordBatchCompression,
+    records: &[u8],
+) -> Result<Vec<u8>> {
+    compress_bytes(compression, records)
 }
 
 #[cfg(test)]

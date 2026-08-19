@@ -2048,9 +2048,10 @@ Implemented evidence:
   KIP-714 client telemetry now has low-level v0 request/response types plus a
   high-level `TelemetryClient` with an owned provider trait, capability
   negotiation, subscription state, payload ceilings, same-connection refresh
-  and retry, jittered scheduling, and a terminating shutdown push. A provider
-  still supplies raw OTLP bytes; built-in OTLP generation, non-zero compression,
-  broker plugin qualification, and live telemetry collection remain open.
+  and retry, broker-negotiated pure-Rust gzip/Snappy/LZ4/Zstd compression,
+  jittered scheduling, and a terminating shutdown push. A provider still
+  supplies raw OTLP bytes; built-in OTLP generation, broker plugin
+  qualification, and live telemetry collection remain open.
   Kafka 4.0 early-access v0 is intentionally excluded because the stable schemas
   removed it in Kafka 4.1.
 - `.github/workflows/share-kafka-smoke.yml` now provides a dedicated Kafka 4.3.1
