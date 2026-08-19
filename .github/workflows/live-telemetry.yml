@@ -1,0 +1,82 @@
+name: Live Client Telemetry
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "37 5 * * 4"
+
+env:
+  CARGO_TERM_COLOR: always
+  KAFRUST_BOOTSTRAP_SERVERS: localhost:9092
+
+jobs:
+  telemetry:
+    name: Kafka 3.7.2 KIP-714 telemetry
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.81.0"
+
+      - name: Build Kafka telemetry test image
+        run: docker build -t kafrust-kafka-telemetry scripts/kafka-client-telemetry-plugin
+
+      - name: Start Kafka with telemetry plugin
+        run: |
+          docker run -d --name kafrust-kafka-telemetry \
+            -p 9092:9092 \
+            -e KAFKA_NODE_ID=1 \
+            -e KAFKA_PROCESS_ROLES=broker,controller \
+            -e KAFKA_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 \
+            -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092 \
+            -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+            -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
+            -e KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT \
+            -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@localhost:9093 \
+            -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
+            -e KAFKA_METRIC_REPORTERS=com.kafrust.KafrustTelemetryReporter \
+            apache/kafka:3.7.2
+
+      - name: Wait for Kafka
+        run: |
+          for attempt in {1..120}; do
+            if docker exec kafrust-kafka-telemetry /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server localhost:9092 >/tmp/kafrust-telemetry-probe.log 2>&1; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/kafrust-telemetry-probe.log || true
+          docker logs kafrust-kafka-telemetry
+          exit 1
+
+      - name: Verify broker plugin loaded
+        run: docker logs kafrust-kafka-telemetry 2>&1 | grep -q KAFRUST_TELEMETRY_PLUGIN_READY
+
+      - name: Create client metrics subscription
+        run: |
+          docker exec kafrust-kafka-telemetry /opt/kafka/bin/kafka-client-metrics.sh \
+            --bootstrap-server localhost:9092 \
+            --alter \
+            --name kafrust-live \
+            --metrics kafrust.client. \
+            --interval 1000
+
+      - name: Run kafrust telemetry smoke
+        run: cargo run -p kafrust --features otlp --example telemetry_smoke
+
+      - name: Verify telemetry payloads and terminating push
+        run: |
+          logs="$(docker logs kafrust-kafka-telemetry 2>&1)"
+          grep -q 'KAFRUST_TELEMETRY .*terminating=false .*bytes=[1-9][0-9]*' <<<"$logs"
+          grep -q 'KAFRUST_TELEMETRY .*terminating=true .*bytes=[1-9][0-9]*' <<<"$logs"
+
+      - name: Dump Kafka logs
+        if: failure()
+        run: docker logs kafrust-kafka-telemetry

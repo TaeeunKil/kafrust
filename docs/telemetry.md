@@ -30,6 +30,9 @@ Implemented:
 - KIP-714 jittered push scheduling and a shutdown-triggered terminating push.
 - the optional `otlp` feature's `ClientMetricsTelemetryProvider`, which maps
   `ClientMetrics` counters and gauges to OTLP MetricsData protobuf bytes.
+- a Kafka 3.7.2 broker-plugin live qualification workflow that verifies a
+  non-terminating payload and a shutdown-triggered terminating payload are
+  received by the broker-side `ClientTelemetryReceiver`.
 
 With the optional `otlp` feature, applications can use the built-in provider:
 
@@ -114,9 +117,14 @@ and applies a broker-accepted codec automatically.
 
 ## Release Gate
 
-Before KIP-714 can count as a production replacement feature, kafrust must add
-a Kafka KRaft live test with an enabled client telemetry plugin. The live gate
-must cover subscription changes, throttling, `UNKNOWN_SUBSCRIPTION_ID`,
-payload-limit handling, compression, and terminating pushes. The built-in
-provider and metrics mapping are implemented behind the optional `otlp` feature;
-the live broker-plugin qualification remains open.
+The Kafka 3.7.2 KRaft live gate is implemented in
+`.github/workflows/live-telemetry.yml`. It builds the test-only broker plugin
+under `scripts/kafka-client-telemetry-plugin/`, creates a client-metrics
+subscription, and verifies both ordinary and terminating payloads. The gate
+also exercises the negotiated compression selection through the normal
+`TelemetryClient` runtime.
+
+The remaining release evidence is subscription mutation while a client is
+running, throttling, `UNKNOWN_SUBSCRIPTION_ID`, and broker-advertised payload
+limit handling. Those cases require additional controlled broker configuration
+changes and remain separate hardening gates.
