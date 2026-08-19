@@ -75,8 +75,19 @@ with published `0.3.0` on Kafka 3.7.2 classic in
 [`32231354623`](https://github.com/TaeeunKil/kafrust/actions/runs/32231354623)
 and Kafka 4.3.1 KIP-848 in
 [`32231357426`](https://github.com/TaeeunKil/kafrust/actions/runs/32231357426).
-Abrupt member-loss expiry, committed-offset restoration after loss, and
-long-duration group churn remain separate follow-up gates.
+The same published artifact now also commits the recovered member's current
+positions, leaves, and joins a fresh member. The fresh member restored all six
+partitions at the committed position without replay on Kafka 3.7.2 classic for
+normal departure in [`32233971623`](https://github.com/TaeeunKil/kafrust/actions/runs/32233971623)
+and abrupt connection drop in
+[`32233975110`](https://github.com/TaeeunKil/kafrust/actions/runs/32233975110),
+and on Kafka 4.3.1 KIP-848 for normal departure in
+[`32234514848`](https://github.com/TaeeunKil/kafrust/actions/runs/32234514848)
+and abrupt connection drop in
+[`32234518025`](https://github.com/TaeeunKil/kafrust/actions/runs/32234518025).
+This closes the bounded committed-offset restoration slice; longer-duration
+group churn, retention/restart combinations, and broader assignor matrices
+remain separate follow-up gates.
 
 The same smoke was rerun with the second member's coordinator connection
 dropped without `LeaveGroup`. The remaining member still reacquired all six
