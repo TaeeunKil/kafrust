@@ -52,6 +52,14 @@ jobs:
         run: |
           docker network create kafrust-published-group
           cluster_id="$(docker run --rm apache/kafka:${{ inputs.kafka_version }} /opt/kafka/bin/kafka-storage.sh random-uuid)"
+          consumer_group_config=()
+          if [ "${{ inputs.group_protocol }}" = "consumer" ]; then
+            consumer_group_config=(
+              -e KAFKA_GROUP_CONSUMER_MIN_SESSION_TIMEOUT_MS=6000
+              -e KAFKA_GROUP_CONSUMER_SESSION_TIMEOUT_MS=6000
+              -e KAFKA_GROUP_CONSUMER_HEARTBEAT_INTERVAL_MS=1000
+            )
+          fi
           for node in 1 2 3; do
             external_port=$((20091 + node))
             docker run -d --name "kafrust-published-group-${node}" \
@@ -70,6 +78,7 @@ jobs:
               -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=3 \
               -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=2 \
               -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 \
+              "${consumer_group_config[@]}" \
               apache/kafka:${{ inputs.kafka_version }}
           done
 
