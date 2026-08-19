@@ -209,7 +209,9 @@ behind the broad pure-Rust competitors in three areas:
   4.3.1 single-node poll/Renew/expiry-redelivery/Accept path passed in
   [run 32213499877](https://github.com/TaeeunKil/kafrust/actions/runs/32213499877),
   and the three-broker fresh-consumer failover path passed in
-  [run 32214201983](https://github.com/TaeeunKil/kafrust/actions/runs/32214201983);
+  [run 32214201983](https://github.com/TaeeunKil/kafrust/actions/runs/32214201983),
+  while an active-heartbeat coordinator-movement path passed in
+  [run 32215845737](https://github.com/TaeeunKil/kafrust/actions/runs/32215845737);
   repeated multi-broker recovery, expiry/reconciliation soak, and ambiguous
   acknowledgement reconciliation remain open),
   KIP-714 beyond the new low-level wire path (the high-level provider and
@@ -218,7 +220,8 @@ behind the broad pure-Rust competitors in three areas:
   automation;
 - production hardening: more complete group lifecycle behavior, ambiguous
   transaction and mutation outcomes, resource ceilings, fuzzing, fault-
-  injected broker coverage, and longer secured multi-broker soaks;
+  injected broker coverage, repeated heartbeat/coordinator failure tests, and
+  longer secured multi-broker soaks;
 - adoption surface: stable 1.0 APIs, wider migration compatibility, published
   examples, and repeatable performance/SLO evidence across representative
   workloads.

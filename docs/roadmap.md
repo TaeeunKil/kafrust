@@ -2032,7 +2032,8 @@ Implemented evidence:
   single-node live gate passed the complete poll/Renew/poll,
   acquisition-lock expiry/redelivery, Accept/commit, and close path in
   [`32213499877`](https://github.com/TaeeunKil/kafrust/actions/runs/32213499877).
-  Multi-broker leader movement, coordinator recovery, and ambiguous
+  One three-broker leader-movement path and one active-heartbeat coordinator
+  recovery path are now live-qualified; repeated recovery and ambiguous
   acknowledgement reconciliation remain open.
   KIP-1206 ShareFetch v2 is now negotiated when advertised: the high-level
   consumer exposes `BatchOptimized` (the backward-compatible default) and
@@ -2064,15 +2065,24 @@ Implemented evidence:
   movement, and verifies a fresh ShareConsumer can consume and accept a
   post-failover record from the surviving brokers. Run
   [`32214201983`](https://github.com/TaeeunKil/kafrust/actions/runs/32214201983)
-  passed this path on Kafka 4.3.1; repeated failures and active heartbeat-task
-  coordinator movement remain open.
+  passed this path on Kafka 4.3.1; repeated failures and long-running soak
+  remain open.
+- `.github/workflows/share-kafka-heartbeat-failover.yml` now provides the
+  active-heartbeat gate: it stops the discovered group coordinator while the
+  detached heartbeat task is running, waits for partition leader movement, and
+  verifies post-failover delivery, acknowledgement, and clean shutdown. Kafka
+  4.3.1 passed this path in
+  [`32215845737`](https://github.com/TaeeunKil/kafrust/actions/runs/32215845737).
 - ShareFetch success responses preserve the broker that served the request,
   while `CurrentLeader` is used only for the leader-error responses where Kafka
   populates it. Retryable ShareFetch leader errors return the connection to the
   pool, refresh metadata, and retry with refreshed routing. Injected tests cover
   the response semantics; the three-broker leader movement workflow passed in
   run [`32214201983`](https://github.com/TaeeunKil/kafrust/actions/runs/32214201983),
-  while repeated and active-heartbeat recovery remain open.
+  while repeated failure, acknowledgement reconciliation, and soak remain
+  open. The live runs exposed and fixed stale broker-connection reuse,
+  partition fetches split across replacement leaders, and stale coordinator
+  connections during group leave.
 - The 2026-08-19 competitor recheck adds `kacrab` to the comparison set. Its
   published `0.4.0` docs claim Kafka 4.3 producer, consumer, share-consumer,
   and 62-operation Admin parity with a broker-matrix and fuzzing posture;

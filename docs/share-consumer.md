@@ -34,14 +34,19 @@ Current evidence:
   leader loss, replacement leader election, and post-failover acceptance by a
   fresh ShareConsumer in
   [run 32214201983](https://github.com/TaeeunKil/kafrust/actions/runs/32214201983).
+- a Kafka 4.3.1 three-broker live gate passing coordinator loss while an active
+  background heartbeat task was running. The task recovered after broker 1
+  stopped, the selected partition moved to broker 2, the post-failover record
+  was received and accepted, and shutdown completed cleanly in
+  [run 32215845737](https://github.com/TaeeunKil/kafrust/actions/runs/32215845737).
 
 The live gate is wired in
 `.github/workflows/share-kafka-smoke.yml`. It starts Kafka 4.3.1 with the
 single-node share-state settings, produces a record, and runs the configured
 ShareConsumer poll/Renew/poll/expiry-redelivery/Accept/commit/close path. The
 passing runs establish the single-node lifecycle and one replicated
-leader-failover path on Kafka 4.3.1. They do not establish long-running
-heartbeat movement, repeated failure recovery, or production readiness.
+leader-failover path on Kafka 4.3.1. They do not establish repeated failure
+recovery, long-running heartbeat movement, or production readiness.
 
 The multi-broker gate is wired in
 `.github/workflows/share-kafka-multi-broker-smoke.yml`. It starts a replicated
@@ -52,10 +57,20 @@ accepts a post-failover record from the surviving brokers. This workflow is a
 manual and scheduled qualification gate. The first successful run is recorded
 in [run 32214201983](https://github.com/TaeeunKil/kafrust/actions/runs/32214201983).
 
+The active-heartbeat gate is wired in
+`.github/workflows/share-kafka-heartbeat-failover.yml`. It joins a three-broker
+cluster, starts the detached heartbeat task, discovers the actual group
+coordinator, stops that broker, and verifies post-failover delivery and
+acknowledgement while the heartbeat task remains active. Kafka 4.3.1 passed
+this path in [run
+32215845737](https://github.com/TaeeunKil/kafrust/actions/runs/32215845737).
+
 This evidence proves the client-side wire and state-machine slice, the
 single-node Kafka 4.3.1 lifecycle, and one three-broker leader-movement path
-with fresh coordinator discovery. It does not prove repeated multi-broker
-recovery, active heartbeat-task coordinator movement, or production readiness.
+with fresh coordinator discovery, plus one active-heartbeat coordinator
+movement path. It does not prove repeated multi-broker recovery, ambiguous
+acknowledgement reconciliation, long-running soak behavior, or production
+readiness.
 
 ## Basic Usage
 
@@ -172,9 +187,11 @@ shutdown. It uses a dedicated coordinator connection and bounded retry, and
 foreground heartbeat failures now rediscover the group coordinator instead of
 reconnecting only to a stale address. Live coordinator movement, connection
 replacement after every ambiguous share operation, and long-running
-assignment/rebalance tests remain open hardening work. The new multi-broker
-workflow exercises fresh coordinator discovery after a broker stop, but it does
-not yet qualify an already-running heartbeat task through coordinator movement.
+assignment/rebalance tests remain open hardening work. The multi-broker
+workflows now exercise both fresh coordinator discovery and an already-running
+heartbeat task through one coordinator movement. Repeated coordinator loss,
+assignment/rebalance behavior, and long-running heartbeat soak tests remain
+open hardening work.
 
 The implementation reuses kafrust's bounded fetch decoder, including record
 batch decompression, header decoding, and configured response/decompression
@@ -187,10 +204,13 @@ Before this API can be advertised as a production replacement, the project must
 complete all of the following:
 
 - repeated multi-broker live Kafka qualification with leader movement and
-  coordinator recovery (one Kafka 4.3.1 fresh-consumer path is verified in
-  [run 32214201983](https://github.com/TaeeunKil/kafrust/actions/runs/32214201983));
+  coordinator recovery (a fresh-consumer path is verified in
+  [run 32214201983](https://github.com/TaeeunKil/kafrust/actions/runs/32214201983)
+  and one active-heartbeat path in
+  [run 32215845737](https://github.com/TaeeunKil/kafrust/actions/runs/32215845737));
 - live background-heartbeat ownership, cancellation, shutdown, and coordinator
-  recovery behavior (the local in-flight cancellation path is covered);
+  recovery behavior (one three-broker movement path is live-qualified, while
+  repeated movement and long-running ownership remain open);
 - duplicate, delayed, and response-loss acknowledgement reconciliation;
 - live renewal expiry, redelivery, and acquisition-lock timeout behavior across
   multiple brokers and repeated runs;
