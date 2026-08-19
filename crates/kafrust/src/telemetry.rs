@@ -3,12 +3,23 @@
 use crate::client::Client;
 use crate::config::ClientConfig;
 use crate::error::{Error, Result};
+#[cfg(feature = "otlp")]
+use crate::metrics::{ClientMetrics, ClientMetricsSnapshot};
 use kafrust_protocol::api::telemetry::{
     GET_TELEMETRY_SUBSCRIPTIONS_API_KEY, PUSH_TELEMETRY_API_KEY,
 };
 use kafrust_protocol::record_batch::{compress_bytes, RecordBatchCompression};
+#[cfg(feature = "otlp")]
+use opentelemetry_proto::tonic::metrics::v1::{
+    metric, number_data_point, AggregationTemporality, Gauge, Metric, MetricsData, NumberDataPoint,
+    ResourceMetrics, ScopeMetrics, Sum,
+};
+#[cfg(feature = "otlp")]
+use prost::Message;
 use rand::Rng;
 use std::time::Duration;
+#[cfg(feature = "otlp")]
+use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::watch;
 
 const UNKNOWN_SUBSCRIPTION_ID: i16 = 117;
@@ -38,6 +49,417 @@ where
         delta_temporality: bool,
     ) -> Result<Vec<u8>> {
         self(requested_metrics, delta_temporality)
+    }
+}
+
+/// Serializes [`ClientMetrics`] as an OTLP MetricsData payload.
+///
+/// This provider is available with the `otlp` feature. Metric names are formed
+/// by concatenating `metric_prefix` and the documented suffixes, and broker
+/// metric-prefix subscriptions are applied before serialization. Counters are
+/// exported as monotonic OTLP sums; gauges represent the current client state.
+#[cfg(feature = "otlp")]
+#[derive(Clone, Debug)]
+pub struct ClientMetricsTelemetryProvider {
+    metrics: ClientMetrics,
+    metric_prefix: String,
+    start_time_unix_nano: u64,
+    previous_snapshot: Option<ClientMetricsSnapshot>,
+    previous_collect_time_unix_nano: Option<u64>,
+}
+
+#[cfg(feature = "otlp")]
+impl ClientMetricsTelemetryProvider {
+    /// Creates a provider backed by shared client metrics.
+    pub fn new(metrics: ClientMetrics) -> Self {
+        Self {
+            metrics,
+            metric_prefix: "kafrust.client.".to_owned(),
+            start_time_unix_nano: unix_time_nanos(),
+            previous_snapshot: None,
+            previous_collect_time_unix_nano: None,
+        }
+    }
+
+    /// Sets the prefix prepended to every exported metric name.
+    pub fn metric_prefix(mut self, metric_prefix: impl Into<String>) -> Self {
+        self.metric_prefix = metric_prefix.into();
+        self
+    }
+
+    /// Returns the shared metrics handle used by this provider.
+    pub fn metrics(&self) -> &ClientMetrics {
+        &self.metrics
+    }
+}
+
+#[cfg(feature = "otlp")]
+impl TelemetryMetricsProvider for ClientMetricsTelemetryProvider {
+    fn collect(
+        &mut self,
+        requested_metrics: &[String],
+        delta_temporality: bool,
+    ) -> Result<Vec<u8>> {
+        let current = self.metrics.snapshot();
+        let now = unix_time_nanos();
+        let previous = self.previous_snapshot.replace(current);
+        let previous_time = self
+            .previous_collect_time_unix_nano
+            .replace(now)
+            .unwrap_or(now);
+        let temporality = if delta_temporality {
+            AggregationTemporality::Delta as i32
+        } else {
+            AggregationTemporality::Cumulative as i32
+        };
+        let mut metrics = Vec::new();
+
+        append_sum(
+            &mut metrics,
+            &self.metric_prefix,
+            requested_metrics,
+            "requests_started",
+            "Kafka request roundtrips started",
+            current.requests_started,
+            previous.map(|snapshot| snapshot.requests_started),
+            delta_temporality,
+            self.start_time_unix_nano,
+            previous_time,
+            now,
+            temporality,
+        );
+        append_sum(
+            &mut metrics,
+            &self.metric_prefix,
+            requested_metrics,
+            "requests_succeeded",
+            "Kafka request roundtrips completed successfully",
+            current.requests_succeeded,
+            previous.map(|snapshot| snapshot.requests_succeeded),
+            delta_temporality,
+            self.start_time_unix_nano,
+            previous_time,
+            now,
+            temporality,
+        );
+        append_sum(
+            &mut metrics,
+            &self.metric_prefix,
+            requested_metrics,
+            "requests_failed",
+            "Kafka request roundtrips that returned an error",
+            current.requests_failed,
+            previous.map(|snapshot| snapshot.requests_failed),
+            delta_temporality,
+            self.start_time_unix_nano,
+            previous_time,
+            now,
+            temporality,
+        );
+        append_sum(
+            &mut metrics,
+            &self.metric_prefix,
+            requested_metrics,
+            "requests_timed_out",
+            "Kafka request roundtrips that timed out",
+            current.requests_timed_out,
+            previous.map(|snapshot| snapshot.requests_timed_out),
+            delta_temporality,
+            self.start_time_unix_nano,
+            previous_time,
+            now,
+            temporality,
+        );
+        append_sum(
+            &mut metrics,
+            &self.metric_prefix,
+            requested_metrics,
+            "requests_cancelled",
+            "Kafka request futures cancelled before completion",
+            current.requests_cancelled,
+            previous.map(|snapshot| snapshot.requests_cancelled),
+            delta_temporality,
+            self.start_time_unix_nano,
+            previous_time,
+            now,
+            temporality,
+        );
+        append_sum(
+            &mut metrics,
+            &self.metric_prefix,
+            requested_metrics,
+            "broker_errors",
+            "Non-zero Kafka broker error codes observed",
+            current.broker_errors,
+            previous.map(|snapshot| snapshot.broker_errors),
+            delta_temporality,
+            self.start_time_unix_nano,
+            previous_time,
+            now,
+            temporality,
+        );
+        append_sum(
+            &mut metrics,
+            &self.metric_prefix,
+            requested_metrics,
+            "retries",
+            "Additional high-level Kafka operation attempts",
+            current.retries,
+            previous.map(|snapshot| snapshot.retries),
+            delta_temporality,
+            self.start_time_unix_nano,
+            previous_time,
+            now,
+            temporality,
+        );
+        append_sum(
+            &mut metrics,
+            &self.metric_prefix,
+            requested_metrics,
+            "produced_records",
+            "Records acknowledged by Kafka Produce operations",
+            current.produced_records,
+            previous.map(|snapshot| snapshot.produced_records),
+            delta_temporality,
+            self.start_time_unix_nano,
+            previous_time,
+            now,
+            temporality,
+        );
+        append_sum(
+            &mut metrics,
+            &self.metric_prefix,
+            requested_metrics,
+            "produce_batches",
+            "Successful topic-partition Produce chunks",
+            current.produce_batches,
+            previous.map(|snapshot| snapshot.produce_batches),
+            delta_temporality,
+            self.start_time_unix_nano,
+            previous_time,
+            now,
+            temporality,
+        );
+        append_sum(
+            &mut metrics,
+            &self.metric_prefix,
+            requested_metrics,
+            "consumed_records",
+            "Records returned by consumer poll and fetch operations",
+            current.consumed_records,
+            previous.map(|snapshot| snapshot.consumed_records),
+            delta_temporality,
+            self.start_time_unix_nano,
+            previous_time,
+            now,
+            temporality,
+        );
+        append_sum(
+            &mut metrics,
+            &self.metric_prefix,
+            requested_metrics,
+            "request_bytes",
+            "Kafka request payload bytes",
+            current.request_bytes,
+            previous.map(|snapshot| snapshot.request_bytes),
+            delta_temporality,
+            self.start_time_unix_nano,
+            previous_time,
+            now,
+            temporality,
+        );
+        append_sum(
+            &mut metrics,
+            &self.metric_prefix,
+            requested_metrics,
+            "response_bytes",
+            "Kafka response payload bytes",
+            current.response_bytes,
+            previous.map(|snapshot| snapshot.response_bytes),
+            delta_temporality,
+            self.start_time_unix_nano,
+            previous_time,
+            now,
+            temporality,
+        );
+
+        append_gauge(
+            &mut metrics,
+            &self.metric_prefix,
+            requested_metrics,
+            "buffered_records",
+            "Buffered producer records currently outstanding",
+            current.buffered_records,
+            now,
+        );
+        append_gauge(
+            &mut metrics,
+            &self.metric_prefix,
+            requested_metrics,
+            "max_buffered_records",
+            "Highest observed buffered producer record count",
+            current.max_buffered_records,
+            now,
+        );
+        append_gauge(
+            &mut metrics,
+            &self.metric_prefix,
+            requested_metrics,
+            "in_flight_requests",
+            "Kafka request roundtrips currently awaiting completion",
+            current.in_flight_requests,
+            now,
+        );
+        append_gauge(
+            &mut metrics,
+            &self.metric_prefix,
+            requested_metrics,
+            "total_latency_ns",
+            "Sum of completed and cancelled request latency",
+            duration_nanos(current.total_latency),
+            now,
+        );
+        append_gauge(
+            &mut metrics,
+            &self.metric_prefix,
+            requested_metrics,
+            "max_latency_ns",
+            "Highest observed completed or cancelled request latency",
+            duration_nanos(current.max_latency),
+            now,
+        );
+
+        let payload = MetricsData {
+            resource_metrics: vec![ResourceMetrics {
+                resource: None,
+                scope_metrics: vec![ScopeMetrics {
+                    scope: None,
+                    metrics,
+                    schema_url: String::new(),
+                }],
+                schema_url: String::new(),
+            }],
+        };
+        Ok(payload.encode_to_vec())
+    }
+}
+
+#[cfg(feature = "otlp")]
+#[allow(clippy::too_many_arguments)]
+fn append_sum(
+    output: &mut Vec<Metric>,
+    metric_prefix: &str,
+    requested_metrics: &[String],
+    suffix: &str,
+    description: &str,
+    current: u64,
+    previous: Option<u64>,
+    delta_temporality: bool,
+    cumulative_start: u64,
+    delta_start: u64,
+    now: u64,
+    temporality: i32,
+) {
+    let name = format!("{metric_prefix}{suffix}");
+    if !metric_requested(&name, requested_metrics) {
+        return;
+    }
+    let value = if delta_temporality {
+        previous.map_or(current, |previous| current.saturating_sub(previous))
+    } else {
+        current
+    };
+    output.push(Metric {
+        name,
+        description: description.to_owned(),
+        unit: "1".to_owned(),
+        metadata: Vec::new(),
+        data: Some(metric::Data::Sum(Sum {
+            data_points: vec![number_data_point(
+                value,
+                if delta_temporality {
+                    delta_start
+                } else {
+                    cumulative_start
+                },
+                now,
+            )],
+            aggregation_temporality: temporality,
+            is_monotonic: true,
+        })),
+    });
+}
+
+#[cfg(feature = "otlp")]
+fn append_gauge(
+    output: &mut Vec<Metric>,
+    metric_prefix: &str,
+    requested_metrics: &[String],
+    suffix: &str,
+    description: &str,
+    value: u64,
+    now: u64,
+) {
+    let name = format!("{metric_prefix}{suffix}");
+    if !metric_requested(&name, requested_metrics) {
+        return;
+    }
+    output.push(Metric {
+        name,
+        description: description.to_owned(),
+        unit: "1".to_owned(),
+        metadata: Vec::new(),
+        data: Some(metric::Data::Gauge(Gauge {
+            data_points: vec![number_data_point(value, 0, now)],
+        })),
+    });
+}
+
+#[cfg(feature = "otlp")]
+fn metric_requested(name: &str, requested_metrics: &[String]) -> bool {
+    requested_metrics.is_empty()
+        || requested_metrics
+            .iter()
+            .any(|prefix| name.starts_with(prefix))
+}
+
+#[cfg(feature = "otlp")]
+fn number_data_point(
+    value: u64,
+    start_time_unix_nano: u64,
+    time_unix_nano: u64,
+) -> NumberDataPoint {
+    NumberDataPoint {
+        attributes: Vec::new(),
+        start_time_unix_nano,
+        time_unix_nano,
+        exemplars: Vec::new(),
+        flags: 0,
+        value: Some(number_data_point::Value::AsInt(u64_to_i64(value))),
+    }
+}
+
+#[cfg(feature = "otlp")]
+fn u64_to_i64(value: u64) -> i64 {
+    match i64::try_from(value) {
+        Ok(value) => value,
+        Err(_) => i64::MAX,
+    }
+}
+
+#[cfg(feature = "otlp")]
+fn duration_nanos(duration: Duration) -> u64 {
+    match u64::try_from(duration.as_nanos()) {
+        Ok(value) => value,
+        Err(_) => u64::MAX,
+    }
+}
+
+#[cfg(feature = "otlp")]
+fn unix_time_nanos() -> u64 {
+    match SystemTime::now().duration_since(UNIX_EPOCH) {
+        Ok(duration) => duration_nanos(duration),
+        Err(_) => 0,
     }
 }
 
@@ -459,6 +881,69 @@ mod tests {
             .collect(&["org.apache.kafka.".to_owned()], true)
             .unwrap();
         assert_eq!(payload, vec![1, 2, 3]);
+    }
+
+    #[cfg(feature = "otlp")]
+    #[test]
+    fn built_in_provider_serializes_filtered_delta_metrics() {
+        use super::ClientMetricsTelemetryProvider;
+        use crate::metrics::ClientMetrics;
+        use opentelemetry_proto::tonic::metrics::v1::{
+            metric, number_data_point, AggregationTemporality, MetricsData,
+        };
+        use prost::Message;
+
+        let metrics = ClientMetrics::new();
+        metrics.record_produce_batch(3);
+        let mut provider =
+            ClientMetricsTelemetryProvider::new(metrics.clone()).metric_prefix("test.");
+        let requested = vec!["test.produced_records".to_owned()];
+
+        let first = provider.collect(&requested, true).unwrap();
+        let first = MetricsData::decode(first.as_slice()).unwrap();
+        let first_metric = &first.resource_metrics[0].scope_metrics[0].metrics[0];
+        assert_eq!(first_metric.name, "test.produced_records");
+        assert!(matches!(
+            first_metric.data.as_ref(),
+            Some(metric::Data::Sum(_))
+        ));
+        let Some(metric::Data::Sum(sum)) = first_metric.data.as_ref() else {
+            return;
+        };
+        assert_eq!(
+            sum.aggregation_temporality,
+            AggregationTemporality::Delta as i32
+        );
+        assert!(sum.is_monotonic);
+        assert!(matches!(
+            sum.data_points[0].value.as_ref(),
+            Some(number_data_point::Value::AsInt(_))
+        ));
+        let Some(number_data_point::Value::AsInt(value)) = sum.data_points[0].value.as_ref() else {
+            return;
+        };
+        assert_eq!(*value, 3);
+        assert_eq!(first.resource_metrics[0].scope_metrics[0].metrics.len(), 1);
+
+        metrics.record_produce_batch(2);
+        let second = provider.collect(&requested, true).unwrap();
+        let second = MetricsData::decode(second.as_slice()).unwrap();
+        let second_metric = &second.resource_metrics[0].scope_metrics[0].metrics[0];
+        assert!(matches!(
+            second_metric.data.as_ref(),
+            Some(metric::Data::Sum(_))
+        ));
+        let Some(metric::Data::Sum(sum)) = second_metric.data.as_ref() else {
+            return;
+        };
+        assert!(matches!(
+            sum.data_points[0].value.as_ref(),
+            Some(number_data_point::Value::AsInt(_))
+        ));
+        let Some(number_data_point::Value::AsInt(value)) = sum.data_points[0].value.as_ref() else {
+            return;
+        };
+        assert_eq!(*value, 2);
     }
 
     #[tokio::test]

@@ -28,12 +28,34 @@ Implemented:
 - broker-negotiated gzip, Snappy, LZ4, and Zstd payload compression using the
   protocol crate's pure Rust codecs;
 - KIP-714 jittered push scheduling and a shutdown-triggered terminating push.
+- the optional `otlp` feature's `ClientMetricsTelemetryProvider`, which maps
+  `ClientMetrics` counters and gauges to OTLP MetricsData protobuf bytes.
 
-The runtime accepts raw OTLP MetricsData v1 protobuf bytes from the provider. It
-compresses those bytes with the strongest codec accepted by the broker, using
-Zstd, LZ4, Snappy, Gzip, then uncompressed as the preference order. It does not
-yet ship a built-in OTLP serializer, so applications still provide the
-MetricsData v1 protobuf bytes.
+With the optional `otlp` feature, applications can use the built-in provider:
+
+```rust
+use kafrust::{
+    ClientConfig, ClientMetrics, ClientMetricsTelemetryProvider, TelemetryClient,
+    TelemetryConfig,
+};
+
+let metrics = ClientMetrics::new();
+let provider = ClientMetricsTelemetryProvider::new(metrics.clone());
+let client_config = ClientConfig::new(["localhost:9092"]).metrics(metrics);
+let client = TelemetryClient::connect(client_config, provider, TelemetryConfig::new()).await?;
+```
+
+The provider exports request, retry, broker-error, produce, consume, byte, and
+latency counters plus current buffering and in-flight gauges. Metric names use
+the `kafrust.client.` prefix by default and can be changed with
+`metric_prefix`. Broker-requested prefixes are applied before serialization.
+Counters honor the broker's cumulative or delta temporality request; a provider
+retains the previous snapshot for delta calculations. The provider intentionally
+does not add resource attributes or topic labels, keeping cardinality bounded.
+
+The runtime also accepts raw OTLP MetricsData v1 protobuf bytes from custom
+providers. It compresses those bytes with the strongest codec accepted by the
+broker, using Zstd, LZ4, Snappy, Gzip, then uncompressed as the preference order.
 The scheduler is deliberately bounded to one in-flight push on one persistent
 connection. It does not queue unbounded payloads or silently split a payload
 that exceeds the broker limit.
@@ -93,8 +115,8 @@ and applies a broker-accepted codec automatically.
 ## Release Gate
 
 Before KIP-714 can count as a production replacement feature, kafrust must add
-a built-in OTLP metrics provider or a documented integration package,
-metrics-to-OTLP mapping from kafrust's own counters, and a Kafka KRaft live test
-with an enabled client telemetry plugin. The live gate must cover subscription
-changes, throttling, `UNKNOWN_SUBSCRIPTION_ID`, payload-limit handling,
-compression, and terminating pushes.
+a Kafka KRaft live test with an enabled client telemetry plugin. The live gate
+must cover subscription changes, throttling, `UNKNOWN_SUBSCRIPTION_ID`,
+payload-limit handling, compression, and terminating pushes. The built-in
+provider and metrics mapping are implemented behind the optional `otlp` feature;
+the live broker-plugin qualification remains open.

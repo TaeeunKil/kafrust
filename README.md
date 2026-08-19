@@ -463,8 +463,8 @@ and a high-level `TelemetryClient` that negotiates broker support, keeps the
 subscription state, bounds payloads, retries an outdated subscription, applies
 push-interval jitter, compresses OTLP payloads with the strongest broker-
 accepted pure-Rust codec, and sends a terminating push during shutdown. The
-application supplies an OTLP MetricsData provider; built-in OTLP serialization
-and live broker-plugin qualification remain in progress.
+optional `otlp` feature includes a built-in `ClientMetricsTelemetryProvider`;
+live broker-plugin qualification remains in progress.
 See [Client Telemetry](docs/telemetry.md).
 
 ## Compatibility

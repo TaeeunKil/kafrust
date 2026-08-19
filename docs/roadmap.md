@@ -2049,9 +2049,10 @@ Implemented evidence:
   high-level `TelemetryClient` with an owned provider trait, capability
   negotiation, subscription state, payload ceilings, same-connection refresh
   and retry, broker-negotiated pure-Rust gzip/Snappy/LZ4/Zstd compression,
-  jittered scheduling, and a terminating shutdown push. A provider still
-  supplies raw OTLP bytes; built-in OTLP generation, broker plugin
-  qualification, and live telemetry collection remain open.
+  jittered scheduling, and a terminating shutdown push. The optional `otlp`
+  feature now provides `ClientMetricsTelemetryProvider`, mapping shared client
+  counters and gauges to filtered cumulative or delta OTLP MetricsData bytes.
+  Broker plugin qualification and live telemetry collection remain open.
   Kafka 4.0 early-access v0 is intentionally excluded because the stable schemas
   removed it in Kafka 4.1.
 - `.github/workflows/share-kafka-smoke.yml` now provides a dedicated Kafka 4.3.1

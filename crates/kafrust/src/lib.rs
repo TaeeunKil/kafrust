@@ -96,6 +96,8 @@ pub use share_consumer::{
     ShareAcknowledgementMode, ShareAcknowledgementType, ShareAcquireMode, ShareConsumer,
     ShareConsumerConfig, ShareConsumerHeartbeat, ShareRecord,
 };
+#[cfg(feature = "otlp")]
+pub use telemetry::ClientMetricsTelemetryProvider;
 pub use telemetry::{
     TelemetryClient, TelemetryConfig, TelemetryMetricsProvider, TelemetryPushSummary,
     TelemetrySubscription,
