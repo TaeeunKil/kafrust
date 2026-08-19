@@ -208,7 +208,9 @@ behind the broad pure-Rust competitors in three areas:
   broker lock-timeout tracking and Renew redelivery replacement; the Kafka
   4.3.1 single-node poll/Renew/expiry-redelivery/Accept path passed in
   [run 32213499877](https://github.com/TaeeunKil/kafrust/actions/runs/32213499877),
-  while multi-broker qualification, expiry/reconciliation soak, and ambiguous
+  and the three-broker fresh-consumer failover path passed in
+  [run 32214201983](https://github.com/TaeeunKil/kafrust/actions/runs/32214201983);
+  repeated multi-broker recovery, expiry/reconciliation soak, and ambiguous
   acknowledgement reconciliation remain open),
   KIP-714 beyond the new low-level wire path (the high-level provider and
   scheduler now exist, but built-in OTLP generation, compression, and live

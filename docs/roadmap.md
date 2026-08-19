@@ -2057,20 +2057,22 @@ Implemented evidence:
   smoke record, and the high-level poll/Renew/poll/expiry-redelivery/Accept/
   commit/close path.
   workflow run [`32213499877`](https://github.com/TaeeunKil/kafrust/actions/runs/32213499877)
-  verifies the single-node ShareConsumer path; multi-broker compatibility is
-  still pending.
+  verifies the single-node ShareConsumer path.
 - `.github/workflows/share-kafka-multi-broker-smoke.yml` now provides the
-  pending three-broker Share gate: it selects a partition led by broker 1,
+  three-broker Share gate: it selects a partition led by broker 1,
   consumes and accepts a pre-failover record, stops broker 1, waits for leader
   movement, and verifies a fresh ShareConsumer can consume and accept a
-  post-failover record from the surviving brokers. The workflow is ready for
-  manual or scheduled execution, but no successful run is claimed yet.
+  post-failover record from the surviving brokers. Run
+  [`32214201983`](https://github.com/TaeeunKil/kafrust/actions/runs/32214201983)
+  passed this path on Kafka 4.3.1; repeated failures and active heartbeat-task
+  coordinator movement remain open.
 - ShareFetch success responses preserve the broker that served the request,
   while `CurrentLeader` is used only for the leader-error responses where Kafka
   populates it. Retryable ShareFetch leader errors return the connection to the
   pool, refresh metadata, and retry with refreshed routing. Injected tests cover
-  the response semantics; multi-broker leader movement still requires a live
-  workflow gate.
+  the response semantics; the three-broker leader movement workflow passed in
+  run [`32214201983`](https://github.com/TaeeunKil/kafrust/actions/runs/32214201983),
+  while repeated and active-heartbeat recovery remain open.
 - The 2026-08-19 competitor recheck adds `kacrab` to the comparison set. Its
   published `0.4.0` docs claim Kafka 4.3 producer, consumer, share-consumer,
   and 62-operation Admin parity with a broker-matrix and fuzzing posture;

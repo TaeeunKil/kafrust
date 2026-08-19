@@ -30,12 +30,18 @@ Current evidence:
 - a Kafka 4.3.1 single-node live gate passing the complete poll/Renew/poll,
   acquisition-lock expiry/redelivery, Accept/commit, and close workflow in
   [run 32213499877](https://github.com/TaeeunKil/kafrust/actions/runs/32213499877).
+- a Kafka 4.3.1 three-broker live gate passing pre-failover acceptance, broker 1
+  leader loss, replacement leader election, and post-failover acceptance by a
+  fresh ShareConsumer in
+  [run 32214201983](https://github.com/TaeeunKil/kafrust/actions/runs/32214201983).
 
 The live gate is wired in
 `.github/workflows/share-kafka-smoke.yml`. It starts Kafka 4.3.1 with the
 single-node share-state settings, produces a record, and runs the configured
 ShareConsumer poll/Renew/poll/expiry-redelivery/Accept/commit/close path. The
-passing run above establishes single-node Kafka 4.3.1 evidence only.
+passing runs establish the single-node lifecycle and one replicated
+leader-failover path on Kafka 4.3.1. They do not establish long-running
+heartbeat movement, repeated failure recovery, or production readiness.
 
 The multi-broker gate is wired in
 `.github/workflows/share-kafka-multi-broker-smoke.yml`. It starts a replicated
@@ -43,12 +49,13 @@ Kafka 4.3.1 KRaft cluster, selects a partition led by broker 1, consumes and
 accepts a pre-failover record, stops broker 1, waits for a replacement leader,
 and then verifies that a fresh ShareConsumer using the same group reads and
 accepts a post-failover record from the surviving brokers. This workflow is a
-manual and scheduled qualification gate; until at least one successful run is
-recorded, multi-broker Share compatibility remains unproven.
+manual and scheduled qualification gate. The first successful run is recorded
+in [run 32214201983](https://github.com/TaeeunKil/kafrust/actions/runs/32214201983).
 
-This evidence proves the client-side wire and state-machine slice plus the
-single-node Kafka 4.3.1 path. It does not prove multi-broker leader movement,
-coordinator recovery, or production readiness.
+This evidence proves the client-side wire and state-machine slice, the
+single-node Kafka 4.3.1 lifecycle, and one three-broker leader-movement path
+with fresh coordinator discovery. It does not prove repeated multi-broker
+recovery, active heartbeat-task coordinator movement, or production readiness.
 
 ## Basic Usage
 
@@ -179,8 +186,9 @@ the same array, frame, and record-size limits as the direct consumer path.
 Before this API can be advertised as a production replacement, the project must
 complete all of the following:
 
-- multi-broker live Kafka qualification with leader movement and coordinator
-  recovery (single-node Kafka 4.3.1 is verified in the run above);
+- repeated multi-broker live Kafka qualification with leader movement and
+  coordinator recovery (one Kafka 4.3.1 fresh-consumer path is verified in
+  [run 32214201983](https://github.com/TaeeunKil/kafrust/actions/runs/32214201983));
 - live background-heartbeat ownership, cancellation, shutdown, and coordinator
   recovery behavior (the local in-flight cancellation path is covered);
 - duplicate, delayed, and response-loss acknowledgement reconciliation;
