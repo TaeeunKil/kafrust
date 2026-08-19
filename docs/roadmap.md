@@ -71,8 +71,11 @@ after altering the active subscription: kafrust observed the stale subscription
 ID, respected Kafka 3.7.2's quota cooldown, refreshed on the same connection,
 and sent subsequent ordinary and terminating payloads with the new ID. This
 closes the bounded subscription-mutation, throttling, and unknown-subscription
-recovery slice. Broker payload-limit qualification, longer collection, and
-secured or multi-broker telemetry remain open follow-up gates.
+recovery slice. The advertised broker payload-limit gate also passed in
+[`32237664774`](https://github.com/TaeeunKil/kafrust/actions/runs/32237664774):
+with Kafka 3.7.2 advertising `telemetry.max.bytes=128`, kafrust rejected an
+oversized OTLP payload before transmission with a typed limit error. Longer
+collection and secured or multi-broker telemetry remain open follow-up gates.
 
 The published group smoke now also verifies normal member departure recovery:
 after two-member assignment and explicit position rejoin, the remaining
@@ -2152,8 +2155,12 @@ Implemented evidence:
   [`32236749392`](https://github.com/TaeeunKil/kafrust/actions/runs/32236749392):
   the client honors response throttle windows and applies the existing push
   interval as a Kafka 3.7.2 compatibility cooldown when the broker returns a
-  zero-throttle quota error during refresh. Broker payload limits, longer
-  collection, and secured or multi-broker telemetry remain open hardening
+  zero-throttle quota error during refresh. The dedicated payload-limit
+  workflow passed in
+  [`32237664774`](https://github.com/TaeeunKil/kafrust/actions/runs/32237664774),
+  proving that an advertised 128-byte ceiling produces a typed pre-send
+  rejection rather than a truncated or malformed OTLP payload. Longer
+  collection and secured or multi-broker telemetry remain open hardening
   gates.
   Kafka 4.0 early-access v0 is intentionally excluded because the stable schemas
   removed it in Kafka 4.1.

@@ -231,8 +231,11 @@ three areas:
   active subscription mutation and unknown-subscription recovery now also pass
   in [run 32236749392](https://github.com/TaeeunKil/kafrust/actions/runs/32236749392),
   including Kafka 3.7.2 quota cooldown handling on the same connection;
-  broker payload-limit qualification and longer telemetry collection remain
-  open, alongside remaining modern Admin paths and protocol-parity automation;
+  the advertised broker payload-limit gate now also passes in
+  [run 32237664774](https://github.com/TaeeunKil/kafrust/actions/runs/32237664774),
+  with a typed pre-send rejection at the broker's 128-byte ceiling. Longer
+  telemetry collection remains open, alongside remaining modern Admin paths
+  and protocol-parity automation;
 - production hardening: long-duration group churn, ambiguous transaction and
   mutation outcomes, resource ceilings, fuzz campaign depth, fault-injected
   broker coverage, longer secured multi-broker soaks, and
