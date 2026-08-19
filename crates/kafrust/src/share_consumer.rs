@@ -1180,8 +1180,11 @@ impl ShareConsumer {
         }
     }
 
-    fn refreshed_share_fetch_broker(&self, desired: &BTreeSet<SharePartitionKey>) -> Result<i32> {
-        let mut leaders = BTreeSet::new();
+    fn share_fetch_partition_leaders(
+        &self,
+        desired: &BTreeSet<SharePartitionKey>,
+    ) -> Result<BTreeMap<i32, BTreeSet<SharePartitionKey>>> {
+        let mut leaders = BTreeMap::<i32, BTreeSet<SharePartitionKey>>::new();
         for partition in desired {
             let Some(leader_id) = self.partition_leaders.get(partition) else {
                 return Err(Error::MissingLeader {
@@ -1193,16 +1196,27 @@ impl ShareConsumer {
                     partition: partition.partition,
                 });
             };
-            leaders.insert(*leader_id);
+            leaders.entry(*leader_id).or_default().insert(*partition);
         }
-        if leaders.len() != 1 {
-            return Err(Error::Unsupported(
-                "share fetch retry split across partition leaders",
-            ));
+        Ok(leaders)
+    }
+
+    async fn fetch_from_partition_leader_groups(
+        &mut self,
+        groups: BTreeMap<i32, BTreeSet<SharePartitionKey>>,
+        max_records: i32,
+    ) -> Result<Vec<ShareRecord>> {
+        let mut records = Vec::new();
+        for (broker_id, partitions) in groups {
+            let remaining =
+                max_records.saturating_sub(i32::try_from(records.len()).unwrap_or(i32::MAX));
+            if remaining <= 0 {
+                break;
+            }
+            records
+                .extend(Box::pin(self.fetch_from_broker(broker_id, partitions, remaining)).await?);
         }
-        leaders.into_iter().next().ok_or(Error::Unsupported(
-            "share fetch retry has no partition leader",
-        ))
+        Ok(records)
     }
 
     async fn fetch_from_broker(
@@ -1264,7 +1278,15 @@ impl ShareConsumer {
                             self.broker_clients.insert(broker_id, broker);
                             self.share_sessions.remove(&broker_id);
                             self.refresh_metadata().await?;
-                            broker_id = self.refreshed_share_fetch_broker(&desired)?;
+                            let leaders = self.share_fetch_partition_leaders(&desired)?;
+                            if leaders.len() != 1 {
+                                return self
+                                    .fetch_from_partition_leader_groups(leaders, max_records)
+                                    .await;
+                            }
+                            broker_id = leaders.into_keys().next().ok_or(Error::Unsupported(
+                                "share fetch retry has no partition leader",
+                            ))?;
                             continue;
                         }
                         self.broker_clients.insert(broker_id, broker);
@@ -1304,7 +1326,15 @@ impl ShareConsumer {
                         self.broker_clients.insert(broker_id, broker);
                         self.share_sessions.remove(&broker_id);
                         self.refresh_metadata().await?;
-                        broker_id = self.refreshed_share_fetch_broker(&desired)?;
+                        let leaders = self.share_fetch_partition_leaders(&desired)?;
+                        if leaders.len() != 1 {
+                            return self
+                                .fetch_from_partition_leader_groups(leaders, max_records)
+                                .await;
+                        }
+                        broker_id = leaders.into_keys().next().ok_or(Error::Unsupported(
+                            "share fetch retry has no partition leader",
+                        ))?;
                         continue;
                     }
                     self.broker_clients.insert(broker_id, broker);
@@ -1318,7 +1348,15 @@ impl ShareConsumer {
                     self.config.client.record_retry();
                     self.share_sessions.remove(&broker_id);
                     self.refresh_metadata().await?;
-                    broker_id = self.refreshed_share_fetch_broker(&desired)?;
+                    let leaders = self.share_fetch_partition_leaders(&desired)?;
+                    if leaders.len() != 1 {
+                        return self
+                            .fetch_from_partition_leader_groups(leaders, max_records)
+                            .await;
+                    }
+                    broker_id = leaders.into_keys().next().ok_or(Error::Unsupported(
+                        "share fetch retry has no partition leader",
+                    ))?;
                 }
                 Err(error) => return Err(error),
             }
@@ -2465,15 +2503,14 @@ mod tests {
             }],
             1
         );
-        assert_eq!(
-            consumer
-                .refreshed_share_fetch_broker(&BTreeSet::from([SharePartitionKey {
-                    topic_id: [5; 16],
-                    partition: 0,
-                }]))
-                .unwrap(),
-            1
-        );
+        let leaders = consumer
+            .share_fetch_partition_leaders(&BTreeSet::from([SharePartitionKey {
+                topic_id: [5; 16],
+                partition: 0,
+            }]))
+            .unwrap();
+        assert_eq!(leaders.len(), 1);
+        assert!(leaders.contains_key(&1));
         let decoded = consumer.decode_share_records(&response, 1).unwrap();
         assert_eq!(decoded.len(), 1);
         assert_eq!(decoded[0].topic(), "orders");
