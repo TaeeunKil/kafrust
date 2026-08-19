@@ -2476,6 +2476,126 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn commit_keeps_pending_acknowledgement_when_response_is_lost() {
+        const TOPIC_ID: [u8; 16] = [6; 16];
+
+        let (client_stream, mut broker_stream) = tokio::io::duplex(8192);
+        let broker_task = tokio::spawn(async move {
+            let _request = read_test_frame(&mut broker_stream).await;
+            drop(broker_stream);
+        });
+        let config = ShareConsumerConfig::new(["localhost:9092"], "orders").subscribe("orders");
+        let mut consumer = ShareConsumer {
+            config,
+            bootstrap: None,
+            coordinator: None,
+            coordinator_addr: "localhost:9092".to_owned(),
+            broker_clients: BTreeMap::new(),
+            broker_addresses: BTreeMap::new(),
+            share_sessions: BTreeMap::from([(
+                1,
+                ShareSession {
+                    epoch: 0,
+                    partitions: BTreeSet::from([SharePartitionKey {
+                        topic_id: TOPIC_ID,
+                        partition: 0,
+                    }]),
+                },
+            )]),
+            assignment: BTreeSet::new(),
+            topic_names: BTreeMap::from([(TOPIC_ID, "orders".to_owned())]),
+            partition_leaders: BTreeMap::from([(
+                SharePartitionKey {
+                    topic_id: TOPIC_ID,
+                    partition: 0,
+                },
+                1,
+            )]),
+            pending: BTreeMap::new(),
+            renewed_records: BTreeMap::new(),
+            member_id: "member-1".to_owned(),
+            member_epoch: 1,
+            next_heartbeat: Instant::now() + Duration::from_secs(60),
+            heartbeat_interval: Duration::from_secs(60),
+            needs_assignment_heartbeat: false,
+            heartbeat_task: None,
+            share_fetch_version: 1,
+            share_acknowledge_version: 1,
+            acquisition_lock_timeout_ms: None,
+            closed: false,
+        };
+
+        let mut message = Encoder::new();
+        message.write_i32(0);
+        message.write_i8(1);
+        message.write_i8(0);
+        message.write_i64(1234);
+        message.write_nullable_bytes(None).unwrap();
+        message.write_nullable_bytes(Some(b"value")).unwrap();
+        let message = message.into_bytes();
+        let mut records = Encoder::new();
+        records.write_i64(10);
+        records.write_i32(i32::try_from(message.len()).unwrap());
+        records.write_raw(&message);
+        let response = ShareFetchResponseV1 {
+            throttle_time_ms: 0,
+            error_code: 0,
+            error_message: None,
+            acquisition_lock_timeout_ms: 30_000,
+            responses: vec![ShareFetchTopicResponseV1 {
+                topic_id: TOPIC_ID,
+                partitions: vec![ShareFetchPartitionResponseV1 {
+                    partition_index: 0,
+                    error_code: 0,
+                    error_message: None,
+                    acknowledgement_error_code: 0,
+                    acknowledgement_error_message: None,
+                    current_leader: ShareLeaderIdAndEpochV1 {
+                        leader_id: 1,
+                        leader_epoch: 0,
+                    },
+                    records: Some(records.into_bytes()),
+                    acquired_records: vec![ShareAcquiredRecordsV1 {
+                        first_offset: 10,
+                        last_offset: 10,
+                        delivery_count: 1,
+                    }],
+                }],
+            }],
+            node_endpoints: Vec::new(),
+        };
+        let record = consumer
+            .decode_share_records(&response, 1)
+            .unwrap()
+            .remove(0);
+        let key = ShareRecordKey::from_record(&record);
+        consumer
+            .acknowledge(&record, ShareAcknowledgementType::Accept)
+            .unwrap();
+        consumer.broker_clients.insert(
+            1,
+            Client::from_stream(
+                Box::new(client_stream),
+                Some("kafrust-test".to_owned()),
+                Some(Duration::from_secs(1)),
+            ),
+        );
+
+        let error = consumer.commit().await.unwrap_err();
+
+        assert!(matches!(
+            error,
+            Error::ShareAcknowledgementOutcomeUnknown { broker_id: 1 }
+        ));
+        assert_eq!(
+            consumer.pending[&key].acknowledgement,
+            Some(ShareAcknowledgementType::Accept)
+        );
+        assert!(!consumer.broker_clients.contains_key(&1));
+        broker_task.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn decodes_share_records_and_tracks_acknowledgement_state() {
         let (stream, _peer) = tokio::io::duplex(1024);
         let config = ShareConsumerConfig::new(["localhost:9092"], "orders").subscribe("orders");
