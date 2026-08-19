@@ -22,6 +22,8 @@ Implemented:
 - `TelemetryMetricsProvider` for application-owned OTLP serialization;
 - capability negotiation for both telemetry APIs before subscription fetch;
 - broker subscription state with client-instance ID retention;
+- no-match subscriptions are re-queried after the broker-provided interval,
+  so a later client-metrics subscription can resume delivery;
 - local and broker-advertised payload ceilings;
 - one same-connection refresh/retry for `UNKNOWN_SUBSCRIPTION_ID` and
   `UNSUPPORTED_COMPRESSION_TYPE`;
@@ -86,9 +88,11 @@ task.await??;
 ```
 
 `run_until_shutdown` performs an immediate push, uses the broker's interval
-with 0.5x..1.5x jitter by default, refreshes an outdated subscription once,
-and sends one terminating push before returning. Dropping the shutdown sender
-also ends the loop and sends the terminating push.
+with 0.5x..1.5x jitter by default, re-queries a no-match subscription after
+that interval, refreshes an outdated subscription once, and sends one
+terminating push before returning when metrics are subscribed. Dropping the
+shutdown sender also ends the loop and sends the terminating push when a
+usable subscription exists.
 
 ## Low-Level Usage
 
