@@ -282,6 +282,17 @@ async fn verify_committed_offset_restore(
         }
     }
 
+    let positions = replacement
+        .assignments()
+        .iter()
+        .map(|assignment| (assignment.partition(), assignment.next_offset()))
+        .collect::<Vec<_>>();
+    eprintln!(
+        "published group smoke committed-offset state protocol={:?} member={} generation={} assignments={positions:?}",
+        replacement.group_protocol(),
+        replacement.member_id(),
+        replacement.generation_id(),
+    );
     Err(Error::Unsupported(
         "published group smoke did not restore committed offsets for every partition",
     ))
