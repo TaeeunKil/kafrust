@@ -32,6 +32,26 @@ async fn main() -> kafrust::Result<()> {
     )
     .await?;
 
+    if std::env::var("KAFRUST_EXPECT_TELEMETRY_PAYLOAD_LIMIT").as_deref() == Ok("true") {
+        match telemetry.push_once().await {
+            Err(kafrust::Error::TelemetryPayloadTooLarge { size, max }) => {
+                println!("telemetry-smoke-payload-limit size={} max={}", size, max);
+                return Ok(());
+            }
+            Ok(Some(_)) => {
+                return Err(kafrust::Error::Unsupported(
+                    "telemetry payload-limit smoke unexpectedly pushed",
+                ));
+            }
+            Ok(None) => {
+                return Err(kafrust::Error::Unsupported(
+                    "telemetry payload-limit smoke has no active subscription",
+                ));
+            }
+            Err(error) => return Err(error),
+        }
+    }
+
     let duration_seconds = std::env::var("KAFRUST_TELEMETRY_SMOKE_SECONDS")
         .ok()
         .and_then(|value| value.parse::<u64>().ok())
