@@ -1317,6 +1317,8 @@ impl ShareConsumer {
                     attempt += 1;
                     self.config.client.record_retry();
                     self.share_sessions.remove(&broker_id);
+                    self.refresh_metadata().await?;
+                    broker_id = self.refreshed_share_fetch_broker(&desired)?;
                 }
                 Err(error) => return Err(error),
             }

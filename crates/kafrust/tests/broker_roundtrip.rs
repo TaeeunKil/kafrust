@@ -235,6 +235,119 @@ async fn share_consumer_multi_broker_failover_when_broker_is_configured() {
     }
 }
 
+#[tokio::test]
+async fn share_consumer_active_heartbeat_failover_when_broker_is_configured() {
+    let Some(topic) = std::env::var("KAFRUST_SHARE_TOPIC").ok() else {
+        eprintln!("skipping share heartbeat failover; set KAFRUST_SHARE_TOPIC");
+        return;
+    };
+    let Some(bootstrap) = std::env::var("KAFRUST_BOOTSTRAP_SERVERS").ok() else {
+        eprintln!("skipping share heartbeat failover; set KAFRUST_BOOTSTRAP_SERVERS");
+        return;
+    };
+    let group_id = std::env::var("KAFRUST_SHARE_GROUP_ID")
+        .unwrap_or_else(|_| "kafrust-share-heartbeat-failover".to_owned());
+    let partition = std::env::var("KAFRUST_SHARE_PARTITION")
+        .expect("KAFRUST_SHARE_PARTITION should be set")
+        .parse::<i32>()
+        .expect("KAFRUST_SHARE_PARTITION should be an integer");
+    let pre_value = std::env::var("KAFRUST_SHARE_PRE_VALUE")
+        .expect("KAFRUST_SHARE_PRE_VALUE should be set")
+        .into_bytes();
+    let post_value = std::env::var("KAFRUST_SHARE_VALUE")
+        .expect("KAFRUST_SHARE_VALUE should be set")
+        .into_bytes();
+    let ready_file = std::env::var("KAFRUST_SHARE_HEARTBEAT_READY_FILE")
+        .expect("KAFRUST_SHARE_HEARTBEAT_READY_FILE should be set");
+
+    let mut consumer = ShareConsumerConfig::new(parse_bootstrap_servers(&bootstrap), group_id)
+        .subscribe(topic.clone())
+        .max_wait_ms(100)
+        .max_retries(10)
+        .acquire_mode(ShareAcquireMode::RecordLimit)
+        .build()
+        .await
+        .expect("ShareConsumer should connect to the configured Kafka cluster");
+    let deadline = Instant::now() + Duration::from_secs(60);
+    loop {
+        let records = consumer
+            .poll()
+            .await
+            .expect("ShareConsumer should receive the pre-heartbeat record");
+        if let Some(record) = records.iter().find(|record| {
+            record.topic() == topic
+                && record.partition() == partition
+                && record.value() == Some(pre_value.as_slice())
+        }) {
+            consumer
+                .acknowledge(record, ShareAcknowledgementType::Accept)
+                .expect("ShareConsumer should accept the pre-heartbeat record locally");
+            consumer
+                .commit()
+                .await
+                .expect("ShareConsumer should commit the pre-heartbeat acknowledgement");
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "ShareConsumer did not receive the pre-heartbeat record before the deadline"
+        );
+        sleep(Duration::from_millis(100)).await;
+    }
+
+    consumer
+        .spawn_heartbeat_task(Duration::from_millis(500))
+        .await
+        .expect("ShareConsumer heartbeat task should start before broker failure");
+    sleep(Duration::from_millis(750)).await;
+    std::fs::write(&ready_file, b"heartbeat-running\n")
+        .expect("ShareConsumer heartbeat readiness marker should be writable");
+
+    loop {
+        let records = consumer
+            .poll()
+            .await
+            .expect("ShareConsumer should recover its fetch path after coordinator failover");
+        if let Some(record) = records.iter().find(|record| {
+            record.topic() == topic
+                && record.partition() == partition
+                && record.value() == Some(post_value.as_slice())
+        }) {
+            consumer
+                .acknowledge(record, ShareAcknowledgementType::Accept)
+                .expect("ShareConsumer should accept the post-heartbeat record locally");
+            consumer
+                .commit()
+                .await
+                .expect("ShareConsumer should commit the post-heartbeat acknowledgement");
+            assert!(
+                !consumer.heartbeat_task_is_finished(),
+                "ShareConsumer heartbeat task should remain alive after coordinator failover"
+            );
+            consumer
+                .stop_heartbeat_task()
+                .await
+                .expect("ShareConsumer heartbeat task should stop cleanly after failover");
+            consumer
+                .close()
+                .await
+                .expect("ShareConsumer should leave the heartbeat failover group cleanly");
+            println!(
+                "share consumer heartbeat failover received {}-{}@{}",
+                record.topic(),
+                record.partition(),
+                record.offset()
+            );
+            return;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "ShareConsumer did not receive the post-heartbeat record before the deadline"
+        );
+        sleep(Duration::from_millis(100)).await;
+    }
+}
+
 fn security_protocol_from_env() -> SecurityProtocol {
     let Ok(value) = std::env::var("KAFRUST_SECURITY_PROTOCOL") else {
         return SecurityProtocol::Plaintext;
