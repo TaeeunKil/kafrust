@@ -221,11 +221,13 @@ behind the broad pure-Rust competitors in three areas:
   and deletion APIs 77, 90, 91, and 92 are now implemented with focused wire,
   coordinator-routing, and Kafka 4.3.1 lifecycle tests in
   [run 32225957928](https://github.com/TaeeunKil/kafrust/actions/runs/32225957928);
-  KIP-714 beyond the new low-level wire path (the
-  high-level provider,
-  scheduler, broker-negotiated pure-Rust compression, and optional built-in
-  OTLP generation now exist, but live broker telemetry remains), remaining
-  modern Admin paths, and protocol-parity automation;
+  KIP-714 beyond the new low-level wire path (the high-level provider,
+  scheduler, broker-negotiated pure-Rust compression, optional built-in OTLP
+  generation, and the Kafka 3.7.2 KRaft broker delivery gate passed in
+  [run 32229640441](https://github.com/TaeeunKil/kafrust/actions/runs/32229640441));
+  subscription mutation, throttling, unknown-subscription recovery, and
+  broker payload-limit qualification remain open, alongside remaining modern
+  Admin paths and protocol-parity automation;
 - production hardening: more complete group lifecycle behavior, ambiguous
   transaction and mutation outcomes, resource ceilings, fuzz campaign depth,
   fault-

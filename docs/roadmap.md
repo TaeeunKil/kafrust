@@ -51,8 +51,9 @@ five supported compression codecs. The targets compile with the repository
 MSRV after pinning their fuzz-only build dependencies; crash corpus reduction,
 scheduled campaigns, and fault-injecting broker coverage remain open.
 
-The first KIP-714 broker-side qualification slice is now wired through
-`live-telemetry.yml`: a Kafka 3.7.2 KRaft image builds the test-only
+The first KIP-714 broker-side qualification slice passed in
+[`32229640441`](https://github.com/TaeeunKil/kafrust/actions/runs/32229640441)
+through `live-telemetry.yml`: a Kafka 3.7.2 KRaft image builds the test-only
 `KafrustTelemetryReporter`, creates a `client-metrics` subscription, and checks
 that kafrust sends both ordinary and terminating payloads. Subscription
 mutation, throttling, unknown-subscription recovery, and broker payload-limit

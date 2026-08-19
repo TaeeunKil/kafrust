@@ -117,7 +117,9 @@ and applies a broker-accepted codec automatically.
 
 ## Release Gate
 
-The Kafka 3.7.2 KRaft live gate is implemented in
+The Kafka 3.7.2 KRaft live gate passed in
+[Actions run 32229640441](https://github.com/TaeeunKil/kafrust/actions/runs/32229640441)
+and is implemented in
 `.github/workflows/live-telemetry.yml`. It builds the test-only broker plugin
 under `scripts/kafka-client-telemetry-plugin/`, creates a client-metrics
 subscription, and verifies both ordinary and terminating payloads. The gate
