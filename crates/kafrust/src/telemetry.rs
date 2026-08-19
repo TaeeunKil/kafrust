@@ -584,6 +584,7 @@ pub struct TelemetryClient<P> {
     config: TelemetryConfig,
     client_instance_id: [u8; 16],
     subscription: Option<TelemetrySubscription>,
+    subscription_refresh_pending: bool,
 }
 
 impl<P> TelemetryClient<P>
@@ -609,6 +610,7 @@ where
             client_instance_id: config.client_instance_id,
             config,
             subscription: None,
+            subscription_refresh_pending: false,
         }
     }
 
@@ -652,6 +654,7 @@ where
         let subscription = TelemetrySubscription::from_response(response)?;
         self.client_instance_id = subscription.client_instance_id;
         self.subscription = Some(subscription);
+        self.subscription_refresh_pending = false;
         self.subscription
             .as_ref()
             .ok_or(Error::Unsupported("telemetry subscription was not stored"))
@@ -663,7 +666,7 @@ where
     /// a payload. An outdated subscription or compression selection causes one
     /// refresh and retry on the same connection.
     pub async fn push_once(&mut self) -> Result<Option<TelemetryPushSummary>> {
-        if self.subscription.is_none() {
+        if self.subscription.is_none() || self.subscription_refresh_pending {
             self.refresh_subscription().await?;
         }
         if self
@@ -671,6 +674,10 @@ where
             .as_ref()
             .is_some_and(|subscription| subscription.requested_metrics.is_empty())
         {
+            // Kafka keeps a no-match subscription in SUBSCRIPTION_NEEDED and
+            // checks it again after the broker interval. Preserve the current
+            // interval while requesting the same lifecycle on the next poll.
+            self.subscription_refresh_pending = true;
             return Ok(None);
         }
         self.push_with_refresh(false).await.map(Some)
@@ -679,6 +686,13 @@ where
     /// Sends one terminating payload, if a subscription has been acquired.
     pub async fn terminate(&mut self) -> Result<Option<TelemetryPushSummary>> {
         if self.subscription.is_none() {
+            return Ok(None);
+        }
+        if self
+            .subscription
+            .as_ref()
+            .is_some_and(|subscription| subscription.requested_metrics.is_empty())
+        {
             return Ok(None);
         }
         self.push_with_refresh(true).await.map(Some)
@@ -1029,6 +1043,85 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn refreshes_empty_subscription_before_the_next_push() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(4096);
+        let broker = tokio::spawn(async move {
+            let request = read_frame(&mut broker_stream).await;
+            assert_eq!(i16::from_be_bytes([request[0], request[1]]), 18);
+            let mut versions = Vec::new();
+            versions.extend_from_slice(&1_i32.to_be_bytes());
+            versions.extend_from_slice(&0_i16.to_be_bytes());
+            versions.push(3);
+            versions.extend_from_slice(&71_i16.to_be_bytes());
+            versions.extend_from_slice(&0_i16.to_be_bytes());
+            versions.extend_from_slice(&0_i16.to_be_bytes());
+            versions.push(0);
+            versions.extend_from_slice(&72_i16.to_be_bytes());
+            versions.extend_from_slice(&0_i16.to_be_bytes());
+            versions.extend_from_slice(&0_i16.to_be_bytes());
+            versions.push(0);
+            versions.extend_from_slice(&0_i32.to_be_bytes());
+            versions.push(0);
+            write_frame(&mut broker_stream, &versions).await;
+
+            let request = read_frame(&mut broker_stream).await;
+            assert_eq!(i16::from_be_bytes([request[0], request[1]]), 71);
+            write_frame(
+                &mut broker_stream,
+                &empty_telemetry_subscription_response([7; 16], 4),
+            )
+            .await;
+
+            let request = read_frame(&mut broker_stream).await;
+            assert_eq!(i16::from_be_bytes([request[0], request[1]]), 71);
+            write_frame(
+                &mut broker_stream,
+                &telemetry_subscription_response([8; 16], 9),
+            )
+            .await;
+
+            let request = read_frame(&mut broker_stream).await;
+            assert_eq!(i16::from_be_bytes([request[0], request[1]]), 72);
+            let mut decoder = Decoder::new(&request);
+            decoder.read_i16().unwrap();
+            decoder.read_i16().unwrap();
+            decoder.read_i32().unwrap();
+            decoder.read_nullable_string().unwrap();
+            decoder.read_tagged_fields().unwrap();
+            decoder.read_uuid().unwrap();
+            assert_eq!(decoder.read_i32().unwrap(), 9);
+
+            let mut response = Encoder::new();
+            response.write_i32(0);
+            response.write_empty_tagged_fields();
+            response.write_i32(3);
+            response.write_i16(0);
+            response.write_empty_tagged_fields();
+            write_frame(&mut broker_stream, &response.into_bytes()).await;
+        });
+
+        let client = Client::from_stream(
+            Box::new(client_stream),
+            Some("telemetry-empty-refresh-test".to_owned()),
+            Some(Duration::from_secs(1)),
+        );
+        let mut telemetry = TelemetryClient::from_client(
+            client,
+            |_requested: &[String], _delta: bool| Ok(vec![1, 2, 3]),
+            TelemetryConfig::new().jitter(false),
+        );
+
+        assert!(telemetry.push_once().await.unwrap().is_none());
+        let pushed = telemetry.push_once().await.unwrap().unwrap();
+        assert_eq!(pushed.subscription_id, 9);
+        assert_eq!(
+            telemetry.subscription().unwrap().client_instance_id,
+            [8; 16]
+        );
+        broker.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn refreshes_subscription_after_unknown_subscription_id() {
         refreshes_subscription_after_push_error(117).await;
     }
@@ -1139,6 +1232,36 @@ mod tests {
         response.write_bool(false);
         response
             .write_compact_array(Some(&["org.apache.kafka.".to_owned()]), |encoder, value| {
+                encoder.write_compact_string(value)
+            })
+            .unwrap();
+        response.write_empty_tagged_fields();
+        response.into_bytes()
+    }
+
+    fn empty_telemetry_subscription_response(
+        client_instance_id: [u8; 16],
+        subscription_id: i32,
+    ) -> Vec<u8> {
+        let mut response = Encoder::new();
+        response.write_i32(4);
+        response.write_empty_tagged_fields();
+        response.write_i32(0);
+        response.write_i16(0);
+        response.write_uuid(&client_instance_id);
+        response.write_i32(subscription_id);
+        response
+            .write_compact_array(Some(&[0_i8]), |encoder, value| {
+                encoder.write_i8(*value);
+                Ok(())
+            })
+            .unwrap();
+        response.write_i32(50);
+        response.write_i32(1024);
+        response.write_bool(false);
+        let requested_metrics: Vec<String> = Vec::new();
+        response
+            .write_compact_array(Some(&requested_metrics), |encoder, value| {
                 encoder.write_compact_string(value)
             })
             .unwrap();
