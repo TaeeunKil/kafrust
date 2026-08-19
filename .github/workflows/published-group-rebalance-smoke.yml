@@ -57,6 +57,7 @@ jobs:
             consumer_group_config=(
               -e KAFKA_GROUP_CONSUMER_MIN_SESSION_TIMEOUT_MS=6000
               -e KAFKA_GROUP_CONSUMER_SESSION_TIMEOUT_MS=6000
+              -e KAFKA_GROUP_CONSUMER_MIN_HEARTBEAT_INTERVAL_MS=1000
               -e KAFKA_GROUP_CONSUMER_HEARTBEAT_INTERVAL_MS=1000
             )
           fi
