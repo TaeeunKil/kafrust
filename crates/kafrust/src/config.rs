@@ -644,8 +644,17 @@ impl ClientConfig {
     }
 
     async fn connect_servers(&self, servers: &[String]) -> Result<Client> {
+        self.connect_servers_rotating(servers, 0).await
+    }
+
+    async fn connect_servers_rotating(&self, servers: &[String], start: usize) -> Result<Client> {
+        if servers.is_empty() {
+            return Err(Error::MissingBootstrapServer);
+        }
         let mut last_error = None;
-        for server in servers {
+        let start = start % servers.len();
+        for offset in 0..servers.len() {
+            let server = &servers[(start + offset) % servers.len()];
             match self.connect_broker(server.clone()).await {
                 Ok(client) => return Ok(client),
                 Err(error) => last_error = Some(error),
@@ -653,6 +662,11 @@ impl ClientConfig {
         }
 
         Err(last_error.unwrap_or(Error::MissingBootstrapServer))
+    }
+
+    pub(crate) async fn connect_bootstrap_server_rotating(&self, start: usize) -> Result<Client> {
+        self.connect_servers_rotating(&self.bootstrap_servers, start)
+            .await
     }
 
     pub(crate) async fn connect_broker(&self, server: String) -> Result<Client> {

@@ -1052,9 +1052,12 @@ impl ShareConsumer {
     }
 
     async fn reconnect_coordinator(&mut self) -> Result<()> {
-        let mut attempt = 0;
+        let mut attempt: u32 = 0;
         loop {
-            match self.rediscover_coordinator().await {
+            match self
+                .rediscover_coordinator(attempt.saturating_add(1) as usize)
+                .await
+            {
                 Ok(()) => return Ok(()),
                 Err(error) if attempt < self.config.max_retries => {
                     attempt += 1;
@@ -1068,8 +1071,12 @@ impl ShareConsumer {
         }
     }
 
-    async fn rediscover_coordinator(&mut self) -> Result<()> {
-        let mut bootstrap = self.config.client.clone().connect().await?;
+    async fn rediscover_coordinator(&mut self, bootstrap_start: usize) -> Result<()> {
+        let mut bootstrap = self
+            .config
+            .client
+            .connect_bootstrap_server_rotating(bootstrap_start)
+            .await?;
         let coordinator_addr =
             share_coordinator_address(&mut bootstrap, &self.config.client, &self.config.group_id)
                 .await?;
@@ -1145,7 +1152,12 @@ impl ShareConsumer {
                 Err(error) if attempt < self.config.max_retries => {
                     attempt += 1;
                     self.config.client.record_retry();
-                    self.bootstrap = Some(self.config.client.clone().connect().await?);
+                    self.bootstrap = Some(
+                        self.config
+                            .client
+                            .connect_bootstrap_server_rotating(attempt as usize)
+                            .await?,
+                    );
                     // The failed metadata request is superseded by the fresh connection.
                     drop(error);
                 }
@@ -1827,7 +1839,7 @@ async fn run_share_heartbeat(
     state: Arc<Mutex<ShareHeartbeatState>>,
     shutdown: oneshot::Receiver<()>,
 ) -> Result<()> {
-    let coordinator = connect_share_coordinator(&client, &group_id).await?;
+    let coordinator = connect_share_coordinator(&client, &group_id, 0).await?;
     run_share_heartbeat_with_coordinator(
         ShareHeartbeatLoop {
             client,
@@ -1857,7 +1869,7 @@ async fn run_share_heartbeat_with_coordinator(
 ) -> Result<()> {
     let mut shutdown = shutdown;
     let mut first_heartbeat = true;
-    let mut attempt = 0;
+    let mut attempt: u32 = 0;
 
     loop {
         if !first_heartbeat {
@@ -1958,11 +1970,15 @@ async fn reconnect_share_coordinator(
     max_retries: u32,
     shutdown: &mut oneshot::Receiver<()>,
 ) -> Result<Client> {
-    let mut attempt = 0;
+    let mut attempt: u32 = 0;
     loop {
         let result = tokio::select! {
             _ = &mut *shutdown => return Err(Error::Unsupported("share heartbeat task stopped")),
-            result = connect_share_coordinator(client, group_id) => result,
+            result = connect_share_coordinator(
+                client,
+                group_id,
+                attempt.saturating_add(1) as usize,
+            ) => result,
         };
         match result {
             Ok(coordinator) => return Ok(coordinator),
@@ -1979,8 +1995,14 @@ async fn reconnect_share_coordinator(
     }
 }
 
-async fn connect_share_coordinator(client: &ClientConfig, group_id: &str) -> Result<Client> {
-    let mut bootstrap = client.clone().connect().await?;
+async fn connect_share_coordinator(
+    client: &ClientConfig,
+    group_id: &str,
+    bootstrap_start: usize,
+) -> Result<Client> {
+    let mut bootstrap = client
+        .connect_bootstrap_server_rotating(bootstrap_start)
+        .await?;
     let coordinator_addr = share_coordinator_address(&mut bootstrap, client, group_id).await?;
     client.connect_broker(coordinator_addr).await
 }
