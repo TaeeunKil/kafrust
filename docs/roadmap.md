@@ -76,7 +76,17 @@ with published `0.3.0` on Kafka 3.7.2 classic in
 and Kafka 4.3.1 KIP-848 in
 [`32231357426`](https://github.com/TaeeunKil/kafrust/actions/runs/32231357426).
 Abrupt member-loss expiry, committed-offset restoration after loss, and
-long-duration group churn remain open.
+long-duration group churn remain separate follow-up gates.
+
+The same smoke was rerun with the second member's coordinator connection
+dropped without `LeaveGroup`. The remaining member still reacquired all six
+partitions on Kafka 3.7.2 classic in
+[`32231944823`](https://github.com/TaeeunKil/kafrust/actions/runs/32231944823)
+and Kafka 4.3.1 KIP-848 in
+[`32232672745`](https://github.com/TaeeunKil/kafrust/actions/runs/32232672745).
+The KIP-848 workflow explicitly bounds the broker's consumer session and
+heartbeat settings for a deterministic failure-detection window; this is
+test qualification, not a claim about Kafka's production defaults.
 
 The published `0.2.30` artifacts were also exercised from fresh external
 projects in the seven-profile `Published Crate Smoke` run
