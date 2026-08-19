@@ -528,8 +528,13 @@ impl ShareConsumerConfig {
         let mut bootstrap = self.client.clone().connect().await?;
         let (share_fetch_version, share_acknowledge_version) =
             ensure_share_api_support(&mut bootstrap, self.acquire_mode).await?;
-        let coordinator_addr =
-            share_coordinator_address(&mut bootstrap, &self.client, &self.group_id).await?;
+        let coordinator_addr = share_coordinator_address_with_retry(
+            &mut bootstrap,
+            &self.client,
+            &self.group_id,
+            self.max_retries,
+        )
+        .await?;
         let coordinator = self.client.connect_broker(coordinator_addr.clone()).await?;
         let mut consumer = ShareConsumer {
             config: self,
@@ -1888,6 +1893,27 @@ async fn share_coordinator_address(
     Ok(format!("{}:{}", response.host, response.port))
 }
 
+async fn share_coordinator_address_with_retry(
+    bootstrap: &mut Client,
+    client: &ClientConfig,
+    group_id: &str,
+    max_retries: u32,
+) -> Result<String> {
+    let mut attempt = 0;
+    loop {
+        match share_coordinator_address(bootstrap, client, group_id).await {
+            Ok(address) => return Ok(address),
+            Err(error) if attempt < max_retries => {
+                attempt += 1;
+                client.record_retry();
+                tokio::time::sleep(share_retry_backoff(attempt)).await;
+                drop(error);
+            }
+            Err(error) => return Err(error),
+        }
+    }
+}
+
 fn share_retry_backoff(attempt: u32) -> Duration {
     let shift = attempt.saturating_sub(1).min(5);
     Duration::from_millis(50_u64.saturating_mul(1_u64 << shift).min(1000))
@@ -2242,6 +2268,52 @@ mod tests {
         )
         .await
         .unwrap();
+        assert_eq!(address, "share-coordinator:9094");
+        broker_task.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn retries_share_coordinator_discovery_after_coordinator_not_available() {
+        let (stream, mut broker_stream) = tokio::io::duplex(4096);
+        let broker_task = tokio::spawn(async move {
+            for (error_code, host, port) in [(15, "", 0), (0, "share-coordinator", 9094)] {
+                let request = read_test_frame(&mut broker_stream).await;
+                assert_eq!(i16::from_be_bytes([request[0], request[1]]), 10);
+                assert_eq!(i16::from_be_bytes([request[2], request[3]]), 1);
+                let correlation_id =
+                    i32::from_be_bytes([request[8], request[9], request[10], request[11]]);
+
+                let mut body = Encoder::new();
+                body.write_i32(0);
+                body.write_i16(error_code);
+                body.write_nullable_string(None).unwrap();
+                body.write_i32(7);
+                body.write_string(host).unwrap();
+                body.write_i32(port);
+
+                let mut response = Encoder::new();
+                response.write_i32(correlation_id);
+                response.write_raw(&body.into_bytes());
+                let response = response.into_bytes();
+                broker_stream
+                    .write_all(&(response.len() as i32).to_be_bytes())
+                    .await
+                    .unwrap();
+                broker_stream.write_all(&response).await.unwrap();
+                broker_stream.flush().await.unwrap();
+            }
+        });
+
+        let mut bootstrap = Client::from_stream(
+            Box::new(stream),
+            Some("kafrust-test".to_owned()),
+            Some(Duration::from_secs(1)),
+        );
+        let config = ClientConfig::new(["localhost:9092"]);
+        let address = share_coordinator_address_with_retry(&mut bootstrap, &config, "orders", 1)
+            .await
+            .unwrap();
+
         assert_eq!(address, "share-coordinator:9094");
         broker_task.await.unwrap();
     }
