@@ -1557,6 +1557,13 @@ fn delivery_error_from_request_error(error: &Error) -> Error {
                 broker_id: *broker_id,
             }
         }
+        Error::ShareAcknowledgementSessionUnavailable {
+            broker_id,
+            available_broker_ids,
+        } => Error::ShareAcknowledgementSessionUnavailable {
+            broker_id: *broker_id,
+            available_broker_ids: available_broker_ids.clone(),
+        },
         Error::ShareRecordNotPending {
             topic,
             partition,
@@ -4695,6 +4702,7 @@ fn can_retry_send(error: &Error) -> bool {
         | Error::AdminMutationOutcomeUnknown { .. }
         | Error::ShareAcknowledgementRequired { .. }
         | Error::ShareAcknowledgementOutcomeUnknown { .. }
+        | Error::ShareAcknowledgementSessionUnavailable { .. }
         | Error::ShareRecordNotPending { .. }
         | Error::ShareRecordAlreadyAcknowledged { .. }
         | Error::TelemetryPayloadTooLarge { .. }

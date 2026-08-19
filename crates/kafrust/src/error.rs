@@ -326,6 +326,13 @@ pub enum Error {
         /// Kafka broker node that received the acknowledgement request.
         broker_id: i32,
     },
+    /// A pending share acknowledgement has no matching ShareFetch session.
+    ShareAcknowledgementSessionUnavailable {
+        /// Kafka broker node selected for the acknowledgement request.
+        broker_id: i32,
+        /// Broker nodes for which a ShareFetch session is currently tracked.
+        available_broker_ids: Vec<i32>,
+    },
     /// A share acknowledgement targeted a record that is not pending locally.
     ShareRecordNotPending {
         /// Kafka topic name.
@@ -484,6 +491,13 @@ impl fmt::Display for Error {
                 f,
                 "share acknowledgement outcome for broker {broker_id} is unknown; do not replay without reconciliation"
             ),
+            Self::ShareAcknowledgementSessionUnavailable {
+                broker_id,
+                available_broker_ids,
+            } => write!(
+                f,
+                "share acknowledgement session for broker {broker_id} is unavailable; active sessions: {available_broker_ids:?}"
+            ),
             Self::ShareRecordNotPending {
                 topic,
                 partition,
@@ -554,6 +568,7 @@ impl std::error::Error for Error {
             | Self::AdminMutationOutcomeUnknown { .. }
             | Self::ShareAcknowledgementRequired { .. }
             | Self::ShareAcknowledgementOutcomeUnknown { .. }
+            | Self::ShareAcknowledgementSessionUnavailable { .. }
             | Self::ShareRecordNotPending { .. }
             | Self::ShareRecordAlreadyAcknowledged { .. }
             | Self::TelemetryPayloadTooLarge { .. }

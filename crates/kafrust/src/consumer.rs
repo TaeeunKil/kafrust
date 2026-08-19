@@ -1857,6 +1857,7 @@ fn can_retry_fetch(error: &Error) -> bool {
         | Error::AdminMutationOutcomeUnknown { .. }
         | Error::ShareAcknowledgementRequired { .. }
         | Error::ShareAcknowledgementOutcomeUnknown { .. }
+        | Error::ShareAcknowledgementSessionUnavailable { .. }
         | Error::ShareRecordNotPending { .. }
         | Error::ShareRecordAlreadyAcknowledged { .. }
         | Error::TelemetryPayloadTooLarge { .. }

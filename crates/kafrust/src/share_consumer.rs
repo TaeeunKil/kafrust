@@ -1434,9 +1434,10 @@ impl ShareConsumer {
                 .share_sessions
                 .get(&broker_id)
                 .map(|session| session.epoch)
-                .ok_or(Error::Unsupported(
-                    "share acknowledgement session is unavailable",
-                ))?;
+                .ok_or_else(|| Error::ShareAcknowledgementSessionUnavailable {
+                    broker_id,
+                    available_broker_ids: self.share_sessions.keys().copied().collect(),
+                })?;
             let has_renew = partitions.values().flatten().any(|(_, acknowledgement)| {
                 *acknowledgement == ShareAcknowledgementType::Renew.as_i8()
             });
