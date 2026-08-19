@@ -17,7 +17,7 @@ use opentelemetry_proto::tonic::metrics::v1::{
 #[cfg(feature = "otlp")]
 use prost::Message;
 use rand::Rng;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 #[cfg(feature = "otlp")]
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::watch;
@@ -25,6 +25,7 @@ use tokio::sync::watch;
 const UNKNOWN_SUBSCRIPTION_ID: i16 = 117;
 const TELEMETRY_TOO_LARGE: i16 = 118;
 const UNSUPPORTED_COMPRESSION_TYPE: i16 = 76;
+const THROTTLING_QUOTA_EXCEEDED: i16 = 89;
 
 /// Supplies an OpenTelemetry MetricsData payload for a broker subscription.
 ///
@@ -576,8 +577,9 @@ pub struct TelemetryPushSummary {
 ///
 /// The same connection is reused for subscription and push requests so Kafka's
 /// telemetry throttling state remains attached to one broker connection. The
-/// runtime refreshes an invalid subscription once, bounds payload allocation,
-/// and sends one terminating push when the shutdown channel is set.
+/// runtime refreshes an invalid subscription, honors broker throttle windows,
+/// bounds payload allocation, and sends one terminating push when the shutdown
+/// channel is set.
 pub struct TelemetryClient<P> {
     client: Client,
     provider: P,
@@ -585,6 +587,7 @@ pub struct TelemetryClient<P> {
     client_instance_id: [u8; 16],
     subscription: Option<TelemetrySubscription>,
     subscription_refresh_pending: bool,
+    throttle_until: Option<Instant>,
 }
 
 impl<P> TelemetryClient<P>
@@ -611,6 +614,7 @@ where
             config,
             subscription: None,
             subscription_refresh_pending: false,
+            throttle_until: None,
         }
     }
 
@@ -621,6 +625,7 @@ where
 
     /// Fetches a new broker subscription and replaces local subscription state.
     pub async fn refresh_subscription(&mut self) -> Result<&TelemetrySubscription> {
+        self.wait_for_throttle().await;
         let api_versions = self
             .client
             .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
@@ -642,22 +647,34 @@ where
             }
         }
 
-        let response = self
-            .client
-            .get_telemetry_subscriptions_v0(self.client_instance_id)
-            .await?;
-        if response.error_code != 0 {
-            return Err(self
+        for attempt in 0..=2 {
+            self.wait_for_throttle().await;
+            let response = self
                 .client
-                .broker_error(response.error_code, "GetTelemetrySubscriptions".to_owned()));
+                .get_telemetry_subscriptions_v0(self.client_instance_id)
+                .await?;
+            self.record_throttle(response.throttle_time_ms);
+            if response.error_code != 0 {
+                if response.error_code == THROTTLING_QUOTA_EXCEEDED && attempt < 2 {
+                    self.wait_for_throttle().await;
+                    continue;
+                }
+                return Err(self
+                    .client
+                    .broker_error(response.error_code, "GetTelemetrySubscriptions".to_owned()));
+            }
+            let subscription = TelemetrySubscription::from_response(response)?;
+            self.client_instance_id = subscription.client_instance_id;
+            self.subscription = Some(subscription);
+            self.subscription_refresh_pending = false;
+            return self
+                .subscription
+                .as_ref()
+                .ok_or(Error::Unsupported("telemetry subscription was not stored"));
         }
-        let subscription = TelemetrySubscription::from_response(response)?;
-        self.client_instance_id = subscription.client_instance_id;
-        self.subscription = Some(subscription);
-        self.subscription_refresh_pending = false;
-        self.subscription
-            .as_ref()
-            .ok_or(Error::Unsupported("telemetry subscription was not stored"))
+        Err(Error::Unsupported(
+            "telemetry subscription throttle retry exhausted",
+        ))
     }
 
     /// Collects and pushes one non-terminating telemetry payload.
@@ -729,14 +746,20 @@ where
     }
 
     async fn push_with_refresh(&mut self, terminating: bool) -> Result<TelemetryPushSummary> {
-        for attempt in 0..=1 {
+        for attempt in 0..=2 {
             match self.push_current(terminating).await {
                 Err(Error::Broker { code, .. })
-                    if attempt == 0
+                    if attempt < 2
                         && (code == UNKNOWN_SUBSCRIPTION_ID
                             || code == UNSUPPORTED_COMPRESSION_TYPE) =>
                 {
                     self.refresh_subscription().await?;
+                }
+                Err(Error::Broker {
+                    code: THROTTLING_QUOTA_EXCEEDED,
+                    ..
+                }) if attempt < 2 => {
+                    self.wait_for_throttle().await;
                 }
                 result => return result,
             }
@@ -745,6 +768,7 @@ where
     }
 
     async fn push_current(&mut self, terminating: bool) -> Result<TelemetryPushSummary> {
+        self.wait_for_throttle().await;
         let subscription = self
             .subscription
             .as_ref()
@@ -785,6 +809,7 @@ where
                 metrics,
             )
             .await?;
+        self.record_throttle(response.throttle_time_ms);
         if response.error_code != 0 {
             if response.error_code == TELEMETRY_TOO_LARGE {
                 return Err(Error::TelemetryPayloadTooLarge {
@@ -800,6 +825,27 @@ where
             subscription_id: subscription.subscription_id,
             payload_bytes,
         })
+    }
+
+    fn record_throttle(&mut self, throttle_time_ms: i32) {
+        let Ok(throttle_time_ms) = u64::try_from(throttle_time_ms) else {
+            return;
+        };
+        let until = Instant::now() + Duration::from_millis(throttle_time_ms);
+        self.throttle_until = Some(
+            self.throttle_until
+                .map_or(until, |current| current.max(until)),
+        );
+    }
+
+    async fn wait_for_throttle(&mut self) {
+        let Some(until) = self.throttle_until.take() else {
+            return;
+        };
+        let remaining = until.saturating_duration_since(Instant::now());
+        if !remaining.is_zero() {
+            tokio::time::sleep(remaining).await;
+        }
     }
 }
 
