@@ -68,6 +68,16 @@ that kafrust sends both ordinary and terminating payloads. Subscription
 mutation, throttling, unknown-subscription recovery, and broker payload-limit
 qualification remain open follow-up gates.
 
+The published group smoke now also verifies normal member departure recovery:
+after two-member assignment and explicit position rejoin, the remaining
+member must reacquire all six partitions and leave cleanly. The gate passed
+with published `0.3.0` on Kafka 3.7.2 classic in
+[`32231354623`](https://github.com/TaeeunKil/kafrust/actions/runs/32231354623)
+and Kafka 4.3.1 KIP-848 in
+[`32231357426`](https://github.com/TaeeunKil/kafrust/actions/runs/32231357426).
+Abrupt member-loss expiry, committed-offset restoration after loss, and
+long-duration group churn remain open.
+
 The published `0.2.30` artifacts were also exercised from fresh external
 projects in the seven-profile `Published Crate Smoke` run
 [`31762679537`](https://github.com/TaeeunKil/kafrust/actions/runs/31762679537).
