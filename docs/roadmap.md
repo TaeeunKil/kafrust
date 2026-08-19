@@ -64,9 +64,15 @@ The first KIP-714 broker-side qualification slice passed in
 [`32229640441`](https://github.com/TaeeunKil/kafrust/actions/runs/32229640441)
 through `live-telemetry.yml`: a Kafka 3.7.2 KRaft image builds the test-only
 `KafrustTelemetryReporter`, creates a `client-metrics` subscription, and checks
-that kafrust sends both ordinary and terminating payloads. Subscription
-mutation, throttling, unknown-subscription recovery, and broker payload-limit
-qualification remain open follow-up gates.
+that kafrust sends both ordinary and terminating payloads. The follow-up live
+gate passed in
+[`32236749392`](https://github.com/TaeeunKil/kafrust/actions/runs/32236749392)
+after altering the active subscription: kafrust observed the stale subscription
+ID, respected Kafka 3.7.2's quota cooldown, refreshed on the same connection,
+and sent subsequent ordinary and terminating payloads with the new ID. This
+closes the bounded subscription-mutation, throttling, and unknown-subscription
+recovery slice. Broker payload-limit qualification, longer collection, and
+secured or multi-broker telemetry remain open follow-up gates.
 
 The published group smoke now also verifies normal member departure recovery:
 after two-member assignment and explicit position rejoin, the remaining
@@ -2141,9 +2147,14 @@ Implemented evidence:
   counters and gauges to filtered cumulative or delta OTLP MetricsData bytes.
   The Kafka 3.7.2 KRaft broker plugin qualification passed in
   [`32229640441`](https://github.com/TaeeunKil/kafrust/actions/runs/32229640441),
-  including ordinary and terminating payload delivery. Subscription
-  mutation, throttling, unknown-subscription recovery, broker payload limits,
-  and longer telemetry collection remain open hardening gates.
+  including ordinary and terminating payload delivery. The same workflow now
+  passes active subscription mutation and recovery in
+  [`32236749392`](https://github.com/TaeeunKil/kafrust/actions/runs/32236749392):
+  the client honors response throttle windows and applies the existing push
+  interval as a Kafka 3.7.2 compatibility cooldown when the broker returns a
+  zero-throttle quota error during refresh. Broker payload limits, longer
+  collection, and secured or multi-broker telemetry remain open hardening
+  gates.
   Kafka 4.0 early-access v0 is intentionally excluded because the stable schemas
   removed it in Kafka 4.1.
 - `.github/workflows/share-kafka-smoke.yml` now provides a dedicated Kafka 4.3.1
