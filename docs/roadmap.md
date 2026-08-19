@@ -90,8 +90,9 @@ coverage toward a release candidate that can be qualified in staging.
   gate passed in [`32224302754`](https://github.com/TaeeunKil/kafrust/actions/runs/32224302754).
    Share Group offset listing through API 90 v0/v1 and intent-specific group
    deletion through API 42 are now implemented with focused wire and
-   coordinator-routing tests. The combined live lifecycle gate and long-running
-   operational evidence remain open.
+   coordinator-routing tests. The combined Kafka 4.3.1 live lifecycle gate
+   passed in [`32225957928`](https://github.com/TaeeunKil/kafrust/actions/runs/32225957928);
+   long-running operational evidence remains open.
 - Flexible `DescribeTopicPartitions` v0 is now implemented through the typed
   protocol and `AdminClient` layers, including topic UUIDs, partition leader/
   ISR state, nullable ELR fields, authorized operations, and paging cursors.

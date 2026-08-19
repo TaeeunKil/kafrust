@@ -80,8 +80,9 @@ wire path for share-group deletion; `AdminClient::delete_share_groups` provides
 that intent-specific name while preserving the typed per-group result.
 
 The focused protocol and coordinator-routing tests cover API 90 v0/v1 and
-share-group deletion. The live Kafka qualification is tracked in the roadmap
-and must cover alter, list, delete-offsets, and delete-group as one lifecycle.
+share-group deletion. The Kafka 4.3.1 live lifecycle gate covers alter, list,
+delete-offsets, and delete-group together in
+[`32225957928`](https://github.com/TaeeunKil/kafrust/actions/runs/32225957928).
 
 ```rust
 use kafrust::{AdminClient, ClientConfig};
