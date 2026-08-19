@@ -44,7 +44,6 @@ jobs:
             -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1 \
             -e KAFKA_SHARE_COORDINATOR_STATE_TOPIC_REPLICATION_FACTOR=1 \
             -e KAFKA_SHARE_COORDINATOR_STATE_TOPIC_MIN_ISR=1 \
-            -e KAFKA_SHARE_AUTO_OFFSET_RESET=earliest \
             -e KAFKA_SHARE_RENEW_ACKNOWLEDGE_ENABLE=true \
             -e KAFKA_GROUP_COORDINATOR_REBALANCE_PROTOCOLS=classic,consumer,share \
             -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 \
@@ -73,6 +72,13 @@ jobs:
 
       - name: Produce share smoke record
         run: |
+          docker exec kafrust-share-kafka /opt/kafka/bin/kafka-configs.sh \
+            --bootstrap-server localhost:9092 \
+            --alter \
+            --entity-type groups \
+            --entity-name "$KAFRUST_SHARE_GROUP_ID" \
+            --add-config share.auto.offset.reset=earliest
+
           printf 'share-smoke-%s\n' "$GITHUB_RUN_ID" | \
             docker exec -i kafrust-share-kafka /opt/kafka/bin/kafka-console-producer.sh \
               --bootstrap-server localhost:9092 \
