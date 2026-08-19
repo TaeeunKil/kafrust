@@ -101,7 +101,7 @@ coverage toward a release candidate that can be qualified in staging.
    passed in [`32225957928`](https://github.com/TaeeunKil/kafrust/actions/runs/32225957928);
    long-running operational evidence remains open.
 - A standalone `fuzz/` workspace now provides six libFuzzer targets and a
-  manual/weekly compile workflow. The public bounded compression helpers have
+  manual/weekly compile-and-smoke workflow. The public bounded compression helpers have
   an all-codec roundtrip regression test. This closes the initial fuzz-harness
   scaffolding slice; corpus growth, minimized crash regressions, and sustained
   campaigns remain part of the production-hardening gate.

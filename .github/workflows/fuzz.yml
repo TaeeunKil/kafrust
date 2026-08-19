@@ -37,3 +37,15 @@ jobs:
             compression; do
             cargo +nightly fuzz check "$target"
           done
+
+      - name: Run bounded fuzz smoke
+        run: |
+          for target in \
+            codec \
+            frame \
+            api_versions_response \
+            group_describe_response \
+            share_group_offsets_response \
+            compression; do
+            cargo +nightly fuzz run "$target" -- -runs=1000 -max_total_time=5
+          done

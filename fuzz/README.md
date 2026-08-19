@@ -25,3 +25,7 @@ must be reduced to a regression test before the target is restarted.
 The current targets cover primitive/flexible decoding, request framing,
 classic and modern group descriptions, share-group offsets, and all five
 Kafka record compression codecs.
+
+The GitHub workflow compiles every target and runs a bounded smoke campaign
+for each target. This catches immediate crashes without pretending that a
+short scheduled run is equivalent to a sustained corpus campaign.

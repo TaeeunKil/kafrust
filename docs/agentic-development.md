@@ -108,5 +108,5 @@ cargo +nightly fuzz run frame
 Malformed input is expected to return a typed error. A crash or sanitizer
 finding must be reduced to a deterministic protocol regression test before
 the fuzz target is considered healthy. The scheduled/manual `Fuzz Check`
-workflow compiles every target; long fuzz campaigns remain a separate
-resource-bounded operation.
+workflow compiles every target and runs a bounded smoke campaign; long fuzz
+campaigns remain a separate resource-bounded operation.
