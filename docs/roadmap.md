@@ -22,6 +22,16 @@ SASL_SSL/SCRAM, and Gzip/Snappy/LZ4/Zstd paths. The release also includes the
 typed Admin mutation ambiguity contract and its current-source response-drop
 qualification.
 
+The current-source `Live Kafka Smoke` matrix passed on commit `ef766cd` in
+[`32221883090`](https://github.com/TaeeunKil/kafrust/actions/runs/32221883090).
+This run covered Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 profiles, plaintext,
+TLS, SASL/PLAIN, SASL_SSL/SCRAM, OAUTHBEARER, ACL authorization,
+multi-broker failover, transaction reconciliation, and KIP-848 paths. The
+plain and secured three-broker coordinator-stop gates now explicitly verify
+that a transmitted classic `OffsetCommit` whose response is lost returns
+`AdminMutationOutcomeUnknown` with no replay, matching the safety contract;
+they no longer incorrectly require a retry of an ambiguous mutation.
+
 The preceding `0.2.30` patch release included consumer-group assignment-state
 preservation across classic and KIP-848 rejoin paths. Its full local Rust
 validation passed, and the complete 17-job live matrix passed in
