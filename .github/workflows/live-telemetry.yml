@@ -47,7 +47,7 @@ jobs:
             -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
             -e KAFKA_METRIC_REPORTERS=com.kafrust.KafrustTelemetryReporter \
             -e CLASSPATH=/opt/kafka/libs/kafrust-telemetry.jar:/opt/kafka/libs/* \
-            apache/kafka:3.7.2
+            kafrust-kafka-telemetry
 
       - name: Wait for Kafka
         run: |
