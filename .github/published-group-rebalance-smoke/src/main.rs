@@ -280,6 +280,11 @@ async fn verify_committed_offset_restore(
             replacement.leave().await?;
             return Ok(());
         }
+        if replacement.assignments().is_empty() {
+            // KIP-848 computes a new target assignment asynchronously after a
+            // member joins, so give the coordinator time to push it.
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
     }
 
     let positions = replacement
