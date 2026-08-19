@@ -5,6 +5,7 @@ use kafrust::{
     AdminClient, ClientConfig, SecurityProtocol, ShareAcknowledgementType, ShareAcquireMode,
     ShareConsumerConfig, ShareGroupOffset,
 };
+use std::collections::BTreeSet;
 use tokio::time::{sleep, Duration, Instant};
 
 #[tokio::test]
@@ -180,6 +181,83 @@ async fn share_consumer_roundtrip_when_broker_is_configured() {
         .close()
         .await
         .expect("ShareConsumer should leave the share group cleanly");
+}
+
+#[tokio::test]
+async fn share_consumer_long_acknowledgement_soak_when_broker_is_configured() {
+    let Some(cycles) = std::env::var("KAFRUST_SHARE_LONG_CYCLES")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+    else {
+        eprintln!("skipping share consumer acknowledgement soak; set KAFRUST_SHARE_LONG_CYCLES");
+        return;
+    };
+    let Some(topic) = std::env::var("KAFRUST_SHARE_TOPIC").ok() else {
+        eprintln!("skipping share consumer acknowledgement soak; set KAFRUST_SHARE_TOPIC");
+        return;
+    };
+    let Some(bootstrap) = std::env::var("KAFRUST_BOOTSTRAP_SERVERS").ok() else {
+        eprintln!("skipping share consumer acknowledgement soak; set KAFRUST_BOOTSTRAP_SERVERS");
+        return;
+    };
+    let prefix = std::env::var("KAFRUST_SHARE_LONG_PREFIX")
+        .expect("KAFRUST_SHARE_LONG_PREFIX should be set");
+    let group_id = std::env::var("KAFRUST_SHARE_GROUP_ID")
+        .unwrap_or_else(|_| "kafrust-share-long-soak".to_owned());
+    let mut consumer = ShareConsumerConfig::new(parse_bootstrap_servers(&bootstrap), group_id)
+        .subscribe(topic)
+        .max_wait_ms(100)
+        .max_records(1)
+        .batch_size(1)
+        .max_retries(10)
+        .acquire_mode(ShareAcquireMode::RecordLimit)
+        .build()
+        .await
+        .expect("ShareConsumer should connect for the acknowledgement soak");
+    let deadline = Instant::now() + Duration::from_secs(90);
+    let mut accepted_values = BTreeSet::new();
+    let mut accepted_offsets = BTreeSet::new();
+
+    while accepted_values.len() < cycles {
+        let records = consumer
+            .poll()
+            .await
+            .expect("ShareConsumer poll should succeed during the acknowledgement soak");
+        let record_count = records.len();
+        for record in records {
+            let value = String::from_utf8_lossy(record.value().unwrap_or_default()).into_owned();
+            assert!(
+                value.starts_with(&prefix),
+                "unexpected record in acknowledgement soak: {value}"
+            );
+            assert!(
+                accepted_values.insert(value.clone()),
+                "accepted record was redelivered before soak completed: {value}"
+            );
+            accepted_offsets.insert(record.offset());
+            consumer
+                .acknowledge(&record, ShareAcknowledgementType::Accept)
+                .expect("acknowledgement should be accepted locally");
+            consumer
+                .commit()
+                .await
+                .expect("acknowledgement should commit during the soak");
+        }
+        assert!(
+            Instant::now() < deadline,
+            "ShareConsumer did not acknowledge {cycles} records before the soak deadline"
+        );
+        if record_count == 0 {
+            sleep(Duration::from_millis(100)).await;
+        }
+    }
+
+    assert_eq!(accepted_values.len(), cycles);
+    assert_eq!(accepted_offsets.len(), cycles);
+    consumer
+        .close()
+        .await
+        .expect("ShareConsumer should close after the acknowledgement soak");
 }
 
 #[tokio::test]
