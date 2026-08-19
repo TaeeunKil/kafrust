@@ -1235,7 +1235,26 @@ impl ShareConsumer {
                 .map_or_else(BTreeSet::new, |session| session.partitions.clone());
             let topics = fetch_topics_for(&desired, &active);
             let forgotten_topics = forgotten_topics_for(&active, &desired);
-            let mut broker = self.take_broker_client(broker_id).await?;
+            let mut broker = match self.take_broker_client(broker_id).await {
+                Ok(broker) => broker,
+                Err(_error) if attempt < self.config.max_retries => {
+                    attempt += 1;
+                    self.config.client.record_retry();
+                    self.share_sessions.remove(&broker_id);
+                    self.refresh_metadata().await?;
+                    let leaders = self.share_fetch_partition_leaders(&desired)?;
+                    if leaders.len() != 1 {
+                        return self
+                            .fetch_from_partition_leader_groups(leaders, max_records)
+                            .await;
+                    }
+                    broker_id = leaders.into_keys().next().ok_or(Error::Unsupported(
+                        "share fetch retry has no partition leader",
+                    ))?;
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
             let result = if self.share_fetch_version >= 2 {
                 broker
                     .share_fetch_v2(
