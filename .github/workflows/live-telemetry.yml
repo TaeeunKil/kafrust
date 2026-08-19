@@ -99,8 +99,12 @@ jobs:
             --name kafrust-live \
             --metrics kafrust.client.requests_ \
             --interval 1000
+          set +e
           wait "$(cat /tmp/kafrust-telemetry-smoke.pid)"
+          smoke_status=$?
+          set -e
           cat /tmp/kafrust-telemetry-smoke.log
+          exit "$smoke_status"
 
       - name: Verify subscription mutation recovery
         run: |
