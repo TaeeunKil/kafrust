@@ -88,8 +88,10 @@ coverage toward a release candidate that can be qualified in staging.
   Share Group offset mutation APIs 91 and 92 are also implemented with typed
   top-level and per-topic/per-partition results; the Kafka 4.3.1 set/delete
   gate passed in [`32224302754`](https://github.com/TaeeunKil/kafrust/actions/runs/32224302754).
-  Share Group offset listing, group deletion, and long-running operational
-  evidence remain open.
+   Share Group offset listing through API 90 v0/v1 and intent-specific group
+   deletion through API 42 are now implemented with focused wire and
+   coordinator-routing tests. The combined live lifecycle gate and long-running
+   operational evidence remain open.
 - Flexible `DescribeTopicPartitions` v0 is now implemented through the typed
   protocol and `AdminClient` layers, including topic UUIDs, partition leader/
   ISR state, nullable ELR fields, authorized operations, and paging cursors.
@@ -103,8 +105,9 @@ coverage toward a release candidate that can be qualified in staging.
   including the explicit controller-listener workflow, in
   [`31781263986`](https://github.com/TaeeunKil/kafrust/actions/runs/31781263986)
   and [`31781264035`](https://github.com/TaeeunKil/kafrust/actions/runs/31781264035).
-  Remaining modern gaps include Share Group offset listing/group deletion,
-  client telemetry/KIP-714, and broader Admin/controller protocol coverage.
+   Remaining modern gaps include live qualification of the Share Group Admin
+   lifecycle, client telemetry/KIP-714, and broader Admin/controller protocol
+   coverage.
 - The first consumer-group lifecycle slice now has a focused regression test
   for retaining an explicit local position when a topic partition remains
   assigned across rejoin, plus a guard that does not copy position from a

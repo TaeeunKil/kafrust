@@ -211,13 +211,39 @@ async fn share_group_offset_mutations_when_broker_is_configured() {
         "share offset alter failed: {altered:?}"
     );
 
+    let listed = admin
+        .list_share_group_offsets(&group_id, None)
+        .await
+        .expect("DescribeShareGroupOffsets should list the altered share offset");
+    assert!(
+        listed.is_success(),
+        "share offset listing failed: {listed:?}"
+    );
+    let listed_partition = listed
+        .topics()
+        .iter()
+        .find(|topic_result| topic_result.topic_name() == topic)
+        .and_then(|topic_result| topic_result.partitions().first())
+        .expect("share offset listing should include the altered topic partition");
+    assert_eq!(listed_partition.partition(), 0);
+    assert_eq!(listed_partition.start_offset(), 0);
+
     let deleted = admin
-        .delete_share_group_offsets(&group_id, &[topic])
+        .delete_share_group_offsets(&group_id, std::slice::from_ref(&topic))
         .await
         .expect("DeleteShareGroupOffsets should succeed for an empty share group");
     assert!(
         deleted.is_success(),
         "share offset delete failed: {deleted:?}"
+    );
+
+    let deleted_group = admin
+        .delete_share_groups(std::slice::from_ref(&group_id))
+        .await
+        .expect("DeleteGroups should delete the empty share group");
+    assert!(
+        deleted_group[0].is_success(),
+        "share group delete failed: {deleted_group:?}"
     );
 }
 

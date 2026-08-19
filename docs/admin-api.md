@@ -71,8 +71,32 @@ failure as `AdminMutationOutcomeUnknown` without replay. The Kafka 4.3.1
 smoke sets and then deletes a real share-group offset in
 [`32224302754`](https://github.com/TaeeunKil/kafrust/actions/runs/32224302754).
 
-Share-group offset listing and share-group deletion are separate remaining
-Admin parity slices.
+`AdminClient::list_share_group_offsets` exposes Kafka's API 90
+`DescribeShareGroupOffsets`. It negotiates v1 when the broker advertises it so
+partition lag is available, and falls back to v0 for Kafka 4.1-era brokers.
+Pass `None` for all known topic-partitions or use `ShareGroupOffsetQuery` to
+filter topics and partitions. Kafka uses the existing API 42 `DeleteGroups`
+wire path for share-group deletion; `AdminClient::delete_share_groups` provides
+that intent-specific name while preserving the typed per-group result.
+
+The focused protocol and coordinator-routing tests cover API 90 v0/v1 and
+share-group deletion. The live Kafka qualification is tracked in the roadmap
+and must cover alter, list, delete-offsets, and delete-group as one lifecycle.
+
+```rust
+use kafrust::{AdminClient, ClientConfig};
+
+# async fn example() -> kafrust::Result<()> {
+let admin = AdminClient::new(ClientConfig::new(["localhost:9092"]));
+let offsets = admin.list_share_group_offsets("orders-share", None).await?;
+for topic in offsets.topics() {
+    for partition in topic.partitions() {
+        println!("{}-{}: {}", topic.topic_name(), partition.partition(), partition.start_offset());
+    }
+}
+# Ok(())
+# }
+```
 
 ```rust
 use kafrust::{AdminClient, ClientConfig};

@@ -87,7 +87,7 @@ jobs:
       - name: Run ShareConsumer and ShareGroupDescribe live roundtrip
         run: cargo test -p kafrust --test broker_roundtrip share_consumer_roundtrip_when_broker_is_configured -- --nocapture
 
-      - name: Run ShareGroup offset mutation live roundtrip
+      - name: Run ShareGroup offset lifecycle live roundtrip
         run: cargo test -p kafrust --test broker_roundtrip share_group_offset_mutations_when_broker_is_configured -- --nocapture
 
       - name: Dump Kafka logs

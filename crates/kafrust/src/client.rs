@@ -65,6 +65,10 @@ use kafrust_protocol::api::describe_producers::{
 use kafrust_protocol::api::describe_quorum::{
     DescribeQuorumRequest, DescribeQuorumResponse, DescribeQuorumTopic,
 };
+use kafrust_protocol::api::describe_share_group_offsets::{
+    DescribeShareGroupOffsetsRequestV0, DescribeShareGroupOffsetsRequestV1,
+    DescribeShareGroupOffsetsResponseV0, DescribeShareGroupOffsetsResponseV1,
+};
 use kafrust_protocol::api::describe_topic_partitions::{
     DescribeTopicPartitionsRequestV0, DescribeTopicPartitionsResponseV0,
     DescribeTopicPartitionsTopicV0,
@@ -1495,6 +1499,46 @@ impl Client {
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v1(&mut decoder)?;
         Ok(DeleteShareGroupOffsetsResponseV0::decode_body(
+            &mut decoder,
+        )?)
+    }
+
+    /// Sends DescribeShareGroupOffsets v0 to a share-group coordinator.
+    pub async fn describe_share_group_offsets_v0(
+        &mut self,
+        groups: Vec<
+            kafrust_protocol::api::describe_share_group_offsets::DescribeShareGroupOffsetsGroup,
+        >,
+    ) -> Result<DescribeShareGroupOffsetsResponseV0> {
+        let request = DescribeShareGroupOffsetsRequestV0 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            groups,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(DescribeShareGroupOffsetsResponseV0::decode_body(
+            &mut decoder,
+        )?)
+    }
+
+    /// Sends DescribeShareGroupOffsets v1, including partition lag.
+    pub async fn describe_share_group_offsets_v1(
+        &mut self,
+        groups: Vec<
+            kafrust_protocol::api::describe_share_group_offsets::DescribeShareGroupOffsetsGroup,
+        >,
+    ) -> Result<DescribeShareGroupOffsetsResponseV1> {
+        let request = DescribeShareGroupOffsetsRequestV1 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            groups,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(DescribeShareGroupOffsetsResponseV1::decode_body(
             &mut decoder,
         )?)
     }
