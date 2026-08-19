@@ -211,7 +211,9 @@ behind the broad pure-Rust competitors in three areas:
   and the three-broker fresh-consumer failover path passed in
   [run 32214201983](https://github.com/TaeeunKil/kafrust/actions/runs/32214201983),
   while an active-heartbeat coordinator-movement path passed in
-  [run 32215845737](https://github.com/TaeeunKil/kafrust/actions/runs/32215845737);
+  [run 32215845737](https://github.com/TaeeunKil/kafrust/actions/runs/32215845737)
+  and three independent matrix attempts passed in
+  [run 32216383214](https://github.com/TaeeunKil/kafrust/actions/runs/32216383214);
   repeated multi-broker recovery, expiry/reconciliation soak, and ambiguous
   acknowledgement reconciliation remain open),
   KIP-714 beyond the new low-level wire path (the high-level provider and

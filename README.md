@@ -448,7 +448,8 @@ roundtrip test, plus an opt-in cancellable background heartbeat task. A Kafka
 and final acceptance path in [run 32213499877](https://github.com/TaeeunKil/kafrust/actions/runs/32213499877).
 A three-broker fresh-consumer failover path passed in [run 32214201983](https://github.com/TaeeunKil/kafrust/actions/runs/32214201983),
 and an active-heartbeat coordinator failover path passed in [run 32215845737](https://github.com/TaeeunKil/kafrust/actions/runs/32215845737).
-Repeated recovery, long-running qualification, and ambiguous
+Three independent repeats of the active-heartbeat path also passed in [run 32216383214](https://github.com/TaeeunKil/kafrust/actions/runs/32216383214).
+In-process repeated recovery, long-running qualification, and ambiguous
 acknowledgement responses are surfaced as a typed unknown-outcome error and are
 not replayed automatically. `BatchOptimized` is the default acquisition mode;
 `RecordLimit` uses KIP-1206 and requires a broker advertising ShareFetch v2;

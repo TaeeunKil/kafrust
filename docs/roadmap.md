@@ -2032,9 +2032,9 @@ Implemented evidence:
   single-node live gate passed the complete poll/Renew/poll,
   acquisition-lock expiry/redelivery, Accept/commit, and close path in
   [`32213499877`](https://github.com/TaeeunKil/kafrust/actions/runs/32213499877).
-  One three-broker leader-movement path and one active-heartbeat coordinator
-  recovery path are now live-qualified; repeated recovery and ambiguous
-  acknowledgement reconciliation remain open.
+  One three-broker leader-movement path and three independent active-heartbeat
+  coordinator recovery attempts are now live-qualified; repeated in-process
+  churn and ambiguous acknowledgement reconciliation remain open.
   KIP-1206 ShareFetch v2 is now negotiated when advertised: the high-level
   consumer exposes `BatchOptimized` (the backward-compatible default) and
   `RecordLimit`, which fails on brokers that cannot provide v2 rather than
@@ -2071,16 +2071,18 @@ Implemented evidence:
   active-heartbeat gate: it stops the discovered group coordinator while the
   detached heartbeat task is running, waits for partition leader movement, and
   verifies post-failover delivery, acknowledgement, and clean shutdown. Kafka
-  4.3.1 passed this path in
-  [`32215845737`](https://github.com/TaeeunKil/kafrust/actions/runs/32215845737).
+  4.3.1 passed the original path in
+  [`32215845737`](https://github.com/TaeeunKil/kafrust/actions/runs/32215845737)
+  and all three independent matrix attempts in
+  [`32216383214`](https://github.com/TaeeunKil/kafrust/actions/runs/32216383214).
 - ShareFetch success responses preserve the broker that served the request,
   while `CurrentLeader` is used only for the leader-error responses where Kafka
   populates it. Retryable ShareFetch leader errors return the connection to the
   pool, refresh metadata, and retry with refreshed routing. Injected tests cover
   the response semantics; the three-broker leader movement workflow passed in
   run [`32214201983`](https://github.com/TaeeunKil/kafrust/actions/runs/32214201983),
-  while repeated failure, acknowledgement reconciliation, and soak remain
-  open. The live runs exposed and fixed stale broker-connection reuse,
+  while in-process repeated failure, acknowledgement reconciliation, and soak
+  remain open. The live runs exposed and fixed stale broker-connection reuse,
   partition fetches split across replacement leaders, and stale coordinator
   connections during group leave.
 - The 2026-08-19 competitor recheck adds `kacrab` to the comparison set. Its
