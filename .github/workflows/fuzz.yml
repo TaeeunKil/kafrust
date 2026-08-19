@@ -24,7 +24,7 @@ jobs:
         run: rustup toolchain install nightly --profile minimal
 
       - name: Install cargo-fuzz
-        run: cargo install cargo-fuzz --locked
+        run: cargo +stable install cargo-fuzz --locked
 
       - name: Compile all fuzz targets
         run: |
