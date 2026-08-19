@@ -549,7 +549,7 @@ impl ShareConsumerConfig {
             partition_leaders: BTreeMap::new(),
             pending: BTreeMap::new(),
             renewed_records: BTreeMap::new(),
-            member_id: String::new(),
+            member_id: new_share_member_id(),
             member_epoch: 0,
             next_heartbeat: Instant::now(),
             heartbeat_interval: Duration::from_millis(1),
@@ -1919,6 +1919,18 @@ fn share_retry_backoff(attempt: u32) -> Duration {
     Duration::from_millis(50_u64.saturating_mul(1_u64 << shift).min(1000))
 }
 
+fn new_share_member_id() -> String {
+    let value = rand::random::<u128>();
+    format!(
+        "{:08x}-{:04x}-{:04x}-{:04x}-{:012x}",
+        (value >> 96) as u32,
+        (value >> 80) as u16,
+        (value >> 64) as u16,
+        (value >> 48) as u16,
+        value & 0x0000_ffff_ffff_ffff,
+    )
+}
+
 async fn ensure_share_api_support(
     client: &mut Client,
     acquire_mode: ShareAcquireMode,
@@ -2154,6 +2166,16 @@ mod tests {
         assert!(ShareConsumerConfig::new(["localhost:9092"], "orders")
             .validate()
             .is_err());
+    }
+
+    #[test]
+    fn generates_uuid_shaped_share_member_ids() {
+        let member_id = new_share_member_id();
+        assert_eq!(member_id.len(), 36);
+        assert_eq!(member_id.as_bytes()[8], b'-');
+        assert_eq!(member_id.as_bytes()[13], b'-');
+        assert_eq!(member_id.as_bytes()[18], b'-');
+        assert_eq!(member_id.as_bytes()[23], b'-');
     }
 
     #[test]
