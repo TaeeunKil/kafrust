@@ -633,7 +633,13 @@ pub struct MessageSetRecord {
     pub control: bool,
 }
 
-fn decode_message_set(bytes: &[u8], limits: DecodeLimits) -> Result<Vec<MessageSetRecord>> {
+/// Decodes Kafka MessageSet or RecordBatch bytes returned by a fetch-family
+/// response.
+///
+/// ShareFetch uses the same record-batch encoding as Fetch, so the high-level
+/// share consumer can reuse the exact compression, header, transactional, and
+/// resource-limit handling implemented here.
+pub fn decode_message_set(bytes: &[u8], limits: DecodeLimits) -> Result<Vec<MessageSetRecord>> {
     let mut decoder = Decoder::with_limits(bytes, limits);
     let mut records = Vec::new();
 

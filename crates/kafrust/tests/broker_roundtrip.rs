@@ -1,7 +1,9 @@
 #![allow(clippy::expect_used)]
 
 use kafrust::protocol::api::find_coordinator::FindCoordinatorResponseV1;
-use kafrust::{ClientConfig, SecurityProtocol};
+use kafrust::{
+    ClientConfig, SecurityProtocol, ShareAcknowledgementType, ShareAcquireMode, ShareConsumerConfig,
+};
 use tokio::time::{sleep, Duration, Instant};
 
 #[tokio::test]
@@ -60,6 +62,106 @@ async fn find_group_coordinator_roundtrip_when_broker_is_configured() {
     assert!(coordinator.node_id >= 0);
     assert!(!coordinator.host.is_empty());
     assert!(coordinator.port > 0);
+}
+
+#[tokio::test]
+async fn share_consumer_roundtrip_when_broker_is_configured() {
+    let Some(topic) = std::env::var("KAFRUST_SHARE_TOPIC").ok() else {
+        eprintln!("skipping share consumer roundtrip; set KAFRUST_SHARE_TOPIC to run it");
+        return;
+    };
+    let Some(bootstrap) = std::env::var("KAFRUST_BOOTSTRAP_SERVERS").ok() else {
+        eprintln!("skipping share consumer roundtrip; set KAFRUST_BOOTSTRAP_SERVERS to run it");
+        return;
+    };
+    let group_id = std::env::var("KAFRUST_SHARE_GROUP_ID")
+        .unwrap_or_else(|_| "kafrust-share-smoke".to_owned());
+    let mut consumer = ShareConsumerConfig::new(parse_bootstrap_servers(&bootstrap), group_id)
+        .subscribe(topic)
+        .max_wait_ms(100)
+        .max_retries(3)
+        .acquire_mode(ShareAcquireMode::RecordLimit)
+        .build()
+        .await
+        .expect("ShareConsumer should connect to the configured Kafka broker");
+    consumer
+        .spawn_heartbeat_task(Duration::from_secs(1))
+        .await
+        .expect("ShareConsumer heartbeat task should start");
+
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        let records = consumer
+            .poll()
+            .await
+            .expect("ShareConsumer poll should succeed");
+        if let Some(record) = records.first() {
+            let offset = record.offset();
+            consumer
+                .acknowledge(record, ShareAcknowledgementType::Renew)
+                .expect("ShareConsumer renewal should be accepted locally");
+            let renewed_records = consumer
+                .poll()
+                .await
+                .expect("ShareConsumer renewal poll should succeed");
+            let renewed_record = renewed_records
+                .iter()
+                .find(|candidate| candidate.offset() == offset)
+                .expect("renewed record should be returned by the next poll");
+            assert!(consumer.acquisition_lock_timeout_ms().is_some());
+            let record_to_complete = if std::env::var_os("KAFRUST_SHARE_TEST_EXPIRY").is_some() {
+                let lock_timeout_ms = consumer
+                    .acquisition_lock_timeout_ms()
+                    .and_then(|timeout| u64::try_from(timeout).ok())
+                    .unwrap_or(30_000)
+                    .max(1_000);
+                sleep(Duration::from_millis(lock_timeout_ms.saturating_add(1_000))).await;
+                let deadline = Instant::now() + Duration::from_secs(30);
+                loop {
+                    let redelivered_records = consumer
+                        .poll()
+                        .await
+                        .expect("ShareConsumer expiry poll should succeed");
+                    if let Some(redelivered) = redelivered_records.iter().find(|candidate| {
+                        candidate.offset() == offset
+                            && candidate.delivery_count() > renewed_record.delivery_count()
+                    }) {
+                        break redelivered.clone();
+                    }
+                    assert!(
+                        Instant::now() < deadline,
+                        "ShareConsumer did not redeliver the expired record"
+                    );
+                    sleep(Duration::from_millis(100)).await;
+                }
+            } else {
+                renewed_record.clone()
+            };
+            assert!(record_to_complete.delivery_count() >= renewed_record.delivery_count());
+            consumer
+                .acknowledge(&record_to_complete, ShareAcknowledgementType::Accept)
+                .expect("ShareConsumer completion acknowledgement should be accepted locally");
+            consumer
+                .commit()
+                .await
+                .expect("ShareConsumer completion acknowledgement should commit");
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "ShareConsumer did not receive a record before the smoke deadline"
+        );
+        sleep(Duration::from_millis(100)).await;
+    }
+
+    consumer
+        .stop_heartbeat_task()
+        .await
+        .expect("ShareConsumer heartbeat task should stop cleanly");
+    consumer
+        .close()
+        .await
+        .expect("ShareConsumer should leave the share group cleanly");
 }
 
 fn security_protocol_from_env() -> SecurityProtocol {

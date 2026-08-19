@@ -18,6 +18,10 @@ pub mod group;
 pub mod metrics;
 /// Producer API.
 pub mod producer;
+/// KIP-932 share-group consumer API.
+pub mod share_consumer;
+/// KIP-714 client telemetry API.
+pub mod telemetry;
 
 mod scram;
 
@@ -87,6 +91,14 @@ pub use producer::{
     Acks, BufferedProducer, Compression, Header, Partitioner, ProducerBatchFailure,
     ProducerBatchRecordOutcome, ProducerBatchReport, ProducerConfig, ProducerDelivery,
     ProducerRecord, RecordMetadata, TransactionStatus,
+};
+pub use share_consumer::{
+    ShareAcknowledgementMode, ShareAcknowledgementType, ShareAcquireMode, ShareConsumer,
+    ShareConsumerConfig, ShareConsumerHeartbeat, ShareRecord,
+};
+pub use telemetry::{
+    TelemetryClient, TelemetryConfig, TelemetryMetricsProvider, TelemetryPushSummary,
+    TelemetrySubscription,
 };
 
 /// Returns the crate version compiled into this build.

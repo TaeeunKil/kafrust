@@ -46,6 +46,13 @@ The same jobs also checked the Kafka quorum CLI through the broker listener;
 this is a `DescribeQuorum` qualification, not a claim of complete KRaft admin
 or controller protocol coverage.
 
+The high-level `ShareConsumer` path is not included in the current compatibility
+claim yet. `.github/workflows/share-kafka-smoke.yml` now defines the pending
+Kafka 4.3.1 live gate for ShareGroupHeartbeat, ShareFetch, ShareAcknowledge,
+background heartbeat ownership, and graceful close. Until that workflow has a
+passing run, the ShareConsumer evidence remains protocol and injected-broker
+only.
+
 The complete 17-job `Live Kafka Smoke` matrix also passed on the current
 connection-lifecycle hardening commit `e0e7e03` in
 [`31765585666`](https://github.com/TaeeunKil/kafrust/actions/runs/31765585666).

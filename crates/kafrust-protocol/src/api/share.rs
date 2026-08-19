@@ -249,29 +249,116 @@ pub struct ShareFetchRequestV1 {
 impl ShareFetchRequestV1 {
     /// Encodes the flexible request, including its request header.
     pub fn encode(&self) -> Result<Vec<u8>> {
-        let mut encoder = Encoder::new();
-        RequestHeader {
-            api_key: SHARE_FETCH_API_KEY,
-            api_version: 1,
-            correlation_id: self.correlation_id,
-            client_id: self.client_id.clone(),
-        }
-        .encode_v2(&mut encoder)?;
-        encoder.write_compact_nullable_string(self.group_id.as_deref())?;
-        encoder.write_compact_nullable_string(self.member_id.as_deref())?;
-        encoder.write_i32(self.share_session_epoch);
-        encoder.write_i32(self.max_wait_ms);
-        encoder.write_i32(self.min_bytes);
-        encoder.write_i32(self.max_bytes);
-        encoder.write_i32(self.max_records);
-        encoder.write_i32(self.batch_size);
-        encoder.write_compact_array(Some(&self.topics), |encoder, topic| topic.encode(encoder))?;
-        encoder.write_compact_array(Some(&self.forgotten_topics), |encoder, topic| {
-            topic.encode(encoder)
-        })?;
-        encoder.write_empty_tagged_fields();
-        Ok(encoder.into_bytes())
+        encode_share_fetch_request(
+            1,
+            self.correlation_id,
+            self.client_id.clone(),
+            self.group_id.clone(),
+            self.member_id.clone(),
+            self.share_session_epoch,
+            self.max_wait_ms,
+            self.min_bytes,
+            self.max_bytes,
+            self.max_records,
+            self.batch_size,
+            None,
+            false,
+            &self.topics,
+            &self.forgotten_topics,
+        )
     }
+}
+
+/// ShareFetch v2 request with KIP-1206 acquisition and KIP-1222 renewal fields.
+///
+/// The response schema remains the ShareFetch v1 response shape.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShareFetchRequestV2 {
+    pub correlation_id: i32,
+    pub client_id: Option<String>,
+    pub group_id: Option<String>,
+    pub member_id: Option<String>,
+    pub share_session_epoch: i32,
+    pub max_wait_ms: i32,
+    pub min_bytes: i32,
+    pub max_bytes: i32,
+    pub max_records: i32,
+    pub batch_size: i32,
+    /// KIP-1206 mode: `0` for batch-optimized or `1` for record-limit.
+    pub share_acquire_mode: i8,
+    /// KIP-1222 renew marker. KIP-1206 callers must send `false`.
+    pub is_renew_ack: bool,
+    pub topics: Vec<ShareFetchTopicV1>,
+    pub forgotten_topics: Vec<ShareForgottenTopicV1>,
+}
+
+impl ShareFetchRequestV2 {
+    /// Encodes the flexible request, including its request header.
+    pub fn encode(&self) -> Result<Vec<u8>> {
+        encode_share_fetch_request(
+            2,
+            self.correlation_id,
+            self.client_id.clone(),
+            self.group_id.clone(),
+            self.member_id.clone(),
+            self.share_session_epoch,
+            self.max_wait_ms,
+            self.min_bytes,
+            self.max_bytes,
+            self.max_records,
+            self.batch_size,
+            Some(self.share_acquire_mode),
+            self.is_renew_ack,
+            &self.topics,
+            &self.forgotten_topics,
+        )
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn encode_share_fetch_request(
+    api_version: i16,
+    correlation_id: i32,
+    client_id: Option<String>,
+    group_id: Option<String>,
+    member_id: Option<String>,
+    share_session_epoch: i32,
+    max_wait_ms: i32,
+    min_bytes: i32,
+    max_bytes: i32,
+    max_records: i32,
+    batch_size: i32,
+    share_acquire_mode: Option<i8>,
+    is_renew_ack: bool,
+    topics: &[ShareFetchTopicV1],
+    forgotten_topics: &[ShareForgottenTopicV1],
+) -> Result<Vec<u8>> {
+    let mut encoder = Encoder::new();
+    RequestHeader {
+        api_key: SHARE_FETCH_API_KEY,
+        api_version,
+        correlation_id,
+        client_id,
+    }
+    .encode_v2(&mut encoder)?;
+    encoder.write_compact_nullable_string(group_id.as_deref())?;
+    encoder.write_compact_nullable_string(member_id.as_deref())?;
+    encoder.write_i32(share_session_epoch);
+    encoder.write_i32(max_wait_ms);
+    encoder.write_i32(min_bytes);
+    encoder.write_i32(max_bytes);
+    encoder.write_i32(max_records);
+    encoder.write_i32(batch_size);
+    if let Some(share_acquire_mode) = share_acquire_mode {
+        encoder.write_i8(share_acquire_mode);
+        encoder.write_bool(is_renew_ack);
+    }
+    encoder.write_compact_array(Some(topics), |encoder, topic| topic.encode(encoder))?;
+    encoder.write_compact_array(Some(forgotten_topics), |encoder, topic| {
+        topic.encode(encoder)
+    })?;
+    encoder.write_empty_tagged_fields();
+    Ok(encoder.into_bytes())
 }
 
 /// Current leader information returned for a share partition.
@@ -490,21 +577,77 @@ pub struct ShareAcknowledgeRequestV1 {
 impl ShareAcknowledgeRequestV1 {
     /// Encodes the flexible request, including its request header.
     pub fn encode(&self) -> Result<Vec<u8>> {
-        let mut encoder = Encoder::new();
-        RequestHeader {
-            api_key: SHARE_ACKNOWLEDGE_API_KEY,
+        encode_share_acknowledge_request(ShareAcknowledgeRequestParts {
             api_version: 1,
             correlation_id: self.correlation_id,
-            client_id: self.client_id.clone(),
-        }
-        .encode_v2(&mut encoder)?;
-        encoder.write_compact_nullable_string(self.group_id.as_deref())?;
-        encoder.write_compact_nullable_string(self.member_id.as_deref())?;
-        encoder.write_i32(self.share_session_epoch);
-        encoder.write_compact_array(Some(&self.topics), |encoder, topic| topic.encode(encoder))?;
-        encoder.write_empty_tagged_fields();
-        Ok(encoder.into_bytes())
+            client_id: self.client_id.as_deref(),
+            group_id: self.group_id.as_deref(),
+            member_id: self.member_id.as_deref(),
+            share_session_epoch: self.share_session_epoch,
+            is_renew_ack: false,
+            topics: &self.topics,
+        })
     }
+}
+
+/// ShareAcknowledge v2 request with KIP-1222 renewal support.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShareAcknowledgeRequestV2 {
+    pub correlation_id: i32,
+    pub client_id: Option<String>,
+    pub group_id: Option<String>,
+    pub member_id: Option<String>,
+    pub share_session_epoch: i32,
+    /// True when one or more acknowledgement batches contain `Renew` (4).
+    pub is_renew_ack: bool,
+    pub topics: Vec<ShareAcknowledgeTopicV1>,
+}
+
+impl ShareAcknowledgeRequestV2 {
+    /// Encodes the flexible request, including its request header.
+    pub fn encode(&self) -> Result<Vec<u8>> {
+        encode_share_acknowledge_request(ShareAcknowledgeRequestParts {
+            api_version: 2,
+            correlation_id: self.correlation_id,
+            client_id: self.client_id.as_deref(),
+            group_id: self.group_id.as_deref(),
+            member_id: self.member_id.as_deref(),
+            share_session_epoch: self.share_session_epoch,
+            is_renew_ack: self.is_renew_ack,
+            topics: &self.topics,
+        })
+    }
+}
+
+struct ShareAcknowledgeRequestParts<'a> {
+    api_version: i16,
+    correlation_id: i32,
+    client_id: Option<&'a str>,
+    group_id: Option<&'a str>,
+    member_id: Option<&'a str>,
+    share_session_epoch: i32,
+    is_renew_ack: bool,
+    topics: &'a [ShareAcknowledgeTopicV1],
+}
+
+fn encode_share_acknowledge_request(parts: ShareAcknowledgeRequestParts<'_>) -> Result<Vec<u8>> {
+    let mut encoder = Encoder::new();
+    RequestHeader {
+        api_key: SHARE_ACKNOWLEDGE_API_KEY,
+        api_version: parts.api_version,
+        correlation_id: parts.correlation_id,
+        client_id: parts.client_id.map(str::to_owned),
+    }
+    .encode_v2(&mut encoder)?;
+    encoder.write_compact_nullable_string(parts.group_id)?;
+    encoder.write_compact_nullable_string(parts.member_id)?;
+    encoder.write_i32(parts.share_session_epoch);
+    if parts.api_version >= 2 {
+        encoder.write_bool(parts.is_renew_ack);
+    }
+    encoder.write_compact_array(Some(parts.topics), |encoder, topic| topic.encode(encoder))?;
+    encoder.write_empty_tagged_fields();
+    Ok(encoder.into_bytes())
 }
 
 /// One partition result returned by ShareAcknowledge.
@@ -586,6 +729,45 @@ impl ShareAcknowledgeResponseV1 {
             throttle_time_ms,
             error_code,
             error_message,
+            responses,
+            node_endpoints,
+        })
+    }
+}
+
+/// ShareAcknowledge v2 response with the current acquisition lock timeout.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShareAcknowledgeResponseV2 {
+    pub throttle_time_ms: i32,
+    pub error_code: i16,
+    pub error_message: Option<String>,
+    pub acquisition_lock_timeout_ms: i32,
+    pub responses: Vec<ShareAcknowledgeTopicResponseV1>,
+    pub node_endpoints: Vec<ShareNodeEndpointV1>,
+}
+
+impl ShareAcknowledgeResponseV2 {
+    /// Decodes the flexible response body after the response header.
+    pub fn decode_body(decoder: &mut Decoder<'_>) -> Result<Self> {
+        let throttle_time_ms = decoder.read_i32()?;
+        let error_code = decoder.read_i16()?;
+        let error_message = decoder.read_compact_nullable_string()?;
+        let acquisition_lock_timeout_ms = decoder.read_i32()?;
+        let responses = decoder
+            .read_compact_array(
+                "share acknowledgement responses",
+                ShareAcknowledgeTopicResponseV1::decode,
+            )?
+            .unwrap_or_default();
+        let node_endpoints = decoder
+            .read_compact_array("share node endpoints", ShareNodeEndpointV1::decode)?
+            .unwrap_or_default();
+        decoder.read_tagged_fields()?;
+        Ok(Self {
+            throttle_time_ms,
+            error_code,
+            error_message,
+            acquisition_lock_timeout_ms,
             responses,
             node_endpoints,
         })
@@ -745,6 +927,117 @@ mod tests {
     }
 
     #[test]
+    fn encodes_share_fetch_v2_request_with_record_limit_mode() {
+        let request = ShareFetchRequestV2 {
+            correlation_id: 23,
+            client_id: Some("kafrust".to_owned()),
+            group_id: Some("share-orders".to_owned()),
+            member_id: Some("member-1".to_owned()),
+            share_session_epoch: 3,
+            max_wait_ms: 500,
+            min_bytes: 1,
+            max_bytes: 1024,
+            max_records: 6,
+            batch_size: 2,
+            share_acquire_mode: 1,
+            is_renew_ack: false,
+            topics: Vec::new(),
+            forgotten_topics: Vec::new(),
+        };
+
+        let encoded = request.encode().unwrap();
+        assert_eq!(&encoded[0..4], &[0, 78, 0, 2]);
+        let mut decoder = Decoder::new(&encoded[4..]);
+        assert_eq!(decoder.read_i32().unwrap(), 23);
+        assert_eq!(
+            decoder.read_nullable_string().unwrap(),
+            Some("kafrust".to_owned())
+        );
+        assert_eq!(decoder.read_tagged_fields().unwrap(), Vec::new());
+        assert_eq!(
+            decoder.read_compact_nullable_string().unwrap(),
+            Some("share-orders".to_owned())
+        );
+        assert_eq!(
+            decoder.read_compact_nullable_string().unwrap(),
+            Some("member-1".to_owned())
+        );
+        assert_eq!(decoder.read_i32().unwrap(), 3);
+        assert_eq!(decoder.read_i32().unwrap(), 500);
+        assert_eq!(decoder.read_i32().unwrap(), 1);
+        assert_eq!(decoder.read_i32().unwrap(), 1024);
+        assert_eq!(decoder.read_i32().unwrap(), 6);
+        assert_eq!(decoder.read_i32().unwrap(), 2);
+        assert_eq!(decoder.read_i8().unwrap(), 1);
+        assert!(!decoder.read_bool().unwrap());
+        assert!(decoder
+            .read_compact_array("topics", |_decoder| Ok::<(), Error>(()))
+            .unwrap()
+            .is_some());
+        assert!(decoder
+            .read_compact_array("forgotten topics", |_decoder| Ok::<(), Error>(()))
+            .unwrap()
+            .is_some());
+        assert_eq!(decoder.read_tagged_fields().unwrap(), Vec::new());
+        assert!(decoder.is_empty());
+    }
+
+    #[test]
+    fn encodes_share_fetch_v2_renew_request_with_zero_fetch_limits() {
+        let request = ShareFetchRequestV2 {
+            correlation_id: 24,
+            client_id: Some("kafrust".to_owned()),
+            group_id: Some("share-orders".to_owned()),
+            member_id: Some("member-1".to_owned()),
+            share_session_epoch: 7,
+            max_wait_ms: 0,
+            min_bytes: 0,
+            max_bytes: 0,
+            max_records: 0,
+            batch_size: 0,
+            share_acquire_mode: 0,
+            is_renew_ack: true,
+            topics: Vec::new(),
+            forgotten_topics: Vec::new(),
+        };
+
+        let encoded = request.encode().unwrap();
+        let mut decoder = Decoder::new(&encoded[4..]);
+        assert_eq!(decoder.read_i32().unwrap(), 24);
+        assert_eq!(
+            decoder.read_nullable_string().unwrap(),
+            Some("kafrust".to_owned())
+        );
+        assert_eq!(decoder.read_tagged_fields().unwrap(), Vec::new());
+        assert_eq!(
+            decoder.read_compact_nullable_string().unwrap(),
+            Some("share-orders".to_owned())
+        );
+        assert_eq!(
+            decoder.read_compact_nullable_string().unwrap(),
+            Some("member-1".to_owned())
+        );
+        assert_eq!(decoder.read_i32().unwrap(), 7);
+        assert_eq!(decoder.read_i32().unwrap(), 0);
+        assert_eq!(decoder.read_i32().unwrap(), 0);
+        assert_eq!(decoder.read_i32().unwrap(), 0);
+        assert_eq!(decoder.read_i32().unwrap(), 0);
+        assert_eq!(decoder.read_i32().unwrap(), 0);
+        assert_eq!(decoder.read_i8().unwrap(), 0);
+        assert!(decoder.read_bool().unwrap());
+        assert!(decoder
+            .read_compact_array("topics", |_decoder| Ok::<(), Error>(()))
+            .unwrap()
+            .is_some());
+        assert!(decoder
+            .read_compact_array("forgotten topics", |_decoder| Ok::<(), Error>(()))
+            .unwrap()
+            .is_some());
+        assert_eq!(decoder.read_tagged_fields().unwrap(), Vec::new());
+        assert!(decoder.is_empty());
+    }
+
+    #[test]
     fn decodes_share_fetch_v1_response_and_preserves_record_bytes() {
         let mut bytes = Encoder::new();
         bytes.write_i32(7);
@@ -851,6 +1144,66 @@ mod tests {
     }
 
     #[test]
+    fn encodes_share_acknowledge_v2_renew_request() {
+        let request = ShareAcknowledgeRequestV2 {
+            correlation_id: 34,
+            client_id: None,
+            group_id: Some("share-orders".to_owned()),
+            member_id: Some("member-1".to_owned()),
+            share_session_epoch: 3,
+            is_renew_ack: true,
+            topics: vec![ShareAcknowledgeTopicV1 {
+                topic_id: [9; 16],
+                partitions: vec![ShareAcknowledgePartitionV1 {
+                    partition_index: 2,
+                    acknowledgement_batches: vec![ShareAcknowledgementBatchV1 {
+                        first_offset: 20,
+                        last_offset: 20,
+                        acknowledgement_types: vec![4],
+                    }],
+                }],
+            }],
+        };
+
+        let encoded = request.encode().unwrap();
+        assert_eq!(&encoded[0..4], &[0, 79, 0, 2]);
+        let mut decoder = Decoder::new(&encoded[4..]);
+        assert_eq!(decoder.read_i32().unwrap(), 34);
+        assert_eq!(decoder.read_nullable_string().unwrap(), None);
+        assert_eq!(decoder.read_tagged_fields().unwrap(), Vec::new());
+        assert_eq!(
+            decoder.read_compact_nullable_string().unwrap(),
+            Some("share-orders".to_owned())
+        );
+        assert_eq!(
+            decoder.read_compact_nullable_string().unwrap(),
+            Some("member-1".to_owned())
+        );
+        assert_eq!(decoder.read_i32().unwrap(), 3);
+        assert!(decoder.read_bool().unwrap());
+        let topics = decoder
+            .read_compact_array("topics", |decoder| {
+                let topic_id = decoder.read_uuid()?;
+                let partitions = decoder
+                    .read_compact_array("partitions", |decoder| {
+                        let partition_index = decoder.read_i32()?;
+                        let batches = decoder
+                            .read_compact_array("batches", ShareAcknowledgementBatchV1::decode)?;
+                        decoder.read_tagged_fields()?;
+                        Ok((partition_index, batches.unwrap_or_default()))
+                    })?
+                    .unwrap_or_default();
+                decoder.read_tagged_fields()?;
+                Ok((topic_id, partitions))
+            })
+            .unwrap()
+            .unwrap();
+        assert_eq!(topics[0].1[0].1[0].acknowledgement_types, vec![4]);
+        assert_eq!(decoder.read_tagged_fields().unwrap(), Vec::new());
+        assert!(decoder.is_empty());
+    }
+
+    #[test]
     fn decodes_share_acknowledge_v1_response_with_leader_endpoint() {
         let mut bytes = Encoder::new();
         bytes.write_i32(4);
@@ -884,6 +1237,28 @@ mod tests {
         let response = ShareAcknowledgeResponseV1::decode_body(&mut decoder).unwrap();
         assert_eq!(response.node_endpoints[0].host, "broker");
         assert_eq!(response.node_endpoints[0].port, 9092);
+        assert!(decoder.is_empty());
+    }
+
+    #[test]
+    fn decodes_share_acknowledge_v2_response_with_lock_timeout() {
+        let mut bytes = Encoder::new();
+        bytes.write_i32(4);
+        bytes.write_i16(0);
+        bytes.write_compact_nullable_string(None).unwrap();
+        bytes.write_i32(45_000);
+        bytes
+            .write_compact_array::<ShareAcknowledgeTopicResponseV1>(Some(&[]), |_encoder, _| Ok(()))
+            .unwrap();
+        bytes
+            .write_compact_array::<ShareNodeEndpointV1>(Some(&[]), |_encoder, _| Ok(()))
+            .unwrap();
+        bytes.write_empty_tagged_fields();
+
+        let encoded = bytes.into_bytes();
+        let mut decoder = Decoder::new(&encoded);
+        let response = ShareAcknowledgeResponseV2::decode_body(&mut decoder).unwrap();
+        assert_eq!(response.acquisition_lock_timeout_ms, 45_000);
         assert!(decoder.is_empty());
     }
 }

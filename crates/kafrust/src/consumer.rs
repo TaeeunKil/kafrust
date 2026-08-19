@@ -181,7 +181,7 @@ impl ConsumerPartitionQueue {
 }
 
 impl ConsumerRecord {
-    fn from_message_set(topic: &str, partition: i32, record: MessageSetRecord) -> Self {
+    pub(crate) fn from_message_set(topic: &str, partition: i32, record: MessageSetRecord) -> Self {
         Self {
             topic: topic.to_owned(),
             partition,
@@ -1855,6 +1855,12 @@ fn can_retry_fetch(error: &Error) -> bool {
         | Error::InvalidConfiguration { .. }
         | Error::ConsumerGroupAssignmentTimeout { .. }
         | Error::AdminMutationOutcomeUnknown { .. }
+        | Error::ShareAcknowledgementRequired { .. }
+        | Error::ShareAcknowledgementOutcomeUnknown { .. }
+        | Error::ShareRecordNotPending { .. }
+        | Error::ShareRecordAlreadyAcknowledged { .. }
+        | Error::TelemetryPayloadTooLarge { .. }
+        | Error::ShareRecordNotAcquired { .. }
         | Error::Unsupported(_)
         | Error::TaskJoin(_)
         | Error::Protocol(_) => false,

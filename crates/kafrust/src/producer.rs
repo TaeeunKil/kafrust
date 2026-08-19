@@ -1549,6 +1549,45 @@ fn delivery_error_from_request_error(error: &Error) -> Error {
         Error::AdminMutationOutcomeUnknown { operation } => {
             Error::AdminMutationOutcomeUnknown { operation }
         }
+        Error::ShareAcknowledgementRequired { count } => {
+            Error::ShareAcknowledgementRequired { count: *count }
+        }
+        Error::ShareAcknowledgementOutcomeUnknown { broker_id } => {
+            Error::ShareAcknowledgementOutcomeUnknown {
+                broker_id: *broker_id,
+            }
+        }
+        Error::ShareRecordNotPending {
+            topic,
+            partition,
+            offset,
+        } => Error::ShareRecordNotPending {
+            topic: topic.clone(),
+            partition: *partition,
+            offset: *offset,
+        },
+        Error::ShareRecordAlreadyAcknowledged {
+            topic,
+            partition,
+            offset,
+        } => Error::ShareRecordAlreadyAcknowledged {
+            topic: topic.clone(),
+            partition: *partition,
+            offset: *offset,
+        },
+        Error::TelemetryPayloadTooLarge { size, max } => Error::TelemetryPayloadTooLarge {
+            size: *size,
+            max: *max,
+        },
+        Error::ShareRecordNotAcquired {
+            topic,
+            partition,
+            offset,
+        } => Error::ShareRecordNotAcquired {
+            topic: topic.clone(),
+            partition: *partition,
+            offset: *offset,
+        },
         Error::Unsupported(feature) => Error::Unsupported(feature),
         Error::Io(error) => Error::Io(std::io::Error::new(error.kind(), error.to_string())),
         Error::TaskJoin(_) => Error::Unsupported("buffered producer task join failed"),
@@ -4654,6 +4693,12 @@ fn can_retry_send(error: &Error) -> bool {
         | Error::InvalidConfiguration { .. }
         | Error::ConsumerGroupAssignmentTimeout { .. }
         | Error::AdminMutationOutcomeUnknown { .. }
+        | Error::ShareAcknowledgementRequired { .. }
+        | Error::ShareAcknowledgementOutcomeUnknown { .. }
+        | Error::ShareRecordNotPending { .. }
+        | Error::ShareRecordAlreadyAcknowledged { .. }
+        | Error::TelemetryPayloadTooLarge { .. }
+        | Error::ShareRecordNotAcquired { .. }
         | Error::Unsupported(_)
         | Error::TaskJoin(_)
         | Error::Protocol(_) => false,

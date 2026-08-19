@@ -141,12 +141,17 @@ use kafrust_protocol::api::sasl::{
     SaslAuthenticateResponseV2, SaslHandshakeRequestV1, SaslHandshakeResponseV1,
 };
 use kafrust_protocol::api::share::{
-    ShareAcknowledgeRequestV1, ShareAcknowledgeResponseV1, ShareAcknowledgeTopicV1,
-    ShareFetchRequestV1, ShareFetchResponseV1, ShareFetchTopicV1, ShareForgottenTopicV1,
-    ShareGroupHeartbeatRequestV1, ShareGroupHeartbeatResponseV1,
+    ShareAcknowledgeRequestV1, ShareAcknowledgeRequestV2, ShareAcknowledgeResponseV1,
+    ShareAcknowledgeResponseV2, ShareAcknowledgeTopicV1, ShareFetchRequestV1, ShareFetchRequestV2,
+    ShareFetchResponseV1, ShareFetchTopicV1, ShareForgottenTopicV1, ShareGroupHeartbeatRequestV1,
+    ShareGroupHeartbeatResponseV1,
 };
 use kafrust_protocol::api::sync_group::{
     SyncGroupAssignment, SyncGroupRequestV2, SyncGroupRequestV3, SyncGroupResponseV2,
+};
+use kafrust_protocol::api::telemetry::{
+    GetTelemetrySubscriptionsRequestV0, GetTelemetrySubscriptionsResponseV0,
+    PushTelemetryRequestV0, PushTelemetryResponseV0,
 };
 use kafrust_protocol::api::txn_offset_commit::{
     TxnOffsetCommitRequestV0, TxnOffsetCommitRequestV3, TxnOffsetCommitResponseV0,
@@ -1979,6 +1984,85 @@ impl Client {
         Ok(ShareFetchResponseV1::decode_body(&mut decoder)?)
     }
 
+    /// Sends ShareFetch v2 with the KIP-1206 acquire mode field.
+    ///
+    /// The response remains decoded with the stable ShareFetch v1 response
+    /// schema because KIP-1206 only adds a request field.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn share_fetch_v2(
+        &mut self,
+        group_id: Option<String>,
+        member_id: Option<String>,
+        share_session_epoch: i32,
+        max_wait_ms: i32,
+        min_bytes: i32,
+        max_bytes: i32,
+        max_records: i32,
+        batch_size: i32,
+        share_acquire_mode: i8,
+        topics: Vec<ShareFetchTopicV1>,
+        forgotten_topics: Vec<ShareForgottenTopicV1>,
+    ) -> Result<ShareFetchResponseV1> {
+        self.share_fetch_v2_with_renew(
+            group_id,
+            member_id,
+            share_session_epoch,
+            max_wait_ms,
+            min_bytes,
+            max_bytes,
+            max_records,
+            batch_size,
+            share_acquire_mode,
+            false,
+            topics,
+            forgotten_topics,
+        )
+        .await
+    }
+
+    /// Sends ShareFetch v2 with optional KIP-1222 renewal semantics.
+    ///
+    /// A renewal fetch must use zero wait, byte, and record limits. The
+    /// high-level share consumer enforces those limits before calling this
+    /// method.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn share_fetch_v2_with_renew(
+        &mut self,
+        group_id: Option<String>,
+        member_id: Option<String>,
+        share_session_epoch: i32,
+        max_wait_ms: i32,
+        min_bytes: i32,
+        max_bytes: i32,
+        max_records: i32,
+        batch_size: i32,
+        share_acquire_mode: i8,
+        is_renew_ack: bool,
+        topics: Vec<ShareFetchTopicV1>,
+        forgotten_topics: Vec<ShareForgottenTopicV1>,
+    ) -> Result<ShareFetchResponseV1> {
+        let request = ShareFetchRequestV2 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            group_id,
+            member_id,
+            share_session_epoch,
+            max_wait_ms,
+            min_bytes,
+            max_bytes,
+            max_records,
+            batch_size,
+            share_acquire_mode,
+            is_renew_ack,
+            topics,
+            forgotten_topics,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(ShareFetchResponseV1::decode_body(&mut decoder)?)
+    }
+
     /// Sends the stable KIP-932 ShareAcknowledge v1 request.
     pub async fn share_acknowledge_v1(
         &mut self,
@@ -1999,6 +2083,72 @@ impl Client {
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v1(&mut decoder)?;
         Ok(ShareAcknowledgeResponseV1::decode_body(&mut decoder)?)
+    }
+
+    /// Sends ShareAcknowledge v2 with KIP-1222 renewal support.
+    pub async fn share_acknowledge_v2(
+        &mut self,
+        group_id: Option<String>,
+        member_id: Option<String>,
+        share_session_epoch: i32,
+        is_renew_ack: bool,
+        topics: Vec<ShareAcknowledgeTopicV1>,
+    ) -> Result<ShareAcknowledgeResponseV2> {
+        let request = ShareAcknowledgeRequestV2 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            group_id,
+            member_id,
+            share_session_epoch,
+            is_renew_ack,
+            topics,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(ShareAcknowledgeResponseV2::decode_body(&mut decoder)?)
+    }
+
+    /// Requests the broker's KIP-714 telemetry subscription.
+    pub async fn get_telemetry_subscriptions_v0(
+        &mut self,
+        client_instance_id: [u8; 16],
+    ) -> Result<GetTelemetrySubscriptionsResponseV0> {
+        let request = GetTelemetrySubscriptionsRequestV0 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            client_instance_id,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(GetTelemetrySubscriptionsResponseV0::decode_body(
+            &mut decoder,
+        )?)
+    }
+
+    /// Pushes an OpenTelemetry MetricsData payload through KIP-714.
+    pub async fn push_telemetry_v0(
+        &mut self,
+        client_instance_id: [u8; 16],
+        subscription_id: i32,
+        terminating: bool,
+        compression_type: i8,
+        metrics: Vec<u8>,
+    ) -> Result<PushTelemetryResponseV0> {
+        let request = PushTelemetryRequestV0 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            client_instance_id,
+            subscription_id,
+            terminating,
+            compression_type,
+            metrics,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(PushTelemetryResponseV0::decode_body(&mut decoder)?)
     }
 
     /// Sends LeaveGroup v3 for one or more dynamic or static group members.
@@ -2984,8 +3134,8 @@ mod tests {
         OffsetForLeaderEpochPartitionV3, OffsetForLeaderEpochTopicV3,
     };
     use kafrust_protocol::api::txn_offset_commit::TxnOffsetCommitPartition;
-    use kafrust_protocol::codec::DecodeLimits;
     use kafrust_protocol::codec::Encoder;
+    use kafrust_protocol::codec::{DecodeLimits, Decoder};
     use std::time::Duration;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
@@ -3582,6 +3732,98 @@ mod tests {
         assert_eq!(response.member_epoch, 2);
         assert_eq!(response.heartbeat_interval_ms, 2500);
         assert!(response.assignment.is_none());
+        broker.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn sends_kip_714_telemetry_requests_over_injected_broker_stream() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(4096);
+        let broker = tokio::spawn(async move {
+            let request = read_test_frame(&mut broker_stream).await;
+            let mut decoder = Decoder::new(&request);
+            assert_eq!(decoder.read_i16().unwrap(), 71);
+            assert_eq!(decoder.read_i16().unwrap(), 0);
+            assert_eq!(decoder.read_i32().unwrap(), 1);
+            assert_eq!(
+                decoder.read_nullable_string().unwrap(),
+                Some("telemetry-test".to_owned())
+            );
+            assert_eq!(decoder.read_tagged_fields().unwrap(), Vec::new());
+            assert_eq!(decoder.read_uuid().unwrap(), [0; 16]);
+            assert_eq!(decoder.read_tagged_fields().unwrap(), Vec::new());
+
+            let mut response = Encoder::new();
+            response.write_i32(1);
+            response.write_empty_tagged_fields();
+            response.write_i32(0);
+            response.write_i16(0);
+            response.write_uuid(&[9; 16]);
+            response.write_i32(3);
+            response
+                .write_compact_array(Some(&[0_i8, 2_i8]), |encoder, value| {
+                    encoder.write_i8(*value);
+                    Ok(())
+                })
+                .unwrap();
+            response.write_i32(30_000);
+            response.write_i32(1024);
+            response.write_bool(false);
+            response
+                .write_compact_array(Some(&["org.apache.kafka.".to_owned()]), |encoder, value| {
+                    encoder.write_compact_string(value)
+                })
+                .unwrap();
+            response.write_empty_tagged_fields();
+            write_test_frame(&mut broker_stream, &response.into_bytes()).await;
+
+            let request = read_test_frame(&mut broker_stream).await;
+            let mut decoder = Decoder::new(&request);
+            assert_eq!(decoder.read_i16().unwrap(), 72);
+            assert_eq!(decoder.read_i16().unwrap(), 0);
+            assert_eq!(decoder.read_i32().unwrap(), 2);
+            assert_eq!(
+                decoder.read_nullable_string().unwrap(),
+                Some("telemetry-test".to_owned())
+            );
+            assert_eq!(decoder.read_tagged_fields().unwrap(), Vec::new());
+            assert_eq!(decoder.read_uuid().unwrap(), [9; 16]);
+            assert_eq!(decoder.read_i32().unwrap(), 3);
+            assert!(!decoder.read_bool().unwrap());
+            assert_eq!(decoder.read_i8().unwrap(), 0);
+            assert_eq!(decoder.read_compact_bytes().unwrap(), vec![1, 2, 3]);
+            assert_eq!(decoder.read_tagged_fields().unwrap(), Vec::new());
+
+            let mut response = Encoder::new();
+            response.write_i32(2);
+            response.write_empty_tagged_fields();
+            response.write_i32(0);
+            response.write_i16(0);
+            response.write_empty_tagged_fields();
+            write_test_frame(&mut broker_stream, &response.into_bytes()).await;
+        });
+
+        let mut client = Client::from_stream(
+            Box::new(client_stream),
+            Some("telemetry-test".to_owned()),
+            Some(Duration::from_secs(1)),
+        );
+        let subscription = client
+            .get_telemetry_subscriptions_v0([0; 16])
+            .await
+            .unwrap();
+        assert_eq!(subscription.client_instance_id, [9; 16]);
+        assert_eq!(subscription.subscription_id, 3);
+        assert_eq!(subscription.accepted_compression_types, vec![0, 2]);
+        assert_eq!(
+            subscription.requested_metrics,
+            vec!["org.apache.kafka.".to_owned()]
+        );
+
+        let response = client
+            .push_telemetry_v0([9; 16], 3, false, 0, vec![1, 2, 3])
+            .await
+            .unwrap();
+        assert_eq!(response.error_code, 0);
         broker.await.unwrap();
     }
 

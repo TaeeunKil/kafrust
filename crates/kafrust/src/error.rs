@@ -84,6 +84,16 @@ pub enum BrokerErrorKind {
     UnknownLeaderEpoch,
     /// Kafka rejected the current fetch session epoch and requires a new session.
     InvalidFetchSessionEpoch,
+    /// Kafka could not find the share session for this member.
+    ShareSessionNotFound,
+    /// Kafka rejected the current share session epoch.
+    InvalidShareSessionEpoch,
+    /// Kafka fenced the share-group state epoch.
+    FencedStateEpoch,
+    /// Kafka rejected an acknowledgement because the record is no longer acquired.
+    InvalidRecordState,
+    /// Kafka could not create a share session because the broker limit was reached.
+    ShareSessionLimitReached,
     /// Kafka found no eligible replica for the requested leader election.
     EligibleLeadersNotAvailable,
     /// Kafka reported that the requested leader is already preferred.
@@ -132,6 +142,11 @@ impl BrokerErrorKind {
             74 => Self::FencedLeaderEpoch,
             75 => Self::UnknownLeaderEpoch,
             70 => Self::InvalidFetchSessionEpoch,
+            122 => Self::ShareSessionNotFound,
+            123 => Self::InvalidShareSessionEpoch,
+            124 => Self::FencedStateEpoch,
+            121 => Self::InvalidRecordState,
+            133 => Self::ShareSessionLimitReached,
             86 => Self::GroupSubscribedToTopic,
             90 => Self::ProducerFenced,
             83 => Self::EligibleLeadersNotAvailable,
@@ -301,6 +316,50 @@ pub enum Error {
         /// Kafka Admin operation whose response was lost or invalid.
         operation: &'static str,
     },
+    /// A share consumer attempted to poll before acknowledging its prior records.
+    ShareAcknowledgementRequired {
+        /// Number of records still waiting for an acknowledgement.
+        count: usize,
+    },
+    /// A ShareAcknowledge request may have reached Kafka but its outcome was not observed.
+    ShareAcknowledgementOutcomeUnknown {
+        /// Kafka broker node that received the acknowledgement request.
+        broker_id: i32,
+    },
+    /// A share acknowledgement targeted a record that is not pending locally.
+    ShareRecordNotPending {
+        /// Kafka topic name.
+        topic: String,
+        /// Kafka partition index.
+        partition: i32,
+        /// Kafka record offset.
+        offset: i64,
+    },
+    /// A share record was acknowledged more than once before commit.
+    ShareRecordAlreadyAcknowledged {
+        /// Kafka topic name.
+        topic: String,
+        /// Kafka partition index.
+        partition: i32,
+        /// Kafka record offset.
+        offset: i64,
+    },
+    /// A telemetry payload exceeded the local or broker-advertised limit.
+    TelemetryPayloadTooLarge {
+        /// Payload bytes returned by the metrics provider.
+        size: usize,
+        /// Maximum accepted payload bytes.
+        max: usize,
+    },
+    /// ShareFetch returned a record outside every acquired record range.
+    ShareRecordNotAcquired {
+        /// Kafka topic name.
+        topic: String,
+        /// Kafka partition index.
+        partition: i32,
+        /// Kafka record offset.
+        offset: i64,
+    },
     /// The requested Kafka feature is not implemented by this alpha API yet.
     Unsupported(&'static str),
     /// I/O failure while connecting to or communicating with a broker.
@@ -417,6 +476,42 @@ impl fmt::Display for Error {
                 f,
                 "Kafka Admin mutation {operation} may have been applied; its outcome is unknown"
             ),
+            Self::ShareAcknowledgementRequired { count } => write!(
+                f,
+                "share consumer has {count} record(s) awaiting acknowledgement"
+            ),
+            Self::ShareAcknowledgementOutcomeUnknown { broker_id } => write!(
+                f,
+                "share acknowledgement outcome for broker {broker_id} is unknown; do not replay without reconciliation"
+            ),
+            Self::ShareRecordNotPending {
+                topic,
+                partition,
+                offset,
+            } => write!(
+                f,
+                "share record {topic}-{partition}@{offset} is not pending"
+            ),
+            Self::ShareRecordAlreadyAcknowledged {
+                topic,
+                partition,
+                offset,
+            } => write!(
+                f,
+                "share record {topic}-{partition}@{offset} was already acknowledged"
+            ),
+            Self::TelemetryPayloadTooLarge { size, max } => write!(
+                f,
+                "telemetry payload of {size} bytes exceeds the configured maximum of {max} bytes"
+            ),
+            Self::ShareRecordNotAcquired {
+                topic,
+                partition,
+                offset,
+            } => write!(
+                f,
+                "share fetch returned record {topic}-{partition}@{offset} outside its acquired ranges"
+            ),
             Self::Unsupported(feature) => write!(f, "unsupported feature: {feature}"),
             Self::Io(error) => write!(f, "I/O error: {error}"),
             Self::TaskJoin(error) => write!(f, "background task join error: {error}"),
@@ -457,6 +552,12 @@ impl std::error::Error for Error {
             | Self::InvalidConfiguration { .. }
             | Self::ConsumerGroupAssignmentTimeout { .. }
             | Self::AdminMutationOutcomeUnknown { .. }
+            | Self::ShareAcknowledgementRequired { .. }
+            | Self::ShareAcknowledgementOutcomeUnknown { .. }
+            | Self::ShareRecordNotPending { .. }
+            | Self::ShareRecordAlreadyAcknowledged { .. }
+            | Self::TelemetryPayloadTooLarge { .. }
+            | Self::ShareRecordNotAcquired { .. }
             | Self::Unsupported(_) => None,
         }
     }
@@ -606,6 +707,13 @@ mod tests {
         assert_eq!(
             error.to_string(),
             "Kafka Admin mutation CreateTopics may have been applied; its outcome is unknown"
+        );
+        assert!(std::error::Error::source(&error).is_none());
+
+        let error = Error::ShareAcknowledgementOutcomeUnknown { broker_id: 3 };
+        assert_eq!(
+            error.to_string(),
+            "share acknowledgement outcome for broker 3 is unknown; do not replay without reconciliation"
         );
         assert!(std::error::Error::source(&error).is_none());
     }

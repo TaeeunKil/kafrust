@@ -30,6 +30,7 @@ consumer group, heartbeat, commit 같은 Kafka 개념을 그대로 드러냅니�
   - [버퍼드 프로듀서](#버퍼드-프로듀서)
   - [직접 컨슈머](#직접-컨슈머)
   - [컨슈머 그룹](#컨슈머-그룹)
+  - [Share 그룹](#share-그룹)
 - [호환성](#호환성)
 - [현재 한계](#현재-한계)
 - [API](#api)
@@ -65,14 +66,14 @@ Rust 프로젝트에 kafrust를 추가합니다.
 
 ```toml
 [dependencies]
-kafrust = "0.2"
+kafrust = "0.3"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
 
 Cargo 명령으로도 추가할 수 있습니다.
 
 ```sh
-cargo add kafrust@0.2
+cargo add kafrust@0.3
 ```
 
 ### 요구 사항
@@ -215,6 +216,57 @@ async fn main() -> kafrust::Result<()> {
 }
 ```
 
+### Share 그룹
+
+현재 개발 브랜치에는 안정화된 KIP-932 v1 API와 선택적인 KIP-1206 ShareFetch v2
+획득 모드, KIP-1222 renewal acknowledgement를 사용하는 알파
+`ShareConsumer`도 들어 있습니다. Share 그룹은
+partition position을 commit하는
+모델이 아니라, 획득한 각 record를 `Accept`, `Release`, `Reject`, `Gap`으로
+개별 acknowledgement하는 작업 큐 모델입니다.
+
+```rust
+use kafrust::{ShareAcknowledgementType, ShareConsumerConfig};
+
+#[tokio::main]
+async fn main() -> kafrust::Result<()> {
+    let mut consumer = ShareConsumerConfig::new(["localhost:9092"], "orders")
+        .subscribe("orders")
+        .build()
+        .await?;
+
+    loop {
+        let records = consumer.poll().await?;
+        for record in &records {
+            process(record.value())?;
+            consumer.acknowledge(record, ShareAcknowledgementType::Accept)?;
+        }
+        consumer.commit().await?;
+    }
+}
+```
+
+이 API는 개발 브랜치에 있으며 아직 공개된 `0.3.0` artifact에는 포함되지
+않았습니다. protocol test와 injected-broker wire 왕복 테스트를 통과했고,
+취소 가능한 background heartbeat task도 추가했습니다. 실제 Kafka 4.x 검증과
+coordinator 복구는 아직 남아 있지만 live workflow는 KIP-1222 renewal 후
+최종 Accept까지 검증하도록 구성했습니다. 응답이 유실된 acknowledgement는 typed
+unknown-outcome 오류로 노출하며 자동 재전송하지 않습니다. 정확한 알파 계약은
+`BatchOptimized`가 기본 모드이며, `RecordLimit`은 ShareFetch v2를 광고하는
+broker가 필요합니다. `Renew`는 ShareAcknowledge v2에서 record를 완료하지
+않고 lock을 연장한 뒤 다음 poll에서 재처리할 수 있게 합니다. 정확한 알파
+계약은 [Share Consumer](docs/share-consumer.md)를 참고하세요.
+
+## Client Telemetry
+
+KIP-714 client telemetry는 low-level `Client` method와 high-level
+`TelemetryClient`로 사용할 수 있습니다. broker capability 협상, subscription
+state 유지, payload 제한, 오래된 subscription 재조회, push interval jitter,
+shutdown 시 terminating push를 포함합니다. 애플리케이션이 OTLP MetricsData
+provider를 제공해야 하며, 내장 OTLP 직렬화와 non-zero compression, 실제 broker
+plugin live 검증은 아직 진행 중입니다. 자세한 내용은
+[Client Telemetry](docs/telemetry.md)를 참고하세요.
+
 ## 호환성
 
 kafrust의 호환성 주장은 실제 broker로 검증된 동작으로 제한합니다.
@@ -287,6 +339,8 @@ kafrust의 호환성 주장은 실제 broker로 검증된 동작으로 제한합
 - [Producer buffering and linger design](docs/producer-buffering.md)
 - [Consumer API direction](docs/consumer-api.md)
 - [Consumer group direction](docs/consumer-groups.md)
+- [Share Consumer](docs/share-consumer.md)
+- [Client telemetry](docs/telemetry.md)
 - [Release preparation](docs/release.md)
 
 ## 번역

@@ -2017,12 +2017,54 @@ Implemented evidence:
   `ShareFetch` (API key 78), and `ShareAcknowledge` (API key 79), including
   flexible headers, share-session epochs, acknowledgement batches, acquired
   record ranges, current-leader metadata, node endpoints, and nullable record
-  bytes. The low-level `Client` exposes the heartbeat, fetch, and acknowledge
-  roundtrip entry points. Focused protocol tests and an injected-broker
-  heartbeat test pass. The high-level ShareConsumer lifecycle, record-batch
-  decoding, acknowledgement retry/release semantics, coordinator recovery,
-  and live Kafka qualification remain open. Kafka 4.0 early-access v0 is
-  intentionally excluded because the stable schemas removed it in Kafka 4.1.
+  bytes. The low-level `Client` and the high-level `ShareConsumer` now expose
+  the corresponding lifecycle: metadata discovery, leader-grouped fetch,
+  bounded record-batch decoding, explicit or implicit acknowledgement state,
+  grouped acknowledgement commits, session closure, and group leave. Focused
+  protocol tests plus an injected-broker Metadata v12 -> ShareFetch v1 ->
+  ShareAcknowledge v1 roundtrip pass, including UUID, offset, and
+  acknowledgement-type assertions. An opt-in detached heartbeat task now owns
+  a dedicated coordinator connection, supports bounded reconnect attempts, and
+  cancels an in-flight request during shutdown in a focused test. Foreground
+  heartbeat failures now rediscover the group coordinator instead of reconnecting
+  only to a stale address. Lost ShareAcknowledge responses are classified as a
+  typed unknown outcome and are never replayed automatically. Live Kafka
+  qualification and ambiguous acknowledgement reconciliation remain open.
+  KIP-1206 ShareFetch v2 is now negotiated when advertised: the high-level
+  consumer exposes `BatchOptimized` (the backward-compatible default) and
+  `RecordLimit`, which fails on brokers that cannot provide v2 rather than
+  silently weakening the configured delivery limit. KIP-1222 `Renew` is now
+  wired through ShareAcknowledge v2, retains renewed records for later
+  completion, exposes the broker acquisition-lock timeout, and replaces a
+  retained record when its acquisition lock expires and Kafka redelivers the
+  same offset. Live v2/renewal evidence, expiry/redelivery qualification, and
+  long-running reconciliation remain open.
+  KIP-714 client telemetry now has low-level v0 request/response types plus a
+  high-level `TelemetryClient` with an owned provider trait, capability
+  negotiation, subscription state, payload ceilings, same-connection refresh
+  and retry, jittered scheduling, and a terminating shutdown push. A provider
+  still supplies raw OTLP bytes; built-in OTLP generation, non-zero compression,
+  broker plugin qualification, and live telemetry collection remain open.
+  Kafka 4.0 early-access v0 is intentionally excluded because the stable schemas
+  removed it in Kafka 4.1.
+- `.github/workflows/share-kafka-smoke.yml` now provides a dedicated Kafka 4.3.1
+  live gate with share-state replication settings, renewal enabled, a produced
+  smoke record, and the high-level poll/Renew/poll/expiry-redelivery/Accept/
+  commit/close path.
+  Its first passing workflow run is still required before the ShareConsumer
+  compatibility claim can move from pending to verified.
+- ShareFetch success responses now update the partition-leader routing cache,
+  and retryable ShareFetch leader errors return the connection to the pool,
+  refresh metadata, and retry with refreshed routing. Injected tests cover the
+  response leader update; multi-broker leader movement still requires the live
+  workflow gate.
+- The 2026-08-19 competitor recheck adds `kacrab` to the comparison set. Its
+  published `0.4.0` docs claim Kafka 4.3 producer, consumer, share-consumer,
+  and 62-operation Admin parity with a broker-matrix and fuzzing posture;
+  `krafka` remains ahead in modern protocol breadth and test infrastructure.
+  Kafrust's differentiator remains a Kafka 3.7-to-current compatibility target
+  with a pure-Rust default codec and no librdkafka dependency, but that is not
+  a substitute for the competitors' missing live and long-duration evidence.
 - Flexible `ApiVersions v3` request and response types report broker API
   version ranges, preserve unknown top-level tagged fields, and share a common
   capability lookup with the legacy v0 response. The high-level producer now

@@ -39,7 +39,7 @@ That does not make kafrust redundant. kafrust's reason to exist is different:
 - Kafka terminology preserved instead of abstracted away
 
 Pure Rust alternatives also exist. This comparison is a source-documented
-snapshot from 2026-08-14, not an independent benchmark:
+snapshot from 2026-08-19, not an independent benchmark:
 
 - [`krafka`](https://github.com/hupe1980/krafka) is the closest broad
   pure-Rust competitor. Its current `main` manifest and docs.rs page are both
@@ -65,6 +65,16 @@ snapshot from 2026-08-14, not an independent benchmark:
   producer and consumer APIs and is being maintained again, but its documented
   tested broker range currently ends at Kafka 3.1 and it does not claim all
   newer Kafka features.
+- [`kacrab`](https://github.com/pirumu/kacrab) is another broad, Rust-native
+  competitor. Its current `0.4.0` docs claim Kafka 4.3 producer, consumer,
+  share-consumer, and 62-operation Admin surfaces, classic and KIP-848 groups,
+  transactions, four codecs, TLS/SASL, generated protocol code, broker-matrix
+  CI, and fuzzing. It accepts a broader broker floor than kafrust but its
+  documented verified matrix is centered on 3.3.2, 3.6.2, 3.9.0, 4.0.0, and
+  4.3.0. It also offers feature-gated TLS and codec choices whose dependency
+  posture must be checked separately when a strict no-native-toolchain build is
+  required. Its queue semantics and Java-shaped configuration make it a direct
+  comparison for the replacement goal, not merely a protocol library.
 
 These projects are references and competitors, not sources to copy blindly.
 Feature claims must be validated in kafrust's own protocol tests, failure
@@ -182,17 +192,26 @@ Required work:
 
 This tier is where comparisons with `rust-rdkafka` and pure Rust alternatives become meaningful. It should not be promised from the current alpha line. The execution path for this target is tracked in roadmap milestones M13 through M21.
 
-### Current Competitive Gap (2026-08-14)
+### Current Competitive Gap (2026-08-19)
 
 The published `0.3.0` line has already closed the basic connectivity,
 compression, security, multi-broker recovery, idempotence, transactions,
 Admin MVP, observability, and migration-documentation gates recorded in the
-roadmap. It is still behind the broad pure-Rust competitors in three areas:
+roadmap. The current development branch has also added the first high-level
+ShareConsumer runtime on top of the stable KIP-932 v1 wire path. It is still
+behind the broad pure-Rust competitors in three areas:
 
 - modern protocol breadth: the high-level Share Consumer/KIP-932 runtime and
-  live qualification (the stable v1 wire types and low-level Client entry
-  points now exist), client telemetry/KIP-714, remaining modern Admin paths,
-  and protocol-parity automation;
+  live qualification (the runtime exists, now negotiates KIP-1206 ShareFetch
+  v2 for strict record limits, and has an opt-in cancellable heartbeat task and
+  foreground coordinator rediscovery, and implements KIP-1222 renewal with
+  broker lock-timeout tracking and Renew redelivery replacement, but live
+  qualification, expiry/redelivery
+  evidence, and ambiguous acknowledgement reconciliation remain open),
+  KIP-714 beyond the new low-level wire path (the high-level provider and
+  scheduler now exist, but built-in OTLP generation, compression, and live
+  broker telemetry remain), remaining modern Admin paths, and protocol-parity
+  automation;
 - production hardening: more complete group lifecycle behavior, ambiguous
   transaction and mutation outcomes, resource ceilings, fuzzing, fault-
   injected broker coverage, and longer secured multi-broker soaks;
@@ -210,8 +229,12 @@ These are effort ranges, not calendar promises:
 
 - **Match krafka's current feature checklist:** roughly 6-12 months of
   focused full-time engineering, or about 9-18 calendar months at the current
-  solo-project pace. Share Groups, telemetry, modern protocol parity, and the
-  associated live tests are the largest feature gaps.
+  solo-project pace. The remaining large slices are Share Groups beyond the
+  current alpha runtime, KIP-714 OTLP/compression/live qualification, modern
+  protocol parity, fuzzing, and the associated live tests.
+- **Match the current broad pure-Rust field (`krafka` plus `kacrab`):** roughly
+  9-18 months of focused work from this branch, because feature names alone do
+  not close the broker-version, failure, security, and release-evidence gap.
 - **Surpass krafka on operational credibility:** roughly 12-24 months. This
   requires repeatable Kafka 3.7 through current matrices, secured and
   multi-broker fault injection, fuzzing, soak data, bounded-resource behavior,

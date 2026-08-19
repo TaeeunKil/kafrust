@@ -33,6 +33,7 @@ features immediately, `rust-rdkafka` is still the practical Rust default.
   - [Buffered Producer](#buffered-producer)
   - [Direct Consumer](#direct-consumer)
   - [Consumer Group](#consumer-group)
+  - [Share Group](#share-group)
 - [Compatibility](#compatibility)
 - [Current Limits](#current-limits)
 - [API](#api)
@@ -69,14 +70,14 @@ Add kafrust to a Rust project:
 
 ```toml
 [dependencies]
-kafrust = "0.2"
+kafrust = "0.3"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
 
 Or with Cargo:
 
 ```sh
-cargo add kafrust@0.2
+cargo add kafrust@0.3
 ```
 
 ### Requirements
@@ -410,6 +411,57 @@ The worker coalesces offsets per partition and synchronizes its generation and
 assignment state across `group.rejoin()`. Check `try_wait()` in long-running
 applications so terminal commit or generation errors are not hidden.
 
+## Share Group
+
+The current development branch also contains an alpha `ShareConsumer` for the
+stable KIP-932 v1 APIs, with optional KIP-1206 ShareFetch v2 acquisition modes
+and KIP-1222 renewal acknowledgement support.
+A share group is a work-queue model: each acquired
+record is acknowledged independently with `Accept`, `Release`, `Reject`, or
+`Gap`, rather than by committing a partition position.
+
+```rust
+use kafrust::{ShareAcknowledgementType, ShareConsumerConfig};
+
+#[tokio::main]
+async fn main() -> kafrust::Result<()> {
+    let mut consumer = ShareConsumerConfig::new(["localhost:9092"], "orders")
+        .subscribe("orders")
+        .build()
+        .await?;
+
+    loop {
+        let records = consumer.poll().await?;
+        for record in &records {
+            process(record.value())?;
+            consumer.acknowledge(record, ShareAcknowledgementType::Accept)?;
+        }
+        consumer.commit().await?;
+    }
+}
+```
+
+This API is on the development branch and is not part of the published `0.3.0`
+artifact yet. It has focused protocol tests and an injected-broker wire
+roundtrip test, plus an opt-in cancellable background heartbeat task. Live Kafka
+4.x qualification and coordinator recovery remain open; the live workflow now
+also exercises KIP-1222 renewal before final acceptance. Ambiguous
+acknowledgement responses are surfaced as a typed unknown-outcome error and are
+not replayed automatically. `BatchOptimized` is the default acquisition mode;
+`RecordLimit` uses KIP-1206 and requires a broker advertising ShareFetch v2;
+`Renew` uses ShareAcknowledge v2 and retains the record for later completion.
+See [Share Consumer](docs/share-consumer.md) for the exact alpha contract.
+
+## Client Telemetry
+
+KIP-714 client telemetry is available through the low-level `Client` methods
+and a high-level `TelemetryClient` that negotiates broker support, keeps the
+subscription state, bounds payloads, retries an outdated subscription, applies
+push-interval jitter, and sends a terminating push during shutdown. The
+application supplies an OTLP MetricsData provider; built-in OTLP serialization,
+non-zero compression, and live broker-plugin qualification remain in progress.
+See [Client Telemetry](docs/telemetry.md).
+
 ## Compatibility
 
 kafrust compatibility claims are limited to behavior verified against real
@@ -595,6 +647,8 @@ Generated API documentation:
 - [Producer buffering and linger design](docs/producer-buffering.md)
 - [Consumer API direction](docs/consumer-api.md)
 - [Consumer group direction](docs/consumer-groups.md)
+- [Share Consumer](docs/share-consumer.md)
+- [Client telemetry](docs/telemetry.md)
 - [Release preparation](docs/release.md)
 
 ## Translations
