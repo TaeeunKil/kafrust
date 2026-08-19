@@ -84,11 +84,6 @@ async fn share_consumer_roundtrip_when_broker_is_configured() {
         .build()
         .await
         .expect("ShareConsumer should connect to the configured Kafka broker");
-    consumer
-        .spawn_heartbeat_task(Duration::from_secs(1))
-        .await
-        .expect("ShareConsumer heartbeat task should start");
-
     let deadline = Instant::now() + Duration::from_secs(30);
     loop {
         let records = consumer
@@ -97,6 +92,10 @@ async fn share_consumer_roundtrip_when_broker_is_configured() {
             .expect("ShareConsumer poll should succeed");
         if let Some(record) = records.first() {
             let offset = record.offset();
+            consumer
+                .spawn_heartbeat_task(Duration::from_secs(1))
+                .await
+                .expect("ShareConsumer heartbeat task should start");
             consumer
                 .acknowledge(record, ShareAcknowledgementType::Renew)
                 .expect("ShareConsumer renewal should be accepted locally");
