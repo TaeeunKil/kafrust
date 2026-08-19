@@ -3176,7 +3176,7 @@ jobs:
             exit 1
           fi
 
-      - name: Run multi-broker Admin OffsetCommit during coordinator stop
+      - name: Classify multi-broker Admin OffsetCommit during coordinator stop
         run: |
           ready_file=/tmp/kafrust-admin-offset-commit-ready
           release_file=/tmp/kafrust-admin-offset-commit-release
@@ -3235,10 +3235,11 @@ jobs:
           done
 
           if [ "$offset_commit_status" -ne 0 ] || [ -z "$coordinator_ready" ] || \
-             ! grep -Eq "retries=[1-9][0-9]*" "$request_log"; then
+             ! grep -Eq "outcome=unknown" "$request_log" || \
+             grep -Eq "retries=[1-9][0-9]*" "$request_log"; then
             cat /tmp/kafrust-admin-offset-commit-recovery.log || true
             docker logs "kafrust-kafka-multi-${coordinator_node}"
-            echo "Admin OffsetCommit did not prove retry recovery"
+            echo "Admin OffsetCommit did not classify the transmitted mutation as unknown"
             exit 1
           fi
 
@@ -4380,7 +4381,7 @@ jobs:
             exit 1
           fi
 
-      - name: Run secured Admin OffsetCommit during coordinator stop
+      - name: Classify secured Admin OffsetCommit during coordinator stop
         env:
           KAFRUST_GROUP_ID: kafrust-secured-admin-offset-${{ github.run_id }}
         run: |
@@ -4442,10 +4443,11 @@ jobs:
           done
 
           if [ "$offset_commit_status" -ne 0 ] || [ -z "$coordinator_ready" ] || \
-             ! grep -Eq "retries=[1-9][0-9]*" "$request_log"; then
+             ! grep -Eq "outcome=unknown" "$request_log" || \
+             grep -Eq "retries=[1-9][0-9]*" "$request_log"; then
             cat /tmp/kafrust-secured-admin-offset-commit-recovery.log || true
             docker logs "$coordinator_container"
-            echo "secured Admin OffsetCommit did not prove retry recovery"
+            echo "secured Admin OffsetCommit did not classify the transmitted mutation as unknown"
             exit 1
           fi
 

@@ -36,7 +36,7 @@ async fn main() -> kafrust::Result<()> {
             .metrics(metrics.clone()),
     )?;
     let admin = AdminClient::new(config);
-    let altered = admin
+    let altered = match admin
         .alter_consumer_group_offsets(
             &group_id,
             &[
@@ -44,7 +44,20 @@ async fn main() -> kafrust::Result<()> {
                     .metadata("kafrust-admin-offset-commit-failover"),
             ],
         )
-        .await?;
+        .await
+    {
+        Ok(altered) => altered,
+        Err(Error::AdminMutationOutcomeUnknown {
+            operation: "OffsetCommit",
+        }) => {
+            println!(
+                "admin consumer group offset commit failover completed {group_id}/{topic}-{partition} outcome=unknown retries={}",
+                metrics.snapshot().retries,
+            );
+            return Ok(());
+        }
+        Err(error) => return Err(error),
+    };
     if !altered.is_success() {
         let error_code = altered
             .topics()

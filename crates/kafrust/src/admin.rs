@@ -2114,7 +2114,10 @@ impl AdminClient {
     ///
     /// This is an administrative commit with generation `-1`, an empty member
     /// ID, and no retention override. Partition-level Kafka errors remain in
-    /// the typed result instead of being collapsed into one boolean.
+    /// the typed result instead of being collapsed into one boolean. A
+    /// transport failure after transmission returns an ambiguous mutation
+    /// outcome rather than replaying the commit, because another actor may
+    /// have advanced the group's committed offset in the meantime.
     #[tracing::instrument(
         level = "debug",
         name = "kafka.admin.alter_consumer_group_offsets",
