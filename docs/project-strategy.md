@@ -197,9 +197,12 @@ This tier is where comparisons with `rust-rdkafka` and pure Rust alternatives be
 The published `0.3.0` line has already closed the basic connectivity,
 compression, security, multi-broker recovery, idempotence, transactions,
 Admin MVP, observability, and migration-documentation gates recorded in the
-roadmap. The current development branch has also added the first high-level
-ShareConsumer runtime on top of the stable KIP-932 v1 wire path. It is still
-behind the broad pure-Rust competitors in three areas:
+roadmap. The published group smoke now also qualifies bounded normal and
+abrupt member departure recovery plus committed-offset restoration across
+Kafka 3.7.2 Classic and Kafka 4.3.1 KIP-848. The current development branch
+has also added the first high-level ShareConsumer runtime on top of the stable
+KIP-932 v1 wire path. It is still behind the broad pure-Rust competitors in
+three areas:
 
 - modern protocol breadth: the high-level Share Consumer/KIP-932 runtime and
   live qualification (the runtime exists, now negotiates KIP-1206 ShareFetch
@@ -228,10 +231,9 @@ behind the broad pure-Rust competitors in three areas:
   subscription mutation, throttling, unknown-subscription recovery, and
   broker payload-limit qualification remain open, alongside remaining modern
   Admin paths and protocol-parity automation;
-- production hardening: more complete group lifecycle behavior, ambiguous
-  transaction and mutation outcomes, resource ceilings, fuzz campaign depth,
-  fault-
-  injected broker coverage, longer secured multi-broker soaks, and
+- production hardening: long-duration group churn, ambiguous transaction and
+  mutation outcomes, resource ceilings, fuzz campaign depth, fault-injected
+  broker coverage, longer secured multi-broker soaks, and
   assignment/rebalance fault matrices;
 - adoption surface: stable 1.0 APIs, wider migration compatibility, published
   examples, and repeatable performance/SLO evidence across representative
