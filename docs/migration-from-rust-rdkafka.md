@@ -293,6 +293,7 @@ kafrust currently provides:
 - topic creation and deletion
 - topic config description and incremental alteration
 - consumer group description
+- KIP-848 consumer-group inspection with typed current and target assignments
 - consumer group listing and deletion
 - selected consumer group offset deletion
 - consumer group committed offset listing and administrative alteration

@@ -2097,8 +2097,11 @@ Implemented evidence:
   `AdminClient::describe_consumer_groups_modern` path. It preserves group and
   assignment epochs, member type, topic UUID/name assignments, authorized
   operations, and broker error messages. An injected coordinator test covers
-  ApiVersions negotiation and the v1 response mapping; broader live KIP-848
-  Admin qualification remains open.
+  ApiVersions negotiation and the v1 response mapping. The existing
+  `admin_consumer_group_offsets_member` Kafka 4.3.1 KIP-848 workflow now calls
+  this API while a real member is joined and verifies that the returned member
+  set contains that member; the resulting workflow run remains the live
+  qualification gate.
 - The 2026-08-19 competitor recheck adds `kacrab` to the comparison set. Its
   published `0.4.0` docs claim Kafka 4.3 producer, consumer, share-consumer,
   and 62-operation Admin parity with a broker-matrix and fuzzing posture;

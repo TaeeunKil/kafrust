@@ -30,6 +30,39 @@ async fn main() -> kafrust::Result<()> {
     let member_epoch = group.generation_id();
     let query = [ConsumerGroupOffsetQuery::new(topic.clone(), [partition])];
 
+    let descriptions = admin
+        .describe_consumer_groups_modern(&[group_id.clone()], true)
+        .await?;
+    let description = descriptions.first().ok_or(Error::MissingGroupDescription {
+        group_id: group_id.clone(),
+    })?;
+    if !description.is_success() {
+        return Err(Error::Broker {
+            code: description.error_code(),
+            context: format!(
+                "modern consumer group description for {}: {:?}",
+                group_id,
+                description.error_message()
+            ),
+        });
+    }
+    if !description
+        .members()
+        .iter()
+        .any(|member| member.member_id() == member_id)
+    {
+        return Err(Error::Unsupported(
+            "modern consumer group description did not include the joined member",
+        ));
+    }
+    println!(
+        "modern description {group_id} state={} group_epoch={} assignment_epoch={} members={}",
+        description.state(),
+        description.group_epoch(),
+        description.assignment_epoch(),
+        description.members().len()
+    );
+
     let before = admin
         .list_consumer_group_offsets_with_member(
             &group_id,

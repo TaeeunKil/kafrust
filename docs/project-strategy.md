@@ -235,7 +235,8 @@ path on Kafka 3.7.2 and 4.3.1. The remaining gap is broader modern Admin and
 KRaft controller coverage, not this API's basic request/response path.
 ConsumerGroupDescribe API key 69 is now available through the typed protocol,
 low-level client, and high-level Admin path; its live KIP-848 qualification is
-still outstanding.
+now runs through the existing Kafka 4.3.1 member-aware Admin workflow, with the
+workflow result retained as the qualification evidence.
 
 ### Estimate To Surpass
 

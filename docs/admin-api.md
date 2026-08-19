@@ -384,6 +384,45 @@ brokers. Member IDs, clients, hosts, protocol metadata, and assignments remain
 available; metadata and assignment payloads are raw bytes because their schema
 depends on the selected group protocol.
 
+For KIP-848 consumer-protocol groups, use the typed modern path instead of
+parsing classic protocol metadata:
+
+```rust
+use kafrust::{AdminClient, ClientConfig};
+
+# async fn example() -> kafrust::Result<()> {
+let admin = AdminClient::new(ClientConfig::new(["localhost:9092"]));
+let descriptions = admin
+    .describe_consumer_groups_modern(&["orders-service".to_owned()], true)
+    .await?;
+
+for group in descriptions {
+    println!(
+        "{} state={} epoch={}/{} members={}",
+        group.group_id(),
+        group.state(),
+        group.group_epoch(),
+        group.assignment_epoch(),
+        group.members().len()
+    );
+    for member in group.members() {
+        for topic in member.assignment().topic_partitions() {
+            println!("{}: {:?}", topic.topic_name(), topic.partitions());
+        }
+    }
+}
+# Ok(())
+# }
+```
+
+`describe_consumer_groups_modern` negotiates ConsumerGroupDescribe v0/v1
+(API key 69) with the group coordinator and preserves group/assignment epochs,
+member type, topic UUIDs, current and target assignments, authorized-operation
+bits, and per-group broker errors. It is intentionally separate from
+`describe_consumer_groups`, whose classic DescribeGroups response contains
+protocol-specific raw assignment bytes. The KIP-848 live gate runs this method
+while a real consumer-protocol member is joined.
+
 ## List and Delete Groups
 
 ```rust
