@@ -29,6 +29,21 @@ fn group_protocol() -> Result<ConsumerGroupProtocol, Error> {
     }
 }
 
+fn member_exit_is_abrupt() -> Result<bool, Error> {
+    match env::var("KAFRUST_MEMBER_EXIT")
+        .unwrap_or_else(|_| "leave".to_owned())
+        .trim()
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "leave" => Ok(false),
+        "drop" => Ok(true),
+        _ => Err(Error::Unsupported(
+            "KAFRUST_MEMBER_EXIT must be leave or drop",
+        )),
+    }
+}
+
 fn group_config(
     bootstrap_servers: &str,
     group_id: &str,
@@ -52,6 +67,7 @@ async fn run() -> kafrust::Result<()> {
     let topic = required("KAFRUST_TOPIC")?;
     let group_id = required("KAFRUST_GROUP_ID")?;
     let protocol = group_protocol()?;
+    let abrupt_member_exit = member_exit_is_abrupt()?;
 
     let mut producer = ProducerConfig::new(bootstrap_servers.split(',').map(str::to_owned))
         .client_id("kafrust-published-group-rebalance-producer")
@@ -97,12 +113,17 @@ async fn run() -> kafrust::Result<()> {
 
     wait_for_two_member_coverage(&mut first, &mut second, &topic, seen_records).await?;
     verify_position_survives_rejoin(&mut first, &topic).await?;
-    leave_after_member_rejoin(second).await?;
+    if abrupt_member_exit {
+        drop(second);
+    } else {
+        leave_after_member_rejoin(second).await?;
+    }
     verify_member_departure_rejoin(&mut first, &topic).await?;
     let first_member_id = first.member_id().to_owned();
     first.leave().await?;
     println!(
-        "published group smoke member-departure recovery passed protocol={protocol:?} first={} partitions={PARTITION_COUNT}",
+        "published group smoke member-departure recovery passed protocol={protocol:?} exit={} first={} partitions={PARTITION_COUNT}",
+        if abrupt_member_exit { "drop" } else { "leave" },
         first_member_id,
     );
     Ok(())

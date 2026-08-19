@@ -15,6 +15,14 @@ on:
         description: "Consumer group protocol: classic or consumer (KIP-848)"
         required: true
         default: "classic"
+      member_exit:
+        description: "How the second member exits: normal LeaveGroup or abrupt connection drop"
+        required: true
+        default: "leave"
+        type: choice
+        options:
+          - leave
+          - drop
 
 env:
   CARGO_TERM_COLOR: always
@@ -29,6 +37,7 @@ jobs:
       KAFRUST_TOPIC: kafrust-published-group-${{ github.run_id }}
       KAFRUST_GROUP_ID: kafrust-published-group-${{ github.run_id }}
       KAFRUST_GROUP_PROTOCOL: ${{ inputs.group_protocol }}
+      KAFRUST_MEMBER_EXIT: ${{ inputs.member_exit }}
 
     steps:
       - name: Checkout
