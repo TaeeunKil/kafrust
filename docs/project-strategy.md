@@ -205,9 +205,11 @@ behind the broad pure-Rust competitors in three areas:
   live qualification (the runtime exists, now negotiates KIP-1206 ShareFetch
   v2 for strict record limits, and has an opt-in cancellable heartbeat task and
   foreground coordinator rediscovery, and implements KIP-1222 renewal with
-  broker lock-timeout tracking and Renew redelivery replacement, but live
-  qualification, expiry/redelivery
-  evidence, and ambiguous acknowledgement reconciliation remain open),
+  broker lock-timeout tracking and Renew redelivery replacement; the Kafka
+  4.3.1 single-node poll/Renew/expiry-redelivery/Accept path passed in
+  [run 32213499877](https://github.com/TaeeunKil/kafrust/actions/runs/32213499877),
+  while multi-broker qualification, expiry/reconciliation soak, and ambiguous
+  acknowledgement reconciliation remain open),
   KIP-714 beyond the new low-level wire path (the high-level provider and
   scheduler now exist, but built-in OTLP generation, compression, and live
   broker telemetry remain), remaining modern Admin paths, and protocol-parity

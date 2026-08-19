@@ -26,17 +26,20 @@ Current evidence:
 - KIP-1222 v2 request/response fixtures for renewal acknowledgement and the
   acquisition-lock timeout, plus local renewal state retention tests.
 - an opt-in cancellable background heartbeat task using a dedicated coordinator
-  connection, including a test that cancels an in-flight heartbeat request.
+  connection, including a test that cancels an in-flight heartbeat request;
+- a Kafka 4.3.1 single-node live gate passing the complete poll/Renew/poll,
+  acquisition-lock expiry/redelivery, Accept/commit, and close workflow in
+  [run 32213499877](https://github.com/TaeeunKil/kafrust/actions/runs/32213499877).
 
 The live gate is wired in
 `.github/workflows/share-kafka-smoke.yml`. It starts Kafka 4.3.1 with the
 single-node share-state settings, produces a record, and runs the configured
-ShareConsumer poll/Renew/poll/expiry-redelivery/Accept/commit/close path. A
-passing workflow run is required before this document can claim live
-compatibility.
+ShareConsumer poll/Renew/poll/expiry-redelivery/Accept/commit/close path. The
+passing run above establishes single-node Kafka 4.3.1 evidence only.
 
-This evidence proves the client-side wire and state-machine slice. It does not
-yet prove live broker compatibility or production readiness.
+This evidence proves the client-side wire and state-machine slice plus the
+single-node Kafka 4.3.1 path. It does not prove multi-broker leader movement,
+coordinator recovery, or production readiness.
 
 ## Basic Usage
 
@@ -105,7 +108,9 @@ If the acquisition lock expires before completion, a broker redelivery of the
 same topic/partition/offset replaces the retained Renew record and updates its
 delivery count. An ordinary duplicate while no Renew state exists remains an
 error instead of being silently delivered twice. Live expiry and redelivery
-qualification is still required before this behavior is a production claim.
+qualification passed on the single-node Kafka 4.3.1 gate; multi-broker and
+long-running qualification are still required before this behavior is a
+production claim.
 
 `ShareAcknowledgementMode::Implicit` accepts unacknowledged records from the
 previous poll before the next poll or commit. In implicit mode, calling
@@ -163,12 +168,13 @@ the same array, frame, and record-size limits as the direct consumer path.
 Before this API can be advertised as a production replacement, the project must
 complete all of the following:
 
-- live Kafka qualification on a broker version that advertises KIP-932 v1;
-- explicit multi-broker leader movement and coordinator recovery tests;
+- multi-broker live Kafka qualification with leader movement and coordinator
+  recovery (single-node Kafka 4.3.1 is verified in the run above);
 - live background-heartbeat ownership, cancellation, shutdown, and coordinator
   recovery behavior (the local in-flight cancellation path is covered);
 - duplicate, delayed, and response-loss acknowledgement reconciliation;
-- live renewal expiry, redelivery, and acquisition-lock timeout behavior;
+- live renewal expiry, redelivery, and acquisition-lock timeout behavior across
+  multiple brokers and repeated runs;
 - long-running share-group soak and resource/backpressure measurements;
 - stable public API review and a `rust-rdkafka` migration example for queue
   workloads.

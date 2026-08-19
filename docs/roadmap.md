@@ -2028,8 +2028,12 @@ Implemented evidence:
   cancels an in-flight request during shutdown in a focused test. Foreground
   heartbeat failures now rediscover the group coordinator instead of reconnecting
   only to a stale address. Lost ShareAcknowledge responses are classified as a
-  typed unknown outcome and are never replayed automatically. Live Kafka
-  qualification and ambiguous acknowledgement reconciliation remain open.
+  typed unknown outcome and are never replayed automatically. The Kafka 4.3.1
+  single-node live gate passed the complete poll/Renew/poll,
+  acquisition-lock expiry/redelivery, Accept/commit, and close path in
+  [`32213499877`](https://github.com/TaeeunKil/kafrust/actions/runs/32213499877).
+  Multi-broker leader movement, coordinator recovery, and ambiguous
+  acknowledgement reconciliation remain open.
   KIP-1206 ShareFetch v2 is now negotiated when advertised: the high-level
   consumer exposes `BatchOptimized` (the backward-compatible default) and
   `RecordLimit`, which fails on brokers that cannot provide v2 rather than
@@ -2037,8 +2041,9 @@ Implemented evidence:
   wired through ShareAcknowledge v2, retains renewed records for later
   completion, exposes the broker acquisition-lock timeout, and replaces a
   retained record when its acquisition lock expires and Kafka redelivers the
-  same offset. Live v2/renewal evidence, expiry/redelivery qualification, and
-  long-running reconciliation remain open.
+  same offset. The single-node Kafka 4.3.1 v2/renewal and expiry/redelivery
+  path passed in the live run above; multi-broker and long-running
+  reconciliation remain open.
   KIP-714 client telemetry now has low-level v0 request/response types plus a
   high-level `TelemetryClient` with an owned provider trait, capability
   negotiation, subscription state, payload ceilings, same-connection refresh
@@ -2051,12 +2056,14 @@ Implemented evidence:
   live gate with share-state replication settings, renewal enabled, a produced
   smoke record, and the high-level poll/Renew/poll/expiry-redelivery/Accept/
   commit/close path.
-  Its first passing workflow run is still required before the ShareConsumer
-  compatibility claim can move from pending to verified.
-- ShareFetch success responses now update the partition-leader routing cache,
-  and retryable ShareFetch leader errors return the connection to the pool,
-  refresh metadata, and retry with refreshed routing. Injected tests cover the
-  response leader update; multi-broker leader movement still requires the live
+  workflow run [`32213499877`](https://github.com/TaeeunKil/kafrust/actions/runs/32213499877)
+  verifies the single-node ShareConsumer path; multi-broker compatibility is
+  still pending.
+- ShareFetch success responses preserve the broker that served the request,
+  while `CurrentLeader` is used only for the leader-error responses where Kafka
+  populates it. Retryable ShareFetch leader errors return the connection to the
+  pool, refresh metadata, and retry with refreshed routing. Injected tests cover
+  the response semantics; multi-broker leader movement still requires a live
   workflow gate.
 - The 2026-08-19 competitor recheck adds `kacrab` to the comparison set. Its
   published `0.4.0` docs claim Kafka 4.3 producer, consumer, share-consumer,

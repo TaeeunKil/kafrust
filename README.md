@@ -443,9 +443,10 @@ async fn main() -> kafrust::Result<()> {
 
 This API is on the development branch and is not part of the published `0.3.0`
 artifact yet. It has focused protocol tests and an injected-broker wire
-roundtrip test, plus an opt-in cancellable background heartbeat task. Live Kafka
-4.x qualification and coordinator recovery remain open; the live workflow now
-also exercises KIP-1222 renewal before final acceptance. Ambiguous
+roundtrip test, plus an opt-in cancellable background heartbeat task. A Kafka
+4.3.1 single-node live smoke passed the KIP-1222 renewal, expiry/redelivery,
+and final acceptance path in [run 32213499877](https://github.com/TaeeunKil/kafrust/actions/runs/32213499877);
+multi-broker leader movement and coordinator recovery remain open. Ambiguous
 acknowledgement responses are surfaced as a typed unknown-outcome error and are
 not replayed automatically. `BatchOptimized` is the default acquisition mode;
 `RecordLimit` uses KIP-1206 and requires a broker advertising ShareFetch v2;
