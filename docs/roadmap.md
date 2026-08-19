@@ -103,8 +103,8 @@ coverage toward a release candidate that can be qualified in staging.
   including the explicit controller-listener workflow, in
   [`31781263986`](https://github.com/TaeeunKil/kafrust/actions/runs/31781263986)
   and [`31781264035`](https://github.com/TaeeunKil/kafrust/actions/runs/31781264035).
-  Remaining modern gaps include Share Groups/KIP-932, client telemetry/KIP-714,
-  and broader Admin/controller protocol coverage.
+  Remaining modern gaps include Share Group offset listing/group deletion,
+  client telemetry/KIP-714, and broader Admin/controller protocol coverage.
 - The first consumer-group lifecycle slice now has a focused regression test
   for retaining an explicit local position when a topic partition remains
   assigned across rejoin, plus a guard that does not copy position from a

@@ -217,8 +217,10 @@ behind the broad pure-Rust competitors in three areas:
   plus three consecutive in-process coordinator churn cycles in
   [run 32219147942](https://github.com/TaeeunKil/kafrust/actions/runs/32219147942);
   expiry/reconciliation soak and ambiguous acknowledgement reconciliation
-  remain open),
-  KIP-714 beyond the new low-level wire path (the high-level provider,
+  remain open), ShareGroupDescribe plus Share Group offset mutation APIs 77,
+  91, and 92 are now live-qualified, while Share Group offset listing and
+  group deletion remain open; KIP-714 beyond the new low-level wire path (the
+  high-level provider,
   scheduler, broker-negotiated pure-Rust compression, and optional built-in
   OTLP generation now exist, but live broker telemetry remains), remaining
   modern Admin paths, and protocol-parity automation;
@@ -244,9 +246,9 @@ These are effort ranges, not calendar promises:
 
 - **Match krafka's current feature checklist:** roughly 6-12 months of
   focused full-time engineering, or about 9-18 calendar months at the current
-  solo-project pace. The remaining large slices are Share Groups beyond the
-  current alpha runtime, KIP-714 OTLP/compression/live qualification, modern
-  protocol parity, fuzzing, and the associated live tests.
+  solo-project pace. The remaining large slices are Share Group Admin
+  completion, KIP-714 live qualification, modern protocol parity, fuzzing, and
+  the associated live tests.
 - **Match the current broad pure-Rust field (`krafka` plus `kacrab`):** roughly
   9-18 months of focused work from this branch, because feature names alone do
   not close the broker-version, failure, security, and release-evidence gap.
