@@ -2099,7 +2099,11 @@ Implemented evidence:
   jittered scheduling, and a terminating shutdown push. The optional `otlp`
   feature now provides `ClientMetricsTelemetryProvider`, mapping shared client
   counters and gauges to filtered cumulative or delta OTLP MetricsData bytes.
-  Broker plugin qualification and live telemetry collection remain open.
+  The Kafka 3.7.2 KRaft broker plugin qualification passed in
+  [`32229640441`](https://github.com/TaeeunKil/kafrust/actions/runs/32229640441),
+  including ordinary and terminating payload delivery. Subscription
+  mutation, throttling, unknown-subscription recovery, broker payload limits,
+  and longer telemetry collection remain open hardening gates.
   Kafka 4.0 early-access v0 is intentionally excluded because the stable schemas
   removed it in Kafka 4.1.
 - `.github/workflows/share-kafka-smoke.yml` now provides a dedicated Kafka 4.3.1
