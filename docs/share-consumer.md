@@ -37,6 +37,15 @@ single-node share-state settings, produces a record, and runs the configured
 ShareConsumer poll/Renew/poll/expiry-redelivery/Accept/commit/close path. The
 passing run above establishes single-node Kafka 4.3.1 evidence only.
 
+The multi-broker gate is wired in
+`.github/workflows/share-kafka-multi-broker-smoke.yml`. It starts a replicated
+Kafka 4.3.1 KRaft cluster, selects a partition led by broker 1, consumes and
+accepts a pre-failover record, stops broker 1, waits for a replacement leader,
+and then verifies that a fresh ShareConsumer using the same group reads and
+accepts a post-failover record from the surviving brokers. This workflow is a
+manual and scheduled qualification gate; until at least one successful run is
+recorded, multi-broker Share compatibility remains unproven.
+
 This evidence proves the client-side wire and state-machine slice plus the
 single-node Kafka 4.3.1 path. It does not prove multi-broker leader movement,
 coordinator recovery, or production readiness.
@@ -156,7 +165,9 @@ shutdown. It uses a dedicated coordinator connection and bounded retry, and
 foreground heartbeat failures now rediscover the group coordinator instead of
 reconnecting only to a stale address. Live coordinator movement, connection
 replacement after every ambiguous share operation, and long-running
-assignment/rebalance tests remain open hardening work.
+assignment/rebalance tests remain open hardening work. The new multi-broker
+workflow exercises fresh coordinator discovery after a broker stop, but it does
+not yet qualify an already-running heartbeat task through coordinator movement.
 
 The implementation reuses kafrust's bounded fetch decoder, including record
 batch decompression, header decoding, and configured response/decompression

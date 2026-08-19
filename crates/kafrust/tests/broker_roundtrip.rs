@@ -163,6 +163,78 @@ async fn share_consumer_roundtrip_when_broker_is_configured() {
         .expect("ShareConsumer should leave the share group cleanly");
 }
 
+#[tokio::test]
+async fn share_consumer_multi_broker_failover_when_broker_is_configured() {
+    let Some(phase) = std::env::var("KAFRUST_SHARE_PHASE").ok() else {
+        eprintln!(
+            "skipping share consumer multi-broker failover; set KAFRUST_SHARE_PHASE to run it"
+        );
+        return;
+    };
+    let Some(topic) = std::env::var("KAFRUST_SHARE_TOPIC").ok() else {
+        eprintln!("skipping share consumer multi-broker failover; set KAFRUST_SHARE_TOPIC");
+        return;
+    };
+    let Some(bootstrap) = std::env::var("KAFRUST_BOOTSTRAP_SERVERS").ok() else {
+        eprintln!("skipping share consumer multi-broker failover; set KAFRUST_BOOTSTRAP_SERVERS");
+        return;
+    };
+    let group_id = std::env::var("KAFRUST_SHARE_GROUP_ID")
+        .unwrap_or_else(|_| "kafrust-share-multi-broker-smoke".to_owned());
+    let partition = std::env::var("KAFRUST_SHARE_PARTITION")
+        .expect("KAFRUST_SHARE_PARTITION should be set")
+        .parse::<i32>()
+        .expect("KAFRUST_SHARE_PARTITION should be an integer");
+    let expected_value = std::env::var("KAFRUST_SHARE_VALUE")
+        .expect("KAFRUST_SHARE_VALUE should be set")
+        .into_bytes();
+
+    let mut consumer = ShareConsumerConfig::new(parse_bootstrap_servers(&bootstrap), group_id)
+        .subscribe(topic.clone())
+        .max_wait_ms(100)
+        .max_retries(10)
+        .acquire_mode(ShareAcquireMode::RecordLimit)
+        .build()
+        .await
+        .expect("ShareConsumer should connect to the configured Kafka cluster");
+    let deadline = Instant::now() + Duration::from_secs(60);
+    loop {
+        let records = consumer
+            .poll()
+            .await
+            .expect("ShareConsumer poll should succeed during multi-broker failover");
+        if let Some(record) = records.iter().find(|record| {
+            record.topic() == topic
+                && record.partition() == partition
+                && record.value() == Some(expected_value.as_slice())
+        }) {
+            consumer
+                .acknowledge(record, ShareAcknowledgementType::Accept)
+                .expect("ShareConsumer should accept the failover record locally");
+            consumer
+                .commit()
+                .await
+                .expect("ShareConsumer should commit the failover acknowledgement");
+            consumer
+                .close()
+                .await
+                .expect("ShareConsumer should leave the failover share group cleanly");
+            println!(
+                "share consumer {phase} phase received {}-{}@{}",
+                record.topic(),
+                record.partition(),
+                record.offset()
+            );
+            return;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "ShareConsumer did not receive the {phase} failover record before the deadline"
+        );
+        sleep(Duration::from_millis(100)).await;
+    }
+}
+
 fn security_protocol_from_env() -> SecurityProtocol {
     let Ok(value) = std::env::var("KAFRUST_SECURITY_PROTOCOL") else {
         return SecurityProtocol::Plaintext;

@@ -2059,6 +2059,12 @@ Implemented evidence:
   workflow run [`32213499877`](https://github.com/TaeeunKil/kafrust/actions/runs/32213499877)
   verifies the single-node ShareConsumer path; multi-broker compatibility is
   still pending.
+- `.github/workflows/share-kafka-multi-broker-smoke.yml` now provides the
+  pending three-broker Share gate: it selects a partition led by broker 1,
+  consumes and accepts a pre-failover record, stops broker 1, waits for leader
+  movement, and verifies a fresh ShareConsumer can consume and accept a
+  post-failover record from the surviving brokers. The workflow is ready for
+  manual or scheduled execution, but no successful run is claimed yet.
 - ShareFetch success responses preserve the broker that served the request,
   while `CurrentLeader` is used only for the leader-error responses where Kafka
   populates it. Retryable ShareFetch leader errors return the connection to the
