@@ -43,6 +43,10 @@ Current evidence:
   the matrix run
   [32216383214](https://github.com/TaeeunKil/kafrust/actions/runs/32216383214),
   each receiving, accepting, and cleanly closing after coordinator loss.
+- a repeated Kafka 4.3.1 coordinator-churn gate passing three consecutive
+  coordinator-loss/recovery cycles inside each long-running ShareConsumer
+  process; all three matrix attempts passed in
+  [run 32219147942](https://github.com/TaeeunKil/kafrust/actions/runs/32219147942).
 
 The live gate is wired in
 `.github/workflows/share-kafka-smoke.yml`. It starts Kafka 4.3.1 with the
@@ -72,11 +76,10 @@ and three independent matrix attempts passed in [run
 32216383214](https://github.com/TaeeunKil/kafrust/actions/runs/32216383214).
 
 This evidence proves the client-side wire and state-machine slice, the
-single-node Kafka 4.3.1 lifecycle, and one three-broker leader-movement path
-with fresh coordinator discovery, plus repeated independent active-heartbeat
-recovery attempts. It does not prove repeated coordinator churn within one
-long-running process, ambiguous acknowledgement reconciliation, long-running
-soak behavior, or production readiness.
+single-node Kafka 4.3.1 lifecycle, three-broker leader movement, and repeated
+coordinator churn within one long-running process. It does not prove
+ambiguous acknowledgement reconciliation, long-running soak behavior,
+assignment/rebalance qualification, or production readiness.
 
 ## Basic Usage
 
@@ -191,13 +194,13 @@ broker-provided heartbeat interval. The task can be checked with
 `try_wait_heartbeat_task()` and stopped with `stop_heartbeat_task()` before
 shutdown. It uses a dedicated coordinator connection and bounded retry, and
 foreground heartbeat failures now rediscover the group coordinator instead of
-reconnecting only to a stale address. Live coordinator movement, connection
-replacement after every ambiguous share operation, and long-running
-assignment/rebalance tests remain open hardening work. The multi-broker
-workflows now exercise both fresh coordinator discovery and an already-running
-heartbeat task through repeated independent coordinator-loss attempts.
-Repeated coordinator churn within one process, assignment/rebalance behavior,
-and long-running heartbeat soak tests remain open hardening work.
+reconnecting only to a stale address. Bootstrap reconnect attempts rotate
+through configured broker addresses so a broker that accepts TCP but resets
+Kafka requests does not consume the entire retry budget. The multi-broker
+workflow now exercises three consecutive coordinator-loss/recovery cycles in
+one process. Assignment/rebalance behavior, ambiguous acknowledgement
+reconciliation, and long-running heartbeat soak tests remain open hardening
+work.
 
 The implementation reuses kafrust's bounded fetch decoder, including record
 batch decompression, header decoding, and configured response/decompression
@@ -213,10 +216,13 @@ complete all of the following:
   coordinator recovery (a fresh-consumer path is verified in
   [run 32214201983](https://github.com/TaeeunKil/kafrust/actions/runs/32214201983)
   and three independent active-heartbeat attempts in
-  [run 32216383214](https://github.com/TaeeunKil/kafrust/actions/runs/32216383214));
+  [run 32216383214](https://github.com/TaeeunKil/kafrust/actions/runs/32216383214),
+  including three consecutive in-process churn cycles in
+  [run 32219147942](https://github.com/TaeeunKil/kafrust/actions/runs/32219147942));
 - live background-heartbeat ownership, cancellation, shutdown, and coordinator
-  recovery behavior (three independent paths are live-qualified, while
-  repeated in-process movement and long-running ownership remain open);
+  recovery behavior (three independent paths and three consecutive in-process
+  coordinator-loss cycles are live-qualified, while long-running ownership
+  remains open);
 - duplicate, delayed, and response-loss acknowledgement reconciliation;
 - live renewal expiry, redelivery, and acquisition-lock timeout behavior across
   multiple brokers and repeated runs;

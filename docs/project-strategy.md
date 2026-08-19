@@ -213,17 +213,19 @@ behind the broad pure-Rust competitors in three areas:
   while an active-heartbeat coordinator-movement path passed in
   [run 32215845737](https://github.com/TaeeunKil/kafrust/actions/runs/32215845737)
   and three independent matrix attempts passed in
-  [run 32216383214](https://github.com/TaeeunKil/kafrust/actions/runs/32216383214);
-  repeated multi-broker recovery, expiry/reconciliation soak, and ambiguous
-  acknowledgement reconciliation remain open),
+  [run 32216383214](https://github.com/TaeeunKil/kafrust/actions/runs/32216383214),
+  plus three consecutive in-process coordinator churn cycles in
+  [run 32219147942](https://github.com/TaeeunKil/kafrust/actions/runs/32219147942);
+  expiry/reconciliation soak and ambiguous acknowledgement reconciliation
+  remain open),
   KIP-714 beyond the new low-level wire path (the high-level provider,
   scheduler, broker-negotiated pure-Rust compression, and optional built-in
   OTLP generation now exist, but live broker telemetry remains), remaining
   modern Admin paths, and protocol-parity automation;
 - production hardening: more complete group lifecycle behavior, ambiguous
   transaction and mutation outcomes, resource ceilings, fuzzing, fault-
-  injected broker coverage, repeated heartbeat/coordinator failure tests, and
-  longer secured multi-broker soaks;
+  injected broker coverage, longer secured multi-broker soaks, and
+  assignment/rebalance fault matrices;
 - adoption surface: stable 1.0 APIs, wider migration compatibility, published
   examples, and repeatable performance/SLO evidence across representative
   workloads.

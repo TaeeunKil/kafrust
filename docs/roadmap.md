@@ -2077,16 +2077,20 @@ Implemented evidence:
   [`32215845737`](https://github.com/TaeeunKil/kafrust/actions/runs/32215845737)
   and all three independent matrix attempts in
   [`32216383214`](https://github.com/TaeeunKil/kafrust/actions/runs/32216383214).
+  The workflow now also passes three consecutive coordinator-loss/recovery
+  cycles inside one ShareConsumer process in all three matrix attempts in
+  [`32219147942`](https://github.com/TaeeunKil/kafrust/actions/runs/32219147942).
 - ShareFetch success responses preserve the broker that served the request,
   while `CurrentLeader` is used only for the leader-error responses where Kafka
   populates it. Retryable ShareFetch leader errors return the connection to the
   pool, refresh metadata, and retry with refreshed routing. Injected tests cover
   the response semantics; the three-broker leader movement workflow passed in
   run [`32214201983`](https://github.com/TaeeunKil/kafrust/actions/runs/32214201983),
-  while in-process repeated failure, acknowledgement reconciliation, and soak
-  remain open. The live runs exposed and fixed stale broker-connection reuse,
+  while acknowledgement reconciliation and soak remain open. The live runs
+  exposed and fixed stale broker-connection reuse,
   partition fetches split across replacement leaders, and stale coordinator
-  connections during group leave.
+  connections during group leave. Bootstrap reconnects now rotate across
+  configured addresses when a dead broker resets requests after TCP connect.
 - The 2026-08-19 competitor recheck adds `kacrab` to the comparison set. Its
   published `0.4.0` docs claim Kafka 4.3 producer, consumer, share-consumer,
   and 62-operation Admin parity with a broker-matrix and fuzzing posture;
