@@ -75,7 +75,44 @@ jobs:
             --interval 1000
 
       - name: Run kafrust telemetry smoke
-        run: cargo run -p kafrust --features otlp --example telemetry_smoke
+        env:
+          KAFRUST_TELEMETRY_SMOKE_SECONDS: "7"
+        run: |
+          set -euo pipefail
+          cargo run -p kafrust --features otlp --example telemetry_smoke > /tmp/kafrust-telemetry-smoke.log 2>&1 &
+          echo $! > /tmp/kafrust-telemetry-smoke.pid
+          for attempt in {1..60}; do
+            if grep -q 'telemetry-smoke-push subscription_id=' /tmp/kafrust-telemetry-smoke.log 2>/dev/null; then
+              break
+            fi
+            if ! kill -0 "$(cat /tmp/kafrust-telemetry-smoke.pid)" 2>/dev/null; then
+              cat /tmp/kafrust-telemetry-smoke.log
+              exit 1
+            fi
+            sleep 1
+          done
+          grep -q 'telemetry-smoke-push subscription_id=' /tmp/kafrust-telemetry-smoke.log
+          sleep 1
+          docker exec kafrust-kafka-telemetry /opt/kafka/bin/kafka-client-metrics.sh \
+            --bootstrap-server localhost:9092 \
+            --alter \
+            --name kafrust-live \
+            --metrics kafrust.client.requests_ \
+            --interval 1000
+          wait "$(cat /tmp/kafrust-telemetry-smoke.pid)"
+          cat /tmp/kafrust-telemetry-smoke.log
+
+      - name: Verify subscription mutation recovery
+        run: |
+          set -euo pipefail
+          log=/tmp/kafrust-telemetry-smoke.log
+          grep -q 'telemetry-smoke-push subscription_id=' "$log"
+          ids="$(grep 'telemetry-smoke-push subscription_id=' "$log" \
+            | sed -E 's/.*subscription_id=([-0-9]+).*/\1/' \
+            | sort -u \
+            | wc -l)"
+          test "$ids" -ge 2
+          grep -q 'telemetry-smoke-terminating pushed=true' "$log"
 
       - name: Verify telemetry payloads and terminating push
         run: |

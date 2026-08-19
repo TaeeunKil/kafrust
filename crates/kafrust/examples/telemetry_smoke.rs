@@ -5,8 +5,8 @@ async fn main() -> kafrust::Result<()> {
         ClientConfig, ClientMetrics, ClientMetricsTelemetryProvider, TelemetryClient,
         TelemetryConfig,
     };
-    use std::time::Duration;
-    use tokio::sync::watch;
+    use std::io::Write;
+    use std::time::{Duration, Instant};
 
     let bootstrap_servers =
         std::env::var("KAFRUST_BOOTSTRAP_SERVERS").unwrap_or_else(|_| "localhost:9092".to_owned());
@@ -25,26 +25,48 @@ async fn main() -> kafrust::Result<()> {
 
     let metrics = ClientMetrics::new();
     let provider = ClientMetricsTelemetryProvider::new(metrics.clone());
-    let telemetry = TelemetryClient::connect(
+    let mut telemetry = TelemetryClient::connect(
         ClientConfig::new(bootstrap_servers).client_id("kafrust-telemetry-smoke"),
         provider,
         TelemetryConfig::new().jitter(false),
     )
     .await?;
 
-    let (shutdown_tx, shutdown_rx) = watch::channel(false);
-    let task = tokio::spawn(telemetry.run_until_shutdown(shutdown_rx));
-    tokio::time::sleep(Duration::from_millis(2500)).await;
-    shutdown_tx
-        .send(true)
-        .map_err(|_| kafrust::Error::Unsupported("telemetry smoke shutdown"))?;
-    task.await
-        .map_err(|_| kafrust::Error::Unsupported("telemetry smoke task"))??;
+    let duration_seconds = std::env::var("KAFRUST_TELEMETRY_SMOKE_SECONDS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .filter(|seconds| *seconds >= 2)
+        .unwrap_or(7);
+    let deadline = Instant::now() + Duration::from_secs(duration_seconds);
+    let mut pushes = 0_u32;
+    while Instant::now() < deadline {
+        if let Some(summary) = telemetry.push_once().await? {
+            pushes += 1;
+            println!(
+                "telemetry-smoke-push subscription_id={} payload_bytes={}",
+                summary.subscription_id, summary.payload_bytes
+            );
+        } else {
+            println!("telemetry-smoke-push subscription_empty=true");
+        }
+        std::io::stdout()
+            .flush()
+            .map_err(|_| kafrust::Error::Unsupported("telemetry smoke output"))?;
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+    }
+    let terminating = telemetry.terminate().await?;
+    println!(
+        "telemetry-smoke-terminating pushed={}",
+        terminating.is_some()
+    );
+    std::io::stdout()
+        .flush()
+        .map_err(|_| kafrust::Error::Unsupported("telemetry smoke output"))?;
 
     let snapshot = metrics.snapshot();
     println!(
-        "telemetry-smoke-ok requests_started={} requests_succeeded={}",
-        snapshot.requests_started, snapshot.requests_succeeded
+        "telemetry-smoke-ok pushes={} requests_started={} requests_succeeded={}",
+        pushes, snapshot.requests_started, snapshot.requests_succeeded
     );
     Ok(())
 }
