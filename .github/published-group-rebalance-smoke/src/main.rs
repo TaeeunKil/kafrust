@@ -233,7 +233,30 @@ async fn verify_committed_offset_restore(
     mut group: ConsumerGroup,
     topic: &str,
 ) -> kafrust::Result<()> {
-    consume_all_assigned_records(&mut group, topic).await?;
+    let expected: BTreeSet<_> = (0..PARTITION_COUNT)
+        .map(|partition| (topic.to_owned(), partition))
+        .collect();
+    for _ in 0..POLL_ATTEMPTS {
+        if assignment_keys(&group) == expected
+            && group
+                .assignments()
+                .iter()
+                .all(|assignment| assignment.next_offset() >= 1)
+        {
+            break;
+        }
+        let _ = group.poll().await?;
+    }
+    if assignment_keys(&group) != expected
+        || !group
+            .assignments()
+            .iter()
+            .all(|assignment| assignment.next_offset() >= 1)
+    {
+        return Err(Error::Unsupported(
+            "published group smoke did not advance every assigned position before offset commit",
+        ));
+    }
     group.commit_offsets().await?;
     group.leave().await?;
 
@@ -261,27 +284,6 @@ async fn verify_committed_offset_restore(
 
     Err(Error::Unsupported(
         "published group smoke did not restore committed offsets for every partition",
-    ))
-}
-
-async fn consume_all_assigned_records(
-    group: &mut ConsumerGroup,
-    topic: &str,
-) -> kafrust::Result<()> {
-    let expected: BTreeSet<_> = (0..PARTITION_COUNT)
-        .map(|partition| (topic.to_owned(), partition))
-        .collect();
-    let mut seen_records = BTreeSet::new();
-
-    for _ in 0..POLL_ATTEMPTS {
-        record_expected_records(&mut seen_records, topic, group.poll().await?);
-        if seen_records == expected {
-            return Ok(());
-        }
-    }
-
-    Err(Error::Unsupported(
-        "published group smoke did not consume every record before offset commit",
     ))
 }
 
