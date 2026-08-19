@@ -233,6 +233,9 @@ behind the broad pure-Rust competitors in three areas:
 `DescribeQuorum` is now live-qualified through the explicit controller-listener
 path on Kafka 3.7.2 and 4.3.1. The remaining gap is broader modern Admin and
 KRaft controller coverage, not this API's basic request/response path.
+ConsumerGroupDescribe API key 69 is now available through the typed protocol,
+low-level client, and high-level Admin path; its live KIP-848 qualification is
+still outstanding.
 
 ### Estimate To Surpass
 

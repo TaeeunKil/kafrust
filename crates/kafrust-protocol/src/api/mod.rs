@@ -6,6 +6,7 @@ pub mod alter_partition_reassignments;
 pub mod alter_replica_log_dirs;
 pub mod alter_user_scram_credentials;
 pub mod api_versions;
+pub mod consumer_group_describe;
 pub mod consumer_group_heartbeat;
 pub mod create_acls;
 pub mod create_partitions;

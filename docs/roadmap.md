@@ -2032,9 +2032,10 @@ Implemented evidence:
   single-node live gate passed the complete poll/Renew/poll,
   acquisition-lock expiry/redelivery, Accept/commit, and close path in
   [`32213499877`](https://github.com/TaeeunKil/kafrust/actions/runs/32213499877).
-  One three-broker leader-movement path and three independent active-heartbeat
-  coordinator recovery attempts are now live-qualified; repeated in-process
-  churn and ambiguous acknowledgement reconciliation remain open.
+  One three-broker leader-movement path, three independent active-heartbeat
+  coordinator recovery attempts, and three consecutive in-process coordinator
+  churn cycles are now live-qualified; ambiguous acknowledgement
+  reconciliation remains open.
   KIP-1206 ShareFetch v2 is now negotiated when advertised: the high-level
   consumer exposes `BatchOptimized` (the backward-compatible default) and
   `RecordLimit`, which fails on brokers that cannot provide v2 rather than
@@ -2091,6 +2092,13 @@ Implemented evidence:
   partition fetches split across replacement leaders, and stale coordinator
   connections during group leave. Bootstrap reconnects now rotate across
   configured addresses when a dead broker resets requests after TCP connect.
+- ConsumerGroupDescribe API key 69 is now implemented through flexible v0/v1
+  protocol types, low-level Client methods, and the high-level
+  `AdminClient::describe_consumer_groups_modern` path. It preserves group and
+  assignment epochs, member type, topic UUID/name assignments, authorized
+  operations, and broker error messages. An injected coordinator test covers
+  ApiVersions negotiation and the v1 response mapping; broader live KIP-848
+  Admin qualification remains open.
 - The 2026-08-19 competitor recheck adds `kacrab` to the comparison set. Its
   published `0.4.0` docs claim Kafka 4.3 producer, consumer, share-consumer,
   and 62-operation Admin parity with a broker-matrix and fuzzing posture;

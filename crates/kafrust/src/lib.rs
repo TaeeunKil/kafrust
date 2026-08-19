@@ -61,13 +61,14 @@ pub use admin::{
     ElectionType, GroupListing, LeaderElection, ListConsumerGroupOffsetsResult,
     ListPartitionReassignmentsResult, ListTransactionsOptions, ListTransactionsResult,
     ListedTransaction, LogDirTopic, LogDirectoryPartitionResult, LogDirectoryResult,
-    LogDirectoryTopicResult, NewPartitions, NewTopic, OngoingPartitionReassignment,
-    OngoingPartitionReassignmentTopic, PartitionReassignment, PartitionReassignmentOptions,
-    PartitionReassignmentPartition, PartitionReassignmentQuery, ReplicaLogDirAssignment,
-    ScramCredentialDeletion, ScramCredentialInfo, ScramCredentialMechanism,
-    ScramCredentialUpsertion, ScramUserCredentials, TopicConfigAlteration, TopicConfigResource,
-    TopicConfigUpdate, TopicConfigUpdateEntry, TopicListing, TransactionDescription,
-    TransactionDescriptionTopic,
+    LogDirectoryTopicResult, ModernConsumerGroupAssignment, ModernConsumerGroupDescription,
+    ModernConsumerGroupMember, ModernConsumerGroupTopicPartitions, NewPartitions, NewTopic,
+    OngoingPartitionReassignment, OngoingPartitionReassignmentTopic, PartitionReassignment,
+    PartitionReassignmentOptions, PartitionReassignmentPartition, PartitionReassignmentQuery,
+    ReplicaLogDirAssignment, ScramCredentialDeletion, ScramCredentialInfo,
+    ScramCredentialMechanism, ScramCredentialUpsertion, ScramUserCredentials,
+    TopicConfigAlteration, TopicConfigResource, TopicConfigUpdate, TopicConfigUpdateEntry,
+    TopicListing, TransactionDescription, TransactionDescriptionTopic,
 };
 pub use client::Client;
 pub use config::{

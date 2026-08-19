@@ -588,7 +588,8 @@ See [Compatibility](docs/compatibility.md) and
   `send_group_offsets_to_transaction`. Transaction coordinator and
   producer/direct-consumer/group recovery after a broker stop are live-verified
   in the three-broker profile. Client quota, SCRAM credential administration,
-  and partition reassignment are available through `AdminClient`. Shared request, retry,
+  partition reassignment, and modern KIP-848 `ConsumerGroupDescribe` are
+  available through `AdminClient`. Shared request, retry,
   broker-error, producer,
   consumer, batch, and buffered-queue metrics are available together with
   approximate request-latency percentiles and high-level operation and

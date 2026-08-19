@@ -18,6 +18,11 @@ use kafrust_protocol::api::alter_replica_log_dirs::{
 use kafrust_protocol::api::alter_user_scram_credentials::{
     AlterUserScramCredentialsDeletionV0, AlterUserScramCredentialsUpsertionV0,
 };
+use kafrust_protocol::api::consumer_group_describe::{
+    ConsumerGroupDescribeAssignment, ConsumerGroupDescribeResponseV0,
+    ConsumerGroupDescribeResponseV1, ConsumerGroupDescribeTopicPartitions, DescribedConsumerGroup,
+    DescribedConsumerGroupMember,
+};
 use kafrust_protocol::api::create_acls::CreateAclsCreationV1;
 use kafrust_protocol::api::create_partitions::{
     CreatePartitionsAssignmentV0, CreatePartitionsTopicResultV0, CreatePartitionsTopicV0,
@@ -1422,6 +1427,118 @@ impl AdminClient {
             descriptions.push(ConsumerGroupDescription::from_protocol(
                 group,
                 throttle_time,
+            ));
+        }
+        Ok(descriptions)
+    }
+
+    /// Describes KIP-848 consumer groups through ConsumerGroupDescribe.
+    ///
+    /// This is the modern group protocol equivalent of
+    /// [`Self::describe_consumer_groups`], which uses the classic
+    /// DescribeGroups API. Kafka 3.8+ brokers advertise this API for groups
+    /// using the consumer protocol and expose group and assignment epochs.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.describe_consumer_groups_modern",
+        skip_all,
+        fields(group_count = group_ids.len(), include_authorized_operations),
+        err
+    )]
+    pub async fn describe_consumer_groups_modern(
+        &self,
+        group_ids: &[String],
+        include_authorized_operations: bool,
+    ) -> Result<Vec<ModernConsumerGroupDescription>> {
+        let mut descriptions = Vec::with_capacity(group_ids.len());
+        for group_id in group_ids {
+            let mut retry = 0;
+            let (throttle_time_ms, group) = loop {
+                let mut coordinator = self.group_coordinator_client(group_id).await?;
+                let api_versions = match coordinator
+                    .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
+                    .await
+                {
+                    Ok(api_versions) => api_versions,
+                    Err(error)
+                        if retry < self.max_retries
+                            && is_retryable_admin_coordinator_error(&error) =>
+                    {
+                        retry += 1;
+                        self.config.record_retry();
+                        tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                        continue;
+                    }
+                    Err(error) => return Err(error),
+                };
+                let Some(version) = api_versions
+                    .highest_supported_version(69, 1)
+                    .filter(|version| *version >= 0)
+                else {
+                    return Err(Error::Unsupported(
+                        "broker does not advertise ConsumerGroupDescribe v0",
+                    ));
+                };
+                let response = match version {
+                    0 => coordinator
+                        .consumer_group_describe_v0(
+                            vec![group_id.clone()],
+                            include_authorized_operations,
+                        )
+                        .await
+                        .map(|response: ConsumerGroupDescribeResponseV0| {
+                            (response.throttle_time_ms, response.groups)
+                        }),
+                    1 => coordinator
+                        .consumer_group_describe_v1(
+                            vec![group_id.clone()],
+                            include_authorized_operations,
+                        )
+                        .await
+                        .map(|response: ConsumerGroupDescribeResponseV1| {
+                            (response.throttle_time_ms, response.groups)
+                        }),
+                    _ => {
+                        return Err(Error::Unsupported(
+                            "unsupported ConsumerGroupDescribe version",
+                        ))
+                    }
+                };
+                let (throttle_time_ms, groups) = match response {
+                    Ok(response) => response,
+                    Err(error)
+                        if retry < self.max_retries
+                            && is_retryable_admin_coordinator_error(&error) =>
+                    {
+                        retry += 1;
+                        self.config.record_retry();
+                        tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                        continue;
+                    }
+                    Err(error) => return Err(error),
+                };
+                let group = groups.into_iter().find(|group| group.group_id == *group_id);
+                let Some(group) = group else {
+                    return Err(Error::MissingGroupDescription {
+                        group_id: group_id.clone(),
+                    });
+                };
+                if retry < self.max_retries && is_retryable_admin_coordinator_code(group.error_code)
+                {
+                    self.config.record_broker_error();
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    continue;
+                }
+                break (throttle_time_ms, group);
+            };
+            if group.error_code != 0 {
+                self.config.record_broker_error();
+            }
+            descriptions.push(ModernConsumerGroupDescription::from_protocol(
+                group,
+                Duration::from_millis(nonnegative_i32_to_u64(throttle_time_ms)),
             ));
         }
         Ok(descriptions)
@@ -7497,6 +7614,246 @@ impl ConsumerGroupDescription {
     }
 }
 
+/// Description returned by Kafka's modern ConsumerGroupDescribe API.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModernConsumerGroupDescription {
+    group_id: String,
+    error_code: i16,
+    error_message: Option<String>,
+    state: String,
+    group_epoch: i32,
+    assignment_epoch: i32,
+    assignor_name: String,
+    members: Vec<ModernConsumerGroupMember>,
+    authorized_operations: i32,
+    throttle_time: Duration,
+}
+
+impl ModernConsumerGroupDescription {
+    /// Returns the consumer group ID.
+    pub fn group_id(&self) -> &str {
+        &self.group_id
+    }
+
+    /// Returns Kafka's current group state string.
+    pub fn state(&self) -> &str {
+        &self.state
+    }
+
+    /// Returns the group's current epoch.
+    pub fn group_epoch(&self) -> i32 {
+        self.group_epoch
+    }
+
+    /// Returns the group's target assignment epoch.
+    pub fn assignment_epoch(&self) -> i32 {
+        self.assignment_epoch
+    }
+
+    /// Returns the selected server-side assignor.
+    pub fn assignor_name(&self) -> &str {
+        &self.assignor_name
+    }
+
+    /// Returns current members in broker response order.
+    pub fn members(&self) -> &[ModernConsumerGroupMember] {
+        &self.members
+    }
+
+    /// Returns Kafka's authorized-operations bitfield, or its sentinel value
+    /// when the request did not ask for authorization details.
+    pub fn authorized_operations(&self) -> i32 {
+        self.authorized_operations
+    }
+
+    /// Returns whether Kafka described this group successfully.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+    }
+
+    /// Returns Kafka's raw group error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns Kafka's optional group error message.
+    pub fn error_message(&self) -> Option<&str> {
+        self.error_message.as_deref()
+    }
+
+    /// Returns the coordinator's throttle time for this request.
+    pub fn throttle_time(&self) -> Duration {
+        self.throttle_time
+    }
+
+    fn from_protocol(group: DescribedConsumerGroup, throttle_time: Duration) -> Self {
+        Self {
+            group_id: group.group_id,
+            error_code: group.error_code,
+            error_message: group.error_message,
+            state: group.group_state,
+            group_epoch: group.group_epoch,
+            assignment_epoch: group.assignment_epoch,
+            assignor_name: group.assignor_name,
+            members: group
+                .members
+                .into_iter()
+                .map(ModernConsumerGroupMember::from_protocol)
+                .collect(),
+            authorized_operations: group.authorized_operations,
+            throttle_time,
+        }
+    }
+}
+
+/// One member returned by Kafka's modern ConsumerGroupDescribe API.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModernConsumerGroupMember {
+    member_id: String,
+    instance_id: Option<String>,
+    rack_id: Option<String>,
+    member_epoch: i32,
+    client_id: String,
+    client_host: String,
+    subscribed_topic_names: Vec<String>,
+    subscribed_topic_regex: Option<String>,
+    assignment: ModernConsumerGroupAssignment,
+    target_assignment: ModernConsumerGroupAssignment,
+    member_type: i8,
+}
+
+impl ModernConsumerGroupMember {
+    /// Returns the member ID.
+    pub fn member_id(&self) -> &str {
+        &self.member_id
+    }
+
+    /// Returns the static group instance ID, when configured.
+    pub fn instance_id(&self) -> Option<&str> {
+        self.instance_id.as_deref()
+    }
+
+    /// Returns the rack ID, when configured.
+    pub fn rack_id(&self) -> Option<&str> {
+        self.rack_id.as_deref()
+    }
+
+    /// Returns the member epoch.
+    pub fn member_epoch(&self) -> i32 {
+        self.member_epoch
+    }
+
+    /// Returns the client ID.
+    pub fn client_id(&self) -> &str {
+        &self.client_id
+    }
+
+    /// Returns the client host.
+    pub fn client_host(&self) -> &str {
+        &self.client_host
+    }
+
+    /// Returns the topics explicitly subscribed by the member.
+    pub fn subscribed_topic_names(&self) -> &[String] {
+        &self.subscribed_topic_names
+    }
+
+    /// Returns the subscription regex, when configured.
+    pub fn subscribed_topic_regex(&self) -> Option<&str> {
+        self.subscribed_topic_regex.as_deref()
+    }
+
+    /// Returns the member's current assignment.
+    pub fn assignment(&self) -> &ModernConsumerGroupAssignment {
+        &self.assignment
+    }
+
+    /// Returns the member's target assignment.
+    pub fn target_assignment(&self) -> &ModernConsumerGroupAssignment {
+        &self.target_assignment
+    }
+
+    /// Returns -1 for unknown, 0 for classic, and 1 for consumer-protocol
+    /// members.
+    pub fn member_type(&self) -> i8 {
+        self.member_type
+    }
+
+    fn from_protocol(member: DescribedConsumerGroupMember) -> Self {
+        Self {
+            member_id: member.member_id,
+            instance_id: member.instance_id,
+            rack_id: member.rack_id,
+            member_epoch: member.member_epoch,
+            client_id: member.client_id,
+            client_host: member.client_host,
+            subscribed_topic_names: member.subscribed_topic_names,
+            subscribed_topic_regex: member.subscribed_topic_regex,
+            assignment: ModernConsumerGroupAssignment::from_protocol(member.assignment),
+            target_assignment: ModernConsumerGroupAssignment::from_protocol(
+                member.target_assignment,
+            ),
+            member_type: member.member_type,
+        }
+    }
+}
+
+/// Topic-partition assignment returned by ConsumerGroupDescribe.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModernConsumerGroupAssignment {
+    topic_partitions: Vec<ModernConsumerGroupTopicPartitions>,
+}
+
+impl ModernConsumerGroupAssignment {
+    /// Returns assigned topic-partition entries.
+    pub fn topic_partitions(&self) -> &[ModernConsumerGroupTopicPartitions] {
+        &self.topic_partitions
+    }
+
+    fn from_protocol(assignment: ConsumerGroupDescribeAssignment) -> Self {
+        Self {
+            topic_partitions: assignment
+                .topic_partitions
+                .into_iter()
+                .map(ModernConsumerGroupTopicPartitions::from_protocol)
+                .collect(),
+        }
+    }
+}
+
+/// One topic's partitions in a modern consumer-group assignment.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModernConsumerGroupTopicPartitions {
+    topic_id: [u8; 16],
+    topic_name: String,
+    partitions: Vec<i32>,
+}
+
+impl ModernConsumerGroupTopicPartitions {
+    /// Returns the Kafka topic UUID.
+    pub fn topic_id(&self) -> &[u8; 16] {
+        &self.topic_id
+    }
+
+    /// Returns the topic name.
+    pub fn topic_name(&self) -> &str {
+        &self.topic_name
+    }
+
+    /// Returns assigned partition indexes.
+    pub fn partitions(&self) -> &[i32] {
+        &self.partitions
+    }
+
+    fn from_protocol(topic: ConsumerGroupDescribeTopicPartitions) -> Self {
+        Self {
+            topic_id: topic.topic_id,
+            topic_name: topic.topic_name,
+            partitions: topic.partitions,
+        }
+    }
+}
+
 /// One member in a Kafka consumer group description.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConsumerGroupMember {
@@ -11039,6 +11396,129 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn routes_modern_consumer_group_describe_to_coordinator() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let coordinator_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&coordinator_request[0..4], &[0, 10, 0, 1]);
+            write_frame(
+                &mut bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let (mut coordinator, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut coordinator).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(
+                &mut coordinator,
+                &api_versions_with_consumer_group_describe(),
+            )
+            .await;
+
+            let describe_request = read_frame(&mut coordinator).await;
+            assert_eq!(&describe_request[0..4], &[0, 69, 0, 1]);
+            write_frame(&mut coordinator, &consumer_group_describe_response()).await;
+        });
+        let admin =
+            AdminClient::new(ClientConfig::new([addr.to_string()]).request_timeout_ms(1_000));
+
+        let descriptions = admin
+            .describe_consumer_groups_modern(&["orders-group".to_owned()], true)
+            .await
+            .unwrap();
+
+        assert_eq!(descriptions.len(), 1);
+        let description = &descriptions[0];
+        assert_eq!(description.group_id(), "orders-group");
+        assert_eq!(description.state(), "Stable");
+        assert_eq!(description.group_epoch(), 4);
+        assert_eq!(description.assignment_epoch(), 5);
+        assert_eq!(description.assignor_name(), "uniform");
+        assert_eq!(description.authorized_operations(), -2147483648);
+        assert_eq!(description.members().len(), 1);
+        let member = &description.members()[0];
+        assert_eq!(member.member_id(), "member-1");
+        assert_eq!(member.member_type(), 1);
+        assert_eq!(
+            member.assignment().topic_partitions()[0].topic_name(),
+            "orders"
+        );
+        assert_eq!(
+            member.assignment().topic_partitions()[0].partitions(),
+            [0, 2]
+        );
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn retries_modern_consumer_group_describe_after_coordinator_disconnect() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let coordinator_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&coordinator_request[0..4], &[0, 10, 0, 1]);
+            write_frame(
+                &mut bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let (mut coordinator, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut coordinator).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(
+                &mut coordinator,
+                &api_versions_with_consumer_group_describe(),
+            )
+            .await;
+            let describe_request = read_frame(&mut coordinator).await;
+            assert_eq!(&describe_request[0..4], &[0, 69, 0, 1]);
+            drop(coordinator);
+
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let coordinator_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&coordinator_request[0..4], &[0, 10, 0, 1]);
+            write_frame(
+                &mut bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let (mut coordinator, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut coordinator).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(
+                &mut coordinator,
+                &api_versions_with_consumer_group_describe(),
+            )
+            .await;
+            let describe_request = read_frame(&mut coordinator).await;
+            assert_eq!(&describe_request[0..4], &[0, 69, 0, 1]);
+            write_frame(&mut coordinator, &consumer_group_describe_response()).await;
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        );
+
+        let descriptions = admin
+            .describe_consumer_groups_modern(&["orders-group".to_owned()], true)
+            .await
+            .unwrap();
+
+        assert_eq!(descriptions.len(), 1);
+        assert!(descriptions[0].is_success());
+        assert_eq!(metrics.snapshot().retries, 1);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn retries_describe_group_after_coordinator_disconnect() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -13132,6 +13612,75 @@ mod tests {
         encoder.write_i16(1);
         encoder.write_empty_tagged_fields();
         encoder.write_i32(0); // throttle time
+        encoder.write_empty_tagged_fields();
+        encoder.into_bytes()
+    }
+
+    fn api_versions_with_consumer_group_describe() -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_i16(0); // success
+        encoder.write_unsigned_varint(2); // one API key
+        encoder.write_i16(69);
+        encoder.write_i16(0);
+        encoder.write_i16(1);
+        encoder.write_empty_tagged_fields();
+        encoder.write_i32(0); // throttle time
+        encoder.write_empty_tagged_fields();
+        encoder.into_bytes()
+    }
+
+    fn consumer_group_describe_response() -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_empty_tagged_fields(); // response header tags
+        encoder.write_i32(4); // throttle time
+        encoder
+            .write_compact_array(Some(&[()]), |encoder, ()| {
+                encoder.write_i16(0);
+                encoder.write_compact_nullable_string(Some("ok"))?;
+                encoder.write_compact_string("orders-group")?;
+                encoder.write_compact_string("Stable")?;
+                encoder.write_i32(4);
+                encoder.write_i32(5);
+                encoder.write_compact_string("uniform")?;
+                encoder.write_compact_array(Some(&[()]), |encoder, ()| {
+                    encoder.write_compact_string("member-1")?;
+                    encoder.write_compact_nullable_string(None)?;
+                    encoder.write_compact_nullable_string(Some("rack-a"))?;
+                    encoder.write_i32(7);
+                    encoder.write_compact_string("client-1")?;
+                    encoder.write_compact_string("/127.0.0.1")?;
+                    encoder
+                        .write_compact_array(Some(&["orders".to_owned()]), |encoder, topic| {
+                            encoder.write_compact_string(topic)
+                        })?;
+                    encoder.write_compact_nullable_string(None)?;
+                    for _ in 0..2 {
+                        encoder.write_compact_array(Some(&[()]), |encoder, ()| {
+                            encoder.write_uuid(&[7; 16]);
+                            encoder.write_compact_string("orders")?;
+                            encoder.write_compact_array(
+                                Some(&[0_i32, 2_i32]),
+                                |encoder, partition| {
+                                    encoder.write_i32(*partition);
+                                    Ok(())
+                                },
+                            )?;
+                            encoder.write_empty_tagged_fields();
+                            Ok(())
+                        })?;
+                        encoder.write_empty_tagged_fields();
+                    }
+                    encoder.write_i8(1);
+                    encoder.write_empty_tagged_fields();
+                    Ok(())
+                })?;
+                encoder.write_i32(-2147483648);
+                encoder.write_empty_tagged_fields();
+                Ok(())
+            })
+            .unwrap();
         encoder.write_empty_tagged_fields();
         encoder.into_bytes()
     }

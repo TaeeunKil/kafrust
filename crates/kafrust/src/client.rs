@@ -22,6 +22,10 @@ use kafrust_protocol::api::alter_user_scram_credentials::{
 use kafrust_protocol::api::api_versions::{
     ApiVersionsRequestV0, ApiVersionsRequestV3, ApiVersionsResponseV0, ApiVersionsResponseV3,
 };
+use kafrust_protocol::api::consumer_group_describe::{
+    ConsumerGroupDescribeRequestV0, ConsumerGroupDescribeRequestV1,
+    ConsumerGroupDescribeResponseV0, ConsumerGroupDescribeResponseV1,
+};
 use kafrust_protocol::api::consumer_group_heartbeat::{
     ConsumerGroupHeartbeatRequestV0, ConsumerGroupHeartbeatResponseV0,
     ConsumerGroupHeartbeatTopicPartitions,
@@ -1393,6 +1397,42 @@ impl Client {
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(DescribeGroupsResponseV1::decode_body(&mut decoder)?)
+    }
+
+    /// Sends ConsumerGroupDescribe v0 to this group coordinator connection.
+    pub async fn consumer_group_describe_v0(
+        &mut self,
+        group_ids: Vec<String>,
+        include_authorized_operations: bool,
+    ) -> Result<ConsumerGroupDescribeResponseV0> {
+        let request = ConsumerGroupDescribeRequestV0 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            group_ids,
+            include_authorized_operations,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(ConsumerGroupDescribeResponseV0::decode_body(&mut decoder)?)
+    }
+
+    /// Sends ConsumerGroupDescribe v1 to this group coordinator connection.
+    pub async fn consumer_group_describe_v1(
+        &mut self,
+        group_ids: Vec<String>,
+        include_authorized_operations: bool,
+    ) -> Result<ConsumerGroupDescribeResponseV1> {
+        let request = ConsumerGroupDescribeRequestV1 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            group_ids,
+            include_authorized_operations,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(ConsumerGroupDescribeResponseV1::decode_body(&mut decoder)?)
     }
 
     /// Sends ListGroups v1 to the broker represented by this connection.
@@ -3732,6 +3772,55 @@ mod tests {
         assert_eq!(response.member_epoch, 2);
         assert_eq!(response.heartbeat_interval_ms, 2500);
         assert!(response.assignment.is_none());
+        broker.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn sends_consumer_group_describe_v1_over_injected_broker_stream() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(1024);
+        let broker = tokio::spawn(async move {
+            let request = read_test_frame(&mut broker_stream).await;
+            let mut decoder = Decoder::new(&request);
+            assert_eq!(decoder.read_i16().unwrap(), 69);
+            assert_eq!(decoder.read_i16().unwrap(), 1);
+            assert_eq!(decoder.read_i32().unwrap(), 1);
+            assert_eq!(
+                decoder.read_nullable_string().unwrap(),
+                Some("kafrust-admin".to_owned())
+            );
+            assert_eq!(decoder.read_tagged_fields().unwrap(), Vec::new());
+            assert_eq!(
+                decoder
+                    .read_compact_array("group IDs", |decoder| decoder.read_compact_string())
+                    .unwrap(),
+                Some(vec!["orders".to_owned()])
+            );
+            assert!(decoder.read_bool().unwrap());
+            assert_eq!(decoder.read_tagged_fields().unwrap(), Vec::new());
+
+            let mut response = Encoder::new();
+            response.write_i32(1);
+            response.write_empty_tagged_fields();
+            response.write_i32(0);
+            response
+                .write_compact_array::<i8>(Some(&[]), |_, _| Ok(()))
+                .unwrap();
+            response.write_empty_tagged_fields();
+            write_test_frame(&mut broker_stream, &response.into_bytes()).await;
+        });
+        let mut client = Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-admin".to_owned()),
+            Some(Duration::from_secs(1)),
+        );
+
+        let response = client
+            .consumer_group_describe_v1(vec!["orders".to_owned()], true)
+            .await
+            .unwrap();
+
+        assert_eq!(response.throttle_time_ms, 0);
+        assert!(response.groups.is_empty());
         broker.await.unwrap();
     }
 
