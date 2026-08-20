@@ -2617,15 +2617,19 @@ Implemented evidence:
   recorded in the subsequent commits and successful run above. This gate does
   not claim general ShareConsumer or `rust-rdkafka` replacement compatibility.
 - `.github/workflows/live-update-features.yml` now provides a broker matrix
-  gate for the negotiated path. Kafka 3.7.2 and 4.3.1 both advertise and pass
-  an empty v1 `validate_only` request in
+  gate for the negotiated path. The earlier empty v1 `validate_only` requests
+  passed on Kafka 3.7.2 and 4.3.1 in
   [`32346412517`](https://github.com/TaeeunKil/kafrust/actions/runs/32346412517)
-  and
-  [`32346412771`](https://github.com/TaeeunKil/kafrust/actions/runs/32346412771).
-  The workflow is intentionally non-mutating at the feature level; v0
-  fallback remains covered by typed and injected-client tests, while live
-  authorization, non-empty downgrade semantics, and controller-failover
-  qualification remain separate gates.
+  and [`32346412771`](https://github.com/TaeeunKil/kafrust/actions/runs/32346412771).
+  The workflow now also sends a non-empty `metadata.version` v1
+  `validate_only` request, derives the current finalized level from
+  `DescribeFeatures`, and checks the per-feature result. Kafka 3.7.2 passed in
+  [`32360936437`](https://github.com/TaeeunKil/kafrust/actions/runs/32360936437)
+  and Kafka 4.3.1 passed in
+  [`32361035007`](https://github.com/TaeeunKil/kafrust/actions/runs/32361035007).
+  The workflow remains non-mutating at the feature level; v0 fallback remains
+  covered by typed and injected-client tests, while actual upgrade/downgrade,
+  authorization, and controller-failover qualification remain separate gates.
 - The 2026-08-20 competitor recheck adds `kacrab` to the comparison set. Its
   published `0.4.0` docs claim Kafka 4.3 producer, consumer, share-consumer,
   and 62-operation Admin parity with a broker-matrix and fuzzing posture;

@@ -118,6 +118,16 @@ Those runs covered the required-client-certificate handshake, Admin, producer,
 direct consumer, consumer group, transactional/read-committed, low-level, and
 coordinator roundtrips. Certificate rotation behavior remains a separate gate.
 
+The current-source `UpdateFeatures` gate now sends a non-empty v1
+`validate_only` request for the broker's finalized `metadata.version` level
+and checks the returned top-level and feature-level success. Kafka 3.7.2
+passed in [`32360936437`](https://github.com/TaeeunKil/kafrust/actions/runs/32360936437)
+and Kafka 4.3.1 passed in
+[`32361035007`](https://github.com/TaeeunKil/kafrust/actions/runs/32361035007).
+This qualifies the populated request and response mapping only; it does not
+claim a finalized upgrade/downgrade, authorization parity, or controller
+failover behavior.
+
 The low-level `Client::api_versions_cached` helper now prefers flexible
 `ApiVersions` v4 and falls back to v3 when a broker returns
 `UNSUPPORTED_VERSION`. Existing higher-level paths retain their established

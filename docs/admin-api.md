@@ -93,6 +93,16 @@ before deciding whether another update is required. The v0 path remains the
 compatibility path for Kafka 3.7-era brokers and newer brokers that advertise
 API key 57 without v1.
 
+The current-source live gate sends a non-empty v1 `validate_only` request for
+the broker's finalized `metadata.version` level and checks the returned
+feature-level result. Kafka 3.7.2 passed in
+[`32360936437`](https://github.com/TaeeunKil/kafrust/actions/runs/32360936437)
+and Kafka 4.3.1 passed in
+[`32361035007`](https://github.com/TaeeunKil/kafrust/actions/runs/32361035007).
+These runs qualify request population and result mapping without changing the
+cluster's finalized feature state; downgrade, authorization, and controller
+failover remain separate gates.
+
 ## DescribeTopicPartitions
 
 `AdminClient::describe_topic_partitions` exposes Kafka's flexible
