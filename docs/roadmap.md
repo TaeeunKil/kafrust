@@ -443,6 +443,14 @@ coverage toward a release candidate that can be qualified in staging.
   remained unchanged; the administrator then applied the replacement value and
   cleaned up the topic. This closes the current-source classic AlterConfigs
   authorization sub-gate only.
+- The current-source `live-create-partitions-authorization.yml` matrix passed
+  on Kafka 3.7.2 and 4.3.1 in
+  [`32366048755`](https://github.com/TaeeunKil/kafrust/actions/runs/32366048755).
+  A restricted SASL/PLAIN principal with cluster/topic discovery, but without
+  the partition-change permission, received `TopicAuthorizationFailed` (29)
+  and the one-partition topic remained unchanged; the administrator then
+  expanded it to two partitions and cleaned it up. This closes the
+  current-source CreatePartitions authorization sub-gate only.
 - The current-source `live-delete-topics-authorization.yml` matrix passed on
   Kafka 3.7.2 and 4.3.1 in
   [`32365120994`](https://github.com/TaeeunKil/kafrust/actions/runs/32365120994).

@@ -1439,6 +1439,17 @@ partition in ascending partition order. CreatePartitions v0 is
 controller-scoped, supports validation-only requests, and preserves per-topic
 errors in `CreatePartitionsResult`.
 
+The current-source
+[`live-create-partitions-authorization.yml`](../.github/workflows/live-create-partitions-authorization.yml)
+gate passed on Kafka 3.7.2 and 4.3.1 in
+[`32366048755`](https://github.com/TaeeunKil/kafrust/actions/runs/32366048755).
+A restricted SASL/PLAIN principal with cluster/topic discovery, but without
+the partition-change permission, received `TopicAuthorizationFailed` (error
+29) and the one-partition topic remained unchanged. The administrator then
+expanded it to two partitions and cleaned it up. This is an operation-specific
+current-source authorization proof, not a universal ACL or Admin mutation
+parity claim.
+
 ## Delete Topics
 
 ```rust
