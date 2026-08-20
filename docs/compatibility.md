@@ -282,8 +282,13 @@ DescribeQuorum convergence checks. The workflow passed in
 [`32344895847`](https://github.com/TaeeunKil/kafrust/actions/runs/32344895847)
 on 2026-08-20, recording voter/observer membership before the mutation, after
 AddRaftVoter, and after RemoveRaftVoter. This qualifies the tested Kafka 4.3.1
-dynamic membership path; broader controller failure and authorization matrices
-remain separate.
+dynamic membership path. The follow-up
+`.github/workflows/live-dynamic-quorum-authorization.yml` gate passed in
+[`32364161150`](https://github.com/TaeeunKil/kafrust/actions/runs/32364161150),
+using a SASL/PLAIN controller listener to reject a restricted principal with
+only cluster `Describe` (`ClusterAuthorizationFailed`, error 31) without
+changing membership, then to complete the Add/Remove lifecycle as `User:admin`.
+Broader controller failure workloads remain separate.
 
 The high-level `ShareConsumer` path now has recorded Kafka 4.3.1 single-node,
 three-broker leader-movement, active-heartbeat coordinator-loss, and repeated

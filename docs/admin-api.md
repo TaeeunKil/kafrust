@@ -164,8 +164,13 @@ routing tests cover the flexible request and response shapes. The isolated
 Kafka 4.3.1 dynamic-quorum gate
 [`32344895847`](https://github.com/TaeeunKil/kafrust/actions/runs/32344895847)
 verified observer-to-voter convergence after AddRaftVoter and voter removal
-after RemoveRaftVoter. Broader controller failure and authorization matrices
-remain separate qualification gates.
+after RemoveRaftVoter. The separate
+[`live-dynamic-quorum-authorization.yml`](../.github/workflows/live-dynamic-quorum-authorization.yml)
+gate passed in [`32364161150`](https://github.com/TaeeunKil/kafrust/actions/runs/32364161150)
+with a SASL/PLAIN controller listener: a restricted principal with only cluster
+`Describe` received `ClusterAuthorizationFailed` (31), and the quorum remained
+unchanged; the administrator then completed AddRaftVoter and RemoveRaftVoter.
+Broader controller failure workloads remain a separate qualification gate.
 
 ## Unregister Broker
 

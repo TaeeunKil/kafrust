@@ -2386,8 +2386,13 @@ Implemented evidence:
   [`32344895847`](https://github.com/TaeeunKil/kafrust/actions/runs/32344895847),
   recording `voters=1 observers=1` before the mutation, `voters=2
   observers=0` after AddRaftVoter, and `voters=1 observers=1` after
-  RemoveRaftVoter. Broader controller failure and authorization matrices remain
-  separate M21 gates.
+  RemoveRaftVoter. The follow-up
+  `.github/workflows/live-dynamic-quorum-authorization.yml` gate passed in
+  [`32364161150`](https://github.com/TaeeunKil/kafrust/actions/runs/32364161150):
+  a SASL/PLAIN principal with only cluster `Describe` received
+  `ClusterAuthorizationFailed` (31) and did not change quorum membership,
+  while `User:admin` completed the Add/Remove lifecycle. Broader controller
+  failure workloads remain a separate M21 gate.
 
 - DescribeConfigs v4 is now available as an opt-in documentation-aware path.
   `DescribeConfigsOptions::include_documentation(true)` negotiates API 32 v4,
