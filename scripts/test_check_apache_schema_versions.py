@@ -20,6 +20,7 @@ class ApacheSchemaAuditTests(unittest.TestCase):
     def test_parse_online_range_supports_closed_and_open_ranges(self) -> None:
         self.assertEqual(MODULE.parse_online_range("3-13"), (3, 13))
         self.assertEqual(MODULE.parse_online_range("0+"), (0, None))
+        self.assertEqual(MODULE.parse_online_range("0"), (0, 0))
 
     def test_discovers_top_level_request_schemas(self) -> None:
         discovered = []
@@ -49,10 +50,13 @@ class ApacheSchemaAuditTests(unittest.TestCase):
                 "apiKey": api_key,
                 "type": message_type,
                 "validVersions": "0-100",
-                "flexibleVersions": "none",
+                "flexibleVersions": "50",
             }
 
-        with patch.object(MODULE, "fetch_schema", side_effect=fake_fetch):
+        with (
+            patch.object(MODULE, "fetch_schema", side_effect=fake_fetch),
+            patch("builtins.print"),
+        ):
             self.assertEqual(MODULE.online_all({}), 0)
 
 
