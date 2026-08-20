@@ -2560,11 +2560,13 @@ Implemented evidence:
   full state and summary and deletes it through the surviving brokers. A
   successful run remains required before replicated recovery is claimed.
 - `.github/workflows/live-update-features.yml` now provides a broker matrix
-  gate for the negotiated path: Kafka 3.7.2 exercises a harmless empty v0
-  mutation, while Kafka 4.3.1 exercises an empty v1 `validate_only` request.
-  The workflow is intentionally non-mutating at the feature level; live
-  authorization, non-empty downgrade semantics, and controller-failover
-  qualification remain separate gates.
+  gate for the negotiated path. Kafka 3.7.2 and 4.3.1 both advertise and pass
+  an empty v1 `validate_only` request; the previous v0 expectation for Kafka
+  3.7.2 was incorrect because that broker advertises v1 as well. The workflow
+  is intentionally non-mutating at the feature level; v0 fallback remains
+  covered by typed and injected-client tests, while live authorization,
+  non-empty downgrade semantics, and controller-failover qualification remain
+  separate gates.
 - The 2026-08-20 competitor recheck adds `kacrab` to the comparison set. Its
   published `0.4.0` docs claim Kafka 4.3 producer, consumer, share-consumer,
   and 62-operation Admin parity with a broker-matrix and fuzzing posture;

@@ -22,8 +22,8 @@ jobs:
     timeout-minutes: 15
     env:
       KAFRUST_BOOTSTRAP_SERVERS: 127.0.0.1:39092
-      KAFRUST_EXPECT_UPDATE_FEATURES_VERSION: ${{ inputs.kafka_version == '4.3.1' && '1' || '0' }}
-      KAFRUST_UPDATE_FEATURES_VALIDATE_ONLY: ${{ inputs.kafka_version == '4.3.1' && 'true' || 'false' }}
+      KAFRUST_EXPECT_UPDATE_FEATURES_VERSION: "1"
+      KAFRUST_UPDATE_FEATURES_VALIDATE_ONLY: "true"
 
     steps:
       - name: Checkout

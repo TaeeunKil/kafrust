@@ -233,6 +233,16 @@ The same jobs also checked the Kafka quorum CLI through the broker listener;
 this is a `DescribeQuorum` qualification, not a claim of complete KRaft admin
 or controller protocol coverage.
 
+The current-source `UpdateFeatures` qualification uses the highest version each
+broker advertises. Kafka 3.7.2 and 4.3.1 both advertise API 57 v1 and pass an
+empty `validate_only` request through the controller-routed Admin path; the
+Kafka 4.3.1 run passed in
+[`32346209959`](https://github.com/TaeeunKil/kafrust/actions/runs/32346209959).
+The Kafka 3.7.2 run initially exposed an incorrect v0 workflow expectation in
+[`32346210023`](https://github.com/TaeeunKil/kafrust/actions/runs/32346210023),
+which is fixed before requalification. v0 fallback remains covered by typed
+and injected-client tests rather than this live broker matrix.
+
 The current source also implements KRaft `AddRaftVoter` v0/v1 (API key 80) and
 `RemoveRaftVoter` v0 (API key 81) through typed protocol, low-level Client, and
 controller-routed Admin paths. Flexible request/response encoding,
