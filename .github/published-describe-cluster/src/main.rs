@@ -1,6 +1,4 @@
-use kafrust::{
-    AdminClient, ClientConfig, DescribeClusterEndpointType, DescribeClusterOptions,
-};
+use kafrust::{AdminClient, ClientConfig, DescribeClusterEndpointType, DescribeClusterOptions};
 
 fn parse_bootstrap_servers(value: &str) -> Vec<String> {
     value
@@ -15,9 +13,10 @@ fn parse_bootstrap_servers(value: &str) -> Vec<String> {
 async fn main() -> kafrust::Result<()> {
     let bootstrap = std::env::var("KAFRUST_BOOTSTRAP_SERVERS")
         .map_err(|_| kafrust::Error::Unsupported("KAFRUST_BOOTSTRAP_SERVERS is required"))?;
-    let controller_bootstrap = std::env::var("KAFRUST_CONTROLLER_BOOTSTRAP_SERVERS").map_err(
-        |_| kafrust::Error::Unsupported("KAFRUST_CONTROLLER_BOOTSTRAP_SERVERS is required"),
-    )?;
+    let controller_bootstrap =
+        std::env::var("KAFRUST_CONTROLLER_BOOTSTRAP_SERVERS").map_err(|_| {
+            kafrust::Error::Unsupported("KAFRUST_CONTROLLER_BOOTSTRAP_SERVERS is required")
+        })?;
     let admin = AdminClient::new(
         ClientConfig::new(parse_bootstrap_servers(&bootstrap))
             .controller_bootstrap_servers(parse_bootstrap_servers(&controller_bootstrap))
@@ -70,6 +69,13 @@ async fn main() -> kafrust::Result<()> {
         ));
     }
 
+    let features = admin.describe_features().await?;
+    if features.finalized_features_epoch() < -1 {
+        return Err(kafrust::Error::Unsupported(
+            "ApiVersions v3 returned an invalid finalized feature epoch",
+        ));
+    }
+
     println!(
         "api60 cluster_id_present=true endpoint_type={:?} authorized_ops_present=true brokers={}",
         dedicated.endpoint_type(),
@@ -84,6 +90,13 @@ async fn main() -> kafrust::Result<()> {
         "api60_controller cluster_id_present=true endpoint_type={:?} authorized_ops_present=true brokers={}",
         controllers.endpoint_type(),
         controllers.brokers().len()
+    );
+    println!(
+        "features supported={} finalized={} epoch={} zk_migration_ready={}",
+        features.supported_features().len(),
+        features.finalized_features().len(),
+        features.finalized_features_epoch(),
+        features.zk_migration_ready()
     );
     Ok(())
 }
