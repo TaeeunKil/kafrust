@@ -1,0 +1,111 @@
+name: Published ConsumerGroupDescribe Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      kafrust_version:
+        description: "Published kafrust version to execute from crates.io"
+        required: true
+        default: "0.3.4"
+
+permissions:
+  contents: read
+
+jobs:
+  published-group-describe:
+    name: Published kafrust ${{ inputs.kafrust_version }} ConsumerGroupDescribe
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      KAFRUST_BOOTSTRAP_SERVERS: localhost:39097
+      KAFRUST_GROUP_ID: kafrust-published-group-describe-${{ github.run_id }}
+      KAFRUST_TOPIC: kafrust-published-group-describe-topic-${{ github.run_id }}
+      RUST_LOG: kafrust=debug
+      CARGO_TERM_COLOR: never
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.81.0"
+
+      - name: Start Kafka 4.3.1
+        run: |
+          docker network create kafrust-published-group-describe
+          cluster_id="$(docker run --rm apache/kafka:4.3.1 /opt/kafka/bin/kafka-storage.sh random-uuid)"
+          docker run -d --name kafrust-published-group-describe-broker \
+            --network kafrust-published-group-describe \
+            -p 39097:9092 \
+            -e KAFKA_CLUSTER_ID="$cluster_id" \
+            -e KAFKA_NODE_ID=1 \
+            -e KAFKA_PROCESS_ROLES=broker,controller \
+            -e KAFKA_LISTENERS=INTERNAL://:29092,EXTERNAL://:9092,CONTROLLER://:9093 \
+            -e KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafrust-published-group-describe-broker:29092,EXTERNAL://localhost:39097 \
+            -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+            -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT \
+            -e KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL \
+            -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafrust-published-group-describe-broker:9093 \
+            -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
+            -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1 \
+            -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1 \
+            -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 \
+            apache/kafka:4.3.1
+
+      - name: Wait for Kafka
+        run: |
+          for attempt in {1..120}; do
+            if docker exec kafrust-published-group-describe-broker \
+              /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server kafrust-published-group-describe-broker:29092 \
+              >/tmp/kafrust-published-group-describe-probe.log 2>&1; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/kafrust-published-group-describe-probe.log || true
+          docker logs kafrust-published-group-describe-broker
+          exit 1
+
+      - name: Create topic
+        run: |
+          docker exec kafrust-published-group-describe-broker /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server kafrust-published-group-describe-broker:29092 \
+            --create \
+            --topic "$KAFRUST_TOPIC" \
+            --partitions 1 \
+            --replication-factor 1
+
+      - name: Create fresh external project
+        env:
+          KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version }}
+        run: |
+          project_dir="$RUNNER_TEMP/kafrust-published-group-describe"
+          cargo new --bin "$project_dir"
+          cp .github/published-group-describe-smoke/src/main.rs "$project_dir/src/main.rs"
+          cp crates/kafrust/examples/common/mod.rs "$project_dir/src/common.rs"
+          sed "s/__KAFRUST_VERSION__/$KAFRUST_PUBLISHED_VERSION/" \
+            .github/published-group-describe-smoke/Cargo.toml > "$project_dir/Cargo.toml"
+          if [ "$project_dir" = "$GITHUB_WORKSPACE" ]; then
+            echo "the published smoke project must be outside the repository"
+            exit 1
+          fi
+
+      - name: Run published ConsumerGroupDescribe
+        run: |
+          project_dir="$RUNNER_TEMP/kafrust-published-group-describe"
+          cargo run --manifest-path "$project_dir/Cargo.toml" 2>&1 \
+            | tee /tmp/kafrust-published-group-describe.log
+          grep -Fq "modern group group_id=" /tmp/kafrust-published-group-describe.log
+          grep -Fq "member_type=1" /tmp/kafrust-published-group-describe.log
+          grep -Fq "assignment_partition=0" /tmp/kafrust-published-group-describe.log
+          grep -A1 -q 'name = "kafrust"' "$project_dir/Cargo.lock"
+          grep -A1 -q 'version = "${{ inputs.kafrust_version }}"' "$project_dir/Cargo.lock"
+
+      - name: Dump diagnostics
+        if: failure()
+        run: |
+          cat /tmp/kafrust-published-group-describe.log || true
+          docker logs kafrust-published-group-describe-broker || true
