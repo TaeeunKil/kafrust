@@ -46,6 +46,13 @@ each member retained three partitions, accepted and consumed 30 records, and
 closed with no in-flight requests or failed requests. This is bounded
 long-running ownership evidence; member-loss, backpressure SLO, and full
 replacement compatibility remain open.
+The same published `kafrust 0.3.4` surface then passed four forced
+member-loss/rejoin cycles in
+[`32405501232`](https://github.com/TaeeunKil/kafrust/actions/runs/32405501232):
+ownership alternated across the two members, all 24 partition/offset pairs were
+unique, and the final survivor reported all six partitions with no in-flight or
+failed requests. Higher-cycle churn, backpressure SLO, and full replacement
+compatibility remain open.
 
 ## Module Visibility
 

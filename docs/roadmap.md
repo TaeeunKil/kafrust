@@ -2726,6 +2726,14 @@ Implemented evidence:
   exact per-partition counts plus unique partition/offset pairs. This closes
   the bounded published long-running ownership slice; dynamic member-loss,
   resource/backpressure SLO, and production readiness remain open.
+  The published `kafrust 0.3.4` repeated-loss workflow then completed four
+  forced member-loss/rejoin cycles in
+  [`32405501232`](https://github.com/TaeeunKil/kafrust/actions/runs/32405501232).
+  Ownership alternated member 1 → member 2 → member 1 → member 2; all 24
+  partition/offset pairs were unique with four records per partition, and the
+  final survivor owned all six partitions with `accepted=6`, `consumed=6`,
+  `in_flight=0`, and zero failed requests. Higher-cycle churn,
+  resource/backpressure SLO, and production readiness remain open.
 - ShareFetch success responses preserve the broker that served the request,
   while `CurrentLeader` is used only for the leader-error responses where Kafka
   populates it. Retryable ShareFetch leader errors return the connection to the

@@ -180,6 +180,15 @@ with `in_flight=0` and zero failed requests, and the workflow verified exact
 per-partition counts plus unique partition/offset pairs. This strengthens the
 published long-running ownership slice; dynamic member loss, backpressure SLO,
 and production readiness remain separate gates.
+The published `kafrust 0.3.4` repeated-loss workflow then completed four forced
+member-loss cycles on the same three-broker Kafka 4.3.1 profile in
+[run 32405501232](https://github.com/TaeeunKil/kafrust/actions/runs/32405501232).
+Ownership moved member 1 → member 2 → member 1 → member 2; all 24 observed
+partition/offset pairs were unique with four records per partition, and the
+final survivor owned all six partitions with `accepted=6`, `consumed=6`,
+`in_flight=0`, and zero failed requests. This strengthens published dynamic
+reassignment evidence; higher-cycle churn, backpressure SLO, and production
+readiness remain separate gates.
 The published Share Group State failover qualification then passed in
 [run 32399284180](https://github.com/TaeeunKil/kafrust/actions/runs/32399284180):
 a fresh external project resolved `kafrust 0.3.3` and `kafrust-protocol 0.3.3`
