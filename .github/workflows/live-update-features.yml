@@ -23,6 +23,7 @@ jobs:
     env:
       KAFRUST_BOOTSTRAP_SERVERS: 127.0.0.1:39092
       KAFRUST_EXPECT_UPDATE_FEATURES_VERSION: "1"
+      KAFRUST_UPDATE_FEATURES_FEATURE: metadata.version
       KAFRUST_UPDATE_FEATURES_VALIDATE_ONLY: "true"
 
     steps:
@@ -71,7 +72,7 @@ jobs:
           docker logs kafrust-update-features-broker
           exit 1
 
-      - name: Run current-source UpdateFeatures roundtrip
+      - name: Run current-source UpdateFeatures feature-level validation
         run: |
           cargo test -p kafrust --test broker_roundtrip \
             api_versions_and_metadata_roundtrip_when_broker_is_configured \

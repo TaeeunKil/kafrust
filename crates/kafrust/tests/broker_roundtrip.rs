@@ -220,19 +220,67 @@ async fn api_versions_and_metadata_roundtrip_when_broker_is_configured() {
         let validate_only = std::env::var("KAFRUST_UPDATE_FEATURES_VALIDATE_ONLY")
             .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE"))
             .unwrap_or(false);
+        let feature_name = std::env::var("KAFRUST_UPDATE_FEATURES_FEATURE").ok();
+        let expected_error_code = std::env::var("KAFRUST_UPDATE_FEATURES_EXPECT_ERROR")
+            .ok()
+            .map(|value| {
+                value
+                    .parse::<i16>()
+                    .expect("valid UpdateFeatures error code")
+            })
+            .unwrap_or(0);
+        let updates = feature_name
+            .as_ref()
+            .map(|feature_name| {
+                let feature_level = std::env::var("KAFRUST_UPDATE_FEATURES_LEVEL")
+                    .ok()
+                    .map(|value| {
+                        value
+                            .parse::<i16>()
+                            .expect("valid UpdateFeatures feature level")
+                    })
+                    .or_else(|| {
+                        features
+                            .finalized_features()
+                            .iter()
+                            .find(|feature| feature.name() == feature_name)
+                            .map(|feature| feature.max_version_level())
+                    })
+                    .expect("configured UpdateFeatures feature must be finalized");
+                vec![kafrust::FeatureUpdate::new(
+                    feature_name.clone(),
+                    feature_level,
+                )]
+            })
+            .unwrap_or_default();
         let result = admin
             .update_features(
-                &[],
+                &updates,
                 UpdateFeaturesOptions::default().validate_only(validate_only),
             )
             .await
-            .expect("UpdateFeatures empty validation request should succeed");
-        assert!(
-            result.is_success(),
-            "UpdateFeatures returned top-level error {}: {:?}",
+            .expect("UpdateFeatures request should return a typed broker result");
+        assert_eq!(
             result.error_code(),
+            expected_error_code,
+            "UpdateFeatures returned unexpected top-level error: {:?}",
             result.error_message()
         );
+        if let Some(feature_name) = feature_name {
+            if expected_error_code == 0 {
+                let feature_result = result
+                    .results()
+                    .iter()
+                    .find(|feature| feature.feature() == feature_name)
+                    .expect("UpdateFeatures should return the requested feature result");
+                assert!(
+                    feature_result.is_success(),
+                    "UpdateFeatures returned feature error {}: {:?}",
+                    feature_result.error_code(),
+                    feature_result.error_message()
+                );
+            }
+        }
     }
 }
 
