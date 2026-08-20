@@ -576,7 +576,7 @@ subscription state, bounds payloads, retries an outdated subscription, applies
 push-interval jitter, compresses OTLP payloads with the strongest broker-
 accepted pure-Rust codec, and sends a terminating push during shutdown. The
 optional `otlp` feature includes a built-in `ClientMetricsTelemetryProvider`;
-live broker-plugin qualification remains in progress.
+the Kafka 3.7.2 broker-plugin gate passed in the [`Live Client Telemetry`](https://github.com/TaeeunKil/kafrust/actions/runs/32422305042), including subscription mutation recovery, payload verification, and the terminating push. Secured, multi-broker, and long-running telemetry remain separate qualification gates.
 See [Client Telemetry](docs/telemetry.md).
 
 ## Compatibility

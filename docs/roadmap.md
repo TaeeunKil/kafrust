@@ -195,6 +195,11 @@ recovery slice. The advertised broker payload-limit gate also passed in
 with Kafka 3.7.2 advertising `telemetry.max.bytes=128`, kafrust rejected an
 oversized OTLP payload before transmission with a typed limit error. Longer
 collection and secured or multi-broker telemetry remain open follow-up gates.
+The latest `main` run [`32422305042`](https://github.com/TaeeunKil/kafrust/actions/runs/32422305042)
+passed the complete Kafka 3.7.2 plugin workflow, including broker plugin
+loading, subscription mutation recovery, ordinary payload verification, and
+the terminating push. This closes the current single-broker live telemetry
+gate; secured, multi-broker, and long-running collection remain open.
 
 The published group smoke now also verifies normal member departure recovery:
 after two-member assignment and explicit position rejoin, the remaining
@@ -465,9 +470,10 @@ coverage toward a release candidate that can be qualified in staging.
   including the explicit controller-listener workflow, in
   [`31781263986`](https://github.com/TaeeunKil/kafrust/actions/runs/31781263986)
   and [`31781264035`](https://github.com/TaeeunKil/kafrust/actions/runs/31781264035).
-   Remaining modern gaps include live qualification of the Share Group Admin
-   lifecycle, client telemetry/KIP-714, and broader Admin/controller protocol
-   coverage.
+   Remaining modern gaps include broader Admin/controller protocol coverage and
+   secured, multi-broker, and long-running telemetry qualification. The
+   single-broker Share Group Admin and KIP-714 telemetry gates are now live-
+   qualified.
 - The first consumer-group lifecycle slice now has a focused regression test
   for retaining an explicit local position when a topic partition remains
   assigned across rejoin, plus a guard that does not copy position from a

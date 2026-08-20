@@ -36,6 +36,8 @@ Implemented:
   non-terminating payload and a shutdown-triggered terminating payload are
   received by the broker-side `ClientTelemetryReceiver`.
 
+The latest single-broker qualification passed in the [`Live Client Telemetry`](https://github.com/TaeeunKil/kafrust/actions/runs/32422305042) workflow on `main`. It also verified subscription mutation recovery and ordinary/terminating payload delivery. The separate payload-limit gate remains recorded above. Secured, multi-broker, and long-running telemetry remain separate gates.
+
 With the optional `otlp` feature, applications can use the built-in provider:
 
 ```rust
