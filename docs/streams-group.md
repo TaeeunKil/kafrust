@@ -27,7 +27,7 @@ invoke `heartbeat()` within the interval returned by
 ## Example
 
 The repository smoke example exercises the initial join, task-state heartbeat,
-and graceful leave:
+nullable offset omission, and graceful leave:
 
 ```powershell
 $env:KAFRUST_BOOTSTRAP_SERVERS = "localhost:9092"

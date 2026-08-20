@@ -351,11 +351,33 @@ impl StreamsGroupSession {
         task_offsets: Vec<StreamsGroupHeartbeatTaskOffset>,
         task_end_offsets: Vec<StreamsGroupHeartbeatTaskOffset>,
     ) {
+        self.set_task_state_with_optional_offsets(
+            active_tasks,
+            standby_tasks,
+            warmup_tasks,
+            Some(task_offsets),
+            Some(task_end_offsets),
+        );
+    }
+
+    /// Replaces task state while optionally omitting changelog offsets.
+    ///
+    /// Kafka 4.3 currently rejects non-null task-offset fields for some Streams
+    /// group configurations. Passing `None` preserves the protocol's nullable
+    /// field semantics and lets the broker request offsets when supported.
+    pub fn set_task_state_with_optional_offsets(
+        &mut self,
+        active_tasks: Vec<StreamsGroupHeartbeatTask>,
+        standby_tasks: Vec<StreamsGroupHeartbeatTask>,
+        warmup_tasks: Vec<StreamsGroupHeartbeatTask>,
+        task_offsets: Option<Vec<StreamsGroupHeartbeatTaskOffset>>,
+        task_end_offsets: Option<Vec<StreamsGroupHeartbeatTaskOffset>>,
+    ) {
         self.pending_active_tasks = Some(active_tasks);
         self.pending_standby_tasks = Some(standby_tasks);
         self.pending_warmup_tasks = Some(warmup_tasks);
-        self.pending_task_offsets = Some(task_offsets);
-        self.pending_task_end_offsets = Some(task_end_offsets);
+        self.pending_task_offsets = task_offsets;
+        self.pending_task_end_offsets = task_end_offsets;
     }
 
     /// Returns whether the session has left the group.

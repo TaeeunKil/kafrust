@@ -1,8 +1,7 @@
 mod common;
 
 use kafrust::streams::{
-    StreamsGroupHeartbeatSubtopology, StreamsGroupHeartbeatTask, StreamsGroupHeartbeatTaskOffset,
-    StreamsGroupHeartbeatTopology,
+    StreamsGroupHeartbeatSubtopology, StreamsGroupHeartbeatTask, StreamsGroupHeartbeatTopology,
 };
 use kafrust::{ClientConfig, StreamsGroupConfig, StreamsGroupSession};
 use std::time::Duration;
@@ -46,23 +45,15 @@ async fn main() -> kafrust::Result<()> {
         session.heartbeat_interval().as_millis()
     );
 
-    session.set_task_state(
+    session.set_task_state_with_optional_offsets(
         vec![StreamsGroupHeartbeatTask {
             subtopology_id: "subtopology-0".to_owned(),
             partitions: Vec::new(),
         }],
         Vec::new(),
         Vec::new(),
-        vec![StreamsGroupHeartbeatTaskOffset {
-            subtopology_id: "subtopology-0".to_owned(),
-            partition: 0,
-            offset: 0,
-        }],
-        vec![StreamsGroupHeartbeatTaskOffset {
-            subtopology_id: "subtopology-0".to_owned(),
-            partition: 0,
-            offset: 0,
-        }],
+        None,
+        None,
     );
     session.heartbeat().await?;
     tokio::time::sleep(Duration::from_millis(100)).await;
