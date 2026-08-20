@@ -277,7 +277,9 @@ ShareConsumer claim. Kafka currently marks those wire APIs unstable, and broad
 clients such as krafka intentionally omit the broker-internal state-persister
 surface. Kafrust's typed implementation now uses the ordinary Group
 coordinator for membership/admin operations and KIP-932 FindCoordinator v6
-with a per-partition `group:topic-id:partition` key for durable state.
+with a per-partition `group:topic-id:partition` key for durable state. The
+topic-id segment follows Kafka's URL-safe Base64-without-padding
+`Uuid::toString()` representation.
 Live lifecycle and replicated-recovery qualification remain open; a passing
 state workflow must not be interpreted as general ShareConsumer or
 `rust-rdkafka` replacement evidence.

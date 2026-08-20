@@ -205,7 +205,7 @@ mod tests {
             correlation_id: 14,
             client_id: Some("kafrust".to_owned()),
             coordinator_type: CoordinatorType::Share,
-            coordinator_keys: vec!["share-orders:00000000-0000-0000-0000-000000000007:0".to_owned()],
+            coordinator_keys: vec!["share-orders:AQAAAAAAAAAAAAAAAAAAAA:0".to_owned()],
         };
 
         let encoded = request.encode().unwrap();

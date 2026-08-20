@@ -1,3 +1,4 @@
+use base64::Engine as _;
 use kafrust_protocol::api::add_offsets_to_txn::{
     AddOffsetsToTxnRequestV0, AddOffsetsToTxnResponseV0,
 };
@@ -4042,25 +4043,9 @@ impl Client {
 }
 
 fn format_topic_id(topic_id: [u8; 16]) -> String {
-    format!(
-        "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
-        topic_id[0],
-        topic_id[1],
-        topic_id[2],
-        topic_id[3],
-        topic_id[4],
-        topic_id[5],
-        topic_id[6],
-        topic_id[7],
-        topic_id[8],
-        topic_id[9],
-        topic_id[10],
-        topic_id[11],
-        topic_id[12],
-        topic_id[13],
-        topic_id[14],
-        topic_id[15]
-    )
+    // Kafka's Uuid::toString uses URL-safe base64 without padding, not the
+    // conventional RFC-4122 hyphenated representation.
+    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(topic_id)
 }
 
 impl fmt::Debug for Client {
@@ -4271,8 +4256,8 @@ impl Drop for RequestSpanGuard {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::{
-        AddPartitionsToTxnTopic, Client, RaftVoterListener, RequestTrace, TxnOffsetCommitTopic,
-        DEFAULT_MAX_RESPONSE_BYTES,
+        format_topic_id, AddPartitionsToTxnTopic, Client, RaftVoterListener, RequestTrace,
+        TxnOffsetCommitTopic, DEFAULT_MAX_RESPONSE_BYTES,
     };
     use crate::config::SaslCredentials;
     use crate::{ClientMetrics, Error};
@@ -4289,6 +4274,11 @@ mod tests {
     use std::time::Duration;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
+
+    #[test]
+    fn formats_topic_id_like_kafka_uuid() {
+        assert_eq!(format_topic_id([7; 16]), "BwcHBwcHBwcHBwcHBwcHBw");
+    }
 
     #[tokio::test]
     async fn times_out_when_broker_does_not_respond() {

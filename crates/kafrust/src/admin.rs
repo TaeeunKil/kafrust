@@ -17531,7 +17531,7 @@ mod tests {
                 &mut bootstrap,
                 &find_share_partition_coordinator_response(
                     addr.port(),
-                    "share-orders:07070707-0707-0707-0707-070707070707:0",
+                    "share-orders:BwcHBwcHBwcHBwcHBwcHBw:0",
                 ),
             )
             .await;
@@ -17551,7 +17551,7 @@ mod tests {
                 &mut bootstrap,
                 &find_share_partition_coordinator_response(
                     addr.port(),
-                    "share-orders:07070707-0707-0707-0707-070707070707:0",
+                    "share-orders:BwcHBwcHBwcHBwcHBwcHBw:0",
                 ),
             )
             .await;

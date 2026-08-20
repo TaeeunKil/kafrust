@@ -2545,7 +2545,9 @@ Implemented evidence:
   typed protocol requests and responses, low-level Client methods, and typed
   coordinator-routed Admin methods. Share-group membership/admin operations
   use the ordinary Group coordinator; durable state uses KIP-932
-  FindCoordinator v6 with a `group:topic-id:partition` key. WriteShareGroupState v1 and
+  FindCoordinator v6 with a `group:topic-id:partition` key whose topic-id
+  segment uses Kafka's URL-safe Base64-without-padding UUID representation.
+  WriteShareGroupState v1 and
   ReadShareGroupStateSummary v1 preserve `delivery_complete_count`; requests
   that need those fields reject a v0-only broker rather than silently losing
   data. Kafka currently marks these wire APIs unstable, so they are tracked as

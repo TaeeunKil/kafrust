@@ -160,7 +160,9 @@ re-registration qualification remains open.
 Share Group State APIs 83-87 are available through typed `AdminClient` methods.
 Share-group membership and group-admin operations use the ordinary Group
 coordinator, while durable state uses Kafka 4.x KIP-932 FindCoordinator v6
-with a per-resource `group:topic-id:partition` key. Write and summary v1
+with a per-resource `group:topic-id:partition` key. The topic-id segment uses
+Kafka's URL-safe Base64-without-padding `Uuid::toString()` representation.
+Write and summary v1
 fields are preserved without silent downgrade; live state lifecycle and
 replicated recovery qualification remain open.
 `list_consumer_group_offsets` and `alter_consumer_group_offsets` expose typed
