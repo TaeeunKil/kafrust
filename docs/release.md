@@ -128,8 +128,9 @@ external project with no workspace path dependency compiled the published
 Streams session, canonical task runtime, and transition API on stable Rust and
 Rust 1.81 in [run 32380345199](https://github.com/TaeeunKil/kafrust/actions/runs/32380345199).
 The crates.io package metadata returned HTTP 200 for both packages; docs.rs
-`0.3.3` indexing was still pending immediately after publication and is not
-claimed by this release note until its build returns successfully.
+pages returned HTTP 200 for both packages on 2026-08-21:
+[`kafrust 0.3.3`](https://docs.rs/kafrust/0.3.3/kafrust/) and
+[`kafrust-protocol 0.3.3`](https://docs.rs/kafrust-protocol/0.3.3/kafrust_protocol/).
 The published single-broker Streams runtime gate later passed in
 [run 32381356444](https://github.com/TaeeunKil/kafrust/actions/runs/32381356444),
 using a fresh external project on Kafka 4.3.1 and Rust 1.81; this is a

@@ -192,8 +192,9 @@ Status: Published as `0.3.3` in protocol-first order. The `0.3.3` package/API
 surface resolves from crates.io and the published Streams surface compiles in
 a fresh external project on stable Rust and Rust 1.81. The `0.3.2` published
 member-aware Admin v10 and broader fresh-project evidence remain recorded
-below; docs.rs `0.3.3` build status is tracked separately from registry
-publication.
+below. Both exact docs.rs pages for `0.3.3` returned HTTP 200 on 2026-08-21:
+[`kafrust`](https://docs.rs/kafrust/0.3.3/kafrust/) and
+[`kafrust-protocol`](https://docs.rs/kafrust-protocol/0.3.3/kafrust_protocol/).
 
 `0.3.x` is a meaningful client milestone, not the complete Kafka replacement
 claim. It is intended to move the current alpha from broad feature
