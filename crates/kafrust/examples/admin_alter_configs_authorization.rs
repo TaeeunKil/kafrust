@@ -2,7 +2,7 @@ mod common;
 
 use kafrust::{
     AdminClient, AlterConfigsOptions, ClientConfig, DeleteTopicsOptions, DescribeConfigsOptions,
-    Error, TopicConfigResource, TopicConfigUpdate,
+    Error, TopicConfigAlteration, TopicConfigResource, TopicConfigUpdate,
 };
 
 const CONFIG_NAME: &str = "retention.ms";
@@ -21,13 +21,23 @@ async fn main() -> kafrust::Result<()> {
             .client_id("kafrust-admin-alter-configs-authorization-example"),
     )?;
     let admin = AdminClient::new(config);
+    let incremental = std::env::var_os("KAFRUST_INCREMENTAL_ALTER_CONFIGS").is_some();
 
-    let result = admin
-        .alter_topic_configs(
-            &[TopicConfigUpdate::new(&topic).set(CONFIG_NAME, UPDATED_VALUE)],
-            AlterConfigsOptions::new(),
-        )
-        .await?;
+    let result = if incremental {
+        admin
+            .incremental_alter_topic_configs(
+                &[TopicConfigAlteration::new(&topic).set(CONFIG_NAME, UPDATED_VALUE)],
+                AlterConfigsOptions::new(),
+            )
+            .await?
+    } else {
+        admin
+            .alter_topic_configs(
+                &[TopicConfigUpdate::new(&topic).set(CONFIG_NAME, UPDATED_VALUE)],
+                AlterConfigsOptions::new(),
+            )
+            .await?
+    };
     let outcome = result.resources().first().ok_or(Error::Unsupported(
         "AlterConfigs returned no resource outcome",
     ))?;
@@ -79,7 +89,12 @@ async fn main() -> kafrust::Result<()> {
             ),
         });
     }
-    println!("AlterConfigs denied with expected error {expected_error}; config retained");
+    let operation = if incremental {
+        "IncrementalAlterConfigs"
+    } else {
+        "AlterConfigs"
+    };
+    println!("{operation} denied with expected error {expected_error}; config retained");
     Ok(())
 }
 
