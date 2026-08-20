@@ -273,10 +273,14 @@ The low-level `Client::streams_group_heartbeat_v0` path now covers the Kafka
 4.x API 88 request and response schemas, including nullable topology metadata,
 task assignments and offsets, member status, and Interactive Queries endpoint
 partitions. The high-level session now covers the source-level member epoch and
-shutdown path, and an injected duplex-broker test verifies initial topology,
-task-state heartbeat, epoch propagation, and graceful shutdown framing. Topology
-reconciliation, background heartbeat ownership, and a live Kafka Streams
-application remain open before claiming Streams client compatibility.
+shutdown path, and `StreamsGroupSessionHandle` owns bounded background
+heartbeat scheduling, task-state commands, assignment snapshots, and graceful
+close. The current Kafka 4.3.1 live gate passed in
+[`32372002532`](https://github.com/TaeeunKil/kafrust/actions/runs/32372002532)
+with join, assignment notification, background heartbeat, nullable task-offset
+omission, and clean leave. Published-artifact compatibility, topology and
+assignment/task-runtime reconciliation, multi-member or coordinator-failure
+behavior, and a live Kafka Streams application remain open.
 
 Topic configuration inspection remains DescribeConfigs v1 by default. An
 explicit `DescribeConfigsOptions::include_documentation(true)` request uses

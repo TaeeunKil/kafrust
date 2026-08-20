@@ -254,13 +254,14 @@ coverage toward a release candidate that can be qualified in staging.
   `.github/workflows/live-streams-group.yml` now provide a Kafka 4.3.1
   real-broker qualification entry point. The workflow enables the broker
   Streams protocol, creates a source topic, and exercises join, background
-  task-state heartbeat, assignment notification, and graceful leave. The live gate passed on
-  commit `eae39b4` in
-  [`32334600160`](https://github.com/TaeeunKil/kafrust/actions/runs/32334600160),
-  including the broker-required nullable task-offset path. This qualifies the
-  manual membership lifecycle only; a complete Kafka Streams application,
-  background heartbeat worker, assignment/task runtime, and multi-member
-  failure matrix remain outside the compatibility claim.
+  task-state heartbeat, assignment notification, and graceful leave. The
+  current-source live gate passed on commit `f666b67` in
+  [`32372002532`](https://github.com/TaeeunKil/kafrust/actions/runs/32372002532),
+  including the broker-required nullable task-offset path. The run confirmed
+  the bounded background handle lifecycle on a single broker. Published
+  artifact qualification, a complete Kafka Streams application,
+  assignment/task-runtime reconciliation, and multi-member or coordinator
+  failure evidence remain outside the compatibility claim.
 - A standalone `fuzz/` workspace now provides ten libFuzzer targets, tracked
   seed corpora, and a manual/weekly corpus-backed campaign workflow. Each
   target has bounded RSS and input-time budgets, and the workflow uploads

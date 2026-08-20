@@ -38,14 +38,18 @@ $env:KAFRUST_BOOTSTRAP_SERVERS = "localhost:9092"
 cargo run -p kafrust --example streams_group_smoke
 ```
 
-The manual/weekly live qualification is defined in
-`.github/workflows/live-streams-group.yml` and uses Kafka 4.3.1 with the
-Streams group protocol enabled. The gate passed on commit `eae39b4` in
-[run 32334600160](https://github.com/TaeeunKil/kafrust/actions/runs/32334600160),
+The live qualification is defined in `.github/workflows/live-streams-group.yml`
+and uses Kafka 4.3.1 with the Streams group protocol enabled. The current
+source gate passed on commit `f666b67` in
+[run 32372002532](https://github.com/TaeeunKil/kafrust/actions/runs/32372002532),
 covering join, background task-state heartbeat, assignment notification,
-nullable task-offset omission, and graceful leave. This qualifies the bounded
-Streams membership lifecycle; it does not establish compatibility with a
-complete Kafka Streams application.
+nullable task-offset omission, and graceful leave. The log confirmed
+`member_epoch=2`, the broker-advertised `5000ms` heartbeat interval, an
+assignment snapshot, and a clean leave. This qualifies the bounded,
+single-broker Streams membership lifecycle; it does not establish published
+artifact compatibility, multi-member or coordinator-failure behavior,
+assignment/task-runtime reconciliation, or compatibility with a complete
+Kafka Streams application.
 
 ## Stability
 
