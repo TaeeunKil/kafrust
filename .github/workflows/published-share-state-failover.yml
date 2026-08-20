@@ -1,0 +1,219 @@
+name: Published Share Group State Failover
+
+on:
+  workflow_dispatch:
+    inputs:
+      kafrust_version:
+        description: "Published kafrust version to run from crates.io"
+        required: true
+        default: "0.3.3"
+  schedule:
+    - cron: "57 4 * * 2"
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTUP_TOOLCHAIN: "1.81.0"
+  KAFRUST_BOOTSTRAP_SERVERS: localhost:19092,localhost:19093,localhost:19094
+  KAFRUST_SHARE_STATE_TOPIC: kafrust-published-share-state-${{ github.run_id }}
+  KAFRUST_SHARE_STATE_GROUP_ID: kafrust-published-share-state-group-${{ github.run_id }}
+  KAFRUST_SHARE_STATE_PARTITION: "0"
+
+jobs:
+  published-share-state-failover:
+    name: Published kafrust Share Group State failover
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.81.0"
+
+      - name: Start three-broker Kafka 4.3.1 with replicated share state
+        run: |
+          docker network create kafrust-published-share-state
+          cluster_id="$(docker run --rm apache/kafka:4.3.1 /opt/kafka/bin/kafka-storage.sh random-uuid)"
+          for node in 1 2 3; do
+            external_port=$((19091 + node))
+            docker run -d --name "kafrust-published-share-state-${node}" \
+              --network kafrust-published-share-state \
+              -p "${external_port}:9092" \
+              -e KAFKA_CLUSTER_ID="$cluster_id" \
+              -e KAFKA_NODE_ID="$node" \
+              -e KAFKA_PROCESS_ROLES=broker,controller \
+              -e KAFKA_LISTENERS=INTERNAL://:29092,EXTERNAL://:9092,CONTROLLER://:9093 \
+              -e KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafrust-published-share-state-${node}:29092,EXTERNAL://localhost:${external_port} \
+              -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+              -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT \
+              -e KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL \
+              -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafrust-published-share-state-1:9093,2@kafrust-published-share-state-2:9093,3@kafrust-published-share-state-3:9093 \
+              -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=3 \
+              -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=3 \
+              -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=2 \
+              -e KAFKA_SHARE_COORDINATOR_STATE_TOPIC_REPLICATION_FACTOR=3 \
+              -e KAFKA_SHARE_COORDINATOR_STATE_TOPIC_MIN_ISR=2 \
+              -e KAFKA_SHARE_RENEW_ACKNOWLEDGE_ENABLE=true \
+              -e KAFKA_GROUP_COORDINATOR_REBALANCE_PROTOCOLS=classic,consumer,share \
+              -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 \
+              apache/kafka:4.3.1
+          done
+
+      - name: Wait for Kafka cluster
+        run: |
+          for attempt in {1..120}; do
+            if docker exec kafrust-published-share-state-1 \
+              /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server kafrust-published-share-state-1:29092 \
+              >/tmp/kafrust-published-share-state-probe.log 2>&1; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/kafrust-published-share-state-probe.log || true
+          docker logs kafrust-published-share-state-1
+          docker logs kafrust-published-share-state-2
+          docker logs kafrust-published-share-state-3
+          exit 1
+
+      - name: Create replicated user topic for share state
+        run: |
+          docker exec kafrust-published-share-state-1 /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server kafrust-published-share-state-1:29092 \
+            --create --if-not-exists --topic "$KAFRUST_SHARE_STATE_TOPIC" \
+            --partitions 6 --replication-factor 3
+
+      - name: Create fresh external published project
+        env:
+          KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version || '0.3.3' }}
+        run: |
+          project_dir="$RUNNER_TEMP/kafrust-published-share-state-failover"
+          cargo new --bin "$project_dir"
+          cp .github/published-share-state-failover/src/main.rs "$project_dir/src/main.rs"
+          sed "s/__KAFRUST_VERSION__/$KAFRUST_PUBLISHED_VERSION/" \
+            .github/published-share-state-failover/Cargo.toml > "$project_dir/Cargo.toml"
+          cargo build --release --manifest-path "$project_dir/Cargo.toml"
+
+      - name: Write replicated Share Group State before leader loss
+        env:
+          KAFRUST_SHARE_STATE_PHASE: write
+        run: |
+          cargo run --quiet --release \
+            --manifest-path "$RUNNER_TEMP/kafrust-published-share-state-failover/Cargo.toml"
+
+      - name: Verify replicated internal state and locate share coordinator
+        run: |
+          for attempt in {1..60}; do
+            state_topic="$(docker exec kafrust-published-share-state-1 \
+              /opt/kafka/bin/kafka-topics.sh \
+              --bootstrap-server kafrust-published-share-state-1:29092 --describe \
+              --topic __share_group_state 2>/dev/null || true)"
+            printf '%s\n' "$state_topic"
+            if printf '%s\n' "$state_topic" | grep -q 'ReplicationFactor: 3'; then
+              isr="$(printf '%s\n' "$state_topic" | awk '{ for (i = 1; i <= NF; i++) if ($i == "Isr:") { print $(i + 1); exit } }')"
+              case ",$isr," in *,1,* ) ;; *) isr="" ;; esac
+              case ",$isr," in *,2,* ) ;; *) isr="" ;; esac
+              case ",$isr," in *,3,* ) ;; *) isr="" ;; esac
+              if [ -n "$isr" ]; then break; fi
+            fi
+            sleep 2
+          done
+          printf '%s\n' "$state_topic" | grep -q 'ReplicationFactor: 3'
+          isr="$(printf '%s\n' "$state_topic" | awk '{ for (i = 1; i <= NF; i++) if ($i == "Isr:") { print $(i + 1); exit } }')"
+          case ",$isr," in *,1,* ) ;; *) echo "state topic is missing broker 1 from ISR: $isr"; exit 1;; esac
+          case ",$isr," in *,2,* ) ;; *) echo "state topic is missing broker 2 from ISR: $isr"; exit 1;; esac
+          case ",$isr," in *,3,* ) ;; *) echo "state topic is missing broker 3 from ISR: $isr"; exit 1;; esac
+
+          output="$(
+            KAFRUST_SHARE_STATE_PHASE=locate \
+              cargo run --quiet --release \
+                --manifest-path "$RUNNER_TEMP/kafrust-published-share-state-failover/Cargo.toml"
+          )"
+          printf '%s\n' "$output"
+          coordinator_endpoint="$(printf '%s\n' "$output" | sed -n 's/^KAFRUST_STATE_COORDINATOR_ENDPOINT=//p' | tail -n 1)"
+          case "$coordinator_endpoint" in
+            *:19092) coordinator_id=1 ;;
+            *:19093) coordinator_id=2 ;;
+            *:19094) coordinator_id=3 ;;
+            *) echo "could not parse the Share coordinator endpoint: $coordinator_endpoint"; exit 1 ;;
+          esac
+          echo "share coordinator is broker $coordinator_id ($coordinator_endpoint)"
+          echo "KAFRUST_STATE_COORDINATOR_ID=$coordinator_id" >> "$GITHUB_ENV"
+
+      - name: Stop share coordinator and wait for replacement
+        run: |
+          coordinator_id="$KAFRUST_STATE_COORDINATOR_ID"
+          docker stop "kafrust-published-share-state-${coordinator_id}"
+          bootstrap_servers=""
+          for node in 1 2 3; do
+            if [ "$node" != "$coordinator_id" ]; then
+              if [ -n "$bootstrap_servers" ]; then bootstrap_servers=",$bootstrap_servers"; fi
+              bootstrap_servers="localhost:$((19091 + node))$bootstrap_servers"
+            fi
+          done
+          for attempt in {1..60}; do
+            if output="$(
+              KAFRUST_SHARE_STATE_PHASE=locate \
+              KAFRUST_BOOTSTRAP_SERVERS="$bootstrap_servers" \
+                cargo run --quiet --release \
+                  --manifest-path "$RUNNER_TEMP/kafrust-published-share-state-failover/Cargo.toml"
+            )"; then
+              printf '%s\n' "$output"
+              coordinator_endpoint="$(printf '%s\n' "$output" | sed -n 's/^KAFRUST_STATE_COORDINATOR_ENDPOINT=//p' | tail -n 1)"
+              case "$coordinator_endpoint" in
+                *:19092) new_coordinator=1 ;;
+                *:19093) new_coordinator=2 ;;
+                *:19094) new_coordinator=3 ;;
+                *) new_coordinator="" ;;
+              esac
+              if [ -n "$new_coordinator" ] && [ "$new_coordinator" != "$coordinator_id" ]; then
+                echo "share coordinator moved from broker $coordinator_id to broker $new_coordinator ($coordinator_endpoint)"
+                echo "KAFRUST_BOOTSTRAP_SERVERS=$bootstrap_servers" >> "$GITHUB_ENV"
+                exit 0
+              fi
+            else
+              echo "Share coordinator lookup is not ready; retrying"
+            fi
+            sleep 2
+          done
+          exit 1
+
+      - name: Read and delete replicated Share Group State after coordinator loss
+        env:
+          KAFRUST_SHARE_STATE_PHASE: read
+        run: |
+          cargo run --quiet --release \
+            --manifest-path "$RUNNER_TEMP/kafrust-published-share-state-failover/Cargo.toml"
+
+      - name: Verify published dependency versions
+        env:
+          KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version || '0.3.3' }}
+        run: |
+          lockfile="$RUNNER_TEMP/kafrust-published-share-state-failover/Cargo.lock"
+          grep -A1 -q 'name = "kafrust"' "$lockfile"
+          grep -A1 -q "version = \"$KAFRUST_PUBLISHED_VERSION\"" "$lockfile"
+          grep -A1 -q 'name = "kafrust-protocol"' "$lockfile"
+          printf '{"kafrust_version":"%s","kafka_version":"4.3.1","replicated_state":true,"coordinator_failover":true,"read_summary_delete":true}\n' \
+            "$KAFRUST_PUBLISHED_VERSION" > "$RUNNER_TEMP/published-share-state-failover.json"
+
+      - name: Upload published Share Group State result
+        uses: actions/upload-artifact@v4
+        with:
+          name: kafrust-published-share-state-failover-${{ github.run_id }}
+          path: ${{ runner.temp }}/published-share-state-failover.json
+
+      - name: Dump Kafka diagnostics
+        if: failure()
+        run: |
+          docker logs kafrust-published-share-state-1 || true
+          docker logs kafrust-published-share-state-2 || true
+          docker logs kafrust-published-share-state-3 || true
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker rm -f kafrust-published-share-state-1 kafrust-published-share-state-2 kafrust-published-share-state-3 || true
+          docker network rm kafrust-published-share-state || true
