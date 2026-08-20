@@ -14,8 +14,9 @@ Status legend:
 
 ## Current Release Qualification
 
-`0.3.1` is published on crates.io in protocol-first order. The preceding
-`0.3.0` release's complete seven-profile external smoke passed in
+`0.3.2` release is being prepared protocol-first. The previous `0.3.1`
+artifact is published on crates.io. The `0.3.0` release's complete
+seven-profile external smoke passed in
 [`31770895344`](https://github.com/TaeeunKil/kafrust/actions/runs/31770895344)
 against Kafka 3.7.2 classic, Kafka 4.3.1 KIP-848, Kafka 3.7.2
 SASL_SSL/SCRAM, and Gzip/Snappy/LZ4/Zstd paths. The `0.3.0` release also
