@@ -118,6 +118,7 @@ async fn member() -> kafrust::Result<()> {
     let ready_path = required_env("KAFRUST_SHARE_MEMBER_READY_FILE")?;
     let start_path = required_env("KAFRUST_SHARE_MEMBER_START_FILE")?;
     let output_path = required_env("KAFRUST_SHARE_MEMBER_OUTPUT_FILE")?;
+    let heartbeat_ready_path = std::env::var("KAFRUST_SHARE_MEMBER_HEARTBEAT_READY_FILE").ok();
     let run_seconds = run_seconds()?;
 
     let mut consumer = ShareConsumerConfig::new(bootstrap_servers()?, group_id)
@@ -136,6 +137,9 @@ async fn member() -> kafrust::Result<()> {
     consumer
         .spawn_heartbeat_task(Duration::from_millis(500))
         .await?;
+    if let Some(path) = heartbeat_ready_path {
+        std::fs::write(path, b"heartbeat-started\n").map_err(kafrust::Error::Io)?;
+    }
     let mut output = std::fs::OpenOptions::new()
         .create(true)
         .append(true)

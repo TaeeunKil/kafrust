@@ -1,0 +1,200 @@
+name: Published ShareConsumer Member Loss
+
+on:
+  workflow_dispatch:
+    inputs:
+      kafrust_version:
+        description: "Published kafrust version to run from crates.io"
+        required: true
+        default: "0.3.3"
+      run_seconds:
+        description: "Seconds the surviving published member remains active"
+        required: true
+        default: "180"
+  schedule:
+    - cron: "17 6 * * 2"
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTUP_TOOLCHAIN: "1.81.0"
+  KAFRUST_BOOTSTRAP_SERVERS: localhost:22092,localhost:22093,localhost:22094
+  KAFRUST_SHARE_TOPIC: kafrust-published-share-member-loss-${{ github.run_id }}
+  KAFRUST_SHARE_GROUP_ID: kafrust-published-share-member-loss-group-${{ github.run_id }}
+  KAFRUST_SHARE_VALUE_PREFIX: published-share-member-loss-
+  KAFRUST_SHARE_MEMBER_RUN_SECONDS: ${{ inputs.run_seconds || '180' }}
+  KAFRUST_SHARE_RECORDS_PER_PARTITION: "1"
+
+jobs:
+  published-share-member-loss:
+    name: Published kafrust ShareConsumer member-loss rebalance
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.81.0"
+
+      - name: Start three-broker Kafka 4.3.1 with share groups enabled
+        run: |
+          docker network create kafrust-published-share-member-loss
+          cluster_id="$(docker run --rm apache/kafka:4.3.1 /opt/kafka/bin/kafka-storage.sh random-uuid)"
+          for node in 1 2 3; do
+            external_port=$((22091 + node))
+            docker run -d --name "kafrust-published-share-member-loss-${node}" \
+              --network kafrust-published-share-member-loss \
+              -p "${external_port}:9092" \
+              -e KAFKA_CLUSTER_ID="${cluster_id}" \
+              -e KAFKA_NODE_ID="${node}" \
+              -e KAFKA_PROCESS_ROLES=broker,controller \
+              -e KAFKA_LISTENERS=INTERNAL://:29092,EXTERNAL://:9092,CONTROLLER://:9093 \
+              -e KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafrust-published-share-member-loss-${node}:29092,EXTERNAL://localhost:${external_port} \
+              -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+              -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT \
+              -e KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL \
+              -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafrust-published-share-member-loss-1:9093,2@kafrust-published-share-member-loss-2:9093,3@kafrust-published-share-member-loss-3:9093 \
+              -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=3 \
+              -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=3 \
+              -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=2 \
+              -e KAFKA_SHARE_COORDINATOR_STATE_TOPIC_REPLICATION_FACTOR=3 \
+              -e KAFKA_SHARE_COORDINATOR_STATE_TOPIC_MIN_ISR=2 \
+              -e KAFKA_SHARE_RENEW_ACKNOWLEDGE_ENABLE=true \
+              -e KAFKA_GROUP_COORDINATOR_REBALANCE_PROTOCOLS=classic,consumer,share \
+              -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 \
+              apache/kafka:4.3.1
+          done
+
+      - name: Wait for Kafka cluster
+        run: |
+          for attempt in {1..120}; do
+            if docker exec kafrust-published-share-member-loss-1 \
+              /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server kafrust-published-share-member-loss-1:29092 \
+              >/tmp/kafrust-published-share-member-loss-probe.log 2>&1; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/kafrust-published-share-member-loss-probe.log || true
+          docker logs kafrust-published-share-member-loss-1
+          docker logs kafrust-published-share-member-loss-2
+          docker logs kafrust-published-share-member-loss-3
+          exit 1
+
+      - name: Create replicated share topic
+        run: |
+          docker exec kafrust-published-share-member-loss-1 /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server kafrust-published-share-member-loss-1:29092 \
+            --create --if-not-exists --topic "$KAFRUST_SHARE_TOPIC" \
+            --partitions 6 --replication-factor 3
+          docker exec kafrust-published-share-member-loss-1 /opt/kafka/bin/kafka-configs.sh \
+            --bootstrap-server kafrust-published-share-member-loss-1:29092 \
+            --alter --entity-type groups --entity-name "$KAFRUST_SHARE_GROUP_ID" \
+            --add-config share.auto.offset.reset=earliest
+
+      - name: Create fresh external published project
+        env:
+          KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version || '0.3.3' }}
+        run: |
+          project_dir="$RUNNER_TEMP/kafrust-published-share-member-loss"
+          cargo new --bin "$project_dir"
+          cp .github/published-share-multi-member/src/main.rs "$project_dir/src/main.rs"
+          sed "s/__KAFRUST_VERSION__/$KAFRUST_PUBLISHED_VERSION/" \
+            .github/published-share-multi-member/Cargo.toml > "$project_dir/Cargo.toml"
+          cargo build --release --manifest-path "$project_dir/Cargo.toml"
+
+      - name: Join members and force member loss
+        run: |
+          set -euo pipefail
+          project_dir="$RUNNER_TEMP/kafrust-published-share-member-loss"
+          ready_base="$RUNNER_TEMP/kafrust-published-share-member-loss-ready"
+          heartbeat_ready_base="$RUNNER_TEMP/kafrust-published-share-member-loss-heartbeat-ready"
+          start_file="$RUNNER_TEMP/kafrust-published-share-member-loss-start"
+          output_base="$RUNNER_TEMP/kafrust-published-share-member-loss-output"
+          log_base="$RUNNER_TEMP/kafrust-published-share-member-loss-log"
+          rm -f "$ready_base"-* "$heartbeat_ready_base"-* "$start_file" "$output_base"-* "$log_base"-*
+
+          for member in 1 2; do
+            KAFRUST_OPERATION=member \
+              KAFRUST_SHARE_MEMBER_ID="share-member-${member}" \
+              KAFRUST_SHARE_MEMBER_READY_FILE="$ready_base-${member}" \
+              KAFRUST_SHARE_MEMBER_HEARTBEAT_READY_FILE="$heartbeat_ready_base-${member}" \
+              KAFRUST_SHARE_MEMBER_START_FILE="$start_file" \
+              KAFRUST_SHARE_MEMBER_OUTPUT_FILE="$output_base-${member}" \
+              cargo run --quiet --release \
+              --manifest-path "$project_dir/Cargo.toml" \
+              > "$log_base-${member}" 2>&1 &
+            if [ "$member" -eq 1 ]; then
+              member_one_pid=$!
+            else
+              member_two_pid=$!
+            fi
+          done
+
+          wait_for_marker() {
+            marker="$1"
+            for attempt in {1..180}; do
+              if [ -f "$marker" ]; then
+                return 0
+              fi
+              sleep 1
+            done
+            echo "timed out waiting for $marker"
+            return 1
+          }
+
+          wait_for_marker "$ready_base-1"
+          wait_for_marker "$ready_base-2"
+          touch "$start_file"
+          wait_for_marker "$heartbeat_ready_base-1"
+          wait_for_marker "$heartbeat_ready_base-2"
+
+          kill -9 "$member_two_pid" 2>/dev/null || true
+          set +e
+          wait "$member_two_pid"
+          member_two_status=$?
+          set -e
+          test "$member_two_status" -ne 0
+
+          KAFRUST_OPERATION=seed cargo run --quiet --release \
+            --manifest-path "$project_dir/Cargo.toml"
+
+          set +e
+          wait "$member_one_pid"
+          member_one_status=$?
+          set -e
+          cat "$log_base-1" "$log_base-2"
+          exit "$member_one_status"
+
+      - name: Verify surviving member owns all partitions
+        run: |
+          set -euo pipefail
+          output_file="$RUNNER_TEMP/kafrust-published-share-member-loss-output-1"
+          log_file="$RUNNER_TEMP/kafrust-published-share-member-loss-log-1"
+          test "$(wc -l < "$output_file")" -eq 6
+          test "$(cut -d, -f2 "$output_file" | sort -n | uniq | paste -sd, -)" = "0,1,2,3,4,5"
+          test "$(cut -d, -f2,3 "$output_file" | sort | uniq | wc -l)" -eq 6
+          test ! -s "$RUNNER_TEMP/kafrust-published-share-member-loss-output-2"
+          grep -q 'member=share-member-1 assignment=6 accepted=6' "$log_file"
+
+      - name: Verify published dependency versions
+        env:
+          KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version || '0.3.3' }}
+        run: |
+          lockfile="$RUNNER_TEMP/kafrust-published-share-member-loss/Cargo.lock"
+          grep -A1 -q 'name = "kafrust"' "$lockfile"
+          grep -A1 -q "version = \"$KAFRUST_PUBLISHED_VERSION\"" "$lockfile"
+          grep -A1 -q 'name = "kafrust-protocol"' "$lockfile"
+
+      - name: Dump diagnostics
+        if: failure()
+        run: |
+          cat "$RUNNER_TEMP/kafrust-published-share-member-loss-log-1" || true
+          cat "$RUNNER_TEMP/kafrust-published-share-member-loss-log-2" || true
+          docker logs kafrust-published-share-member-loss-1 || true
+          docker logs kafrust-published-share-member-loss-2 || true
+          docker logs kafrust-published-share-member-loss-3 || true
