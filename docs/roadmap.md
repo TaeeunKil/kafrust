@@ -14,13 +14,14 @@ Status legend:
 
 ## Current Release Qualification
 
-`0.3.0` is published on crates.io in protocol-first order. The complete
-post-publish seven-profile external smoke passed in
+`0.3.1` is published on crates.io in protocol-first order. The preceding
+`0.3.0` release's complete seven-profile external smoke passed in
 [`31770895344`](https://github.com/TaeeunKil/kafrust/actions/runs/31770895344)
 against Kafka 3.7.2 classic, Kafka 4.3.1 KIP-848, Kafka 3.7.2
-SASL_SSL/SCRAM, and Gzip/Snappy/LZ4/Zstd paths. The release also includes the
-typed Admin mutation ambiguity contract and its current-source response-drop
-qualification.
+SASL_SSL/SCRAM, and Gzip/Snappy/LZ4/Zstd paths. The `0.3.0` release also
+included the typed Admin mutation ambiguity contract and its current-source
+response-drop qualification. The published `0.3.1` artifact has separate
+fresh-project evidence recorded below.
 
 The current-source `Live Kafka Smoke` matrix passed on commit `dc7446b` in
 [`32339508792`](https://github.com/TaeeunKil/kafrust/actions/runs/32339508792).

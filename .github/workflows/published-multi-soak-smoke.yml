@@ -6,7 +6,7 @@ on:
       kafrust_version:
         description: "Published kafrust version to qualify from crates.io"
         required: true
-        default: "0.2.28"
+        default: "0.3.1"
       kafka_version:
         description: "Apache Kafka broker image version"
         required: true

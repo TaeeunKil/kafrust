@@ -13,7 +13,7 @@ The current development branch implements the stable KIP-932 v1 wire shape for
 KIP-1206 ShareFetch v2 acquisition mode and KIP-1222 ShareAcknowledge v2
 renewal, and provides a high-level `ShareConsumer` runtime. The API is pre-1.0
 and is not included in
-the published `0.3.0` crate until a release gate is completed.
+the published `0.3.1` crate until a release gate is completed.
 
 Current evidence:
 
