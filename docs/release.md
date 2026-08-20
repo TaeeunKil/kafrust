@@ -181,6 +181,16 @@ read/summary/delete. This qualifies the published unstable state path only.
 Longer ownership/backpressure campaigns, higher-cycle rebalance matrices beyond
 four cycles, and production readiness remain unqualified.
 
+The published `DescribeCluster` gate then passed from fresh external `kafrust
+0.3.3` projects on Kafka 3.7.2 and 4.3.1 in
+[run 32400851719](https://github.com/TaeeunKil/kafrust/actions/runs/32400851719)
+and [run 32400851830](https://github.com/TaeeunKil/kafrust/actions/runs/32400851830).
+Both runs resolved the client and protocol crates from crates.io, verified the
+generated lockfile, and checked API 60 cluster identity, authorized operations,
+broker endpoint metadata, and Metadata fallback. This qualifies the published
+broker-bootstrap path only; controller-endpoint bootstrap and broader Admin
+version/security/failure matrices remain open.
+
 The `0.2.18` packages passed Cargo publish verification and both staged
 all-feature package-documentation builds on commit `373de00`. The matching
 `kafrust-protocol` and `kafrust` packages were published in that order; both

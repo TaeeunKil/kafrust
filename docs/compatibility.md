@@ -307,9 +307,16 @@ type and documentation fields in
 
 The current source also exposes an opt-in `AdminClient::describe_cluster_with_options`
 path using Kafka `DescribeCluster` API 60 v1, preserving cluster ID, endpoint
-type, broker rack, and cluster authorized operations. The Kafka 4.x manual
-configuration workflow now checks this response as well; no passing live or
-published-artifact result has been recorded yet.
+type, broker rack, and cluster authorized operations. The published `kafrust
+0.3.3` path now passes from fresh external projects against Kafka 3.7.2 and
+4.3.1 in [`32400851719`](https://github.com/TaeeunKil/kafrust/actions/runs/32400851719)
+and [`32400851830`](https://github.com/TaeeunKil/kafrust/actions/runs/32400851830),
+with crates.io resolution and lockfile verification. The gate checks API 60
+cluster identity, authorized operations, broker endpoint metadata, and the
+existing Metadata fallback. This qualifies the broker-bootstrap path only:
+requesting `Controllers` through a broker listener returns Kafka's
+`MISMATCHED_ENDPOINT_TYPE`, so controller bootstrap configuration and a
+controller-endpoint qualification remain open.
 
 The current-source `DescribeTopicPartitions` qualification passed on commit
 `d833f9f`: Kafka 3.7.2 correctly returned the explicit unsupported capability
@@ -1070,6 +1077,8 @@ other coordinator-routed writes remain separate qualification items.
 | Apache Kafka 3.7.2 | three-broker KRaft; PLAINTEXT and SASL_SSL SCRAM failover profiles | DescribeProducers v0 leader routing; DescribeTransactions v0 coordinator routing | [`Live Kafka Smoke`, run `31589394777`](https://github.com/TaeeunKil/kafrust/actions/runs/31589394777) on 2026-08-12 | Passing |
 | Apache Kafka 4.3.1 | single-node and three-broker KRaft; three-broker SASL_PLAINTEXT and SASL_SSL/SCRAM | KIP-848 member-aware Admin OffsetFetch v9 and OffsetCommit v9 | [`Live Kafka Smoke`, run `31607006237`](https://github.com/TaeeunKil/kafrust/actions/runs/31607006237) on 2026-08-12 | Passing; plaintext and secured profiles |
 | Apache Kafka 4.3.1 | single-node KRaft | API 74 `ListConfigResources` v1, documentation-aware `DescribeConfigs` v4, and `DescribeCluster` v1 | [`Live ListConfigResources Compatibility`, run `32342304005`](https://github.com/TaeeunKil/kafrust/actions/runs/32342304005) on 2026-08-20 | Passing; current-source MSRV gate |
+| Published `kafrust 0.3.3` | fresh external Cargo project with no workspace path dependency; Kafka 3.7.2 single-node KRaft; stable Rust and Rust 1.81 | `DescribeCluster` API 60 v1 broker endpoint, cluster ID, authorized operations, broker metadata, and Metadata fallback | [`Published DescribeCluster`, run `32400851719`](https://github.com/TaeeunKil/kafrust/actions/runs/32400851719) on 2026-08-21 | Passing; published broker-bootstrap path and lockfile verification; controller endpoint remains unqualified |
+| Published `kafrust 0.3.3` | fresh external Cargo project with no workspace path dependency; Kafka 4.3.1 single-node KRaft; stable Rust and Rust 1.81 | `DescribeCluster` API 60 v1 broker endpoint, cluster ID, authorized operations, broker metadata, and Metadata fallback | [`Published DescribeCluster`, run `32400851830`](https://github.com/TaeeunKil/kafrust/actions/runs/32400851830) on 2026-08-21 | Passing; published broker-bootstrap path and lockfile verification; controller endpoint remains unqualified |
 | Apache Kafka 3.9.1 | single-node KRaft | API 74 `ListClientMetricsResources` v0 with the client-metrics resource filter | [`Live ListConfigResources Compatibility`, run `32342680037`](https://github.com/TaeeunKil/kafrust/actions/runs/32342680037) on 2026-08-20 | Passing; current-source MSRV gate |
 | Apache Kafka 3.7.2 | single-node KRaft with required client certificates | current-source mTLS handshake, Admin, producer, direct consumer, classic consumer group, transactional/read-committed, low-level, and coordinator roundtrips | [`Live Mutual TLS`, run `32343983601`](https://github.com/TaeeunKil/kafrust/actions/runs/32343983601) on 2026-08-20 | Passing; short-lived generated certificates; rotation remains separate |
 | Apache Kafka 4.3.1 | single-node KRaft with required client certificates | current-source mTLS handshake, Admin, producer, direct consumer, KIP-848 consumer group, transactional/read-committed, low-level, and coordinator roundtrips | [`Live Mutual TLS`, run `32343983397`](https://github.com/TaeeunKil/kafrust/actions/runs/32343983397) on 2026-08-20 | Passing; short-lived generated certificates; rotation remains separate |

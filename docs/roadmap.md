@@ -2528,9 +2528,14 @@ Implemented evidence:
   preserves cluster ID, endpoint type, broker rack, and cluster authorized
   operations, with Metadata fallback when API 60 is absent. Protocol,
   injected-client, and Admin capability-routing tests pass. The existing
-  Metadata-based method remains unchanged for compatibility; live and
-  published-artifact qualification are part of the next Kafka 4.x workflow
-  run.
+  Metadata-based method remains unchanged for compatibility. The published
+  `kafrust 0.3.3` external gate passed the broker-bootstrap path on Kafka 3.7.2
+  and 4.3.1 in [`32400851719`](https://github.com/TaeeunKil/kafrust/actions/runs/32400851719)
+  and [`32400851830`](https://github.com/TaeeunKil/kafrust/actions/runs/32400851830),
+  including crates.io lockfile verification and API 60 cluster/authorized-
+  operation checks. The controller endpoint is not yet qualified because it
+  requires a controller bootstrap endpoint rather than an ordinary broker
+  listener; this remains a separate 1.0 compatibility task.
 
 - KRaft `AddRaftVoter` API 80 v0/v1 and `RemoveRaftVoter` API 81 v0 are now
   implemented through typed flexible protocol messages, low-level Client
