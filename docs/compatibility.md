@@ -23,6 +23,11 @@ response definitions, and checks message identity, API key, and local version
 bounds. It is an API identity/version guard only; it does not establish
 field-level or byte-for-byte parity, which still requires generated or golden
 schema fixtures and targeted live qualification.
+The latest online audit passed in
+[`32384257319`](https://github.com/TaeeunKil/kafrust/actions/runs/32384257319),
+checking 152 request/response schemas from the 76 local request types. The
+audit accepts Apache's singleton ranges such as `validVersions: "0"` as a
+closed range; its regression test covers that metadata shape.
   OffsetCommit and OffsetFetch v10 now have UUID-based protocol types,
   low-level `Client` methods, and high-level group/Admin negotiation with a v9
   fallback. The snapshot is an identity and version guard, not field-level or
@@ -349,8 +354,8 @@ dynamic quorum from a standalone controller, provisions a second controller
 with `--no-initial-controllers`, and runs the public
 `admin_dynamic_quorum` example through Add/RemoveRaftVoter plus
 DescribeQuorum convergence checks. The workflow passed in
-[`32344895847`](https://github.com/TaeeunKil/kafrust/actions/runs/32344895847)
-on 2026-08-20, recording voter/observer membership before the mutation, after
+[`32383742320`](https://github.com/TaeeunKil/kafrust/actions/runs/32383742320)
+on 2026-08-20, revalidating voter/observer membership before the mutation, after
 AddRaftVoter, and after RemoveRaftVoter. This qualifies the tested Kafka 4.3.1
 dynamic membership path. The follow-up
 `.github/workflows/live-dynamic-quorum-authorization.yml` gate passed in

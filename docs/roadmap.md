@@ -311,7 +311,10 @@ coverage toward a release candidate that can be qualified in staging.
   remain open. The scheduled/manual `Apache Schema Audit` workflow runs the
   same checker in `--online-all` mode across all 76 local request schemas and
   their 76 matching responses, so API identity and version drift is checked
-  beyond the deterministic ten-schema snapshot gate.
+  beyond the deterministic ten-schema snapshot gate. The latest online audit
+  passed in [`32384257319`](https://github.com/TaeeunKil/kafrust/actions/runs/32384257319),
+  checking 152 request/response schemas; the audit regression suite now also
+  covers Apache singleton ranges such as `validVersions: "0"`.
 - Kafka 4.x topic-UUID `OffsetCommit v10` and `OffsetFetch v10` are now
   implemented in the protocol crate and exposed through low-level `Client`
   methods. Focused request/response wire tests and the existing offset fuzz
@@ -2492,7 +2495,7 @@ Implemented evidence:
   `.github/workflows/live-dynamic-quorum.yml` provision a Kafka 4.3.1
   standalone/dynamic controller pair and exercise Add/RemoveRaftVoter with
   DescribeQuorum convergence checks. The live qualification passed in
-  [`32344895847`](https://github.com/TaeeunKil/kafrust/actions/runs/32344895847),
+  [`32383742320`](https://github.com/TaeeunKil/kafrust/actions/runs/32383742320),
   recording `voters=1 observers=1` before the mutation, `voters=2
   observers=0` after AddRaftVoter, and `voters=1 observers=1` after
   RemoveRaftVoter. The follow-up
