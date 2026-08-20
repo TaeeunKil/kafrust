@@ -277,7 +277,6 @@ jobs:
           KAFRUST_TOPIC_PATTERN: '^kafrust-regex-(orders|payments|dynamic-${{ github.run_id }})$'
           KAFRUST_REGEX_EXPECTED_TOPICS: kafrust-regex-orders,kafrust-regex-payments
           KAFRUST_REGEX_DYNAMIC_TOPIC: kafrust-regex-dynamic-${{ github.run_id }}
-          RUST_LOG: kafrust=debug
         run: cargo run -p kafrust --example consumer_group_regex
 
       - name: Run KIP-848 consumer group example

@@ -47,17 +47,16 @@ recovering through different coordinators, in
 High-level regex subscriptions now select `ConsumerGroupHeartbeat v1` and send
 the regex as the broker subscription field while omitting the resolved topic
 name list; explicit-name subscriptions continue to use v0. A duplex wire
-regression test covers the v1 header and nullable regex field. The recorded
-KIP-848 live runs above predate this selection change and therefore qualify the
-previous v0 path, not the new v1 regex transport; a fresh live v1 matrix and
-dynamic post-join topic-discovery qualification remain open. The source now
+regression test covers the v1 header and nullable regex field. Because Kafka
+4.3.1 v1 requires a client-generated member ID, regex joins also generate and
+retain a UUID-shaped member ID for the lifetime of the consumer. The source
 refreshes Metadata v1/v12 and retries assignment mapping when a regex
-assignment contains an unknown topic UUID; this is covered by the same
-runtime path but still needs a live broker topic-creation/assignment result.
+assignment contains an unknown topic UUID.
 The `Live Kafka Smoke` workflow now has a Kafka 4.3.1-only dynamic regex job
 that creates and produces a matching topic after the group joins, then waits
-for the assignment and record; no passing run is claimed until GitHub Actions
-can execute it.
+for the assignment and record. The complete 17-job matrix, including the
+Kafka 4.3.1 regex v1 initial join and post-join dynamic topic assignment,
+passed in [`32339508792`](https://github.com/TaeeunKil/kafrust/actions/runs/32339508792).
 
 Direct and group consumers now select flexible topic-UUID Fetch v13 when the
 broker advertises it and Metadata v12 resolves a non-zero topic ID. They retain
@@ -88,7 +87,7 @@ release entries below. The latest recorded live matrix covered Kafka 3.7.2,
 3.8.1, 3.9.1, and 4.3.1 with plaintext, TLS, SASL/PLAIN, SASL_SSL/SCRAM,
 OAUTHBEARER, ACL authorization, multi-broker failover, transaction
 reconciliation, and KIP-848 paths in
-[`32221883090`](https://github.com/TaeeunKil/kafrust/actions/runs/32221883090).
+[`32339508792`](https://github.com/TaeeunKil/kafrust/actions/runs/32339508792).
 The published `0.3.0` artifact also passed a 600-second Kafka 4.3.1
 three-broker simultaneous-loss soak in
 [`32230130048`](https://github.com/TaeeunKil/kafrust/actions/runs/32230130048).
