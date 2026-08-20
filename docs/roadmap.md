@@ -2280,8 +2280,12 @@ Implemented evidence:
   requires client authentication on Kafka 3.7.2 or 4.3.1, verifies the
   handshake independently, and runs Admin, producer, direct-consumer,
   consumer-group, transactional/read-committed, low-level, and coordinator
-  roundtrips; a passing workflow run and certificate-rotation behavior remain
-  open security gates.
+  roundtrips. Kafka 3.7.2 passed in
+  [`32343983601`](https://github.com/TaeeunKil/kafrust/actions/runs/32343983601)
+  and Kafka 4.3.1 passed in
+  [`32343983397`](https://github.com/TaeeunKil/kafrust/actions/runs/32343983397).
+  Certificate rotation behavior and published-artifact mTLS evidence remain
+  separate security gates.
 
 - The test suite now includes a reusable in-process scripted broker harness
   under `crates/kafrust/tests/support/`. It records API key, version,

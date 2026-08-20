@@ -98,9 +98,16 @@ These are live results for the named paths, not a claim of complete Kafka or
 `rust-rdkafka` parity.
 
 Mutual TLS client certificate authentication is implemented in the shared
-configuration and high-level builders, but no live broker evidence is claimed
-for it yet. The manual [`live-mtls.yml`](../.github/workflows/live-mtls.yml)
-workflow is the reproducible qualification path for Kafka 3.7.2 and 4.3.1.
+configuration and high-level builders. The manual
+[`live-mtls.yml`](../.github/workflows/live-mtls.yml) workflow passed its
+current-source qualification on Kafka 3.7.2 in
+[`32343983601`](https://github.com/TaeeunKil/kafrust/actions/runs/32343983601)
+and Kafka 4.3.1 in
+[`32343983397`](https://github.com/TaeeunKil/kafrust/actions/runs/32343983397).
+Those runs covered the required-client-certificate handshake, Admin, producer,
+direct consumer, consumer group, transactional/read-committed, low-level, and
+coordinator roundtrips. Certificate rotation behavior and published-artifact
+mTLS evidence remain separate gates.
 
 The low-level `Client::api_versions_cached` helper now prefers flexible
 `ApiVersions` v4 and falls back to v3 when a broker returns
@@ -805,6 +812,8 @@ other coordinator-routed writes remain separate qualification items.
 | Apache Kafka 4.3.1 | single-node and three-broker KRaft; three-broker SASL_PLAINTEXT and SASL_SSL/SCRAM | KIP-848 member-aware Admin OffsetFetch v9 and OffsetCommit v9 | [`Live Kafka Smoke`, run `31607006237`](https://github.com/TaeeunKil/kafrust/actions/runs/31607006237) on 2026-08-12 | Passing; plaintext and secured profiles |
 | Apache Kafka 4.3.1 | single-node KRaft | API 74 `ListConfigResources` v1, documentation-aware `DescribeConfigs` v4, and `DescribeCluster` v1 | [`Live ListConfigResources Compatibility`, run `32342304005`](https://github.com/TaeeunKil/kafrust/actions/runs/32342304005) on 2026-08-20 | Passing; current-source MSRV gate |
 | Apache Kafka 3.9.1 | single-node KRaft | API 74 `ListClientMetricsResources` v0 with the client-metrics resource filter | [`Live ListConfigResources Compatibility`, run `32342680037`](https://github.com/TaeeunKil/kafrust/actions/runs/32342680037) on 2026-08-20 | Passing; current-source MSRV gate |
+| Apache Kafka 3.7.2 | single-node KRaft with required client certificates | current-source mTLS handshake, Admin, producer, direct consumer, classic consumer group, transactional/read-committed, low-level, and coordinator roundtrips | [`Live Mutual TLS`, run `32343983601`](https://github.com/TaeeunKil/kafrust/actions/runs/32343983601) on 2026-08-20 | Passing; short-lived generated certificates; rotation and published-artifact evidence remain separate |
+| Apache Kafka 4.3.1 | single-node KRaft with required client certificates | current-source mTLS handshake, Admin, producer, direct consumer, KIP-848 consumer group, transactional/read-committed, low-level, and coordinator roundtrips | [`Live Mutual TLS`, run `32343983397`](https://github.com/TaeeunKil/kafrust/actions/runs/32343983397) on 2026-08-20 | Passing; short-lived generated certificates; rotation and published-artifact evidence remain separate |
 | Published `kafrust 0.3.1` | fresh external Cargo project with no workspace path dependency; Kafka 4.3.1 single-node KRaft | API 74 `ListConfigResources` v1 and documentation-aware `DescribeConfigs` v4 | [`Published API 74 Configuration Smoke`, run `32343030081`](https://github.com/TaeeunKil/kafrust/actions/runs/32343030081) on 2026-08-20 | Passing; crates.io resolution and v4 metadata verified |
 | Published `kafrust 0.3.1` | fresh external Cargo project with no workspace path dependency; Kafka 3.9.1 single-node KRaft | API 74 `ListClientMetricsResources` v0 with the client-metrics resource filter | [`Published API 74 Configuration Smoke`, run `32343145837`](https://github.com/TaeeunKil/kafrust/actions/runs/32343145837) on 2026-08-20 | Passing; crates.io resolution verified |
 | Published `kafrust 0.3.1` and `kafrust-protocol 0.3.1` | fresh external Cargo project with no workspace path dependency; Kafka 4.3.1 single-node KRaft | published member-aware Admin OffsetFetch v10 and OffsetCommit v10; committed offset verified by Kafka CLI | [`Published Member Offset Smoke`, run `32341534974`](https://github.com/TaeeunKil/kafrust/actions/runs/32341534974) on 2026-08-20 | Passing; crates.io resolution and API version marker verified |
@@ -1429,8 +1438,8 @@ authentications. External provider-specific behavior remains unclaimed.
 The current compatibility claim does not cover:
 
 - TLS workflows beyond the listed TLS smoke examples.
-- Mutual TLS client certificate authentication until the dedicated
-  `live-mtls.yml` workflow has a passing run recorded here.
+- Certificate rotation and published-artifact mutual TLS qualification beyond
+  the current-source runs listed above.
 - SASL workflows beyond the listed SASL_PLAINTEXT and SASL_SSL smoke examples.
 - Production SASL/OAUTHBEARER provider compatibility beyond the local signed
   OIDC/JWKS fixture, including discovery/token endpoints, key rotation,
