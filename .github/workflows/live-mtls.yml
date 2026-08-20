@@ -147,7 +147,7 @@ jobs:
             --bootstrap-server kafrust-mtls-broker:29092 \
             --create \
             --topic "$KAFRUST_TOPIC" \
-            --partitions 3 \
+            --partitions 1 \
             --replication-factor 1
 
       - name: Run Kafka mTLS roundtrip
