@@ -39,6 +39,13 @@ and [`32403253688`](https://github.com/TaeeunKil/kafrust/actions/runs/3240325368
 `DescribeClusterEndpointType::Controllers` now requires and uses
 `ClientConfig::controller_bootstrap_servers`; omitting that configuration is
 rejected explicitly rather than attempting a broker-listener request.
+The published ShareConsumer surface also passed a 300-second two-member
+ownership run from `kafrust 0.3.4` in
+[`32404294014`](https://github.com/TaeeunKil/kafrust/actions/runs/32404294014):
+each member retained three partitions, accepted and consumed 30 records, and
+closed with no in-flight requests or failed requests. This is bounded
+long-running ownership evidence; member-loss, backpressure SLO, and full
+replacement compatibility remain open.
 
 ## Module Visibility
 

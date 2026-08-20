@@ -172,6 +172,14 @@ A four-cycle rerun then moved ownership back to member 2, reconciled 24 unique
 records with four per partition, and ended with the survivor at `consumed=6`
 and `in_flight=0` in
 [run 32394453120](https://github.com/TaeeunKil/kafrust/actions/runs/32394453120).
+The published `kafrust 0.3.4` artifact then sustained two-member Share ownership
+for 300 seconds over six replicated partitions and 60 seeded records in
+[run 32404294014](https://github.com/TaeeunKil/kafrust/actions/runs/32404294014).
+Each member retained three partitions, accepted and consumed 30 records, closed
+with `in_flight=0` and zero failed requests, and the workflow verified exact
+per-partition counts plus unique partition/offset pairs. This strengthens the
+published long-running ownership slice; dynamic member loss, backpressure SLO,
+and production readiness remain separate gates.
 The published Share Group State failover qualification then passed in
 [run 32399284180](https://github.com/TaeeunKil/kafrust/actions/runs/32399284180):
 a fresh external project resolved `kafrust 0.3.3` and `kafrust-protocol 0.3.3`

@@ -2718,8 +2718,14 @@ Implemented evidence:
   [`32387564503`](https://github.com/TaeeunKil/kafrust/actions/runs/32387564503).
   A bounded two-member published ownership/assignment gate then passed in
   [`32388813780`](https://github.com/TaeeunKil/kafrust/actions/runs/32388813780).
-  Long-running multi-broker ownership, dynamic member-loss/rebalance, and
-  resource/backpressure evidence remain open.
+  The published `kafrust 0.3.4` workflow then sustained two-member ownership
+  for 300 seconds over six replicated partitions and 60 records in
+  [`32404294014`](https://github.com/TaeeunKil/kafrust/actions/runs/32404294014).
+  Each member retained three partitions, accepted and consumed 30 records,
+  closed with `in_flight=0` and zero failed requests, and the workflow verified
+  exact per-partition counts plus unique partition/offset pairs. This closes
+  the bounded published long-running ownership slice; dynamic member-loss,
+  resource/backpressure SLO, and production readiness remain open.
 - ShareFetch success responses preserve the broker that served the request,
   while `CurrentLeader` is used only for the leader-error responses where Kafka
   populates it. Retryable ShareFetch leader errors return the connection to the
