@@ -437,6 +437,13 @@ coverage toward a release candidate that can be qualified in staging.
   `rust-rdkafka 0.39.0` ranged from 86,085.93 to 165,229.42 producer and
   207,251.77 to 795,296.43 consumer records/s. The spread is recorded as
   workload evidence, not a universal performance ranking.
+- The published `0.3.3` comparison passed after the workflow default moved to
+  the current release in [`32381987301`](https://github.com/TaeeunKil/kafrust/actions/runs/32381987301).
+  Across three repetitions, kafrust measured median 70,279.61 producer and
+  388,288.51 consumer records/s; `rust-rdkafka 0.39.0` measured median
+  161,271.11 producer and 795,363.67 consumer records/s. This closes the
+  current published-artifact comparison run, not replacement, feature parity,
+  failure compatibility, or production SLO qualification.
 - Published `0.2.30` then passed a 300-second single-node broker-restart soak
   in [`31768319413`](https://github.com/TaeeunKil/kafrust/actions/runs/31768319413),
   processing 21,597,600 records with 180 operation errors, 954 failed
