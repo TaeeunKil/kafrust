@@ -7,6 +7,7 @@ use kafrust::{
 
 #[tokio::main]
 async fn main() -> kafrust::Result<()> {
+    common::init_tracing()?;
     let bootstrap_servers = common::bootstrap_servers_from_env();
     let group_id = std::env::var("KAFRUST_GROUP_ID")
         .unwrap_or_else(|_| "kafrust-kip848-admin-offsets".to_owned());
@@ -28,7 +29,10 @@ async fn main() -> kafrust::Result<()> {
     let group = group_config.join().await?;
     let member_id = group.member_id().to_owned();
     let member_epoch = group.generation_id();
-    let query = [ConsumerGroupOffsetQuery::new(topic.clone(), [partition])];
+    let topic_id = group
+        .topic_id(&topic)
+        .ok_or(Error::Unsupported("KIP-848 assignment has no topic UUID"))?;
+    let query = [ConsumerGroupOffsetQuery::new(topic.clone(), [partition]).topic_id(topic_id)];
 
     let descriptions = admin
         .describe_consumer_groups_modern(&[group_id.clone()], true)
@@ -86,6 +90,7 @@ async fn main() -> kafrust::Result<()> {
             None,
             &[
                 ConsumerGroupOffset::new(topic.clone(), partition, target_offset)
+                    .topic_id(topic_id)
                     .metadata("kafrust-kip848-admin-smoke"),
             ],
         )

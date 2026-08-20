@@ -17,11 +17,13 @@ use kafrust_protocol::api::metadata::{
     MetadataRequestTopicV12, MetadataResponseV1, MetadataResponseV12,
 };
 use kafrust_protocol::api::offset_commit::{
-    OffsetCommitPartition, OffsetCommitPartitionV7, OffsetCommitPartitionV9, OffsetCommitTopic,
-    OffsetCommitTopicResponse, OffsetCommitTopicV7, OffsetCommitTopicV9,
+    OffsetCommitPartition, OffsetCommitPartitionV10, OffsetCommitPartitionV7,
+    OffsetCommitPartitionV9, OffsetCommitTopic, OffsetCommitTopicResponse,
+    OffsetCommitTopicResponseV10, OffsetCommitTopicV10, OffsetCommitTopicV7, OffsetCommitTopicV9,
 };
 use kafrust_protocol::api::offset_fetch::{
-    OffsetFetchPartitionResponse, OffsetFetchTopic, OffsetFetchTopicResponse, OffsetFetchTopicV9,
+    OffsetFetchPartitionResponse, OffsetFetchTopic, OffsetFetchTopicResponse,
+    OffsetFetchTopicResponseV10, OffsetFetchTopicV10, OffsetFetchTopicV9,
 };
 use kafrust_protocol::api::sync_group::SyncGroupAssignment;
 use kafrust_protocol::codec::{Decoder, Encoder};
@@ -169,6 +171,12 @@ struct JoinedGroup {
     members: Vec<JoinGroupMember>,
 }
 
+#[derive(Default)]
+struct AssignmentMetadata {
+    leader_epochs: BTreeMap<(String, i32), i32>,
+    topic_ids: BTreeMap<String, [u8; 16]>,
+}
+
 #[derive(Clone)]
 /// Configuration builder for the classic Kafka consumer group alpha API.
 pub struct ConsumerGroupConfig {
@@ -209,6 +217,7 @@ struct ConsumerProtocolHeartbeatState {
 struct ConsumerProtocolHeartbeatConfig {
     group_instance_id: Option<String>,
     topics: Vec<String>,
+    topic_pattern: Option<String>,
     server_assignor: Option<String>,
     rebalance_timeout_ms: i32,
 }
@@ -243,6 +252,16 @@ impl ConsumerGroupConfig {
             server_assignor: None,
             rebalance_listener: None,
         }
+    }
+
+    /// Replaces the shared client configuration used by group and fetch
+    /// connections.
+    ///
+    /// This is useful when the same bootstrap, controller, security, limits,
+    /// or metrics policy is shared by several kafrust clients.
+    pub fn with_client_config(mut self, client: ClientConfig) -> Self {
+        self.client = client;
+        self
     }
 
     /// Sets the Kafka client ID used by group and fetch requests.
@@ -302,6 +321,18 @@ impl ConsumerGroupConfig {
     /// Adds a DER-encoded TLS root certificate for group, coordinator, and fetch validation.
     pub fn tls_root_certificate_der(mut self, certificate: impl Into<Vec<u8>>) -> Self {
         self.client = self.client.tls_root_certificate_der(certificate);
+        self
+    }
+
+    /// Adds a DER-encoded client certificate for TLS mutual authentication.
+    pub fn tls_client_certificate_der(mut self, certificate: impl Into<Vec<u8>>) -> Self {
+        self.client = self.client.tls_client_certificate_der(certificate);
+        self
+    }
+
+    /// Sets the DER-encoded private key for TLS mutual authentication.
+    pub fn tls_client_private_key_der(mut self, key: impl Into<Vec<u8>>) -> Self {
+        self.client = self.client.tls_client_private_key_der(key);
         self
     }
 
@@ -601,6 +632,11 @@ impl ConsumerGroupConfig {
     /// Returns the configured topic subscription pattern, if any.
     pub fn topic_pattern_ref(&self) -> Option<&str> {
         self.topic_pattern.as_deref()
+    }
+
+    /// Returns the shared low-level client configuration.
+    pub fn client_config(&self) -> &ClientConfig {
+        &self.client
     }
 
     fn has_subscription(&self) -> bool {
@@ -983,6 +1019,13 @@ impl ConsumerGroupConfig {
         Ok(())
     }
 
+    /// Validates and returns this consumer-group configuration without opening
+    /// a broker connection.
+    pub fn build_config(self) -> Result<Self> {
+        self.validate()?;
+        Ok(self)
+    }
+
     async fn join_consumer(
         self,
         member_id: Option<String>,
@@ -1067,19 +1110,19 @@ impl ConsumerGroupConfig {
                 .client
                 .connect_broker(coordinator_addr(&coordinator))
                 .await?;
-            let response = coordinator_client
-                .consumer_group_heartbeat_v0(
-                    self.group_id.clone(),
-                    requested_member_id.clone(),
-                    member_epoch,
-                    self.group_instance_id.clone(),
-                    None,
-                    self.rebalance_timeout_ms,
-                    Some(topics.clone()),
-                    self.server_assignor.clone(),
-                    topic_partitions.clone(),
-                )
-                .await?;
+            let response = send_consumer_group_heartbeat(
+                &mut coordinator_client,
+                self.group_id.clone(),
+                requested_member_id.clone(),
+                member_epoch,
+                self.group_instance_id.clone(),
+                self.rebalance_timeout_ms,
+                self.topic_pattern.is_none().then(|| topics.clone()),
+                self.topic_pattern.clone(),
+                self.server_assignor.clone(),
+                topic_partitions.clone(),
+            )
+            .await?;
             if response.error_code == 0 {
                 break (coordinator_client, response);
             }
@@ -1341,6 +1384,7 @@ struct CommitWorkerState {
     group_instance_id: Option<String>,
     protocol: ConsumerGroupProtocol,
     retention_time_ms: i64,
+    consumer_topic_ids: BTreeMap<String, [u8; 16]>,
     assignments: Vec<ConsumerAssignment>,
     pending_commit_offsets: BTreeMap<(String, i32), i64>,
 }
@@ -1353,6 +1397,7 @@ struct CommitWorkerMembership {
     group_instance_id: Option<String>,
     protocol: ConsumerGroupProtocol,
     retention_time_ms: i64,
+    consumer_topic_ids: BTreeMap<String, [u8; 16]>,
     assignments: Vec<ConsumerAssignment>,
 }
 
@@ -1420,6 +1465,7 @@ impl CommitWorkerLink {
         state.group_instance_id = membership.group_instance_id;
         state.protocol = membership.protocol;
         state.retention_time_ms = membership.retention_time_ms;
+        state.consumer_topic_ids = membership.consumer_topic_ids;
         state.assignments = membership.assignments;
         state.pending_commit_offsets = pending_commit_offsets;
         let assignments = state.assignments.clone();
@@ -1642,6 +1688,16 @@ impl ConsumerGroup {
         self.consumer.assignments()
     }
 
+    /// Returns the stable Kafka topic UUID cached for a KIP-848 assignment.
+    ///
+    /// The value is available for consumer-protocol groups after Metadata v12
+    /// resolution. Classic groups and assignments without a usable UUID return
+    /// `None`. Pass the value to the member-aware Admin offset builders when
+    /// opting into OffsetFetch/OffsetCommit v10.
+    pub fn topic_id(&self, topic: &str) -> Option<[u8; 16]> {
+        self.consumer_topic_ids.get(topic).copied()
+    }
+
     async fn start_auto_commit_if_enabled(&mut self) -> Result<()> {
         if !self.config.auto_commit {
             return Ok(());
@@ -1708,6 +1764,7 @@ impl ConsumerGroup {
                 group_instance_id: self.config.group_instance_id.clone(),
                 protocol: self.protocol,
                 retention_time_ms: self.retention_time_ms,
+                consumer_topic_ids: self.consumer_topic_ids.clone(),
                 assignments: self.consumer.assignments().to_vec(),
             },
             pending_commit_offsets,
@@ -1858,20 +1915,19 @@ impl ConsumerGroup {
     }
 
     async fn leave_consumer(mut self) -> Result<()> {
-        let response = self
-            .coordinator
-            .consumer_group_heartbeat_v0(
-                self.group_id.clone(),
-                self.member_id.clone(),
-                -1,
-                self.config.group_instance_id.clone(),
-                None,
-                -1,
-                None,
-                None,
-                None,
-            )
-            .await?;
+        let response = send_consumer_group_heartbeat(
+            &mut self.coordinator,
+            self.group_id.clone(),
+            self.member_id.clone(),
+            -1,
+            self.config.group_instance_id.clone(),
+            -1,
+            None,
+            self.config.topic_pattern.clone(),
+            None,
+            None,
+        )
+        .await?;
         if response.error_code != 0 {
             return Err(consumer_group_heartbeat_error(
                 &self.config.client,
@@ -2097,8 +2153,9 @@ impl ConsumerGroup {
         {
             let previous_assignments = self.consumer.assignments().to_vec();
             self.notify_rebalance(RebalancePhase::Before, &previous_assignments);
-            let protocol_assignment =
-                consumer_protocol_assignment(&assignment, &self.consumer_topic_ids)?;
+            let protocol_assignment = self
+                .resolve_consumer_protocol_assignment(&assignment)
+                .await?;
             let mut bootstrap = self.config.client.clone().connect().await?;
             let assignments = assignments_from_protocol(
                 &mut self.coordinator,
@@ -2162,6 +2219,7 @@ impl ConsumerGroup {
             group_instance_id: self.config.group_instance_id.clone(),
             protocol: self.protocol,
             retention_time_ms: self.retention_time_ms,
+            consumer_topic_ids: self.consumer_topic_ids.clone(),
             assignments: self.consumer.assignments().to_vec(),
             pending_commit_offsets: self.pending_commit_offsets.clone(),
         }));
@@ -2265,6 +2323,7 @@ impl ConsumerGroup {
         });
         let consumer_state_for_task = consumer_state.clone();
         let topics = self.resolved_topics.clone();
+        let topic_pattern = self.config.topic_pattern.clone();
         let server_assignor = self.config.server_assignor.clone();
         let rebalance_timeout_ms = self.config.rebalance_timeout_ms;
         let (shutdown, shutdown_rx) = oneshot::channel();
@@ -2285,6 +2344,7 @@ impl ConsumerGroup {
                         ConsumerProtocolHeartbeatConfig {
                             group_instance_id,
                             topics,
+                            topic_pattern,
                             server_assignor,
                             rebalance_timeout_ms,
                         },
@@ -2383,6 +2443,7 @@ impl ConsumerGroup {
                         group_instance_id: self.config.group_instance_id.clone(),
                         protocol: self.protocol,
                         retention_time_ms: self.retention_time_ms,
+                        consumer_topic_ids: self.consumer_topic_ids.clone(),
                         assignments: self.consumer.assignments().to_vec(),
                     },
                     pending_commit_offsets,
@@ -2429,6 +2490,7 @@ impl ConsumerGroup {
                     group_instance_id: self.config.group_instance_id.clone(),
                     protocol: self.protocol,
                     retention_time_ms: self.retention_time_ms,
+                    consumer_topic_ids: self.consumer_topic_ids.clone(),
                     assignments: self.consumer.assignments().to_vec(),
                 },
                 pending_commit_offsets,
@@ -2513,24 +2575,70 @@ impl ConsumerGroup {
         Ok(())
     }
 
+    async fn refresh_consumer_topic_metadata(&mut self) -> Result<()> {
+        let mut bootstrap = self.config.client.clone().connect().await?;
+        let topics = self
+            .config
+            .resolve_subscription_topics(&mut bootstrap)
+            .await?;
+        let metadata = bootstrap
+            .metadata_v12(Some(
+                topics
+                    .iter()
+                    .map(|name| MetadataRequestTopicV12 {
+                        topic_id: [0; 16],
+                        name: Some(name.clone()),
+                    })
+                    .collect(),
+            ))
+            .await?;
+        let topic_ids = topic_ids_for_names(&metadata, &topics).map_err(|error| match error {
+            Error::Broker { code, context } => self.config.client.broker_error(code, context),
+            error => error,
+        })?;
+        self.resolved_topics = topics;
+        self.consumer_topic_ids = topic_ids;
+        Ok(())
+    }
+
+    async fn resolve_consumer_protocol_assignment(
+        &mut self,
+        assignment: &[ConsumerGroupHeartbeatTopicPartitions],
+    ) -> Result<ConsumerProtocolAssignmentV0> {
+        match consumer_protocol_assignment(assignment, &self.consumer_topic_ids) {
+            Err(Error::UnknownTopicOrPartition { .. }) if self.config.topic_pattern.is_some() => {
+                debug!(
+                    group_id = self.group_id.as_str(),
+                    member_id = self.member_id.as_str(),
+                    "refreshing regex topic metadata after a new KIP-848 assignment"
+                );
+                self.refresh_consumer_topic_metadata().await?;
+                consumer_protocol_assignment(assignment, &self.consumer_topic_ids)
+            }
+            result => result,
+        }
+    }
+
     async fn heartbeat_consumer(&mut self) -> Result<()> {
         let owned_partitions = self.consumer_owned_partitions.clone();
         let mut retry_attempt = 0;
         let response = loop {
-            let response = match self
-                .coordinator
-                .consumer_group_heartbeat_v0(
-                    self.group_id.clone(),
-                    self.member_id.clone(),
-                    self.generation_id,
-                    self.config.group_instance_id.clone(),
-                    None,
-                    self.config.rebalance_timeout_ms,
-                    Some(self.resolved_topics.clone()),
-                    self.config.server_assignor.clone(),
-                    owned_partitions.clone(),
-                )
-                .await
+            let response = match send_consumer_group_heartbeat(
+                &mut self.coordinator,
+                self.group_id.clone(),
+                self.member_id.clone(),
+                self.generation_id,
+                self.config.group_instance_id.clone(),
+                self.config.rebalance_timeout_ms,
+                self.config
+                    .topic_pattern
+                    .is_none()
+                    .then(|| self.resolved_topics.clone()),
+                self.config.topic_pattern.clone(),
+                self.config.server_assignor.clone(),
+                owned_partitions.clone(),
+            )
+            .await
             {
                 Ok(response) => response,
                 Err(error)
@@ -2592,8 +2700,9 @@ impl ConsumerGroup {
         if let Some(assignment) = response.assignment {
             let previous_assignments = self.consumer.assignments().to_vec();
             self.notify_rebalance(RebalancePhase::Before, &previous_assignments);
-            let protocol_assignment =
-                consumer_protocol_assignment(&assignment, &self.consumer_topic_ids)?;
+            let protocol_assignment = self
+                .resolve_consumer_protocol_assignment(&assignment)
+                .await?;
             let mut bootstrap = self.config.client.clone().connect().await?;
             let assignments = assignments_from_protocol(
                 &mut self.coordinator,
@@ -2679,17 +2788,54 @@ impl ConsumerGroup {
         &mut self,
         assignments: &[ConsumerAssignment],
     ) -> Result<()> {
-        let response_topics = match if self.protocol == ConsumerGroupProtocol::Consumer {
-            self.coordinator
-                .offset_commit_v9(
-                    self.group_id.clone(),
-                    self.generation_id,
-                    self.member_id.clone(),
-                    self.config.group_instance_id.clone(),
-                    offset_commit_topics_v9(assignments),
-                )
-                .await
-                .map(|response| response.topics)
+        let response_error = match if self.protocol == ConsumerGroupProtocol::Consumer {
+            let topics_v10 = (!assignments.is_empty())
+                .then(|| offset_commit_topics_v10(assignments, &self.consumer_topic_ids))
+                .flatten();
+            if let Some(topics) = topics_v10 {
+                if self.coordinator.supports_offset_commit_v10().await? {
+                    self.coordinator
+                        .offset_commit_v10(
+                            self.group_id.clone(),
+                            self.generation_id,
+                            self.member_id.clone(),
+                            self.config.group_instance_id.clone(),
+                            topics,
+                        )
+                        .await
+                        .map(|response| {
+                            offset_commit_response_error_v10(
+                                &self.group_id,
+                                &response.topics,
+                                &self.consumer_topic_ids,
+                            )
+                        })
+                } else {
+                    self.coordinator
+                        .offset_commit_v9(
+                            self.group_id.clone(),
+                            self.generation_id,
+                            self.member_id.clone(),
+                            self.config.group_instance_id.clone(),
+                            offset_commit_topics_v9(assignments),
+                        )
+                        .await
+                        .map(|response| {
+                            offset_commit_response_error(&self.group_id, &response.topics)
+                        })
+                }
+            } else {
+                self.coordinator
+                    .offset_commit_v9(
+                        self.group_id.clone(),
+                        self.generation_id,
+                        self.member_id.clone(),
+                        self.config.group_instance_id.clone(),
+                        offset_commit_topics_v9(assignments),
+                    )
+                    .await
+                    .map(|response| offset_commit_response_error(&self.group_id, &response.topics))
+            }
         } else if let Some(group_instance_id) = &self.config.group_instance_id {
             self.coordinator
                 .offset_commit_v7(
@@ -2700,7 +2846,7 @@ impl ConsumerGroup {
                     offset_commit_topics_v7(assignments),
                 )
                 .await
-                .map(|response| response.topics)
+                .map(|response| offset_commit_response_error(&self.group_id, &response.topics))
         } else {
             self.coordinator
                 .offset_commit_v2(
@@ -2711,9 +2857,9 @@ impl ConsumerGroup {
                     offset_commit_topics(assignments),
                 )
                 .await
-                .map(|response| response.topics)
+                .map(|response| offset_commit_response_error(&self.group_id, &response.topics))
         } {
-            Ok(topics) => topics,
+            Ok(error) => error,
             Err(error) if should_rejoin_group(&error) => {
                 debug!(
                     group_id = self.group_id.as_str(),
@@ -2728,7 +2874,7 @@ impl ConsumerGroup {
             }
             Err(error) => return Err(error),
         };
-        if let Some(error) = offset_commit_response_error(&self.group_id, &response_topics) {
+        if let Some(error) = response_error {
             let error = match error {
                 Error::Broker { code, context } => self.config.client.broker_error(code, context),
                 error => error,
@@ -3583,25 +3729,55 @@ async fn assignments_from_protocol(
 ) -> Result<Vec<ConsumerAssignment>> {
     let mut assignments = Vec::new();
     let mut reset_partitions = Vec::new();
-    let leader_epochs = assignment_leader_epochs(bootstrap, assignment).await?;
+    let assignment_metadata = assignment_metadata(bootstrap, assignment).await?;
+    let leader_epochs = assignment_metadata.leader_epochs;
     let (offset_topics, offset_error_code) =
         if let Some((member_id, member_epoch)) = consumer_member {
-            let offsets = coordinator
-                .offset_fetch_v9(
-                    group_id.to_owned(),
-                    Some(member_id.to_owned()),
+            let topics_v10 = (!assignment.assignments.is_empty())
+                .then(|| offset_fetch_topics_v10(assignment, &assignment_metadata.topic_ids))
+                .flatten();
+            if let Some(topics) = topics_v10 {
+                if coordinator.supports_offset_fetch_v10().await? {
+                    let offsets = coordinator
+                        .offset_fetch_v10(
+                            group_id.to_owned(),
+                            Some(member_id.to_owned()),
+                            member_epoch,
+                            Some(topics),
+                            false,
+                        )
+                        .await?;
+                    let group = offsets
+                        .groups
+                        .into_iter()
+                        .find(|group| group.group_id == group_id)
+                        .ok_or(Error::Unsupported(
+                            "offset fetch response omitted requested group",
+                        ))?;
+                    (
+                        offset_fetch_topics_from_v10(group.topics, &assignment_metadata.topic_ids)?,
+                        group.error_code,
+                    )
+                } else {
+                    offset_fetch_v9_for_assignment(
+                        coordinator,
+                        group_id,
+                        member_id,
+                        member_epoch,
+                        assignment,
+                    )
+                    .await?
+                }
+            } else {
+                offset_fetch_v9_for_assignment(
+                    coordinator,
+                    group_id,
+                    member_id,
                     member_epoch,
-                    Some(offset_fetch_topics_v9(assignment)),
+                    assignment,
                 )
-                .await?;
-            let group = offsets
-                .groups
-                .into_iter()
-                .find(|group| group.group_id == group_id)
-                .ok_or(Error::Unsupported(
-                    "offset fetch response omitted requested group",
-                ))?;
-            (group.topics, group.error_code)
+                .await?
+            }
         } else {
             let offsets = coordinator
                 .offset_fetch_v2(group_id.to_owned(), Some(offset_fetch_topics(assignment)))
@@ -3663,12 +3839,12 @@ async fn assignments_from_protocol(
     Ok(assignments)
 }
 
-async fn assignment_leader_epochs(
+async fn assignment_metadata(
     bootstrap: &mut Client,
     assignment: &ConsumerProtocolAssignmentV0,
-) -> Result<BTreeMap<(String, i32), i32>> {
+) -> Result<AssignmentMetadata> {
     if assignment.assignments.is_empty() || !bootstrap.supports_metadata_v12().await? {
-        return Ok(BTreeMap::new());
+        return Ok(AssignmentMetadata::default());
     }
 
     let requests = assignment
@@ -3683,18 +3859,24 @@ async fn assignment_leader_epochs(
         Ok(metadata) => metadata,
         Err(error) => {
             debug!(error = %error, "initial consumer-group leader epoch metadata unavailable");
-            return Ok(BTreeMap::new());
+            return Ok(AssignmentMetadata::default());
         }
     };
-    Ok(assignment_leader_epochs_from_metadata(
-        &metadata, assignment,
-    ))
+    Ok(assignment_metadata_from_metadata(&metadata, assignment))
 }
 
+#[cfg(test)]
 fn assignment_leader_epochs_from_metadata(
     metadata: &MetadataResponseV12,
     assignment: &ConsumerProtocolAssignmentV0,
 ) -> BTreeMap<(String, i32), i32> {
+    assignment_metadata_from_metadata(metadata, assignment).leader_epochs
+}
+
+fn assignment_metadata_from_metadata(
+    metadata: &MetadataResponseV12,
+    assignment: &ConsumerProtocolAssignmentV0,
+) -> AssignmentMetadata {
     let assigned = assignment
         .assignments
         .iter()
@@ -3706,7 +3888,7 @@ fn assignment_leader_epochs_from_metadata(
         })
         .collect::<BTreeSet<_>>();
 
-    let mut epochs = BTreeMap::new();
+    let mut result = AssignmentMetadata::default();
     for topic in &metadata.topics {
         let Some(topic_name) = topic.name.as_deref() else {
             continue;
@@ -3714,19 +3896,29 @@ fn assignment_leader_epochs_from_metadata(
         if topic.error_code != 0 {
             continue;
         }
+        if assignment
+            .assignments
+            .iter()
+            .any(|assigned| assigned.topic == topic_name)
+            && topic.topic_id != [0; 16]
+        {
+            result
+                .topic_ids
+                .insert(topic_name.to_owned(), topic.topic_id);
+        }
         for partition in &topic.partitions {
             if partition.error_code == 0
                 && partition.leader_epoch >= 0
                 && assigned.contains(&(topic_name, partition.partition_index))
             {
-                epochs.insert(
+                result.leader_epochs.insert(
                     (topic_name.to_owned(), partition.partition_index),
                     partition.leader_epoch,
                 );
             }
         }
     }
-    epochs
+    result
 }
 
 async fn resolve_reset_offsets(
@@ -3910,6 +4102,73 @@ fn offset_fetch_topics_v9(assignment: &ConsumerProtocolAssignmentV0) -> Vec<Offs
         .collect()
 }
 
+fn offset_fetch_topics_v10(
+    assignment: &ConsumerProtocolAssignmentV0,
+    topic_ids: &BTreeMap<String, [u8; 16]>,
+) -> Option<Vec<OffsetFetchTopicV10>> {
+    assignment
+        .assignments
+        .iter()
+        .map(|topic| {
+            let topic_id = topic_ids.get(&topic.topic).copied()?;
+            if topic_id == [0; 16] {
+                return None;
+            }
+            Some(OffsetFetchTopicV10 {
+                topic_id,
+                partition_indexes: topic.partitions.clone(),
+            })
+        })
+        .collect()
+}
+
+fn offset_fetch_topics_from_v10(
+    topics: Vec<OffsetFetchTopicResponseV10>,
+    topic_ids: &BTreeMap<String, [u8; 16]>,
+) -> Result<Vec<OffsetFetchTopicResponse>> {
+    let names_by_id = topic_ids
+        .iter()
+        .map(|(name, topic_id)| (*topic_id, name.as_str()))
+        .collect::<BTreeMap<_, _>>();
+    topics
+        .into_iter()
+        .map(|topic| {
+            let name = names_by_id.get(&topic.topic_id).ok_or(Error::Unsupported(
+                "offset fetch response contained an unknown topic UUID",
+            ))?;
+            Ok(OffsetFetchTopicResponse {
+                name: (*name).to_owned(),
+                partitions: topic.partitions,
+            })
+        })
+        .collect()
+}
+
+async fn offset_fetch_v9_for_assignment(
+    coordinator: &mut Client,
+    group_id: &str,
+    member_id: &str,
+    member_epoch: i32,
+    assignment: &ConsumerProtocolAssignmentV0,
+) -> Result<(Vec<OffsetFetchTopicResponse>, i16)> {
+    let offsets = coordinator
+        .offset_fetch_v9(
+            group_id.to_owned(),
+            Some(member_id.to_owned()),
+            member_epoch,
+            Some(offset_fetch_topics_v9(assignment)),
+        )
+        .await?;
+    let group = offsets
+        .groups
+        .into_iter()
+        .find(|group| group.group_id == group_id)
+        .ok_or(Error::Unsupported(
+            "offset fetch response omitted requested group",
+        ))?;
+    Ok((group.topics, group.error_code))
+}
+
 fn committed_offset(
     group_id: &str,
     topics: &[OffsetFetchTopicResponse],
@@ -4012,6 +4271,41 @@ fn offset_commit_topics_v9(assignments: &[ConsumerAssignment]) -> Vec<OffsetComm
         .collect()
 }
 
+fn offset_commit_topics_v10(
+    assignments: &[ConsumerAssignment],
+    topic_ids: &BTreeMap<String, [u8; 16]>,
+) -> Option<Vec<OffsetCommitTopicV10>> {
+    let mut topics = BTreeMap::<[u8; 16], Vec<OffsetCommitPartitionV10>>::new();
+    for assignment in assignments {
+        let topic_id = topic_ids.get(assignment.topic()).copied()?;
+        if topic_id == [0; 16] {
+            return None;
+        }
+        topics
+            .entry(topic_id)
+            .or_default()
+            .push(OffsetCommitPartitionV10 {
+                partition_index: assignment.partition(),
+                committed_offset: assignment.next_offset(),
+                committed_leader_epoch: assignment.leader_epoch(),
+                committed_metadata: None,
+            });
+    }
+
+    Some(
+        topics
+            .into_iter()
+            .map(|(topic_id, mut partitions)| {
+                partitions.sort_by_key(|partition| partition.partition_index);
+                OffsetCommitTopicV10 {
+                    topic_id,
+                    partitions,
+                }
+            })
+            .collect(),
+    )
+}
+
 fn offset_commit_response_error(
     group_id: &str,
     topics: &[OffsetCommitTopicResponse],
@@ -4024,6 +4318,36 @@ fn offset_commit_response_error(
                     context: format!(
                         "offset commit group {group_id} {}-{}",
                         topic.name, partition.partition_index
+                    ),
+                });
+            }
+        }
+    }
+    None
+}
+
+fn offset_commit_response_error_v10(
+    group_id: &str,
+    topics: &[OffsetCommitTopicResponseV10],
+    topic_ids: &BTreeMap<String, [u8; 16]>,
+) -> Option<Error> {
+    let names_by_id = topic_ids
+        .iter()
+        .map(|(name, topic_id)| (*topic_id, name.as_str()))
+        .collect::<BTreeMap<_, _>>();
+    for topic in topics {
+        let Some(topic_name) = names_by_id.get(&topic.topic_id) else {
+            return Some(Error::Unsupported(
+                "offset commit response contained an unknown topic UUID",
+            ));
+        };
+        for partition in &topic.partitions {
+            if partition.error_code != 0 {
+                return Some(Error::Broker {
+                    code: partition.error_code,
+                    context: format!(
+                        "offset commit group {group_id} {}-{}",
+                        topic_name, partition.partition_index
                     ),
                 });
             }
@@ -4228,17 +4552,54 @@ async fn commit_worker_request(
     state: &CommitWorkerState,
     assignments: &[ConsumerAssignment],
 ) -> Result<()> {
-    let response_topics = match state.protocol {
-        ConsumerGroupProtocol::Consumer => coordinator
-            .offset_commit_v9(
-                state.group_id.clone(),
-                state.generation_id,
-                state.member_id.clone(),
-                state.group_instance_id.clone(),
-                offset_commit_topics_v9(assignments),
-            )
-            .await
-            .map(|response| response.topics),
+    let response_error = match state.protocol {
+        ConsumerGroupProtocol::Consumer => {
+            let topics_v10 = offset_commit_topics_v10(assignments, &state.consumer_topic_ids);
+            if let Some(topics) = topics_v10 {
+                if coordinator.supports_offset_commit_v10().await? {
+                    coordinator
+                        .offset_commit_v10(
+                            state.group_id.clone(),
+                            state.generation_id,
+                            state.member_id.clone(),
+                            state.group_instance_id.clone(),
+                            topics,
+                        )
+                        .await
+                        .map(|response| {
+                            offset_commit_response_error_v10(
+                                &state.group_id,
+                                &response.topics,
+                                &state.consumer_topic_ids,
+                            )
+                        })
+                } else {
+                    coordinator
+                        .offset_commit_v9(
+                            state.group_id.clone(),
+                            state.generation_id,
+                            state.member_id.clone(),
+                            state.group_instance_id.clone(),
+                            offset_commit_topics_v9(assignments),
+                        )
+                        .await
+                        .map(|response| {
+                            offset_commit_response_error(&state.group_id, &response.topics)
+                        })
+                }
+            } else {
+                coordinator
+                    .offset_commit_v9(
+                        state.group_id.clone(),
+                        state.generation_id,
+                        state.member_id.clone(),
+                        state.group_instance_id.clone(),
+                        offset_commit_topics_v9(assignments),
+                    )
+                    .await
+                    .map(|response| offset_commit_response_error(&state.group_id, &response.topics))
+            }
+        }
         ConsumerGroupProtocol::Classic if state.group_instance_id.is_some() => coordinator
             .offset_commit_v7(
                 state.group_id.clone(),
@@ -4248,7 +4609,7 @@ async fn commit_worker_request(
                 offset_commit_topics_v7(assignments),
             )
             .await
-            .map(|response| response.topics),
+            .map(|response| offset_commit_response_error(&state.group_id, &response.topics)),
         ConsumerGroupProtocol::Classic => coordinator
             .offset_commit_v2(
                 state.group_id.clone(),
@@ -4258,10 +4619,10 @@ async fn commit_worker_request(
                 offset_commit_topics(assignments),
             )
             .await
-            .map(|response| response.topics),
+            .map(|response| offset_commit_response_error(&state.group_id, &response.topics)),
     }?;
 
-    if let Some(error) = offset_commit_response_error(&state.group_id, &response_topics) {
+    if let Some(error) = response_error {
         return Err(match error {
             Error::Broker { code, context } => coordinator.broker_error(code, context),
             error => error,
@@ -4373,14 +4734,15 @@ async fn run_background_consumer_heartbeat(
         );
         let response = tokio::select! {
             _ = &mut shutdown => return Ok(()),
-            response = coordinator.consumer_group_heartbeat_v0(
+            response = send_consumer_group_heartbeat(
+                coordinator,
                 group_id.clone(),
                 member_id,
                 member_epoch,
                 config.group_instance_id.clone(),
-                None,
                 config.rebalance_timeout_ms,
-                Some(config.topics.clone()),
+                config.topic_pattern.is_none().then(|| config.topics.clone()),
+                config.topic_pattern.clone(),
                 config.server_assignor.clone(),
                 owned_partitions,
             ) => response?,
@@ -4396,6 +4758,57 @@ async fn run_background_consumer_heartbeat(
             ));
         }
         record_consumer_heartbeat_response(&state, response).await;
+    }
+}
+
+/// Sends the KIP-848 heartbeat version that matches the configured
+/// subscription shape. Kafka v1 carries the topic regex field; v0 remains the
+/// compatible path for explicit topic-name subscriptions.
+#[allow(clippy::too_many_arguments)]
+async fn send_consumer_group_heartbeat(
+    coordinator: &mut Client,
+    group_id: String,
+    member_id: String,
+    member_epoch: i32,
+    instance_id: Option<String>,
+    rebalance_timeout_ms: i32,
+    subscribed_topic_names: Option<Vec<String>>,
+    subscribed_topic_regex: Option<String>,
+    server_assignor: Option<String>,
+    topic_partitions: Option<Vec<ConsumerGroupHeartbeatTopicPartitions>>,
+) -> Result<ConsumerGroupHeartbeatResponseV0> {
+    match subscribed_topic_regex {
+        Some(regex) => {
+            coordinator
+                .consumer_group_heartbeat_v1(
+                    group_id,
+                    member_id,
+                    member_epoch,
+                    instance_id,
+                    None,
+                    rebalance_timeout_ms,
+                    None,
+                    Some(regex),
+                    server_assignor,
+                    topic_partitions,
+                )
+                .await
+        }
+        None => {
+            coordinator
+                .consumer_group_heartbeat_v0(
+                    group_id,
+                    member_id,
+                    member_epoch,
+                    instance_id,
+                    None,
+                    rebalance_timeout_ms,
+                    subscribed_topic_names,
+                    server_assignor,
+                    topic_partitions,
+                )
+                .await
+        }
     }
 }
 
@@ -4636,7 +5049,7 @@ mod tests {
         offset_commit_topics_v7, offset_commit_topics_v9, offset_fetch_topics,
         pending_commit_assignments, queue_commit_offset, range_assignments,
         record_consumer_heartbeat_response, round_robin_assignments,
-        run_background_consumer_heartbeat, run_background_heartbeat,
+        run_background_consumer_heartbeat, run_background_heartbeat, send_consumer_group_heartbeat,
         should_rejoin_after_background_heartbeat, should_rejoin_group, should_retry_commit_worker,
         should_retry_consumer_join_transport, sticky_assignments, validate_commit_worker_interval,
         validate_heartbeat_interval, CommitWorkerLink, CommitWorkerMembership, CommitWorkerState,
@@ -4661,19 +5074,19 @@ mod tests {
         PartitionMetadata, TopicMetadata,
     };
     use kafrust_protocol::api::offset_commit::{
-        OffsetCommitPartitionResponse, OffsetCommitTopicResponse,
+        OffsetCommitPartitionResponse, OffsetCommitTopicResponse, OffsetCommitTopicResponseV10,
     };
     use kafrust_protocol::api::offset_fetch::{
-        OffsetFetchPartitionResponse, OffsetFetchTopicResponse,
+        OffsetFetchPartitionResponse, OffsetFetchTopicResponse, OffsetFetchTopicResponseV10,
     };
-    use kafrust_protocol::codec::Encoder;
+    use kafrust_protocol::codec::{Decoder, Encoder};
     use kafrust_protocol::consumer_group::{
         ConsumerProtocolAssignmentV0, ConsumerProtocolSubscriptionV0,
         ConsumerProtocolSubscriptionV1, ConsumerProtocolTopicAssignment,
     };
     use std::sync::atomic::AtomicBool;
     use std::sync::Arc;
-    use tokio::io::AsyncReadExt;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::sync::{mpsc, oneshot, Notify};
 
     #[test]
@@ -4942,6 +5355,7 @@ mod tests {
                 group_instance_id: None,
                 protocol: ConsumerGroupProtocol::Classic,
                 retention_time_ms: -1,
+                consumer_topic_ids: BTreeMap::new(),
                 assignments: vec![ConsumerAssignment::new("orders".to_owned(), 0, 0)],
                 pending_commit_offsets: BTreeMap::new(),
             })),
@@ -4971,6 +5385,7 @@ mod tests {
                 group_instance_id: None,
                 protocol: ConsumerGroupProtocol::Classic,
                 retention_time_ms: -1,
+                consumer_topic_ids: BTreeMap::new(),
                 assignments: vec![ConsumerAssignment::new("payments".to_owned(), 0, 3)],
             },
             link.snapshot_pending().unwrap(),
@@ -5604,6 +6019,72 @@ mod tests {
     }
 
     #[test]
+    fn builds_offset_fetch_v10_topics_from_assignment_topic_ids() {
+        let assignment = ConsumerProtocolAssignmentV0 {
+            assignments: vec![ConsumerProtocolTopicAssignment {
+                topic: "orders".to_owned(),
+                partitions: vec![0, 2],
+            }],
+            user_data: None,
+        };
+        let topic_ids = BTreeMap::from([("orders".to_owned(), [7; 16])]);
+
+        let topics = super::offset_fetch_topics_v10(&assignment, &topic_ids).unwrap();
+
+        assert_eq!(topics[0].topic_id, [7; 16]);
+        assert_eq!(topics[0].partition_indexes, vec![0, 2]);
+    }
+
+    #[test]
+    fn refuses_offset_fetch_v10_topics_without_all_topic_ids() {
+        let assignment = ConsumerProtocolAssignmentV0 {
+            assignments: vec![ConsumerProtocolTopicAssignment {
+                topic: "orders".to_owned(),
+                partitions: vec![0],
+            }],
+            user_data: None,
+        };
+
+        assert!(super::offset_fetch_topics_v10(&assignment, &BTreeMap::new()).is_none());
+    }
+
+    #[test]
+    fn maps_offset_fetch_v10_topic_ids_back_to_names() {
+        let topic_ids = BTreeMap::from([("orders".to_owned(), [7; 16])]);
+        let topics = vec![OffsetFetchTopicResponseV10 {
+            topic_id: [7; 16],
+            partitions: vec![OffsetFetchPartitionResponse {
+                partition_index: 0,
+                committed_offset: 42,
+                metadata: None,
+                error_code: 0,
+            }],
+        }];
+
+        let topics = super::offset_fetch_topics_from_v10(topics, &topic_ids).unwrap();
+
+        assert_eq!(topics[0].name, "orders");
+        assert_eq!(topics[0].partitions[0].committed_offset, 42);
+    }
+
+    #[test]
+    fn rejects_unknown_offset_fetch_v10_topic_ids() {
+        let error = super::offset_fetch_topics_from_v10(
+            vec![OffsetFetchTopicResponseV10 {
+                topic_id: [9; 16],
+                partitions: Vec::new(),
+            }],
+            &BTreeMap::from([("orders".to_owned(), [7; 16])]),
+        )
+        .unwrap_err();
+
+        assert!(matches!(
+            error,
+            Error::Unsupported("offset fetch response contained an unknown topic UUID")
+        ));
+    }
+
+    #[test]
     fn reads_committed_offset_and_surfaces_partition_error() {
         let topics = vec![OffsetFetchTopicResponse {
             name: "orders".to_owned(),
@@ -5716,6 +6197,59 @@ mod tests {
             4
         );
         assert_eq!(topics[1].name, "payments");
+    }
+
+    #[test]
+    fn builds_offset_commit_v10_topics_from_topic_ids() {
+        let mut assignment = ConsumerAssignment::new("orders".to_owned(), 1, 43);
+        assignment.set_leader_epoch(4);
+
+        let topics = super::offset_commit_topics_v10(
+            &[assignment],
+            &BTreeMap::from([("orders".to_owned(), [7; 16])]),
+        )
+        .unwrap();
+
+        assert_eq!(topics[0].topic_id, [7; 16]);
+        assert_eq!(topics[0].partitions[0].partition_index, 1);
+        assert_eq!(topics[0].partitions[0].committed_leader_epoch, 4);
+    }
+
+    #[test]
+    fn falls_back_from_offset_commit_v10_without_complete_topic_ids() {
+        let assignment = ConsumerAssignment::new("orders".to_owned(), 0, 11);
+
+        assert!(super::offset_commit_topics_v10(&[assignment], &BTreeMap::new()).is_none());
+    }
+
+    #[test]
+    fn surfaces_offset_commit_v10_partition_error_and_unknown_topic_id() {
+        let topic_ids = BTreeMap::from([("orders".to_owned(), [7; 16])]);
+        let response = vec![OffsetCommitTopicResponseV10 {
+            topic_id: [7; 16],
+            partitions: vec![OffsetCommitPartitionResponse {
+                partition_index: 0,
+                error_code: 27,
+            }],
+        }];
+
+        let error =
+            super::offset_commit_response_error_v10("orders-group", &response, &topic_ids).unwrap();
+        assert!(matches!(error, Error::Broker { code: 27, .. }));
+
+        let error = super::offset_commit_response_error_v10(
+            "orders-group",
+            &[OffsetCommitTopicResponseV10 {
+                topic_id: [9; 16],
+                partitions: Vec::new(),
+            }],
+            &topic_ids,
+        )
+        .unwrap();
+        assert!(matches!(
+            error,
+            Error::Unsupported("offset commit response contained an unknown topic UUID")
+        ));
     }
 
     #[test]
@@ -5932,6 +6466,81 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn sends_kip_848_regex_heartbeat_v1_without_topic_names() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(1024);
+        let broker = tokio::spawn(async move {
+            let request = read_heartbeat_request(&mut broker_stream).await;
+            let mut decoder = Decoder::new(&request);
+            assert_eq!(decoder.read_i16().unwrap(), 68);
+            assert_eq!(decoder.read_i16().unwrap(), 1);
+            assert_eq!(decoder.read_i32().unwrap(), 1);
+            assert_eq!(
+                decoder.read_nullable_string().unwrap(),
+                Some("kafrust-kip848-regex-test".to_owned())
+            );
+            assert_eq!(decoder.read_tagged_fields().unwrap(), Vec::new());
+            assert_eq!(decoder.read_compact_string().unwrap(), "orders-group");
+            assert_eq!(decoder.read_compact_string().unwrap(), "member-a");
+            assert_eq!(decoder.read_i32().unwrap(), 1);
+            assert_eq!(decoder.read_compact_nullable_string().unwrap(), None);
+            assert_eq!(decoder.read_compact_nullable_string().unwrap(), None);
+            assert_eq!(decoder.read_i32().unwrap(), 1_000);
+            assert_eq!(
+                decoder
+                    .read_compact_array("subscribed topic names", |decoder| {
+                        decoder.read_compact_string()
+                    })
+                    .unwrap(),
+                None
+            );
+            assert_eq!(
+                decoder.read_compact_nullable_string().unwrap(),
+                Some("^orders-[0-9]+$".to_owned())
+            );
+
+            let mut response = Encoder::new();
+            response.write_i32(1);
+            response.write_empty_tagged_fields();
+            response.write_i32(0);
+            response.write_i16(0);
+            response.write_compact_nullable_string(None).unwrap();
+            response
+                .write_compact_nullable_string(Some("member-a"))
+                .unwrap();
+            response.write_i32(1);
+            response.write_i32(1_000);
+            response.write_i8(-1);
+            response.write_empty_tagged_fields();
+            response.write_empty_tagged_fields();
+            write_heartbeat_response(&mut broker_stream, response.into_bytes()).await;
+        });
+
+        let mut client = crate::client::Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-kip848-regex-test".to_owned()),
+            Some(Duration::from_secs(1)),
+        );
+        let response = send_consumer_group_heartbeat(
+            &mut client,
+            "orders-group".to_owned(),
+            "member-a".to_owned(),
+            1,
+            None,
+            1_000,
+            Some(vec!["orders".to_owned()]),
+            Some("^orders-[0-9]+$".to_owned()),
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(response.error_code, 0);
+        assert_eq!(response.member_id.as_deref(), Some("member-a"));
+        broker.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn classic_heartbeat_shutdown_cancels_inflight_request() {
         let (client_stream, mut broker_stream) = tokio::io::duplex(1024);
         let (request_seen, request_seen_rx) = oneshot::channel();
@@ -5994,6 +6603,7 @@ mod tests {
         let config = ConsumerProtocolHeartbeatConfig {
             group_instance_id: None,
             topics: vec!["orders".to_owned()],
+            topic_pattern: None,
             server_assignor: None,
             rebalance_timeout_ms: 1_000,
         };
@@ -6020,12 +6630,19 @@ mod tests {
         let _ = broker.await;
     }
 
-    async fn read_heartbeat_request(stream: &mut tokio::io::DuplexStream) {
+    async fn read_heartbeat_request(stream: &mut tokio::io::DuplexStream) -> Vec<u8> {
         let mut size = [0u8; 4];
         stream.read_exact(&mut size).await.unwrap();
         let size = usize::try_from(i32::from_be_bytes(size)).unwrap();
         let mut request = vec![0u8; size];
         stream.read_exact(&mut request).await.unwrap();
+        request
+    }
+
+    async fn write_heartbeat_response(stream: &mut tokio::io::DuplexStream, response: Vec<u8>) {
+        let size = i32::try_from(response.len()).unwrap().to_be_bytes();
+        stream.write_all(&size).await.unwrap();
+        stream.write_all(&response).await.unwrap();
     }
 
     #[tokio::test]

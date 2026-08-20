@@ -20,14 +20,17 @@ use kafrust_protocol::api::alter_user_scram_credentials::{
     AlterUserScramCredentialsRequestV0, AlterUserScramCredentialsResponseV0,
 };
 use kafrust_protocol::api::api_versions::{
-    ApiVersionsRequestV0, ApiVersionsRequestV3, ApiVersionsResponseV0, ApiVersionsResponseV3,
+    ApiVersionsRequestV0, ApiVersionsRequestV3, ApiVersionsRequestV4, ApiVersionsRequestV5,
+    ApiVersionsResponseV0, ApiVersionsResponseV3, ApiVersionsResponseV4, ApiVersionsResponseV5,
+    UNSUPPORTED_VERSION_ERROR_CODE,
 };
 use kafrust_protocol::api::consumer_group_describe::{
     ConsumerGroupDescribeRequestV0, ConsumerGroupDescribeRequestV1,
     ConsumerGroupDescribeResponseV0, ConsumerGroupDescribeResponseV1,
 };
 use kafrust_protocol::api::consumer_group_heartbeat::{
-    ConsumerGroupHeartbeatRequestV0, ConsumerGroupHeartbeatResponseV0,
+    ConsumerGroupHeartbeatRequestV0, ConsumerGroupHeartbeatRequestV1,
+    ConsumerGroupHeartbeatResponseV0, ConsumerGroupHeartbeatResponseV1,
     ConsumerGroupHeartbeatTopicPartitions,
 };
 use kafrust_protocol::api::create_acls::{CreateAclsRequestV1, CreateAclsResponseV1};
@@ -52,8 +55,10 @@ use kafrust_protocol::api::describe_acls::{DescribeAclsRequestV1, DescribeAclsRe
 use kafrust_protocol::api::describe_client_quotas::{
     DescribeClientQuotasRequestV0, DescribeClientQuotasResponseV0,
 };
+use kafrust_protocol::api::describe_cluster::{DescribeClusterRequest, DescribeClusterResponse};
 use kafrust_protocol::api::describe_configs::{
-    DescribeConfigsRequestV1, DescribeConfigsResourceV1, DescribeConfigsResponseV1,
+    DescribeConfigsRequestV1, DescribeConfigsRequestV4, DescribeConfigsResourceV1,
+    DescribeConfigsResourceV4, DescribeConfigsResponseV1, DescribeConfigsResponseV4,
 };
 use kafrust_protocol::api::describe_groups::{DescribeGroupsRequestV1, DescribeGroupsResponseV1};
 use kafrust_protocol::api::describe_log_dirs::{
@@ -85,9 +90,14 @@ use kafrust_protocol::api::elect_leaders::{
 };
 use kafrust_protocol::api::end_txn::{EndTxnRequestV0, EndTxnResponseV0};
 use kafrust_protocol::api::fetch::{
-    FetchPartitionV11, FetchPartitionV12, FetchPartitionV2, FetchRequestV11, FetchRequestV12,
-    FetchRequestV4, FetchResponseV11, FetchResponseV12, FetchResponseV4, FetchTopicV11,
-    FetchTopicV12, FetchTopicV2, API_KEY as FETCH_API_KEY,
+    FetchForgottenTopicV13, FetchForgottenTopicV14, FetchForgottenTopicV15, FetchForgottenTopicV16,
+    FetchForgottenTopicV17, FetchForgottenTopicV18, FetchPartitionV11, FetchPartitionV12,
+    FetchPartitionV2, FetchReplicaStateV15, FetchRequestV11, FetchRequestV12, FetchRequestV13,
+    FetchRequestV14, FetchRequestV15, FetchRequestV16, FetchRequestV17, FetchRequestV18,
+    FetchRequestV4, FetchResponseV11, FetchResponseV12, FetchResponseV13, FetchResponseV14,
+    FetchResponseV15, FetchResponseV16, FetchResponseV17, FetchResponseV18, FetchResponseV4,
+    FetchTopicV11, FetchTopicV12, FetchTopicV13, FetchTopicV14, FetchTopicV15, FetchTopicV16,
+    FetchTopicV17, FetchTopicV18, FetchTopicV2, API_KEY as FETCH_API_KEY,
 };
 use kafrust_protocol::api::find_coordinator::{
     CoordinatorType, FindCoordinatorRequestV1, FindCoordinatorResponseV1,
@@ -107,7 +117,14 @@ use kafrust_protocol::api::join_group::{
 use kafrust_protocol::api::leave_group::{
     LeaveGroupMemberIdentity, LeaveGroupRequestV3, LeaveGroupResponseV3,
 };
-use kafrust_protocol::api::list_groups::{ListGroupsRequestV1, ListGroupsResponseV1};
+use kafrust_protocol::api::list_config_resources::{
+    ListConfigResourcesRequestV0, ListConfigResourcesRequestV1, ListConfigResourcesResponseV0,
+    ListConfigResourcesResponseV1,
+};
+use kafrust_protocol::api::list_groups::{
+    ListGroupsRequestV1, ListGroupsRequestV4, ListGroupsRequestV5, ListGroupsResponseV1,
+    ListGroupsResponseV4, ListGroupsResponseV5,
+};
 use kafrust_protocol::api::list_offsets::{
     ListOffsetsRequestV1, ListOffsetsResponseV1, ListOffsetsTopicV1,
 };
@@ -123,16 +140,18 @@ use kafrust_protocol::api::metadata::{
     MetadataResponseV12, API_KEY as METADATA_API_KEY,
 };
 use kafrust_protocol::api::offset_commit::{
-    OffsetCommitRequestV2, OffsetCommitRequestV7, OffsetCommitRequestV9, OffsetCommitResponseV2,
-    OffsetCommitResponseV7, OffsetCommitResponseV9, OffsetCommitTopic, OffsetCommitTopicV7,
-    OffsetCommitTopicV9,
+    OffsetCommitRequestV10, OffsetCommitRequestV2, OffsetCommitRequestV7, OffsetCommitRequestV9,
+    OffsetCommitResponseV10, OffsetCommitResponseV2, OffsetCommitResponseV7,
+    OffsetCommitResponseV9, OffsetCommitTopic, OffsetCommitTopicV10, OffsetCommitTopicV7,
+    OffsetCommitTopicV9, API_KEY as OFFSET_COMMIT_API_KEY,
 };
 use kafrust_protocol::api::offset_delete::{
     OffsetDeleteRequestTopicV0, OffsetDeleteRequestV0, OffsetDeleteResponseV0,
 };
 use kafrust_protocol::api::offset_fetch::{
-    OffsetFetchRequestV2, OffsetFetchRequestV9, OffsetFetchResponseV2, OffsetFetchResponseV9,
-    OffsetFetchTopic, OffsetFetchTopicV9,
+    OffsetFetchRequestV10, OffsetFetchRequestV2, OffsetFetchRequestV9, OffsetFetchResponseV10,
+    OffsetFetchResponseV2, OffsetFetchResponseV9, OffsetFetchTopic, OffsetFetchTopicV10,
+    OffsetFetchTopicV9, API_KEY as OFFSET_FETCH_API_KEY,
 };
 use kafrust_protocol::api::offset_for_leader_epoch::{
     OffsetForLeaderEpochRequestV3, OffsetForLeaderEpochResponseV3, OffsetForLeaderEpochTopicV3,
@@ -143,6 +162,10 @@ use kafrust_protocol::api::produce::{
     ProduceRequestV9, ProduceResponseV11, ProduceResponseV12, ProduceResponseV13,
     ProduceResponseV2, ProduceResponseV7, ProduceResponseV9, ProduceTopicV13, ProduceTopicV2,
     ProduceTopicV3, RecordBatchIdentity, RecordBatchMessage,
+};
+use kafrust_protocol::api::raft_voter::{
+    AddRaftVoterRequestV0, AddRaftVoterRequestV1, AddRaftVoterResponse, RaftVoterListener,
+    RemoveRaftVoterRequestV0, RemoveRaftVoterResponse,
 };
 use kafrust_protocol::api::sasl::{
     SaslAuthenticateRequestV1, SaslAuthenticateRequestV2, SaslAuthenticateResponseV1,
@@ -162,6 +185,24 @@ use kafrust_protocol::api::share_group_offsets::{
     AlterShareGroupOffsetsTopicV0, DeleteShareGroupOffsetsRequestV0,
     DeleteShareGroupOffsetsResponseV0, DeleteShareGroupOffsetsTopicV0,
 };
+use kafrust_protocol::api::share_group_state::{
+    DeleteShareGroupStateRequestV0, DeleteShareGroupStateResponseV0, DeleteShareGroupStateTopic,
+    InitializeShareGroupStateRequestV0, InitializeShareGroupStateResponseV0,
+    InitializeShareGroupStateTopic, ReadShareGroupStateRequestV0, ReadShareGroupStateResponseV0,
+    ReadShareGroupStateSummaryRequestV0, ReadShareGroupStateSummaryRequestV1,
+    ReadShareGroupStateSummaryResponseV0, ReadShareGroupStateSummaryResponseV1,
+    ReadShareGroupStateTopic, WriteShareGroupStateRequestV0, WriteShareGroupStateRequestV1,
+    WriteShareGroupStateResponseV0, WriteShareGroupStateResponseV1, WriteShareGroupStateTopicV0,
+    WriteShareGroupStateTopicV1,
+};
+use kafrust_protocol::api::streams_group_describe::{
+    StreamsGroupDescribeRequestV0, StreamsGroupDescribeResponseV0,
+};
+use kafrust_protocol::api::streams_group_heartbeat::{
+    StreamsGroupHeartbeatEndpoint, StreamsGroupHeartbeatKeyValue, StreamsGroupHeartbeatRequestV0,
+    StreamsGroupHeartbeatResponseV0, StreamsGroupHeartbeatTask, StreamsGroupHeartbeatTaskOffset,
+    StreamsGroupHeartbeatTopology,
+};
 use kafrust_protocol::api::sync_group::{
     SyncGroupAssignment, SyncGroupRequestV2, SyncGroupRequestV3, SyncGroupResponseV2,
 };
@@ -172,6 +213,13 @@ use kafrust_protocol::api::telemetry::{
 use kafrust_protocol::api::txn_offset_commit::{
     TxnOffsetCommitRequestV0, TxnOffsetCommitRequestV3, TxnOffsetCommitResponseV0,
     TxnOffsetCommitResponseV3, TxnOffsetCommitTopic, TxnOffsetCommitTopicV3,
+};
+use kafrust_protocol::api::unregister_broker::{
+    UnregisterBrokerRequestV0, UnregisterBrokerResponseV0,
+};
+use kafrust_protocol::api::update_features::{
+    FeatureUpdateV1, UpdateFeaturesRequestV0, UpdateFeaturesRequestV1, UpdateFeaturesResponseV0,
+    UpdateFeaturesResponseV1,
 };
 use kafrust_protocol::codec::{DecodeLimits, Decoder};
 use kafrust_protocol::frame::encode_frame;
@@ -395,11 +443,86 @@ impl Client {
         Ok(response)
     }
 
-    /// Returns ApiVersions v3 capabilities cached for this broker connection.
+    /// Sends flexible ApiVersions v4 and decodes the broker capability ranges.
+    ///
+    /// ApiVersions v4 has the same wire shape as v3, but fixes the broker
+    /// response semantics for supported feature minimum version zero.
+    pub async fn api_versions_v4(
+        &mut self,
+        client_software_name: impl Into<String>,
+        client_software_version: impl Into<String>,
+    ) -> Result<ApiVersionsResponseV4> {
+        let request = ApiVersionsRequestV4 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            client_software_name: client_software_name.into(),
+            client_software_version: client_software_version.into(),
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(ApiVersionsResponseV4::decode_body(&mut decoder)?)
+    }
+
+    /// Sends flexible ApiVersions v5 with optional cluster and node checks.
+    ///
+    /// Pass `None` and `-1` when the expected identity is not known yet. The
+    /// v5 response body is compatible with the v4 response body.
+    pub async fn api_versions_v5(
+        &mut self,
+        client_software_name: impl Into<String>,
+        client_software_version: impl Into<String>,
+        cluster_id: Option<String>,
+        node_id: i32,
+    ) -> Result<ApiVersionsResponseV5> {
+        let request = ApiVersionsRequestV5 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            client_software_name: client_software_name.into(),
+            client_software_version: client_software_version.into(),
+            cluster_id,
+            node_id,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v0(&mut decoder)?;
+        Ok(ApiVersionsResponseV5::decode_body(&mut decoder)?)
+    }
+
+    /// Negotiates the newest generally usable flexible ApiVersions shape.
+    ///
+    /// Kafka 4.x brokers may accept v4, while older brokers can return
+    /// `UNSUPPORTED_VERSION`; those connections are retried with v3. The
+    /// decoded capability ranges have the same public shape either way.
+    pub async fn api_versions_cached(
+        &mut self,
+        client_software_name: impl Into<String>,
+        client_software_version: impl Into<String>,
+    ) -> Result<ApiVersionsResponseV4> {
+        if let Some(response) = self.api_versions_v3_cache.clone() {
+            return Ok(response);
+        }
+
+        let client_software_name = client_software_name.into();
+        let client_software_version = client_software_version.into();
+        let response = self
+            .api_versions_v4(&client_software_name, &client_software_version)
+            .await?;
+        let response = if response.error_code == UNSUPPORTED_VERSION_ERROR_CODE {
+            self.api_versions_v3(client_software_name, client_software_version)
+                .await?
+        } else {
+            response
+        };
+        self.api_versions_v3_cache = Some(response.clone());
+        Ok(response)
+    }
+
+    /// Returns flexible ApiVersions capabilities cached for this broker connection.
     ///
     /// If this connection has not negotiated capabilities yet, this method
-    /// sends ApiVersions v3 once and caches the decoded response. Use
-    /// [`Self::api_versions_v3`] when an explicit capability refresh is needed.
+    /// sends ApiVersions v4 once and falls back to v3 when necessary. Use
+    /// [`Self::api_versions_v3`] when an explicit v3 request is needed.
     pub async fn api_versions_v3_cached(
         &mut self,
         client_software_name: impl Into<String>,
@@ -412,14 +535,27 @@ impl Client {
             .await
     }
 
-    /// Returns the last ApiVersions v3 response negotiated on this connection.
-    pub fn cached_api_versions_v3(&self) -> Option<&ApiVersionsResponseV3> {
+    /// Returns the last flexible ApiVersions response negotiated on this connection.
+    pub fn cached_api_versions(&self) -> Option<&ApiVersionsResponseV4> {
         self.api_versions_v3_cache.as_ref()
     }
 
-    /// Clears the cached ApiVersions v3 response so the next cached lookup refreshes it.
-    pub fn clear_api_versions_v3_cache(&mut self) {
+    /// Returns the last flexible ApiVersions response through the legacy name.
+    ///
+    /// This alias remains for callers that used the pre-v4 API. The cached
+    /// response may have been obtained through v4 and fallen back to v3.
+    pub fn cached_api_versions_v3(&self) -> Option<&ApiVersionsResponseV3> {
+        self.cached_api_versions()
+    }
+
+    /// Clears the cached flexible ApiVersions response.
+    pub fn clear_api_versions_cache(&mut self) {
         self.api_versions_v3_cache = None;
+    }
+
+    /// Clears the cached ApiVersions response through the legacy name.
+    pub fn clear_api_versions_v3_cache(&mut self) {
+        self.clear_api_versions_cache();
     }
 
     pub(crate) async fn supports_fetch_v11(&mut self) -> Result<bool> {
@@ -440,6 +576,15 @@ impl Client {
             .is_some_and(|version| version >= 12))
     }
 
+    pub(crate) async fn supports_fetch_v13(&mut self) -> Result<bool> {
+        let response = self
+            .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
+            .await?;
+        Ok(response
+            .highest_supported_version(FETCH_API_KEY, 18)
+            .is_some_and(|version| version >= 13))
+    }
+
     pub(crate) async fn supports_metadata_v12(&mut self) -> Result<bool> {
         let response = self
             .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
@@ -447,6 +592,24 @@ impl Client {
         Ok(response
             .highest_supported_version(METADATA_API_KEY, 12)
             .is_some_and(|version| version >= 12))
+    }
+
+    pub(crate) async fn supports_offset_fetch_v10(&mut self) -> Result<bool> {
+        let response = self
+            .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
+            .await?;
+        Ok(response
+            .highest_supported_version(OFFSET_FETCH_API_KEY, 10)
+            .is_some_and(|version| version >= 10))
+    }
+
+    pub(crate) async fn supports_offset_commit_v10(&mut self) -> Result<bool> {
+        let response = self
+            .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
+            .await?;
+        Ok(response
+            .highest_supported_version(OFFSET_COMMIT_API_KEY, 10)
+            .is_some_and(|version| version >= 10))
     }
 
     /// Returns the broker-advertised SASL session lifetime in milliseconds.
@@ -669,6 +832,47 @@ impl Client {
         topics: Vec<DescribeQuorumTopic>,
     ) -> Result<DescribeQuorumResponse> {
         self.describe_quorum(2, topics).await
+    }
+
+    /// Sends DescribeCluster v0 to the broker represented by this connection.
+    pub async fn describe_cluster_v0(
+        &mut self,
+        include_cluster_authorized_operations: bool,
+    ) -> Result<DescribeClusterResponse> {
+        self.describe_cluster(0, include_cluster_authorized_operations, 1)
+            .await
+    }
+
+    /// Sends DescribeCluster v1 to the broker represented by this connection.
+    pub async fn describe_cluster_v1(
+        &mut self,
+        include_cluster_authorized_operations: bool,
+        endpoint_type: i8,
+    ) -> Result<DescribeClusterResponse> {
+        self.describe_cluster(1, include_cluster_authorized_operations, endpoint_type)
+            .await
+    }
+
+    async fn describe_cluster(
+        &mut self,
+        api_version: i16,
+        include_cluster_authorized_operations: bool,
+        endpoint_type: i8,
+    ) -> Result<DescribeClusterResponse> {
+        let request = DescribeClusterRequest {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            api_version,
+            include_cluster_authorized_operations,
+            endpoint_type,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(DescribeClusterResponse::decode_body(
+            &mut decoder,
+            api_version,
+        )?)
     }
 
     async fn describe_quorum(
@@ -915,7 +1119,7 @@ impl Client {
     /// Sends ListTransactions v1 with a broker-side duration filter.
     ///
     /// The response schema is shared with ListTransactions v0. Callers should
-    /// negotiate API support through [`Self::api_versions_v3_cached`] before
+    /// negotiate API support through [`Self::api_versions_cached`] before
     /// selecting this method.
     pub async fn list_transactions_v1(
         &mut self,
@@ -952,6 +1156,57 @@ impl Client {
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(DescribeConfigsResponseV1::decode_body(&mut decoder)?)
+    }
+
+    /// Sends DescribeConfigs v4 with optional configuration documentation.
+    pub async fn describe_configs_v4(
+        &mut self,
+        resources: Vec<DescribeConfigsResourceV4>,
+        include_synonyms: bool,
+        include_documentation: bool,
+    ) -> Result<DescribeConfigsResponseV4> {
+        let request = DescribeConfigsRequestV4 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            resources,
+            include_synonyms,
+            include_documentation,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(DescribeConfigsResponseV4::decode_body(&mut decoder)?)
+    }
+
+    /// Sends Kafka API 74 v0, the older ListClientMetricsResources operation.
+    pub async fn list_config_resources_v0(&mut self) -> Result<ListConfigResourcesResponseV0> {
+        let request = ListConfigResourcesRequestV0 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(ListConfigResourcesResponseV0::decode_body(&mut decoder)?)
+    }
+
+    /// Sends Kafka ListConfigResources v1 to the broker represented by this connection.
+    ///
+    /// An empty resource-type filter asks Kafka for all supported configuration
+    /// resource types. Version 1 is available on Kafka 4.1 and newer brokers.
+    pub async fn list_config_resources_v1(
+        &mut self,
+        resource_types: Vec<i8>,
+    ) -> Result<ListConfigResourcesResponseV1> {
+        let request = ListConfigResourcesRequestV1 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            resource_types,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(ListConfigResourcesResponseV1::decode_body(&mut decoder)?)
     }
 
     /// Sends DescribeLogDirs v1 to this broker.
@@ -1342,6 +1597,143 @@ impl Client {
         )?)
     }
 
+    /// Sends UpdateFeatures v0 to the active controller represented by this
+    /// connection. High-level callers should prefer [`crate::AdminClient`],
+    /// which discovers the active controller and applies mutation outcome
+    /// handling.
+    pub async fn update_features_v0(
+        &mut self,
+        timeout_ms: i32,
+        updates: Vec<kafrust_protocol::api::update_features::FeatureUpdateV0>,
+    ) -> Result<UpdateFeaturesResponseV0> {
+        let request = UpdateFeaturesRequestV0 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            timeout_ms,
+            updates,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(UpdateFeaturesResponseV0::decode_body(&mut decoder)?)
+    }
+
+    /// Sends UpdateFeatures v1 to the active controller represented by this
+    /// connection. High-level callers should prefer [`crate::AdminClient`],
+    /// which negotiates the broker capability and preserves mutation outcome
+    /// handling.
+    pub async fn update_features_v1(
+        &mut self,
+        timeout_ms: i32,
+        updates: Vec<FeatureUpdateV1>,
+        validate_only: bool,
+    ) -> Result<UpdateFeaturesResponseV1> {
+        let request = UpdateFeaturesRequestV1 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            timeout_ms,
+            updates,
+            validate_only,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(UpdateFeaturesResponseV1::decode_body(&mut decoder)?)
+    }
+
+    /// Sends AddRaftVoter v0 to the active KRaft controller represented by
+    /// this connection. High-level callers should prefer
+    /// [`crate::AdminClient`], which discovers the controller and preserves
+    /// mutation outcome handling.
+    pub async fn add_raft_voter_v0(
+        &mut self,
+        cluster_id: Option<String>,
+        timeout_ms: i32,
+        voter_id: i32,
+        voter_directory_id: [u8; 16],
+        listeners: Vec<RaftVoterListener>,
+    ) -> Result<AddRaftVoterResponse> {
+        let request = AddRaftVoterRequestV0 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            cluster_id,
+            timeout_ms,
+            voter_id,
+            voter_directory_id,
+            listeners,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(AddRaftVoterResponse::decode_body(&mut decoder)?)
+    }
+
+    /// Sends AddRaftVoter v1 to the active KRaft controller represented by
+    /// this connection.
+    pub async fn add_raft_voter_v1(
+        &mut self,
+        cluster_id: Option<String>,
+        timeout_ms: i32,
+        voter_id: i32,
+        voter_directory_id: [u8; 16],
+        listeners: Vec<RaftVoterListener>,
+        ack_when_committed: bool,
+    ) -> Result<AddRaftVoterResponse> {
+        let request = AddRaftVoterRequestV1 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            cluster_id,
+            timeout_ms,
+            voter_id,
+            voter_directory_id,
+            listeners,
+            ack_when_committed,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(AddRaftVoterResponse::decode_body(&mut decoder)?)
+    }
+
+    /// Sends RemoveRaftVoter v0 to the active KRaft controller represented by
+    /// this connection.
+    pub async fn remove_raft_voter_v0(
+        &mut self,
+        cluster_id: Option<String>,
+        voter_id: i32,
+        voter_directory_id: [u8; 16],
+    ) -> Result<RemoveRaftVoterResponse> {
+        let request = RemoveRaftVoterRequestV0 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            cluster_id,
+            voter_id,
+            voter_directory_id,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(RemoveRaftVoterResponse::decode_body(&mut decoder)?)
+    }
+
+    /// Sends UnregisterBroker v0 to the active KRaft controller represented by
+    /// this connection. High-level callers should prefer [`crate::AdminClient`],
+    /// which discovers the controller and preserves mutation outcome handling.
+    pub async fn unregister_broker_v0(
+        &mut self,
+        broker_id: i32,
+    ) -> Result<UnregisterBrokerResponseV0> {
+        let request = UnregisterBrokerRequestV0 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            broker_id,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(UnregisterBrokerResponseV0::decode_body(&mut decoder)?)
+    }
+
     /// Sends ListPartitionReassignments v0 to the broker represented by this connection.
     pub async fn list_partition_reassignments_v0(
         &mut self,
@@ -1465,6 +1857,205 @@ impl Client {
         Ok(ShareGroupDescribeResponseV1::decode_body(&mut decoder)?)
     }
 
+    /// Sends StreamsGroupDescribe v0 to this Streams group coordinator.
+    pub async fn streams_group_describe_v0(
+        &mut self,
+        group_ids: Vec<String>,
+        include_authorized_operations: bool,
+    ) -> Result<StreamsGroupDescribeResponseV0> {
+        let request = StreamsGroupDescribeRequestV0 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            group_ids,
+            include_authorized_operations,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(StreamsGroupDescribeResponseV0::decode_body(&mut decoder)?)
+    }
+
+    /// Sends StreamsGroupHeartbeat v0 to a Streams group coordinator.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn streams_group_heartbeat_v0(
+        &mut self,
+        group_id: impl Into<String>,
+        member_id: impl Into<String>,
+        member_epoch: i32,
+        endpoint_information_epoch: i32,
+        instance_id: Option<String>,
+        rack_id: Option<String>,
+        rebalance_timeout_ms: i32,
+        topology: Option<StreamsGroupHeartbeatTopology>,
+        active_tasks: Option<Vec<StreamsGroupHeartbeatTask>>,
+        standby_tasks: Option<Vec<StreamsGroupHeartbeatTask>>,
+        warmup_tasks: Option<Vec<StreamsGroupHeartbeatTask>>,
+        process_id: Option<String>,
+        user_endpoint: Option<StreamsGroupHeartbeatEndpoint>,
+        client_tags: Option<Vec<StreamsGroupHeartbeatKeyValue>>,
+        task_offsets: Option<Vec<StreamsGroupHeartbeatTaskOffset>>,
+        task_end_offsets: Option<Vec<StreamsGroupHeartbeatTaskOffset>>,
+        shutdown_application: bool,
+    ) -> Result<StreamsGroupHeartbeatResponseV0> {
+        let request = StreamsGroupHeartbeatRequestV0 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            group_id: group_id.into(),
+            member_id: member_id.into(),
+            member_epoch,
+            endpoint_information_epoch,
+            instance_id,
+            rack_id,
+            rebalance_timeout_ms,
+            topology,
+            active_tasks,
+            standby_tasks,
+            warmup_tasks,
+            process_id,
+            user_endpoint,
+            client_tags,
+            task_offsets,
+            task_end_offsets,
+            shutdown_application,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(StreamsGroupHeartbeatResponseV0::decode_body(&mut decoder)?)
+    }
+
+    /// Sends InitializeShareGroupState v0 to this share-group coordinator.
+    pub async fn initialize_share_group_state_v0(
+        &mut self,
+        group_id: impl Into<String>,
+        topics: Vec<InitializeShareGroupStateTopic>,
+    ) -> Result<InitializeShareGroupStateResponseV0> {
+        let request = InitializeShareGroupStateRequestV0 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            group_id: group_id.into(),
+            topics,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(InitializeShareGroupStateResponseV0::decode_body(
+            &mut decoder,
+        )?)
+    }
+
+    /// Sends ReadShareGroupState v0 to this share-group coordinator.
+    pub async fn read_share_group_state_v0(
+        &mut self,
+        group_id: impl Into<String>,
+        topics: Vec<ReadShareGroupStateTopic>,
+    ) -> Result<ReadShareGroupStateResponseV0> {
+        let request = ReadShareGroupStateRequestV0 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            group_id: group_id.into(),
+            topics,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(ReadShareGroupStateResponseV0::decode_body(&mut decoder)?)
+    }
+
+    /// Sends WriteShareGroupState v0 to this share-group coordinator.
+    pub async fn write_share_group_state_v0(
+        &mut self,
+        group_id: impl Into<String>,
+        topics: Vec<WriteShareGroupStateTopicV0>,
+    ) -> Result<WriteShareGroupStateResponseV0> {
+        let request = WriteShareGroupStateRequestV0 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            group_id: group_id.into(),
+            topics,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(WriteShareGroupStateResponseV0::decode_body(&mut decoder)?)
+    }
+
+    /// Sends WriteShareGroupState v1, including delivery completion counts.
+    pub async fn write_share_group_state_v1(
+        &mut self,
+        group_id: impl Into<String>,
+        topics: Vec<WriteShareGroupStateTopicV1>,
+    ) -> Result<WriteShareGroupStateResponseV1> {
+        let request = WriteShareGroupStateRequestV1 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            group_id: group_id.into(),
+            topics,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(WriteShareGroupStateResponseV1::decode_body(&mut decoder)?)
+    }
+
+    /// Sends DeleteShareGroupState v0 to this share-group coordinator.
+    pub async fn delete_share_group_state_v0(
+        &mut self,
+        group_id: impl Into<String>,
+        topics: Vec<DeleteShareGroupStateTopic>,
+    ) -> Result<DeleteShareGroupStateResponseV0> {
+        let request = DeleteShareGroupStateRequestV0 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            group_id: group_id.into(),
+            topics,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(DeleteShareGroupStateResponseV0::decode_body(&mut decoder)?)
+    }
+
+    /// Sends ReadShareGroupStateSummary v0 to this share-group coordinator.
+    pub async fn read_share_group_state_summary_v0(
+        &mut self,
+        group_id: impl Into<String>,
+        topics: Vec<ReadShareGroupStateTopic>,
+    ) -> Result<ReadShareGroupStateSummaryResponseV0> {
+        let request = ReadShareGroupStateSummaryRequestV0 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            group_id: group_id.into(),
+            topics,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(ReadShareGroupStateSummaryResponseV0::decode_body(
+            &mut decoder,
+        )?)
+    }
+
+    /// Sends ReadShareGroupStateSummary v1, including delivery completion counts.
+    pub async fn read_share_group_state_summary_v1(
+        &mut self,
+        group_id: impl Into<String>,
+        topics: Vec<ReadShareGroupStateTopic>,
+    ) -> Result<ReadShareGroupStateSummaryResponseV1> {
+        let request = ReadShareGroupStateSummaryRequestV1 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            group_id: group_id.into(),
+            topics,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(ReadShareGroupStateSummaryResponseV1::decode_body(
+            &mut decoder,
+        )?)
+    }
+
     /// Sends AlterShareGroupOffsets v0 to this share-group coordinator.
     pub async fn alter_share_group_offsets_v0(
         &mut self,
@@ -1553,6 +2144,42 @@ impl Client {
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(ListGroupsResponseV1::decode_body(&mut decoder)?)
+    }
+
+    /// Sends ListGroups v4 with a group-state filter to the broker represented
+    /// by this connection.
+    pub async fn list_groups_v4(
+        &mut self,
+        states_filter: Vec<String>,
+    ) -> Result<ListGroupsResponseV4> {
+        let request = ListGroupsRequestV4 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            states_filter,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(ListGroupsResponseV4::decode_body(&mut decoder)?)
+    }
+
+    /// Sends ListGroups v5 with group-state and group-type filters to the
+    /// broker represented by this connection.
+    pub async fn list_groups_v5(
+        &mut self,
+        states_filter: Vec<String>,
+        types_filter: Vec<String>,
+    ) -> Result<ListGroupsResponseV5> {
+        let request = ListGroupsRequestV5 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            states_filter,
+            types_filter,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(ListGroupsResponseV5::decode_body(&mut decoder)?)
     }
 
     /// Sends DeleteGroups v1 to this group coordinator connection.
@@ -1862,6 +2489,30 @@ impl Client {
         Ok(OffsetFetchResponseV9::decode_body(&mut decoder)?)
     }
 
+    /// Sends OffsetFetch v10 with topic UUIDs for Kafka 4.x.
+    pub async fn offset_fetch_v10(
+        &mut self,
+        group_id: impl Into<String>,
+        member_id: Option<String>,
+        member_epoch: i32,
+        topics: Option<Vec<OffsetFetchTopicV10>>,
+        require_stable: bool,
+    ) -> Result<OffsetFetchResponseV10> {
+        let request = OffsetFetchRequestV10 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            group_id: group_id.into(),
+            member_id,
+            member_epoch,
+            topics,
+            require_stable,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(OffsetFetchResponseV10::decode_body(&mut decoder)?)
+    }
+
     /// Sends ListOffsets v1 to resolve timestamp-based partition offsets.
     pub async fn list_offsets_v1(
         &mut self,
@@ -2070,6 +2721,41 @@ impl Client {
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v1(&mut decoder)?;
         Ok(ConsumerGroupHeartbeatResponseV0::decode_body(&mut decoder)?)
+    }
+
+    /// Sends KIP-848 ConsumerGroupHeartbeat v1 with an optional topic regex.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn consumer_group_heartbeat_v1(
+        &mut self,
+        group_id: impl Into<String>,
+        member_id: impl Into<String>,
+        member_epoch: i32,
+        instance_id: Option<String>,
+        rack_id: Option<String>,
+        rebalance_timeout_ms: i32,
+        subscribed_topic_names: Option<Vec<String>>,
+        subscribed_topic_regex: Option<String>,
+        server_assignor: Option<String>,
+        topic_partitions: Option<Vec<ConsumerGroupHeartbeatTopicPartitions>>,
+    ) -> Result<ConsumerGroupHeartbeatResponseV1> {
+        let request = ConsumerGroupHeartbeatRequestV1 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            group_id: group_id.into(),
+            member_id: member_id.into(),
+            member_epoch,
+            instance_id,
+            rack_id,
+            rebalance_timeout_ms,
+            subscribed_topic_names,
+            subscribed_topic_regex,
+            server_assignor,
+            topic_partitions,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(ConsumerGroupHeartbeatResponseV1::decode_body(&mut decoder)?)
     }
 
     /// Sends the stable KIP-932 ShareGroupHeartbeat v1 request.
@@ -2389,6 +3075,30 @@ impl Client {
         Ok(OffsetCommitResponseV9::decode_body(&mut decoder)?)
     }
 
+    /// Sends OffsetCommit v10 with topic UUIDs for Kafka 4.x.
+    pub async fn offset_commit_v10(
+        &mut self,
+        group_id: impl Into<String>,
+        member_epoch: i32,
+        member_id: impl Into<String>,
+        group_instance_id: Option<String>,
+        topics: Vec<OffsetCommitTopicV10>,
+    ) -> Result<OffsetCommitResponseV10> {
+        let request = OffsetCommitRequestV10 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            group_id: group_id.into(),
+            generation_id_or_member_epoch: member_epoch,
+            member_id: member_id.into(),
+            group_instance_id,
+            topics,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(OffsetCommitResponseV10::decode_body(&mut decoder)?)
+    }
+
     pub(crate) async fn fetch_one_v4(
         &mut self,
         request: FetchOneRequestV4,
@@ -2481,6 +3191,224 @@ impl Client {
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v1(&mut decoder)?;
         Ok(FetchResponseV12::decode_body(&mut decoder)?)
+    }
+
+    /// Sends Fetch v13 with topic UUIDs for Kafka 4.x.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn fetch_v13(
+        &mut self,
+        cluster_id: Option<String>,
+        max_wait_ms: i32,
+        min_bytes: i32,
+        max_bytes: i32,
+        isolation_level: i8,
+        session_id: i32,
+        session_epoch: i32,
+        topics: Vec<FetchTopicV13>,
+        forgotten_topics: Vec<FetchForgottenTopicV13>,
+        rack_id: impl Into<String>,
+    ) -> Result<FetchResponseV13> {
+        let request = FetchRequestV13 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            cluster_id,
+            max_wait_ms,
+            min_bytes,
+            max_bytes,
+            isolation_level,
+            session_id,
+            session_epoch,
+            topics,
+            forgotten_topics,
+            rack_id: rack_id.into(),
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(FetchResponseV13::decode_body(&mut decoder)?)
+    }
+
+    /// Sends Fetch v14 with topic UUIDs and tiered-storage error semantics.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn fetch_v14(
+        &mut self,
+        cluster_id: Option<String>,
+        max_wait_ms: i32,
+        min_bytes: i32,
+        max_bytes: i32,
+        isolation_level: i8,
+        session_id: i32,
+        session_epoch: i32,
+        topics: Vec<FetchTopicV14>,
+        forgotten_topics: Vec<FetchForgottenTopicV14>,
+        rack_id: impl Into<String>,
+    ) -> Result<FetchResponseV14> {
+        let request = FetchRequestV14 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            cluster_id,
+            max_wait_ms,
+            min_bytes,
+            max_bytes,
+            isolation_level,
+            session_id,
+            session_epoch,
+            topics,
+            forgotten_topics,
+            rack_id: rack_id.into(),
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(FetchResponseV14::decode_body(&mut decoder)?)
+    }
+
+    /// Sends Fetch v15 with the Kafka 4.x replica-state tagged struct.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn fetch_v15(
+        &mut self,
+        cluster_id: Option<String>,
+        replica_state: Option<FetchReplicaStateV15>,
+        max_wait_ms: i32,
+        min_bytes: i32,
+        max_bytes: i32,
+        isolation_level: i8,
+        session_id: i32,
+        session_epoch: i32,
+        topics: Vec<FetchTopicV15>,
+        forgotten_topics: Vec<FetchForgottenTopicV15>,
+        rack_id: impl Into<String>,
+    ) -> Result<FetchResponseV15> {
+        let request = FetchRequestV15 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            cluster_id,
+            replica_state,
+            max_wait_ms,
+            min_bytes,
+            max_bytes,
+            isolation_level,
+            session_id,
+            session_epoch,
+            topics,
+            forgotten_topics,
+            rack_id: rack_id.into(),
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(FetchResponseV15::decode_body(&mut decoder)?)
+    }
+
+    /// Sends Fetch v16, whose request shape is identical to v15.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn fetch_v16(
+        &mut self,
+        cluster_id: Option<String>,
+        replica_state: Option<FetchReplicaStateV15>,
+        max_wait_ms: i32,
+        min_bytes: i32,
+        max_bytes: i32,
+        isolation_level: i8,
+        session_id: i32,
+        session_epoch: i32,
+        topics: Vec<FetchTopicV16>,
+        forgotten_topics: Vec<FetchForgottenTopicV16>,
+        rack_id: impl Into<String>,
+    ) -> Result<FetchResponseV16> {
+        let request = FetchRequestV16 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            cluster_id,
+            replica_state,
+            max_wait_ms,
+            min_bytes,
+            max_bytes,
+            isolation_level,
+            session_id,
+            session_epoch,
+            topics,
+            forgotten_topics,
+            rack_id: rack_id.into(),
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(FetchResponseV16::decode_body(&mut decoder)?)
+    }
+
+    /// Sends Fetch v17 with follower directory-ID tagged fields.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn fetch_v17(
+        &mut self,
+        cluster_id: Option<String>,
+        replica_state: Option<FetchReplicaStateV15>,
+        max_wait_ms: i32,
+        min_bytes: i32,
+        max_bytes: i32,
+        isolation_level: i8,
+        session_id: i32,
+        session_epoch: i32,
+        topics: Vec<FetchTopicV17>,
+        forgotten_topics: Vec<FetchForgottenTopicV17>,
+        rack_id: impl Into<String>,
+    ) -> Result<FetchResponseV17> {
+        let request = FetchRequestV17 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            cluster_id,
+            replica_state,
+            max_wait_ms,
+            min_bytes,
+            max_bytes,
+            isolation_level,
+            session_id,
+            session_epoch,
+            topics,
+            forgotten_topics,
+            rack_id: rack_id.into(),
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(FetchResponseV17::decode_body(&mut decoder)?)
+    }
+
+    /// Sends Fetch v18 with directory-ID and follower high-watermark fields.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn fetch_v18(
+        &mut self,
+        cluster_id: Option<String>,
+        replica_state: Option<FetchReplicaStateV15>,
+        max_wait_ms: i32,
+        min_bytes: i32,
+        max_bytes: i32,
+        isolation_level: i8,
+        session_id: i32,
+        session_epoch: i32,
+        topics: Vec<FetchTopicV18>,
+        forgotten_topics: Vec<FetchForgottenTopicV18>,
+        rack_id: impl Into<String>,
+    ) -> Result<FetchResponseV18> {
+        let request = FetchRequestV18 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            cluster_id,
+            replica_state,
+            max_wait_ms,
+            min_bytes,
+            max_bytes,
+            isolation_level,
+            session_id,
+            session_epoch,
+            topics,
+            forgotten_topics,
+            rack_id: rack_id.into(),
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(FetchResponseV18::decode_body(&mut decoder)?)
     }
 
     /// Sends Produce v2 for pre-built topic partition payloads.
@@ -3273,15 +4201,19 @@ impl Drop for RequestSpanGuard {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::{
-        AddPartitionsToTxnTopic, Client, RequestTrace, TxnOffsetCommitTopic,
+        AddPartitionsToTxnTopic, Client, RaftVoterListener, RequestTrace, TxnOffsetCommitTopic,
         DEFAULT_MAX_RESPONSE_BYTES,
     };
     use crate::config::SaslCredentials;
     use crate::{ClientMetrics, Error};
+    use kafrust_protocol::api::fetch::{FetchPartitionV12, FetchTopicV13};
+    use kafrust_protocol::api::offset_commit::{OffsetCommitPartitionV10, OffsetCommitTopicV10};
+    use kafrust_protocol::api::offset_fetch::OffsetFetchTopicV10;
     use kafrust_protocol::api::offset_for_leader_epoch::{
         OffsetForLeaderEpochPartitionV3, OffsetForLeaderEpochTopicV3,
     };
     use kafrust_protocol::api::txn_offset_commit::TxnOffsetCommitPartition;
+    use kafrust_protocol::api::update_features::{FeatureUpdateV0, FeatureUpdateV1};
     use kafrust_protocol::codec::Encoder;
     use kafrust_protocol::codec::{DecodeLimits, Decoder};
     use std::time::Duration;
@@ -3428,6 +4360,185 @@ mod tests {
         assert_eq!(snapshot.requests_succeeded, 1);
         assert_eq!(snapshot.response_bytes, 0);
         assert_eq!(snapshot.in_flight_requests, 0);
+        broker.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn sends_topic_uuid_offset_fetch_and_commit_v10() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(2048);
+        let broker = tokio::spawn(async move {
+            let fetch_request = read_test_frame(&mut broker_stream).await;
+            assert_eq!(&fetch_request[0..4], &[0, 9, 0, 10]);
+
+            let mut fetch_response = Encoder::new();
+            fetch_response.write_i32(1);
+            fetch_response.write_empty_tagged_fields();
+            fetch_response.write_i32(0);
+            fetch_response
+                .write_compact_array(Some(&[()]), |encoder, ()| {
+                    encoder.write_compact_string("orders-group")?;
+                    encoder.write_compact_array(Some(&[()]), |encoder, ()| {
+                        encoder.write_uuid(&[9; 16]);
+                        encoder.write_compact_array(Some(&[()]), |encoder, ()| {
+                            encoder.write_i32(0);
+                            encoder.write_i64(42);
+                            encoder.write_i32(7);
+                            encoder.write_compact_nullable_string(Some("processed"))?;
+                            encoder.write_i16(0);
+                            encoder.write_empty_tagged_fields();
+                            Ok(())
+                        })?;
+                        encoder.write_empty_tagged_fields();
+                        Ok(())
+                    })?;
+                    encoder.write_i16(0);
+                    encoder.write_empty_tagged_fields();
+                    Ok(())
+                })
+                .unwrap();
+            fetch_response.write_empty_tagged_fields();
+            write_test_frame(&mut broker_stream, &fetch_response.into_bytes()).await;
+
+            let commit_request = read_test_frame(&mut broker_stream).await;
+            assert_eq!(&commit_request[0..4], &[0, 8, 0, 10]);
+
+            let mut commit_response = Encoder::new();
+            commit_response.write_i32(2);
+            commit_response.write_empty_tagged_fields();
+            commit_response.write_i32(2);
+            commit_response
+                .write_compact_array(Some(&[()]), |encoder, ()| {
+                    encoder.write_uuid(&[9; 16]);
+                    encoder.write_compact_array(Some(&[()]), |encoder, ()| {
+                        encoder.write_i32(0);
+                        encoder.write_i16(0);
+                        encoder.write_empty_tagged_fields();
+                        Ok(())
+                    })?;
+                    encoder.write_empty_tagged_fields();
+                    Ok(())
+                })
+                .unwrap();
+            commit_response.write_empty_tagged_fields();
+            write_test_frame(&mut broker_stream, &commit_response.into_bytes()).await;
+        });
+
+        let mut client = Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-v10-test".to_owned()),
+            Some(Duration::from_secs(1)),
+        );
+        let fetch = client
+            .offset_fetch_v10(
+                "orders-group",
+                Some("member-a".to_owned()),
+                7,
+                Some(vec![OffsetFetchTopicV10 {
+                    topic_id: [9; 16],
+                    partition_indexes: vec![0],
+                }]),
+                true,
+            )
+            .await
+            .unwrap();
+        assert_eq!(fetch.groups[0].topics[0].topic_id, [9; 16]);
+        assert_eq!(fetch.groups[0].topics[0].partitions[0].committed_offset, 42);
+
+        let commit = client
+            .offset_commit_v10(
+                "orders-group",
+                7,
+                "member-a",
+                None,
+                vec![OffsetCommitTopicV10 {
+                    topic_id: [9; 16],
+                    partitions: vec![OffsetCommitPartitionV10 {
+                        partition_index: 0,
+                        committed_offset: 43,
+                        committed_leader_epoch: 7,
+                        committed_metadata: None,
+                    }],
+                }],
+            )
+            .await
+            .unwrap();
+        assert_eq!(commit.throttle_time_ms, 2);
+        assert_eq!(commit.topics[0].topic_id, [9; 16]);
+        assert_eq!(commit.topics[0].partitions[0].error_code, 0);
+        broker.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn sends_topic_uuid_fetch_v13_over_injected_broker_stream() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(2048);
+        let broker = tokio::spawn(async move {
+            let request = read_test_frame(&mut broker_stream).await;
+            assert_eq!(&request[0..4], &[0, 1, 0, 13]);
+            assert!(request.windows(16).any(|bytes| bytes == [7; 16]));
+
+            let mut response = Encoder::new();
+            response.write_i32(1); // response correlation id
+            response.write_empty_tagged_fields();
+            response.write_i32(0); // throttle time
+            response.write_i16(0); // top-level error
+            response.write_i32(3); // fetch session id
+            response
+                .write_compact_array(Some(&[()]), |encoder, ()| {
+                    encoder.write_uuid(&[7; 16]);
+                    encoder.write_compact_array(Some(&[()]), |encoder, ()| {
+                        encoder.write_i32(0);
+                        encoder.write_i16(0);
+                        encoder.write_i64(43);
+                        encoder.write_i64(42);
+                        encoder.write_i64(40);
+                        encoder.write_compact_array(Some(&[] as &[()]), |_encoder, ()| Ok(()))?;
+                        encoder.write_i32(-1);
+                        encoder.write_compact_nullable_bytes(Some(&[]))?;
+                        encoder.write_empty_tagged_fields();
+                        Ok(())
+                    })?;
+                    encoder.write_empty_tagged_fields();
+                    Ok(())
+                })
+                .unwrap();
+            response.write_empty_tagged_fields();
+            write_test_frame(&mut broker_stream, &response.into_bytes()).await;
+        });
+
+        let mut client = Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-fetch-v13-test".to_owned()),
+            Some(Duration::from_secs(1)),
+        );
+        let response = client
+            .fetch_v13(
+                Some("cluster-a".to_owned()),
+                500,
+                1,
+                1_048_576,
+                1,
+                3,
+                2,
+                vec![FetchTopicV13 {
+                    topic_id: [7; 16],
+                    partitions: vec![FetchPartitionV12 {
+                        partition_index: 0,
+                        current_leader_epoch: 4,
+                        fetch_offset: 42,
+                        last_fetched_epoch: 3,
+                        log_start_offset: -1,
+                        max_bytes: 1_048_576,
+                    }],
+                }],
+                Vec::new(),
+                "rack-a",
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.session_id, 3);
+        assert_eq!(response.responses[0].topic_id, [7; 16]);
+        assert_eq!(response.responses[0].partitions[0].high_watermark, 43);
         broker.await.unwrap();
     }
 
@@ -3615,6 +4726,546 @@ mod tests {
         assert_eq!(metrics.requests_started, 1);
         assert_eq!(metrics.requests_succeeded, 1);
         assert_eq!(metrics.response_bytes, 19);
+        broker.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn sends_flexible_api_versions_v4_over_injected_broker_stream() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(1024);
+        let broker = tokio::spawn(async move {
+            let request = read_test_frame(&mut broker_stream).await;
+            assert_eq!(
+                request,
+                [
+                    0, 18, // api key
+                    0, 4, // api version
+                    0, 0, 0, 1, // correlation id
+                    0xff, 0xff, // nullable client id
+                    0,    // request header tagged fields
+                    8, b'k', b'a', b'f', b'r', b'u', b's', b't', // software name
+                    6, b'0', b'.', b'3', b'.', b'0', // software version
+                    0,    // request body tagged fields
+                ]
+            );
+
+            let response = [
+                0, 0, 0, 1, // correlation id
+                0, 0, // error code
+                2, // compact api key count: one entry
+                0, 18, 0, 0, 0, 4, 0, // ApiVersions min/max + entry tags
+                0, 0, 0, 0, // throttle time
+                0, // response tagged fields
+            ];
+            write_test_frame(&mut broker_stream, &response).await;
+        });
+
+        let mut client =
+            Client::from_stream(Box::new(client_stream), None, Some(Duration::from_secs(1)));
+        let response = client.api_versions_v4("kafrust", "0.3.0").await.unwrap();
+
+        assert_eq!(response.error_code, 0);
+        assert_eq!(response.highest_supported_version(18, 4), Some(4));
+        assert!(response.tagged_fields.is_empty());
+        broker.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn sends_flexible_api_versions_v5_with_cluster_identity() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(1024);
+        let broker = tokio::spawn(async move {
+            let request = read_test_frame(&mut broker_stream).await;
+            assert_eq!(
+                request,
+                [
+                    0, 18, // api key
+                    0, 5, // api version
+                    0, 0, 0, 1, // correlation id
+                    0xff, 0xff, // nullable client id
+                    0,    // request header tagged fields
+                    8, b'k', b'a', b'f', b'r', b'u', b's', b't', // software name
+                    6, b'0', b'.', b'3', b'.', b'0', // software version
+                    10, b'c', b'l', b'u', b's', b't', b'e', b'r', b'-', b'1', 0, 0, 0,
+                    3, // node id
+                    0, // request body tagged fields
+                ]
+            );
+
+            let response = [
+                0, 0, 0, 1, // correlation id
+                0, 0, // error code
+                1, // empty compact api key array
+                0, 0, 0, 0, // throttle time
+                0, // response tagged fields
+            ];
+            write_test_frame(&mut broker_stream, &response).await;
+        });
+
+        let mut client =
+            Client::from_stream(Box::new(client_stream), None, Some(Duration::from_secs(1)));
+        let response = client
+            .api_versions_v5("kafrust", "0.3.0", Some("cluster-1".to_owned()), 3)
+            .await
+            .unwrap();
+
+        assert_eq!(response.error_code, 0);
+        assert!(response.api_keys.is_empty());
+        broker.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn prefers_api_versions_v4_and_falls_back_to_v3() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(1024);
+        let broker = tokio::spawn(async move {
+            let v4_request = read_test_frame(&mut broker_stream).await;
+            assert_eq!(&v4_request[2..4], &[0, 4]);
+            let unsupported = [
+                0, 0, 0, 1, // correlation id
+                0, 35, // UNSUPPORTED_VERSION
+                1,  // empty compact api key array
+                0, 0, 0, 0, // throttle time
+                0, // response tagged fields
+            ];
+            write_test_frame(&mut broker_stream, &unsupported).await;
+
+            let v3_request = read_test_frame(&mut broker_stream).await;
+            assert_eq!(&v3_request[2..4], &[0, 3]);
+            let supported = [
+                0, 0, 0, 2, // correlation id
+                0, 0, // error code
+                2, // compact api key count: one entry
+                0, 18, 0, 0, 0, 4, 0, // ApiVersions min/max + entry tags
+                0, 0, 0, 0, // throttle time
+                0, // response tagged fields
+            ];
+            write_test_frame(&mut broker_stream, &supported).await;
+        });
+
+        let mut client =
+            Client::from_stream(Box::new(client_stream), None, Some(Duration::from_secs(1)));
+        let response = client
+            .api_versions_cached("kafrust", "0.3.0")
+            .await
+            .unwrap();
+        let cached = client.cached_api_versions_v3().unwrap();
+
+        assert_eq!(response.error_code, 0);
+        assert_eq!(response.highest_supported_version(18, 4), Some(4));
+        assert_eq!(cached, &response);
+        assert_eq!(client.metrics().snapshot().requests_started, 2);
+        broker.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn sends_list_config_resources_v1_over_injected_broker_stream() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(1024);
+        let broker = tokio::spawn(async move {
+            let request = read_test_frame(&mut broker_stream).await;
+            assert_eq!(
+                request,
+                [
+                    0, 74, // API key
+                    0, 1, // API version
+                    0, 0, 0, 1, // correlation id
+                    0xff, 0xff, // nullable client id
+                    0,    // request header tagged fields
+                    3, 2, 32, // compact resource type array
+                    0,  // request tagged fields
+                ]
+            );
+
+            let response = [
+                0, 0, 0, 1, // correlation id
+                0, // response header tagged fields
+                0, 0, 0, 0, // throttle time
+                0, 0, // top-level error code
+                3, // compact resource count
+                7, b'o', b'r', b'd', b'e', b'r', b's', 2, 0, // orders topic
+                9, b'p', b'a', b'y', b'm', b'e', b'n', b't', b's', 32, 0, // payments group
+                0, // response tagged fields
+            ];
+            write_test_frame(&mut broker_stream, &response).await;
+        });
+
+        let mut client =
+            Client::from_stream(Box::new(client_stream), None, Some(Duration::from_secs(1)));
+        let response = client.list_config_resources_v1(vec![2, 32]).await.unwrap();
+
+        assert_eq!(response.error_code, 0);
+        assert_eq!(response.resources.len(), 2);
+        assert_eq!(response.resources[0].resource_name, "orders");
+        assert_eq!(response.resources[0].resource_type, 2);
+        assert_eq!(response.resources[1].resource_type, 32);
+        broker.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn sends_list_client_metrics_resources_v0_over_injected_broker_stream() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(1024);
+        let broker = tokio::spawn(async move {
+            let request = read_test_frame(&mut broker_stream).await;
+            assert_eq!(
+                request,
+                [
+                    0, 74, // API key
+                    0, 0, // API version
+                    0, 0, 0, 1, // correlation id
+                    0xff, 0xff, // nullable client id
+                    0,    // request header tagged fields
+                    0,    // empty v0 request body tagged fields
+                ]
+            );
+
+            let response = [
+                0, 0, 0, 1, // correlation id
+                0, // response header tagged fields
+                0, 0, 0, 4, // throttle time
+                0, 0, // error code
+                2, // compact resource count
+                8, b'l', b'a', b't', b'e', b'n', b'c', b'y', // resource name
+                0,    // resource tagged fields
+                0,    // response tagged fields
+            ];
+            write_test_frame(&mut broker_stream, &response).await;
+        });
+
+        let mut client =
+            Client::from_stream(Box::new(client_stream), None, Some(Duration::from_secs(1)));
+        let response = client.list_config_resources_v0().await.unwrap();
+
+        assert_eq!(response.throttle_time_ms, 4);
+        assert_eq!(response.error_code, 0);
+        assert_eq!(response.resources.len(), 1);
+        assert_eq!(response.resources[0].name, "latency");
+        broker.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn sends_describe_cluster_v1_over_injected_broker_stream() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(1024);
+        let broker = tokio::spawn(async move {
+            let request = read_test_frame(&mut broker_stream).await;
+            assert_eq!(
+                request,
+                [
+                    0, 60, // API key
+                    0, 1, // API version
+                    0, 0, 0, 1, // correlation id
+                    0xff, 0xff, // nullable client id
+                    0,    // request header tagged fields
+                    1,    // include cluster authorized operations
+                    1,    // broker endpoint
+                    0,    // request tagged fields
+                ]
+            );
+            let response = [
+                0, 0, 0, 1, // correlation id
+                0, // response header tagged fields
+                0, 0, 0, 0, // throttle time
+                0, 0, // top-level error code
+                1, // compact nullable error message: null
+                1, // broker endpoint
+                8, b'c', b'l', b'u', b's', b't', b'e', b'r', // cluster id
+                0, 0, 0, 1, // controller id
+                2, // compact broker count
+                0, 0, 0, 1, // broker id
+                8, b'b', b'r', b'o', b'k', b'e', b'r', b'1', // host
+                0, 0, 35, 132, // port
+                1,   // nullable rack: null
+                0,   // broker tagged fields
+                0, 0, 0, 7, // cluster authorized operations
+                0, // response tagged fields
+            ];
+            write_test_frame(&mut broker_stream, &response).await;
+        });
+
+        let mut client =
+            Client::from_stream(Box::new(client_stream), None, Some(Duration::from_secs(1)));
+        let response = client.describe_cluster_v1(true, 1).await.unwrap();
+
+        assert_eq!(response.cluster_id, "cluster");
+        assert_eq!(response.controller_id, 1);
+        assert_eq!(response.brokers.len(), 1);
+        assert_eq!(response.brokers[0].port, 9092);
+        assert_eq!(response.cluster_authorized_operations, 7);
+        broker.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn sends_update_features_v0_over_injected_broker_stream() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(1024);
+        let broker = tokio::spawn(async move {
+            let request = read_test_frame(&mut broker_stream).await;
+            assert_eq!(
+                request,
+                [
+                    0, 57, // api key
+                    0, 0, // api version
+                    0, 0, 0, 1, // correlation id
+                    0xff, 0xff, // nullable client id
+                    0,    // request header tagged fields
+                    0, 0, 234, 96, // timeout ms
+                    2,  // compact update count
+                    17, // compact feature string length
+                    b'm', b'e', b't', b'a', b'd', b'a', b't', b'a', b'.', b'v', b'e', b'r', b's',
+                    b'i', b'o', b'n', 0, 21, // max version level
+                    0,  // allow downgrade
+                    0,  // update tagged fields
+                    0,  // request tagged fields
+                ]
+            );
+
+            let response = [
+                0, 0, 0, 1, // response correlation id
+                0, // response header tagged fields
+                0, 0, 0, 12, // throttle time
+                0, 0, // top-level error code
+                3, b'o', b'k', // compact nullable error message
+                2,    // compact result count
+                17,   // compact feature string length
+                b'm', b'e', b't', b'a', b'd', b'a', b't', b'a', b'.', b'v', b'e', b'r', b's', b'i',
+                b'o', b'n', 0, 0, // per-feature error code
+                3, b'o', b'k', // compact nullable error message
+                0,    // result tagged fields
+                0,    // response tagged fields
+            ];
+            write_test_frame(&mut broker_stream, &response).await;
+        });
+
+        let mut client =
+            Client::from_stream(Box::new(client_stream), None, Some(Duration::from_secs(1)));
+        let response = client
+            .update_features_v0(
+                60_000,
+                vec![FeatureUpdateV0 {
+                    feature: "metadata.version".to_owned(),
+                    max_version_level: 21,
+                    allow_downgrade: false,
+                }],
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.throttle_time_ms, 12);
+        assert_eq!(response.error_code, 0);
+        assert_eq!(response.error_message.as_deref(), Some("ok"));
+        assert_eq!(response.results.len(), 1);
+        assert_eq!(response.results[0].feature, "metadata.version");
+        assert_eq!(response.results[0].error_code, 0);
+        assert_eq!(response.results[0].error_message.as_deref(), Some("ok"));
+        let metrics = client.metrics().snapshot();
+        assert_eq!(metrics.requests_started, 1);
+        assert_eq!(metrics.requests_succeeded, 1);
+        assert_eq!(metrics.requests_failed, 0);
+        broker.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn sends_update_features_v1_over_injected_broker_stream() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(1024);
+        let broker = tokio::spawn(async move {
+            let request = read_test_frame(&mut broker_stream).await;
+            assert_eq!(
+                request,
+                [
+                    0, 57, // api key
+                    0, 1, // api version
+                    0, 0, 0, 1, // correlation id
+                    0xff, 0xff, // nullable client id
+                    0,    // request header tagged fields
+                    0, 0, 234, 96, // timeout ms
+                    2,  // compact update count
+                    17, // compact feature string length
+                    b'm', b'e', b't', b'a', b'd', b'a', b't', b'a', b'.', b'v', b'e', b'r', b's',
+                    b'i', b'o', b'n', 0, 21, // max version level
+                    2,  // safe downgrade
+                    0,  // update tagged fields
+                    1,  // validate only
+                    0,  // request tagged fields
+                ]
+            );
+
+            let response = [
+                0, 0, 0, 1, // response correlation id
+                0, // response header tagged fields
+                0, 0, 0, 12, // throttle time
+                0, 0, // top-level error code
+                3, b'o', b'k', // compact nullable error message
+                2,    // compact result count
+                17,   // compact feature string length
+                b'm', b'e', b't', b'a', b'd', b'a', b't', b'a', b'.', b'v', b'e', b'r', b's', b'i',
+                b'o', b'n', 0, 0, // per-feature error code
+                3, b'o', b'k', // compact nullable error message
+                0,    // result tagged fields
+                0,    // response tagged fields
+            ];
+            write_test_frame(&mut broker_stream, &response).await;
+        });
+
+        let mut client =
+            Client::from_stream(Box::new(client_stream), None, Some(Duration::from_secs(1)));
+        let response = client
+            .update_features_v1(
+                60_000,
+                vec![FeatureUpdateV1 {
+                    feature: "metadata.version".to_owned(),
+                    max_version_level: 21,
+                    upgrade_type: 2,
+                }],
+                true,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.throttle_time_ms, 12);
+        assert_eq!(response.error_code, 0);
+        assert_eq!(response.error_message.as_deref(), Some("ok"));
+        assert_eq!(response.results.len(), 1);
+        assert_eq!(response.results[0].feature, "metadata.version");
+        assert_eq!(response.results[0].error_code, 0);
+        assert_eq!(response.results[0].error_message.as_deref(), Some("ok"));
+        let metrics = client.metrics().snapshot();
+        assert_eq!(metrics.requests_started, 1);
+        assert_eq!(metrics.requests_succeeded, 1);
+        assert_eq!(metrics.requests_failed, 0);
+        broker.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn sends_add_raft_voter_v1_over_injected_broker_stream() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(1024);
+        let broker = tokio::spawn(async move {
+            let request = read_test_frame(&mut broker_stream).await;
+            assert_eq!(
+                request,
+                [
+                    0, 80, // API key
+                    0, 1, // API version
+                    0, 0, 0, 1, // correlation id
+                    0xff, 0xff, // nullable client id
+                    0,    // request header tagged fields
+                    8, b'c', b'l', b'u', b's', b't', b'e', b'r', // cluster id
+                    0, 0, 234, 96, // timeout ms
+                    0, 0, 0, 4, // voter id
+                    9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, // directory id
+                    2, // compact listener count
+                    11, b'C', b'O', b'N', b'T', b'R', b'O', b'L', b'L', b'E', b'R', 11, b'c', b'o',
+                    b'n', b't', b'r', b'o', b'l', b'l', b'e', b'r', 35, 133, // port 9093
+                    0,   // listener tagged fields
+                    1,   // ack when committed
+                    0,   // request tagged fields
+                ]
+            );
+            let response = [
+                0, 0, 0, 1, // correlation id
+                0, // response header tagged fields
+                0, 0, 0, 12, // throttle time
+                0, 0, // error code
+                0, // null compact error message
+                0, // response tagged fields
+            ];
+            write_test_frame(&mut broker_stream, &response).await;
+        });
+
+        let mut client =
+            Client::from_stream(Box::new(client_stream), None, Some(Duration::from_secs(1)));
+        let response = client
+            .add_raft_voter_v1(
+                Some("cluster".to_owned()),
+                60_000,
+                4,
+                [9; 16],
+                vec![RaftVoterListener {
+                    name: "CONTROLLER".to_owned(),
+                    host: "controller".to_owned(),
+                    port: 9093,
+                }],
+                true,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.throttle_time_ms, 12);
+        assert_eq!(response.error_code, 0);
+        assert_eq!(response.error_message, None);
+        broker.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn sends_remove_raft_voter_v0_over_injected_broker_stream() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(1024);
+        let broker = tokio::spawn(async move {
+            let request = read_test_frame(&mut broker_stream).await;
+            assert_eq!(
+                request,
+                [
+                    0, 81, // API key
+                    0, 0, // API version
+                    0, 0, 0, 1, // correlation id
+                    0xff, 0xff, // nullable client id
+                    0,    // request header tagged fields
+                    8, b'c', b'l', b'u', b's', b't', b'e', b'r', // cluster id
+                    0, 0, 0, 2, // voter id
+                    3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, // directory id
+                    0, // request tagged fields
+                ]
+            );
+            let response = [
+                0, 0, 0, 1, // correlation id
+                0, // response header tagged fields
+                0, 0, 0, 0, // throttle time
+                0, 0, // error code
+                0, // null compact error message
+                0, // response tagged fields
+            ];
+            write_test_frame(&mut broker_stream, &response).await;
+        });
+
+        let mut client =
+            Client::from_stream(Box::new(client_stream), None, Some(Duration::from_secs(1)));
+        let response = client
+            .remove_raft_voter_v0(Some("cluster".to_owned()), 2, [3; 16])
+            .await
+            .unwrap();
+
+        assert_eq!(response.error_code, 0);
+        broker.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn sends_unregister_broker_v0_over_injected_broker_stream() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(1024);
+        let broker = tokio::spawn(async move {
+            let request = read_test_frame(&mut broker_stream).await;
+            assert_eq!(
+                request,
+                [
+                    0, 64, // API key
+                    0, 0, // API version
+                    0, 0, 0, 1, // correlation id
+                    0xff, 0xff, // nullable client id
+                    0,    // request header tagged fields
+                    0, 0, 0, 4, // broker id
+                    0, // request tagged fields
+                ]
+            );
+            let response = [
+                0, 0, 0, 1, // correlation id
+                0, // response header tagged fields
+                0, 0, 0, 12, // throttle time
+                0, 0, // error code
+                0, // null compact error message
+                0, // response tagged fields
+            ];
+            write_test_frame(&mut broker_stream, &response).await;
+        });
+
+        let mut client =
+            Client::from_stream(Box::new(client_stream), None, Some(Duration::from_secs(1)));
+        let response = client.unregister_broker_v0(4).await.unwrap();
+
+        assert_eq!(response.throttle_time_ms, 12);
+        assert_eq!(response.error_code, 0);
+        assert_eq!(response.error_message, None);
         broker.await.unwrap();
     }
 
@@ -3842,6 +5493,60 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn sends_kip_848_consumer_group_heartbeat_v1_with_topic_regex() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(1024);
+        let broker = tokio::spawn(async move {
+            let request = read_test_frame(&mut broker_stream).await;
+            assert_eq!(&request[0..4], &[0, 68, 0, 1]);
+            assert_eq!(&request[4..8], &[0, 0, 0, 1]);
+            assert!(request.windows(9).any(|bytes| bytes == b"orders-.*"));
+            assert_eq!(request.last(), Some(&0));
+
+            let mut response = Vec::new();
+            response.extend_from_slice(&[0, 0, 0, 1]); // response correlation id
+            response.push(0); // response header tagged fields
+            response.extend_from_slice(&[0, 0, 0, 0]); // throttle time
+            response.extend_from_slice(&[0, 0]); // error code
+            response.push(0); // null error message
+            response.push(9); // member id length + 1
+            response.extend_from_slice(b"member-a");
+            response.extend_from_slice(&[0, 0, 0, 3]); // member epoch
+            response.extend_from_slice(&2500_i32.to_be_bytes());
+            response.push(0xff); // null nullable assignment struct
+            response.push(0); // response tagged fields
+            write_test_frame(&mut broker_stream, &response).await;
+        });
+        let mut client = Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-stream-test".to_owned()),
+            Some(Duration::from_secs(1)),
+        );
+
+        let response = client
+            .consumer_group_heartbeat_v1(
+                "orders-group",
+                "member-a",
+                2,
+                None,
+                Some("rack-a".to_owned()),
+                30_000,
+                None,
+                Some("orders-.*".to_owned()),
+                Some("uniform".to_owned()),
+                None,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.error_code, 0);
+        assert_eq!(response.member_id.as_deref(), Some("member-a"));
+        assert_eq!(response.member_epoch, 3);
+        assert_eq!(response.heartbeat_interval_ms, 2500);
+        assert!(response.assignment.is_none());
+        broker.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn sends_share_group_heartbeat_v1_over_injected_broker_stream() {
         let (client_stream, mut broker_stream) = tokio::io::duplex(1024);
         let broker = tokio::spawn(async move {
@@ -3978,6 +5683,155 @@ mod tests {
 
         assert_eq!(response.throttle_time_ms, 0);
         assert!(response.groups.is_empty());
+        broker.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn sends_streams_group_describe_v0_over_injected_broker_stream() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(1024);
+        let broker = tokio::spawn(async move {
+            let request = read_test_frame(&mut broker_stream).await;
+            let mut decoder = Decoder::new(&request);
+            assert_eq!(decoder.read_i16().unwrap(), 89);
+            assert_eq!(decoder.read_i16().unwrap(), 0);
+            assert_eq!(decoder.read_i32().unwrap(), 1);
+            assert_eq!(
+                decoder.read_nullable_string().unwrap(),
+                Some("kafrust-admin".to_owned())
+            );
+            assert_eq!(decoder.read_tagged_fields().unwrap(), Vec::new());
+            assert_eq!(
+                decoder
+                    .read_compact_array("group IDs", |decoder| decoder.read_compact_string())
+                    .unwrap(),
+                Some(vec!["streams-orders".to_owned()])
+            );
+            assert!(decoder.read_bool().unwrap());
+            assert_eq!(decoder.read_tagged_fields().unwrap(), Vec::new());
+
+            let mut response = Encoder::new();
+            response.write_i32(1);
+            response.write_empty_tagged_fields();
+            response.write_i32(0);
+            response
+                .write_compact_array::<i8>(Some(&[]), |_, _| Ok(()))
+                .unwrap();
+            response.write_empty_tagged_fields();
+            write_test_frame(&mut broker_stream, &response.into_bytes()).await;
+        });
+        let mut client = Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-admin".to_owned()),
+            Some(Duration::from_secs(1)),
+        );
+
+        let response = client
+            .streams_group_describe_v0(vec!["streams-orders".to_owned()], true)
+            .await
+            .unwrap();
+
+        assert_eq!(response.throttle_time_ms, 0);
+        assert!(response.groups.is_empty());
+        broker.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn sends_streams_group_heartbeat_v0_over_injected_broker_stream() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(2048);
+        let broker = tokio::spawn(async move {
+            let request = read_test_frame(&mut broker_stream).await;
+            let mut decoder = Decoder::new(&request);
+            assert_eq!(decoder.read_i16().unwrap(), 88);
+            assert_eq!(decoder.read_i16().unwrap(), 0);
+            assert_eq!(decoder.read_i32().unwrap(), 1);
+            assert_eq!(
+                decoder.read_nullable_string().unwrap(),
+                Some("kafrust-admin".to_owned())
+            );
+            assert_eq!(decoder.read_tagged_fields().unwrap(), Vec::new());
+            assert_eq!(decoder.read_compact_string().unwrap(), "streams-orders");
+            assert_eq!(decoder.read_compact_string().unwrap(), "member-a");
+            assert_eq!(decoder.read_i32().unwrap(), 0);
+            assert_eq!(decoder.read_i32().unwrap(), 0);
+            assert!(decoder.read_compact_nullable_string().unwrap().is_none());
+            assert!(decoder.read_compact_nullable_string().unwrap().is_none());
+            assert_eq!(decoder.read_i32().unwrap(), 30_000);
+            assert_eq!(decoder.read_i8().unwrap(), -1);
+            assert_eq!(decoder.read_unsigned_varint().unwrap(), 1);
+            assert_eq!(decoder.read_unsigned_varint().unwrap(), 0);
+            assert_eq!(decoder.read_unsigned_varint().unwrap(), 1);
+            assert!(decoder.read_compact_nullable_string().unwrap().is_none());
+            assert_eq!(decoder.read_i8().unwrap(), -1);
+            assert_eq!(decoder.read_unsigned_varint().unwrap(), 0);
+            assert_eq!(decoder.read_unsigned_varint().unwrap(), 0);
+            assert_eq!(decoder.read_unsigned_varint().unwrap(), 0);
+            assert!(!decoder.read_bool().unwrap());
+            assert_eq!(decoder.read_tagged_fields().unwrap(), Vec::new());
+            assert!(decoder.is_empty());
+
+            let mut response = Encoder::new();
+            response.write_i32(1);
+            response.write_empty_tagged_fields();
+            response.write_i32(0);
+            response.write_i16(0);
+            response.write_compact_nullable_string(None).unwrap();
+            response.write_compact_string("member-a").unwrap();
+            response.write_i32(1);
+            response.write_i32(2500);
+            response.write_i32(10);
+            response.write_i32(1000);
+            response.write_i8(-1);
+            response
+                .write_compact_array::<i8>(Some(&[]), |_, _| Ok(()))
+                .unwrap();
+            response
+                .write_compact_array::<i8>(None, |_, _| Ok(()))
+                .unwrap();
+            response
+                .write_compact_array::<i8>(Some(&[]), |_, _| Ok(()))
+                .unwrap();
+            response.write_i32(2);
+            response
+                .write_compact_array::<i8>(None, |_, _| Ok(()))
+                .unwrap();
+            response.write_empty_tagged_fields();
+            write_test_frame(&mut broker_stream, &response.into_bytes()).await;
+        });
+        let mut client = Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-admin".to_owned()),
+            Some(Duration::from_secs(1)),
+        );
+
+        let response = client
+            .streams_group_heartbeat_v0(
+                "streams-orders",
+                "member-a",
+                0,
+                0,
+                None,
+                None,
+                30_000,
+                None,
+                Some(Vec::new()),
+                None,
+                Some(Vec::new()),
+                None,
+                None,
+                None,
+                None,
+                None,
+                false,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.member_id, "member-a");
+        assert_eq!(response.heartbeat_interval_ms, 2500);
+        assert!(response.status.is_none());
+        assert!(response.active_tasks.unwrap().is_empty());
+        assert!(response.standby_tasks.is_none());
+        assert!(response.warmup_tasks.unwrap().is_empty());
         broker.await.unwrap();
     }
 

@@ -68,16 +68,47 @@ per-entity results; both paths are live-verified in the documented Kafka
 3.7.2 StandardAuthorizer profile. Consumer-group offset listing and
 administrative alteration use typed classic OffsetFetch v2 and OffsetCommit v2
 results. See the repository's `docs/admin-api.md` for details.
+For group discovery, `AdminClient::list_groups` negotiates ListGroups v4/v5
+when advertised and preserves broker-reported group state and type;
+`list_groups_with_options` adds broker-side state/type filters, while the
+low-level `Client::list_groups_v1` method remains available for exact legacy
+wire compatibility.
+API 74 configuration-resource discovery is available through
+`AdminClient::list_config_resources`; Kafka 3.9-era brokers use the v0
+client-metrics compatibility shape when an exact `ClientMetrics` filter is
+requested, while Kafka 4.1+ brokers use the v1 typed resource path. The v1
+path and opt-in DescribeConfigs v4 metadata path share the manual Kafka 4.x
+qualification workflow, but remain outside the live compatibility claim until
+a passing run is recorded. `AdminClient::describe_cluster_with_options` similarly uses
+DescribeCluster API 60 when advertised and preserves cluster-level metadata;
+the default remains the legacy Metadata path for compatibility.
+The controller-routed `AdminClient::unregister_broker` method exposes Kafka's
+UnregisterBroker API 64 v0 and preserves explicit unknown-outcome handling for
+transport failures after transmission; live broker unregister qualification is
+not yet claimed.
+Share Group State APIs 83-87 are available through typed `AdminClient` methods
+and share-coordinator routing. Write and summary v1 fields are preserved
+without silent downgrade; live state lifecycle qualification remains open.
 Delegation-token lifecycle APIs cover create, describe, renew, and expire with
 negotiated Kafka versions. They require an authenticated SASL or mutual-TLS
 channel and a broker-side delegation-token secret; use the
 `admin_delegation_tokens` example for the complete opt-in lifecycle.
 
+## Streams Group
+
+The development branch includes an alpha `StreamsGroupSession` for Kafka's
+dedicated Streams group heartbeat protocol. It publishes topology, tracks
+member and endpoint epochs, reports task state, retries coordinator recovery,
+and leaves with `shutdown_application=true`. It is a membership layer only,
+not a Kafka Streams DSL or task processor; the caller currently drives
+`heartbeat()`. See the repository's `docs/streams-group.md` for the contract
+and live qualification workflow.
+
 ## Install
 
 ```toml
 [dependencies]
-kafrust = "0.2"
+kafrust = "0.3"
 tokio = { version = "1", features = ["macros", "rt"] }
 ```
 
@@ -245,6 +276,13 @@ async fn main() -> kafrust::Result<()> {
 }
 ```
 
+For concurrent non-transactional enqueueing, call `producer.handle()` and
+clone the returned `BufferedProducerHandle` into the Tokio tasks that produce
+records. The handle preserves bounded-queue backpressure and per-record
+delivery results. Stop using all handles before closing the owning producer;
+transactional buffered producers reject handles to keep transaction ordering
+explicit.
+
 ## Direct Consumer
 
 The direct consumer path fetches from explicit topic partitions and offsets.
@@ -347,7 +385,7 @@ Plaintext is the default transport. TLS transport is available only when the
 non-default `tls` crate feature is enabled:
 
 ```toml
-kafrust = { version = "0.2", features = ["tls"] }
+kafrust = { version = "0.3", features = ["tls"] }
 ```
 
 Without that feature, `SecurityProtocol::Tls` returns `Error::Unsupported`
@@ -360,6 +398,15 @@ certificate subject alternative name.
 
 Use `tls_root_certificate_der(bytes)` to add DER-encoded root certificates while
 still keeping platform roots enabled.
+
+Mutual TLS uses repeatable `tls_client_certificate_der` calls for the client
+certificate chain plus `tls_client_private_key_der` for the private key. The
+pair is validated before connection, rejected for plaintext, and the private
+key is redacted from `ClientConfig` debug output. Live mTLS broker evidence is
+still a release gate.
+The repository examples also accept `KAFRUST_TLS_CLIENT_CERT_DER_PATH` and
+`KAFRUST_TLS_CLIENT_KEY_DER_PATH` so producer, consumer, group, and Admin
+examples use the same mTLS settings as the broker-roundtrip workflow.
 
 SASL credentials can be stored on the shared client configuration with
 `sasl_plain(username, password)`, `sasl_scram_sha_256(username, password)`, or
@@ -496,8 +543,9 @@ three-broker profiles are verified against Kafka `3.7.2`.
 
 Verified high-level paths include:
 
-- `ApiVersions v0` and flexible `ApiVersions v3` capability roundtrips, plus
-  `Metadata v1` roundtrips.
+- Low-level `Client` `ApiVersions v0` and flexible `ApiVersions v4` capability
+  roundtrips with a v3 fallback, plus opt-in v5 cluster/node identity encoding
+  and `Metadata v1` roundtrips.
 - Producer single-record, batch, and buffered sends.
 - Direct topic-partition fetch using Fetch v4 response decoding.
 - Classic consumer group join, sync, heartbeat, poll, and offset commit.

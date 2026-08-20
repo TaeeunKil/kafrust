@@ -1,9 +1,16 @@
 #![allow(clippy::expect_used)]
 
 use kafrust::protocol::api::find_coordinator::FindCoordinatorResponseV1;
+use kafrust::protocol::api::list_groups::API_KEY as LIST_GROUPS_API_KEY;
+use kafrust::protocol::api::metadata::MetadataRequestTopicV12;
 use kafrust::{
-    AdminClient, ClientConfig, SecurityProtocol, ShareAcknowledgementType, ShareAcquireMode,
-    ShareConsumerConfig, ShareGroupOffset,
+    AdminClient, ClientConfig, ConfigResourceType, DescribeClusterEndpointType,
+    DescribeClusterOptions, DescribeConfigsOptions, ListConfigResourcesOptions, ListGroupsOptions,
+    SecurityProtocol, ShareAcknowledgementType, ShareAcquireMode, ShareConsumerConfig,
+    ShareGroupOffset, ShareGroupStateBatch, ShareGroupStateDeleteTopic,
+    ShareGroupStateInitializePartition, ShareGroupStateInitializeTopic,
+    ShareGroupStateReadPartition, ShareGroupStateReadTopic, ShareGroupStateWritePartition,
+    ShareGroupStateWriteTopic, TopicConfigResource, UpdateFeaturesOptions,
 };
 use std::collections::BTreeSet;
 use tokio::time::{sleep, Duration, Instant};
@@ -28,6 +35,12 @@ async fn api_versions_and_metadata_roundtrip_when_broker_is_configured() {
         .expect("ApiVersions roundtrip should succeed");
     assert!(!api_versions.api_keys.is_empty());
 
+    let api_versions_v3 = client
+        .api_versions_v3("kafrust-integration", env!("CARGO_PKG_VERSION"))
+        .await
+        .expect("flexible ApiVersions roundtrip should succeed");
+    assert_eq!(api_versions_v3.error_code, 0);
+
     let metadata = client
         .metadata(None)
         .await
@@ -38,6 +51,187 @@ async fn api_versions_and_metadata_roundtrip_when_broker_is_configured() {
             metadata.brokers.len() >= expected_brokers,
             "expected at least {expected_brokers} brokers, got {}",
             metadata.brokers.len()
+        );
+    }
+
+    let admin = AdminClient::new(
+        client_config_from_env(
+            parse_bootstrap_servers(&bootstrap),
+            "kafrust-admin-features",
+        )
+        .expect("valid admin feature configuration"),
+    );
+
+    if let Some(expected_version) = std::env::var("KAFRUST_EXPECT_LIST_GROUPS_VERSION")
+        .ok()
+        .map(|value| value.parse::<i16>().expect("valid ListGroups API version"))
+    {
+        let selected_version = api_versions_v3
+            .highest_supported_version(LIST_GROUPS_API_KEY, 5)
+            .unwrap_or(1);
+        assert_eq!(selected_version, expected_version);
+
+        let mut options = ListGroupsOptions::new();
+        if expected_version >= 4 {
+            options = options.state("Stable");
+        }
+        if expected_version >= 5 {
+            options = options.group_type("consumer");
+        }
+        let groups = admin
+            .list_groups_with_options(options)
+            .await
+            .expect("ListGroups negotiation and roundtrip should succeed");
+        for group in groups {
+            assert_eq!(group.api_version(), expected_version);
+        }
+    }
+
+    let features = admin
+        .describe_features()
+        .await
+        .expect("Kafka feature metadata should be readable through AdminClient");
+    assert!(features.finalized_features_epoch() >= -1);
+
+    if let Some(expected_version) = std::env::var("KAFRUST_EXPECT_LIST_CONFIG_RESOURCES_VERSION")
+        .ok()
+        .map(|value| {
+            value
+                .parse::<i16>()
+                .expect("valid ListConfigResources API version")
+        })
+    {
+        let selected_version = api_versions_v3
+            .highest_supported_version(74, 1)
+            .filter(|version| *version >= 1)
+            .or_else(|| api_versions_v3.highest_supported_version(74, 0))
+            .expect("broker should advertise API 74 v0 or v1");
+        assert_eq!(selected_version, expected_version);
+        let resource_type = std::env::var("KAFRUST_LIST_CONFIG_RESOURCES_RESOURCE_TYPE")
+            .ok()
+            .map(|value| {
+                value
+                    .parse::<i8>()
+                    .map(ConfigResourceType::from_code)
+                    .expect("valid ListConfigResources resource type")
+            })
+            .unwrap_or(ConfigResourceType::Topic);
+        let result = admin
+            .list_config_resources(ListConfigResourcesOptions::new().resource_type(resource_type))
+            .await
+            .expect("ListConfigResources roundtrip should succeed");
+        assert_eq!(result.api_version(), expected_version);
+        assert!(
+            result.is_success(),
+            "ListConfigResources returned top-level error {}",
+            result.error_code()
+        );
+    }
+
+    if let Some(expected_version) = std::env::var("KAFRUST_EXPECT_DESCRIBE_CLUSTER_VERSION")
+        .ok()
+        .map(|value| {
+            value
+                .parse::<i16>()
+                .expect("valid DescribeCluster API version")
+        })
+    {
+        let selected_version = api_versions_v3
+            .highest_supported_version(60, 1)
+            .expect("broker should advertise DescribeCluster v1");
+        assert_eq!(selected_version, expected_version);
+        let result = admin
+            .describe_cluster_with_options(
+                DescribeClusterOptions::new()
+                    .include_cluster_authorized_operations(true)
+                    .endpoint_type(DescribeClusterEndpointType::Brokers),
+            )
+            .await
+            .expect("DescribeCluster roundtrip should succeed");
+        assert!(result.cluster_id().is_some());
+        assert_eq!(
+            result.endpoint_type(),
+            Some(DescribeClusterEndpointType::Brokers)
+        );
+        assert!(result.cluster_authorized_operations().is_some());
+        assert!(!result.brokers().is_empty());
+    }
+
+    if let Some(expected_version) = std::env::var("KAFRUST_EXPECT_DESCRIBE_CONFIGS_VERSION")
+        .ok()
+        .map(|value| {
+            value
+                .parse::<i16>()
+                .expect("valid DescribeConfigs API version")
+        })
+    {
+        let selected_version = api_versions_v3
+            .highest_supported_version(32, 4)
+            .expect("broker should advertise DescribeConfigs v4");
+        assert_eq!(selected_version, expected_version);
+        let topic = std::env::var("KAFRUST_CONFIG_TOPIC")
+            .expect("KAFRUST_CONFIG_TOPIC is required for DescribeConfigs qualification");
+        let result = admin
+            .describe_topic_configs(
+                &[TopicConfigResource::new(topic)],
+                DescribeConfigsOptions::new().include_documentation(true),
+            )
+            .await
+            .expect("DescribeConfigs v4 roundtrip should succeed");
+        let resource = result
+            .resources()
+            .first()
+            .expect("DescribeConfigs should return the requested topic");
+        assert!(
+            resource.is_success(),
+            "DescribeConfigs returned resource error {}: {:?}",
+            resource.error_code(),
+            resource.error_message()
+        );
+        assert!(
+            resource
+                .entries()
+                .iter()
+                .any(|entry| entry.config_type().is_some()),
+            "DescribeConfigs v4 should preserve configuration type metadata"
+        );
+        assert!(
+            resource
+                .entries()
+                .iter()
+                .any(|entry| entry.documentation().is_some()),
+            "DescribeConfigs v4 should preserve at least one documentation field"
+        );
+    }
+
+    if let Some(expected_version) = std::env::var("KAFRUST_EXPECT_UPDATE_FEATURES_VERSION")
+        .ok()
+        .map(|value| {
+            value
+                .parse::<i16>()
+                .expect("valid UpdateFeatures API version")
+        })
+    {
+        let selected_version = api_versions_v3
+            .highest_supported_version(57, 1)
+            .or_else(|| api_versions_v3.highest_supported_version(57, 0))
+            .expect("broker should advertise UpdateFeatures v0 or v1");
+        assert_eq!(selected_version, expected_version);
+        let validate_only = std::env::var("KAFRUST_UPDATE_FEATURES_VALIDATE_ONLY")
+            .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE"))
+            .unwrap_or(false);
+        let result = admin
+            .update_features(
+                &[],
+                UpdateFeaturesOptions::default().validate_only(validate_only),
+            )
+            .await
+            .expect("UpdateFeatures empty validation request should succeed");
+        assert!(
+            result.is_success(),
+            "UpdateFeatures returned top-level error {}: {:?}",
+            result.error_code(),
+            result.error_message()
         );
     }
 }
@@ -79,7 +273,7 @@ async fn share_consumer_roundtrip_when_broker_is_configured() {
     let group_id = std::env::var("KAFRUST_SHARE_GROUP_ID")
         .unwrap_or_else(|_| "kafrust-share-smoke".to_owned());
     let mut consumer =
-        ShareConsumerConfig::new(parse_bootstrap_servers(&bootstrap), group_id.clone())
+        share_consumer_config_from_env(&bootstrap, group_id.clone(), "kafrust-share-consumer")
             .subscribe(topic)
             .max_wait_ms(100)
             .max_retries(10)
@@ -204,16 +398,17 @@ async fn share_consumer_long_acknowledgement_soak_when_broker_is_configured() {
         .expect("KAFRUST_SHARE_LONG_PREFIX should be set");
     let group_id = std::env::var("KAFRUST_SHARE_GROUP_ID")
         .unwrap_or_else(|_| "kafrust-share-long-soak".to_owned());
-    let mut consumer = ShareConsumerConfig::new(parse_bootstrap_servers(&bootstrap), group_id)
-        .subscribe(topic)
-        .max_wait_ms(100)
-        .max_records(1)
-        .batch_size(1)
-        .max_retries(10)
-        .acquire_mode(ShareAcquireMode::RecordLimit)
-        .build()
-        .await
-        .expect("ShareConsumer should connect for the acknowledgement soak");
+    let mut consumer =
+        share_consumer_config_from_env(&bootstrap, group_id, "kafrust-share-acknowledgement-soak")
+            .subscribe(topic)
+            .max_wait_ms(100)
+            .max_records(1)
+            .batch_size(1)
+            .max_retries(10)
+            .acquire_mode(ShareAcquireMode::RecordLimit)
+            .build()
+            .await
+            .expect("ShareConsumer should connect for the acknowledgement soak");
     let deadline = Instant::now() + Duration::from_secs(90);
     let mut accepted_values = BTreeSet::new();
     let mut accepted_offsets = BTreeSet::new();
@@ -258,6 +453,103 @@ async fn share_consumer_long_acknowledgement_soak_when_broker_is_configured() {
         .close()
         .await
         .expect("ShareConsumer should close after the acknowledgement soak");
+}
+
+#[tokio::test]
+async fn share_consumer_reconciles_lost_release_response_when_broker_is_configured() {
+    let Some(bootstrap) = std::env::var("KAFRUST_BOOTSTRAP_SERVERS").ok() else {
+        eprintln!(
+            "skipping share consumer acknowledgement ambiguity; set KAFRUST_BOOTSTRAP_SERVERS"
+        );
+        return;
+    };
+    let Some(topic) = std::env::var("KAFRUST_SHARE_AMBIGUITY_TOPIC").ok() else {
+        eprintln!(
+            "skipping share consumer acknowledgement ambiguity; set KAFRUST_SHARE_AMBIGUITY_TOPIC"
+        );
+        return;
+    };
+    let expected_value = std::env::var("KAFRUST_SHARE_AMBIGUITY_VALUE")
+        .expect("KAFRUST_SHARE_AMBIGUITY_VALUE should be set")
+        .into_bytes();
+    let group_id = std::env::var("KAFRUST_SHARE_AMBIGUITY_GROUP_ID")
+        .unwrap_or_else(|_| "kafrust-share-acknowledgement-ambiguity".to_owned());
+    let mut consumer = share_consumer_config_from_env(
+        &bootstrap,
+        group_id,
+        "kafrust-share-acknowledgement-ambiguity",
+    )
+    .subscribe(topic)
+    .max_wait_ms(100)
+    .max_records(1)
+    .batch_size(1)
+    .max_retries(10)
+    .acquire_mode(ShareAcquireMode::RecordLimit)
+    .build()
+    .await
+    .expect("ShareConsumer should connect for acknowledgement ambiguity");
+
+    let deadline = Instant::now() + Duration::from_secs(120);
+    let mut release_response_was_unknown = false;
+    let mut accepted_redelivery = false;
+    while !accepted_redelivery {
+        let records = consumer
+            .poll()
+            .await
+            .expect("ShareConsumer poll should succeed during acknowledgement reconciliation");
+        for record in records {
+            assert_eq!(record.value(), Some(expected_value.as_slice()));
+            if !release_response_was_unknown {
+                consumer
+                    .acknowledge(&record, ShareAcknowledgementType::Release)
+                    .expect("release acknowledgement should be accepted locally");
+                let error = consumer
+                    .commit()
+                    .await
+                    .expect_err("dropped release response must be ambiguous");
+                assert!(matches!(
+                    error,
+                    kafrust::Error::ShareAcknowledgementOutcomeUnknown { .. }
+                ));
+                consumer
+                    .reconcile_acknowledgement_outcomes()
+                    .await
+                    .expect("acknowledgement reconciliation should discard the affected session");
+                let error = consumer
+                    .commit()
+                    .await
+                    .expect_err("unknown acknowledgement must block commit until redelivery");
+                assert!(matches!(
+                    error,
+                    kafrust::Error::ShareAcknowledgementOutcomeUnknown { .. }
+                ));
+                release_response_was_unknown = true;
+            } else {
+                consumer
+                    .acknowledge(&record, ShareAcknowledgementType::Accept)
+                    .expect("redelivered record should accept a replacement acknowledgement");
+                consumer
+                    .commit()
+                    .await
+                    .expect("replacement acknowledgement should commit");
+                accepted_redelivery = true;
+                break;
+            }
+        }
+        assert!(
+            Instant::now() < deadline,
+            "ShareConsumer did not reconcile the lost release response before the deadline"
+        );
+        if !accepted_redelivery {
+            sleep(Duration::from_millis(100)).await;
+        }
+    }
+
+    assert!(release_response_was_unknown);
+    consumer
+        .close()
+        .await
+        .expect("ShareConsumer should close after acknowledgement reconciliation");
 }
 
 #[tokio::test]
@@ -326,6 +618,337 @@ async fn share_group_offset_mutations_when_broker_is_configured() {
 }
 
 #[tokio::test]
+async fn share_group_state_lifecycle_when_broker_is_configured() {
+    let Some(topic_name) = std::env::var("KAFRUST_SHARE_STATE_TOPIC")
+        .or_else(|_| std::env::var("KAFRUST_SHARE_TOPIC"))
+        .ok()
+    else {
+        eprintln!(
+            "skipping share group state lifecycle; set KAFRUST_SHARE_STATE_TOPIC or KAFRUST_SHARE_TOPIC"
+        );
+        return;
+    };
+    let Some(bootstrap) = std::env::var("KAFRUST_BOOTSTRAP_SERVERS").ok() else {
+        eprintln!("skipping share group state lifecycle; set KAFRUST_BOOTSTRAP_SERVERS");
+        return;
+    };
+    let group_id = std::env::var("KAFRUST_SHARE_STATE_GROUP_ID")
+        .unwrap_or_else(|_| format!("kafrust-share-state-{}", std::process::id()));
+
+    let mut metadata_client = client_config_from_env(
+        parse_bootstrap_servers(&bootstrap),
+        "kafrust-share-state-metadata",
+    )
+    .expect("valid share state metadata configuration")
+    .connect()
+    .await
+    .expect("connect to Kafka for share state metadata");
+    let metadata = metadata_client
+        .metadata_v12(Some(vec![MetadataRequestTopicV12 {
+            topic_id: [0; 16],
+            name: Some(topic_name.clone()),
+        }]))
+        .await
+        .expect("Metadata v12 should return the share state topic UUID");
+    let topic = metadata
+        .topics
+        .iter()
+        .find(|topic| topic.name.as_deref() == Some(topic_name.as_str()))
+        .expect("share state topic should be present in Metadata v12");
+    assert_eq!(topic.error_code, 0, "share state topic metadata failed");
+    assert_ne!(topic.topic_id, [0; 16], "Kafka should return a topic UUID");
+    let partition = topic
+        .partitions
+        .iter()
+        .find(|partition| partition.partition_index == 0)
+        .expect("share state topic should have partition 0");
+    assert_eq!(
+        partition.error_code, 0,
+        "share state partition metadata failed"
+    );
+
+    let admin = AdminClient::new(
+        client_config_from_env(
+            parse_bootstrap_servers(&bootstrap),
+            "kafrust-share-state-admin",
+        )
+        .expect("valid share state admin configuration"),
+    );
+    let initialize = admin
+        .initialize_share_group_state(
+            &group_id,
+            &[ShareGroupStateInitializeTopic::new(
+                topic.topic_id,
+                [ShareGroupStateInitializePartition::new(0, 0, 0)],
+            )],
+        )
+        .await
+        .expect("InitializeShareGroupState should succeed");
+    assert!(
+        initialize.is_success(),
+        "share state initialization failed: {initialize:?}"
+    );
+
+    let write = admin
+        .write_share_group_state(
+            &group_id,
+            &[ShareGroupStateWriteTopic::new(
+                topic.topic_id,
+                [ShareGroupStateWritePartition::new(
+                    0,
+                    0,
+                    partition.leader_epoch,
+                    0,
+                    [ShareGroupStateBatch::new(0, 0, 0, 0)],
+                )
+                .with_delivery_complete_count(0)],
+            )],
+        )
+        .await
+        .expect("WriteShareGroupState v1 should succeed");
+    assert!(write.is_success(), "share state write failed: {write:?}");
+
+    let read = admin
+        .read_share_group_state(
+            &group_id,
+            &[ShareGroupStateReadTopic::new(
+                topic.topic_id,
+                [ShareGroupStateReadPartition::new(0, partition.leader_epoch)],
+            )],
+        )
+        .await
+        .expect("ReadShareGroupState should succeed");
+    assert!(read.is_success(), "share state read failed: {read:?}");
+    let read_partition = read
+        .topics()
+        .first()
+        .and_then(|topic| topic.partitions().first())
+        .expect("share state read should return partition 0");
+    assert_eq!(read_partition.partition(), 0);
+    assert_eq!(read_partition.start_offset(), 0);
+    assert_eq!(read_partition.state_batches().len(), 1);
+    assert_eq!(read_partition.state_batches()[0].delivery_state(), 0);
+
+    let summary = admin
+        .read_share_group_state_summary(
+            &group_id,
+            &[ShareGroupStateReadTopic::new(
+                topic.topic_id,
+                [ShareGroupStateReadPartition::new(0, partition.leader_epoch)],
+            )],
+        )
+        .await
+        .expect("ReadShareGroupStateSummary should succeed");
+    assert!(
+        summary.is_success(),
+        "share state summary failed: {summary:?}"
+    );
+    let summary_partition = summary
+        .topics()
+        .first()
+        .and_then(|topic| topic.partitions().first())
+        .expect("share state summary should return partition 0");
+    assert_eq!(summary_partition.start_offset(), 0);
+    assert_eq!(summary_partition.delivery_complete_count(), Some(0));
+
+    let deleted = admin
+        .delete_share_group_state(
+            &group_id,
+            &[ShareGroupStateDeleteTopic::new(topic.topic_id, [0])],
+        )
+        .await
+        .expect("DeleteShareGroupState should succeed");
+    assert!(
+        deleted.is_success(),
+        "share state delete failed: {deleted:?}"
+    );
+}
+
+#[tokio::test]
+async fn share_group_state_replica_failover_when_broker_is_configured() {
+    let Some(phase) = std::env::var("KAFRUST_SHARE_STATE_PHASE").ok() else {
+        eprintln!("skipping share group state failover; set KAFRUST_SHARE_STATE_PHASE to run it");
+        return;
+    };
+    let Some(topic_name) = std::env::var("KAFRUST_SHARE_STATE_TOPIC")
+        .or_else(|_| std::env::var("KAFRUST_SHARE_TOPIC"))
+        .ok()
+    else {
+        eprintln!(
+            "skipping share group state failover; set KAFRUST_SHARE_STATE_TOPIC or KAFRUST_SHARE_TOPIC"
+        );
+        return;
+    };
+    let Some(bootstrap) = std::env::var("KAFRUST_BOOTSTRAP_SERVERS").ok() else {
+        eprintln!("skipping share group state failover; set KAFRUST_BOOTSTRAP_SERVERS");
+        return;
+    };
+    let group_id = std::env::var("KAFRUST_SHARE_STATE_GROUP_ID")
+        .unwrap_or_else(|_| format!("kafrust-share-state-failover-{}", std::process::id()));
+    let partition_index = std::env::var("KAFRUST_SHARE_STATE_PARTITION")
+        .unwrap_or_else(|_| "0".to_owned())
+        .parse::<i32>()
+        .expect("KAFRUST_SHARE_STATE_PARTITION must be a valid partition index");
+
+    let mut metadata_client = client_config_from_env(
+        parse_bootstrap_servers(&bootstrap),
+        "kafrust-share-state-failover-metadata",
+    )
+    .expect("valid share state failover metadata configuration")
+    .connect()
+    .await
+    .expect("connect to Kafka for share state failover metadata");
+    let metadata = metadata_client
+        .metadata_v12(Some(vec![MetadataRequestTopicV12 {
+            topic_id: [0; 16],
+            name: Some(topic_name.clone()),
+        }]))
+        .await
+        .expect("Metadata v12 should return the replicated share state topic UUID");
+    let topic = metadata
+        .topics
+        .iter()
+        .find(|topic| topic.name.as_deref() == Some(topic_name.as_str()))
+        .expect("replicated share state topic should be present in Metadata v12");
+    assert_eq!(topic.error_code, 0, "share state topic metadata failed");
+    assert_ne!(topic.topic_id, [0; 16], "Kafka should return a topic UUID");
+    let partition = topic
+        .partitions
+        .iter()
+        .find(|partition| partition.partition_index == partition_index)
+        .expect("replicated share state partition should be present");
+    assert_eq!(
+        partition.error_code, 0,
+        "share state partition metadata failed"
+    );
+
+    let admin = AdminClient::new(
+        client_config_from_env(
+            parse_bootstrap_servers(&bootstrap),
+            "kafrust-share-state-failover-admin",
+        )
+        .expect("valid share state failover admin configuration"),
+    );
+    let topic_id = topic.topic_id;
+    let partition_epoch = partition.leader_epoch;
+    let partition_index_for_state = partition_index;
+
+    match phase.as_str() {
+        "write" => {
+            let initialize = admin
+                .initialize_share_group_state(
+                    &group_id,
+                    &[ShareGroupStateInitializeTopic::new(
+                        topic_id,
+                        [ShareGroupStateInitializePartition::new(
+                            partition_index_for_state,
+                            0,
+                            0,
+                        )],
+                    )],
+                )
+                .await
+                .expect("InitializeShareGroupState should succeed before failover");
+            assert!(
+                initialize.is_success(),
+                "share state initialization before failover failed: {initialize:?}"
+            );
+
+            let write = admin
+                .write_share_group_state(
+                    &group_id,
+                    &[ShareGroupStateWriteTopic::new(
+                        topic_id,
+                        [ShareGroupStateWritePartition::new(
+                            partition_index_for_state,
+                            0,
+                            partition_epoch,
+                            0,
+                            [ShareGroupStateBatch::new(0, 0, 0, 0)],
+                        )
+                        .with_delivery_complete_count(0)],
+                    )],
+                )
+                .await
+                .expect("WriteShareGroupState should succeed before failover");
+            assert!(
+                write.is_success(),
+                "share state write before failover failed: {write:?}"
+            );
+        }
+        "read" => {
+            let read = admin
+                .read_share_group_state(
+                    &group_id,
+                    &[ShareGroupStateReadTopic::new(
+                        topic_id,
+                        [ShareGroupStateReadPartition::new(
+                            partition_index_for_state,
+                            partition_epoch,
+                        )],
+                    )],
+                )
+                .await
+                .expect("ReadShareGroupState should recover from a state leader failover");
+            assert!(
+                read.is_success(),
+                "share state read after failover failed: {read:?}"
+            );
+            let read_partition = read
+                .topics()
+                .first()
+                .and_then(|topic| topic.partitions().first())
+                .expect("share state read should return the replicated partition");
+            assert_eq!(read_partition.partition(), partition_index_for_state);
+            assert_eq!(read_partition.start_offset(), 0);
+            assert_eq!(read_partition.state_batches().len(), 1);
+            assert_eq!(read_partition.state_batches()[0].delivery_state(), 0);
+
+            let summary = admin
+                .read_share_group_state_summary(
+                    &group_id,
+                    &[ShareGroupStateReadTopic::new(
+                        topic_id,
+                        [ShareGroupStateReadPartition::new(
+                            partition_index_for_state,
+                            partition_epoch,
+                        )],
+                    )],
+                )
+                .await
+                .expect("ReadShareGroupStateSummary should recover from a state leader failover");
+            assert!(
+                summary.is_success(),
+                "share state summary after failover failed: {summary:?}"
+            );
+            let summary_partition = summary
+                .topics()
+                .first()
+                .and_then(|topic| topic.partitions().first())
+                .expect("share state summary should return the replicated partition");
+            assert_eq!(summary_partition.start_offset(), 0);
+            assert_eq!(summary_partition.delivery_complete_count(), Some(0));
+
+            let deleted = admin
+                .delete_share_group_state(
+                    &group_id,
+                    &[ShareGroupStateDeleteTopic::new(
+                        topic_id,
+                        [partition_index_for_state],
+                    )],
+                )
+                .await
+                .expect("DeleteShareGroupState should recover from a state leader failover");
+            assert!(
+                deleted.is_success(),
+                "share state delete after failover failed: {deleted:?}"
+            );
+        }
+        _ => eprintln!("KAFRUST_SHARE_STATE_PHASE must be write or read"),
+    }
+}
+
+#[tokio::test]
 async fn share_consumer_multi_broker_failover_when_broker_is_configured() {
     let Some(phase) = std::env::var("KAFRUST_SHARE_PHASE").ok() else {
         eprintln!(
@@ -351,14 +974,15 @@ async fn share_consumer_multi_broker_failover_when_broker_is_configured() {
         .expect("KAFRUST_SHARE_VALUE should be set")
         .into_bytes();
 
-    let mut consumer = ShareConsumerConfig::new(parse_bootstrap_servers(&bootstrap), group_id)
-        .subscribe(topic.clone())
-        .max_wait_ms(100)
-        .max_retries(10)
-        .acquire_mode(ShareAcquireMode::RecordLimit)
-        .build()
-        .await
-        .expect("ShareConsumer should connect to the configured Kafka cluster");
+    let mut consumer =
+        share_consumer_config_from_env(&bootstrap, group_id, "kafrust-share-multi-broker")
+            .subscribe(topic.clone())
+            .max_wait_ms(100)
+            .max_retries(10)
+            .acquire_mode(ShareAcquireMode::RecordLimit)
+            .build()
+            .await
+            .expect("ShareConsumer should connect to the configured Kafka cluster");
     let deadline = Instant::now() + Duration::from_secs(60);
     loop {
         let records = consumer
@@ -444,14 +1068,15 @@ async fn share_consumer_active_heartbeat_failover_when_broker_is_configured() {
             .into_bytes()]
     };
 
-    let mut consumer = ShareConsumerConfig::new(parse_bootstrap_servers(&bootstrap), group_id)
-        .subscribe(topic.clone())
-        .max_wait_ms(100)
-        .max_retries(10)
-        .acquire_mode(ShareAcquireMode::RecordLimit)
-        .build()
-        .await
-        .expect("ShareConsumer should connect to the configured Kafka cluster");
+    let mut consumer =
+        share_consumer_config_from_env(&bootstrap, group_id, "kafrust-share-heartbeat")
+            .subscribe(topic.clone())
+            .max_wait_ms(100)
+            .max_retries(10)
+            .acquire_mode(ShareAcquireMode::RecordLimit)
+            .build()
+            .await
+            .expect("ShareConsumer should connect to the configured Kafka cluster");
     let deadline = Instant::now() + Duration::from_secs(60);
     loop {
         let records = consumer
@@ -596,7 +1221,24 @@ fn client_config_from_env(
     if let Some(certificate) = tls_root_certificate_der_from_env()? {
         config = config.tls_root_certificate_der(certificate);
     }
+    if let Some(certificate) = tls_client_certificate_der_from_env()? {
+        config = config.tls_client_certificate_der(certificate);
+    }
+    if let Some(private_key) = tls_client_private_key_der_from_env()? {
+        config = config.tls_client_private_key_der(private_key);
+    }
     Ok(config)
+}
+
+fn share_consumer_config_from_env(
+    bootstrap: &str,
+    group_id: impl Into<String>,
+    client_id: &str,
+) -> ShareConsumerConfig {
+    let bootstrap_servers = parse_bootstrap_servers(bootstrap);
+    let client_config = client_config_from_env(bootstrap_servers.clone(), client_id)
+        .expect("valid ShareConsumer client configuration");
+    ShareConsumerConfig::new(bootstrap_servers, group_id).with_client_config(client_config)
 }
 
 struct TestSaslCredentials {
@@ -670,6 +1312,22 @@ fn tls_server_name_from_env() -> Option<String> {
 
 fn tls_root_certificate_der_from_env() -> kafrust::Result<Option<Vec<u8>>> {
     let Ok(path) = std::env::var("KAFRUST_TLS_ROOT_CERT_DER_PATH") else {
+        return Ok(None);
+    };
+
+    Ok(Some(std::fs::read(path)?))
+}
+
+fn tls_client_certificate_der_from_env() -> kafrust::Result<Option<Vec<u8>>> {
+    let Ok(path) = std::env::var("KAFRUST_TLS_CLIENT_CERT_DER_PATH") else {
+        return Ok(None);
+    };
+
+    Ok(Some(std::fs::read(path)?))
+}
+
+fn tls_client_private_key_der_from_env() -> kafrust::Result<Option<Vec<u8>>> {
+    let Ok(path) = std::env::var("KAFRUST_TLS_CLIENT_KEY_DER_PATH") else {
         return Ok(None);
     };
 

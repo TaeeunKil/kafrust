@@ -13,9 +13,10 @@ use kafrust_protocol::api::metadata::{
 };
 use kafrust_protocol::api::produce::{
     encoded_message_set_len, encoded_record_batch_set_len_with_compression, MessageSetMessage,
-    ProducePartitionV2, ProducePartitionV3, ProduceResponseV13, ProduceResponseV2,
-    ProduceResponseV7, ProduceResponseV9, ProduceTopicV13, ProduceTopicV2, ProduceTopicV3,
-    RecordBatchIdentity, RecordBatchMessage, API_KEY as PRODUCE_API_KEY,
+    ProduceLeaderIdAndEpochV10, ProduceNodeEndpointV10, ProducePartitionV2, ProducePartitionV3,
+    ProduceResponseV13, ProduceResponseV2, ProduceResponseV7, ProduceResponseV9, ProduceTopicV13,
+    ProduceTopicV2, ProduceTopicV3, RecordBatchIdentity, RecordBatchMessage,
+    API_KEY as PRODUCE_API_KEY,
 };
 use kafrust_protocol::api::txn_offset_commit::{
     TxnOffsetCommitPartition, TxnOffsetCommitPartitionV3, TxnOffsetCommitTopic,
@@ -411,6 +412,7 @@ pub struct Producer {
     client: Client,
     config: ProducerConfig,
     metadata_cache: BTreeMap<String, MetadataResponseV1>,
+    leader_hints: BTreeMap<(String, i32), ProduceLeaderHint>,
     topic_id_cache: BTreeMap<String, [u8; 16]>,
     keyless_partition_indexes: BTreeMap<String, usize>,
     broker_clients: BTreeMap<String, Client>,
@@ -681,6 +683,18 @@ pub struct BufferedProducer {
     defunct: bool,
 }
 
+/// Cloneable enqueue handle for a non-transactional [`BufferedProducer`].
+///
+/// The handle shares the producer's bounded command queue and can be moved
+/// into multiple Tokio tasks. Delivery ordering and completion are still
+/// owned by the single buffered producer worker. Close the owning
+/// [`BufferedProducer`] after all handles have been dropped or stopped.
+#[derive(Clone, Debug)]
+pub struct BufferedProducerHandle {
+    commands: mpsc::Sender<BufferedProducerCommand>,
+    metrics: ClientMetrics,
+}
+
 impl BufferedProducer {
     /// Enqueues one record for the buffered producer path.
     ///
@@ -702,6 +716,23 @@ impl BufferedProducer {
             return Err(Error::Unsupported("transaction has not been started"));
         }
         enqueue_buffered_record(&self.commands, &self.metrics, record).await
+    }
+
+    /// Returns a cloneable enqueue handle for concurrent non-transactional
+    /// sends.
+    ///
+    /// Transactional buffered producers reject handles because transaction
+    /// boundaries must remain ordered through the owning producer.
+    pub fn handle(&self) -> Result<BufferedProducerHandle> {
+        if self.transactional {
+            return Err(Error::Unsupported(
+                "buffered producer handles are unavailable for transactions",
+            ));
+        }
+        Ok(BufferedProducerHandle {
+            commands: self.commands.clone(),
+            metrics: self.metrics.clone(),
+        })
     }
 
     /// Starts a transaction on a buffered producer configured with a transactional ID.
@@ -932,6 +963,20 @@ impl BufferedProducer {
             self.defunct = true;
             self.in_transaction = false;
         }
+    }
+}
+
+impl BufferedProducerHandle {
+    /// Enqueues one record using the shared bounded producer queue.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.producer.buffered_handle_send",
+        skip_all,
+        fields(topic = record.topic(), partition = ?record.partition_ref()),
+        err
+    )]
+    pub async fn send(&self, record: ProducerRecord) -> Result<ProducerDelivery> {
+        enqueue_buffered_record(&self.commands, &self.metrics, record).await
     }
 }
 
@@ -2084,8 +2129,12 @@ impl Producer {
                 .get(topic)
                 .ok_or(Error::Unsupported("missing batch topic metadata"))?;
             let partition = self.choose_partition(&record.record, metadata)?;
-            let leader = leader_for(metadata, record.record.topic(), partition)?;
-            let broker_addr = broker_addr_for(metadata, leader)?;
+            let (_, broker_addr) = resolve_produce_route(
+                &mut self.leader_hints,
+                metadata,
+                record.record.topic(),
+                partition,
+            )?;
             groups
                 .entry(ProduceBatchKey {
                     broker_addr,
@@ -2478,6 +2527,12 @@ impl Producer {
                 };
                 let partition_response =
                     produce_partition_response(&response, &key.topic, key.partition)?;
+                self.remember_produce_leader_hint(
+                    &key.topic,
+                    key.partition,
+                    partition_response.error_code,
+                    partition_response.leader_hint.clone(),
+                );
                 if partition_response.error_code != 0 {
                     self.config.client.record_broker_error();
                     if self.idempotent_state.is_some() {
@@ -2550,8 +2605,8 @@ impl Producer {
         timestamp_ms: i64,
     ) -> Result<RecordMetadata> {
         let partition = self.choose_partition(record, metadata)?;
-        let leader = leader_for(metadata, record.topic(), partition)?;
-        let broker_addr = broker_addr_for(metadata, leader)?;
+        let (leader, broker_addr) =
+            resolve_produce_route(&mut self.leader_hints, metadata, record.topic(), partition)?;
         self.register_transaction_partition(record.topic(), partition)
             .await?;
         debug!(
@@ -2829,6 +2884,12 @@ impl Producer {
             };
             let partition_response =
                 produce_partition_response(&response, record.topic(), partition)?;
+            self.remember_produce_leader_hint(
+                record.topic(),
+                partition,
+                partition_response.error_code,
+                partition_response.leader_hint.clone(),
+            );
             if partition_response.error_code != 0 {
                 self.config.client.record_broker_error();
                 if self.idempotent_state.is_some() {
@@ -2868,6 +2929,22 @@ impl Producer {
             self.broker_clients.insert(broker_addr, leader_client);
         }
         result
+    }
+
+    fn remember_produce_leader_hint(
+        &mut self,
+        topic: &str,
+        partition: i32,
+        error_code: i16,
+        leader_hint: Option<ProduceLeaderHint>,
+    ) {
+        if !BrokerErrorKind::from_code(error_code).is_produce_retryable() {
+            return;
+        }
+        if let Some(leader_hint) = leader_hint {
+            self.leader_hints
+                .insert((topic.to_owned(), partition), leader_hint);
+        }
     }
 
     fn ensure_idempotent_producer_usable(&self) -> Result<()> {
@@ -3456,6 +3533,15 @@ impl ProducerConfig {
         }
     }
 
+    /// Replaces the shared client configuration used by producer connections.
+    ///
+    /// This is useful when the same bootstrap, controller, security, limits,
+    /// or metrics policy is shared by several kafrust clients.
+    pub fn with_client_config(mut self, client: ClientConfig) -> Self {
+        self.client = client;
+        self
+    }
+
     /// Sets the Kafka client ID used by producer requests.
     pub fn client_id(mut self, client_id: impl Into<String>) -> Self {
         self.client = self.client.client_id(client_id);
@@ -3507,6 +3593,18 @@ impl ProducerConfig {
     /// Adds a DER-encoded TLS root certificate for producer broker validation.
     pub fn tls_root_certificate_der(mut self, certificate: impl Into<Vec<u8>>) -> Self {
         self.client = self.client.tls_root_certificate_der(certificate);
+        self
+    }
+
+    /// Adds a DER-encoded client certificate for TLS mutual authentication.
+    pub fn tls_client_certificate_der(mut self, certificate: impl Into<Vec<u8>>) -> Self {
+        self.client = self.client.tls_client_certificate_der(certificate);
+        self
+    }
+
+    /// Sets the DER-encoded private key for TLS mutual authentication.
+    pub fn tls_client_private_key_der(mut self, key: impl Into<Vec<u8>>) -> Self {
+        self.client = self.client.tls_client_private_key_der(key);
         self
     }
 
@@ -3775,6 +3873,13 @@ impl ProducerConfig {
         Ok(())
     }
 
+    /// Validates and returns this producer configuration without opening a
+    /// broker connection.
+    pub fn build_config(self) -> Result<Self> {
+        self.validate()?;
+        Ok(self)
+    }
+
     /// Connects to Kafka and builds a producer.
     pub async fn build(self) -> Result<Producer> {
         self.validate()?;
@@ -3798,6 +3903,7 @@ impl ProducerConfig {
             client,
             config: self,
             metadata_cache: BTreeMap::new(),
+            leader_hints: BTreeMap::new(),
             topic_id_cache: BTreeMap::new(),
             keyless_partition_indexes: BTreeMap::new(),
             broker_clients: BTreeMap::new(),
@@ -4176,6 +4282,20 @@ fn broker_addr_for(metadata: &MetadataResponseV1, node_id: i32) -> Result<String
         .ok_or(Error::MissingBroker { node_id })
 }
 
+fn resolve_produce_route(
+    leader_hints: &mut BTreeMap<(String, i32), ProduceLeaderHint>,
+    metadata: &MetadataResponseV1,
+    topic: &str,
+    partition: i32,
+) -> Result<(i32, String)> {
+    if let Some(hint) = leader_hints.remove(&(topic.to_owned(), partition)) {
+        return Ok((-1, hint.broker_addr));
+    }
+
+    let leader = leader_for(metadata, topic, partition)?;
+    Ok((leader, broker_addr_for(metadata, leader)?))
+}
+
 fn broker_addr(broker: &BrokerMetadata) -> String {
     format!("{}:{}", broker.host, broker.port)
 }
@@ -4378,10 +4498,16 @@ enum ProduceResponse {
     V13(ProduceResponseV13),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct ProducePartitionResult {
     error_code: i16,
     base_offset: i64,
+    leader_hint: Option<ProduceLeaderHint>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ProduceLeaderHint {
+    broker_addr: String,
 }
 
 fn produce_partition_response(
@@ -4403,6 +4529,7 @@ fn produce_partition_response(
             .map(|partition| ProducePartitionResult {
                 error_code: partition.error_code,
                 base_offset: partition.base_offset,
+                leader_hint: None,
             }),
         ProduceResponse::V7(response) => response
             .responses
@@ -4417,6 +4544,7 @@ fn produce_partition_response(
             .map(|partition| ProducePartitionResult {
                 error_code: partition.error_code,
                 base_offset: partition.base_offset,
+                leader_hint: None,
             }),
         ProduceResponse::V9(response) => response
             .responses
@@ -4431,6 +4559,10 @@ fn produce_partition_response(
             .map(|partition| ProducePartitionResult {
                 error_code: partition.error_code,
                 base_offset: partition.base_offset,
+                leader_hint: produce_leader_hint(
+                    partition.current_leader,
+                    &response.node_endpoints,
+                ),
             }),
         ProduceResponse::V13(response) => response
             .responses
@@ -4444,11 +4576,31 @@ fn produce_partition_response(
             .map(|partition| ProducePartitionResult {
                 error_code: partition.error_code,
                 base_offset: partition.base_offset,
+                leader_hint: produce_leader_hint(
+                    partition.current_leader,
+                    &response.node_endpoints,
+                ),
             }),
     };
     result.ok_or_else(|| Error::UnknownTopicOrPartition {
         topic: topic_name.to_owned(),
         partition: partition_index,
+    })
+}
+
+fn produce_leader_hint(
+    current_leader: Option<ProduceLeaderIdAndEpochV10>,
+    node_endpoints: &[ProduceNodeEndpointV10],
+) -> Option<ProduceLeaderHint> {
+    let current_leader = current_leader?;
+    let endpoint = node_endpoints
+        .iter()
+        .find(|endpoint| endpoint.node_id == current_leader.leader_id)?;
+    if endpoint.host.is_empty() || !(1..=u16::MAX as i32).contains(&endpoint.port) {
+        return None;
+    }
+    Some(ProduceLeaderHint {
+        broker_addr: format!("{}:{}", endpoint.host, endpoint.port),
     })
 }
 
@@ -4747,15 +4899,17 @@ mod tests {
         invalidate_metadata_cache, invalidate_metadata_cache_for_record_indexes,
         is_retryable_transaction_coordinator_error, is_retryable_transaction_transport_error,
         kafka_murmur2, largest_fitting_prefix, leader_for, message_set_message,
-        record_batch_attempt_outcomes, record_batch_message, select_produce_batch_version,
+        produce_leader_hint, produce_partition_response, record_batch_attempt_outcomes,
+        record_batch_message, resolve_produce_route, select_produce_batch_version,
         select_produce_batch_version_with_topic_id, select_produce_version,
         select_produce_version_with_topic_id, transaction_offset_topics, Acks, BatchRecord,
         BufferedFlushReason, BufferedProduceRequest, BufferedProducer, BufferedProducerCommand,
-        BufferedProducerState, Compression, IdempotentBatchSequenceTracker,
+        BufferedProducerHandle, BufferedProducerState, Compression, IdempotentBatchSequenceTracker,
         IdempotentProduceErrorDisposition, IdempotentProducerState, PreparedBatchRecord,
-        ProduceBatchKey, ProduceVersion, Producer, ProducerBatchFailure,
-        ProducerBatchRecordOutcome, ProducerBatchReport, ProducerConfig, ProducerDelivery,
-        ProducerRecord, RecordMetadata, SecurityProtocol, TransactionState, TransactionStatus,
+        ProduceBatchKey, ProduceLeaderHint, ProduceResponse, ProduceVersion, Producer,
+        ProducerBatchFailure, ProducerBatchRecordOutcome, ProducerBatchReport, ProducerConfig,
+        ProducerDelivery, ProducerRecord, RecordMetadata, SecurityProtocol, TransactionState,
+        TransactionStatus,
     };
     use crate::consumer::ConsumerAssignment;
     use crate::{BrokerErrorKind, Client, ClientMetrics, Error};
@@ -4763,7 +4917,10 @@ mod tests {
     use kafrust_protocol::api::metadata::{
         BrokerMetadata, MetadataResponseV1, PartitionMetadata, TopicMetadata,
     };
-    use kafrust_protocol::api::produce::API_KEY as PRODUCE_API_KEY;
+    use kafrust_protocol::api::produce::{
+        ProduceLeaderIdAndEpochV10, ProduceNodeEndpointV10, ProducePartitionResponseV9,
+        ProduceResponseV9, ProduceTopicResponseV9, API_KEY as PRODUCE_API_KEY,
+    };
     use std::cell::Cell;
     use std::collections::BTreeMap;
     use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
@@ -4776,6 +4933,109 @@ mod tests {
         assert_eq!(Acks::None.as_i16(), 0);
         assert_eq!(Acks::Leader.as_i16(), 1);
         assert_eq!(Acks::All.as_i16(), -1);
+    }
+
+    #[test]
+    fn accepts_only_complete_produce_leader_hints() {
+        let hint = produce_leader_hint(
+            Some(ProduceLeaderIdAndEpochV10 {
+                leader_id: 2,
+                leader_epoch: 7,
+            }),
+            &[ProduceNodeEndpointV10 {
+                node_id: 2,
+                host: "broker-2".to_owned(),
+                port: 9093,
+                rack: Some("rack-b".to_owned()),
+            }],
+        );
+        assert_eq!(
+            hint.as_ref().map(|hint| hint.broker_addr.as_str()),
+            Some("broker-2:9093")
+        );
+
+        assert!(produce_leader_hint(
+            Some(ProduceLeaderIdAndEpochV10 {
+                leader_id: 2,
+                leader_epoch: 7,
+            }),
+            &[],
+        )
+        .is_none());
+        assert!(produce_leader_hint(
+            Some(ProduceLeaderIdAndEpochV10 {
+                leader_id: 2,
+                leader_epoch: 7,
+            }),
+            &[ProduceNodeEndpointV10 {
+                node_id: 2,
+                host: "broker-2".to_owned(),
+                port: 0,
+                rack: None,
+            }],
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn consumes_a_leader_hint_before_requesting_a_metadata_leader() {
+        let mut metadata = metadata_fixture();
+        metadata.topics[0].partitions[0].leader_id = -1;
+        let mut hints = BTreeMap::from([(
+            ("orders".to_owned(), 0),
+            ProduceLeaderHint {
+                broker_addr: "broker-2:9093".to_owned(),
+            },
+        )]);
+
+        assert_eq!(
+            resolve_produce_route(&mut hints, &metadata, "orders", 0).unwrap(),
+            (-1, "broker-2:9093".to_owned())
+        );
+        assert!(hints.is_empty());
+        assert!(matches!(
+            resolve_produce_route(&mut hints, &metadata, "orders", 0),
+            Err(Error::MissingLeader { partition: 0, .. })
+        ));
+    }
+
+    #[test]
+    fn maps_flexible_produce_response_leader_hint_for_retry() {
+        let response = ProduceResponse::V9(ProduceResponseV9 {
+            responses: vec![ProduceTopicResponseV9 {
+                name: "orders".to_owned(),
+                partitions: vec![ProducePartitionResponseV9 {
+                    partition_index: 0,
+                    error_code: 5,
+                    base_offset: -1,
+                    log_append_time_ms: -1,
+                    log_start_offset: -1,
+                    record_errors: Vec::new(),
+                    error_message: None,
+                    current_leader: Some(ProduceLeaderIdAndEpochV10 {
+                        leader_id: 2,
+                        leader_epoch: 8,
+                    }),
+                }],
+            }],
+            throttle_time_ms: 0,
+            node_endpoints: vec![ProduceNodeEndpointV10 {
+                node_id: 2,
+                host: "broker-2".to_owned(),
+                port: 9093,
+                rack: None,
+            }],
+        });
+
+        let result = produce_partition_response(&response, "orders", 0).unwrap();
+        assert_eq!(result.error_code, 5);
+        assert_eq!(
+            result
+                .leader_hint
+                .as_ref()
+                .map(|hint| hint.broker_addr.as_str()),
+            Some("broker-2:9093")
+        );
     }
 
     #[tokio::test]
@@ -5741,6 +6001,7 @@ mod tests {
             client,
             config,
             metadata_cache: BTreeMap::new(),
+            leader_hints: BTreeMap::new(),
             topic_id_cache: BTreeMap::new(),
             keyless_partition_indexes: BTreeMap::new(),
             broker_clients: BTreeMap::new(),
@@ -5796,6 +6057,7 @@ mod tests {
             client,
             config,
             metadata_cache: BTreeMap::new(),
+            leader_hints: BTreeMap::new(),
             topic_id_cache: BTreeMap::new(),
             keyless_partition_indexes: BTreeMap::new(),
             broker_clients: BTreeMap::new(),
@@ -5855,6 +6117,7 @@ mod tests {
             client,
             config,
             metadata_cache: BTreeMap::new(),
+            leader_hints: BTreeMap::new(),
             topic_id_cache: BTreeMap::new(),
             keyless_partition_indexes: BTreeMap::new(),
             broker_clients: BTreeMap::new(),
@@ -6170,6 +6433,72 @@ mod tests {
             producer.commit_transaction().await.unwrap_err(),
             Error::Unsupported("producer is not transactional")
         ));
+    }
+
+    #[test]
+    fn rejects_transactional_buffered_handles_and_clones_non_transactional_handles() {
+        let (transactional_commands, _) = mpsc::channel(1);
+        let transactional = BufferedProducer {
+            commands: transactional_commands,
+            metrics: ClientMetrics::new(),
+            worker: None,
+            state: BufferedProducerState::Open,
+            transactional: true,
+            in_transaction: false,
+            defunct: false,
+        };
+        assert!(matches!(
+            transactional.handle(),
+            Err(Error::Unsupported(
+                "buffered producer handles are unavailable for transactions"
+            ))
+        ));
+
+        let (commands, _) = mpsc::channel(1);
+        let producer = BufferedProducer {
+            commands,
+            metrics: ClientMetrics::new(),
+            worker: None,
+            state: BufferedProducerState::Open,
+            transactional: false,
+            in_transaction: false,
+            defunct: false,
+        };
+        let handle = producer.handle().unwrap();
+        let _clone = handle.clone();
+    }
+
+    #[tokio::test]
+    async fn buffered_handle_shares_bounded_enqueue_queue() {
+        let (commands, mut receiver) = mpsc::channel(2);
+        let metrics = ClientMetrics::new();
+        let handle = BufferedProducerHandle { commands, metrics };
+        let clone = handle.clone();
+        let first = tokio::spawn(async move {
+            handle
+                .send(ProducerRecord::to("orders").key("order-1"))
+                .await
+        });
+        let second = tokio::spawn(async move {
+            clone
+                .send(ProducerRecord::to("orders").key("order-2"))
+                .await
+        });
+
+        let first_command = receiver.recv().await.unwrap();
+        let second_command = receiver.recv().await.unwrap();
+        for (command, offset) in [(first_command, 41), (second_command, 42)] {
+            assert!(matches!(command, BufferedProducerCommand::Send(_)));
+            if let BufferedProducerCommand::Send(request) = command {
+                request
+                    .delivery_sender
+                    .send(Ok(RecordMetadata::new("orders", 0, offset, None)))
+                    .unwrap();
+            }
+        }
+
+        assert!(first.await.unwrap().is_ok());
+        assert!(second.await.unwrap().is_ok());
     }
 
     #[tokio::test]
@@ -6773,6 +7102,7 @@ mod tests {
             client,
             config,
             metadata_cache: BTreeMap::new(),
+            leader_hints: BTreeMap::new(),
             topic_id_cache: BTreeMap::new(),
             keyless_partition_indexes: BTreeMap::new(),
             broker_clients: BTreeMap::new(),
@@ -6823,6 +7153,7 @@ mod tests {
             client,
             config,
             metadata_cache,
+            leader_hints: BTreeMap::new(),
             topic_id_cache: BTreeMap::new(),
             keyless_partition_indexes: BTreeMap::new(),
             broker_clients: BTreeMap::new(),
@@ -6896,6 +7227,7 @@ mod tests {
             client,
             config,
             metadata_cache,
+            leader_hints: BTreeMap::new(),
             topic_id_cache: BTreeMap::new(),
             keyless_partition_indexes: BTreeMap::new(),
             broker_clients: BTreeMap::new(),

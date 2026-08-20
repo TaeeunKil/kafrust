@@ -20,6 +20,8 @@ pub mod metrics;
 pub mod producer;
 /// KIP-932 share-group consumer API.
 pub mod share_consumer;
+/// Kafka Streams group membership and heartbeat API.
+pub mod streams;
 /// KIP-714 client telemetry API.
 pub mod telemetry;
 
@@ -27,21 +29,22 @@ mod scram;
 
 pub use admin::{
     AclBinding, AclFilter, AclOperation, AclPatternType, AclPermissionType, AclResourceType,
-    AdminClient, AlterClientQuotaEntryResult, AlterClientQuotasResult, AlterConfigResourceResult,
-    AlterConfigsOptions, AlterConfigsResult, AlterConsumerGroupOffsetsPartitionResult,
-    AlterConsumerGroupOffsetsResult, AlterConsumerGroupOffsetsTopicResult,
-    AlterPartitionReassignmentResult, AlterPartitionReassignmentTopicResult,
-    AlterPartitionReassignmentsResult, AlterReplicaLogDirsPartitionResult,
-    AlterReplicaLogDirsResult, AlterReplicaLogDirsTopicResult, AlterScramCredentialResult,
-    AlterShareGroupOffsetsPartitionResult, AlterShareGroupOffsetsResult,
-    AlterShareGroupOffsetsTopicResult, AlterUserScramCredentialsResult, BrokerDescription,
-    ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaEntityComponent, ClientQuotaFilter,
-    ClientQuotaFilterComponent, ClientQuotaMatchType, ClientQuotaOperation, ClientQuotaValue,
-    ClusterDescription, ConfigAlterOperation, ConfigAlterOperationKind, ConfigEntry,
-    ConfigResourceResult, ConfigSource, ConfigSynonym, ConsumerGroupDescription,
-    ConsumerGroupMember, ConsumerGroupOffset, ConsumerGroupOffsetDelete,
-    ConsumerGroupOffsetPartitionResult, ConsumerGroupOffsetQuery, ConsumerGroupOffsetTopicResult,
-    CreateAclsEntryResult, CreateAclsResult, CreateDelegationTokenOptions, CreatePartitionsOptions,
+    AddRaftVoterOptions, AdminClient, AlterClientQuotaEntryResult, AlterClientQuotasResult,
+    AlterConfigResourceResult, AlterConfigsOptions, AlterConfigsResult,
+    AlterConsumerGroupOffsetsPartitionResult, AlterConsumerGroupOffsetsResult,
+    AlterConsumerGroupOffsetsTopicResult, AlterPartitionReassignmentResult,
+    AlterPartitionReassignmentTopicResult, AlterPartitionReassignmentsResult,
+    AlterReplicaLogDirsPartitionResult, AlterReplicaLogDirsResult, AlterReplicaLogDirsTopicResult,
+    AlterScramCredentialResult, AlterShareGroupOffsetsPartitionResult,
+    AlterShareGroupOffsetsResult, AlterShareGroupOffsetsTopicResult,
+    AlterUserScramCredentialsResult, BrokerDescription, ClientQuotaAlteration, ClientQuotaEntity,
+    ClientQuotaEntityComponent, ClientQuotaFilter, ClientQuotaFilterComponent,
+    ClientQuotaMatchType, ClientQuotaOperation, ClientQuotaValue, ClusterDescription,
+    ConfigAlterOperation, ConfigAlterOperationKind, ConfigEntry, ConfigResourceResult,
+    ConfigResourceType, ConfigSource, ConfigSynonym, ConsumerGroupDescription, ConsumerGroupMember,
+    ConsumerGroupOffset, ConsumerGroupOffsetDelete, ConsumerGroupOffsetPartitionResult,
+    ConsumerGroupOffsetQuery, ConsumerGroupOffsetTopicResult, CreateAclsEntryResult,
+    CreateAclsResult, CreateDelegationTokenOptions, CreatePartitionsOptions,
     CreatePartitionsResult, CreatePartitionsTopicResult, CreateTopicResult, CreateTopicsOptions,
     CreateTopicsResult, CreatedDelegationToken, DelegationTokenOperationResult,
     DelegationTokenPrincipal, DeleteAclsFilterResult, DeleteAclsResult,
@@ -50,29 +53,44 @@ pub use admin::{
     DeleteRecordsPartition, DeleteRecordsPartitionResult, DeleteRecordsResult, DeleteRecordsTopic,
     DeleteRecordsTopicResult, DeleteShareGroupOffsetsResult, DeleteShareGroupOffsetsTopicResult,
     DeleteShareGroupResult, DeleteTopicResult, DeleteTopicsOptions, DeleteTopicsResult,
-    DeletedAclResult, DescribeAclsResult, DescribeClientQuotasResult, DescribeConfigsOptions,
-    DescribeConfigsResult, DescribeDelegationTokensResult, DescribeLogDirsBrokerResult,
-    DescribeProducersActiveProducer, DescribeProducersPartitionResult, DescribeProducersResult,
-    DescribeProducersTopic, DescribeProducersTopicResult, DescribeQuorumListener,
-    DescribeQuorumNode, DescribeQuorumPartitionResult, DescribeQuorumReplicaState,
-    DescribeQuorumResult, DescribeQuorumTopic, DescribeQuorumTopicResult,
-    DescribeTopicPartitionsCursor, DescribeTopicPartitionsOptions,
-    DescribeTopicPartitionsPartition, DescribeTopicPartitionsResult, DescribeTopicPartitionsTopic,
-    DescribeTransactionsResult, DescribeUserScramCredentialsResult, DescribedDelegationTokenResult,
-    ElectLeadersOptions, ElectLeadersPartitionResult, ElectLeadersResult, ElectLeadersTopicResult,
-    ElectionType, GroupListing, LeaderElection, ListConsumerGroupOffsetsResult,
-    ListPartitionReassignmentsResult, ListShareGroupOffsetsResult, ListTransactionsOptions,
-    ListTransactionsResult, ListedTransaction, LogDirTopic, LogDirectoryPartitionResult,
+    DeletedAclResult, DescribeAclsResult, DescribeClientQuotasResult, DescribeClusterEndpointType,
+    DescribeClusterOptions, DescribeConfigsOptions, DescribeConfigsResult,
+    DescribeDelegationTokensResult, DescribeLogDirsBrokerResult, DescribeProducersActiveProducer,
+    DescribeProducersPartitionResult, DescribeProducersResult, DescribeProducersTopic,
+    DescribeProducersTopicResult, DescribeQuorumListener, DescribeQuorumNode,
+    DescribeQuorumPartitionResult, DescribeQuorumReplicaState, DescribeQuorumResult,
+    DescribeQuorumTopic, DescribeQuorumTopicResult, DescribeTopicPartitionsCursor,
+    DescribeTopicPartitionsOptions, DescribeTopicPartitionsPartition,
+    DescribeTopicPartitionsResult, DescribeTopicPartitionsTopic, DescribeTransactionsResult,
+    DescribeUserScramCredentialsResult, DescribedDelegationTokenResult, ElectLeadersOptions,
+    ElectLeadersPartitionResult, ElectLeadersResult, ElectLeadersTopicResult, ElectionType,
+    FeatureMetadata, FeatureUpdate, FeatureUpdateResult, FeatureUpgradeType, FinalizedFeature,
+    GroupListing, LeaderElection, ListConfigResourcesOptions, ListConfigResourcesResult,
+    ListConsumerGroupOffsetsResult, ListGroupsOptions, ListPartitionReassignmentsResult,
+    ListShareGroupOffsetsResult, ListTransactionsOptions, ListTransactionsResult,
+    ListedConfigResource, ListedTransaction, LogDirTopic, LogDirectoryPartitionResult,
     LogDirectoryResult, LogDirectoryTopicResult, ModernConsumerGroupAssignment,
     ModernConsumerGroupDescription, ModernConsumerGroupMember, ModernConsumerGroupTopicPartitions,
     NewPartitions, NewTopic, OngoingPartitionReassignment, OngoingPartitionReassignmentTopic,
     PartitionReassignment, PartitionReassignmentOptions, PartitionReassignmentPartition,
-    PartitionReassignmentQuery, ReplicaLogDirAssignment, ScramCredentialDeletion,
-    ScramCredentialInfo, ScramCredentialMechanism, ScramCredentialUpsertion, ScramUserCredentials,
-    ShareGroupAssignment, ShareGroupDescription, ShareGroupMember, ShareGroupOffset,
-    ShareGroupOffsetPartitionResult, ShareGroupOffsetQuery, ShareGroupOffsetTopicResult,
-    ShareGroupTopicPartitions, TopicConfigAlteration, TopicConfigResource, TopicConfigUpdate,
-    TopicConfigUpdateEntry, TopicListing, TransactionDescription, TransactionDescriptionTopic,
+    PartitionReassignmentQuery, RaftVoterListener, RaftVoterResult,
+    ReadShareGroupStatePartitionResult, ReadShareGroupStateResult,
+    ReadShareGroupStateSummaryPartitionResult, ReadShareGroupStateSummaryResult,
+    ReadShareGroupStateSummaryTopicResult, ReadShareGroupStateTopicResult, RemoveRaftVoterOptions,
+    ReplicaLogDirAssignment, ScramCredentialDeletion, ScramCredentialInfo,
+    ScramCredentialMechanism, ScramCredentialUpsertion, ScramUserCredentials, ShareGroupAssignment,
+    ShareGroupDescription, ShareGroupMember, ShareGroupOffset, ShareGroupOffsetPartitionResult,
+    ShareGroupOffsetQuery, ShareGroupOffsetTopicResult, ShareGroupStateBatch,
+    ShareGroupStateDeleteTopic, ShareGroupStateInitializePartition, ShareGroupStateInitializeTopic,
+    ShareGroupStatePartitionResult, ShareGroupStateReadPartition, ShareGroupStateReadTopic,
+    ShareGroupStateResult, ShareGroupStateTopicResult, ShareGroupStateWritePartition,
+    ShareGroupStateWriteTopic, ShareGroupTopicPartitions, StreamsGroupAssignment,
+    StreamsGroupDescription, StreamsGroupEndpoint, StreamsGroupKeyValue, StreamsGroupMember,
+    StreamsGroupSubtopology, StreamsGroupTask, StreamsGroupTaskOffset, StreamsGroupTopic,
+    StreamsGroupTopicConfig, StreamsGroupTopology, SupportedFeature, TopicConfigAlteration,
+    TopicConfigResource, TopicConfigUpdate, TopicConfigUpdateEntry, TopicListing,
+    TransactionDescription, TransactionDescriptionTopic, UnregisterBrokerResult,
+    UpdateFeaturesOptions, UpdateFeaturesResult,
 };
 pub use client::Client;
 pub use config::{
@@ -93,14 +111,15 @@ pub use group::{
 pub use kafrust_protocol as protocol;
 pub use metrics::{ClientMetrics, ClientMetricsSnapshot};
 pub use producer::{
-    Acks, BufferedProducer, Compression, Header, Partitioner, ProducerBatchFailure,
-    ProducerBatchRecordOutcome, ProducerBatchReport, ProducerConfig, ProducerDelivery,
-    ProducerRecord, RecordMetadata, TransactionStatus,
+    Acks, BufferedProducer, BufferedProducerHandle, Compression, Header, Partitioner,
+    ProducerBatchFailure, ProducerBatchRecordOutcome, ProducerBatchReport, ProducerConfig,
+    ProducerDelivery, ProducerRecord, RecordMetadata, TransactionStatus,
 };
 pub use share_consumer::{
     ShareAcknowledgementMode, ShareAcknowledgementType, ShareAcquireMode, ShareConsumer,
     ShareConsumerConfig, ShareConsumerHeartbeat, ShareRecord,
 };
+pub use streams::{StreamsGroupConfig, StreamsGroupSession, StreamsGroupSessionAssignment};
 #[cfg(feature = "otlp")]
 pub use telemetry::ClientMetricsTelemetryProvider;
 pub use telemetry::{

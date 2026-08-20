@@ -268,6 +268,16 @@ impl ShareConsumerConfig {
         }
     }
 
+    /// Replaces the shared client configuration used by share-group
+    /// connections.
+    ///
+    /// This is useful when the same bootstrap, controller, security, limits,
+    /// or metrics policy is shared by several kafrust clients.
+    pub fn with_client_config(mut self, client: ClientConfig) -> Self {
+        self.client = client;
+        self
+    }
+
     /// Adds a topic to the share-group subscription.
     pub fn subscribe(mut self, topic: impl Into<String>) -> Self {
         self.topics.push(topic.into());
@@ -337,6 +347,18 @@ impl ShareConsumerConfig {
     /// Adds a DER-encoded TLS root certificate.
     pub fn tls_root_certificate_der(mut self, certificate: impl Into<Vec<u8>>) -> Self {
         self.client = self.client.tls_root_certificate_der(certificate);
+        self
+    }
+
+    /// Adds a DER-encoded client certificate for TLS mutual authentication.
+    pub fn tls_client_certificate_der(mut self, certificate: impl Into<Vec<u8>>) -> Self {
+        self.client = self.client.tls_client_certificate_der(certificate);
+        self
+    }
+
+    /// Sets the DER-encoded private key for TLS mutual authentication.
+    pub fn tls_client_private_key_der(mut self, key: impl Into<Vec<u8>>) -> Self {
+        self.client = self.client.tls_client_private_key_der(key);
         self
     }
 
@@ -520,6 +542,13 @@ impl ShareConsumerConfig {
             });
         }
         Ok(())
+    }
+
+    /// Validates and returns this Share Consumer configuration without opening
+    /// a broker connection.
+    pub fn build_config(self) -> Result<Self> {
+        self.validate()?;
+        Ok(self)
     }
 
     /// Connects, joins the share group, and returns a ready consumer.
@@ -924,6 +953,11 @@ impl ShareConsumer {
     }
 
     /// Closes share sessions and leaves the share group.
+    ///
+    /// An acknowledgement with an unknown broker outcome is never replayed
+    /// during shutdown. Known acknowledgements are completed, sessions and
+    /// group membership are cleaned up, and the unknown outcome is returned
+    /// after cleanup so the caller can record the safety boundary.
     pub async fn close(&mut self) -> Result<()> {
         if self.closed {
             return Ok(());
@@ -934,7 +968,18 @@ impl ShareConsumer {
                 pending.acknowledgement = Some(ShareAcknowledgementType::Release);
             }
         }
-        self.commit_pending_acknowledgements(false).await?;
+        let unknown_acknowledgement = self
+            .pending
+            .values()
+            .find(|pending| pending.acknowledgement_outcome_unknown)
+            .map(|pending| Error::ShareAcknowledgementOutcomeUnknown {
+                broker_id: pending.broker_id,
+            });
+        // Known Release acknowledgements can still be sent during shutdown,
+        // but an acknowledgement whose response was lost must never be
+        // replayed. Preserve that error for the caller after cleanup finishes.
+        self.commit_pending_acknowledgements_with_policy(false, unknown_acknowledgement.is_some())
+            .await?;
 
         let sessions = self
             .share_sessions
@@ -950,7 +995,7 @@ impl ShareConsumer {
             self.leave_share_group().await?;
         }
         self.closed = true;
-        Ok(())
+        unknown_acknowledgement.map_or(Ok(()), Err)
     }
 
     async fn leave_share_group(&mut self) -> Result<()> {
@@ -1025,6 +1070,19 @@ impl ShareConsumer {
 
     async fn prepare_for_poll(&mut self) -> Result<()> {
         if self.pending.is_empty() {
+            return Ok(());
+        }
+        // An acknowledgement response may have been applied by Kafka even
+        // though the client never observed the response. After the caller has
+        // discarded the affected session, allow the next fetch to observe a
+        // broker redelivery instead of turning reconciliation into a loop of
+        // the same unknown-outcome error. `commit()` remains blocked until the
+        // redelivery clears the unknown state.
+        if self
+            .pending
+            .values()
+            .any(|pending| pending.acknowledgement_outcome_unknown)
+        {
             return Ok(());
         }
         if self.config.acknowledgement_mode == ShareAcknowledgementMode::Implicit {
@@ -1519,11 +1577,9 @@ impl ShareConsumer {
                     let Some(acquired) = partition_response.acquired_records.iter().find(|range| {
                         range.first_offset <= message.offset && message.offset <= range.last_offset
                     }) else {
-                        return Err(Error::ShareRecordNotAcquired {
-                            topic: topic_name.clone(),
-                            partition: partition_response.partition_index,
-                            offset: message.offset,
-                        });
+                        // ShareFetch may return a complete record batch while only a subset of
+                        // its offsets is acquired by this consumer.
+                        continue;
                     };
                     let record = ConsumerRecord::from_message_set(
                         &topic_name,
@@ -1587,20 +1643,34 @@ impl ShareConsumer {
     }
 
     async fn commit_pending_acknowledgements(&mut self, renew_via_fetch: bool) -> Result<()> {
+        self.commit_pending_acknowledgements_with_policy(renew_via_fetch, false)
+            .await
+    }
+
+    async fn commit_pending_acknowledgements_with_policy(
+        &mut self,
+        renew_via_fetch: bool,
+        skip_unknown: bool,
+    ) -> Result<()> {
         if self.pending.is_empty() {
             return Ok(());
         }
-        if let Some(pending) = self
-            .pending
-            .values()
-            .find(|pending| pending.acknowledgement_outcome_unknown)
-        {
-            return Err(Error::ShareAcknowledgementOutcomeUnknown {
-                broker_id: pending.broker_id,
-            });
+        if !skip_unknown {
+            if let Some(pending) = self
+                .pending
+                .values()
+                .find(|pending| pending.acknowledgement_outcome_unknown)
+            {
+                return Err(Error::ShareAcknowledgementOutcomeUnknown {
+                    broker_id: pending.broker_id,
+                });
+            }
         }
         let mut grouped = BTreeMap::<i32, BTreeMap<SharePartitionKey, Vec<(i64, i8)>>>::new();
         for (key, pending) in &self.pending {
+            if pending.acknowledgement_outcome_unknown {
+                continue;
+            }
             let Some(acknowledgement) = pending.acknowledgement else {
                 continue;
             };
@@ -2452,6 +2522,10 @@ mod tests {
                 },
             ],
             throttle_time_ms: 0,
+            supported_features: Vec::new(),
+            finalized_features_epoch: -1,
+            finalized_features: Vec::new(),
+            zk_migration_ready: false,
             tagged_fields: Vec::new(),
         };
         assert_eq!(
@@ -2704,7 +2778,101 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn decodes_share_records_and_tracks_acknowledgement_state() {
+    async fn close_finishes_after_an_unknown_acknowledgement_outcome() {
+        const TOPIC_ID: [u8; 16] = [9; 16];
+
+        let config = ShareConsumerConfig::new(["localhost:9092"], "orders").subscribe("orders");
+        let mut consumer = ShareConsumer {
+            config,
+            bootstrap: None,
+            coordinator: None,
+            coordinator_addr: "localhost:9092".to_owned(),
+            broker_clients: BTreeMap::new(),
+            broker_addresses: BTreeMap::new(),
+            share_sessions: BTreeMap::new(),
+            assignment: BTreeSet::new(),
+            topic_names: BTreeMap::from([(TOPIC_ID, "orders".to_owned())]),
+            partition_leaders: BTreeMap::new(),
+            pending: BTreeMap::new(),
+            renewed_records: BTreeMap::new(),
+            member_id: String::new(),
+            member_epoch: -1,
+            next_heartbeat: Instant::now(),
+            heartbeat_interval: Duration::from_secs(1),
+            needs_assignment_heartbeat: false,
+            heartbeat_task: None,
+            share_fetch_version: 1,
+            share_acknowledge_version: 1,
+            acquisition_lock_timeout_ms: None,
+            closed: false,
+        };
+
+        let mut message = Encoder::new();
+        message.write_i32(0);
+        message.write_i8(1);
+        message.write_i8(0);
+        message.write_i64(1234);
+        message.write_nullable_bytes(None).unwrap();
+        message.write_nullable_bytes(Some(b"value")).unwrap();
+        let message = message.into_bytes();
+        let mut records = Encoder::new();
+        records.write_i64(10);
+        records.write_i32(i32::try_from(message.len()).unwrap());
+        records.write_raw(&message);
+        let response = ShareFetchResponseV1 {
+            throttle_time_ms: 0,
+            error_code: 0,
+            error_message: None,
+            acquisition_lock_timeout_ms: 30_000,
+            responses: vec![ShareFetchTopicResponseV1 {
+                topic_id: TOPIC_ID,
+                partitions: vec![ShareFetchPartitionResponseV1 {
+                    partition_index: 0,
+                    error_code: 0,
+                    error_message: None,
+                    acknowledgement_error_code: 0,
+                    acknowledgement_error_message: None,
+                    current_leader: ShareLeaderIdAndEpochV1 {
+                        leader_id: 1,
+                        leader_epoch: 0,
+                    },
+                    records: Some(records.into_bytes()),
+                    acquired_records: vec![ShareAcquiredRecordsV1 {
+                        first_offset: 10,
+                        last_offset: 10,
+                        delivery_count: 1,
+                    }],
+                }],
+            }],
+            node_endpoints: Vec::new(),
+        };
+        let record = consumer
+            .decode_share_records(&response, 1)
+            .unwrap()
+            .remove(0);
+        let key = ShareRecordKey::from_record(&record);
+        consumer
+            .pending
+            .get_mut(&key)
+            .unwrap()
+            .acknowledgement_outcome_unknown = true;
+
+        let error = consumer.close().await.unwrap_err();
+
+        assert!(matches!(
+            error,
+            Error::ShareAcknowledgementOutcomeUnknown { broker_id: 1 }
+        ));
+        assert!(consumer.closed);
+        assert_eq!(consumer.pending_acknowledgement_reconciliation_count(), 1);
+        assert!(matches!(
+            consumer.reconcile_acknowledgement_outcomes().await,
+            Err(Error::Unsupported("share consumer is closed"))
+        ));
+    }
+
+    #[tokio::test]
+    async fn decodes_only_acquired_records_from_a_complete_share_batch() {
         let (stream, _peer) = tokio::io::duplex(1024);
         let config = ShareConsumerConfig::new(["localhost:9092"], "orders").subscribe("orders");
         let mut consumer = ShareConsumer {
@@ -2750,10 +2918,23 @@ mod tests {
         message.write_nullable_bytes(None).unwrap();
         message.write_nullable_bytes(Some(b"value")).unwrap();
         let message = message.into_bytes();
+        let mut unacquired_message = Encoder::new();
+        unacquired_message.write_i32(0);
+        unacquired_message.write_i8(1);
+        unacquired_message.write_i8(0);
+        unacquired_message.write_i64(1235);
+        unacquired_message.write_nullable_bytes(None).unwrap();
+        unacquired_message
+            .write_nullable_bytes(Some(b"unacquired"))
+            .unwrap();
+        let unacquired_message = unacquired_message.into_bytes();
         let mut records = Encoder::new();
         records.write_i64(10);
         records.write_i32(i32::try_from(message.len()).unwrap());
         records.write_raw(&message);
+        records.write_i64(11);
+        records.write_i32(i32::try_from(unacquired_message.len()).unwrap());
+        records.write_raw(&unacquired_message);
 
         let response = ShareFetchResponseV1 {
             throttle_time_ms: 0,
@@ -2830,6 +3011,7 @@ mod tests {
             .acknowledgement_outcome_unknown = true;
         assert_eq!(consumer.pending_acknowledgement_reconciliation_count(), 1);
         consumer.reconcile_acknowledgement_outcomes().await.unwrap();
+        consumer.prepare_for_poll().await.unwrap();
         let mut ambiguous_redelivery = response;
         ambiguous_redelivery.responses[0].partitions[0].acquired_records[0].delivery_count = 4;
         let reconciled = consumer

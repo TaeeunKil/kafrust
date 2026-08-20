@@ -2,8 +2,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use kafrust_protocol::api::fetch::{
     AbortedTransactionV4, FetchPartitionResponseV11, FetchPartitionResponseV12,
-    FetchPartitionResponseV4, FetchResponseV11, FetchResponseV12, FetchResponseV4,
-    MessageSetRecord,
+    FetchPartitionResponseV13, FetchPartitionResponseV4, FetchPartitionV12, FetchResponseV11,
+    FetchResponseV12, FetchResponseV13, FetchResponseV4, FetchTopicV13, MessageSetRecord,
 };
 use kafrust_protocol::api::list_offsets::{
     ListOffsetsPartitionResponseV1, ListOffsetsPartitionV1, ListOffsetsTopicResponseV1,
@@ -288,6 +288,7 @@ pub struct Consumer {
     assignments: Vec<ConsumerAssignment>,
     partition_queues: BTreeMap<(String, i32), mpsc::Sender<ConsumerRecord>>,
     metadata_cache: BTreeMap<String, MetadataResponseV1>,
+    fetch_topic_ids: BTreeMap<String, [u8; 16]>,
     broker_clients: BTreeMap<String, Client>,
     fetch_sessions: BTreeMap<String, FetchSessionState>,
     preferred_read_replicas: BTreeMap<(String, i32), i32>,
@@ -324,6 +325,7 @@ impl Consumer {
             assignments,
             partition_queues: BTreeMap::new(),
             metadata_cache: BTreeMap::new(),
+            fetch_topic_ids: BTreeMap::new(),
             broker_clients: BTreeMap::new(),
             fetch_sessions: BTreeMap::new(),
             preferred_read_replicas: BTreeMap::new(),
@@ -366,6 +368,7 @@ impl Consumer {
         self.assignments = assignments;
         self.restore_assignment_state(&previous_assignments);
         self.metadata_cache.clear();
+        self.fetch_topic_ids.clear();
         self.fetch_sessions.clear();
     }
 
@@ -989,13 +992,66 @@ impl Consumer {
             .copied()
             .unwrap_or_default();
         let (session_id, session_epoch) = session.next_request();
+        let topic_id = if leader_client.supports_fetch_v13().await? {
+            self.topic_id_for_fetch(topic).await?
+        } else {
+            None
+        };
         let (
             error_code,
             preferred_read_replica,
             aborted_transactions,
             records,
             response_session_id,
-        ) = if leader_client.supports_fetch_v12().await? {
+        ) = if let Some(topic_id) = topic_id {
+            let response = leader_client
+                .fetch_v13(
+                    None,
+                    self.config.max_wait_ms,
+                    self.config.min_bytes,
+                    self.config.max_partition_bytes,
+                    self.config.isolation_level.as_i8(),
+                    session_id,
+                    session_epoch,
+                    vec![FetchTopicV13 {
+                        topic_id,
+                        partitions: vec![FetchPartitionV12 {
+                            partition_index: partition,
+                            current_leader_epoch,
+                            fetch_offset: offset,
+                            last_fetched_epoch: current_leader_epoch,
+                            log_start_offset: -1,
+                            max_bytes: self.config.max_partition_bytes,
+                        }],
+                    }],
+                    Vec::new(),
+                    rack_id,
+                )
+                .await?;
+            if response.error_code != 0 {
+                self.fetch_sessions.remove(&broker_addr);
+                self.fetch_topic_ids.remove(topic);
+                return Err(self.config.client.broker_error(
+                    response.error_code,
+                    format!("fetch {topic}-{partition}@{offset}"),
+                ));
+            }
+            let partition_response = fetch_partition_response_v13(&response, topic_id, partition)?;
+            (
+                partition_response.error_code,
+                Some(partition_response.preferred_read_replica),
+                partition_response
+                    .aborted_transactions
+                    .iter()
+                    .map(|transaction| AbortedTransactionV4 {
+                        producer_id: transaction.producer_id,
+                        first_offset: transaction.first_offset,
+                    })
+                    .collect(),
+                partition_response.records.clone(),
+                response.session_id,
+            )
+        } else if leader_client.supports_fetch_v12().await? {
             let response = leader_client
                 .fetch_one_v12(FetchOneRequestV12 {
                     replica_id: -1,
@@ -1094,6 +1150,7 @@ impl Consumer {
         };
         if error_code != 0 {
             self.fetch_sessions.remove(&broker_addr);
+            self.fetch_topic_ids.remove(topic);
             return Err(self
                 .config
                 .client
@@ -1186,6 +1243,48 @@ impl Consumer {
         self.metadata_cache
             .insert(topic.to_owned(), metadata.clone());
         Ok(metadata)
+    }
+
+    async fn topic_id_for_fetch(&mut self, topic: &str) -> Result<Option<[u8; 16]>> {
+        if let Some(topic_id) = self.fetch_topic_ids.get(topic) {
+            return Ok(Some(*topic_id));
+        }
+        if !self.client.supports_metadata_v12().await? {
+            return Ok(None);
+        }
+
+        let request = Some(vec![MetadataRequestTopicV12 {
+            topic_id: [0; 16],
+            name: Some(topic.to_owned()),
+        }]);
+        let metadata = match self.client.metadata_v12(request.clone()).await {
+            Ok(metadata) => metadata,
+            Err(error) if can_retry_fetch(&error) => {
+                self.config.client.record_retry();
+                self.client = self.config.client.clone().connect().await?;
+                self.client.metadata_v12(request).await?
+            }
+            Err(error) => return Err(error),
+        };
+        let topic_metadata = metadata
+            .topics
+            .iter()
+            .find(|metadata| metadata.name.as_deref() == Some(topic))
+            .ok_or_else(|| Error::UnknownTopicOrPartition {
+                topic: topic.to_owned(),
+                partition: -1,
+            })?;
+        if topic_metadata.error_code != 0 {
+            return Err(self
+                .config
+                .client
+                .broker_error(topic_metadata.error_code, format!("metadata topic {topic}")));
+        }
+        let topic_id = (topic_metadata.topic_id != [0; 16]).then_some(topic_metadata.topic_id);
+        if let Some(topic_id) = topic_id {
+            self.fetch_topic_ids.insert(topic.to_owned(), topic_id);
+        }
+        Ok(topic_id)
     }
 
     async fn connect_or_reuse_broker(&mut self, broker_addr: &str) -> Result<Client> {
@@ -1343,6 +1442,15 @@ impl ConsumerConfig {
         }
     }
 
+    /// Replaces the shared client configuration used by consumer connections.
+    ///
+    /// This is useful when the same bootstrap, controller, security, limits,
+    /// or metrics policy is shared by several kafrust clients.
+    pub fn with_client_config(mut self, client: ClientConfig) -> Self {
+        self.client = client;
+        self
+    }
+
     /// Sets the Kafka client ID used by consumer requests.
     pub fn client_id(mut self, client_id: impl Into<String>) -> Self {
         self.client = self.client.client_id(client_id);
@@ -1400,6 +1508,18 @@ impl ConsumerConfig {
     /// Adds a DER-encoded TLS root certificate for consumer broker validation.
     pub fn tls_root_certificate_der(mut self, certificate: impl Into<Vec<u8>>) -> Self {
         self.client = self.client.tls_root_certificate_der(certificate);
+        self
+    }
+
+    /// Adds a DER-encoded client certificate for TLS mutual authentication.
+    pub fn tls_client_certificate_der(mut self, certificate: impl Into<Vec<u8>>) -> Self {
+        self.client = self.client.tls_client_certificate_der(certificate);
+        self
+    }
+
+    /// Sets the DER-encoded private key for TLS mutual authentication.
+    pub fn tls_client_private_key_der(mut self, key: impl Into<Vec<u8>>) -> Self {
+        self.client = self.client.tls_client_private_key_der(key);
         self
     }
 
@@ -1560,6 +1680,13 @@ impl ConsumerConfig {
         self.validate_values()
     }
 
+    /// Validates and returns this consumer configuration without opening a
+    /// broker connection.
+    pub fn build_config(self) -> Result<Self> {
+        self.validate()?;
+        Ok(self)
+    }
+
     /// Connects to Kafka and builds a direct consumer.
     pub async fn build(self) -> Result<Consumer> {
         self.validate()?;
@@ -1570,6 +1697,7 @@ impl ConsumerConfig {
             assignments: Vec::new(),
             partition_queues: BTreeMap::new(),
             metadata_cache: BTreeMap::new(),
+            fetch_topic_ids: BTreeMap::new(),
             broker_clients: BTreeMap::new(),
             fetch_sessions: BTreeMap::new(),
             preferred_read_replicas: BTreeMap::new(),
@@ -1706,6 +1834,27 @@ fn fetch_partition_response_v12<'a>(
         })
         .ok_or_else(|| Error::UnknownTopicOrPartition {
             topic: topic_name.to_owned(),
+            partition: partition_index,
+        })
+}
+
+fn fetch_partition_response_v13(
+    response: &FetchResponseV13,
+    topic_id: [u8; 16],
+    partition_index: i32,
+) -> Result<&FetchPartitionResponseV13> {
+    response
+        .responses
+        .iter()
+        .find(|topic| topic.topic_id == topic_id)
+        .and_then(|topic| {
+            topic
+                .partitions
+                .iter()
+                .find(|partition| partition.partition_index == partition_index)
+        })
+        .ok_or_else(|| Error::UnknownTopicOrPartition {
+            topic: format!("topic-id-{topic_id:02x?}"),
             partition: partition_index,
         })
 }
@@ -2389,6 +2538,93 @@ mod tests {
 
         assert!(consumer.poll().await.unwrap().is_empty());
         assert_eq!(consumer.assignments()[0].leader_epoch(), 8);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn selects_fetch_v13_when_topic_uuid_is_cached() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut socket).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut socket, &api_versions_v3_fetch_v13_response(1)).await;
+
+            let fetch_request = read_frame(&mut socket).await;
+            assert_eq!(&fetch_request[0..4], &[0, 1, 0, 13]);
+            assert!(fetch_request.windows(16).any(|window| window == [7; 16]));
+            write_frame(&mut socket, &fetch_v13_response_frame(2, [7; 16])).await;
+        });
+        let (client_stream, broker_stream) = tokio::io::duplex(64);
+        let _broker_stream = broker_stream;
+        let client = Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-fetch-v13-selection-test".to_owned()),
+            Some(std::time::Duration::from_millis(500)),
+        );
+        let config = ConsumerConfig::new([addr.to_string()]).request_timeout_ms(500);
+        let mut consumer = Consumer::from_assignments(
+            client,
+            config,
+            vec![ConsumerAssignment::new("orders".to_owned(), 0, 42)],
+        );
+        let mut metadata = metadata_fixture();
+        metadata.brokers[0].host = addr.ip().to_string();
+        metadata.brokers[0].port = i32::from(addr.port());
+        consumer
+            .metadata_cache
+            .insert("orders".to_owned(), metadata);
+        consumer
+            .fetch_topic_ids
+            .insert("orders".to_owned(), [7; 16]);
+
+        assert!(consumer.poll().await.unwrap().is_empty());
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn resolves_topic_uuid_before_selecting_fetch_v13() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(2048);
+        let server = tokio::spawn(async move {
+            let api_versions_request = read_frame(&mut broker_stream).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            let api_versions_correlation =
+                i32::from_be_bytes(api_versions_request[4..8].try_into().unwrap());
+            write_frame(
+                &mut broker_stream,
+                &api_versions_v3_metadata_fetch_response(api_versions_correlation, 13),
+            )
+            .await;
+
+            let metadata_request = read_frame(&mut broker_stream).await;
+            assert_eq!(&metadata_request[0..4], &[0, 3, 0, 12]);
+            let metadata_correlation =
+                i32::from_be_bytes(metadata_request[4..8].try_into().unwrap());
+            let broker_addr = "127.0.0.1:9092".parse().unwrap();
+            write_frame(
+                &mut broker_stream,
+                &metadata_v12_response_frame_with_topic_id(
+                    metadata_correlation,
+                    &broker_addr,
+                    5,
+                    [7; 16],
+                ),
+            )
+            .await;
+        });
+        let client = Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-fetch-v13-metadata-test".to_owned()),
+            Some(std::time::Duration::from_millis(500)),
+        );
+        let config = ConsumerConfig::new(["localhost:9092"]).request_timeout_ms(500);
+        let mut consumer = Consumer::from_assignments(client, config, Vec::new());
+
+        assert_eq!(
+            consumer.topic_id_for_fetch("orders").await.unwrap(),
+            Some([7; 16])
+        );
         server.await.unwrap();
     }
 
@@ -3270,6 +3506,10 @@ mod tests {
         api_versions_v3_fetch_response(correlation_id, 12)
     }
 
+    fn api_versions_v3_fetch_v13_response(correlation_id: i32) -> Vec<u8> {
+        api_versions_v3_fetch_response(correlation_id, 13)
+    }
+
     fn api_versions_v3_fetch_response(correlation_id: i32, max_version: i16) -> Vec<u8> {
         let mut response = Encoder::new();
         response.write_i32(correlation_id);
@@ -3358,6 +3598,30 @@ mod tests {
         response.write_i64(42);
         response.write_unsigned_varint(1); // no aborted transactions
         response.write_i32(preferred_read_replica);
+        response.write_compact_nullable_bytes(Some(&[])).unwrap();
+        response.write_unsigned_varint(0); // partition tags
+        response.write_unsigned_varint(0); // topic tags
+        response.write_unsigned_varint(0); // response tags
+        response.into_bytes()
+    }
+
+    fn fetch_v13_response_frame(correlation_id: i32, topic_id: [u8; 16]) -> Vec<u8> {
+        let mut response = Encoder::new();
+        response.write_i32(correlation_id);
+        response.write_unsigned_varint(0); // response header tags
+        response.write_i32(0); // throttle time
+        response.write_i16(0); // top-level error
+        response.write_i32(0); // fetch session id
+        response.write_unsigned_varint(2); // one compact topic
+        response.write_uuid(&topic_id);
+        response.write_unsigned_varint(2); // one compact partition
+        response.write_i32(0);
+        response.write_i16(0);
+        response.write_i64(43);
+        response.write_i64(43);
+        response.write_i64(42);
+        response.write_unsigned_varint(1); // no aborted transactions
+        response.write_i32(-1); // preferred read replica
         response.write_compact_nullable_bytes(Some(&[])).unwrap();
         response.write_unsigned_varint(0); // partition tags
         response.write_unsigned_varint(0); // topic tags
@@ -3529,6 +3793,15 @@ mod tests {
         addr: &std::net::SocketAddr,
         leader_epoch: i32,
     ) -> Vec<u8> {
+        metadata_v12_response_frame_with_topic_id(correlation_id, addr, leader_epoch, [0; 16])
+    }
+
+    fn metadata_v12_response_frame_with_topic_id(
+        correlation_id: i32,
+        addr: &std::net::SocketAddr,
+        leader_epoch: i32,
+        topic_id: [u8; 16],
+    ) -> Vec<u8> {
         let mut response = Encoder::new();
         response.write_i32(correlation_id);
         response.write_unsigned_varint(0); // response header tags
@@ -3548,7 +3821,7 @@ mod tests {
         response
             .write_compact_nullable_string(Some("orders"))
             .unwrap();
-        response.write_uuid(&[0; 16]);
+        response.write_uuid(&topic_id);
         response.write_i8(0); // internal
         response.write_unsigned_varint(2); // one compact partition
         response.write_i16(0);

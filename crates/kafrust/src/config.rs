@@ -272,7 +272,7 @@ impl fmt::Debug for SaslCredentials {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 /// Connection settings shared by low-level clients, producers, and consumers.
 pub struct ClientConfig {
     bootstrap_servers: Vec<String>,
@@ -285,8 +285,46 @@ pub struct ClientConfig {
     security_protocol: SecurityProtocol,
     tls_server_name: Option<String>,
     tls_root_certificates_der: Vec<Vec<u8>>,
+    tls_client_certificates_der: Vec<Vec<u8>>,
+    tls_client_private_key_der: Option<Vec<u8>>,
     sasl_credentials: Option<SaslCredentials>,
     metrics: ClientMetrics,
+}
+
+impl fmt::Debug for ClientConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ClientConfig")
+            .field("bootstrap_servers", &self.bootstrap_servers)
+            .field(
+                "controller_bootstrap_servers",
+                &self.controller_bootstrap_servers,
+            )
+            .field("client_id", &self.client_id)
+            .field("client_rack", &self.client_rack)
+            .field("request_timeout", &self.request_timeout)
+            .field("max_response_bytes", &self.max_response_bytes)
+            .field("decode_limits", &self.decode_limits)
+            .field("security_protocol", &self.security_protocol)
+            .field("tls_server_name", &self.tls_server_name)
+            .field(
+                "tls_root_certificate_count",
+                &self.tls_root_certificates_der.len(),
+            )
+            .field(
+                "tls_client_certificate_count",
+                &self.tls_client_certificates_der.len(),
+            )
+            .field(
+                "tls_client_private_key_der",
+                &self
+                    .tls_client_private_key_der
+                    .as_ref()
+                    .map(|_| "<redacted>"),
+            )
+            .field("sasl_credentials", &self.sasl_credentials)
+            .field("metrics", &self.metrics)
+            .finish()
+    }
 }
 
 impl ClientConfig {
@@ -303,6 +341,8 @@ impl ClientConfig {
             security_protocol: SecurityProtocol::Plaintext,
             tls_server_name: None,
             tls_root_certificates_der: Vec::new(),
+            tls_client_certificates_der: Vec::new(),
+            tls_client_private_key_der: None,
             sasl_credentials: None,
             metrics: ClientMetrics::new(),
         }
@@ -393,6 +433,29 @@ impl ClientConfig {
     /// or [`SecurityProtocol::SaslTls`] is used. Platform roots are still used.
     pub fn tls_root_certificate_der(mut self, certificate: impl Into<Vec<u8>>) -> Self {
         self.tls_root_certificates_der.push(certificate.into());
+        self
+    }
+
+    /// Adds a DER-encoded client certificate to the TLS certificate chain.
+    ///
+    /// The matching private key must be configured with
+    /// [`Self::tls_client_private_key_der`]. The certificate chain is sent
+    /// only for [`SecurityProtocol::Tls`] and [`SecurityProtocol::SaslTls`]
+    /// connections. The bytes are retained as configuration material and are
+    /// never included in `Debug` output.
+    pub fn tls_client_certificate_der(mut self, certificate: impl Into<Vec<u8>>) -> Self {
+        self.tls_client_certificates_der.push(certificate.into());
+        self
+    }
+
+    /// Sets the DER-encoded private key used for TLS client authentication.
+    ///
+    /// The key may use one of the formats accepted by
+    /// `rustls-pki-types::PrivateKeyDer` (PKCS#1, PKCS#8, or SEC1). A client
+    /// certificate must also be configured with
+    /// [`Self::tls_client_certificate_der`].
+    pub fn tls_client_private_key_der(mut self, key: impl Into<Vec<u8>>) -> Self {
+        self.tls_client_private_key_der = Some(key.into());
         self
     }
 
@@ -543,6 +606,18 @@ impl ClientConfig {
         &self.tls_root_certificates_der
     }
 
+    /// Returns configured DER-encoded TLS client certificates.
+    pub fn tls_client_certificates_der(&self) -> &[Vec<u8>] {
+        &self.tls_client_certificates_der
+    }
+
+    /// Returns whether a TLS client private key is configured.
+    ///
+    /// The key bytes are intentionally not exposed through a public accessor.
+    pub fn has_tls_client_private_key(&self) -> bool {
+        self.tls_client_private_key_der.is_some()
+    }
+
     /// Returns the configured SASL credentials, when present.
     pub fn sasl_credentials_ref(&self) -> Option<&SaslCredentials> {
         self.sasl_credentials.as_ref()
@@ -621,6 +696,45 @@ impl ClientConfig {
         {
             return Err(Error::InvalidTlsServerName {
                 server: self.tls_server_name.clone().unwrap_or_default(),
+            });
+        }
+        let has_client_certificates = !self.tls_client_certificates_der.is_empty();
+        let has_client_key = self.tls_client_private_key_der.is_some();
+        if has_client_certificates != has_client_key {
+            return Err(Error::InvalidConfiguration {
+                field: if has_client_certificates {
+                    "tls_client_private_key_der"
+                } else {
+                    "tls_client_certificates_der"
+                },
+                reason: "client certificate and private key must be configured together",
+            });
+        }
+        if self.tls_client_certificates_der.iter().any(Vec::is_empty) {
+            return Err(Error::InvalidConfiguration {
+                field: "tls_client_certificates_der",
+                reason: "entries must not be empty",
+            });
+        }
+        if self
+            .tls_client_private_key_der
+            .as_deref()
+            .is_some_and(<[u8]>::is_empty)
+        {
+            return Err(Error::InvalidConfiguration {
+                field: "tls_client_private_key_der",
+                reason: "must not be empty",
+            });
+        }
+        if (has_client_certificates || has_client_key)
+            && !matches!(
+                self.security_protocol,
+                SecurityProtocol::Tls | SecurityProtocol::SaslTls
+            )
+        {
+            return Err(Error::InvalidConfiguration {
+                field: "security_protocol",
+                reason: "TLS client authentication requires TLS or SASL_SSL",
             });
         }
         Ok(())
@@ -720,7 +834,7 @@ impl ClientConfig {
 
     #[cfg(feature = "tls")]
     async fn connect_tls_broker(&self, server: String) -> Result<Client> {
-        use rustls::pki_types::{CertificateDer, ServerName};
+        use rustls::pki_types::{CertificateDer, PrivateKeyDer, ServerName};
         use rustls_platform_verifier::{BuilderVerifierExt, Verifier};
         use tokio_rustls::TlsConnector;
 
@@ -758,7 +872,37 @@ impl ClientConfig {
                 .dangerous()
                 .with_custom_certificate_verifier(Arc::new(verifier))
         };
-        let tls_config = tls_builder.with_no_client_auth();
+        let tls_config = match (
+            self.tls_client_certificates_der.is_empty(),
+            self.tls_client_private_key_der.as_ref(),
+        ) {
+            (true, None) => tls_builder.with_no_client_auth(),
+            (false, Some(private_key)) => {
+                let certificates = self
+                    .tls_client_certificates_der
+                    .iter()
+                    .cloned()
+                    .map(CertificateDer::from)
+                    .collect::<Vec<_>>();
+                let private_key =
+                    PrivateKeyDer::try_from(private_key.clone()).map_err(|error| {
+                        Error::TlsConfig {
+                            reason: format!("failed to parse TLS client private key: {error}"),
+                        }
+                    })?;
+                tls_builder
+                    .with_client_auth_cert(certificates, private_key)
+                    .map_err(|error| Error::TlsConfig {
+                        reason: format!("failed to configure TLS client authentication: {error}"),
+                    })?
+            }
+            _ => {
+                return Err(Error::InvalidConfiguration {
+                    field: "tls_client_certificates_der",
+                    reason: "client certificate and private key must be configured together",
+                });
+            }
+        };
 
         let tcp_stream = tokio::net::TcpStream::connect(server.as_str()).await?;
         let tls_stream = TlsConnector::from(Arc::new(tls_config))
@@ -1057,6 +1201,78 @@ mod tests {
             4 * 1024 * 1024
         );
         assert_eq!(config.security_protocol_ref(), SecurityProtocol::Plaintext);
+    }
+
+    #[test]
+    fn stores_tls_client_authentication_material_without_debugging_secrets() {
+        let config = ClientConfig::new(["broker.example.com:9093"])
+            .security_protocol(SecurityProtocol::Tls)
+            .tls_client_certificate_der([1, 2, 3])
+            .tls_client_certificate_der([4, 5])
+            .tls_client_private_key_der([9, 8, 7]);
+
+        assert!(config.validate().is_ok());
+        assert_eq!(
+            config.tls_client_certificates_der(),
+            &[vec![1, 2, 3], vec![4, 5]]
+        );
+        assert!(config.has_tls_client_private_key());
+
+        let debug = format!("{config:?}");
+        assert!(!debug.contains("[1, 2, 3]"));
+        assert!(!debug.contains("[9, 8, 7]"));
+        assert!(debug.contains("<redacted>"));
+    }
+
+    #[test]
+    fn rejects_incomplete_or_inapplicable_tls_client_authentication() {
+        let cases = [
+            (
+                ClientConfig::new(["broker:9092"])
+                    .tls_client_certificate_der([1])
+                    .validate(),
+                "tls_client_private_key_der",
+            ),
+            (
+                ClientConfig::new(["broker:9092"])
+                    .tls_client_private_key_der([1])
+                    .validate(),
+                "tls_client_certificates_der",
+            ),
+            (
+                ClientConfig::new(["broker:9092"])
+                    .tls_client_certificate_der([1])
+                    .tls_client_private_key_der([2])
+                    .validate(),
+                "security_protocol",
+            ),
+            (
+                ClientConfig::new(["broker:9092"])
+                    .security_protocol(SecurityProtocol::Tls)
+                    .tls_client_certificate_der([])
+                    .tls_client_private_key_der([2])
+                    .validate(),
+                "tls_client_certificates_der",
+            ),
+            (
+                ClientConfig::new(["broker:9092"])
+                    .security_protocol(SecurityProtocol::Tls)
+                    .tls_client_certificate_der([1])
+                    .tls_client_private_key_der([])
+                    .validate(),
+                "tls_client_private_key_der",
+            ),
+        ];
+
+        for (result, field) in cases {
+            assert!(matches!(
+                result,
+                Err(Error::InvalidConfiguration {
+                    field: actual,
+                    ..
+                }) if actual == field
+            ));
+        }
     }
 
     #[test]

@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::future::Future;
 use std::time::Duration;
@@ -18,6 +18,7 @@ use kafrust_protocol::api::alter_replica_log_dirs::{
 use kafrust_protocol::api::alter_user_scram_credentials::{
     AlterUserScramCredentialsDeletionV0, AlterUserScramCredentialsUpsertionV0,
 };
+use kafrust_protocol::api::api_versions::ApiVersionsResponseV3;
 use kafrust_protocol::api::consumer_group_describe::{
     ConsumerGroupDescribeAssignment, ConsumerGroupDescribeResponseV0,
     ConsumerGroupDescribeResponseV1, ConsumerGroupDescribeTopicPartitions, DescribedConsumerGroup,
@@ -48,9 +49,11 @@ use kafrust_protocol::api::describe_client_quotas::{
     DescribeClientQuotasComponentV0, DescribeClientQuotasEntityV0, DescribeClientQuotasEntryV0,
     DescribeClientQuotasResponseV0, DescribeClientQuotasValueV0,
 };
+use kafrust_protocol::api::describe_cluster::DescribeClusterResponse;
 use kafrust_protocol::api::describe_configs::{
-    DescribeConfigsEntryV1, DescribeConfigsResourceV1, DescribeConfigsResultV1,
-    DescribeConfigsSynonymV1,
+    DescribeConfigsEntryV1, DescribeConfigsEntryV4, DescribeConfigsResourceV1,
+    DescribeConfigsResourceV4, DescribeConfigsResultV1, DescribeConfigsResultV4,
+    DescribeConfigsSynonymV1, DescribeConfigsSynonymV4,
 };
 use kafrust_protocol::api::describe_groups::{DescribeGroupsGroupV1, DescribeGroupsMemberV1};
 use kafrust_protocol::api::describe_log_dirs::{DescribeLogDirsResponse, DescribeLogDirsTopic};
@@ -79,12 +82,19 @@ use kafrust_protocol::api::incremental_alter_configs::{
     IncrementalAlterConfigsEntryV0, IncrementalAlterConfigsResourceResponseV0,
     IncrementalAlterConfigsResourceV0,
 };
-use kafrust_protocol::api::list_groups::ListedGroupV1;
+use kafrust_protocol::api::list_config_resources::ListedConfigResourceV1;
+use kafrust_protocol::api::list_groups::{
+    ListGroupsResponseV1, ListGroupsResponseV4, ListGroupsResponseV5, ListedGroupV1, ListedGroupV4,
+    ListedGroupV5, API_KEY as LIST_GROUPS_API_KEY,
+};
 use kafrust_protocol::api::list_partition_reassignments::ListPartitionReassignmentsTopicV0;
 use kafrust_protocol::api::list_transactions::ListedTransactionV0;
-use kafrust_protocol::api::metadata::{BrokerMetadata, MetadataResponseV1, TopicMetadata};
+use kafrust_protocol::api::metadata::{
+    BrokerMetadata, MetadataRequestTopicV12, MetadataResponseV1, TopicMetadata,
+};
 use kafrust_protocol::api::offset_commit::{
-    OffsetCommitPartition, OffsetCommitPartitionV9, OffsetCommitTopic, OffsetCommitTopicResponse,
+    OffsetCommitPartition, OffsetCommitPartitionV10, OffsetCommitPartitionV9,
+    OffsetCommitResponseV10, OffsetCommitTopic, OffsetCommitTopicResponse, OffsetCommitTopicV10,
     OffsetCommitTopicV9,
 };
 use kafrust_protocol::api::offset_delete::{
@@ -92,7 +102,11 @@ use kafrust_protocol::api::offset_delete::{
     OffsetDeleteResponseTopicV0,
 };
 use kafrust_protocol::api::offset_fetch::{
-    OffsetFetchGroupResponse, OffsetFetchTopic, OffsetFetchTopicResponse, OffsetFetchTopicV9,
+    OffsetFetchGroupResponse, OffsetFetchResponseV10, OffsetFetchTopic, OffsetFetchTopicResponse,
+    OffsetFetchTopicV10, OffsetFetchTopicV9,
+};
+use kafrust_protocol::api::raft_voter::{
+    AddRaftVoterResponse, RaftVoterListener as ProtocolRaftVoterListener,
 };
 use kafrust_protocol::api::share_group_describe::{
     DescribedShareGroup, DescribedShareGroupMember, ShareGroupDescribeAssignment,
@@ -104,6 +118,33 @@ use kafrust_protocol::api::share_group_offsets::{
     DeleteShareGroupOffsetsResponseV0, DeleteShareGroupOffsetsTopicResultV0,
     DeleteShareGroupOffsetsTopicV0,
 };
+use kafrust_protocol::api::share_group_state::{
+    DeleteShareGroupStateTopic, InitializeShareGroupStatePartition, InitializeShareGroupStateTopic,
+    ReadShareGroupStatePartition, ReadShareGroupStateResponseV0,
+    ReadShareGroupStateSummaryResponseV0, ReadShareGroupStateSummaryResponseV1,
+    ReadShareGroupStateSummaryTopicResult as ProtocolShareGroupStateSummaryTopicResult,
+    ReadShareGroupStateTopic, ShareGroupStateBatch as ProtocolShareGroupStateBatch,
+    ShareGroupStatePartitionResult as ProtocolShareGroupStatePartitionResult,
+    ShareGroupStateResultResponse,
+    ShareGroupStateTopicResult as ProtocolShareGroupStateTopicResult,
+    WriteShareGroupStatePartitionV0, WriteShareGroupStatePartitionV1, WriteShareGroupStateTopicV0,
+    WriteShareGroupStateTopicV1,
+};
+use kafrust_protocol::api::streams_group_describe::{
+    DescribedStreamsGroup as ProtocolDescribedStreamsGroup,
+    DescribedStreamsGroupMember as ProtocolDescribedStreamsGroupMember,
+    StreamsGroupAssignment as ProtocolStreamsGroupAssignment,
+    StreamsGroupEndpoint as ProtocolStreamsGroupEndpoint,
+    StreamsGroupKeyValue as ProtocolStreamsGroupKeyValue,
+    StreamsGroupSubtopology as ProtocolStreamsGroupSubtopology,
+    StreamsGroupTask as ProtocolStreamsGroupTask,
+    StreamsGroupTaskOffset as ProtocolStreamsGroupTaskOffset,
+    StreamsGroupTopic as ProtocolStreamsGroupTopic,
+    StreamsGroupTopicConfig as ProtocolStreamsGroupTopicConfig,
+    StreamsGroupTopology as ProtocolStreamsGroupTopology,
+};
+use kafrust_protocol::api::unregister_broker::UnregisterBrokerResponseV0;
+use kafrust_protocol::api::update_features::UpdateFeaturesResponseV0;
 
 use crate::client::Client;
 use crate::config::ClientConfig;
@@ -115,6 +156,102 @@ use rand::RngCore;
 const ADMIN_COORDINATOR_MAX_RETRIES: u32 = 5;
 const ADMIN_COORDINATOR_RETRY_BACKOFF_BASE: Duration = Duration::from_millis(50);
 const ADMIN_COORDINATOR_MAX_RETRY_BACKOFF: Duration = Duration::from_millis(800);
+
+struct MemberOffsetFetchV10Request {
+    group_id: String,
+    member_id: Option<String>,
+    member_epoch: i32,
+    topics: Vec<OffsetFetchTopicV10>,
+    topic_names: BTreeMap<[u8; 16], String>,
+    require_stable: bool,
+}
+
+struct MemberOffsetCommitV10Request {
+    group_id: String,
+    member_id: String,
+    member_epoch: i32,
+    group_instance_id: Option<String>,
+    topics: Vec<OffsetCommitTopicV10>,
+    topic_names: BTreeMap<[u8; 16], String>,
+}
+
+enum ListGroupsResponse {
+    V1(ListGroupsResponseV1),
+    V4(ListGroupsResponseV4),
+    V5(ListGroupsResponseV5),
+}
+
+impl ListGroupsResponse {
+    fn error_code(&self) -> i16 {
+        match self {
+            Self::V1(response) => response.error_code,
+            Self::V4(response) => response.error_code,
+            Self::V5(response) => response.error_code,
+        }
+    }
+
+    fn throttle_time_ms(&self) -> i32 {
+        match self {
+            Self::V1(response) => response.throttle_time_ms,
+            Self::V4(response) => response.throttle_time_ms,
+            Self::V5(response) => response.throttle_time_ms,
+        }
+    }
+
+    fn api_version(&self) -> i16 {
+        match self {
+            Self::V1(_) => 1,
+            Self::V4(_) => 4,
+            Self::V5(_) => 5,
+        }
+    }
+
+    fn into_group_listings(
+        self,
+        coordinator_id: i32,
+        throttle_time: Duration,
+    ) -> Vec<GroupListing> {
+        let api_version = self.api_version();
+        match self {
+            Self::V1(response) => response
+                .groups
+                .into_iter()
+                .map(|group| {
+                    GroupListing::from_protocol_v1(
+                        group,
+                        coordinator_id,
+                        throttle_time,
+                        api_version,
+                    )
+                })
+                .collect(),
+            Self::V4(response) => response
+                .groups
+                .into_iter()
+                .map(|group| {
+                    GroupListing::from_protocol_v4(
+                        group,
+                        coordinator_id,
+                        throttle_time,
+                        api_version,
+                    )
+                })
+                .collect(),
+            Self::V5(response) => response
+                .groups
+                .into_iter()
+                .map(|group| {
+                    GroupListing::from_protocol_v5(
+                        group,
+                        coordinator_id,
+                        throttle_time,
+                        api_version,
+                    )
+                })
+                .collect(),
+        }
+    }
+}
 
 fn admin_mutation_error(client: &Client, operation: &'static str, error: Error) -> Error {
     if client.last_request_may_have_been_transmitted()
@@ -156,6 +293,13 @@ impl AdminClient {
     /// connection.
     pub fn validate(&self) -> Result<()> {
         self.config.validate()
+    }
+
+    /// Validates and returns this admin client without opening a broker
+    /// connection.
+    pub fn build_config(self) -> Result<Self> {
+        self.validate()?;
+        Ok(self)
     }
 
     /// Sets the maximum retry attempts for transient coordinator discovery and
@@ -224,19 +368,586 @@ impl AdminClient {
         }
     }
 
+    async fn resolve_topic_ids_from_metadata(
+        &self,
+        coordinator: &mut Client,
+        requested_names: Option<&[String]>,
+    ) -> Result<Option<BTreeMap<String, [u8; 16]>>> {
+        if !coordinator.supports_metadata_v12().await? {
+            return Ok(None);
+        }
+
+        let request_topics = requested_names.map(|names| {
+            names
+                .iter()
+                .map(|name| MetadataRequestTopicV12 {
+                    topic_id: [0; 16],
+                    name: Some(name.clone()),
+                })
+                .collect::<Vec<_>>()
+        });
+        let response = coordinator.metadata_v12(request_topics).await?;
+        if response.topics.iter().any(|topic| topic.error_code != 0) {
+            return Ok(None);
+        }
+
+        let mut topic_ids = BTreeMap::new();
+        let mut names_by_topic_id = BTreeMap::new();
+        for topic in response.topics {
+            let Some(name) = topic.name else {
+                continue;
+            };
+            if topic.topic_id == [0; 16] {
+                continue;
+            }
+            if let Some(previous) = names_by_topic_id.insert(topic.topic_id, name.clone()) {
+                if previous != name {
+                    return Ok(None);
+                }
+            }
+            if let Some(previous) = topic_ids.insert(name, topic.topic_id) {
+                if previous != topic.topic_id {
+                    return Ok(None);
+                }
+            }
+        }
+
+        if requested_names
+            .is_some_and(|names| names.iter().any(|name| !topic_ids.contains_key(name)))
+        {
+            return Ok(None);
+        }
+        Ok(Some(topic_ids))
+    }
+
+    async fn offset_fetch_topics_v10_with_metadata(
+        &self,
+        coordinator: &mut Client,
+        topics: Option<&[ConsumerGroupOffsetQuery]>,
+    ) -> Result<Option<(Option<Vec<OffsetFetchTopicV10>>, BTreeMap<[u8; 16], String>)>> {
+        let Some(topics) = topics else {
+            let topic_ids = self
+                .resolve_topic_ids_from_metadata(coordinator, None)
+                .await?;
+            return Ok(topic_ids.map(|topic_ids| {
+                (
+                    None,
+                    topic_ids
+                        .into_iter()
+                        .map(|(name, topic_id)| (topic_id, name))
+                        .collect(),
+                )
+            }));
+        };
+
+        if let Some(request_topics) = offset_fetch_topics_v10(Some(topics)) {
+            return Ok(Some((
+                Some(request_topics),
+                topic_names_by_id_from_queries(topics),
+            )));
+        }
+
+        let mut topic_ids_by_name = BTreeMap::new();
+        let mut missing_names = BTreeSet::new();
+        for topic in topics {
+            if let Some(topic_id) = nonzero_topic_id(topic.topic_id) {
+                if let Some(previous) = topic_ids_by_name.insert(topic.topic.clone(), topic_id) {
+                    if previous != topic_id {
+                        return Ok(None);
+                    }
+                }
+            } else {
+                missing_names.insert(topic.topic.clone());
+            }
+        }
+        let missing_names = missing_names
+            .into_iter()
+            .filter(|name| !topic_ids_by_name.contains_key(name))
+            .collect::<Vec<_>>();
+        if !missing_names.is_empty() {
+            let Some(resolved) = self
+                .resolve_topic_ids_from_metadata(coordinator, Some(&missing_names))
+                .await?
+            else {
+                return Ok(None);
+            };
+            for (name, topic_id) in resolved {
+                if let Some(previous) = topic_ids_by_name.insert(name, topic_id) {
+                    if previous != topic_id {
+                        return Ok(None);
+                    }
+                }
+            }
+        }
+
+        let mut topics_by_id = BTreeMap::<[u8; 16], Vec<i32>>::new();
+        let mut topic_names = BTreeMap::new();
+        for topic in topics {
+            let Some(&topic_id) = topic_ids_by_name.get(&topic.topic) else {
+                return Ok(None);
+            };
+            if let Some(previous) = topic_names.insert(topic_id, topic.topic.clone()) {
+                if previous != topic.topic {
+                    return Ok(None);
+                }
+            }
+            topics_by_id
+                .entry(topic_id)
+                .or_default()
+                .extend(topic.partitions.iter().copied());
+        }
+        let request_topics = topics_by_id
+            .into_iter()
+            .map(|(topic_id, partition_indexes)| OffsetFetchTopicV10 {
+                topic_id,
+                partition_indexes,
+            })
+            .collect();
+        Ok(Some((Some(request_topics), topic_names)))
+    }
+
+    async fn offset_commit_topics_v10_with_metadata(
+        &self,
+        coordinator: &mut Client,
+        offsets: &[ConsumerGroupOffset],
+    ) -> Result<Option<(Vec<OffsetCommitTopicV10>, BTreeMap<[u8; 16], String>)>> {
+        if let Some(topics) = offset_commit_topics_v10(offsets) {
+            return Ok(Some((topics, topic_names_by_id_from_offsets(offsets))));
+        }
+
+        if offsets.is_empty() {
+            return Ok(None);
+        }
+
+        let mut topic_ids_by_name = BTreeMap::new();
+        let mut missing_names = BTreeSet::new();
+        for offset in offsets {
+            if let Some(topic_id) = nonzero_topic_id(offset.topic_id) {
+                if let Some(previous) = topic_ids_by_name.insert(offset.topic.clone(), topic_id) {
+                    if previous != topic_id {
+                        return Ok(None);
+                    }
+                }
+            } else {
+                missing_names.insert(offset.topic.clone());
+            }
+        }
+        let missing_names = missing_names
+            .into_iter()
+            .filter(|name| !topic_ids_by_name.contains_key(name))
+            .collect::<Vec<_>>();
+        if !missing_names.is_empty() {
+            let Some(resolved) = self
+                .resolve_topic_ids_from_metadata(coordinator, Some(&missing_names))
+                .await?
+            else {
+                return Ok(None);
+            };
+            for (name, topic_id) in resolved {
+                if let Some(previous) = topic_ids_by_name.insert(name, topic_id) {
+                    if previous != topic_id {
+                        return Ok(None);
+                    }
+                }
+            }
+        }
+
+        let mut topics_by_id = BTreeMap::<[u8; 16], Vec<OffsetCommitPartitionV10>>::new();
+        let mut topic_names = BTreeMap::new();
+        for offset in offsets {
+            let Some(&topic_id) = topic_ids_by_name.get(&offset.topic) else {
+                return Ok(None);
+            };
+            if let Some(previous) = topic_names.insert(topic_id, offset.topic.clone()) {
+                if previous != offset.topic {
+                    return Ok(None);
+                }
+            }
+            topics_by_id
+                .entry(topic_id)
+                .or_default()
+                .push(OffsetCommitPartitionV10 {
+                    partition_index: offset.partition,
+                    committed_offset: offset.offset,
+                    committed_leader_epoch: offset.leader_epoch,
+                    committed_metadata: offset.metadata.clone(),
+                });
+        }
+        let topics = topics_by_id
+            .into_iter()
+            .map(|(topic_id, partitions)| OffsetCommitTopicV10 {
+                topic_id,
+                partitions,
+            })
+            .collect();
+        Ok(Some((topics, topic_names)))
+    }
+
     /// Describes the Kafka cluster brokers and active controller.
     #[tracing::instrument(level = "debug", name = "kafka.admin.describe_cluster", skip_all, err)]
     pub async fn describe_cluster(&self) -> Result<ClusterDescription> {
         let metadata = self.metadata_with_admin_retries(Some(Vec::new())).await?;
 
-        Ok(ClusterDescription {
-            controller_id: metadata.controller_id,
-            brokers: metadata
-                .brokers
-                .into_iter()
-                .map(BrokerDescription::from_protocol)
-                .collect(),
-        })
+        Ok(ClusterDescription::from_metadata(metadata))
+    }
+
+    /// Describes the cluster through Kafka's dedicated DescribeCluster API.
+    ///
+    /// Kafka 3.7 and newer brokers advertise API 60. The v1 path preserves
+    /// endpoint type and the v0 fallback remains available for brokers that
+    /// only advertise the original flexible version. If API 60 is absent,
+    /// this method falls back to Metadata so older deployments retain the
+    /// established cluster description behavior.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.describe_cluster_with_options",
+        skip_all,
+        err
+    )]
+    pub async fn describe_cluster_with_options(
+        &self,
+        options: DescribeClusterOptions,
+    ) -> Result<ClusterDescription> {
+        let mut retry = 0;
+        loop {
+            let mut client = match self.config.clone().connect().await {
+                Ok(client) => client,
+                Err(error) if retry < self.max_retries && is_retryable_admin_read_error(&error) => {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
+            let api_versions = match client
+                .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
+                .await
+            {
+                Ok(response) => response,
+                Err(error) if retry < self.max_retries && is_retryable_admin_read_error(&error) => {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
+            if api_versions.error_code != 0 {
+                return Err(client.broker_error(
+                    api_versions.error_code,
+                    "describe cluster capabilities".to_owned(),
+                ));
+            }
+
+            let Some(api_version) = api_versions.highest_supported_version(60, 1) else {
+                let metadata = self
+                    .metadata_with_admin_retries_from(Some(Vec::new()), &mut retry)
+                    .await?;
+                return Ok(ClusterDescription::from_metadata(metadata));
+            };
+            if options.endpoint_type.is_some() && api_version < 1 {
+                return Err(Error::Unsupported(
+                    "DescribeCluster endpoint selection requires v1",
+                ));
+            }
+            let endpoint_type = options
+                .endpoint_type
+                .unwrap_or(DescribeClusterEndpointType::Brokers)
+                .code();
+            let response = if api_version >= 1 {
+                client
+                    .describe_cluster_v1(
+                        options.include_cluster_authorized_operations,
+                        endpoint_type,
+                    )
+                    .await
+            } else {
+                client
+                    .describe_cluster_v0(options.include_cluster_authorized_operations)
+                    .await
+            };
+            match response {
+                Ok(response)
+                    if response.error_code != 0
+                        && retry < self.max_retries
+                        && is_retryable_admin_read_code(response.error_code) =>
+                {
+                    retry += 1;
+                    self.config.record_broker_error();
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                }
+                Ok(response) if response.error_code != 0 => {
+                    return Err(
+                        client.broker_error(response.error_code, "describe cluster".to_owned())
+                    );
+                }
+                Ok(response) => return Ok(ClusterDescription::from_describe_cluster(response)),
+                Err(error) if retry < self.max_retries && is_retryable_admin_read_error(&error) => {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                }
+                Err(error) => return Err(error),
+            }
+        }
+    }
+
+    /// Describes broker-supported and cluster-finalized Kafka features.
+    ///
+    /// Kafka exposes this metadata through the tagged fields of ApiVersions
+    /// v3+, so this method performs a capability handshake against one broker
+    /// and returns the typed feature view without issuing a second request.
+    #[tracing::instrument(level = "debug", name = "kafka.admin.describe_features", skip_all, err)]
+    pub async fn describe_features(&self) -> Result<FeatureMetadata> {
+        let mut retry = 0;
+        loop {
+            let mut client = match self.config.clone().connect().await {
+                Ok(client) => client,
+                Err(error) if retry < self.max_retries && is_retryable_admin_read_error(&error) => {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
+            let response = match client
+                .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
+                .await
+            {
+                Ok(response) => response,
+                Err(error) if retry < self.max_retries && is_retryable_admin_read_error(&error) => {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
+            if response.error_code != 0 {
+                return Err(
+                    client.broker_error(response.error_code, "describe Kafka features".to_owned())
+                );
+            }
+            return Ok(FeatureMetadata::from_protocol(response));
+        }
+    }
+
+    /// Updates finalized Kafka feature levels through UpdateFeatures v1 when
+    /// advertised, falling back to v0 when the requested operation is
+    /// representable there.
+    ///
+    /// Kafka routes this mutation to the active controller. The request is
+    /// sent once after controller discovery; a transport error after send is
+    /// reported as [`Error::AdminMutationOutcomeUnknown`] because retrying
+    /// could apply a feature change twice or leave the caller unsure which
+    /// feature levels were persisted.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.update_features",
+        skip_all,
+        fields(update_count = updates.len()),
+        err
+    )]
+    pub async fn update_features(
+        &self,
+        updates: &[FeatureUpdate],
+        options: UpdateFeaturesOptions,
+    ) -> Result<UpdateFeaturesResult> {
+        let mut controller_client = self.controller_client_with_retries().await?;
+        let api_versions = controller_client
+            .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
+            .await?;
+        let api_version = api_versions
+            .highest_supported_version(57, 1)
+            .or_else(|| api_versions.highest_supported_version(57, 0))
+            .ok_or(Error::Unsupported(
+                "broker does not advertise UpdateFeatures v0 or v1",
+            ))?;
+        let response = match api_version {
+            1 => controller_client
+                .update_features_v1(
+                    duration_millis_i32(options.timeout),
+                    updates.iter().map(FeatureUpdate::as_protocol_v1).collect(),
+                    options.validate_only,
+                )
+                .await
+                .map_err(|error| {
+                    admin_mutation_error(&controller_client, "UpdateFeatures", error)
+                })?,
+            0 => {
+                if options.validate_only {
+                    return Err(Error::Unsupported(
+                        "UpdateFeatures validate_only requires v1",
+                    ));
+                }
+                let updates = updates
+                    .iter()
+                    .map(FeatureUpdate::as_protocol_v0)
+                    .collect::<Option<Vec<_>>>()
+                    .ok_or(Error::Unsupported(
+                        "UpdateFeatures unsafe downgrade requires v1",
+                    ))?;
+                controller_client
+                    .update_features_v0(duration_millis_i32(options.timeout), updates)
+                    .await
+                    .map_err(|error| {
+                        admin_mutation_error(&controller_client, "UpdateFeatures", error)
+                    })?
+            }
+            _ => unreachable!("negotiated UpdateFeatures version exceeds client support"),
+        };
+
+        if response.error_code != 0 {
+            self.config.record_broker_error();
+        }
+        for result in &response.results {
+            if result.error_code != 0 {
+                self.config.record_broker_error();
+            }
+        }
+        Ok(UpdateFeaturesResult::from_protocol(response))
+    }
+
+    /// Adds a voter to the active KRaft controller quorum.
+    ///
+    /// The request is sent once after controller discovery. A transport
+    /// failure after transmission is returned as
+    /// [`Error::AdminMutationOutcomeUnknown`] because the voter may already
+    /// have been committed by the controller.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.add_raft_voter",
+        skip_all,
+        fields(voter_id = options.voter_id, ack_when_committed = options.ack_when_committed),
+        err
+    )]
+    pub async fn add_raft_voter(&self, options: AddRaftVoterOptions) -> Result<RaftVoterResult> {
+        let mut controller_client = self.controller_client_with_retries().await?;
+        let api_versions = controller_client
+            .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
+            .await?;
+        let api_version = api_versions
+            .highest_supported_version(80, 1)
+            .or_else(|| api_versions.highest_supported_version(80, 0))
+            .ok_or(Error::Unsupported(
+                "broker does not advertise AddRaftVoter v0 or v1",
+            ))?;
+        if api_version == 0 && options.ack_when_committed {
+            return Err(Error::Unsupported(
+                "AddRaftVoter ack_when_committed requires v1",
+            ));
+        }
+        let listeners = options
+            .listeners
+            .iter()
+            .map(ProtocolRaftVoterListener::from)
+            .collect();
+        let response = match api_version {
+            1 => controller_client
+                .add_raft_voter_v1(
+                    options.cluster_id.clone(),
+                    duration_millis_i32(options.timeout),
+                    options.voter_id,
+                    options.voter_directory_id,
+                    listeners,
+                    options.ack_when_committed,
+                )
+                .await
+                .map_err(|error| admin_mutation_error(&controller_client, "AddRaftVoter", error))?,
+            0 => controller_client
+                .add_raft_voter_v0(
+                    options.cluster_id.clone(),
+                    duration_millis_i32(options.timeout),
+                    options.voter_id,
+                    options.voter_directory_id,
+                    listeners,
+                )
+                .await
+                .map_err(|error| admin_mutation_error(&controller_client, "AddRaftVoter", error))?,
+            _ => unreachable!("negotiated AddRaftVoter version exceeds client support"),
+        };
+        if response.error_code != 0 {
+            self.config.record_broker_error();
+        }
+        Ok(RaftVoterResult::from_protocol(response, api_version))
+    }
+
+    /// Removes a voter from the active KRaft controller quorum.
+    ///
+    /// The request is sent once after controller discovery. A transport
+    /// failure after transmission is returned as
+    /// [`Error::AdminMutationOutcomeUnknown`] because the voter may already
+    /// have been removed by the controller.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.remove_raft_voter",
+        skip_all,
+        fields(voter_id = options.voter_id),
+        err
+    )]
+    pub async fn remove_raft_voter(
+        &self,
+        options: RemoveRaftVoterOptions,
+    ) -> Result<RaftVoterResult> {
+        let mut controller_client = self.controller_client_with_retries().await?;
+        let api_versions = controller_client
+            .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
+            .await?;
+        let api_version =
+            api_versions
+                .highest_supported_version(81, 0)
+                .ok_or(Error::Unsupported(
+                    "broker does not advertise RemoveRaftVoter v0",
+                ))?;
+        let response = controller_client
+            .remove_raft_voter_v0(
+                options.cluster_id,
+                options.voter_id,
+                options.voter_directory_id,
+            )
+            .await
+            .map_err(|error| admin_mutation_error(&controller_client, "RemoveRaftVoter", error))?;
+        if response.error_code != 0 {
+            self.config.record_broker_error();
+        }
+        Ok(RaftVoterResult::from_protocol(response, api_version))
+    }
+
+    /// Unregisters a broker through the active KRaft controller.
+    ///
+    /// Kafka sends this controller mutation once after controller discovery.
+    /// A transport failure after transmission is returned as
+    /// [`Error::AdminMutationOutcomeUnknown`] because the controller may
+    /// already have removed the broker registration.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.unregister_broker",
+        skip_all,
+        fields(broker_id),
+        err
+    )]
+    pub async fn unregister_broker(&self, broker_id: i32) -> Result<UnregisterBrokerResult> {
+        let mut controller_client = self.controller_client_with_retries().await?;
+        let api_versions = controller_client
+            .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
+            .await?;
+        let api_version =
+            api_versions
+                .highest_supported_version(64, 0)
+                .ok_or(Error::Unsupported(
+                    "broker does not advertise UnregisterBroker v0",
+                ))?;
+        let response = controller_client
+            .unregister_broker_v0(broker_id)
+            .await
+            .map_err(|error| admin_mutation_error(&controller_client, "UnregisterBroker", error))?;
+        if response.error_code != 0 {
+            self.config.record_broker_error();
+        }
+        Ok(UnregisterBrokerResult::from_protocol(response, api_version))
     }
 
     /// Lists topics visible to the configured Kafka principal.
@@ -1217,9 +1928,12 @@ impl AdminClient {
         Ok(ListPartitionReassignmentsResult::from_protocol(response))
     }
 
-    /// Describes configurations for Kafka topics using DescribeConfigs v1.
+    /// Describes configurations for Kafka topics.
     ///
-    /// Resource-level Kafka failures remain in [`DescribeConfigsResult`].
+    /// The default path uses DescribeConfigs v1 for compatibility with Kafka
+    /// 3.7-era brokers. Setting [`DescribeConfigsOptions::include_documentation`]
+    /// requests DescribeConfigs v4 on a broker that advertises it and retains
+    /// Kafka's configuration type and documentation metadata.
     #[tracing::instrument(
         level = "debug",
         name = "kafka.admin.describe_topic_configs",
@@ -1232,6 +1946,9 @@ impl AdminClient {
         resources: &[TopicConfigResource],
         options: DescribeConfigsOptions,
     ) -> Result<DescribeConfigsResult> {
+        if options.include_documentation {
+            return self.describe_topic_configs_v4(resources, options).await;
+        }
         let request_resources = resources
             .iter()
             .map(TopicConfigResource::as_protocol)
@@ -1287,6 +2004,195 @@ impl AdminClient {
                 .map(ConfigResourceResult::from_protocol)
                 .collect(),
         })
+    }
+
+    async fn describe_topic_configs_v4(
+        &self,
+        resources: &[TopicConfigResource],
+        options: DescribeConfigsOptions,
+    ) -> Result<DescribeConfigsResult> {
+        let request_resources = resources
+            .iter()
+            .map(TopicConfigResource::as_protocol_v4)
+            .collect::<Vec<_>>();
+        let mut retry = 0;
+        let response = loop {
+            let mut client = match self.config.clone().connect().await {
+                Ok(client) => client,
+                Err(error) if retry < self.max_retries && is_retryable_admin_read_error(&error) => {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
+            let api_versions = match client
+                .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
+                .await
+            {
+                Ok(response) => response,
+                Err(error) if retry < self.max_retries && is_retryable_admin_read_error(&error) => {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
+            if api_versions.error_code != 0 {
+                return Err(client.broker_error(
+                    api_versions.error_code,
+                    "describe topic config capabilities".to_owned(),
+                ));
+            }
+            if api_versions.highest_supported_version(32, 4).is_none() {
+                return Err(Error::Unsupported(
+                    "broker does not advertise DescribeConfigs v4",
+                ));
+            }
+            match client
+                .describe_configs_v4(
+                    request_resources.clone(),
+                    options.include_synonyms,
+                    options.include_documentation,
+                )
+                .await
+            {
+                Ok(response)
+                    if retry < self.max_retries
+                        && response
+                            .results
+                            .iter()
+                            .any(|resource| is_retryable_admin_read_code(resource.error_code)) =>
+                {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                }
+                Ok(response) => break response,
+                Err(error) if retry < self.max_retries && is_retryable_admin_read_error(&error) => {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                }
+                Err(error) => return Err(error),
+            }
+        };
+
+        for resource in &response.results {
+            if resource.error_code != 0 {
+                self.config.record_broker_error();
+            }
+        }
+
+        Ok(DescribeConfigsResult {
+            throttle_time: Duration::from_millis(nonnegative_i32_to_u64(response.throttle_time_ms)),
+            resources: response
+                .results
+                .into_iter()
+                .map(ConfigResourceResult::from_v4_protocol)
+                .collect(),
+        })
+    }
+
+    /// Lists Kafka configuration resources through API 74.
+    ///
+    /// Kafka 4.1 added v1 for discovering topic, broker, group, client metrics,
+    /// and broker-logger resources that can be inspected with DescribeConfigs.
+    /// An empty type filter requests all resource types supported by the
+    /// broker. On Kafka 3.9-era brokers, an exact `ClientMetrics` filter uses
+    /// the compatible v0 operation; broader filters return
+    /// `Error::Unsupported` rather than pretending v0 can list resource types
+    /// it cannot represent.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.list_config_resources",
+        skip_all,
+        fields(resource_type_count = options.resource_types.len()),
+        err
+    )]
+    pub async fn list_config_resources(
+        &self,
+        options: ListConfigResourcesOptions,
+    ) -> Result<ListConfigResourcesResult> {
+        let resource_types = options
+            .resource_types
+            .iter()
+            .map(|resource_type| resource_type.code())
+            .collect::<Vec<_>>();
+        let mut retry = 0;
+        let response = loop {
+            let mut client = match self.config.clone().connect().await {
+                Ok(client) => client,
+                Err(error) if retry < self.max_retries && is_retryable_admin_read_error(&error) => {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
+            let api_versions = match client
+                .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
+                .await
+            {
+                Ok(response) => response,
+                Err(error) if retry < self.max_retries && is_retryable_admin_read_error(&error) => {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
+            let api_version = api_versions
+                .highest_supported_version(74, 1)
+                .filter(|version| *version >= 1)
+                .or_else(|| api_versions.highest_supported_version(74, 0))
+                .ok_or(Error::Unsupported(
+                    "broker does not advertise ListConfigResources v0 or v1",
+                ))?;
+            let response = match api_version {
+                1 => client
+                    .list_config_resources_v1(resource_types.clone())
+                    .await
+                    .map(|response| ListConfigResourcesResult::from_protocol(response, 1)),
+                0 if options.resource_types == [ConfigResourceType::ClientMetrics] => client
+                    .list_config_resources_v0()
+                    .await
+                    .map(|response| ListConfigResourcesResult::from_protocol_v0(response, 0)),
+                0 => {
+                    return Err(Error::Unsupported(
+                        "ListConfigResources v0 only lists client metrics resources",
+                    ));
+                }
+                _ => unreachable!("negotiated ListConfigResources version exceeds support"),
+            };
+            match response {
+                Ok(response)
+                    if retry < self.max_retries
+                        && is_retryable_admin_read_code(response.error_code) =>
+                {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                }
+                Ok(response) => break response,
+                Err(error) if retry < self.max_retries && is_retryable_admin_read_error(&error) => {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                }
+                Err(error) => return Err(error),
+            }
+        };
+
+        if response.error_code != 0 {
+            self.config.record_broker_error();
+        }
+
+        Ok(response)
     }
 
     /// Incrementally alters Kafka topic configurations.
@@ -1659,6 +2565,591 @@ impl AdminClient {
         Ok(descriptions)
     }
 
+    /// Describes Kafka Streams groups through StreamsGroupDescribe.
+    ///
+    /// Streams groups are coordinator-owned. Each requested group is resolved
+    /// independently so a coordinator movement for one group does not cause a
+    /// response for another group to be attributed to the wrong coordinator.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.describe_streams_groups",
+        skip_all,
+        fields(group_count = group_ids.len(), include_authorized_operations),
+        err
+    )]
+    pub async fn describe_streams_groups(
+        &self,
+        group_ids: &[String],
+        include_authorized_operations: bool,
+    ) -> Result<Vec<StreamsGroupDescription>> {
+        let mut descriptions = Vec::with_capacity(group_ids.len());
+        for group_id in group_ids {
+            let mut retry = 0;
+            let (throttle_time_ms, group) = loop {
+                let mut coordinator = self.group_coordinator_client(group_id).await?;
+                let api_versions = match coordinator
+                    .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
+                    .await
+                {
+                    Ok(api_versions) => api_versions,
+                    Err(error)
+                        if retry < self.max_retries
+                            && is_retryable_admin_coordinator_error(&error) =>
+                    {
+                        retry += 1;
+                        self.config.record_retry();
+                        tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                        continue;
+                    }
+                    Err(error) => return Err(error),
+                };
+                if api_versions.highest_supported_version(89, 0).is_none() {
+                    return Err(Error::Unsupported(
+                        "broker does not advertise StreamsGroupDescribe v0",
+                    ));
+                }
+                let response = match coordinator
+                    .streams_group_describe_v0(
+                        vec![group_id.clone()],
+                        include_authorized_operations,
+                    )
+                    .await
+                {
+                    Ok(response) => response,
+                    Err(error)
+                        if retry < self.max_retries
+                            && is_retryable_admin_coordinator_error(&error) =>
+                    {
+                        retry += 1;
+                        self.config.record_retry();
+                        tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                        continue;
+                    }
+                    Err(error) => return Err(error),
+                };
+                let throttle_time_ms = response.throttle_time_ms;
+                let group = response
+                    .groups
+                    .into_iter()
+                    .find(|group| group.group_id == *group_id);
+                let Some(group) = group else {
+                    return Err(Error::MissingGroupDescription {
+                        group_id: group_id.clone(),
+                    });
+                };
+                if retry < self.max_retries && is_retryable_admin_coordinator_code(group.error_code)
+                {
+                    self.config.record_broker_error();
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    continue;
+                }
+                break (throttle_time_ms, group);
+            };
+            if group.error_code != 0 {
+                self.config.record_broker_error();
+            }
+            descriptions.push(StreamsGroupDescription::from_protocol(
+                group,
+                Duration::from_millis(nonnegative_i32_to_u64(throttle_time_ms)),
+            ));
+        }
+        Ok(descriptions)
+    }
+
+    /// Initializes share-group state for the selected topic partitions.
+    ///
+    /// The request is routed to the share-group coordinator. A transmitted
+    /// request whose response is lost is reported as an unknown mutation
+    /// outcome and is never replayed automatically.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.initialize_share_group_state",
+        skip_all,
+        fields(group_id, topic_count = topics.len()),
+        err
+    )]
+    pub async fn initialize_share_group_state(
+        &self,
+        group_id: &str,
+        topics: &[ShareGroupStateInitializeTopic],
+    ) -> Result<ShareGroupStateResult> {
+        let protocol_topics = topics
+            .iter()
+            .map(|topic| InitializeShareGroupStateTopic {
+                topic_id: topic.topic_id,
+                partitions: topic
+                    .partitions
+                    .iter()
+                    .map(|partition| InitializeShareGroupStatePartition {
+                        partition: partition.partition,
+                        state_epoch: partition.state_epoch,
+                        start_offset: partition.start_offset,
+                    })
+                    .collect(),
+            })
+            .collect::<Vec<_>>();
+        let mut retry = 0;
+        let response = loop {
+            let mut coordinator = self.group_coordinator_client(group_id).await?;
+            let api_versions = match coordinator
+                .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
+                .await
+            {
+                Ok(api_versions) => api_versions,
+                Err(error)
+                    if retry < self.max_retries && is_retryable_admin_coordinator_error(&error) =>
+                {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
+            if api_versions.highest_supported_version(83, 0).is_none() {
+                return Err(Error::Unsupported(
+                    "broker does not advertise InitializeShareGroupState v0",
+                ));
+            }
+            let response = coordinator
+                .initialize_share_group_state_v0(group_id, protocol_topics.clone())
+                .await
+                .map_err(|error| {
+                    admin_mutation_error(&coordinator, "InitializeShareGroupState", error)
+                })?;
+            let retryable = response.results.iter().any(|topic| {
+                topic
+                    .partitions
+                    .iter()
+                    .any(|partition| is_retryable_admin_coordinator_code(partition.error_code))
+            });
+            if retry < self.max_retries && retryable {
+                self.config.record_broker_error();
+                retry += 1;
+                self.config.record_retry();
+                tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                continue;
+            }
+            break response;
+        };
+        if response.results.iter().any(|topic| {
+            topic
+                .partitions
+                .iter()
+                .any(|partition| partition.error_code != 0)
+        }) {
+            self.config.record_broker_error();
+        }
+        Ok(ShareGroupStateResult::from_protocol(response))
+    }
+
+    /// Reads the complete delivery state for selected share partitions.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.read_share_group_state",
+        skip_all,
+        fields(group_id, topic_count = topics.len()),
+        err
+    )]
+    pub async fn read_share_group_state(
+        &self,
+        group_id: &str,
+        topics: &[ShareGroupStateReadTopic],
+    ) -> Result<ReadShareGroupStateResult> {
+        let protocol_topics = topics
+            .iter()
+            .map(|topic| ReadShareGroupStateTopic {
+                topic_id: topic.topic_id,
+                partitions: topic
+                    .partitions
+                    .iter()
+                    .map(|partition| ReadShareGroupStatePartition {
+                        partition: partition.partition,
+                        leader_epoch: partition.leader_epoch,
+                    })
+                    .collect(),
+            })
+            .collect::<Vec<_>>();
+        let mut retry = 0;
+        let response = loop {
+            let mut coordinator = self.group_coordinator_client(group_id).await?;
+            let api_versions = match coordinator
+                .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
+                .await
+            {
+                Ok(api_versions) => api_versions,
+                Err(error)
+                    if retry < self.max_retries && is_retryable_admin_coordinator_error(&error) =>
+                {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
+            if api_versions.highest_supported_version(84, 0).is_none() {
+                return Err(Error::Unsupported(
+                    "broker does not advertise ReadShareGroupState v0",
+                ));
+            }
+            let response = match coordinator
+                .read_share_group_state_v0(group_id, protocol_topics.clone())
+                .await
+            {
+                Ok(response) => response,
+                Err(error)
+                    if retry < self.max_retries && is_retryable_admin_coordinator_error(&error) =>
+                {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
+            let retryable = response.results.iter().any(|topic| {
+                topic
+                    .partitions
+                    .iter()
+                    .any(|partition| is_retryable_admin_coordinator_code(partition.error_code))
+            });
+            if retry < self.max_retries && retryable {
+                self.config.record_broker_error();
+                retry += 1;
+                self.config.record_retry();
+                tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                continue;
+            }
+            break response;
+        };
+        if response.results.iter().any(|topic| {
+            topic
+                .partitions
+                .iter()
+                .any(|partition| partition.error_code != 0)
+        }) {
+            self.config.record_broker_error();
+        }
+        Ok(ReadShareGroupStateResult::from_protocol(response))
+    }
+
+    /// Writes share-group delivery state, preferring v1 when available.
+    ///
+    /// `delivery_complete_count` requires WriteShareGroupState v1. If a
+    /// broker advertises only v0, a request that contains this field fails
+    /// explicitly instead of silently losing it.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.write_share_group_state",
+        skip_all,
+        fields(group_id, topic_count = topics.len()),
+        err
+    )]
+    pub async fn write_share_group_state(
+        &self,
+        group_id: &str,
+        topics: &[ShareGroupStateWriteTopic],
+    ) -> Result<ShareGroupStateResult> {
+        let requires_v1 = topics.iter().any(|topic| {
+            topic
+                .partitions
+                .iter()
+                .any(|partition| partition.delivery_complete_count.is_some())
+        });
+        let mut retry = 0;
+        let response = loop {
+            let mut coordinator = self.group_coordinator_client(group_id).await?;
+            let api_versions = match coordinator
+                .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
+                .await
+            {
+                Ok(api_versions) => api_versions,
+                Err(error)
+                    if retry < self.max_retries && is_retryable_admin_coordinator_error(&error) =>
+                {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
+            let Some(version) = api_versions.highest_supported_version(85, 1) else {
+                return Err(Error::Unsupported(
+                    "broker does not advertise WriteShareGroupState",
+                ));
+            };
+            let response = match version {
+                1 => {
+                    let protocol_topics = topics
+                        .iter()
+                        .map(|topic| WriteShareGroupStateTopicV1 {
+                            topic_id: topic.topic_id,
+                            partitions: topic
+                                .partitions
+                                .iter()
+                                .map(|partition| WriteShareGroupStatePartitionV1 {
+                                    partition: partition.partition,
+                                    state_epoch: partition.state_epoch,
+                                    leader_epoch: partition.leader_epoch,
+                                    start_offset: partition.start_offset,
+                                    delivery_complete_count: partition
+                                        .delivery_complete_count
+                                        .unwrap_or(0),
+                                    state_batches: partition
+                                        .state_batches
+                                        .iter()
+                                        .map(ProtocolShareGroupStateBatch::from)
+                                        .collect(),
+                                })
+                                .collect(),
+                        })
+                        .collect();
+                    coordinator
+                        .write_share_group_state_v1(group_id, protocol_topics)
+                        .await
+                        .map_err(|error| {
+                            admin_mutation_error(&coordinator, "WriteShareGroupState", error)
+                        })?
+                }
+                0 if !requires_v1 => {
+                    let protocol_topics = topics
+                        .iter()
+                        .map(|topic| WriteShareGroupStateTopicV0 {
+                            topic_id: topic.topic_id,
+                            partitions: topic
+                                .partitions
+                                .iter()
+                                .map(|partition| WriteShareGroupStatePartitionV0 {
+                                    partition: partition.partition,
+                                    state_epoch: partition.state_epoch,
+                                    leader_epoch: partition.leader_epoch,
+                                    start_offset: partition.start_offset,
+                                    state_batches: partition
+                                        .state_batches
+                                        .iter()
+                                        .map(ProtocolShareGroupStateBatch::from)
+                                        .collect(),
+                                })
+                                .collect(),
+                        })
+                        .collect();
+                    coordinator
+                        .write_share_group_state_v0(group_id, protocol_topics)
+                        .await
+                        .map_err(|error| {
+                            admin_mutation_error(&coordinator, "WriteShareGroupState", error)
+                        })?
+                }
+                0 => {
+                    return Err(Error::Unsupported(
+                        "WriteShareGroupState v1 is required for delivery_complete_count",
+                    ));
+                }
+                _ => {
+                    return Err(Error::Unsupported(
+                        "unsupported WriteShareGroupState version",
+                    ))
+                }
+            };
+            let retryable = response.results.iter().any(|topic| {
+                topic
+                    .partitions
+                    .iter()
+                    .any(|partition| is_retryable_admin_coordinator_code(partition.error_code))
+            });
+            if retry < self.max_retries && retryable {
+                self.config.record_broker_error();
+                retry += 1;
+                self.config.record_retry();
+                tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                continue;
+            }
+            break response;
+        };
+        if response.results.iter().any(|topic| {
+            topic
+                .partitions
+                .iter()
+                .any(|partition| partition.error_code != 0)
+        }) {
+            self.config.record_broker_error();
+        }
+        Ok(ShareGroupStateResult::from_protocol(response))
+    }
+
+    /// Deletes share-group state for selected topic partitions.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.delete_share_group_state",
+        skip_all,
+        fields(group_id, topic_count = topics.len()),
+        err
+    )]
+    pub async fn delete_share_group_state(
+        &self,
+        group_id: &str,
+        topics: &[ShareGroupStateDeleteTopic],
+    ) -> Result<ShareGroupStateResult> {
+        let protocol_topics = topics
+            .iter()
+            .map(|topic| DeleteShareGroupStateTopic {
+                topic_id: topic.topic_id,
+                partitions: topic.partitions.clone(),
+            })
+            .collect::<Vec<_>>();
+        let mut retry = 0;
+        let response = loop {
+            let mut coordinator = self.group_coordinator_client(group_id).await?;
+            let api_versions = match coordinator
+                .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
+                .await
+            {
+                Ok(api_versions) => api_versions,
+                Err(error)
+                    if retry < self.max_retries && is_retryable_admin_coordinator_error(&error) =>
+                {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
+            if api_versions.highest_supported_version(86, 0).is_none() {
+                return Err(Error::Unsupported(
+                    "broker does not advertise DeleteShareGroupState v0",
+                ));
+            }
+            let response = coordinator
+                .delete_share_group_state_v0(group_id, protocol_topics.clone())
+                .await
+                .map_err(|error| {
+                    admin_mutation_error(&coordinator, "DeleteShareGroupState", error)
+                })?;
+            let retryable = response.results.iter().any(|topic| {
+                topic
+                    .partitions
+                    .iter()
+                    .any(|partition| is_retryable_admin_coordinator_code(partition.error_code))
+            });
+            if retry < self.max_retries && retryable {
+                self.config.record_broker_error();
+                retry += 1;
+                self.config.record_retry();
+                tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                continue;
+            }
+            break response;
+        };
+        if response.results.iter().any(|topic| {
+            topic
+                .partitions
+                .iter()
+                .any(|partition| partition.error_code != 0)
+        }) {
+            self.config.record_broker_error();
+        }
+        Ok(ShareGroupStateResult::from_protocol(response))
+    }
+
+    /// Reads the compact summary of share-group state, preferring v1 when
+    /// available so delivery completion counts are retained.
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.read_share_group_state_summary",
+        skip_all,
+        fields(group_id, topic_count = topics.len()),
+        err
+    )]
+    pub async fn read_share_group_state_summary(
+        &self,
+        group_id: &str,
+        topics: &[ShareGroupStateReadTopic],
+    ) -> Result<ReadShareGroupStateSummaryResult> {
+        let protocol_topics = topics
+            .iter()
+            .map(|topic| ReadShareGroupStateTopic {
+                topic_id: topic.topic_id,
+                partitions: topic
+                    .partitions
+                    .iter()
+                    .map(|partition| ReadShareGroupStatePartition {
+                        partition: partition.partition,
+                        leader_epoch: partition.leader_epoch,
+                    })
+                    .collect(),
+            })
+            .collect::<Vec<_>>();
+        let mut retry = 0;
+        let response = loop {
+            let mut coordinator = self.group_coordinator_client(group_id).await?;
+            let api_versions = match coordinator
+                .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
+                .await
+            {
+                Ok(api_versions) => api_versions,
+                Err(error)
+                    if retry < self.max_retries && is_retryable_admin_coordinator_error(&error) =>
+                {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
+            let Some(version) = api_versions.highest_supported_version(87, 1) else {
+                return Err(Error::Unsupported(
+                    "broker does not advertise ReadShareGroupStateSummary",
+                ));
+            };
+            let response = match version {
+                1 => coordinator
+                    .read_share_group_state_summary_v1(group_id, protocol_topics.clone())
+                    .await
+                    .map(ReadShareGroupStateSummaryResponse::V1),
+                0 => coordinator
+                    .read_share_group_state_summary_v0(group_id, protocol_topics.clone())
+                    .await
+                    .map(ReadShareGroupStateSummaryResponse::V0),
+                _ => {
+                    return Err(Error::Unsupported(
+                        "unsupported ReadShareGroupStateSummary version",
+                    ))
+                }
+            };
+            let response = match response {
+                Ok(response) => response,
+                Err(error)
+                    if retry < self.max_retries && is_retryable_admin_coordinator_error(&error) =>
+                {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
+            let retryable = response.has_retryable_error();
+            if retry < self.max_retries && retryable {
+                self.config.record_broker_error();
+                retry += 1;
+                self.config.record_retry();
+                tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                continue;
+            }
+            break response;
+        };
+        if response.has_error() {
+            self.config.record_broker_error();
+        }
+        Ok(ReadShareGroupStateSummaryResult::from_protocol(response))
+    }
+
     /// Sets share-group offsets through AlterShareGroupOffsets.
     ///
     /// Kafka requires the share group to be empty for this operation. Results
@@ -2005,8 +3496,32 @@ impl AdminClient {
     ///
     /// ListGroups is broker-scoped because each group coordinator only reports
     /// the groups it owns. Results are sorted by group ID and deduplicated.
+    /// The request version is negotiated per broker; use
+    /// [`Self::list_groups_with_options`] when a broker-side state or type
+    /// filter is required.
     #[tracing::instrument(level = "debug", name = "kafka.admin.list_groups", skip_all, err)]
     pub async fn list_groups(&self) -> Result<Vec<GroupListing>> {
+        self.list_groups_with_options(ListGroupsOptions::default())
+            .await
+    }
+
+    /// Lists Kafka groups with broker-negotiated state and type filters.
+    ///
+    /// Brokers advertising ListGroups v5 receive both filters and return the
+    /// group state and type. Brokers advertising v4 receive the state filter
+    /// and return group state. Older brokers fall back to v1 when no modern
+    /// filter was requested; a requested filter that the broker cannot
+    /// represent returns [`Error::Unsupported`].
+    #[tracing::instrument(
+        level = "debug",
+        name = "kafka.admin.list_groups_with_options",
+        skip_all,
+        err
+    )]
+    pub async fn list_groups_with_options(
+        &self,
+        options: ListGroupsOptions,
+    ) -> Result<Vec<GroupListing>> {
         let metadata = self.metadata_with_admin_retries(Some(Vec::new())).await?;
         let mut groups = BTreeMap::new();
 
@@ -2026,10 +3541,62 @@ impl AdminClient {
                     }
                     Err(error) => return Err(error),
                 };
-                match client.list_groups_v1().await {
+                let api_versions = match client
+                    .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
+                    .await
+                {
+                    Ok(response) => response,
+                    Err(error)
+                        if retry < self.max_retries && is_retryable_admin_read_error(&error) =>
+                    {
+                        retry += 1;
+                        self.config.record_retry();
+                        tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                        continue;
+                    }
+                    Err(error) => return Err(error),
+                };
+                if api_versions.error_code != 0 {
+                    return Err(client.broker_error(
+                        api_versions.error_code,
+                        "list groups capabilities".to_owned(),
+                    ));
+                }
+
+                let Some(version) = api_versions
+                    .highest_supported_version(LIST_GROUPS_API_KEY, 5)
+                    .filter(|version| *version >= 1)
+                else {
+                    return Err(Error::Unsupported(
+                        "broker does not advertise ListGroups v1 or newer",
+                    ));
+                };
+                if !options.states.is_empty() && version < 4 {
+                    return Err(Error::Unsupported(
+                        "ListGroups state filters require v4 or newer",
+                    ));
+                }
+                if !options.types.is_empty() && version < 5 {
+                    return Err(Error::Unsupported(
+                        "ListGroups type filters require v5 or newer",
+                    ));
+                }
+
+                let response = match version {
+                    5 => client
+                        .list_groups_v5(options.states.clone(), options.types.clone())
+                        .await
+                        .map(ListGroupsResponse::V5),
+                    4 => client
+                        .list_groups_v4(options.states.clone())
+                        .await
+                        .map(ListGroupsResponse::V4),
+                    _ => client.list_groups_v1().await.map(ListGroupsResponse::V1),
+                };
+                match response {
                     Ok(response)
                         if retry < self.max_retries
-                            && is_retryable_admin_read_code(response.error_code) =>
+                            && is_retryable_admin_read_code(response.error_code()) =>
                     {
                         self.config.record_broker_error();
                         retry += 1;
@@ -2047,19 +3614,17 @@ impl AdminClient {
                     Err(error) => return Err(error),
                 }
             };
-            if response.error_code != 0 {
+
+            if response.error_code() != 0 {
                 return Err(self.config.broker_error(
-                    response.error_code,
+                    response.error_code(),
                     format!("list groups on broker {}", broker.node_id),
                 ));
             }
             let throttle_time =
-                Duration::from_millis(nonnegative_i32_to_u64(response.throttle_time_ms));
-            for group in response.groups {
-                groups.insert(
-                    group.group_id.clone(),
-                    GroupListing::from_protocol(group, broker.node_id, throttle_time),
-                );
+                Duration::from_millis(nonnegative_i32_to_u64(response.throttle_time_ms()));
+            for group in response.into_group_listings(broker.node_id, throttle_time) {
+                groups.insert(group.group_id.clone(), group);
             }
         }
 
@@ -2489,13 +4054,18 @@ impl AdminClient {
         ))
     }
 
-    /// Lists committed offsets through the KIP-848 member-aware OffsetFetch v9 API.
+    /// Lists committed offsets through the KIP-848 member-aware OffsetFetch API.
     ///
     /// The member ID may be omitted for an unjoined consumer-protocol request;
     /// joined members should pass the current ID and member epoch from
     /// [`ConsumerGroup::metadata`](crate::ConsumerGroup::metadata). A fresh
     /// metadata snapshot is required after every rejoin. `require_stable`
-    /// requests that Kafka wait for unstable transactional offsets.
+    /// requests that Kafka wait for unstable transactional offsets. Kafrust
+    /// uses OffsetFetch v10 when the coordinator and Metadata v12 advertise
+    /// the required capability, resolving names to UUIDs automatically. A
+    /// caller may provide UUIDs through [`ConsumerGroupOffsetQuery::topic_id`]
+    /// to avoid that metadata lookup. Otherwise it uses the name-based v9
+    /// fallback.
     #[tracing::instrument(
         level = "debug",
         name = "kafka.admin.list_consumer_group_offsets_with_member",
@@ -2511,6 +4081,36 @@ impl AdminClient {
         topics: Option<&[ConsumerGroupOffsetQuery]>,
         require_stable: bool,
     ) -> Result<ListConsumerGroupOffsetsResult> {
+        let mut fallback_coordinator = {
+            let mut coordinator = self.group_coordinator_client(group_id).await?;
+            if coordinator.supports_offset_fetch_v10().await? {
+                let v10_topics = self
+                    .offset_fetch_topics_v10_with_metadata(&mut coordinator, topics)
+                    .await?;
+                if let Some((request_topics_v10, topic_names)) = v10_topics {
+                    tracing::debug!(
+                        group_id,
+                        api_version = 10,
+                        "using member-aware Admin OffsetFetch"
+                    );
+                    return self
+                        .list_consumer_group_offsets_with_member_v10(
+                            MemberOffsetFetchV10Request {
+                                group_id: group_id.to_owned(),
+                                member_id: member_id.map(str::to_owned),
+                                member_epoch,
+                                topics: request_topics_v10.unwrap_or_default(),
+                                topic_names,
+                                require_stable,
+                            },
+                            coordinator,
+                        )
+                        .await;
+                }
+            }
+            Some(coordinator)
+        };
+
         let request_topics = topics.map(|topics| {
             topics
                 .iter()
@@ -2520,7 +4120,10 @@ impl AdminClient {
         let member_id = member_id.map(str::to_owned);
         let mut retry = 0;
         let response = loop {
-            let mut coordinator = self.group_coordinator_client(group_id).await?;
+            let mut coordinator = match fallback_coordinator.take() {
+                Some(coordinator) => coordinator,
+                None => self.group_coordinator_client(group_id).await?,
+            };
             match coordinator
                 .offset_fetch_v9_with_require_stable(
                     group_id,
@@ -2650,14 +4253,19 @@ impl AdminClient {
         ))
     }
 
-    /// Alters committed offsets through the KIP-848 member-aware
-    /// OffsetCommit v9 API.
+    /// Alters committed offsets through the KIP-848 member-aware OffsetCommit
+    /// API.
     ///
     /// `member_id`, `member_epoch`, and `group_instance_id` must describe the
     /// current joined member when the broker enforces consumer-protocol
     /// membership. Retryable broker responses are retried with the same offset
     /// values; a transport failure after transmission is returned as an
-    /// ambiguous mutation outcome rather than replayed.
+    /// ambiguous mutation outcome rather than replayed. Kafrust uses
+    /// OffsetCommit v10 when the coordinator and Metadata v12 advertise the
+    /// required capability, resolving topic names to UUIDs automatically. A
+    /// caller may provide UUIDs through [`ConsumerGroupOffset::topic_id`] to
+    /// avoid that metadata lookup; otherwise the name-based v9 fallback is
+    /// retained.
     #[tracing::instrument(
         level = "debug",
         name = "kafka.admin.alter_consumer_group_offsets_with_member",
@@ -2673,6 +4281,36 @@ impl AdminClient {
         group_instance_id: Option<&str>,
         offsets: &[ConsumerGroupOffset],
     ) -> Result<AlterConsumerGroupOffsetsResult> {
+        let mut fallback_coordinator = {
+            let mut coordinator = self.group_coordinator_client(group_id).await?;
+            if coordinator.supports_offset_commit_v10().await? {
+                let v10_topics = self
+                    .offset_commit_topics_v10_with_metadata(&mut coordinator, offsets)
+                    .await?;
+                if let Some((topics_v10, topic_names)) = v10_topics {
+                    tracing::debug!(
+                        group_id,
+                        api_version = 10,
+                        "using member-aware Admin OffsetCommit"
+                    );
+                    return self
+                        .alter_consumer_group_offsets_with_member_v10(
+                            MemberOffsetCommitV10Request {
+                                group_id: group_id.to_owned(),
+                                member_id: member_id.to_owned(),
+                                member_epoch,
+                                group_instance_id: group_instance_id.map(str::to_owned),
+                                topics: topics_v10,
+                                topic_names,
+                            },
+                            coordinator,
+                        )
+                        .await;
+                }
+            }
+            Some(coordinator)
+        };
+
         let mut topics = BTreeMap::<String, Vec<OffsetCommitPartitionV9>>::new();
         for offset in offsets {
             topics
@@ -2692,7 +4330,10 @@ impl AdminClient {
         let group_instance_id = group_instance_id.map(str::to_owned);
         let mut retry = 0;
         let response = loop {
-            let mut coordinator = self.group_coordinator_client(group_id).await?;
+            let mut coordinator = match fallback_coordinator.take() {
+                Some(coordinator) => coordinator,
+                None => self.group_coordinator_client(group_id).await?,
+            };
             let result = coordinator
                 .offset_commit_v9(
                     group_id,
@@ -2729,6 +4370,137 @@ impl AdminClient {
             group_id,
             response.throttle_time_ms,
             response.topics,
+        ))
+    }
+
+    async fn list_consumer_group_offsets_with_member_v10(
+        &self,
+        request: MemberOffsetFetchV10Request,
+        mut coordinator: Client,
+    ) -> Result<ListConsumerGroupOffsetsResult> {
+        let mut retry = 0;
+        let response = loop {
+            match coordinator
+                .offset_fetch_v10(
+                    &request.group_id,
+                    request.member_id.clone(),
+                    request.member_epoch,
+                    Some(request.topics.clone()),
+                    request.require_stable,
+                )
+                .await
+            {
+                Ok(response)
+                    if retry < self.max_retries && is_retryable_offset_fetch_v10(&response) =>
+                {
+                    record_offset_fetch_v10_errors(&self.config, &response);
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    coordinator = self.group_coordinator_client(&request.group_id).await?;
+                }
+                Ok(response) => break response,
+                Err(error)
+                    if retry < self.max_retries && is_retryable_admin_coordinator_error(&error) =>
+                {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                    coordinator = self.group_coordinator_client(&request.group_id).await?;
+                }
+                Err(error) => return Err(error),
+            }
+        };
+
+        record_offset_fetch_v10_errors(&self.config, &response);
+        let throttle_time_ms = response.throttle_time_ms;
+        let group = response
+            .groups
+            .into_iter()
+            .find(|group| group.group_id == request.group_id)
+            .ok_or_else(|| Error::MissingGroupDescription {
+                group_id: request.group_id.clone(),
+            })?;
+        let topics =
+            group
+                .topics
+                .into_iter()
+                .map(|topic| {
+                    let name = request.topic_names.get(&topic.topic_id).cloned().ok_or(
+                        Error::Unsupported("offset fetch response contained an unknown topic UUID"),
+                    )?;
+                    Ok(OffsetFetchTopicResponse {
+                        name,
+                        partitions: topic.partitions,
+                    })
+                })
+                .collect::<Result<Vec<_>>>()?;
+        Ok(ListConsumerGroupOffsetsResult::from_protocol_v9(
+            &request.group_id,
+            throttle_time_ms,
+            OffsetFetchGroupResponse {
+                group_id: group.group_id,
+                topics,
+                error_code: group.error_code,
+            },
+        ))
+    }
+
+    async fn alter_consumer_group_offsets_with_member_v10(
+        &self,
+        request: MemberOffsetCommitV10Request,
+        mut coordinator: Client,
+    ) -> Result<AlterConsumerGroupOffsetsResult> {
+        let mut retry = 0;
+        let response = loop {
+            let result = coordinator
+                .offset_commit_v10(
+                    &request.group_id,
+                    request.member_epoch,
+                    &request.member_id,
+                    request.group_instance_id.clone(),
+                    request.topics.clone(),
+                )
+                .await;
+            match result {
+                Ok(response) => {
+                    if retry < self.max_retries && is_retryable_offset_commit_v10(&response) {
+                        record_offset_commit_v10_errors(&self.config, &response);
+                        retry += 1;
+                        self.config.record_retry();
+                        tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                        coordinator = self.group_coordinator_client(&request.group_id).await?;
+                    } else {
+                        break response;
+                    }
+                }
+                Err(error) => {
+                    return Err(admin_mutation_error(&coordinator, "OffsetCommit", error))
+                }
+            }
+        };
+
+        record_offset_commit_v10_errors(&self.config, &response);
+        let topics =
+            response
+                .topics
+                .into_iter()
+                .map(|topic| {
+                    let name = request.topic_names.get(&topic.topic_id).cloned().ok_or(
+                        Error::Unsupported(
+                            "offset commit response contained an unknown topic UUID",
+                        ),
+                    )?;
+                    Ok(OffsetCommitTopicResponse {
+                        name,
+                        partitions: topic.partitions,
+                    })
+                })
+                .collect::<Result<Vec<_>>>()?;
+        Ok(AlterConsumerGroupOffsetsResult::from_protocol_v9(
+            &request.group_id,
+            response.throttle_time_ms,
+            topics,
         ))
     }
 
@@ -6554,8 +8326,11 @@ impl ListPartitionReassignmentsResult {
 pub struct GroupListing {
     group_id: String,
     protocol_type: String,
+    group_state: Option<String>,
+    group_type: Option<String>,
     coordinator_id: i32,
     throttle_time: Duration,
+    api_version: i16,
 }
 
 impl GroupListing {
@@ -6569,6 +8344,18 @@ impl GroupListing {
         &self.protocol_type
     }
 
+    /// Returns the broker-reported group state when ListGroups v4 or newer
+    /// was used, such as `Stable` or `Empty`.
+    pub fn group_state(&self) -> Option<&str> {
+        self.group_state.as_deref()
+    }
+
+    /// Returns the broker-reported group type when ListGroups v5 was used,
+    /// such as `consumer`, `classic`, or `share`.
+    pub fn group_type(&self) -> Option<&str> {
+        self.group_type.as_deref()
+    }
+
     /// Returns the broker ID that coordinates this group.
     pub fn coordinator_id(&self) -> i32 {
         self.coordinator_id
@@ -6579,13 +8366,108 @@ impl GroupListing {
         self.throttle_time
     }
 
-    fn from_protocol(group: ListedGroupV1, coordinator_id: i32, throttle_time: Duration) -> Self {
+    /// Returns the negotiated ListGroups API version used for this result.
+    pub fn api_version(&self) -> i16 {
+        self.api_version
+    }
+
+    fn from_protocol_v1(
+        group: ListedGroupV1,
+        coordinator_id: i32,
+        throttle_time: Duration,
+        api_version: i16,
+    ) -> Self {
         Self {
             group_id: group.group_id,
             protocol_type: group.protocol_type,
+            group_state: None,
+            group_type: None,
             coordinator_id,
             throttle_time,
+            api_version,
         }
+    }
+
+    fn from_protocol_v4(
+        group: ListedGroupV4,
+        coordinator_id: i32,
+        throttle_time: Duration,
+        api_version: i16,
+    ) -> Self {
+        Self {
+            group_id: group.group_id,
+            protocol_type: group.protocol_type,
+            group_state: Some(group.group_state),
+            group_type: None,
+            coordinator_id,
+            throttle_time,
+            api_version,
+        }
+    }
+
+    fn from_protocol_v5(
+        group: ListedGroupV5,
+        coordinator_id: i32,
+        throttle_time: Duration,
+        api_version: i16,
+    ) -> Self {
+        Self {
+            group_id: group.group_id,
+            protocol_type: group.protocol_type,
+            group_state: Some(group.group_state),
+            group_type: Some(group.group_type),
+            coordinator_id,
+            throttle_time,
+            api_version,
+        }
+    }
+}
+
+/// Options for broker-negotiated ListGroups queries.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ListGroupsOptions {
+    states: Vec<String>,
+    types: Vec<String>,
+}
+
+impl ListGroupsOptions {
+    /// Creates an option set that asks for every group.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Adds a broker-side group-state filter.
+    pub fn state(mut self, state: impl Into<String>) -> Self {
+        self.states.push(state.into());
+        self
+    }
+
+    /// Replaces the broker-side group-state filter.
+    pub fn states(mut self, states: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        self.states = states.into_iter().map(Into::into).collect();
+        self
+    }
+
+    /// Adds a broker-side group-type filter.
+    pub fn group_type(mut self, group_type: impl Into<String>) -> Self {
+        self.types.push(group_type.into());
+        self
+    }
+
+    /// Replaces the broker-side group-type filter.
+    pub fn group_types(mut self, group_types: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        self.types = group_types.into_iter().map(Into::into).collect();
+        self
+    }
+
+    /// Returns the requested group-state filter.
+    pub fn states_ref(&self) -> &[String] {
+        &self.states
+    }
+
+    /// Returns the requested group-type filter.
+    pub fn group_types_ref(&self) -> &[String] {
+        &self.types
     }
 }
 
@@ -6675,11 +8557,679 @@ impl BrokerDescription {
     }
 }
 
+/// One listener endpoint advertised by a KRaft voter.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RaftVoterListener {
+    name: String,
+    host: String,
+    port: u16,
+}
+
+impl RaftVoterListener {
+    /// Creates a listener endpoint from its Kafka listener name, host, and port.
+    pub fn new(name: impl Into<String>, host: impl Into<String>, port: u16) -> Self {
+        Self {
+            name: name.into(),
+            host: host.into(),
+            port,
+        }
+    }
+
+    /// Returns the Kafka listener name.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Returns the listener host.
+    pub fn host(&self) -> &str {
+        &self.host
+    }
+
+    /// Returns the listener port.
+    pub fn port(&self) -> u16 {
+        self.port
+    }
+}
+
+impl From<&RaftVoterListener> for ProtocolRaftVoterListener {
+    fn from(listener: &RaftVoterListener) -> Self {
+        Self {
+            name: listener.name.clone(),
+            host: listener.host.clone(),
+            port: listener.port,
+        }
+    }
+}
+
+/// Options for adding a voter to the KRaft controller quorum.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AddRaftVoterOptions {
+    cluster_id: Option<String>,
+    timeout: Duration,
+    voter_id: i32,
+    voter_directory_id: [u8; 16],
+    listeners: Vec<RaftVoterListener>,
+    ack_when_committed: bool,
+}
+
+impl AddRaftVoterOptions {
+    /// Creates options with a 60-second controller timeout and no listeners.
+    pub fn new(voter_id: i32, voter_directory_id: [u8; 16]) -> Self {
+        Self {
+            cluster_id: None,
+            timeout: Duration::from_secs(60),
+            voter_id,
+            voter_directory_id,
+            listeners: Vec::new(),
+            ack_when_committed: false,
+        }
+    }
+
+    /// Sets the expected Kafka cluster ID, when known.
+    pub fn cluster_id(mut self, cluster_id: impl Into<String>) -> Self {
+        self.cluster_id = Some(cluster_id.into());
+        self
+    }
+
+    /// Sets the controller-side voter addition timeout.
+    pub fn timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = timeout;
+        self
+    }
+
+    /// Adds one listener endpoint to the voter registration.
+    pub fn listener(mut self, listener: RaftVoterListener) -> Self {
+        self.listeners.push(listener);
+        self
+    }
+
+    /// Requests that v1 wait until the voter addition is committed.
+    pub fn ack_when_committed(mut self, ack_when_committed: bool) -> Self {
+        self.ack_when_committed = ack_when_committed;
+        self
+    }
+
+    /// Returns the configured cluster ID.
+    pub fn cluster_id_ref(&self) -> Option<&str> {
+        self.cluster_id.as_deref()
+    }
+
+    /// Returns the controller-side timeout.
+    pub fn request_timeout(&self) -> Duration {
+        self.timeout
+    }
+
+    /// Returns the voter broker ID.
+    pub fn voter_id(&self) -> i32 {
+        self.voter_id
+    }
+
+    /// Returns the voter directory UUID.
+    pub fn voter_directory_id(&self) -> [u8; 16] {
+        self.voter_directory_id
+    }
+
+    /// Returns the listener endpoints.
+    pub fn listeners(&self) -> &[RaftVoterListener] {
+        &self.listeners
+    }
+
+    /// Returns whether the request waits for the committed quorum change.
+    pub fn ack_when_committed_ref(&self) -> bool {
+        self.ack_when_committed
+    }
+}
+
+/// Options for removing a voter from the KRaft controller quorum.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoveRaftVoterOptions {
+    cluster_id: Option<String>,
+    voter_id: i32,
+    voter_directory_id: [u8; 16],
+}
+
+impl RemoveRaftVoterOptions {
+    /// Creates options for a voter identified by broker ID and directory UUID.
+    pub fn new(voter_id: i32, voter_directory_id: [u8; 16]) -> Self {
+        Self {
+            cluster_id: None,
+            voter_id,
+            voter_directory_id,
+        }
+    }
+
+    /// Sets the expected Kafka cluster ID.
+    pub fn cluster_id(mut self, cluster_id: impl Into<String>) -> Self {
+        self.cluster_id = Some(cluster_id.into());
+        self
+    }
+
+    /// Returns the configured cluster ID.
+    pub fn cluster_id_ref(&self) -> Option<&str> {
+        self.cluster_id.as_deref()
+    }
+
+    /// Returns the voter broker ID.
+    pub fn voter_id(&self) -> i32 {
+        self.voter_id
+    }
+
+    /// Returns the voter directory UUID.
+    pub fn voter_directory_id(&self) -> [u8; 16] {
+        self.voter_directory_id
+    }
+}
+
+/// Outcome returned by AddRaftVoter and RemoveRaftVoter.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RaftVoterResult {
+    api_version: i16,
+    throttle_time: Duration,
+    error_code: i16,
+    error_message: Option<String>,
+}
+
+impl RaftVoterResult {
+    /// Returns the negotiated API version.
+    pub fn api_version(&self) -> i16 {
+        self.api_version
+    }
+
+    /// Returns the broker throttle duration.
+    pub fn throttle_time(&self) -> Duration {
+        self.throttle_time
+    }
+
+    /// Returns the Kafka error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns the broker error message, when supplied.
+    pub fn error_message(&self) -> Option<&str> {
+        self.error_message.as_deref()
+    }
+
+    /// Returns kafrust's classification for a broker error.
+    pub fn broker_error_kind(&self) -> Option<BrokerErrorKind> {
+        (self.error_code != 0).then(|| BrokerErrorKind::from_code(self.error_code))
+    }
+
+    /// Returns whether Kafka accepted the voter mutation.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+    }
+
+    fn from_protocol(response: AddRaftVoterResponse, api_version: i16) -> Self {
+        Self {
+            api_version,
+            throttle_time: Duration::from_millis(nonnegative_i32_to_u64(response.throttle_time_ms)),
+            error_code: response.error_code,
+            error_message: response.error_message,
+        }
+    }
+}
+
+/// Outcome returned by [`AdminClient::unregister_broker`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnregisterBrokerResult {
+    api_version: i16,
+    throttle_time: Duration,
+    error_code: i16,
+    error_message: Option<String>,
+}
+
+impl UnregisterBrokerResult {
+    /// Returns the negotiated API version.
+    pub fn api_version(&self) -> i16 {
+        self.api_version
+    }
+
+    /// Returns the broker throttle duration.
+    pub fn throttle_time(&self) -> Duration {
+        self.throttle_time
+    }
+
+    /// Returns the Kafka error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns the broker error message, when supplied.
+    pub fn error_message(&self) -> Option<&str> {
+        self.error_message.as_deref()
+    }
+
+    /// Returns kafrust's classification for a broker error.
+    pub fn broker_error_kind(&self) -> Option<BrokerErrorKind> {
+        (self.error_code != 0).then(|| BrokerErrorKind::from_code(self.error_code))
+    }
+
+    /// Returns whether Kafka accepted the broker-unregistration request.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+    }
+
+    fn from_protocol(response: UnregisterBrokerResponseV0, api_version: i16) -> Self {
+        Self {
+            api_version,
+            throttle_time: Duration::from_millis(nonnegative_i32_to_u64(response.throttle_time_ms)),
+            error_code: response.error_code,
+            error_message: response.error_message,
+        }
+    }
+}
+
+/// The Kafka UpdateFeatures v1 operation to apply to a finalized feature.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FeatureUpgradeType {
+    /// Raise or retain the feature level without allowing a downgrade.
+    Upgrade,
+    /// Allow a downgrade that Kafka considers safe.
+    SafeDowngrade,
+    /// Allow a downgrade that Kafka considers unsafe.
+    UnsafeDowngrade,
+}
+
+/// One finalized Kafka feature level change submitted to
+/// [`AdminClient::update_features`]. A level below one requests removal of a
+/// finalized feature according to Kafka's UpdateFeatures contract.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FeatureUpdate {
+    feature: String,
+    max_version_level: i16,
+    upgrade_type: FeatureUpgradeType,
+}
+
+impl FeatureUpdate {
+    /// Creates a feature update with downgrade protection enabled by default.
+    pub fn new(feature: impl Into<String>, max_version_level: i16) -> Self {
+        Self {
+            feature: feature.into(),
+            max_version_level,
+            upgrade_type: FeatureUpgradeType::Upgrade,
+        }
+    }
+
+    /// Allows Kafka to lower or remove the currently finalized feature level.
+    pub fn allow_downgrade(mut self, allow_downgrade: bool) -> Self {
+        self.upgrade_type = if allow_downgrade {
+            FeatureUpgradeType::SafeDowngrade
+        } else {
+            FeatureUpgradeType::Upgrade
+        };
+        self
+    }
+
+    /// Sets Kafka's v1 three-way feature upgrade operation.
+    pub fn upgrade_type(mut self, upgrade_type: FeatureUpgradeType) -> Self {
+        self.upgrade_type = upgrade_type;
+        self
+    }
+
+    /// Returns the Kafka feature name.
+    pub fn feature(&self) -> &str {
+        &self.feature
+    }
+
+    /// Returns the requested maximum finalized version level.
+    pub fn max_version_level(&self) -> i16 {
+        self.max_version_level
+    }
+
+    /// Returns whether Kafka may lower or remove the current level.
+    pub fn downgrade_allowed(&self) -> bool {
+        !matches!(self.upgrade_type, FeatureUpgradeType::Upgrade)
+    }
+
+    /// Returns the requested Kafka v1 operation.
+    pub fn upgrade_type_ref(&self) -> FeatureUpgradeType {
+        self.upgrade_type
+    }
+
+    fn as_protocol_v0(&self) -> Option<kafrust_protocol::api::update_features::FeatureUpdateV0> {
+        if matches!(self.upgrade_type, FeatureUpgradeType::UnsafeDowngrade) {
+            return None;
+        }
+        Some(kafrust_protocol::api::update_features::FeatureUpdateV0 {
+            feature: self.feature.clone(),
+            max_version_level: self.max_version_level,
+            allow_downgrade: self.downgrade_allowed(),
+        })
+    }
+
+    fn as_protocol_v1(&self) -> kafrust_protocol::api::update_features::FeatureUpdateV1 {
+        let upgrade_type = match self.upgrade_type {
+            FeatureUpgradeType::Upgrade => 1,
+            FeatureUpgradeType::SafeDowngrade => 2,
+            FeatureUpgradeType::UnsafeDowngrade => 3,
+        };
+        kafrust_protocol::api::update_features::FeatureUpdateV1 {
+            feature: self.feature.clone(),
+            max_version_level: self.max_version_level,
+            upgrade_type,
+        }
+    }
+}
+
+/// Options for a controller-routed UpdateFeatures request.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UpdateFeaturesOptions {
+    timeout: Duration,
+    validate_only: bool,
+}
+
+impl UpdateFeaturesOptions {
+    /// Creates options with Kafka's 60-second default request timeout.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Sets the broker-side feature update timeout.
+    pub fn timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = timeout;
+        self
+    }
+
+    /// Returns the configured broker request timeout.
+    pub fn request_timeout(&self) -> Duration {
+        self.timeout
+    }
+
+    /// Validates the requested changes without finalizing them when the
+    /// broker supports UpdateFeatures v1.
+    pub fn validate_only(mut self, validate_only: bool) -> Self {
+        self.validate_only = validate_only;
+        self
+    }
+
+    /// Returns whether the request is validation-only.
+    pub fn validate_only_ref(&self) -> bool {
+        self.validate_only
+    }
+}
+
+impl Default for UpdateFeaturesOptions {
+    fn default() -> Self {
+        Self {
+            timeout: Duration::from_secs(60),
+            validate_only: false,
+        }
+    }
+}
+
+/// Top-level and per-feature outcomes returned by UpdateFeatures.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UpdateFeaturesResult {
+    throttle_time: Duration,
+    error_code: i16,
+    error_message: Option<String>,
+    results: Vec<FeatureUpdateResult>,
+}
+
+impl UpdateFeaturesResult {
+    /// Returns the broker throttle duration.
+    pub fn throttle_time(&self) -> Duration {
+        self.throttle_time
+    }
+
+    /// Returns the top-level Kafka error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns the top-level Kafka error message, when present.
+    pub fn error_message(&self) -> Option<&str> {
+        self.error_message.as_deref()
+    }
+
+    /// Returns whether the top-level feature update request succeeded.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+    }
+
+    /// Returns per-feature outcomes retained by Kafka for UpdateFeatures.
+    pub fn results(&self) -> &[FeatureUpdateResult] {
+        &self.results
+    }
+
+    fn from_protocol(response: UpdateFeaturesResponseV0) -> Self {
+        Self {
+            throttle_time: Duration::from_millis(nonnegative_i32_to_u64(response.throttle_time_ms)),
+            error_code: response.error_code,
+            error_message: response.error_message,
+            results: response
+                .results
+                .into_iter()
+                .map(FeatureUpdateResult::from_protocol)
+                .collect(),
+        }
+    }
+}
+
+/// Outcome for one feature in an UpdateFeatures response.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FeatureUpdateResult {
+    feature: String,
+    error_code: i16,
+    error_message: Option<String>,
+}
+
+impl FeatureUpdateResult {
+    /// Returns the Kafka feature name.
+    pub fn feature(&self) -> &str {
+        &self.feature
+    }
+
+    /// Returns the feature-level Kafka error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns the feature-level Kafka error message, when present.
+    pub fn error_message(&self) -> Option<&str> {
+        self.error_message.as_deref()
+    }
+
+    /// Returns whether Kafka accepted this feature update.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+    }
+
+    fn from_protocol(
+        result: kafrust_protocol::api::update_features::FeatureUpdateResultV0,
+    ) -> Self {
+        Self {
+            feature: result.feature,
+            error_code: result.error_code,
+            error_message: result.error_message,
+        }
+    }
+}
+
+/// A Kafka feature version range supported by one broker.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SupportedFeature {
+    name: String,
+    min_version: i16,
+    max_version: i16,
+}
+
+impl SupportedFeature {
+    /// Returns the Kafka feature name.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Returns the minimum version level supported by the broker.
+    pub fn min_version(&self) -> i16 {
+        self.min_version
+    }
+
+    /// Returns the maximum version level supported by the broker.
+    pub fn max_version(&self) -> i16 {
+        self.max_version
+    }
+}
+
+/// A cluster-wide finalized Kafka feature version range.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FinalizedFeature {
+    name: String,
+    min_version_level: i16,
+    max_version_level: i16,
+}
+
+impl FinalizedFeature {
+    /// Returns the Kafka feature name.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Returns the finalized minimum version level.
+    pub fn min_version_level(&self) -> i16 {
+        self.min_version_level
+    }
+
+    /// Returns the finalized maximum version level.
+    pub fn max_version_level(&self) -> i16 {
+        self.max_version_level
+    }
+}
+
+/// Broker-supported and cluster-finalized feature metadata.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FeatureMetadata {
+    supported_features: Vec<SupportedFeature>,
+    finalized_features_epoch: i64,
+    finalized_features: Vec<FinalizedFeature>,
+    zk_migration_ready: bool,
+}
+
+impl FeatureMetadata {
+    /// Returns the feature ranges supported by the broker serving the request.
+    pub fn supported_features(&self) -> &[SupportedFeature] {
+        &self.supported_features
+    }
+
+    /// Returns the finalized-feature metadata epoch, or `-1` if Kafka reported
+    /// that the epoch is unknown.
+    pub fn finalized_features_epoch(&self) -> i64 {
+        self.finalized_features_epoch
+    }
+
+    /// Returns cluster-wide finalized feature ranges.
+    pub fn finalized_features(&self) -> &[FinalizedFeature] {
+        &self.finalized_features
+    }
+
+    /// Returns whether the broker reports that ZooKeeper migration is ready.
+    pub fn zk_migration_ready(&self) -> bool {
+        self.zk_migration_ready
+    }
+
+    fn from_protocol(response: ApiVersionsResponseV3) -> Self {
+        Self {
+            supported_features: response
+                .supported_features
+                .into_iter()
+                .map(|feature| SupportedFeature {
+                    name: feature.name,
+                    min_version: feature.min_version,
+                    max_version: feature.max_version,
+                })
+                .collect(),
+            finalized_features_epoch: response.finalized_features_epoch,
+            finalized_features: response
+                .finalized_features
+                .into_iter()
+                .map(|feature| FinalizedFeature {
+                    name: feature.name,
+                    min_version_level: feature.min_version_level,
+                    max_version_level: feature.max_version_level,
+                })
+                .collect(),
+            zk_migration_ready: response.zk_migration_ready,
+        }
+    }
+}
+
+/// Kafka endpoint set selected by DescribeCluster v1.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DescribeClusterEndpointType {
+    /// Return broker endpoints.
+    Brokers,
+    /// Return controller endpoints.
+    Controllers,
+    /// Preserve an endpoint type introduced by a newer broker.
+    Other(i8),
+}
+
+impl DescribeClusterEndpointType {
+    /// Returns Kafka's raw endpoint type code.
+    pub fn code(self) -> i8 {
+        match self {
+            Self::Brokers => 1,
+            Self::Controllers => 2,
+            Self::Other(code) => code,
+        }
+    }
+
+    /// Preserves an endpoint type received from Kafka.
+    pub fn from_code(code: i8) -> Self {
+        match code {
+            1 => Self::Brokers,
+            2 => Self::Controllers,
+            code => Self::Other(code),
+        }
+    }
+}
+
+/// Options for Kafka's dedicated DescribeCluster API.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct DescribeClusterOptions {
+    include_cluster_authorized_operations: bool,
+    endpoint_type: Option<DescribeClusterEndpointType>,
+}
+
+impl DescribeClusterOptions {
+    /// Creates options that request broker endpoints without ACL bitfields.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Requests the cluster authorized-operations bitfield.
+    pub fn include_cluster_authorized_operations(mut self, include: bool) -> Self {
+        self.include_cluster_authorized_operations = include;
+        self
+    }
+
+    /// Selects the endpoint set for DescribeCluster v1.
+    pub fn endpoint_type(mut self, endpoint_type: DescribeClusterEndpointType) -> Self {
+        self.endpoint_type = Some(endpoint_type);
+        self
+    }
+
+    /// Returns whether cluster authorized operations were requested.
+    pub fn includes_cluster_authorized_operations(&self) -> bool {
+        self.include_cluster_authorized_operations
+    }
+
+    /// Returns the requested endpoint set, or `None` for the v0-compatible
+    /// default broker endpoint selection.
+    pub fn endpoint_type_ref(&self) -> Option<DescribeClusterEndpointType> {
+        self.endpoint_type
+    }
+}
+
 /// Kafka cluster metadata returned by [`AdminClient::describe_cluster`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClusterDescription {
     controller_id: i32,
     brokers: Vec<BrokerDescription>,
+    cluster_id: Option<String>,
+    endpoint_type: Option<DescribeClusterEndpointType>,
+    cluster_authorized_operations: Option<i32>,
 }
 
 impl ClusterDescription {
@@ -6693,11 +9243,62 @@ impl ClusterDescription {
         &self.brokers
     }
 
+    /// Returns the Kafka cluster ID when the dedicated DescribeCluster path
+    /// supplied it.
+    pub fn cluster_id(&self) -> Option<&str> {
+        self.cluster_id.as_deref()
+    }
+
+    /// Returns the endpoint set represented by this response.
+    pub fn endpoint_type(&self) -> Option<DescribeClusterEndpointType> {
+        self.endpoint_type
+    }
+
+    /// Returns Kafka's cluster authorized-operations bitfield when requested.
+    pub fn cluster_authorized_operations(&self) -> Option<i32> {
+        self.cluster_authorized_operations
+    }
+
     /// Returns the active controller broker when it is present in metadata.
     pub fn controller(&self) -> Option<&BrokerDescription> {
         self.brokers
             .iter()
             .find(|broker| broker.id == self.controller_id)
+    }
+
+    fn from_metadata(metadata: MetadataResponseV1) -> Self {
+        Self {
+            controller_id: metadata.controller_id,
+            brokers: metadata
+                .brokers
+                .into_iter()
+                .map(BrokerDescription::from_protocol)
+                .collect(),
+            cluster_id: None,
+            endpoint_type: None,
+            cluster_authorized_operations: None,
+        }
+    }
+
+    fn from_describe_cluster(response: DescribeClusterResponse) -> Self {
+        Self {
+            controller_id: response.controller_id,
+            brokers: response
+                .brokers
+                .into_iter()
+                .map(|broker| BrokerDescription {
+                    id: broker.node_id,
+                    host: broker.host,
+                    port: broker.port,
+                    rack: broker.rack,
+                })
+                .collect(),
+            cluster_id: Some(response.cluster_id),
+            endpoint_type: response
+                .endpoint_type
+                .map(DescribeClusterEndpointType::from_code),
+            cluster_authorized_operations: Some(response.cluster_authorized_operations),
+        }
     }
 }
 
@@ -7337,6 +9938,194 @@ impl DescribeQuorumResult {
     }
 }
 
+/// Kafka resource types accepted by ListConfigResources.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConfigResourceType {
+    /// Topic configuration resources.
+    Topic,
+    /// Broker configuration resources.
+    Broker,
+    /// Broker logger configuration resources.
+    BrokerLogger,
+    /// Client metrics configuration resources.
+    ClientMetrics,
+    /// Consumer group configuration resources.
+    Group,
+    /// A resource type introduced by a newer broker.
+    Other(i8),
+}
+
+impl ConfigResourceType {
+    /// Returns Kafka's raw resource type code.
+    pub const fn code(self) -> i8 {
+        match self {
+            Self::Topic => 2,
+            Self::Broker => 4,
+            Self::BrokerLogger => 8,
+            Self::ClientMetrics => 16,
+            Self::Group => 32,
+            Self::Other(code) => code,
+        }
+    }
+
+    /// Converts a broker resource type code without discarding unknown values.
+    pub const fn from_code(code: i8) -> Self {
+        match code {
+            2 => Self::Topic,
+            4 => Self::Broker,
+            8 => Self::BrokerLogger,
+            16 => Self::ClientMetrics,
+            32 => Self::Group,
+            code => Self::Other(code),
+        }
+    }
+}
+
+/// Options for one ListConfigResources operation.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ListConfigResourcesOptions {
+    resource_types: Vec<ConfigResourceType>,
+}
+
+impl ListConfigResourcesOptions {
+    /// Creates an option set that asks for all resource types supported by Kafka.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Adds a resource type to the broker-side filter.
+    pub fn resource_type(mut self, resource_type: ConfigResourceType) -> Self {
+        self.resource_types.push(resource_type);
+        self
+    }
+
+    /// Replaces the broker-side resource type filter.
+    pub fn resource_types(
+        mut self,
+        resource_types: impl IntoIterator<Item = ConfigResourceType>,
+    ) -> Self {
+        self.resource_types = resource_types.into_iter().collect();
+        self
+    }
+
+    /// Returns the requested resource type filter, or an empty slice for all types.
+    pub fn resource_types_ref(&self) -> &[ConfigResourceType] {
+        &self.resource_types
+    }
+}
+
+/// Complete response from one ListConfigResources operation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ListConfigResourcesResult {
+    api_version: i16,
+    throttle_time: Duration,
+    error_code: i16,
+    resources: Vec<ListedConfigResource>,
+}
+
+impl ListConfigResourcesResult {
+    /// Returns the negotiated API 74 version.
+    pub fn api_version(&self) -> i16 {
+        self.api_version
+    }
+
+    /// Returns the broker throttle time.
+    pub fn throttle_time(&self) -> Duration {
+        self.throttle_time
+    }
+
+    /// Returns the top-level Kafka error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns whether Kafka listed the resources successfully.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+    }
+
+    /// Returns kafrust's classification for a top-level error code.
+    pub fn broker_error_kind(&self) -> Option<BrokerErrorKind> {
+        (self.error_code != 0).then(|| BrokerErrorKind::from_code(self.error_code))
+    }
+
+    /// Returns resources in broker response order.
+    pub fn resources(&self) -> &[ListedConfigResource] {
+        &self.resources
+    }
+
+    /// Consumes this response and returns its resources.
+    pub fn into_resources(self) -> Vec<ListedConfigResource> {
+        self.resources
+    }
+
+    fn from_protocol(
+        response: kafrust_protocol::api::list_config_resources::ListConfigResourcesResponseV1,
+        api_version: i16,
+    ) -> Self {
+        Self {
+            api_version,
+            throttle_time: Duration::from_millis(nonnegative_i32_to_u64(response.throttle_time_ms)),
+            error_code: response.error_code,
+            resources: response
+                .resources
+                .into_iter()
+                .map(ListedConfigResource::from_protocol)
+                .collect(),
+        }
+    }
+
+    fn from_protocol_v0(
+        response: kafrust_protocol::api::list_config_resources::ListConfigResourcesResponseV0,
+        api_version: i16,
+    ) -> Self {
+        Self {
+            api_version,
+            throttle_time: Duration::from_millis(nonnegative_i32_to_u64(response.throttle_time_ms)),
+            error_code: response.error_code,
+            resources: response
+                .resources
+                .into_iter()
+                .map(|resource| ListedConfigResource {
+                    name: resource.name,
+                    resource_type: ConfigResourceType::ClientMetrics,
+                })
+                .collect(),
+        }
+    }
+}
+
+/// One configuration resource returned by ListConfigResources.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ListedConfigResource {
+    name: String,
+    resource_type: ConfigResourceType,
+}
+
+impl ListedConfigResource {
+    /// Returns the resource name.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Returns the typed resource kind.
+    pub fn resource_type(&self) -> ConfigResourceType {
+        self.resource_type
+    }
+
+    /// Returns Kafka's raw resource type code.
+    pub fn resource_type_code(&self) -> i8 {
+        self.resource_type.code()
+    }
+
+    fn from_protocol(resource: ListedConfigResourceV1) -> Self {
+        Self {
+            name: resource.resource_name,
+            resource_type: ConfigResourceType::from_code(resource.resource_type),
+        }
+    }
+}
+
 /// One Kafka topic whose configuration should be described.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TopicConfigResource {
@@ -7376,6 +10165,14 @@ impl TopicConfigResource {
 
     fn as_protocol(&self) -> DescribeConfigsResourceV1 {
         DescribeConfigsResourceV1 {
+            resource_type: 2,
+            resource_name: self.name.clone(),
+            configuration_keys: self.configuration_keys.clone(),
+        }
+    }
+
+    fn as_protocol_v4(&self) -> DescribeConfigsResourceV4 {
+        DescribeConfigsResourceV4 {
             resource_type: 2,
             resource_name: self.name.clone(),
             configuration_keys: self.configuration_keys.clone(),
@@ -7471,6 +10268,7 @@ impl TopicConfigUpdateEntry {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct DescribeConfigsOptions {
     include_synonyms: bool,
+    include_documentation: bool,
 }
 
 impl DescribeConfigsOptions {
@@ -7485,9 +10283,21 @@ impl DescribeConfigsOptions {
         self
     }
 
+    /// Selects whether Kafka should return configuration type and documentation.
+    /// This requires DescribeConfigs v4, available on Kafka 4.0 and newer.
+    pub fn include_documentation(mut self, include_documentation: bool) -> Self {
+        self.include_documentation = include_documentation;
+        self
+    }
+
     /// Returns whether configuration synonyms were requested.
     pub fn includes_synonyms(&self) -> bool {
         self.include_synonyms
+    }
+
+    /// Returns whether configuration documentation was requested.
+    pub fn includes_documentation(&self) -> bool {
+        self.include_documentation
     }
 }
 
@@ -7579,6 +10389,20 @@ impl ConfigResourceResult {
                 .collect(),
         }
     }
+
+    fn from_v4_protocol(result: DescribeConfigsResultV4) -> Self {
+        Self {
+            resource_type: result.resource_type,
+            name: result.resource_name,
+            error_code: result.error_code,
+            error_message: result.error_message,
+            entries: result
+                .configs
+                .into_iter()
+                .map(ConfigEntry::from_v4_protocol)
+                .collect(),
+        }
+    }
 }
 
 /// One Kafka configuration entry.
@@ -7590,6 +10414,8 @@ pub struct ConfigEntry {
     source: ConfigSource,
     is_sensitive: bool,
     synonyms: Vec<ConfigSynonym>,
+    config_type: Option<i8>,
+    documentation: Option<String>,
 }
 
 impl ConfigEntry {
@@ -7623,6 +10449,17 @@ impl ConfigEntry {
         &self.synonyms
     }
 
+    /// Returns Kafka's raw configuration type code when DescribeConfigs v4
+    /// supplied it.
+    pub fn config_type(&self) -> Option<i8> {
+        self.config_type
+    }
+
+    /// Returns Kafka's configuration documentation when requested.
+    pub fn documentation(&self) -> Option<&str> {
+        self.documentation.as_deref()
+    }
+
     fn from_protocol(entry: DescribeConfigsEntryV1) -> Self {
         Self {
             name: entry.name,
@@ -7635,6 +10472,25 @@ impl ConfigEntry {
                 .into_iter()
                 .map(ConfigSynonym::from_protocol)
                 .collect(),
+            config_type: None,
+            documentation: None,
+        }
+    }
+
+    fn from_v4_protocol(entry: DescribeConfigsEntryV4) -> Self {
+        Self {
+            name: entry.name,
+            value: entry.value,
+            read_only: entry.read_only,
+            source: ConfigSource::from_code(entry.config_source),
+            is_sensitive: entry.is_sensitive,
+            synonyms: entry
+                .synonyms
+                .into_iter()
+                .map(ConfigSynonym::from_v4_protocol)
+                .collect(),
+            config_type: Some(entry.config_type),
+            documentation: entry.documentation,
         }
     }
 }
@@ -7664,6 +10520,14 @@ impl ConfigSynonym {
     }
 
     fn from_protocol(synonym: DescribeConfigsSynonymV1) -> Self {
+        Self {
+            name: synonym.name,
+            value: synonym.value,
+            source: ConfigSource::from_code(synonym.source),
+        }
+    }
+
+    fn from_v4_protocol(synonym: DescribeConfigsSynonymV4) -> Self {
         Self {
             name: synonym.name,
             value: synonym.value,
@@ -8525,6 +11389,1280 @@ impl ShareGroupTopicPartitions {
     }
 }
 
+/// Description returned by Kafka's StreamsGroupDescribe API.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StreamsGroupDescription {
+    group_id: String,
+    error_code: i16,
+    error_message: Option<String>,
+    state: String,
+    group_epoch: i32,
+    assignment_epoch: i32,
+    topology: Option<StreamsGroupTopology>,
+    members: Vec<StreamsGroupMember>,
+    authorized_operations: i32,
+    throttle_time: Duration,
+}
+
+impl StreamsGroupDescription {
+    /// Returns the Streams group ID.
+    pub fn group_id(&self) -> &str {
+        &self.group_id
+    }
+
+    /// Returns Kafka's current Streams group state.
+    pub fn state(&self) -> &str {
+        &self.state
+    }
+
+    /// Returns the current group epoch.
+    pub fn group_epoch(&self) -> i32 {
+        self.group_epoch
+    }
+
+    /// Returns the current assignment epoch.
+    pub fn assignment_epoch(&self) -> i32 {
+        self.assignment_epoch
+    }
+
+    /// Returns the initialized topology, when the broker included one.
+    pub fn topology(&self) -> Option<&StreamsGroupTopology> {
+        self.topology.as_ref()
+    }
+
+    /// Returns Streams group members in broker response order.
+    pub fn members(&self) -> &[StreamsGroupMember] {
+        &self.members
+    }
+
+    /// Returns Kafka's authorized-operations bitfield.
+    pub fn authorized_operations(&self) -> i32 {
+        self.authorized_operations
+    }
+
+    /// Returns whether Kafka described this group successfully.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+    }
+
+    /// Returns Kafka's raw group error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns Kafka's optional group error message.
+    pub fn error_message(&self) -> Option<&str> {
+        self.error_message.as_deref()
+    }
+
+    /// Returns the coordinator's throttle duration for this request.
+    pub fn throttle_time(&self) -> Duration {
+        self.throttle_time
+    }
+
+    fn from_protocol(group: ProtocolDescribedStreamsGroup, throttle_time: Duration) -> Self {
+        Self {
+            group_id: group.group_id,
+            error_code: group.error_code,
+            error_message: group.error_message,
+            state: group.group_state,
+            group_epoch: group.group_epoch,
+            assignment_epoch: group.assignment_epoch,
+            topology: group.topology.map(StreamsGroupTopology::from_protocol),
+            members: group
+                .members
+                .into_iter()
+                .map(StreamsGroupMember::from_protocol)
+                .collect(),
+            authorized_operations: group.authorized_operations,
+            throttle_time,
+        }
+    }
+}
+
+/// The topology currently initialized for a Streams group.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StreamsGroupTopology {
+    epoch: i32,
+    subtopologies: Option<Vec<StreamsGroupSubtopology>>,
+}
+
+impl StreamsGroupTopology {
+    /// Returns the topology epoch.
+    pub fn epoch(&self) -> i32 {
+        self.epoch
+    }
+
+    /// Returns the configured subtopologies, preserving Kafka's nullable value.
+    pub fn subtopologies(&self) -> Option<&[StreamsGroupSubtopology]> {
+        self.subtopologies.as_deref()
+    }
+
+    fn from_protocol(topology: ProtocolStreamsGroupTopology) -> Self {
+        Self {
+            epoch: topology.epoch,
+            subtopologies: topology.subtopologies.map(|subtopologies| {
+                subtopologies
+                    .into_iter()
+                    .map(StreamsGroupSubtopology::from_protocol)
+                    .collect()
+            }),
+        }
+    }
+}
+
+/// One subtopology in a Streams group topology.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StreamsGroupSubtopology {
+    subtopology_id: String,
+    source_topics: Vec<String>,
+    repartition_sink_topics: Vec<String>,
+    state_changelog_topics: Vec<StreamsGroupTopic>,
+    repartition_source_topics: Vec<StreamsGroupTopic>,
+}
+
+impl StreamsGroupSubtopology {
+    /// Returns the stable subtopology identifier.
+    pub fn subtopology_id(&self) -> &str {
+        &self.subtopology_id
+    }
+
+    /// Returns source topics read by this subtopology.
+    pub fn source_topics(&self) -> &[String] {
+        &self.source_topics
+    }
+
+    /// Returns repartition sink topic names.
+    pub fn repartition_sink_topics(&self) -> &[String] {
+        &self.repartition_sink_topics
+    }
+
+    /// Returns automatically managed state changelog topics.
+    pub fn state_changelog_topics(&self) -> &[StreamsGroupTopic] {
+        &self.state_changelog_topics
+    }
+
+    /// Returns automatically managed repartition source topics.
+    pub fn repartition_source_topics(&self) -> &[StreamsGroupTopic] {
+        &self.repartition_source_topics
+    }
+
+    fn from_protocol(subtopology: ProtocolStreamsGroupSubtopology) -> Self {
+        Self {
+            subtopology_id: subtopology.subtopology_id,
+            source_topics: subtopology.source_topics,
+            repartition_sink_topics: subtopology.repartition_sink_topics,
+            state_changelog_topics: subtopology
+                .state_changelog_topics
+                .into_iter()
+                .map(StreamsGroupTopic::from_protocol)
+                .collect(),
+            repartition_source_topics: subtopology
+                .repartition_source_topics
+                .into_iter()
+                .map(StreamsGroupTopic::from_protocol)
+                .collect(),
+        }
+    }
+}
+
+/// A topic managed by a Streams group topology.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StreamsGroupTopic {
+    name: String,
+    partitions: i32,
+    replication_factor: i16,
+    topic_configs: Vec<StreamsGroupTopicConfig>,
+}
+
+impl StreamsGroupTopic {
+    /// Returns the topic name.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Returns the configured partition count.
+    pub fn partitions(&self) -> i32 {
+        self.partitions
+    }
+
+    /// Returns the configured replication factor.
+    pub fn replication_factor(&self) -> i16 {
+        self.replication_factor
+    }
+
+    /// Returns topic-level configurations.
+    pub fn topic_configs(&self) -> &[StreamsGroupTopicConfig] {
+        &self.topic_configs
+    }
+
+    fn from_protocol(topic: ProtocolStreamsGroupTopic) -> Self {
+        Self {
+            name: topic.name,
+            partitions: topic.partitions,
+            replication_factor: topic.replication_factor,
+            topic_configs: topic
+                .topic_configs
+                .into_iter()
+                .map(StreamsGroupTopicConfig::from_protocol)
+                .collect(),
+        }
+    }
+}
+
+/// One configuration entry for a Streams group-managed topic.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StreamsGroupTopicConfig {
+    key: String,
+    value: String,
+}
+
+impl StreamsGroupTopicConfig {
+    /// Returns the configuration key.
+    pub fn key(&self) -> &str {
+        &self.key
+    }
+
+    /// Returns the configuration value.
+    pub fn value(&self) -> &str {
+        &self.value
+    }
+
+    fn from_protocol(config: ProtocolStreamsGroupTopicConfig) -> Self {
+        Self {
+            key: config.key,
+            value: config.value,
+        }
+    }
+}
+
+/// One member returned by StreamsGroupDescribe.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StreamsGroupMember {
+    member_id: String,
+    member_epoch: i32,
+    instance_id: Option<String>,
+    rack_id: Option<String>,
+    client_id: String,
+    client_host: String,
+    topology_epoch: i32,
+    process_id: String,
+    user_endpoint: Option<StreamsGroupEndpoint>,
+    client_tags: Vec<StreamsGroupKeyValue>,
+    task_offsets: Vec<StreamsGroupTaskOffset>,
+    task_end_offsets: Vec<StreamsGroupTaskOffset>,
+    assignment: StreamsGroupAssignment,
+    target_assignment: StreamsGroupAssignment,
+    is_classic: bool,
+}
+
+impl StreamsGroupMember {
+    /// Returns the member ID.
+    pub fn member_id(&self) -> &str {
+        &self.member_id
+    }
+
+    /// Returns the member epoch.
+    pub fn member_epoch(&self) -> i32 {
+        self.member_epoch
+    }
+
+    /// Returns the static instance ID, when configured.
+    pub fn instance_id(&self) -> Option<&str> {
+        self.instance_id.as_deref()
+    }
+
+    /// Returns the rack ID, when configured.
+    pub fn rack_id(&self) -> Option<&str> {
+        self.rack_id.as_deref()
+    }
+
+    /// Returns the Kafka client ID.
+    pub fn client_id(&self) -> &str {
+        &self.client_id
+    }
+
+    /// Returns the client host reported by Kafka.
+    pub fn client_host(&self) -> &str {
+        &self.client_host
+    }
+
+    /// Returns the member's topology epoch.
+    pub fn topology_epoch(&self) -> i32 {
+        self.topology_epoch
+    }
+
+    /// Returns the Streams process ID.
+    pub fn process_id(&self) -> &str {
+        &self.process_id
+    }
+
+    /// Returns the Interactive Queries endpoint, when configured.
+    pub fn user_endpoint(&self) -> Option<&StreamsGroupEndpoint> {
+        self.user_endpoint.as_ref()
+    }
+
+    /// Returns rack-aware client tags.
+    pub fn client_tags(&self) -> &[StreamsGroupKeyValue] {
+        &self.client_tags
+    }
+
+    /// Returns cumulative changelog offsets reported by the member.
+    pub fn task_offsets(&self) -> &[StreamsGroupTaskOffset] {
+        &self.task_offsets
+    }
+
+    /// Returns cumulative changelog end offsets reported by the member.
+    pub fn task_end_offsets(&self) -> &[StreamsGroupTaskOffset] {
+        &self.task_end_offsets
+    }
+
+    /// Returns the member's current task assignment.
+    pub fn assignment(&self) -> &StreamsGroupAssignment {
+        &self.assignment
+    }
+
+    /// Returns the member's target task assignment.
+    pub fn target_assignment(&self) -> &StreamsGroupAssignment {
+        &self.target_assignment
+    }
+
+    /// Returns whether this is a classic member pending upgrade.
+    pub fn is_classic(&self) -> bool {
+        self.is_classic
+    }
+
+    fn from_protocol(member: ProtocolDescribedStreamsGroupMember) -> Self {
+        Self {
+            member_id: member.member_id,
+            member_epoch: member.member_epoch,
+            instance_id: member.instance_id,
+            rack_id: member.rack_id,
+            client_id: member.client_id,
+            client_host: member.client_host,
+            topology_epoch: member.topology_epoch,
+            process_id: member.process_id,
+            user_endpoint: member
+                .user_endpoint
+                .map(StreamsGroupEndpoint::from_protocol),
+            client_tags: member
+                .client_tags
+                .into_iter()
+                .map(StreamsGroupKeyValue::from_protocol)
+                .collect(),
+            task_offsets: member
+                .task_offsets
+                .into_iter()
+                .map(StreamsGroupTaskOffset::from_protocol)
+                .collect(),
+            task_end_offsets: member
+                .task_end_offsets
+                .into_iter()
+                .map(StreamsGroupTaskOffset::from_protocol)
+                .collect(),
+            assignment: StreamsGroupAssignment::from_protocol(member.assignment),
+            target_assignment: StreamsGroupAssignment::from_protocol(member.target_assignment),
+            is_classic: member.is_classic,
+        }
+    }
+}
+
+/// A host and port exposed by a Streams group member.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StreamsGroupEndpoint {
+    host: String,
+    port: u16,
+}
+
+impl StreamsGroupEndpoint {
+    /// Returns the endpoint host.
+    pub fn host(&self) -> &str {
+        &self.host
+    }
+
+    /// Returns the endpoint port.
+    pub fn port(&self) -> u16 {
+        self.port
+    }
+
+    fn from_protocol(endpoint: ProtocolStreamsGroupEndpoint) -> Self {
+        Self {
+            host: endpoint.host,
+            port: endpoint.port,
+        }
+    }
+}
+
+/// A key/value entry attached to a Streams group member.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StreamsGroupKeyValue {
+    key: String,
+    value: String,
+}
+
+impl StreamsGroupKeyValue {
+    /// Returns the key.
+    pub fn key(&self) -> &str {
+        &self.key
+    }
+
+    /// Returns the value.
+    pub fn value(&self) -> &str {
+        &self.value
+    }
+
+    fn from_protocol(entry: ProtocolStreamsGroupKeyValue) -> Self {
+        Self {
+            key: entry.key,
+            value: entry.value,
+        }
+    }
+}
+
+/// A cumulative changelog offset reported by a Streams group member.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StreamsGroupTaskOffset {
+    subtopology_id: String,
+    partition: i32,
+    offset: i64,
+}
+
+impl StreamsGroupTaskOffset {
+    /// Returns the subtopology identifier.
+    pub fn subtopology_id(&self) -> &str {
+        &self.subtopology_id
+    }
+
+    /// Returns the partition index.
+    pub fn partition(&self) -> i32 {
+        self.partition
+    }
+
+    /// Returns the cumulative offset.
+    pub fn offset(&self) -> i64 {
+        self.offset
+    }
+
+    fn from_protocol(offset: ProtocolStreamsGroupTaskOffset) -> Self {
+        Self {
+            subtopology_id: offset.subtopology_id,
+            partition: offset.partition,
+            offset: offset.offset,
+        }
+    }
+}
+
+/// Current or target task assignment for a Streams group member.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StreamsGroupAssignment {
+    active_tasks: Vec<StreamsGroupTask>,
+    standby_tasks: Vec<StreamsGroupTask>,
+    warmup_tasks: Vec<StreamsGroupTask>,
+}
+
+impl StreamsGroupAssignment {
+    /// Returns active tasks.
+    pub fn active_tasks(&self) -> &[StreamsGroupTask] {
+        &self.active_tasks
+    }
+
+    /// Returns standby tasks.
+    pub fn standby_tasks(&self) -> &[StreamsGroupTask] {
+        &self.standby_tasks
+    }
+
+    /// Returns warm-up tasks.
+    pub fn warmup_tasks(&self) -> &[StreamsGroupTask] {
+        &self.warmup_tasks
+    }
+
+    fn from_protocol(assignment: ProtocolStreamsGroupAssignment) -> Self {
+        Self {
+            active_tasks: assignment
+                .active_tasks
+                .into_iter()
+                .map(StreamsGroupTask::from_protocol)
+                .collect(),
+            standby_tasks: assignment
+                .standby_tasks
+                .into_iter()
+                .map(StreamsGroupTask::from_protocol)
+                .collect(),
+            warmup_tasks: assignment
+                .warmup_tasks
+                .into_iter()
+                .map(StreamsGroupTask::from_protocol)
+                .collect(),
+        }
+    }
+}
+
+/// One Streams task assignment identified by subtopology and partitions.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StreamsGroupTask {
+    subtopology_id: String,
+    partitions: Vec<i32>,
+}
+
+impl StreamsGroupTask {
+    /// Returns the subtopology identifier.
+    pub fn subtopology_id(&self) -> &str {
+        &self.subtopology_id
+    }
+
+    /// Returns assigned partition indexes.
+    pub fn partitions(&self) -> &[i32] {
+        &self.partitions
+    }
+
+    fn from_protocol(task: ProtocolStreamsGroupTask) -> Self {
+        Self {
+            subtopology_id: task.subtopology_id,
+            partitions: task.partitions,
+        }
+    }
+}
+
+/// One partition supplied to InitializeShareGroupState.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ShareGroupStateInitializePartition {
+    partition: i32,
+    state_epoch: i32,
+    start_offset: i64,
+}
+
+impl ShareGroupStateInitializePartition {
+    /// Creates an initialization entry for one share partition.
+    pub fn new(partition: i32, state_epoch: i32, start_offset: i64) -> Self {
+        Self {
+            partition,
+            state_epoch,
+            start_offset,
+        }
+    }
+
+    /// Returns the partition index.
+    pub fn partition(&self) -> i32 {
+        self.partition
+    }
+
+    /// Returns the state epoch.
+    pub fn state_epoch(&self) -> i32 {
+        self.state_epoch
+    }
+
+    /// Returns the share-partition start offset.
+    pub fn start_offset(&self) -> i64 {
+        self.start_offset
+    }
+}
+
+/// One topic supplied to InitializeShareGroupState.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShareGroupStateInitializeTopic {
+    topic_id: [u8; 16],
+    partitions: Vec<ShareGroupStateInitializePartition>,
+}
+
+impl ShareGroupStateInitializeTopic {
+    /// Creates an initialization request entry for one topic UUID.
+    pub fn new(
+        topic_id: [u8; 16],
+        partitions: impl IntoIterator<Item = ShareGroupStateInitializePartition>,
+    ) -> Self {
+        Self {
+            topic_id,
+            partitions: partitions.into_iter().collect(),
+        }
+    }
+
+    /// Returns the Kafka topic UUID.
+    pub fn topic_id(&self) -> &[u8; 16] {
+        &self.topic_id
+    }
+
+    /// Returns initialization entries in request order.
+    pub fn partitions(&self) -> &[ShareGroupStateInitializePartition] {
+        &self.partitions
+    }
+}
+
+/// One partition filter supplied to ReadShareGroupState or its summary.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ShareGroupStateReadPartition {
+    partition: i32,
+    leader_epoch: i32,
+}
+
+impl ShareGroupStateReadPartition {
+    /// Creates a read entry for one share partition.
+    pub fn new(partition: i32, leader_epoch: i32) -> Self {
+        Self {
+            partition,
+            leader_epoch,
+        }
+    }
+
+    /// Returns the partition index.
+    pub fn partition(&self) -> i32 {
+        self.partition
+    }
+
+    /// Returns the leader epoch supplied to Kafka.
+    pub fn leader_epoch(&self) -> i32 {
+        self.leader_epoch
+    }
+}
+
+/// One topic filter supplied to ReadShareGroupState or its summary.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShareGroupStateReadTopic {
+    topic_id: [u8; 16],
+    partitions: Vec<ShareGroupStateReadPartition>,
+}
+
+impl ShareGroupStateReadTopic {
+    /// Creates a read request entry for one topic UUID.
+    pub fn new(
+        topic_id: [u8; 16],
+        partitions: impl IntoIterator<Item = ShareGroupStateReadPartition>,
+    ) -> Self {
+        Self {
+            topic_id,
+            partitions: partitions.into_iter().collect(),
+        }
+    }
+
+    /// Returns the Kafka topic UUID.
+    pub fn topic_id(&self) -> &[u8; 16] {
+        &self.topic_id
+    }
+
+    /// Returns partition filters in request order.
+    pub fn partitions(&self) -> &[ShareGroupStateReadPartition] {
+        &self.partitions
+    }
+}
+
+/// One delivery-state batch supplied to or returned by share-group state APIs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ShareGroupStateBatch {
+    first_offset: i64,
+    last_offset: i64,
+    delivery_state: i8,
+    delivery_count: i16,
+}
+
+impl ShareGroupStateBatch {
+    /// Creates one state batch using Kafka's delivery-state numeric value.
+    pub fn new(
+        first_offset: i64,
+        last_offset: i64,
+        delivery_state: i8,
+        delivery_count: i16,
+    ) -> Self {
+        Self {
+            first_offset,
+            last_offset,
+            delivery_state,
+            delivery_count,
+        }
+    }
+
+    /// Returns the first offset in the batch.
+    pub fn first_offset(&self) -> i64 {
+        self.first_offset
+    }
+
+    /// Returns the last offset in the batch.
+    pub fn last_offset(&self) -> i64 {
+        self.last_offset
+    }
+
+    /// Returns Kafka's delivery-state numeric value.
+    pub fn delivery_state(&self) -> i8 {
+        self.delivery_state
+    }
+
+    /// Returns the delivery count.
+    pub fn delivery_count(&self) -> i16 {
+        self.delivery_count
+    }
+}
+
+impl From<&ShareGroupStateBatch> for ProtocolShareGroupStateBatch {
+    fn from(batch: &ShareGroupStateBatch) -> Self {
+        Self {
+            first_offset: batch.first_offset,
+            last_offset: batch.last_offset,
+            delivery_state: batch.delivery_state,
+            delivery_count: batch.delivery_count,
+        }
+    }
+}
+
+/// One partition supplied to WriteShareGroupState.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShareGroupStateWritePartition {
+    partition: i32,
+    state_epoch: i32,
+    leader_epoch: i32,
+    start_offset: i64,
+    delivery_complete_count: Option<i32>,
+    state_batches: Vec<ShareGroupStateBatch>,
+}
+
+impl ShareGroupStateWritePartition {
+    /// Creates a write entry for one share partition.
+    pub fn new(
+        partition: i32,
+        state_epoch: i32,
+        leader_epoch: i32,
+        start_offset: i64,
+        state_batches: impl IntoIterator<Item = ShareGroupStateBatch>,
+    ) -> Self {
+        Self {
+            partition,
+            state_epoch,
+            leader_epoch,
+            start_offset,
+            delivery_complete_count: None,
+            state_batches: state_batches.into_iter().collect(),
+        }
+    }
+
+    /// Adds the Kafka 4.3 delivery-completion count carried by Write v1.
+    pub fn with_delivery_complete_count(mut self, count: i32) -> Self {
+        self.delivery_complete_count = Some(count);
+        self
+    }
+
+    /// Returns the partition index.
+    pub fn partition(&self) -> i32 {
+        self.partition
+    }
+
+    /// Returns the share-partition state epoch.
+    pub fn state_epoch(&self) -> i32 {
+        self.state_epoch
+    }
+
+    /// Returns the leader epoch.
+    pub fn leader_epoch(&self) -> i32 {
+        self.leader_epoch
+    }
+
+    /// Returns the share-partition start offset.
+    pub fn start_offset(&self) -> i64 {
+        self.start_offset
+    }
+
+    /// Returns the optional v1 delivery-completion count.
+    pub fn delivery_complete_count(&self) -> Option<i32> {
+        self.delivery_complete_count
+    }
+
+    /// Returns state batches in request order.
+    pub fn state_batches(&self) -> &[ShareGroupStateBatch] {
+        &self.state_batches
+    }
+}
+
+/// One topic supplied to WriteShareGroupState.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShareGroupStateWriteTopic {
+    topic_id: [u8; 16],
+    partitions: Vec<ShareGroupStateWritePartition>,
+}
+
+impl ShareGroupStateWriteTopic {
+    /// Creates a write request entry for one topic UUID.
+    pub fn new(
+        topic_id: [u8; 16],
+        partitions: impl IntoIterator<Item = ShareGroupStateWritePartition>,
+    ) -> Self {
+        Self {
+            topic_id,
+            partitions: partitions.into_iter().collect(),
+        }
+    }
+
+    /// Returns the Kafka topic UUID.
+    pub fn topic_id(&self) -> &[u8; 16] {
+        &self.topic_id
+    }
+
+    /// Returns partition writes in request order.
+    pub fn partitions(&self) -> &[ShareGroupStateWritePartition] {
+        &self.partitions
+    }
+}
+
+/// One topic supplied to DeleteShareGroupState.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShareGroupStateDeleteTopic {
+    topic_id: [u8; 16],
+    partitions: Vec<i32>,
+}
+
+impl ShareGroupStateDeleteTopic {
+    /// Creates a deletion request entry for one topic UUID.
+    pub fn new(topic_id: [u8; 16], partitions: impl IntoIterator<Item = i32>) -> Self {
+        Self {
+            topic_id,
+            partitions: partitions.into_iter().collect(),
+        }
+    }
+
+    /// Returns the Kafka topic UUID.
+    pub fn topic_id(&self) -> &[u8; 16] {
+        &self.topic_id
+    }
+
+    /// Returns partition indexes in request order.
+    pub fn partitions(&self) -> &[i32] {
+        &self.partitions
+    }
+}
+
+/// Result of Initialize, Write, or Delete share-group state.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShareGroupStateResult {
+    topics: Vec<ShareGroupStateTopicResult>,
+}
+
+impl ShareGroupStateResult {
+    /// Returns topic results in broker response order.
+    pub fn topics(&self) -> &[ShareGroupStateTopicResult] {
+        &self.topics
+    }
+
+    /// Returns whether every returned partition succeeded.
+    pub fn is_success(&self) -> bool {
+        self.topics
+            .iter()
+            .all(ShareGroupStateTopicResult::is_success)
+    }
+
+    fn from_protocol(response: ShareGroupStateResultResponse) -> Self {
+        Self {
+            topics: response
+                .results
+                .into_iter()
+                .map(ShareGroupStateTopicResult::from_protocol)
+                .collect(),
+        }
+    }
+}
+
+/// One topic result returned by Initialize, Write, or Delete share state.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShareGroupStateTopicResult {
+    topic_id: [u8; 16],
+    partitions: Vec<ShareGroupStatePartitionResult>,
+}
+
+impl ShareGroupStateTopicResult {
+    /// Returns the Kafka topic UUID.
+    pub fn topic_id(&self) -> &[u8; 16] {
+        &self.topic_id
+    }
+
+    /// Returns partition results in broker response order.
+    pub fn partitions(&self) -> &[ShareGroupStatePartitionResult] {
+        &self.partitions
+    }
+
+    /// Returns whether every partition in this topic succeeded.
+    pub fn is_success(&self) -> bool {
+        self.partitions
+            .iter()
+            .all(ShareGroupStatePartitionResult::is_success)
+    }
+
+    fn from_protocol(topic: ProtocolShareGroupStateTopicResult) -> Self {
+        Self {
+            topic_id: topic.topic_id,
+            partitions: topic
+                .partitions
+                .into_iter()
+                .map(ShareGroupStatePartitionResult::from_protocol)
+                .collect(),
+        }
+    }
+}
+
+/// One partition result returned by a share-group state mutation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShareGroupStatePartitionResult {
+    partition: i32,
+    error_code: i16,
+    error_message: Option<String>,
+}
+
+impl ShareGroupStatePartitionResult {
+    /// Returns the partition index.
+    pub fn partition(&self) -> i32 {
+        self.partition
+    }
+
+    /// Returns the Kafka error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns the broker error message, when supplied.
+    pub fn error_message(&self) -> Option<&str> {
+        self.error_message.as_deref()
+    }
+
+    /// Returns whether Kafka accepted this partition operation.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+    }
+
+    fn from_protocol(partition: ProtocolShareGroupStatePartitionResult) -> Self {
+        Self {
+            partition: partition.partition,
+            error_code: partition.error_code,
+            error_message: partition.error_message,
+        }
+    }
+}
+
+/// Complete ReadShareGroupState result.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReadShareGroupStateResult {
+    topics: Vec<ReadShareGroupStateTopicResult>,
+}
+
+impl ReadShareGroupStateResult {
+    /// Returns topic results in broker response order.
+    pub fn topics(&self) -> &[ReadShareGroupStateTopicResult] {
+        &self.topics
+    }
+
+    /// Returns whether every returned partition succeeded.
+    pub fn is_success(&self) -> bool {
+        self.topics
+            .iter()
+            .all(ReadShareGroupStateTopicResult::is_success)
+    }
+
+    fn from_protocol(response: ReadShareGroupStateResponseV0) -> Self {
+        Self {
+            topics: response
+                .results
+                .into_iter()
+                .map(ReadShareGroupStateTopicResult::from_protocol)
+                .collect(),
+        }
+    }
+}
+
+/// One topic returned by ReadShareGroupState.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReadShareGroupStateTopicResult {
+    topic_id: [u8; 16],
+    partitions: Vec<ReadShareGroupStatePartitionResult>,
+}
+
+impl ReadShareGroupStateTopicResult {
+    /// Returns the Kafka topic UUID.
+    pub fn topic_id(&self) -> &[u8; 16] {
+        &self.topic_id
+    }
+
+    /// Returns partition state in broker response order.
+    pub fn partitions(&self) -> &[ReadShareGroupStatePartitionResult] {
+        &self.partitions
+    }
+
+    /// Returns whether every partition in this topic succeeded.
+    pub fn is_success(&self) -> bool {
+        self.partitions
+            .iter()
+            .all(ReadShareGroupStatePartitionResult::is_success)
+    }
+
+    fn from_protocol(
+        topic: kafrust_protocol::api::share_group_state::ReadShareGroupStateTopicResult,
+    ) -> Self {
+        Self {
+            topic_id: topic.topic_id,
+            partitions: topic
+                .partitions
+                .into_iter()
+                .map(ReadShareGroupStatePartitionResult::from_protocol)
+                .collect(),
+        }
+    }
+}
+
+/// One partition returned by ReadShareGroupState.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReadShareGroupStatePartitionResult {
+    partition: i32,
+    error_code: i16,
+    error_message: Option<String>,
+    state_epoch: i32,
+    start_offset: i64,
+    state_batches: Vec<ShareGroupStateBatch>,
+}
+
+impl ReadShareGroupStatePartitionResult {
+    /// Returns the partition index.
+    pub fn partition(&self) -> i32 {
+        self.partition
+    }
+
+    /// Returns the Kafka error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns the broker error message, when supplied.
+    pub fn error_message(&self) -> Option<&str> {
+        self.error_message.as_deref()
+    }
+
+    /// Returns the share-partition state epoch.
+    pub fn state_epoch(&self) -> i32 {
+        self.state_epoch
+    }
+
+    /// Returns the share-partition start offset.
+    pub fn start_offset(&self) -> i64 {
+        self.start_offset
+    }
+
+    /// Returns delivery-state batches in broker response order.
+    pub fn state_batches(&self) -> &[ShareGroupStateBatch] {
+        &self.state_batches
+    }
+
+    /// Returns whether Kafka returned this partition without an error.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+    }
+
+    fn from_protocol(
+        partition: kafrust_protocol::api::share_group_state::ReadShareGroupStatePartitionResult,
+    ) -> Self {
+        Self {
+            partition: partition.partition,
+            error_code: partition.error_code,
+            error_message: partition.error_message,
+            state_epoch: partition.state_epoch,
+            start_offset: partition.start_offset,
+            state_batches: partition
+                .state_batches
+                .into_iter()
+                .map(ShareGroupStateBatch::from_protocol)
+                .collect(),
+        }
+    }
+}
+
+impl ShareGroupStateBatch {
+    fn from_protocol(batch: ProtocolShareGroupStateBatch) -> Self {
+        Self {
+            first_offset: batch.first_offset,
+            last_offset: batch.last_offset,
+            delivery_state: batch.delivery_state,
+            delivery_count: batch.delivery_count,
+        }
+    }
+}
+
+/// Complete ReadShareGroupStateSummary result.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReadShareGroupStateSummaryResult {
+    topics: Vec<ReadShareGroupStateSummaryTopicResult>,
+}
+
+impl ReadShareGroupStateSummaryResult {
+    /// Returns topic results in broker response order.
+    pub fn topics(&self) -> &[ReadShareGroupStateSummaryTopicResult] {
+        &self.topics
+    }
+
+    /// Returns whether every returned partition succeeded.
+    pub fn is_success(&self) -> bool {
+        self.topics
+            .iter()
+            .all(ReadShareGroupStateSummaryTopicResult::is_success)
+    }
+
+    fn from_protocol(response: ReadShareGroupStateSummaryResponse) -> Self {
+        Self {
+            topics: response.into_topics(),
+        }
+    }
+}
+
+/// One topic returned by ReadShareGroupStateSummary.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReadShareGroupStateSummaryTopicResult {
+    topic_id: [u8; 16],
+    partitions: Vec<ReadShareGroupStateSummaryPartitionResult>,
+}
+
+impl ReadShareGroupStateSummaryTopicResult {
+    /// Returns the Kafka topic UUID.
+    pub fn topic_id(&self) -> &[u8; 16] {
+        &self.topic_id
+    }
+
+    /// Returns partition summaries in broker response order.
+    pub fn partitions(&self) -> &[ReadShareGroupStateSummaryPartitionResult] {
+        &self.partitions
+    }
+
+    /// Returns whether every partition in this topic succeeded.
+    pub fn is_success(&self) -> bool {
+        self.partitions
+            .iter()
+            .all(ReadShareGroupStateSummaryPartitionResult::is_success)
+    }
+
+    fn from_protocol(topic: ProtocolShareGroupStateSummaryTopicResult) -> Self {
+        Self {
+            topic_id: topic.topic_id,
+            partitions: topic
+                .partitions
+                .into_iter()
+                .map(ReadShareGroupStateSummaryPartitionResult::from_protocol)
+                .collect(),
+        }
+    }
+}
+
+/// One partition returned by ReadShareGroupStateSummary.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReadShareGroupStateSummaryPartitionResult {
+    partition: i32,
+    error_code: i16,
+    error_message: Option<String>,
+    state_epoch: i32,
+    leader_epoch: i32,
+    start_offset: i64,
+    delivery_complete_count: Option<i32>,
+}
+
+impl ReadShareGroupStateSummaryPartitionResult {
+    /// Returns the partition index.
+    pub fn partition(&self) -> i32 {
+        self.partition
+    }
+
+    /// Returns the Kafka error code.
+    pub fn error_code(&self) -> i16 {
+        self.error_code
+    }
+
+    /// Returns the broker error message, when supplied.
+    pub fn error_message(&self) -> Option<&str> {
+        self.error_message.as_deref()
+    }
+
+    /// Returns the share-partition state epoch.
+    pub fn state_epoch(&self) -> i32 {
+        self.state_epoch
+    }
+
+    /// Returns the leader epoch.
+    pub fn leader_epoch(&self) -> i32 {
+        self.leader_epoch
+    }
+
+    /// Returns the share-partition start offset.
+    pub fn start_offset(&self) -> i64 {
+        self.start_offset
+    }
+
+    /// Returns the v1 delivery-completion count, when supplied by Kafka.
+    pub fn delivery_complete_count(&self) -> Option<i32> {
+        self.delivery_complete_count
+    }
+
+    /// Returns whether Kafka returned this partition without an error.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+    }
+
+    fn from_protocol(
+        partition: kafrust_protocol::api::share_group_state::
+            ReadShareGroupStateSummaryPartitionResult,
+    ) -> Self {
+        Self {
+            partition: partition.partition,
+            error_code: partition.error_code,
+            error_message: partition.error_message,
+            state_epoch: partition.state_epoch,
+            leader_epoch: partition.leader_epoch,
+            start_offset: partition.start_offset,
+            delivery_complete_count: partition.delivery_complete_count,
+        }
+    }
+}
+
+enum ReadShareGroupStateSummaryResponse {
+    V0(ReadShareGroupStateSummaryResponseV0),
+    V1(ReadShareGroupStateSummaryResponseV1),
+}
+
+impl ReadShareGroupStateSummaryResponse {
+    fn into_topics(self) -> Vec<ReadShareGroupStateSummaryTopicResult> {
+        match self {
+            Self::V0(response) => response
+                .results
+                .into_iter()
+                .map(ReadShareGroupStateSummaryTopicResult::from_protocol)
+                .collect(),
+            Self::V1(response) => response
+                .results
+                .into_iter()
+                .map(ReadShareGroupStateSummaryTopicResult::from_protocol)
+                .collect(),
+        }
+    }
+
+    fn has_error(&self) -> bool {
+        match self {
+            Self::V0(response) => response.results.iter().any(|topic| {
+                topic
+                    .partitions
+                    .iter()
+                    .any(|partition| partition.error_code != 0)
+            }),
+            Self::V1(response) => response.results.iter().any(|topic| {
+                topic
+                    .partitions
+                    .iter()
+                    .any(|partition| partition.error_code != 0)
+            }),
+        }
+    }
+
+    fn has_retryable_error(&self) -> bool {
+        match self {
+            Self::V0(response) => response.results.iter().any(|topic| {
+                topic
+                    .partitions
+                    .iter()
+                    .any(|partition| is_retryable_admin_coordinator_code(partition.error_code))
+            }),
+            Self::V1(response) => response.results.iter().any(|topic| {
+                topic
+                    .partitions
+                    .iter()
+                    .any(|partition| is_retryable_admin_coordinator_code(partition.error_code))
+            }),
+        }
+    }
+}
+
 /// One share-group offset to set administratively.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ShareGroupOffset {
@@ -9183,6 +13321,40 @@ fn is_retryable_offset_fetch_v9(
     })
 }
 
+fn offset_fetch_topics_v10(
+    topics: Option<&[ConsumerGroupOffsetQuery]>,
+) -> Option<Vec<OffsetFetchTopicV10>> {
+    topics?
+        .iter()
+        .map(ConsumerGroupOffsetQuery::as_protocol_v10)
+        .collect()
+}
+
+fn nonzero_topic_id(topic_id: Option<[u8; 16]>) -> Option<[u8; 16]> {
+    topic_id.filter(|topic_id| *topic_id != [0; 16])
+}
+
+fn topic_names_by_id_from_queries(
+    topics: &[ConsumerGroupOffsetQuery],
+) -> BTreeMap<[u8; 16], String> {
+    topics
+        .iter()
+        .filter_map(|topic| topic.topic_id.map(|id| (id, topic.topic.clone())))
+        .collect()
+}
+
+fn is_retryable_offset_fetch_v10(response: &OffsetFetchResponseV10) -> bool {
+    response.groups.iter().any(|group| {
+        is_retryable_admin_coordinator_code(group.error_code)
+            || group.topics.iter().any(|topic| {
+                topic
+                    .partitions
+                    .iter()
+                    .any(|partition| is_retryable_admin_coordinator_code(partition.error_code))
+            })
+    })
+}
+
 fn record_offset_fetch_v9_errors(
     config: &ClientConfig,
     response: &kafrust_protocol::api::offset_fetch::OffsetFetchResponseV9,
@@ -9205,6 +13377,78 @@ fn record_offset_commit_v9_errors(
     config: &ClientConfig,
     response: &kafrust_protocol::api::offset_commit::OffsetCommitResponseV9,
 ) {
+    for topic in &response.topics {
+        for partition in &topic.partitions {
+            if partition.error_code != 0 {
+                config.record_broker_error();
+            }
+        }
+    }
+}
+
+fn offset_commit_topics_v10(offsets: &[ConsumerGroupOffset]) -> Option<Vec<OffsetCommitTopicV10>> {
+    if offsets.is_empty() {
+        return None;
+    }
+    let mut topics = BTreeMap::<[u8; 16], Vec<OffsetCommitPartitionV10>>::new();
+    for offset in offsets {
+        let topic_id = offset.topic_id?;
+        if topic_id == [0; 16] {
+            return None;
+        }
+        topics
+            .entry(topic_id)
+            .or_default()
+            .push(OffsetCommitPartitionV10 {
+                partition_index: offset.partition,
+                committed_offset: offset.offset,
+                committed_leader_epoch: offset.leader_epoch,
+                committed_metadata: offset.metadata.clone(),
+            });
+    }
+    Some(
+        topics
+            .into_iter()
+            .map(|(topic_id, partitions)| OffsetCommitTopicV10 {
+                topic_id,
+                partitions,
+            })
+            .collect(),
+    )
+}
+
+fn topic_names_by_id_from_offsets(offsets: &[ConsumerGroupOffset]) -> BTreeMap<[u8; 16], String> {
+    offsets
+        .iter()
+        .filter_map(|offset| offset.topic_id.map(|id| (id, offset.topic.clone())))
+        .collect()
+}
+
+fn is_retryable_offset_commit_v10(response: &OffsetCommitResponseV10) -> bool {
+    response.topics.iter().any(|topic| {
+        topic
+            .partitions
+            .iter()
+            .any(|partition| is_retryable_admin_coordinator_code(partition.error_code))
+    })
+}
+
+fn record_offset_fetch_v10_errors(config: &ClientConfig, response: &OffsetFetchResponseV10) {
+    for group in &response.groups {
+        if group.error_code != 0 {
+            config.record_broker_error();
+        }
+        for topic in &group.topics {
+            for partition in &topic.partitions {
+                if partition.error_code != 0 {
+                    config.record_broker_error();
+                }
+            }
+        }
+    }
+}
+
+fn record_offset_commit_v10_errors(config: &ClientConfig, response: &OffsetCommitResponseV10) {
     for topic in &response.topics {
         for partition in &topic.partitions {
             if partition.error_code != 0 {
@@ -9242,6 +13486,7 @@ fn admin_coordinator_retry_backoff(retry_attempt: u32) -> Duration {
 pub struct ConsumerGroupOffsetQuery {
     topic: String,
     partitions: Vec<i32>,
+    topic_id: Option<[u8; 16]>,
 }
 
 impl ConsumerGroupOffsetQuery {
@@ -9250,7 +13495,18 @@ impl ConsumerGroupOffsetQuery {
         Self {
             topic: topic.into(),
             partitions: partitions.into_iter().collect(),
+            topic_id: None,
         }
+    }
+
+    /// Associates the stable Kafka topic UUID used by OffsetFetch v10.
+    ///
+    /// A zero UUID is ignored for explicit version selection. The member-aware
+    /// Admin method may resolve the topic name through Metadata v12; if that
+    /// capability is unavailable, it uses the name-based OffsetFetch v9 path.
+    pub fn topic_id(mut self, topic_id: [u8; 16]) -> Self {
+        self.topic_id = Some(topic_id);
+        self
     }
 
     /// Returns the topic name.
@@ -9261,6 +13517,11 @@ impl ConsumerGroupOffsetQuery {
     /// Returns partition indexes in request order.
     pub fn partitions(&self) -> &[i32] {
         &self.partitions
+    }
+
+    /// Returns the optional topic UUID used for OffsetFetch v10.
+    pub fn topic_id_ref(&self) -> Option<[u8; 16]> {
+        self.topic_id
     }
 
     fn as_protocol(&self) -> OffsetFetchTopic {
@@ -9276,6 +13537,14 @@ impl ConsumerGroupOffsetQuery {
             partition_indexes: self.partitions.clone(),
         }
     }
+
+    fn as_protocol_v10(&self) -> Option<OffsetFetchTopicV10> {
+        let topic_id = self.topic_id?;
+        (topic_id != [0; 16]).then_some(OffsetFetchTopicV10 {
+            topic_id,
+            partition_indexes: self.partitions.clone(),
+        })
+    }
 }
 
 /// One committed consumer-group offset to set administratively.
@@ -9286,6 +13555,7 @@ pub struct ConsumerGroupOffset {
     offset: i64,
     leader_epoch: i32,
     metadata: Option<String>,
+    topic_id: Option<[u8; 16]>,
 }
 
 impl ConsumerGroupOffset {
@@ -9297,7 +13567,18 @@ impl ConsumerGroupOffset {
             offset,
             leader_epoch: -1,
             metadata: None,
+            topic_id: None,
         }
+    }
+
+    /// Associates the stable Kafka topic UUID used by OffsetCommit v10.
+    ///
+    /// A zero UUID is ignored for explicit version selection. The member-aware
+    /// Admin method may resolve the topic name through Metadata v12; if that
+    /// capability is unavailable, it uses the name-based OffsetCommit v9 path.
+    pub fn topic_id(mut self, topic_id: [u8; 16]) -> Self {
+        self.topic_id = Some(topic_id);
+        self
     }
 
     /// Sets the broker leader epoch associated with this committed offset.
@@ -9319,6 +13600,11 @@ impl ConsumerGroupOffset {
     /// Returns the topic name.
     pub fn topic(&self) -> &str {
         &self.topic
+    }
+
+    /// Returns the optional topic UUID used for OffsetCommit v10.
+    pub fn topic_id_ref(&self) -> Option<[u8; 16]> {
+        self.topic_id
     }
 
     /// Returns the partition index.
@@ -11245,18 +15531,23 @@ fn nonnegative_i32_to_u64(value: i32) -> u64 {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::{
-        AclFilter, AclOperation, AclPatternType, AclPermissionType, AclResourceType, AdminClient,
-        AlterConfigsOptions, ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter,
-        ClientQuotaFilterComponent, ClientQuotaMatchType, ConfigAlterOperationKind, ConfigSource,
-        ConsumerGroupOffset, ConsumerGroupOffsetDelete, ConsumerGroupOffsetQuery,
-        CreateDelegationTokenOptions, CreatePartitionsOptions, CreateTopicsOptions,
-        DelegationTokenPrincipal, DeleteRecordsOptions, DeleteRecordsTopic, DeleteTopicsOptions,
-        DescribeConfigsOptions, DescribeProducersTopic, DescribeQuorumTopic,
-        DescribeTopicPartitionsCursor, DescribeTopicPartitionsOptions, ElectLeadersOptions,
-        ElectionType, LeaderElection, ListTransactionsOptions, LogDirTopic, NewPartitions,
-        NewTopic, PartitionReassignment, PartitionReassignmentOptions, PartitionReassignmentQuery,
-        ReplicaLogDirAssignment, ScramCredentialDeletion, ScramCredentialMechanism,
-        ScramCredentialUpsertion, TopicConfigAlteration, TopicConfigResource, TopicConfigUpdate,
+        AclFilter, AclOperation, AclPatternType, AclPermissionType, AclResourceType,
+        AddRaftVoterOptions, AdminClient, AlterConfigsOptions, ClientQuotaAlteration,
+        ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent, ClientQuotaMatchType,
+        ConfigAlterOperationKind, ConfigResourceType, ConfigSource, ConsumerGroupOffset,
+        ConsumerGroupOffsetDelete, ConsumerGroupOffsetQuery, CreateDelegationTokenOptions,
+        CreatePartitionsOptions, CreateTopicsOptions, DelegationTokenPrincipal,
+        DeleteRecordsOptions, DeleteRecordsTopic, DeleteTopicsOptions, DescribeClusterEndpointType,
+        DescribeClusterOptions, DescribeConfigsOptions, DescribeProducersTopic,
+        DescribeQuorumTopic, DescribeTopicPartitionsCursor, DescribeTopicPartitionsOptions,
+        ElectLeadersOptions, ElectionType, LeaderElection, ListConfigResourcesOptions,
+        ListGroupsOptions, ListTransactionsOptions, LogDirTopic, NewPartitions, NewTopic,
+        PartitionReassignment, PartitionReassignmentOptions, PartitionReassignmentQuery,
+        RaftVoterListener, RemoveRaftVoterOptions, ReplicaLogDirAssignment,
+        ScramCredentialDeletion, ScramCredentialMechanism, ScramCredentialUpsertion,
+        ShareGroupStateBatch, ShareGroupStateInitializePartition, ShareGroupStateInitializeTopic,
+        ShareGroupStateWritePartition, ShareGroupStateWriteTopic, TopicConfigAlteration,
+        TopicConfigResource, TopicConfigUpdate,
     };
     use crate::{BrokerErrorKind, Client, ClientConfig, ClientMetrics, Error};
     use kafrust_protocol::codec::DecodeLimits;
@@ -11569,6 +15860,154 @@ mod tests {
         assert_eq!(cluster.brokers()[0].port(), i32::from(addr.port()));
         assert_eq!(cluster.brokers()[0].rack(), None);
         assert_eq!(cluster.controller(), Some(&cluster.brokers()[0]));
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn adds_raft_voter_through_the_dedicated_controller() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut connection, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut connection).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut connection, &api_versions_with_raft_voter(1, 0)).await;
+
+            let add_request = read_frame(&mut connection).await;
+            assert_eq!(&add_request[0..4], &[0, 80, 0, 1]);
+            assert!(add_request
+                .windows(b"cluster".len())
+                .any(|bytes| bytes == b"cluster"));
+            assert!(add_request
+                .windows(b"CONTROLLER".len())
+                .any(|bytes| bytes == b"CONTROLLER"));
+            write_frame(&mut connection, &raft_voter_response(12, 0)).await;
+        });
+        let admin = AdminClient::new(
+            ClientConfig::new(["bootstrap:9092"])
+                .controller_bootstrap_servers([addr.to_string()])
+                .request_timeout_ms(1_000),
+        );
+
+        let result = admin
+            .add_raft_voter(
+                AddRaftVoterOptions::new(4, [9; 16])
+                    .cluster_id("cluster")
+                    .timeout(Duration::from_secs(60))
+                    .listener(RaftVoterListener::new("CONTROLLER", "controller", 9093))
+                    .ack_when_committed(true),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(result.api_version(), 1);
+        assert_eq!(result.throttle_time(), Duration::from_millis(12));
+        assert!(result.is_success());
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn removes_raft_voter_through_the_dedicated_controller() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut connection, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut connection).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut connection, &api_versions_with_raft_voter(0, 0)).await;
+
+            let remove_request = read_frame(&mut connection).await;
+            assert_eq!(&remove_request[0..4], &[0, 81, 0, 0]);
+            assert!(remove_request
+                .windows(b"cluster".len())
+                .any(|bytes| bytes == b"cluster"));
+            write_frame(&mut connection, &raft_voter_response(0, 0)).await;
+        });
+        let admin = AdminClient::new(
+            ClientConfig::new(["bootstrap:9092"])
+                .controller_bootstrap_servers([addr.to_string()])
+                .request_timeout_ms(1_000),
+        );
+
+        let result = admin
+            .remove_raft_voter(RemoveRaftVoterOptions::new(2, [3; 16]).cluster_id("cluster"))
+            .await
+            .unwrap();
+
+        assert_eq!(result.api_version(), 0);
+        assert!(result.is_success());
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn unregisters_broker_through_the_dedicated_controller() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut connection, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut connection).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut connection, &api_versions_with_unregister_broker()).await;
+
+            let unregister_request = read_frame(&mut connection).await;
+            assert_eq!(&unregister_request[0..4], &[0, 64, 0, 0]);
+            assert_eq!(
+                &unregister_request[unregister_request.len() - 5..],
+                &[0, 0, 0, 4, 0]
+            );
+            write_frame(&mut connection, &unregister_broker_response(12, 0)).await;
+        });
+        let admin = AdminClient::new(
+            ClientConfig::new(["bootstrap:9092"])
+                .controller_bootstrap_servers([addr.to_string()])
+                .request_timeout_ms(1_000),
+        );
+
+        let result = admin.unregister_broker(4).await.unwrap();
+
+        assert_eq!(result.api_version(), 0);
+        assert_eq!(result.throttle_time(), Duration::from_millis(12));
+        assert!(result.is_success());
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn describes_cluster_with_dedicated_api_and_preserves_authorization_metadata() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut connection, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut connection).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut connection, &api_versions_with_describe_cluster()).await;
+
+            let describe_request = read_frame(&mut connection).await;
+            assert_eq!(&describe_request[0..4], &[0, 60, 0, 1]);
+            write_frame(&mut connection, &describe_cluster_response()).await;
+        });
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .client_id("kafrust-admin-test")
+                .request_timeout_ms(1_000),
+        );
+
+        let cluster = admin
+            .describe_cluster_with_options(
+                DescribeClusterOptions::new()
+                    .include_cluster_authorized_operations(true)
+                    .endpoint_type(DescribeClusterEndpointType::Controllers),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(cluster.cluster_id(), Some("cluster"));
+        assert_eq!(
+            cluster.endpoint_type(),
+            Some(DescribeClusterEndpointType::Controllers)
+        );
+        assert_eq!(cluster.cluster_authorized_operations(), Some(7));
+        assert_eq!(cluster.controller_id(), 1);
+        assert_eq!(cluster.brokers()[0].rack(), Some("rack-a"));
         server.await.unwrap();
     }
 
@@ -12405,6 +16844,143 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn lists_config_resources_with_typed_resource_kinds() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut connection, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut connection).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut connection, &api_versions_with_list_config_resources(1)).await;
+
+            let request = read_frame(&mut connection).await;
+            assert_eq!(&request[0..4], &[0, 74, 0, 1]);
+            write_frame(&mut connection, &list_config_resources_response()).await;
+        });
+        let admin =
+            AdminClient::new(ClientConfig::new([addr.to_string()]).request_timeout_ms(1_000));
+
+        let result = admin
+            .list_config_resources(
+                ListConfigResourcesOptions::new()
+                    .resource_type(ConfigResourceType::Topic)
+                    .resource_type(ConfigResourceType::Group),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(result.throttle_time(), Duration::from_millis(7));
+        assert_eq!(result.api_version(), 1);
+        assert!(result.is_success());
+        assert_eq!(result.resources().len(), 2);
+        assert_eq!(result.resources()[0].name(), "orders");
+        assert_eq!(
+            result.resources()[0].resource_type(),
+            ConfigResourceType::Topic
+        );
+        assert_eq!(
+            result.resources()[1].resource_type(),
+            ConfigResourceType::Group
+        );
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn falls_back_to_list_client_metrics_resources_v0_for_old_brokers() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut connection, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut connection).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut connection, &api_versions_with_list_config_resources(0)).await;
+
+            let request = read_frame(&mut connection).await;
+            assert_eq!(&request[0..4], &[0, 74, 0, 0]);
+            write_frame(&mut connection, &list_client_metrics_resources_response()).await;
+        });
+        let admin =
+            AdminClient::new(ClientConfig::new([addr.to_string()]).request_timeout_ms(1_000));
+
+        let result = admin
+            .list_config_resources(
+                ListConfigResourcesOptions::new().resource_type(ConfigResourceType::ClientMetrics),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(result.api_version(), 0);
+        assert_eq!(result.resources().len(), 1);
+        assert_eq!(result.resources()[0].name(), "latency");
+        assert_eq!(
+            result.resources()[0].resource_type(),
+            ConfigResourceType::ClientMetrics
+        );
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn rejects_non_client_metrics_filter_when_only_v0_is_available() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut connection, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut connection).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut connection, &api_versions_with_list_config_resources(0)).await;
+        });
+        let admin =
+            AdminClient::new(ClientConfig::new([addr.to_string()]).request_timeout_ms(1_000));
+
+        let error = admin
+            .list_config_resources(
+                ListConfigResourcesOptions::new().resource_type(ConfigResourceType::Topic),
+            )
+            .await
+            .unwrap_err();
+
+        assert!(matches!(
+            error,
+            Error::Unsupported("ListConfigResources v0 only lists client metrics resources")
+        ));
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn describes_topic_configs_with_v4_documentation_metadata() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut connection, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut connection).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut connection, &api_versions_with_describe_configs_v4()).await;
+
+            let describe_request = read_frame(&mut connection).await;
+            assert_eq!(&describe_request[0..4], &[0, 32, 0, 4]);
+            write_frame(&mut connection, &describe_configs_v4_response()).await;
+        });
+        let admin =
+            AdminClient::new(ClientConfig::new([addr.to_string()]).request_timeout_ms(1_000));
+
+        let result = admin
+            .describe_topic_configs(
+                &[TopicConfigResource::new("orders")],
+                DescribeConfigsOptions::new()
+                    .include_synonyms(true)
+                    .include_documentation(true),
+            )
+            .await
+            .unwrap();
+
+        let entry = &result.resources()[0].entries()[0];
+        assert_eq!(entry.config_type(), Some(7));
+        assert_eq!(entry.documentation(), Some("The cleanup policy."));
+        assert_eq!(entry.synonyms()[0].source(), ConfigSource::DefaultConfig);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn retries_topic_config_describe_after_connection_drop() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -12695,6 +17271,53 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn routes_streams_group_describe_to_coordinator() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let coordinator_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&coordinator_request[0..4], &[0, 10, 0, 1]);
+            write_frame(
+                &mut bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let (mut coordinator, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut coordinator).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(
+                &mut coordinator,
+                &api_versions_with_streams_group_describe(),
+            )
+            .await;
+
+            let describe_request = read_frame(&mut coordinator).await;
+            assert_eq!(&describe_request[0..4], &[0, 89, 0, 0]);
+            write_frame(&mut coordinator, &streams_group_describe_response()).await;
+        });
+        let admin =
+            AdminClient::new(ClientConfig::new([addr.to_string()]).request_timeout_ms(1_000));
+
+        let descriptions = admin
+            .describe_streams_groups(&["streams-orders".to_owned()], true)
+            .await
+            .unwrap();
+
+        assert_eq!(descriptions.len(), 1);
+        let description = &descriptions[0];
+        assert_eq!(description.group_id(), "streams-orders");
+        assert_eq!(description.state(), "Stable");
+        assert_eq!(description.group_epoch(), 4);
+        assert_eq!(description.assignment_epoch(), 5);
+        assert_eq!(description.authorized_operations(), -2147483648);
+        assert!(description.topology().is_none());
+        assert!(description.members().is_empty());
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn routes_share_group_offset_mutations_to_coordinator() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -12751,6 +17374,85 @@ mod tests {
             .unwrap();
         assert!(deleted.is_success());
         assert_eq!(deleted.topics()[0].topic_name(), "orders");
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn routes_share_group_state_and_preserves_v1_fields() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let coordinator_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&coordinator_request[0..4], &[0, 10, 0, 1]);
+            write_frame(
+                &mut bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let (mut coordinator, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut coordinator).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut coordinator, &api_versions_with_share_group_state()).await;
+            let initialize_request = read_frame(&mut coordinator).await;
+            assert_eq!(&initialize_request[0..4], &[0, 83, 0, 0]);
+            write_frame(&mut coordinator, &share_group_state_result_response()).await;
+
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let coordinator_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&coordinator_request[0..4], &[0, 10, 0, 1]);
+            write_frame(
+                &mut bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let (mut coordinator, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut coordinator).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut coordinator, &api_versions_with_share_group_state()).await;
+            let write_request = read_frame(&mut coordinator).await;
+            assert_eq!(&write_request[0..4], &[0, 85, 0, 1]);
+            write_frame(&mut coordinator, &share_group_state_result_response()).await;
+        });
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .client_id("kafrust-share-state-test")
+                .request_timeout_ms(1_000),
+        );
+
+        let initialized = admin
+            .initialize_share_group_state(
+                "share-orders",
+                &[ShareGroupStateInitializeTopic::new(
+                    [7; 16],
+                    [ShareGroupStateInitializePartition::new(0, 1, 0)],
+                )],
+            )
+            .await
+            .unwrap();
+        assert!(initialized.is_success());
+        assert_eq!(initialized.topics()[0].partitions()[0].partition(), 0);
+
+        let written = admin
+            .write_share_group_state(
+                "share-orders",
+                &[ShareGroupStateWriteTopic::new(
+                    [7; 16],
+                    [ShareGroupStateWritePartition::new(
+                        0,
+                        1,
+                        2,
+                        0,
+                        [ShareGroupStateBatch::new(0, 1, 0, 1)],
+                    )
+                    .with_delivery_complete_count(3)],
+                )],
+            )
+            .await
+            .unwrap();
+        assert!(written.is_success());
         server.await.unwrap();
     }
 
@@ -12948,6 +17650,9 @@ mod tests {
             write_frame(&mut bootstrap, &metadata_response(addr.port())).await;
 
             let (mut broker, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut broker).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut broker, &api_versions_with_list_groups(1)).await;
             let list_request = read_frame(&mut broker).await;
             assert_eq!(&list_request[0..4], &[0, 16, 0, 1]);
             write_frame(&mut broker, &list_groups_response()).await;
@@ -12968,6 +17673,112 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn negotiates_list_groups_v5_filters_and_preserves_group_metadata() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let metadata_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+            write_frame(&mut bootstrap, &metadata_response(addr.port())).await;
+
+            let (mut broker, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut broker).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut broker, &api_versions_with_list_groups(5)).await;
+
+            let list_request = read_frame(&mut broker).await;
+            assert_eq!(&list_request[0..4], &[0, 16, 0, 5]);
+            write_frame(&mut broker, &list_groups_v5_response()).await;
+        });
+        let admin =
+            AdminClient::new(ClientConfig::new([addr.to_string()]).request_timeout_ms(1_000));
+
+        let groups = admin
+            .list_groups_with_options(
+                ListGroupsOptions::new()
+                    .state("Stable")
+                    .group_type("consumer"),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].group_id(), "orders-group");
+        assert_eq!(groups[0].group_state(), Some("Stable"));
+        assert_eq!(groups[0].group_type(), Some("consumer"));
+        assert_eq!(groups[0].api_version(), 5);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn negotiates_list_groups_v4_state_filter_and_preserves_group_state() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let metadata_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+            write_frame(&mut bootstrap, &metadata_response(addr.port())).await;
+
+            let (mut broker, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut broker).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut broker, &api_versions_with_list_groups(4)).await;
+
+            let list_request = read_frame(&mut broker).await;
+            assert_eq!(&list_request[0..4], &[0, 16, 0, 4]);
+            assert!(list_request
+                .windows(b"Stable".len())
+                .any(|window| window == b"Stable"));
+            write_frame(&mut broker, &list_groups_v4_response()).await;
+        });
+        let admin =
+            AdminClient::new(ClientConfig::new([addr.to_string()]).request_timeout_ms(1_000));
+
+        let groups = admin
+            .list_groups_with_options(ListGroupsOptions::new().state("Stable"))
+            .await
+            .unwrap();
+
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].group_id(), "orders-group");
+        assert_eq!(groups[0].group_state(), Some("Stable"));
+        assert_eq!(groups[0].group_type(), None);
+        assert_eq!(groups[0].api_version(), 4);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn rejects_list_groups_when_broker_does_not_advertise_the_api() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let metadata_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+            write_frame(&mut bootstrap, &metadata_response(addr.port())).await;
+
+            let (mut broker, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut broker).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut broker, &api_versions_without_list_groups()).await;
+        });
+        let admin =
+            AdminClient::new(ClientConfig::new([addr.to_string()]).request_timeout_ms(1_000));
+
+        let result = admin.list_groups().await;
+
+        assert!(matches!(
+            result,
+            Err(Error::Unsupported(
+                "broker does not advertise ListGroups v1 or newer"
+            ))
+        ));
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn retries_list_groups_after_broker_disconnect() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -12978,11 +17789,14 @@ mod tests {
             write_frame(&mut bootstrap, &metadata_response(addr.port())).await;
 
             let (mut first, _) = listener.accept().await.unwrap();
-            let list_request = read_frame(&mut first).await;
-            assert_eq!(&list_request[0..4], &[0, 16, 0, 1]);
+            let api_versions_request = read_frame(&mut first).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
             drop(first);
 
             let (mut second, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut second).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut second, &api_versions_with_list_groups(1)).await;
             let list_request = read_frame(&mut second).await;
             assert_eq!(&list_request[0..4], &[0, 16, 0, 1]);
             write_frame(&mut second, &list_groups_response()).await;
@@ -13018,6 +17832,9 @@ mod tests {
             write_frame(&mut second_bootstrap, &metadata_response(addr.port())).await;
 
             let (mut broker, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut broker).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut broker, &api_versions_with_list_groups(1)).await;
             let list_request = read_frame(&mut broker).await;
             assert_eq!(&list_request[0..4], &[0, 16, 0, 1]);
             write_frame(&mut broker, &list_groups_response()).await;
@@ -13342,6 +18159,9 @@ mod tests {
             .await;
 
             let (mut coordinator, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut coordinator).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut coordinator, &api_versions_with_list_transactions()).await;
             let fetch_request = read_frame(&mut coordinator).await;
             assert_eq!(&fetch_request[0..4], &[0, 9, 0, 9]);
             assert!(fetch_request
@@ -13360,6 +18180,9 @@ mod tests {
             .await;
 
             let (mut coordinator, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut coordinator).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut coordinator, &api_versions_with_list_transactions()).await;
             let commit_request = read_frame(&mut coordinator).await;
             assert_eq!(&commit_request[0..4], &[0, 8, 0, 9]);
             assert!(commit_request
@@ -13429,6 +18252,9 @@ mod tests {
             .await;
 
             let (mut coordinator, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut coordinator).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut coordinator, &api_versions_with_list_transactions()).await;
             read_frame(&mut coordinator).await;
             write_frame(&mut coordinator, &offset_fetch_v9_response(14)).await;
 
@@ -14985,6 +19811,45 @@ mod tests {
         encoder.into_bytes()
     }
 
+    fn api_versions_with_describe_cluster() -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_i16(0); // success
+        encoder.write_unsigned_varint(2); // one API key
+        encoder.write_i16(60);
+        encoder.write_i16(0);
+        encoder.write_i16(1);
+        encoder.write_empty_tagged_fields();
+        encoder.write_i32(0); // throttle time
+        encoder.write_empty_tagged_fields();
+        encoder.into_bytes()
+    }
+
+    fn describe_cluster_response() -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_empty_tagged_fields(); // response header tags
+        encoder.write_i32(0); // throttle time
+        encoder.write_i16(0); // top-level error
+        encoder.write_compact_nullable_string(None).unwrap();
+        encoder.write_i8(2); // controller endpoint
+        encoder.write_compact_string("cluster").unwrap();
+        encoder.write_i32(1); // controller ID
+        encoder
+            .write_compact_array(Some(&[()]), |encoder, ()| {
+                encoder.write_i32(1);
+                encoder.write_compact_string("127.0.0.1")?;
+                encoder.write_i32(9092);
+                encoder.write_compact_nullable_string(Some("rack-a"))?;
+                encoder.write_empty_tagged_fields();
+                Ok(())
+            })
+            .unwrap();
+        encoder.write_i32(7); // cluster authorized operations
+        encoder.write_empty_tagged_fields();
+        encoder.into_bytes()
+    }
+
     fn api_versions_with_consumer_group_describe() -> Vec<u8> {
         let mut encoder = Encoder::new();
         encoder.write_i32(1); // correlation ID
@@ -15009,6 +19874,44 @@ mod tests {
         encoder.write_i16(1);
         encoder.write_empty_tagged_fields();
         encoder.write_i32(0); // throttle time
+        encoder.write_empty_tagged_fields();
+        encoder.into_bytes()
+    }
+
+    fn api_versions_with_streams_group_describe() -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_i16(0); // success
+        encoder.write_unsigned_varint(2); // one API key
+        encoder.write_i16(89);
+        encoder.write_i16(0);
+        encoder.write_i16(0);
+        encoder.write_empty_tagged_fields();
+        encoder.write_i32(0); // throttle time
+        encoder.write_empty_tagged_fields();
+        encoder.into_bytes()
+    }
+
+    fn streams_group_describe_response() -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_empty_tagged_fields(); // response header tags
+        encoder.write_i32(4); // throttle time
+        encoder
+            .write_compact_array(Some(&[()]), |encoder, ()| {
+                encoder.write_i16(0);
+                encoder.write_compact_nullable_string(Some("ok"))?;
+                encoder.write_compact_string("streams-orders")?;
+                encoder.write_compact_string("Stable")?;
+                encoder.write_i32(4);
+                encoder.write_i32(5);
+                encoder.write_i8(-1); // nullable topology
+                encoder.write_compact_array::<i8>(Some(&[]), |_, _| Ok(()))?;
+                encoder.write_i32(-2147483648);
+                encoder.write_empty_tagged_fields();
+                Ok(())
+            })
+            .unwrap();
         encoder.write_empty_tagged_fields();
         encoder.into_bytes()
     }
@@ -15075,6 +19978,50 @@ mod tests {
             encoder.write_empty_tagged_fields();
         }
         encoder.write_i32(0); // throttle time
+        encoder.write_empty_tagged_fields();
+        encoder.into_bytes()
+    }
+
+    fn api_versions_with_share_group_state() -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_i16(0); // success
+        encoder.write_unsigned_varint(6); // five API keys
+        for (api_key, max_version) in [
+            (83_i16, 0_i16),
+            (84_i16, 0_i16),
+            (85_i16, 1_i16),
+            (86_i16, 0_i16),
+            (87_i16, 1_i16),
+        ] {
+            encoder.write_i16(api_key);
+            encoder.write_i16(0);
+            encoder.write_i16(max_version);
+            encoder.write_empty_tagged_fields();
+        }
+        encoder.write_i32(0); // throttle time
+        encoder.write_empty_tagged_fields();
+        encoder.into_bytes()
+    }
+
+    fn share_group_state_result_response() -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_empty_tagged_fields(); // response header tags
+        encoder
+            .write_compact_array(Some(&[()]), |encoder, ()| {
+                encoder.write_uuid(&[7; 16]);
+                encoder.write_compact_array(Some(&[()]), |encoder, ()| {
+                    encoder.write_i32(0);
+                    encoder.write_i16(0);
+                    encoder.write_compact_nullable_string(None)?;
+                    encoder.write_empty_tagged_fields();
+                    Ok(())
+                })?;
+                encoder.write_empty_tagged_fields();
+                Ok(())
+            })
+            .unwrap();
         encoder.write_empty_tagged_fields();
         encoder.into_bytes()
     }
@@ -15351,6 +20298,82 @@ mod tests {
         encoder.into_bytes()
     }
 
+    fn api_versions_with_raft_voter(add_max_version: i16, remove_max_version: i16) -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_i16(0); // success
+        encoder.write_unsigned_varint(3); // two API keys
+        for (api_key, max_version) in [(80_i16, add_max_version), (81_i16, remove_max_version)] {
+            encoder.write_i16(api_key);
+            encoder.write_i16(0);
+            encoder.write_i16(max_version);
+            encoder.write_empty_tagged_fields();
+        }
+        encoder.write_i32(0); // throttle time
+        encoder.write_empty_tagged_fields();
+        encoder.into_bytes()
+    }
+
+    fn api_versions_with_unregister_broker() -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_i16(0); // success
+        encoder.write_unsigned_varint(2); // one API key
+        encoder.write_i16(64);
+        encoder.write_i16(0);
+        encoder.write_i16(0);
+        encoder.write_empty_tagged_fields();
+        encoder.write_i32(0); // throttle time
+        encoder.write_empty_tagged_fields();
+        encoder.into_bytes()
+    }
+
+    fn raft_voter_response(throttle_time_ms: i32, error_code: i16) -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_empty_tagged_fields(); // response header tags
+        encoder.write_i32(throttle_time_ms);
+        encoder.write_i16(error_code);
+        encoder.write_compact_nullable_string(None).unwrap();
+        encoder.write_empty_tagged_fields();
+        encoder.into_bytes()
+    }
+
+    fn unregister_broker_response(throttle_time_ms: i32, error_code: i16) -> Vec<u8> {
+        raft_voter_response(throttle_time_ms, error_code)
+    }
+
+    fn api_versions_with_list_config_resources(max_version: i16) -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_i16(0); // success
+        encoder.write_unsigned_varint(2); // one API key
+        encoder.write_i16(74);
+        encoder.write_i16(0);
+        encoder.write_i16(max_version);
+        encoder.write_empty_tagged_fields();
+        encoder.write_i32(0); // throttle time
+        encoder.write_empty_tagged_fields();
+        encoder.into_bytes()
+    }
+
+    fn list_client_metrics_resources_response() -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_empty_tagged_fields(); // response header tags
+        encoder.write_i32(7); // throttle time
+        encoder.write_i16(0); // success
+        encoder
+            .write_compact_array(Some(&["latency"]), |encoder, name| {
+                encoder.write_compact_string(name)?;
+                encoder.write_empty_tagged_fields();
+                Ok(())
+            })
+            .unwrap();
+        encoder.write_empty_tagged_fields();
+        encoder.into_bytes()
+    }
+
     fn describe_quorum_v2_response() -> Vec<u8> {
         let mut encoder = Encoder::new();
         encoder.write_i32(1); // correlation ID
@@ -15589,6 +20612,75 @@ mod tests {
                 })
             })
             .unwrap();
+    }
+
+    fn list_config_resources_response() -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_empty_tagged_fields(); // response header tags
+        encoder.write_i32(7); // throttle time
+        encoder.write_i16(0); // top-level success
+        encoder
+            .write_compact_array(Some(&["orders", "group-a"]), |encoder, name| {
+                encoder.write_compact_string(name)?;
+                encoder.write_i8(if *name == "orders" { 2 } else { 32 });
+                encoder.write_empty_tagged_fields();
+                Ok(())
+            })
+            .unwrap();
+        encoder.write_empty_tagged_fields(); // response tags
+        encoder.into_bytes()
+    }
+
+    fn api_versions_with_describe_configs_v4() -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_i16(0); // success
+        encoder.write_unsigned_varint(2); // one API key
+        encoder.write_i16(32);
+        encoder.write_i16(1);
+        encoder.write_i16(4);
+        encoder.write_empty_tagged_fields();
+        encoder.write_i32(0); // throttle time
+        encoder.write_empty_tagged_fields();
+        encoder.into_bytes()
+    }
+
+    fn describe_configs_v4_response() -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(2); // correlation ID
+        encoder.write_empty_tagged_fields(); // response header tags
+        encoder.write_i32(9); // throttle time
+        encoder
+            .write_compact_array(Some(&[()]), |encoder, ()| {
+                encoder.write_i16(0);
+                encoder.write_compact_nullable_string(None)?;
+                encoder.write_i8(2);
+                encoder.write_compact_string("orders")?;
+                encoder.write_compact_array(Some(&[()]), |encoder, ()| {
+                    encoder.write_compact_string("cleanup.policy")?;
+                    encoder.write_compact_nullable_string(Some("compact"))?;
+                    encoder.write_bool(false);
+                    encoder.write_i8(1);
+                    encoder.write_bool(false);
+                    encoder.write_compact_array(Some(&[()]), |encoder, ()| {
+                        encoder.write_compact_string("cleanup.policy")?;
+                        encoder.write_compact_nullable_string(Some("delete"))?;
+                        encoder.write_i8(5);
+                        encoder.write_empty_tagged_fields();
+                        Ok(())
+                    })?;
+                    encoder.write_i8(7);
+                    encoder.write_compact_nullable_string(Some("The cleanup policy."))?;
+                    encoder.write_empty_tagged_fields();
+                    Ok(())
+                })?;
+                encoder.write_empty_tagged_fields();
+                Ok(())
+            })
+            .unwrap();
+        encoder.write_empty_tagged_fields(); // response tags
+        encoder.into_bytes()
     }
 
     fn describe_configs_response() -> Vec<u8> {
@@ -15897,6 +20989,73 @@ mod tests {
         ]
     }
 
+    fn api_versions_with_list_groups(max_version: i16) -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_i16(0); // success
+        encoder.write_unsigned_varint(2); // one API key
+        encoder.write_i16(16);
+        encoder.write_i16(0);
+        encoder.write_i16(max_version);
+        encoder.write_empty_tagged_fields();
+        encoder.write_i32(0); // throttle time
+        encoder.write_empty_tagged_fields();
+        encoder.into_bytes()
+    }
+
+    fn api_versions_without_list_groups() -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_i16(0); // success
+        encoder.write_unsigned_varint(2); // one API key
+        encoder.write_i16(3);
+        encoder.write_i16(0);
+        encoder.write_i16(12);
+        encoder.write_empty_tagged_fields();
+        encoder.write_i32(0); // throttle time
+        encoder.write_empty_tagged_fields();
+        encoder.into_bytes()
+    }
+
+    fn list_groups_v5_response() -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_empty_tagged_fields(); // response header tags
+        encoder.write_i32(7); // throttle time
+        encoder.write_i16(0); // success
+        encoder
+            .write_compact_array(Some(&[()]), |encoder, ()| {
+                encoder.write_compact_string("orders-group")?;
+                encoder.write_compact_string("consumer")?;
+                encoder.write_compact_string("Stable")?;
+                encoder.write_compact_string("consumer")?;
+                encoder.write_empty_tagged_fields();
+                Ok(())
+            })
+            .unwrap();
+        encoder.write_empty_tagged_fields(); // response tagged fields
+        encoder.into_bytes()
+    }
+
+    fn list_groups_v4_response() -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_empty_tagged_fields(); // response header tags
+        encoder.write_i32(7); // throttle time
+        encoder.write_i16(0); // success
+        encoder
+            .write_compact_array(Some(&[()]), |encoder, ()| {
+                encoder.write_compact_string("orders-group")?;
+                encoder.write_compact_string("consumer")?;
+                encoder.write_compact_string("Stable")?;
+                encoder.write_empty_tagged_fields();
+                Ok(())
+            })
+            .unwrap();
+        encoder.write_empty_tagged_fields(); // response tagged fields
+        encoder.into_bytes()
+    }
+
     fn delete_groups_response() -> Vec<u8> {
         delete_groups_response_with_error(68)
     }
@@ -16034,6 +21193,83 @@ mod tests {
         let last = response.len();
         response[last - 2..].copy_from_slice(&error_code.to_be_bytes());
         response
+    }
+
+    #[test]
+    fn maps_api_versions_feature_metadata() {
+        let response = kafrust_protocol::api::api_versions::ApiVersionsResponseV3 {
+            error_code: 0,
+            api_keys: Vec::new(),
+            throttle_time_ms: 0,
+            supported_features: vec![kafrust_protocol::api::api_versions::SupportedFeature {
+                name: "group_coordinator".to_owned(),
+                min_version: 1,
+                max_version: 3,
+            }],
+            finalized_features_epoch: 12,
+            finalized_features: vec![kafrust_protocol::api::api_versions::FinalizedFeature {
+                name: "metadata.version".to_owned(),
+                min_version_level: 1,
+                max_version_level: 4,
+            }],
+            zk_migration_ready: true,
+            tagged_fields: Vec::new(),
+        };
+
+        let metadata = super::FeatureMetadata::from_protocol(response);
+
+        assert_eq!(metadata.finalized_features_epoch(), 12);
+        assert_eq!(metadata.supported_features()[0].name(), "group_coordinator");
+        assert_eq!(metadata.supported_features()[0].min_version(), 1);
+        assert_eq!(metadata.supported_features()[0].max_version(), 3);
+        assert_eq!(metadata.finalized_features()[0].name(), "metadata.version");
+        assert_eq!(metadata.finalized_features()[0].min_version_level(), 1);
+        assert_eq!(metadata.finalized_features()[0].max_version_level(), 4);
+        assert!(metadata.zk_migration_ready());
+    }
+
+    #[test]
+    fn maps_update_features_result() {
+        let result = super::UpdateFeaturesResult::from_protocol(super::UpdateFeaturesResponseV0 {
+            throttle_time_ms: 12,
+            error_code: 0,
+            error_message: None,
+            results: vec![
+                kafrust_protocol::api::update_features::FeatureUpdateResultV0 {
+                    feature: "metadata.version".to_owned(),
+                    error_code: 0,
+                    error_message: None,
+                },
+            ],
+        });
+
+        assert!(result.is_success());
+        assert_eq!(result.throttle_time(), Duration::from_millis(12));
+        assert_eq!(result.results()[0].feature(), "metadata.version");
+        assert!(result.results()[0].is_success());
+    }
+
+    #[test]
+    fn maps_update_features_upgrade_types_without_v0_loss() {
+        let safe = super::FeatureUpdate::new("metadata.version", 21).allow_downgrade(true);
+        assert_eq!(
+            safe.upgrade_type_ref(),
+            super::FeatureUpgradeType::SafeDowngrade
+        );
+        assert!(safe.as_protocol_v0().is_some());
+        assert_eq!(safe.as_protocol_v1().upgrade_type, 2);
+
+        let unsafe_downgrade = super::FeatureUpdate::new("metadata.version", 20)
+            .upgrade_type(super::FeatureUpgradeType::UnsafeDowngrade);
+        assert_eq!(
+            unsafe_downgrade.upgrade_type_ref(),
+            super::FeatureUpgradeType::UnsafeDowngrade
+        );
+        assert!(unsafe_downgrade.as_protocol_v0().is_none());
+        assert_eq!(unsafe_downgrade.as_protocol_v1().upgrade_type, 3);
+
+        let options = super::UpdateFeaturesOptions::default().validate_only(true);
+        assert!(options.validate_only_ref());
     }
 
     fn offset_commit_v9_response() -> Vec<u8> {

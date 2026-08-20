@@ -3,7 +3,10 @@ mod common;
 use std::collections::BTreeSet;
 use std::time::{Duration, Instant};
 
-use kafrust::{ConsumerGroupConfig, Error};
+use kafrust::{
+    AdminClient, ClientConfig, ConsumerGroupConfig, CreateTopicsOptions, Error, NewTopic,
+    ProducerConfig, ProducerRecord,
+};
 
 #[tokio::main]
 async fn main() -> kafrust::Result<()> {
@@ -14,11 +17,12 @@ async fn main() -> kafrust::Result<()> {
         .unwrap_or_else(|_| r"^kafrust-regex-(orders|payments)$".to_owned());
     let expected_topics = expected_topics_from_env();
 
-    let config = common::apply_security(
-        ConsumerGroupConfig::new(bootstrap_servers, group_id)
-            .client_id("kafrust-consumer-group-regex")
-            .subscribe_pattern(pattern.clone()),
+    let client_config = common::apply_security(
+        ClientConfig::new(bootstrap_servers.clone()).client_id("kafrust-consumer-group-regex"),
     )?;
+    let config = ConsumerGroupConfig::new(bootstrap_servers.clone(), group_id)
+        .with_client_config(client_config.clone())
+        .subscribe_pattern(pattern.clone());
     let mut group = config.join().await?;
     let assigned_topics = group
         .assignments()
@@ -86,6 +90,60 @@ async fn main() -> kafrust::Result<()> {
         return Err(Error::Unsupported(
             "regex subscription left queued offsets after commit",
         ));
+    }
+
+    if let Some(dynamic_topic) = std::env::var_os("KAFRUST_REGEX_DYNAMIC_TOPIC") {
+        let dynamic_topic = dynamic_topic
+            .into_string()
+            .map_err(|_| Error::Unsupported("KAFRUST_REGEX_DYNAMIC_TOPIC is not valid UTF-8"))?;
+        let admin = AdminClient::new(client_config.clone());
+        let result = admin
+            .create_topics(
+                &[NewTopic::new(&dynamic_topic, 1, 1)],
+                CreateTopicsOptions::new(),
+            )
+            .await?;
+        for topic in result.topics() {
+            if !topic.is_success() && topic.error_code() != 36 {
+                return Err(Error::Broker {
+                    code: topic.error_code(),
+                    context: format!("create dynamic regex topic {}", topic.name()),
+                });
+            }
+        }
+
+        let mut producer = ProducerConfig::new(bootstrap_servers.clone())
+            .with_client_config(client_config.clone())
+            .build()
+            .await?;
+        producer
+            .send(
+                ProducerRecord::to(&dynamic_topic)
+                    .key("kafrust-regex-dynamic-key")
+                    .value("kafrust-regex-dynamic-value"),
+            )
+            .await?;
+
+        let deadline = Instant::now() + Duration::from_secs(15);
+        let dynamic_records = loop {
+            let records = group.poll().await?;
+            if records.iter().any(|record| record.topic() == dynamic_topic) {
+                break records;
+            }
+            if Instant::now() >= deadline {
+                return Err(Error::Unsupported(
+                    "regex subscription did not receive the dynamically created topic",
+                ));
+            }
+        };
+        for record in &dynamic_records {
+            group.commit_record(record)?;
+        }
+        group.commit_queued_offsets().await?;
+        println!(
+            "regex subscription received dynamic topic {dynamic_topic:?} in {} record(s)",
+            dynamic_records.len()
+        );
     }
 
     group.rejoin().await?;

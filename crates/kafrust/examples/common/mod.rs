@@ -198,6 +198,12 @@ where
     if let Some(certificate) = tls_root_certificate_der_from_env()? {
         config = config.tls_root_certificate_der(certificate);
     }
+    if let Some(certificate) = tls_client_certificate_der_from_env()? {
+        config = config.tls_client_certificate_der(certificate);
+    }
+    if let Some(private_key) = tls_client_private_key_der_from_env()? {
+        config = config.tls_client_private_key_der(private_key);
+    }
     Ok(config)
 }
 
@@ -248,6 +254,8 @@ pub(crate) trait ExampleSecurityConfig: Sized {
     fn security_protocol(self, security_protocol: SecurityProtocol) -> Self;
     fn tls_server_name(self, server_name: String) -> Self;
     fn tls_root_certificate_der(self, certificate: Vec<u8>) -> Self;
+    fn tls_client_certificate_der(self, certificate: Vec<u8>) -> Self;
+    fn tls_client_private_key_der(self, private_key: Vec<u8>) -> Self;
     fn sasl_plain(self, username: String, password: String) -> Self;
     fn sasl_scram_sha_256(self, username: String, password: String) -> Self;
     fn sasl_scram_sha_512(self, username: String, password: String) -> Self;
@@ -272,6 +280,14 @@ impl ExampleSecurityConfig for ClientConfig {
 
     fn tls_root_certificate_der(self, certificate: Vec<u8>) -> Self {
         ClientConfig::tls_root_certificate_der(self, certificate)
+    }
+
+    fn tls_client_certificate_der(self, certificate: Vec<u8>) -> Self {
+        ClientConfig::tls_client_certificate_der(self, certificate)
+    }
+
+    fn tls_client_private_key_der(self, private_key: Vec<u8>) -> Self {
+        ClientConfig::tls_client_private_key_der(self, private_key)
     }
 
     fn sasl_plain(self, username: String, password: String) -> Self {
@@ -322,6 +338,14 @@ impl ExampleSecurityConfig for ProducerConfig {
         ProducerConfig::tls_root_certificate_der(self, certificate)
     }
 
+    fn tls_client_certificate_der(self, certificate: Vec<u8>) -> Self {
+        ProducerConfig::tls_client_certificate_der(self, certificate)
+    }
+
+    fn tls_client_private_key_der(self, private_key: Vec<u8>) -> Self {
+        ProducerConfig::tls_client_private_key_der(self, private_key)
+    }
+
     fn sasl_plain(self, username: String, password: String) -> Self {
         ProducerConfig::sasl_plain(self, username, password)
     }
@@ -370,6 +394,14 @@ impl ExampleSecurityConfig for ConsumerConfig {
         ConsumerConfig::tls_root_certificate_der(self, certificate)
     }
 
+    fn tls_client_certificate_der(self, certificate: Vec<u8>) -> Self {
+        ConsumerConfig::tls_client_certificate_der(self, certificate)
+    }
+
+    fn tls_client_private_key_der(self, private_key: Vec<u8>) -> Self {
+        ConsumerConfig::tls_client_private_key_der(self, private_key)
+    }
+
     fn sasl_plain(self, username: String, password: String) -> Self {
         ConsumerConfig::sasl_plain(self, username, password)
     }
@@ -416,6 +448,14 @@ impl ExampleSecurityConfig for ConsumerGroupConfig {
 
     fn tls_root_certificate_der(self, certificate: Vec<u8>) -> Self {
         ConsumerGroupConfig::tls_root_certificate_der(self, certificate)
+    }
+
+    fn tls_client_certificate_der(self, certificate: Vec<u8>) -> Self {
+        ConsumerGroupConfig::tls_client_certificate_der(self, certificate)
+    }
+
+    fn tls_client_private_key_der(self, private_key: Vec<u8>) -> Self {
+        ConsumerGroupConfig::tls_client_private_key_der(self, private_key)
     }
 
     fn sasl_plain(self, username: String, password: String) -> Self {
@@ -550,6 +590,22 @@ fn tls_server_name_from_env() -> Option<String> {
 
 fn tls_root_certificate_der_from_env() -> kafrust::Result<Option<Vec<u8>>> {
     let Ok(path) = std::env::var("KAFRUST_TLS_ROOT_CERT_DER_PATH") else {
+        return Ok(None);
+    };
+
+    Ok(Some(std::fs::read(path)?))
+}
+
+fn tls_client_certificate_der_from_env() -> kafrust::Result<Option<Vec<u8>>> {
+    let Ok(path) = std::env::var("KAFRUST_TLS_CLIENT_CERT_DER_PATH") else {
+        return Ok(None);
+    };
+
+    Ok(Some(std::fs::read(path)?))
+}
+
+fn tls_client_private_key_der_from_env() -> kafrust::Result<Option<Vec<u8>>> {
+    let Ok(path) = std::env::var("KAFRUST_TLS_CLIENT_KEY_DER_PATH") else {
         return Ok(None);
     };
 
