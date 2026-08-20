@@ -63,7 +63,7 @@ slice; repeated runs, secured variants, and longer-duration evidence remain
 open.
 
 The published secure multi-broker soak workflow now defaults to the current
-`0.3.0` artifact, Kafka 4.3.1, simultaneous broker loss, and a 600-second
+`0.3.1` artifact, Kafka 4.3.1, simultaneous broker loss, and a 600-second
 campaign, and it runs on a weekly schedule as well as manually. The workflow
 configuration is in place; recurring scheduled evidence remains required for
 the longer secured-soak campaign.
@@ -2436,8 +2436,13 @@ Implemented evidence:
    `.github/workflows/share-kafka-acknowledgement-ambiguity.yml` gate now drops
    the first `ShareAcknowledge` response for a `Release` and verifies
    redelivery plus replacement `Accept`; Kafka 4.3.1 passed this gate in
-   [`32347035522`](https://github.com/TaeeunKil/kafrust/actions/runs/32347035522).
-   Long-running ambiguous reconciliation remains open.
+    [`32347035522`](https://github.com/TaeeunKil/kafrust/actions/runs/32347035522).
+    The ordinary 64-record acknowledgement soak and the live response-loss
+    reconciliation gate also passed in
+    [`32355746726`](https://github.com/TaeeunKil/kafrust/actions/runs/32355746726)
+    and [`32355746798`](https://github.com/TaeeunKil/kafrust/actions/runs/32355746798).
+    Long-running ambiguous reconciliation, multi-broker ownership, and
+    resource/backpressure measurements remain open.
   `close()` now skips unknown acknowledgements without replaying them, completes
   known shutdown releases, closes share sessions, leaves the group, and returns
   the unknown-outcome error only after cleanup. A focused regression test keeps

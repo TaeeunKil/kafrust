@@ -60,7 +60,7 @@ single-node share-state settings, produces a record, and runs the configured
 ShareConsumer poll/Renew/poll/expiry-redelivery/Accept/commit/close path. The
 passing runs establish the single-node lifecycle and one replicated
 leader-failover path on Kafka 4.3.1. They do not establish repeated failure
-recovery, long-running heartbeat movement, or production readiness.
+recovery, long-running multi-broker ownership, or production readiness.
 
 The multi-broker gate is wired in
 `.github/workflows/share-kafka-multi-broker-smoke.yml`. It starts a replicated
@@ -83,10 +83,10 @@ and three independent matrix attempts passed in [run
 
 This evidence proves the client-side wire and state-machine slice, the
 deterministic response-loss safety boundary, the single-node Kafka 4.3.1
-lifecycle, three-broker leader movement, and repeated coordinator churn within
-one long-running process. It does not prove live ambiguous acknowledgement
-reconciliation, long-running soak behavior, assignment/rebalance qualification,
-or production readiness.
+lifecycle, three-broker leader movement, repeated coordinator churn within one
+long-running process, ordinary acknowledgement progress, and live ambiguous
+acknowledgement reconciliation. It does not prove long-running multi-broker
+ownership, assignment/rebalance qualification, or production readiness.
 
 ## Basic Usage
 
@@ -221,11 +221,11 @@ reconnecting only to a stale address. Bootstrap reconnect attempts rotate
 through configured broker addresses so a broker that accepts TCP but resets
 Kafka requests does not consume the entire retry budget. The multi-broker
 workflow now exercises three consecutive coordinator-loss/recovery cycles in
-one process. The deterministic public response-loss gate now covers the
-unknown-outcome classification and deterministic redelivery recovery. Live
-acknowledgement reconciliation now also passes against Kafka 4.3.1;
-assignment/rebalance behavior and long-running heartbeat soak tests remain
-open hardening work.
+one process. The deterministic public response-loss gate and live Kafka 4.3.1
+response-loss gate now cover unknown-outcome classification and redelivery
+recovery. The 64-record live acknowledgement soak also passes;
+multi-broker long-running ownership, assignment/rebalance behavior, and
+resource/backpressure measurements remain open hardening work.
 
 The implementation reuses kafrust's bounded fetch decoder, including record
 batch decompression, header decoding, and configured response/decompression
@@ -244,8 +244,12 @@ to classify the outcome as unknown without replaying it, then verifies broker
 redelivery, replacement `Accept`, and successful completion.
 The ordinary acknowledgement soak passed in
 [`32346739498`](https://github.com/TaeeunKil/kafrust/actions/runs/32346739498),
-and the live response-loss reconciliation gate passed in
-[`32347035522`](https://github.com/TaeeunKil/kafrust/actions/runs/32347035522).
+and again from the current `main` commit in
+[`32355746726`](https://github.com/TaeeunKil/kafrust/actions/runs/32355746726).
+The live response-loss reconciliation gate passed in
+[`32347035522`](https://github.com/TaeeunKil/kafrust/actions/runs/32347035522),
+and again from the current `main` commit in
+[`32355746798`](https://github.com/TaeeunKil/kafrust/actions/runs/32355746798).
 
 ## Release Gate
 
@@ -261,17 +265,23 @@ complete all of the following:
   [run 32219147942](https://github.com/TaeeunKil/kafrust/actions/runs/32219147942));
 - live background-heartbeat ownership, cancellation, shutdown, and coordinator
   recovery behavior (three independent paths and three consecutive in-process
-  coordinator-loss cycles are live-qualified, while long-running ownership
-  remains open);
-- duplicate, delayed, and response-loss acknowledgement reconciliation;
+  coordinator-loss cycles are live-qualified, while multi-broker long-running
+  ownership remains open);
+- duplicate, delayed, and response-loss acknowledgement reconciliation (the
+  response-loss path is live-qualified; delayed and duplicate delivery
+  matrices remain open);
 - the deterministic public response-loss gate in
   `crates/kafrust/tests/fault_injection.rs` must remain green as the live
   ambiguity workflow evolves;
 - live renewal expiry, redelivery, and acquisition-lock timeout behavior across
   multiple brokers and repeated runs;
 - response-loss fault injection through
-  `.github/workflows/share-kafka-acknowledgement-ambiguity.yml`;
-- long-running share-group soak and resource/backpressure measurements;
+  `.github/workflows/share-kafka-acknowledgement-ambiguity.yml` (passed on
+  Kafka 4.3.1 in
+  [run 32355746798](https://github.com/TaeeunKil/kafrust/actions/runs/32355746798));
+- long-running multi-broker share-group soak and resource/backpressure
+  measurements (the single-node 64-record soak passed in
+  [run 32355746726](https://github.com/TaeeunKil/kafrust/actions/runs/32355746726));
 - stable public API review and a `rust-rdkafka` migration example for queue
   workloads.
 
