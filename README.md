@@ -500,11 +500,15 @@ all six seeded partitions were observed exactly once across the members.
 The same published workflow also passed a 60-second 384-record extension in
 [run 32389641275](https://github.com/TaeeunKil/kafrust/actions/runs/32389641275),
 with each member accepting 192 records and all partition/offset pairs unique.
+The published member-loss path also passed in
+[run 32390219711](https://github.com/TaeeunKil/kafrust/actions/runs/32390219711):
+after member 2 was force-terminated, member 1 reacquired all six partitions and
+accepted one record from each.
 In-process repeated recovery, long-running qualification, and ambiguous
 acknowledgement responses are surfaced as a typed unknown-outcome error and are
 not replayed automatically. Multi-broker long-running ownership,
-dynamic member-loss/rebalance, and broader published-artifact qualification
-remain open. `BatchOptimized` is the default acquisition mode;
+repeated member churn, longer backpressure, and broader published-artifact
+qualification remain open. `BatchOptimized` is the default acquisition mode;
 `RecordLimit` uses KIP-1206 and requires a broker advertising ShareFetch v2;
 `Renew` uses ShareAcknowledge v2 and retains the record for later completion.
 See [Share Consumer](docs/share-consumer.md) for the exact alpha contract.

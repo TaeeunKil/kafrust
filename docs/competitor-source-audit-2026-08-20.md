@@ -77,9 +77,12 @@ surfaces separate.
   The same published workflow then passed a 60-second, 384-record extension;
   each member accepted 192 records and all partition/offset pairs remained
   unique in [`32389641275`](https://github.com/TaeeunKil/kafrust/actions/runs/32389641275).
-  The remaining Share gaps are long-running ownership, dynamic member-loss and
-  rebalance qualification, Streams background heartbeat/assignment ownership,
-  and broader published coverage.
+  A forced member-loss run then terminated member 2 and verified that member 1
+  reacquired all six partitions and accepted one record from each in
+  [`32390219711`](https://github.com/TaeeunKil/kafrust/actions/runs/32390219711).
+  The remaining Share gaps are repeated churn, long-running ownership and
+  backpressure qualification, Streams background heartbeat/assignment
+  ownership, and broader published coverage.
 
 ## Findings By Project
 

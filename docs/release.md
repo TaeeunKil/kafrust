@@ -153,8 +153,12 @@ The same published workflow then processed 384 records over a 60-second
 two-member run, with each member accepting 192 records and all partition/offset
 pairs unique, in
 [run 32389641275](https://github.com/TaeeunKil/kafrust/actions/runs/32389641275).
-Long-running ownership, dynamic member-loss/rebalance, and production
-readiness remain unqualified.
+The forced member-loss profile then terminated the second member after both
+heartbeats were active; the surviving published member rebalanced to all six
+partitions and accepted one record from each in
+[run 32390219711](https://github.com/TaeeunKil/kafrust/actions/runs/32390219711).
+Longer ownership/backpressure campaigns, repeated rebalance matrices, and
+production readiness remain unqualified.
 
 The `0.2.18` packages passed Cargo publish verification and both staged
 all-feature package-documentation builds on commit `373de00`. The matching

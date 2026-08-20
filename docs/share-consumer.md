@@ -92,6 +92,10 @@ Current evidence:
   records; the workflow verified all 384 records, exact per-partition counts,
   and global `(partition, offset)` uniqueness in
   [run 32389641275](https://github.com/TaeeunKil/kafrust/actions/runs/32389641275).
+- A published member-loss gate then force-terminated member 2 after both
+  heartbeat tasks were active. The surviving member rebalanced to all six
+  partitions and accepted one record from each while member 2 produced no
+  output, in [run 32390219711](https://github.com/TaeeunKil/kafrust/actions/runs/32390219711).
 
 The live gate is wired in
 `.github/workflows/share-kafka-smoke.yml`. It starts Kafka 4.3.1 with the
@@ -130,9 +134,9 @@ lifecycle, three-broker leader movement, repeated coordinator churn within one
 long-running process, bounded acknowledgement progress, bounded two-member
 partition ownership, published-artifact runtime/soak behavior on one
 single-node profile, and live ambiguous acknowledgement reconciliation. It
-does not prove long-running multi-broker ownership, dynamic assignment and
-member-loss/rebalance behavior, broad published-artifact coverage, or
-production readiness.
+does not prove long-running multi-broker ownership, repeated dynamic
+assignment/member-loss/rebalance behavior, broad published-artifact coverage,
+or production readiness.
 
 ## Basic Usage
 
@@ -338,8 +342,9 @@ complete all of the following:
   [run 32388813780](https://github.com/TaeeunKil/kafrust/actions/runs/32388813780),
   and the 384-record/60-second extension passed in
   [run 32389641275](https://github.com/TaeeunKil/kafrust/actions/runs/32389641275),
-  but dynamic member-loss/rebalance and longer backpressure coverage remain
-  open;
+  and forced member-loss recovery passed in
+  [run 32390219711](https://github.com/TaeeunKil/kafrust/actions/runs/32390219711),
+  but longer backpressure and repeated rebalance coverage remain open;
 - stable public API review and a `rust-rdkafka` migration example for queue
   workloads.
 
