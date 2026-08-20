@@ -4,8 +4,8 @@ use std::collections::BTreeSet;
 use std::time::{Duration, Instant};
 
 use kafrust::{
-    AdminClient, ClientConfig, ConsumerGroupConfig, CreateTopicsOptions, Error, NewTopic,
-    ProducerConfig, ProducerRecord,
+    AdminClient, ClientConfig, ConsumerGroupConfig, ConsumerGroupProtocol, CreateTopicsOptions,
+    Error, NewTopic, ProducerConfig, ProducerRecord,
 };
 
 #[tokio::main]
@@ -21,9 +21,20 @@ async fn main() -> kafrust::Result<()> {
     let client_config = common::apply_security(
         ClientConfig::new(bootstrap_servers.clone()).client_id("kafrust-consumer-group-regex"),
     )?;
-    let config = ConsumerGroupConfig::new(bootstrap_servers.clone(), group_id)
+    let mut config = ConsumerGroupConfig::new(bootstrap_servers.clone(), group_id)
         .with_client_config(client_config.clone())
         .subscribe_pattern(pattern.clone());
+    if let Ok(protocol) = std::env::var("KAFRUST_GROUP_PROTOCOL") {
+        config = config.group_protocol(match protocol.to_ascii_lowercase().as_str() {
+            "classic" => ConsumerGroupProtocol::Classic,
+            "consumer" | "kip-848" => ConsumerGroupProtocol::Consumer,
+            _ => {
+                return Err(Error::Unsupported(
+                    "KAFRUST_GROUP_PROTOCOL must be classic or consumer",
+                ))
+            }
+        });
+    }
     let mut group = config.join().await?;
     let assigned_topics = group
         .assignments()
