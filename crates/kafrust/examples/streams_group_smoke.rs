@@ -37,7 +37,7 @@ async fn main() -> kafrust::Result<()> {
         .rebalance_timeout_ms(30_000)
         .max_retries(3);
 
-    let mut session = StreamsGroupSession::join(config).await?;
+    let session = StreamsGroupSession::join(config).await?;
     println!(
         "joined streams group member_id={} member_epoch={} heartbeat_interval_ms={}",
         session.member_id(),
@@ -45,20 +45,32 @@ async fn main() -> kafrust::Result<()> {
         session.heartbeat_interval().as_millis()
     );
 
-    session.set_task_state_with_optional_offsets(
-        vec![StreamsGroupHeartbeatTask {
-            subtopology_id: "subtopology-0".to_owned(),
-            partitions: Vec::new(),
-        }],
-        Vec::new(),
-        Vec::new(),
-        None,
-        None,
+    let handle = session.spawn_heartbeat_task();
+    handle
+        .set_task_state(
+            vec![StreamsGroupHeartbeatTask {
+                subtopology_id: "subtopology-0".to_owned(),
+                partitions: Vec::new(),
+            }],
+            Vec::new(),
+            Vec::new(),
+            None,
+            None,
+        )
+        .await?;
+
+    let mut assignments = handle.subscribe_assignment();
+    tokio::time::timeout(Duration::from_secs(10), assignments.changed())
+        .await
+        .map_err(|_| kafrust::Error::RequestTimedOut { timeout_ms: 10_000 })?
+        .map_err(|_| kafrust::Error::StreamsGroupBackgroundTaskClosed)?;
+    let assignment = handle.assignment();
+    println!(
+        "background heartbeat received assignment active_tasks={} task_offset_interval_ms={}",
+        assignment.active_tasks.as_ref().map_or(0, Vec::len),
+        assignment.task_offset_interval_ms
     );
-    session.heartbeat().await?;
-    tokio::time::sleep(Duration::from_millis(100)).await;
-    session.heartbeat().await?;
-    session.close().await?;
+    handle.close().await?;
     println!("left streams group cleanly");
     Ok(())
 }

@@ -29,8 +29,9 @@ leave guarantee.
 
 ## Example
 
-The repository smoke example exercises the initial join, task-state heartbeat,
-nullable offset omission, and graceful leave:
+The repository smoke example exercises the initial join, background task-state
+heartbeat, assignment watch notification, nullable offset omission, and
+graceful leave:
 
 ```powershell
 $env:KAFRUST_BOOTSTRAP_SERVERS = "localhost:9092"
@@ -41,9 +42,10 @@ The manual/weekly live qualification is defined in
 `.github/workflows/live-streams-group.yml` and uses Kafka 4.3.1 with the
 Streams group protocol enabled. The gate passed on commit `eae39b4` in
 [run 32334600160](https://github.com/TaeeunKil/kafrust/actions/runs/32334600160),
-covering join, task-state heartbeat, repeated heartbeat, nullable task-offset
-omission, and graceful leave. This qualifies the manual membership lifecycle;
-it does not establish compatibility with a complete Kafka Streams application.
+covering join, background task-state heartbeat, assignment notification,
+nullable task-offset omission, and graceful leave. This qualifies the bounded
+Streams membership lifecycle; it does not establish compatibility with a
+complete Kafka Streams application.
 
 ## Stability
 

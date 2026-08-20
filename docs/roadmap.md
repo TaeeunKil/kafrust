@@ -253,8 +253,8 @@ coverage toward a release candidate that can be qualified in staging.
 - `crates/kafrust/examples/streams_group_smoke.rs` and
   `.github/workflows/live-streams-group.yml` now provide a Kafka 4.3.1
   real-broker qualification entry point. The workflow enables the broker
-  Streams protocol, creates a source topic, and exercises join, task-state
-  heartbeat, repeated heartbeat, and graceful leave. The live gate passed on
+  Streams protocol, creates a source topic, and exercises join, background
+  task-state heartbeat, assignment notification, and graceful leave. The live gate passed on
   commit `eae39b4` in
   [`32334600160`](https://github.com/TaeeunKil/kafrust/actions/runs/32334600160),
   including the broker-required nullable task-offset path. This qualifies the

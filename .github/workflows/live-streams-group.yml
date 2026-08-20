@@ -67,7 +67,7 @@ jobs:
             --partitions 1 \
             --replication-factor 1
 
-      - name: Run Streams group lifecycle smoke
+      - name: Run Streams group background lifecycle smoke
         run: cargo run -p kafrust --example streams_group_smoke
 
       - name: Dump Kafka logs
