@@ -157,7 +157,11 @@ The forced member-loss profile then terminated the second member after both
 heartbeats were active; the surviving published member rebalanced to all six
 partitions and accepted one record from each in
 [run 32390219711](https://github.com/TaeeunKil/kafrust/actions/runs/32390219711).
-Longer ownership/backpressure campaigns, repeated rebalance matrices, and
+A two-cycle published churn profile then passed in one group: member 2 took
+over after member 1's first peer loss, rejoined, and later took over after
+member 1 stopped, with 12 unique partition/offset records in
+[run 32391027028](https://github.com/TaeeunKil/kafrust/actions/runs/32391027028).
+Longer ownership/backpressure campaigns, higher-cycle rebalance matrices, and
 production readiness remain unqualified.
 
 The `0.2.18` packages passed Cargo publish verification and both staged

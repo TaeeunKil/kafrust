@@ -262,6 +262,10 @@ unknown-outcome 오류로 노출하며 자동 재전송하지 않습니다. 정�
 6개 partition을 모두 다시 할당받는 member-loss 검증도
 [run 32390219711](https://github.com/TaeeunKil/kafrust/actions/runs/32390219711)에서
 통과했습니다.
+같은 group에서 두 번의 forced-loss를 수행하는 churn 검증도
+[run 32391027028](https://github.com/TaeeunKil/kafrust/actions/runs/32391027028)에서
+통과했습니다. 첫 번째에는 member 1이, 두 번째에는 재join한 member 2가
+6개 partition을 모두 takeover했고 12개 offset이 중복되지 않았습니다.
 `BatchOptimized`가 기본 모드이며, `RecordLimit`은 ShareFetch v2를 광고하는
 broker가 필요합니다. `Renew`는 ShareAcknowledge v2에서 record를 완료하지
 않고 lock을 연장한 뒤 다음 poll에서 재처리할 수 있게 합니다. 정확한 알파
@@ -310,7 +314,7 @@ kafrust의 호환성 주장은 실제 broker로 검증된 동작으로 제한합
   qualification이 필요합니다.
 - transactions의 broker 응답을 관찰할 수 없는 경우 결과는 의도적으로
   `TransactionOutcomeUnknown`으로 보고되며 producer를 폐기해야 합니다.
-- ShareConsumer의 repeated member churn, long-running ownership, backpressure,
+- ShareConsumer의 higher-cycle churn, long-running ownership, backpressure,
   그리고 broader published-artifact qualification은 아직 1.0 release
   gate입니다.
 - KIP-848 member-aware offset semantics, 더 넓은 fault-injection, target

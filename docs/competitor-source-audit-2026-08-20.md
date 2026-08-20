@@ -80,7 +80,10 @@ surfaces separate.
   A forced member-loss run then terminated member 2 and verified that member 1
   reacquired all six partitions and accepted one record from each in
   [`32390219711`](https://github.com/TaeeunKil/kafrust/actions/runs/32390219711).
-  The remaining Share gaps are repeated churn, long-running ownership and
+  A same-group two-cycle churn run then verified member 2 rejoining and taking
+  over all six partitions after member 1 stopped, with 12 unique offsets, in
+  [`32391027028`](https://github.com/TaeeunKil/kafrust/actions/runs/32391027028).
+  The remaining Share gaps are higher-cycle churn, long-running ownership and
   backpressure qualification, Streams background heartbeat/assignment
   ownership, and broader published coverage.
 

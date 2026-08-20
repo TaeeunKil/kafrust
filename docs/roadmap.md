@@ -229,7 +229,10 @@ coverage toward a release candidate that can be qualified in staging.
   This closes the basic published assignment and bounded soak slices; dynamic
   member-loss recovery also passed when the surviving member reacquired all six
   partitions in [`32390219711`](https://github.com/TaeeunKil/kafrust/actions/runs/32390219711).
-  Repeated churn, longer ownership, and backpressure qualification remain
+  A two-cycle same-group churn profile also passed: the rejoined peer took
+  over all six partitions after the second forced loss, with 12 unique offsets,
+  in [`32391027028`](https://github.com/TaeeunKil/kafrust/actions/runs/32391027028).
+  Higher-cycle churn, longer ownership, and backpressure qualification remain
   separate 1.0 gates.
 - Stable `ShareGroupDescribe` v1 (API key 77) is now implemented through the
   typed protocol, low-level `Client`, and coordinator-aware `AdminClient`

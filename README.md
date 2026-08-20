@@ -504,10 +504,14 @@ The published member-loss path also passed in
 [run 32390219711](https://github.com/TaeeunKil/kafrust/actions/runs/32390219711):
 after member 2 was force-terminated, member 1 reacquired all six partitions and
 accepted one record from each.
+The same-group repeated churn path also passed in
+[run 32391027028](https://github.com/TaeeunKil/kafrust/actions/runs/32391027028):
+member 2 rejoined after the first loss and later took over all six partitions
+after member 1 stopped, with 12 unique offsets.
 In-process repeated recovery, long-running qualification, and ambiguous
 acknowledgement responses are surfaced as a typed unknown-outcome error and are
 not replayed automatically. Multi-broker long-running ownership,
-repeated member churn, longer backpressure, and broader published-artifact
+higher-cycle churn, longer backpressure, and broader published-artifact
 qualification remain open. `BatchOptimized` is the default acquisition mode;
 `RecordLimit` uses KIP-1206 and requires a broker advertising ShareFetch v2;
 `Renew` uses ShareAcknowledge v2 and retains the record for later completion.
