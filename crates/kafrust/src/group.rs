@@ -684,7 +684,12 @@ impl ConsumerGroupConfig {
                     "KIP-848 groups use a broker-side assignor; configure ConsumerGroupAssignmentStrategy::Range or select the classic protocol",
                 ));
             }
-            self.join_consumer(None, 0, None).await?
+            // KIP-848 v1 regex subscriptions require a client-generated member ID.
+            let member_id = self
+                .topic_pattern
+                .as_ref()
+                .map(|_| new_consumer_member_id());
+            self.join_consumer(member_id, 0, None).await?
         } else {
             self.join_with_owned_partitions(Vec::new()).await?
         };
@@ -4836,6 +4841,31 @@ fn coordinator_addr(coordinator: &FindCoordinatorResponseV1) -> String {
     format!("{}:{}", coordinator.host, coordinator.port)
 }
 
+fn new_consumer_member_id() -> String {
+    use rand::RngCore;
+
+    let mut bytes = [0_u8; 16];
+    rand::thread_rng().fill_bytes(&mut bytes);
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    let hex = bytes
+        .iter()
+        .fold(String::with_capacity(32), |mut hex, byte| {
+            use std::fmt::Write;
+
+            let _ = write!(hex, "{byte:02x}");
+            hex
+        });
+    format!(
+        "{}-{}-{}-{}-{}",
+        &hex[..8],
+        &hex[8..12],
+        &hex[12..16],
+        &hex[16..20],
+        &hex[20..]
+    )
+}
+
 async fn connect_group_coordinator_with_retry(
     client: &ClientConfig,
     group_id: &str,
@@ -5045,9 +5075,9 @@ mod tests {
         cooperative_rejoin_required_for_assignment, cooperative_sticky_assignments,
         decode_classic_subscription, decode_sticky_user_data, encode_sticky_user_data,
         group_retry_backoff, leave_group_response_error, list_offset, list_offsets_topics,
-        member_id_after_join_error, offset_commit_response_error, offset_commit_topics,
-        offset_commit_topics_v7, offset_commit_topics_v9, offset_fetch_topics,
-        pending_commit_assignments, queue_commit_offset, range_assignments,
+        member_id_after_join_error, new_consumer_member_id, offset_commit_response_error,
+        offset_commit_topics, offset_commit_topics_v7, offset_commit_topics_v9,
+        offset_fetch_topics, pending_commit_assignments, queue_commit_offset, range_assignments,
         record_consumer_heartbeat_response, round_robin_assignments,
         run_background_consumer_heartbeat, run_background_heartbeat, send_consumer_group_heartbeat,
         should_rejoin_after_background_heartbeat, should_rejoin_group, should_retry_commit_worker,
@@ -5447,6 +5477,19 @@ mod tests {
 
         assert_eq!(config.group_protocol_ref(), ConsumerGroupProtocol::Consumer);
         assert_eq!(config.server_assignor_ref(), Some("uniform"));
+    }
+
+    #[test]
+    fn generates_uuid_shaped_member_ids_for_kip_848_regex_subscriptions() {
+        let member_id = new_consumer_member_id();
+
+        assert_eq!(member_id.len(), 36);
+        assert_eq!(&member_id[8..9], "-");
+        assert_eq!(&member_id[13..14], "-");
+        assert_eq!(&member_id[18..19], "-");
+        assert_eq!(&member_id[23..24], "-");
+        assert_eq!(&member_id[14..15], "4");
+        assert!(matches!(&member_id[19..20], "8" | "9" | "a" | "b"));
     }
 
     #[test]
