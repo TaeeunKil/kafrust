@@ -422,6 +422,17 @@ schema-order fix is in current source and the published `0.3.1` run passes.
 This remains a single workload baseline, not API/feature parity, a production
 SLO, or a universal performance ranking.
 
+The `Published rust-rdkafka Comparison` workflow is manually dispatched and
+keeps every historical run visible in GitHub Actions. A red run therefore
+describes that specific historical input and commit, not the current latest
+artifact. The workflow now defaults to three independent repetitions per
+implementation, uses a fresh topic for every repetition, records the
+repetition number in `comparison-results.jsonl`, and verifies that both
+implementations produced the complete repetition set. This improves
+measurement repeatability but still covers only the documented produce/fetch
+profile; it does not establish feature parity, failure compatibility, or a
+production SLO.
+
 The published `0.2.30` single-node broker-restart soak passed for 300 seconds
 in [`31768319413`](https://github.com/TaeeunKil/kafrust/actions/runs/31768319413).
 The fresh external project processed 21,597,600 1-KiB records through a

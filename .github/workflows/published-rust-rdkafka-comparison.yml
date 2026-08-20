@@ -19,6 +19,10 @@ on:
         description: "Payload bytes per record"
         required: true
         default: "1024"
+      repetitions:
+        description: "Independent repetitions per implementation"
+        required: true
+        default: "3"
       kafrust_source:
         description: "Compare the checked-out kafrust source instead of crates.io"
         required: true
@@ -81,13 +85,21 @@ jobs:
 
       - name: Create comparison topics
         run: |
-          for implementation in kafrust rdkafka; do
-            docker exec kafrust-rdkafka-comparison /opt/kafka/bin/kafka-topics.sh \
-              --bootstrap-server localhost:9092 \
-              --create \
-              --topic "kafrust-rdkafka-comparison-${GITHUB_RUN_ID}-${implementation}" \
-              --partitions 1 \
-              --replication-factor 1
+          set -euo pipefail
+          repetitions='${{ inputs.repetitions }}'
+          case "$repetitions" in
+            ''|*[!0-9]*) echo "repetitions must be a positive integer" >&2; exit 1 ;;
+          esac
+          test "$repetitions" -gt 0
+          for repetition in $(seq 1 "$repetitions"); do
+            for implementation in kafrust rdkafka; do
+              docker exec kafrust-rdkafka-comparison /opt/kafka/bin/kafka-topics.sh \
+                --bootstrap-server localhost:9092 \
+                --create \
+                --topic "kafrust-rdkafka-comparison-${GITHUB_RUN_ID}-${implementation}-${repetition}" \
+                --partitions 1 \
+                --replication-factor 1
+            done
           done
 
       - name: Create fresh external comparison project
@@ -113,16 +125,27 @@ jobs:
         run: |
           set -euo pipefail
           project_dir="$RUNNER_TEMP/kafrust-published-rust-rdkafka-comparison"
+          repetitions='${{ inputs.repetitions }}'
           : > comparison-results.jsonl
-          for implementation in kafrust rdkafka; do
-            KAFRUST_COMPARISON_IMPLEMENTATION="$implementation" \
-              KAFRUST_TOPIC="kafrust-rdkafka-comparison-${GITHUB_RUN_ID}-${implementation}" \
-              cargo run --quiet --release --manifest-path "$project_dir/Cargo.toml" \
-              | tee -a comparison-results.jsonl
+          for repetition in $(seq 1 "$repetitions"); do
+            for implementation in kafrust rdkafka; do
+              KAFRUST_COMPARISON_IMPLEMENTATION="$implementation" \
+                KAFRUST_COMPARISON_REPETITION="$repetition" \
+                KAFRUST_TOPIC="kafrust-rdkafka-comparison-${GITHUB_RUN_ID}-${implementation}-${repetition}" \
+                cargo run --quiet --release --manifest-path "$project_dir/Cargo.toml" \
+                | tee -a comparison-results.jsonl
+            done
           done
-          test "$(wc -l < comparison-results.jsonl)" -eq 2
-          grep -q '"implementation":"kafrust"' comparison-results.jsonl
-          grep -q '"implementation":"rdkafka"' comparison-results.jsonl
+          test "$(wc -l < comparison-results.jsonl)" -eq "$((repetitions * 2))"
+          test "$(jq -s --argjson repetitions "$repetitions" \
+            'map(select(.implementation == "kafrust")) | length == $repetitions' \
+            comparison-results.jsonl)" = true
+          test "$(jq -s --argjson repetitions "$repetitions" \
+            'map(select(.implementation == "rdkafka")) | length == $repetitions' \
+            comparison-results.jsonl)" = true
+          test "$(jq -s --argjson repetitions "$repetitions" \
+            'map(.repetition) | sort | unique == ([range(1; $repetitions + 1)] | sort)' \
+            comparison-results.jsonl)" = true
 
       - name: Verify published and comparison dependency versions
         run: |

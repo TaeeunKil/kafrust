@@ -16,6 +16,7 @@ const CONSUME_TIMEOUT: Duration = Duration::from_secs(60);
 #[derive(Debug)]
 struct ResultRow {
     implementation: &'static str,
+    repetition: usize,
     records: usize,
     payload_bytes: usize,
     batch_size: usize,
@@ -28,6 +29,7 @@ struct ResultRow {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     let implementation = required("KAFRUST_COMPARISON_IMPLEMENTATION")?;
+    let repetition = usize_from_env("KAFRUST_COMPARISON_REPETITION", 1)?;
     let servers = required("KAFRUST_BOOTSTRAP_SERVERS")?;
     let topic = required("KAFRUST_TOPIC")?;
     let records = usize_from_env("KAFRUST_COMPARISON_RECORDS", 20_000)?;
@@ -38,13 +40,34 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     }
 
     let row = match implementation.as_str() {
-        "kafrust" => run_kafrust(&servers, &topic, records, batch_size, payload_bytes).await?,
-        "rdkafka" => run_rdkafka(&servers, &topic, records, batch_size, payload_bytes).await?,
+        "kafrust" => {
+            run_kafrust(
+                &servers,
+                &topic,
+                records,
+                batch_size,
+                payload_bytes,
+                repetition,
+            )
+            .await?
+        }
+        "rdkafka" => {
+            run_rdkafka(
+                &servers,
+                &topic,
+                records,
+                batch_size,
+                payload_bytes,
+                repetition,
+            )
+            .await?
+        }
         _ => return Err("KAFRUST_COMPARISON_IMPLEMENTATION must be kafrust or rdkafka".into()),
     };
     println!(
-        "{{\"implementation\":\"{}\",\"records\":{},\"payload_bytes\":{},\"batch_size\":{},\"produce_seconds\":{:.6},\"consume_seconds\":{:.6},\"produce_records_per_second\":{:.2},\"consume_records_per_second\":{:.2}}}",
+        "{{\"implementation\":\"{}\",\"repetition\":{},\"records\":{},\"payload_bytes\":{},\"batch_size\":{},\"produce_seconds\":{:.6},\"consume_seconds\":{:.6},\"produce_records_per_second\":{:.2},\"consume_records_per_second\":{:.2}}}",
         row.implementation,
+        row.repetition,
         row.records,
         row.payload_bytes,
         row.batch_size,
@@ -62,6 +85,7 @@ async fn run_kafrust(
     records: usize,
     batch_size: usize,
     payload_bytes: usize,
+    repetition: usize,
 ) -> Result<ResultRow, Box<dyn Error + Send + Sync>> {
     let bootstrap_servers = servers.split(',').map(str::to_owned).collect::<Vec<_>>();
     let metrics = ClientMetrics::new();
@@ -125,6 +149,7 @@ async fn run_kafrust(
     let consume_elapsed = consume_started.elapsed();
     Ok(ResultRow {
         implementation: "kafrust",
+        repetition,
         records,
         payload_bytes,
         batch_size,
@@ -141,6 +166,7 @@ async fn run_rdkafka(
     records: usize,
     batch_size: usize,
     payload_bytes: usize,
+    repetition: usize,
 ) -> Result<ResultRow, Box<dyn Error + Send + Sync>> {
     let producer: FutureProducer = ClientConfig::new()
         .set("bootstrap.servers", servers)
@@ -195,6 +221,7 @@ async fn run_rdkafka(
     let consume_elapsed = consume_started.elapsed();
     Ok(ResultRow {
         implementation: "rdkafka",
+        repetition,
         records,
         payload_bytes,
         batch_size,

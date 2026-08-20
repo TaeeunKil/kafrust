@@ -386,6 +386,12 @@ coverage toward a release candidate that can be qualified in staging.
   91,577.21 producer and 323,988.79 consumer records/s. This closes the
   published `0.3.1` comparison/reliability slice, not replacement, feature
   parity, or production SLO qualification.
+- The comparison workflow now defaults to three independent repetitions per
+  implementation, isolates each repetition on a fresh topic, and uploads
+  repetition-labelled JSONL results. Its validation rejects incomplete or
+  duplicated result sets. Historical red runs remain visible by design and
+  must be interpreted against their recorded commit and published version;
+  this workflow still qualifies only the documented produce/fetch profile.
 - Published `0.2.30` then passed a 300-second single-node broker-restart soak
   in [`31768319413`](https://github.com/TaeeunKil/kafrust/actions/runs/31768319413),
   processing 21,597,600 records with 180 operation errors, 954 failed
