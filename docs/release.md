@@ -245,6 +245,15 @@ subscription metadata, topic partition 0 assignment, and
 only; the removed Kafka 4.0 early-access v0, security, and multi-member Admin
 matrices remain open.
 
+The published `kafrust 0.3.4` OAUTHBEARER gate passed on Kafka 3.7.2 in
+[run 32411655133](https://github.com/TaeeunKil/kafrust/actions/runs/32411655133).
+The fresh external project resolved the crates.io artifact, connected through
+SASL_SSL with Kafka's built-in unsecured validator, supplied the token through
+the public async provider, and completed `describe_cluster`, `acks=all`
+produce, and direct-consumer readback. This is published basic
+OAUTHBEARER/TLS evidence, not a claim of signed OIDC/JWKS provider
+compatibility or provider discovery and outage semantics.
+
 The `0.2.18` packages passed Cargo publish verification and both staged
 all-feature package-documentation builds on commit `373de00`. The matching
 `kafrust-protocol` and `kafrust` packages were published in that order; both

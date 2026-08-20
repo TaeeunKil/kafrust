@@ -132,6 +132,16 @@ Those runs covered the required-client-certificate handshake, Admin, producer,
 direct consumer, consumer group, transactional/read-committed, low-level, and
 coordinator roundtrips. Certificate rotation behavior remains a separate gate.
 
+The published `kafrust 0.3.4` artifact also passed the dedicated external
+OAUTHBEARER gate on Kafka 3.7.2 in
+[`32411655133`](https://github.com/TaeeunKil/kafrust/actions/runs/32411655133).
+The fresh external Cargo project resolved the client from crates.io and
+verified SASL_SSL with Kafka's built-in unsecured OAUTHBEARER validator, an
+async token provider, `AdminClient::describe_cluster`, an `acks=all` produce,
+and direct-consumer readback. This qualifies the published basic
+OAUTHBEARER/TLS path; signed OIDC/JWKS, provider discovery, key rotation, and
+provider-specific outage behavior remain separate gates.
+
 The current-source `UpdateFeatures` gate now sends a non-empty v1
 `validate_only` request for the broker's finalized `metadata.version` level
 and checks the returned top-level and feature-level success. Kafka 3.7.2
@@ -1134,6 +1144,7 @@ other coordinator-routed writes remain separate qualification items.
 | Published `kafrust 0.3.1` and `kafrust-protocol 0.3.1` | fresh external Cargo project with no workspace path dependency; Kafka 4.3.1 single-node KRaft | published member-aware Admin OffsetFetch v10 and OffsetCommit v10; committed offset verified by Kafka CLI | [`Published Member Offset Smoke`, run `32341534974`](https://github.com/TaeeunKil/kafrust/actions/runs/32341534974) on 2026-08-20 | Passing; crates.io resolution and API version marker verified |
 | Published `kafrust 0.3.4` | fresh external Cargo project with no workspace path dependency; Kafka 4.3.1 single-node KRaft; KIP-848 consumer member joined by the fixture | `ConsumerGroupDescribe` API 69 through `AdminClient::describe_consumer_groups_modern`; stable state, group/assignment epochs, member type/epoch, and current/target topic-partition assignments | [`Published ConsumerGroupDescribe Smoke`, run `32408765709`](https://github.com/TaeeunKil/kafrust/actions/runs/32408765709) on 2026-08-21 | Passing; `state=Stable`, epochs `2/2`, `member_type=1`, `member_epoch=2`, and partition 0 assignment verified from crates.io artifact |
 | Published `kafrust 0.3.4` | fresh external Cargo project with no workspace path dependency; Kafka 4.3.1 single-node KRaft with share groups enabled; active ShareConsumer member joined by the fixture | stable `ShareGroupDescribe` API 77 through `AdminClient::describe_share_groups`; state/epochs, member identity/epoch, subscription metadata, assignment, and authorization bits | [`Published ShareGroupDescribe Smoke`, run `32410690294`](https://github.com/TaeeunKil/kafrust/actions/runs/32410690294) on 2026-08-21 | Passing; `state=Stable`, epochs `3/3`, `member_epoch=3`, `assignment_partition=0`, `subscribed_topic=true`, and `authorized_operations=3400` verified from crates.io artifact |
+| Published `kafrust 0.3.4` | fresh external Cargo project with no workspace path dependency; Kafka 3.7.2 single-node KRaft over SASL_SSL; built-in unsecured OAUTHBEARER validator; stable Rust | published async OAuth token provider, `AdminClient::describe_cluster`, `acks=all` produce, and direct-consumer readback | [`Published OAUTHBEARER Smoke`, run `32411655133`](https://github.com/TaeeunKil/kafrust/actions/runs/32411655133) on 2026-08-21 | Passing; crates.io resolution and generated lockfile verified; signed OIDC/JWKS and provider-specific behavior remain separate |
 | Published `kafrust 0.3.1` and `kafrust-protocol 0.3.1` | fresh external Cargo project with no workspace path dependency; Kafka 4.3.1 single-node KRaft | KIP-848 regex v1 member assignment, dynamic topic discovery/record, offset commit, and explicit rejoin | [`Published KIP-848 Regex Smoke`, run `32341967051`](https://github.com/TaeeunKil/kafrust/actions/runs/32341967051) on 2026-08-20 | Passing; API key 68 v1 and UUID-shaped member ID observed in logs |
 | Apache Kafka 3.7.2 | three-broker KRaft | In-flight leader-routed DeleteRecords v1 and DescribeProducers v0, coordinator-routed DescribeTransactions v0, DescribeGroups v1, OffsetFetch v2, and exact-offset OffsetCommit v2, plus broker-routed DescribeConfigs v1 and ListGroups v1, pre-transmission gates, broker stops, fresh discovery/retry | [`Live Kafka Smoke`, run `31616181960`](https://github.com/TaeeunKil/kafrust/actions/runs/31616181960) on 2026-08-12 | Passing; ListGroups recorded `retries=7` |
 | Apache Kafka 3.7.2 | three-broker KRaft with SASL_SSL/SCRAM-SHA-256 | In-flight coordinator-routed Admin DescribeGroups v1, OffsetFetch v2, and exact-offset OffsetCommit v2, coordinator stop, secured rediscovery/retry | [`Live Kafka Smoke`, run `31698102459`](https://github.com/TaeeunKil/kafrust/actions/runs/31698102459) on 2026-08-13 | Passing; all recorded `retries=1` |

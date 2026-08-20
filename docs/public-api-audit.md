@@ -79,6 +79,17 @@ partition 0 assignment, and `authorized_operations=3400`. Kafka 4.0's removed
 early-access v0, security variants, and multi-member Admin reads remain separate
 gates.
 
+The published `kafrust 0.3.4` external gate also exercises the public
+OAUTHBEARER surface on Kafka 3.7.2 in
+[`32411655133`](https://github.com/TaeeunKil/kafrust/actions/runs/32411655133).
+The fixture used `SecurityProtocol::SaslTls`,
+`ClientConfig::sasl_oauthbearer_provider`, `AdminClient::describe_cluster`,
+`ProducerConfig::with_client_config`, and
+`ConsumerConfig::with_client_config` from a fresh Cargo project resolved from
+crates.io. It passed the broker's built-in unsecured validator and read back
+the produced record. Signed OIDC/JWKS, provider discovery, and
+provider-specific failure behavior remain unqualified.
+
 ## Module Visibility
 
 The crate also exposes public modules:

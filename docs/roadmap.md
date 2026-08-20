@@ -1369,6 +1369,14 @@ Evidence:
   `codex/live-oauth-smoke`; the dedicated Kafka 3.7.2 SASL_SSL OAUTHBEARER
   job passed with the built-in unsecured validator. This does not qualify a
   production OAuth/OIDC provider.
+- Published `kafrust 0.3.4` passed the same basic SASL_SSL OAUTHBEARER path
+  from a fresh external Cargo project in
+  [`32411655133`](https://github.com/TaeeunKil/kafrust/actions/runs/32411655133):
+  crates.io resolution, async token-provider authentication,
+  `AdminClient::describe_cluster`, `acks=all` produce, and direct-consumer
+  readback. This closes the published basic OAuth gate only; signed OIDC/JWKS,
+  provider discovery, key rotation, and provider-specific outage behavior
+  remain open.
 - The signed local OIDC/JWKS fixture passed Kafka's validator, the Java Kafka
   client, and kafrust static and provider-backed paths in the OIDC job
   [`31584760474`](https://github.com/TaeeunKil/kafrust/actions/runs/31584760474/job/94078116567).
@@ -3009,7 +3017,9 @@ Implemented evidence:
   control-A acknowledgement after an error challenge. Injected broker tests
   cover handshake ordering, exact authentication bytes, and error challenge
   acknowledgement; the signed OIDC live job above adds Kafka 3.7.2 coverage.
-  Async token providers are covered by injected connection tests; external
+  Async token providers are covered by injected connection tests and the
+  published `0.3.4` gate [`32411655133`](https://github.com/TaeeunKil/kafrust/actions/runs/32411655133).
+  The published gate uses Kafka's built-in unsecured validator; external
   provider-specific OAuth/OIDC verification remains open.
 - Cooperative-sticky group membership encodes Subscription v1 owned
   partitions and performs staged ownership transfers with focused local tests.
