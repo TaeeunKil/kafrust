@@ -477,7 +477,7 @@ async fn main() -> kafrust::Result<()> {
 }
 ```
 
-The API is pre-1.0, but the published `0.3.3` artifact now includes this
+The API is pre-1.0, but the published `0.3.5` artifact now includes this
 surface. It has focused protocol tests and an injected-broker wire roundtrip
 test, plus an opt-in cancellable background heartbeat task. A Kafka 4.3.1
 single-node live smoke passed the KIP-1222 renewal, expiry/redelivery, and
@@ -506,6 +506,12 @@ The published member-loss path also passed in
 [run 32390219711](https://github.com/TaeeunKil/kafrust/actions/runs/32390219711):
 after member 2 was force-terminated, member 1 reacquired all six partitions and
 accepted one record from each.
+The published `0.3.5` artifact also passed a fresh external three-broker
+leader-failover run in
+[run 32423091397](https://github.com/TaeeunKil/kafrust/actions/runs/32423091397):
+after the selected partition leader was stopped, the surviving published
+producer and ShareConsumer completed the post-failover path through the
+replacement leader.
 The same-group repeated churn path also passed in
 [run 32391027028](https://github.com/TaeeunKil/kafrust/actions/runs/32391027028):
 member 2 rejoined after the first loss and later took over all six partitions

@@ -140,6 +140,16 @@ zero final in-flight and buffered records. This closes the current published
 election data loss, production SLOs, and service-canary evidence remain
 separate gates.
 
+The published `0.3.5` ShareConsumer also passed a fresh external three-broker
+leader-failover gate in
+[`32423091397`](https://github.com/TaeeunKil/kafrust/actions/runs/32423091397).
+The run used Kafka 4.3.1 with share groups enabled, produced and consumed a
+record before stopping the selected partition leader, waited for a replacement
+leader, and completed the post-failover produce/consume path through surviving
+bootstrap servers. This closes the current published Share leader-failover
+slice. It does not close long-running multi-broker ownership, multi-member
+churn, secured Share, or production-SLO evidence.
+
 The verification-hardening slice now includes a standalone pure-Rust fuzz
 workspace with ten libFuzzer targets covering primitive/flexible decoding,
 framing, classic and modern group descriptions, share-group offsets, and all
