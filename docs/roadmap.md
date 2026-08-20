@@ -16,7 +16,7 @@ Status legend:
 
 `0.3.5` is now published on crates.io in protocol-first order. The fresh
 external signed OAUTHBEARER gate passed on Kafka 3.7.2 in
-[`32419795744`](https://github.com/TaeeunKil/kafrust/actions/runs/32419795744):
+[`32420723537`](https://github.com/TaeeunKil/kafrust/actions/runs/32420723537):
 the published `kafrust 0.3.5` client completed RS256 OIDC/JWKS validation,
 initial authentication, produce/readback, and SASL re-authentication on the
 same connection after the broker session lifetime threshold. The prior
