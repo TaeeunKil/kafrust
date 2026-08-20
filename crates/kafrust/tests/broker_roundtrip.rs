@@ -822,6 +822,22 @@ async fn share_group_state_replica_failover_when_broker_is_configured() {
         "share state partition metadata failed"
     );
 
+    if phase == "locate" {
+        let coordinator = metadata_client
+            .find_share_partition_coordinator(&group_id, topic.topic_id, partition_index)
+            .await
+            .expect("Share coordinator lookup should succeed");
+        assert_eq!(
+            coordinator.error_code, 0,
+            "Share coordinator lookup returned an error"
+        );
+        println!(
+            "KAFRUST_STATE_COORDINATOR_ENDPOINT={}:{}",
+            coordinator.host, coordinator.port
+        );
+        return;
+    }
+
     let admin = AdminClient::new(
         client_config_from_env(
             parse_bootstrap_servers(&bootstrap),

@@ -112,64 +112,59 @@ jobs:
           case ",$isr," in *,2,* ) ;; *) echo "state topic is missing broker 2 from ISR: $isr"; exit 1;; esac
           case ",$isr," in *,3,* ) ;; *) echo "state topic is missing broker 3 from ISR: $isr"; exit 1;; esac
 
-          for attempt in {1..60}; do
-            coordinator_output="$(docker exec kafrust-share-state-1 /opt/kafka/bin/kafka-share-groups.sh \
-              --bootstrap-server kafrust-share-state-1:29092 --describe \
-              --group "$KAFRUST_SHARE_STATE_GROUP_ID" --state 2>/dev/null || true)"
-            printf '%s\n' "$coordinator_output"
-            coordinator_id="$(printf '%s\n' "$coordinator_output" | \
-              awk '$0 !~ /COORDINATOR/ && $0 ~ /\([0-9]+\)/ { match($0, /\([0-9]+\)/); print substr($0, RSTART + 1, RLENGTH - 2); exit }')"
-            case "$coordinator_id" in
-              1|2|3)
-                echo "share coordinator is broker $coordinator_id"
-                echo "KAFRUST_STATE_COORDINATOR_ID=$coordinator_id" >> "$GITHUB_ENV"
-                exit 0
-                ;;
-            esac
-            sleep 2
-          done
-          echo "could not locate the share coordinator for the written group"
-          exit 1
+          output="$(
+            KAFRUST_SHARE_STATE_PHASE=locate \
+            KAFRUST_BOOTSTRAP_SERVERS=localhost:19092,localhost:19093,localhost:19094 \
+              cargo test -p kafrust --test broker_roundtrip \
+                share_group_state_replica_failover_when_broker_is_configured -- --nocapture
+          )"
+          printf '%s\n' "$output"
+          coordinator_endpoint="$(printf '%s\n' "$output" | sed -n 's/^KAFRUST_STATE_COORDINATOR_ENDPOINT=//p' | tail -n 1)"
+          case "$coordinator_endpoint" in
+            *:19092) coordinator_id=1 ;;
+            *:19093) coordinator_id=2 ;;
+            *:19094) coordinator_id=3 ;;
+            *) echo "could not parse the Share coordinator endpoint: $coordinator_endpoint"; exit 1 ;;
+          esac
+          echo "share coordinator is broker $coordinator_id ($coordinator_endpoint)"
+          echo "KAFRUST_STATE_COORDINATOR_ID=$coordinator_id" >> "$GITHUB_ENV"
 
       - name: Stop share coordinator and wait for replacement
         run: |
           coordinator_id="$KAFRUST_STATE_COORDINATOR_ID"
           docker stop "kafrust-share-state-${coordinator_id}"
-          surviving_node=""
+          bootstrap_servers=""
           for node in 1 2 3; do
             if [ "$node" != "$coordinator_id" ]; then
-              surviving_node="$node"
-              break
+              if [ -n "$bootstrap_servers" ]; then bootstrap_servers=",$bootstrap_servers"; fi
+              bootstrap_servers="localhost:$((19091 + node))$bootstrap_servers"
             fi
           done
           for attempt in {1..60}; do
-            output="$(docker exec "kafrust-share-state-${surviving_node}" /opt/kafka/bin/kafka-share-groups.sh \
-              --bootstrap-server "kafrust-share-state-${surviving_node}:29092" --describe \
-              --group "$KAFRUST_SHARE_STATE_GROUP_ID" --state 2>/dev/null || true)"
-            printf '%s\n' "$output"
-            new_coordinator="$(printf '%s\n' "$output" | \
-              awk '$0 !~ /COORDINATOR/ && $0 ~ /\([0-9]+\)/ { match($0, /\([0-9]+\)/); print substr($0, RSTART + 1, RLENGTH - 2); exit }')"
-            case "$new_coordinator" in
-              1|2|3)
-                if [ "$new_coordinator" != "$coordinator_id" ]; then
-                  echo "share coordinator moved from broker $coordinator_id to broker $new_coordinator"
-                  bootstrap_servers=""
-                  for node in 1 2 3; do
-                    if [ "$node" != "$coordinator_id" ]; then
-                      if [ -n "$bootstrap_servers" ]; then bootstrap_servers=",$bootstrap_servers"; fi
-                      bootstrap_servers="localhost:$((19091 + node))$bootstrap_servers"
-                    fi
-                  done
-                  echo "KAFRUST_BOOTSTRAP_SERVERS=$bootstrap_servers" >> "$GITHUB_ENV"
-                  exit 0
-                fi
-                ;;
-            esac
+            if output="$(
+              KAFRUST_SHARE_STATE_PHASE=locate \
+              KAFRUST_BOOTSTRAP_SERVERS="$bootstrap_servers" \
+                cargo test -p kafrust --test broker_roundtrip \
+                  share_group_state_replica_failover_when_broker_is_configured -- --nocapture
+            )"; then
+              printf '%s\n' "$output"
+              coordinator_endpoint="$(printf '%s\n' "$output" | sed -n 's/^KAFRUST_STATE_COORDINATOR_ENDPOINT=//p' | tail -n 1)"
+              case "$coordinator_endpoint" in
+                *:19092) new_coordinator=1 ;;
+                *:19093) new_coordinator=2 ;;
+                *:19094) new_coordinator=3 ;;
+                *) new_coordinator="" ;;
+              esac
+              if [ -n "$new_coordinator" ] && [ "$new_coordinator" != "$coordinator_id" ]; then
+                echo "share coordinator moved from broker $coordinator_id to broker $new_coordinator ($coordinator_endpoint)"
+                echo "KAFRUST_BOOTSTRAP_SERVERS=$bootstrap_servers" >> "$GITHUB_ENV"
+                exit 0
+              fi
+            else
+              echo "Share coordinator lookup is not ready; retrying"
+            fi
             sleep 2
           done
-          docker exec "kafrust-share-state-${surviving_node}" /opt/kafka/bin/kafka-share-groups.sh \
-            --bootstrap-server "kafrust-share-state-${surviving_node}:29092" --describe \
-            --group "$KAFRUST_SHARE_STATE_GROUP_ID" --state || true
           exit 1
 
       - name: Read and delete replicated Share Group State after coordinator loss
