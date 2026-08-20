@@ -246,7 +246,7 @@ async fn main() -> kafrust::Result<()> {
 }
 ```
 
-이 API는 개발 브랜치에 있으며 아직 공개된 `0.3.0` artifact에는 포함되지
+이 API는 개발 브랜치에 있으며 아직 공개된 `0.3.2` artifact에는 포함되지
 않았습니다. protocol test와 injected-broker wire 왕복 테스트를 통과했고,
 취소 가능한 background heartbeat task도 추가했습니다. 실제 Kafka 4.x 검증과
 coordinator 복구는 아직 남아 있지만 live workflow는 KIP-1222 renewal 후

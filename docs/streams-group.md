@@ -50,14 +50,18 @@ lifecycle close. The three-broker coordinator-stop gate passed on commit
 `21ec3fd` in [run 32374858753](https://github.com/TaeeunKil/kafrust/actions/runs/32374858753),
 covering a coordinator node stop, post-stop heartbeat recovery, and clean
 leave. Together these qualify the bounded Streams membership and background
-heartbeat lifecycle on single- and multi-broker plaintext clusters; they do
-not establish published artifact compatibility, assignment/task-runtime
-reconciliation, or compatibility with a complete Kafka Streams application.
+heartbeat lifecycle on single- and multi-broker plaintext clusters. The
+published `kafrust 0.3.2` surface was also compiled from a fresh external Cargo
+project with no workspace path dependency on both stable Rust and Rust 1.81;
+this proves package/API availability, not broker runtime compatibility,
+assignment/task-runtime reconciliation, or compatibility with a complete Kafka
+Streams application.
 
 ## Stability
 
 This is an alpha, expert-level API. The session now preserves the latest
 successful assignment snapshot without collapsing nullable fields. Before
-`1.0`, the project still needs published-artifact qualification of the
-background handle, automatic assignment/task-runtime reconciliation, and a
-real Kafka Streams application test.
+`1.0`, the project still needs automatic assignment/task-runtime
+reconciliation, a real Kafka Streams application test, and a published
+broker-runtime gate for this API. The published artifact surface check is
+defined in `.github/workflows/published-streams-surface.yml`.

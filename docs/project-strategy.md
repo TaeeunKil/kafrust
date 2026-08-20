@@ -222,7 +222,7 @@ These tiers define what "usable" and "complete" mean for this project. Dates are
 
 ### Alpha Client
 
-Current state after the published v0.3.1 alpha release.
+Current state after the published v0.3.2 alpha release.
 
 Expected use:
 

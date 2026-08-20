@@ -109,6 +109,18 @@ cargo doc --manifest-path target/package/kafrust-protocol-<version>/Cargo.toml -
 cargo doc --manifest-path target/package/kafrust-<version>/Cargo.toml --all-features --no-deps
 ```
 
+The `0.3.2` packages were published protocol-first on 2026-08-20. The
+`kafrust-protocol 0.3.2` package was published before `kafrust 0.3.2`, which
+allowed the client package to verify against the matching registry dependency;
+the previous source tree could not package safely while both crates reused the
+`0.3.1` version. A fresh external project with no workspace path dependency
+compiled the published Streams surface, including
+`StreamsGroupSessionHandle` and assignment-watch APIs, on stable Rust and Rust
+1.81 with `cargo check --all-features`. The repeatable CI gate is
+`.github/workflows/published-streams-surface.yml`; docs.rs indexing was still
+pending immediately after publication and must be recorded separately once its
+build completes.
+
 The `0.2.18` packages passed Cargo publish verification and both staged
 all-feature package-documentation builds on commit `373de00`. The matching
 `kafrust-protocol` and `kafrust` packages were published in that order; both

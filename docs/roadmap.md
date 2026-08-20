@@ -14,9 +14,12 @@ Status legend:
 
 ## Current Release Qualification
 
-`0.3.2` release is being prepared protocol-first. The previous `0.3.1`
-artifact is published on crates.io. The `0.3.0` release's complete
-seven-profile external smoke passed in
+`0.3.2` is now published on crates.io in protocol-first order. Its package
+verification passed after `kafrust-protocol 0.3.2` became available from the
+registry, and a fresh external project compiled the published Streams public
+surface on stable Rust and Rust 1.81. The previous `0.3.1` artifact remains
+published on crates.io. The `0.3.0` release's complete seven-profile external
+smoke passed in
 [`31770895344`](https://github.com/TaeeunKil/kafrust/actions/runs/31770895344)
 against Kafka 3.7.2 classic, Kafka 4.3.1 KIP-848, Kafka 3.7.2
 SASL_SSL/SCRAM, and Gzip/Snappy/LZ4/Zstd paths. The `0.3.0` release also
@@ -183,13 +186,15 @@ Both published docs.rs pages returned HTTP 200 for
 
 ## 0.3 Release Target
 
-Status: Published as `0.3.0`; patch `0.3.1` is also published after the
-post-release modern Kafka protocol work. The `0.3.1` published member-aware
-Admin v10 smoke passed, both crates resolve from crates.io, and the `0.3.1`
-docs.rs pages return HTTP 200.
+Status: Published as `0.3.2` in protocol-first order. The `0.3.2` package/API
+surface resolves from crates.io and the published Streams surface compiles in
+a fresh external project on stable Rust and Rust 1.81. The `0.3.1` published
+member-aware Admin v10 and broader fresh-project evidence remain recorded
+below; docs.rs `0.3.2` build status is tracked separately from registry
+publication.
 
-`0.3.0` is the next meaningful client milestone, not the complete Kafka
-replacement claim. It is intended to move the current alpha from broad feature
+`0.3.x` is a meaningful client milestone, not the complete Kafka replacement
+claim. It is intended to move the current alpha from broad feature
 coverage toward a release candidate that can be qualified in staging.
 
 ### Required slices
@@ -249,8 +254,11 @@ coverage toward a release candidate that can be qualified in staging.
   waits for graceful close. Focused wire coverage verifies the automatic
   heartbeat and member-epoch `-1` leave; published-handle qualification,
   automatic assignment/task-runtime reconciliation, and multi-member failure
-  evidence remain open. This is not yet a published Streams compatibility
-  claim.
+  evidence remain open. The published `0.3.2` surface now also compiles the
+  handle and assignment-watch API from a fresh external project on stable and
+  Rust 1.81. Automatic assignment/task-runtime reconciliation, published
+  broker-runtime qualification, and a complete Kafka Streams application
+  remain open.
 - `crates/kafrust/examples/streams_group_smoke.rs` and
   `.github/workflows/live-streams-group.yml` now provide a Kafka 4.3.1
   real-broker qualification entry point. The workflow enables the broker
@@ -261,15 +269,16 @@ coverage toward a release candidate that can be qualified in staging.
   including the broker-required nullable task-offset path, two-member
   membership, member departure convergence, and clean leave. The run confirms
   the bounded background handle lifecycle and broker-side member observation
-  on a single broker. Published artifact qualification, a complete Kafka
+  on a single broker. Published broker-runtime qualification, a complete Kafka
   Streams application, assignment/task-runtime reconciliation, and
   coordinator-broker failure evidence remain outside the compatibility claim
   for this single-broker job. The separate three-broker coordinator-stop gate
   passed on commit `21ec3fd` in
   [`32374858753`](https://github.com/TaeeunKil/kafrust/actions/runs/32374858753),
   proving post-stop heartbeat recovery and clean leave through the replacement
-  coordinator. Published artifact qualification, assignment/task-runtime
-  reconciliation, and a complete Kafka Streams application remain open.
+  coordinator. Published API-surface qualification is now complete; published
+  broker-runtime qualification, assignment/task-runtime reconciliation, and a
+  complete Kafka Streams application remain open.
 - A standalone `fuzz/` workspace now provides ten libFuzzer targets, tracked
   seed corpora, and a manual/weekly corpus-backed campaign workflow. Each
   target has bounded RSS and input-time budgets, and the workflow uploads

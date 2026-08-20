@@ -475,7 +475,7 @@ async fn main() -> kafrust::Result<()> {
 }
 ```
 
-This API is on the development branch and is not part of the published `0.3.1`
+This API is on the development branch and is not part of the published `0.3.2`
 artifact yet. It has focused protocol tests and an injected-broker wire
 roundtrip test, plus an opt-in cancellable background heartbeat task. A Kafka
 4.3.1 single-node live smoke passed the KIP-1222 renewal, expiry/redelivery,
@@ -492,7 +492,7 @@ See [Share Consumer](docs/share-consumer.md) for the exact alpha contract.
 
 ## Streams Group
 
-The development branch also includes an alpha `StreamsGroupSession` for
+The published `0.3.2` artifact includes an alpha `StreamsGroupSession` for
 Kafka's dedicated Streams group heartbeat protocol. It publishes the initial
 topology, tracks member and endpoint epochs, reports task state, reconnects and
 rejoins within a bounded retry budget, and leaves with

@@ -1,0 +1,53 @@
+name: Published Streams Surface
+
+on:
+  workflow_dispatch:
+    inputs:
+      kafrust_version:
+        description: "Published kafrust version to compile from crates.io"
+        required: true
+        default: "0.3.2"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  compile:
+    name: Published kafrust ${{ inputs.kafrust_version }} Streams API (${{ matrix.toolchain }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        toolchain:
+          - stable
+          - "1.81.0"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.toolchain }}
+
+      - name: Create fresh external project
+        env:
+          KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version }}
+        run: |
+          project_dir="$RUNNER_TEMP/kafrust-published-streams-surface"
+          cargo new --bin "$project_dir"
+          cp .github/published-streams-surface/src/main.rs "$project_dir/src/main.rs"
+          sed "s/__KAFRUST_VERSION__/$KAFRUST_PUBLISHED_VERSION/" \
+            .github/published-streams-surface/Cargo.toml > "$project_dir/Cargo.toml"
+
+      - name: Compile published Streams API
+        run: cargo check --all-features --manifest-path "$RUNNER_TEMP/kafrust-published-streams-surface/Cargo.toml"
+
+      - name: Verify published dependency versions
+        run: |
+          lockfile="$RUNNER_TEMP/kafrust-published-streams-surface/Cargo.lock"
+          grep -A1 -q 'name = "kafrust"' "$lockfile"
+          grep -A1 -q 'version = "${{ inputs.kafrust_version }}"' "$lockfile"
+          grep -A1 -q 'name = "kafrust-protocol"' "$lockfile"
+          grep -A1 -q 'version = "${{ inputs.kafrust_version }}"' "$lockfile"
