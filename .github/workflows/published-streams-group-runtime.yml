@@ -1,0 +1,102 @@
+name: Published Streams Group Runtime
+
+on:
+  workflow_dispatch:
+    inputs:
+      kafrust_version:
+        description: "Published kafrust version to run from crates.io"
+        required: true
+        default: "0.3.3"
+  schedule:
+    - cron: "47 4 * * 2"
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTUP_TOOLCHAIN: "1.81.0"
+  KAFRUST_BOOTSTRAP_SERVERS: localhost:9092
+  KAFRUST_STREAMS_TOPIC: kafrust-published-streams-runtime
+  KAFRUST_STREAMS_GROUP_ID: kafrust-published-streams-runtime-${{ github.run_id }}
+
+jobs:
+  published-runtime:
+    name: Published kafrust Streams runtime
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.81.0"
+
+      - name: Start Kafka 4.3.1 with Streams groups enabled
+        run: |
+          docker run -d --name kafrust-published-streams-kafka \
+            -p 9092:9092 \
+            -e KAFKA_NODE_ID=1 \
+            -e KAFKA_PROCESS_ROLES=broker,controller \
+            -e KAFKA_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 \
+            -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092 \
+            -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+            -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
+            -e KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT \
+            -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@localhost:9093 \
+            -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
+            -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1 \
+            -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1 \
+            -e KAFKA_GROUP_COORDINATOR_REBALANCE_PROTOCOLS=classic,consumer,streams \
+            -e KAFKA_GROUP_STREAMS_INITIAL_REBALANCE_DELAY_MS=0 \
+            apache/kafka:4.3.1
+
+      - name: Wait for Kafka
+        run: |
+          for attempt in {1..90}; do
+            if docker exec kafrust-published-streams-kafka /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server localhost:9092 >/tmp/kafrust-published-streams-probe.log 2>&1; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/kafrust-published-streams-probe.log || true
+          docker logs kafrust-published-streams-kafka
+          exit 1
+
+      - name: Create Streams source topic
+        run: |
+          docker exec kafrust-published-streams-kafka /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server localhost:9092 \
+            --create \
+            --topic "$KAFRUST_STREAMS_TOPIC" \
+            --partitions 1 \
+            --replication-factor 1
+
+      - name: Create fresh external published project
+        env:
+          KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version || '0.3.3' }}
+        run: |
+          project_dir="$RUNNER_TEMP/kafrust-published-streams-group-runtime"
+          cargo new --bin "$project_dir"
+          cp .github/published-streams-group-runtime/src/main.rs "$project_dir/src/main.rs"
+          sed "s/__KAFRUST_VERSION__/$KAFRUST_PUBLISHED_VERSION/" \
+            .github/published-streams-group-runtime/Cargo.toml > "$project_dir/Cargo.toml"
+
+      - name: Build and run published Streams runtime
+        run: |
+          project_dir="$RUNNER_TEMP/kafrust-published-streams-group-runtime"
+          cargo run --release --manifest-path "$project_dir/Cargo.toml"
+
+      - name: Verify published dependency versions
+        env:
+          KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version || '0.3.3' }}
+        run: |
+          lockfile="$RUNNER_TEMP/kafrust-published-streams-group-runtime/Cargo.lock"
+          grep -A1 -q 'name = "kafrust"' "$lockfile"
+          grep -A1 -q "version = \"$KAFRUST_PUBLISHED_VERSION\"" "$lockfile"
+          grep -A1 -q 'name = "kafrust-protocol"' "$lockfile"
+
+      - name: Dump Kafka logs
+        if: failure()
+        run: docker logs kafrust-published-streams-kafka || true
