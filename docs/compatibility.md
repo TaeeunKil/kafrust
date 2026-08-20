@@ -467,6 +467,14 @@ on Kafka 3.7.2 in [`31772470761`](https://github.com/TaeeunKil/kafrust/actions/r
 and Kafka 4.3.1 in [`31772470590`](https://github.com/TaeeunKil/kafrust/actions/runs/31772470590).
 These are operation-specific proofs, not a universal authorization or
 post-transmission guarantee for every Admin mutation.
+The dedicated `UnregisterBroker` authorization gate then used
+`StandardAuthorizer` with SASL/PLAIN on Kafka 3.7.2 and 4.3.1. A restricted
+principal with only cluster discovery permission received
+`ClusterAuthorizationFailed` (error code 31), while the configured
+administrator principal was allowed to unregister the broker in
+[`32360499520`](https://github.com/TaeeunKil/kafrust/actions/runs/32360499520).
+This is an operation-specific permission result, not a claim about a
+production ACL policy or every Admin API.
 The current-source gate also qualifies AlterClientQuotas by setting
 `producer_byte_rate`, dropping the response, and confirming the value through
 DescribeClientQuotas on Kafka 3.7.2 in
@@ -862,6 +870,7 @@ other coordinator-routed writes remain separate qualification items.
 | Apache Kafka 4.3.1 | three-broker KRaft | KIP-848 consumer protocol over SASL_PLAINTEXT; coordinator broker-stop recovery | [`Live Kafka Smoke`, run `31569709189`](https://github.com/TaeeunKil/kafrust/actions/runs/31569709189) on 2026-08-12 | Passing |
 | Apache Kafka 4.3.1 | three-broker KRaft | KIP-848 consumer protocol over SASL_SSL with SCRAM-SHA-256; coordinator broker-stop recovery | [`Live Kafka Smoke`, run `31570924845`](https://github.com/TaeeunKil/kafrust/actions/runs/31570924845) on 2026-08-12 | Passing |
 | Apache Kafka 3.7.2 | single-node KRaft with StandardAuthorizer | PLAINTEXT ACL and client-quota admin | `Live Kafka Smoke` ACL authorizer job, manual run `31459874329` on 2026-08-11 | Passing |
+| Apache Kafka 3.7.2 and 4.3.1 | single-node KRaft with StandardAuthorizer; SASL/PLAIN | `UnregisterBroker` authorization: restricted cluster-discovery principal denied with error code 31 and administrator allowed | [`Live Unregister Broker Authorization`, run `32360499520`](https://github.com/TaeeunKil/kafrust/actions/runs/32360499520) on 2026-08-20 | Passing; operation-specific permission evidence only |
 | Apache Kafka 3.7.2 | single-node KRaft | SASL_SSL SCRAM credential administration | `Live Kafka Smoke` SASL_SSL SCRAM job, manual run `31461980967` on 2026-08-11 | Passing |
 | Apache Kafka 3.7.2 | three-broker KRaft | controller-routed partition reassignment | `Live Kafka Smoke` multi-broker job, manual run `31462962605` on 2026-08-11 | Passing |
 | Apache Kafka 3.7.2 | three-broker KRaft | cooperative-sticky consumer protocol, multi-member transfer, transient-member rollback, member-loss recovery, and rebalance listener lifecycle | [`Live Kafka Smoke`, run `31557534371`](https://github.com/TaeeunKil/kafrust/actions/runs/31557534371) on 2026-08-12 | Passing |

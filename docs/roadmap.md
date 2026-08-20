@@ -2576,8 +2576,13 @@ Implemented evidence:
 - The `live-unregister-broker-rejoin.yml` gate now qualifies the remaining
   operational proof for Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 in
   [`32359316032`](https://github.com/TaeeunKil/kafrust/actions/runs/32359316032).
-  Other authorization policies and workload-specific failure behavior remain
-  separate gates.
+  The follow-up `live-unregister-broker-authorization.yml` gate passed Kafka
+  3.7.2 and 4.3.1 in [`32360499520`](https://github.com/TaeeunKil/kafrust/actions/runs/32360499520):
+  a SASL/PLAIN principal with only cluster discovery permission received
+  `ClusterAuthorizationFailed` (error code 31), while the configured
+  administrator principal was allowed to complete the mutation. This closes
+  the operation-specific authorization proof; production ACL policy and
+  workload-specific failure behavior remain separate gates.
 - Kafka Share Group State APIs 83-87 are now implemented through flexible
   typed protocol requests and responses, low-level Client methods, and typed
   coordinator-routed Admin methods. Share-group membership/admin operations

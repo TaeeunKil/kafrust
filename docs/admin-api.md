@@ -179,6 +179,16 @@ four tested broker versions. This is separate from the response-drop proof
 above and does not claim behavior for every authorization policy or failure
 workload.
 
+The `live-unregister-broker-authorization.yml` gate also qualifies the
+operation-specific permission boundary with Kafka `StandardAuthorizer` and
+SASL/PLAIN. On Kafka 3.7.2 and 4.3.1, a restricted principal that can only
+discover the cluster is rejected with `ClusterAuthorizationFailed` (error
+code 31), while the configured administrator principal is allowed to perform
+the mutation in [`32360499520`](https://github.com/TaeeunKil/kafrust/actions/runs/32360499520).
+This verifies the client preserves the broker's authorization result; it does
+not establish the ACL policy required by a production principal or parity for
+other Admin mutations.
+
 ## Describe Share Groups
 
 `AdminClient::describe_share_groups` exposes Kafka's stable KIP-932

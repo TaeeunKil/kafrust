@@ -421,6 +421,14 @@ quorum, restarted the same node, and verified re-registration plus quorum
 health in [`32359316032`](https://github.com/TaeeunKil/kafrust/actions/runs/32359316032).
 The operational path is qualified for those broker versions; target
 authorization and broader failure workloads remain migration gates.
+The dedicated authorization gate also passed on Kafka 3.7.2 and 4.3.1 with
+`StandardAuthorizer` and SASL/PLAIN: a principal limited to cluster discovery
+received `ClusterAuthorizationFailed` (error code 31), while an authorized
+administrator completed `UnregisterBroker` in
+[`32360499520`](https://github.com/TaeeunKil/kafrust/actions/runs/32360499520).
+This confirms the operation-specific permission result is surfaced by kafrust;
+compare the production principal's ACLs and qualify other Admin mutations
+before migration.
 CreatePartitions passed in
 [`31771635710`](https://github.com/TaeeunKil/kafrust/actions/runs/31771635710)
 and [`31771636082`](https://github.com/TaeeunKil/kafrust/actions/runs/31771636082),
