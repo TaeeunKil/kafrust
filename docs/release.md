@@ -589,6 +589,18 @@ final in-flight or buffered records. Together these qualify the tested secured
 simultaneous-loss behavior across Kafka 3.7.2 and 4.3.1. Unclean-election data
 loss, production SLOs, and service canary readiness remain separate claims.
 
+The current published `0.3.3` secured simultaneous-loss campaign also passed in
+[`32396241090`](https://github.com/TaeeunKil/kafrust/actions/runs/32396241090).
+The fresh external project resolved `kafrust 0.3.3` from crates.io with TLS,
+authenticated to Kafka 4.3.1 using SASL_SSL/SCRAM, ran for 600 seconds across
+three replicated partitions, and survived simultaneous ten-second outages of
+brokers 1 and 2. It reconciled 19,188,800 records, observed 283 operation
+errors, 6 failed requests, and 9 retries, then reported `recovered=true` with
+zero final in-flight and buffered records. This closes the current published
+`0.3.3` secured simultaneous-loss evidence slice; repeated campaigns, unclean-
+election data loss, production SLOs, and service-canary evidence remain
+separate gates.
+
 The following current-main live run
 [`31719615947`](https://github.com/TaeeunKil/kafrust/actions/runs/31719615947)
 also passed the controlled classic consumer-group combined-fault gate in the
