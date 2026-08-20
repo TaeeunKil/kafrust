@@ -1,0 +1,9 @@
+[package]
+name = "kafrust-published-oauthbearer-reauth-smoke"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+kafrust = { version = "__KAFRUST_VERSION__", features = ["tls"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }

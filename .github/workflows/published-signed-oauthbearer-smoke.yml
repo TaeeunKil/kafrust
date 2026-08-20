@@ -123,6 +123,7 @@ jobs:
             -e KAFKA_SASL_OAUTHBEARER_EXPECTED_AUDIENCE=kafrust-client \
             -e KAFKA_SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS=2 \
             -e KAFKA_SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS=1000 \
+            -e KAFKA_CONNECTIONS_MAX_REAUTH_MS=10000 \
             -e KAFKA_LISTENER_NAME_SASL__SSL_OAUTHBEARER_SASL_JAAS_CONFIG="org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;" \
             -e KAFKA_LISTENER_NAME_SASL__SSL_OAUTHBEARER_SASL_SERVER_CALLBACK_HANDLER_CLASS=org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallbackHandler \
             -e KAFKA_LISTENER_NAME_SASL__SSL_OAUTHBEARER_SASL_OAUTHBEARER_JWKS_ENDPOINT_URL=http://host.docker.internal:8090/jwks.json \
@@ -210,6 +211,30 @@ jobs:
           grep -Fq "token_provider=true" /tmp/kafrust-published-signed-oauthbearer.log
           grep -Fq "consumed=true" /tmp/kafrust-published-signed-oauthbearer.log
 
+      - name: Create fresh external re-authentication project
+        env:
+          KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version || '0.3.4' }}
+        run: |
+          project_dir="$RUNNER_TEMP/kafrust-published-oauthbearer-reauth"
+          cargo new --bin "$project_dir"
+          cp .github/published-oauthbearer-reauth-smoke/src/main.rs "$project_dir/src/main.rs"
+          sed "s/__KAFRUST_VERSION__/$KAFRUST_PUBLISHED_VERSION/" \
+            .github/published-oauthbearer-reauth-smoke/Cargo.toml > "$project_dir/Cargo.toml"
+          if [ "$project_dir" = "$GITHUB_WORKSPACE" ]; then
+            echo "the published re-authentication project must be outside the repository"
+            exit 1
+          fi
+
+      - name: Run published OAUTHBEARER re-authentication client
+        run: |
+          project_dir="$RUNNER_TEMP/kafrust-published-oauthbearer-reauth"
+          cargo run --manifest-path "$project_dir/Cargo.toml" 2>&1 \
+            | tee /tmp/kafrust-published-oauthbearer-reauth.log
+          grep -Fq "published oauthbearer reauth ok" /tmp/kafrust-published-oauthbearer-reauth.log
+          grep -Fq "provider_calls=" /tmp/kafrust-published-oauthbearer-reauth.log
+          grep -Fq "sasl_v2=true" /tmp/kafrust-published-oauthbearer-reauth.log
+          grep -Fq "same_connection=true" /tmp/kafrust-published-oauthbearer-reauth.log
+
       - name: Verify published dependency versions
         env:
           KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version || '0.3.4' }}
@@ -223,6 +248,7 @@ jobs:
         if: failure()
         run: |
           cat /tmp/kafrust-published-signed-oauthbearer.log || true
+          cat /tmp/kafrust-published-oauthbearer-reauth.log || true
           cat /tmp/kafrust-published-oidc-provider.log || true
           docker logs kafrust-published-signed-oauthbearer || true
 
