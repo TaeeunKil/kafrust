@@ -1,6 +1,6 @@
 [package]
 name = "kafrust"
-version = "0.3.0"
+version = "0.3.1"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -31,7 +31,7 @@ otlp = [
 [dependencies]
 base64 = "0.22"
 hmac = "0.12"
-kafrust-protocol = { version = "0.3.0", path = "../kafrust-protocol" }
+kafrust-protocol = { version = "0.3.1", path = "../kafrust-protocol" }
 opentelemetry-proto = { version = "0.32", default-features = false, features = [
     "gen-tonic-messages",
     "metrics",
