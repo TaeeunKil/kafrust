@@ -2558,7 +2558,10 @@ Implemented evidence:
   3.7.2 and 4.3.1. The three-broker validation failover matrix
   [`32363072430`](https://github.com/TaeeunKil/kafrust/actions/runs/32363072430)
   also passes after replacing the active controller; actual downgrade and
-  state-changing mutation during controller failover remain open.
+  state-changing mutation during controller failover remain open. Kafka 4.3.1
+  `transaction.version` `2 -> 1 -> 2` state transitions are verified in
+  [`32363428806`](https://github.com/TaeeunKil/kafrust/actions/runs/32363428806);
+  metadata-version transitions across the declared broker matrix remain open.
 - Kafka `UnregisterBroker` API 64 v0 is now implemented through a flexible
   typed protocol path, low-level `Client::unregister_broker_v0`, and the
   controller-routed `AdminClient::unregister_broker` method. The result keeps
@@ -2639,8 +2642,10 @@ Implemented evidence:
   administrator success. The three-broker controller-failover matrix
   [`32363072430`](https://github.com/TaeeunKil/kafrust/actions/runs/32363072430)
   passes the same v1 validation after leader replacement. Actual
-  upgrade/downgrade and state-changing mutation during controller failover
-  remain separate gates.
+  metadata-version upgrade/downgrade and state-changing mutation during
+  controller failover remain separate gates. Kafka 4.3.1 transaction feature
+  transitions are covered separately by
+  [`32363428806`](https://github.com/TaeeunKil/kafrust/actions/runs/32363428806).
 - The 2026-08-20 competitor recheck adds `kacrab` to the comparison set. Its
   published `0.4.0` docs claim Kafka 4.3 producer, consumer, share-consumer,
   and 62-operation Admin parity with a broker-matrix and fuzzing posture;

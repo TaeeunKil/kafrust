@@ -107,8 +107,10 @@ qualified the same non-empty `metadata.version` request on Kafka 3.7.2 and
 was accepted in [`32362301496`](https://github.com/TaeeunKil/kafrust/actions/runs/32362301496).
 The controller-routed validation path also survived an active-controller
 failure on both versions in [`32363072430`](https://github.com/TaeeunKil/kafrust/actions/runs/32363072430).
-Actual upgrade/downgrade and state-changing mutation during controller failover
-remain open.
+The Kafka 4.3.1 lifecycle gate [`32363428806`](https://github.com/TaeeunKil/kafrust/actions/runs/32363428806)
+also performed and verified `transaction.version` `2 -> 1` safe downgrade and
+`1 -> 2` upgrade. Metadata-version transitions across the declared broker
+matrix and state-changing mutation during controller failover remain open.
 
 ## DescribeTopicPartitions
 

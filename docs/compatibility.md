@@ -134,7 +134,12 @@ the restricted principal was rejected with error 31 and the administrator was
 accepted. The separate three-broker controller-failover matrix
 [`32363072430`](https://github.com/TaeeunKil/kafrust/actions/runs/32363072430)
 stopped the active controller, waited for a new leader, and passed the same
-v1 validation through the surviving broker quorum on both versions.
+v1 validation through the surviving broker quorum on both versions. The Kafka
+4.3.1 lifecycle run [`32363428806`](https://github.com/TaeeunKil/kafrust/actions/runs/32363428806)
+then performed `transaction.version` `2 -> 1 -> 2`, verifying the finalized
+level after each state change. Metadata-version transitions across the declared
+broker matrix and state-changing mutation during controller failover remain
+open.
 
 The low-level `Client::api_versions_cached` helper now prefers flexible
 `ApiVersions` v4 and falls back to v3 when a broker returns
