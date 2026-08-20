@@ -166,8 +166,10 @@ Both published docs.rs pages returned HTTP 200 for
 
 ## 0.3 Release Target
 
-Status: Published as `0.3.0`; post-publish external smoke passed and both
-docs.rs pages are green.
+Status: Published as `0.3.0`; patch `0.3.1` is also published after the
+post-release modern Kafka protocol work. The `0.3.1` published member-aware
+Admin v10 smoke passed, both crates resolve from crates.io, and the `0.3.1`
+docs.rs pages return HTTP 200.
 
 `0.3.0` is the next meaningful client milestone, not the complete Kafka
 replacement claim. It is intended to move the current alpha from broad feature
@@ -267,8 +269,12 @@ coverage toward a release candidate that can be qualified in staging.
   v10 from Metadata v12 topic IDs with v9 fallback. Member-aware Admin offset
   methods now resolve names through Metadata v12 for the same v10/v9
   negotiation; callers can attach complete topic UUIDs through the public
-  offset/query builders to skip discovery. Live and
-  published-artifact Admin v10 evidence remains open.
+  offset/query builders to skip discovery. The Kafka 4.3.1 current-source live
+  matrix passed the member-aware v10 Admin path in
+  [`32339508792`](https://github.com/TaeeunKil/kafrust/actions/runs/32339508792),
+  and the published `0.3.1` external-project gate passed both v10 operations
+  with Kafka CLI offset verification in
+  [`32341534974`](https://github.com/TaeeunKil/kafrust/actions/runs/32341534974).
 - `ConsumerGroupHeartbeat` v1 is now implemented in the protocol crate and
   exposed through low-level `Client`, including the nullable
   `SubscribedTopicRegex` field added by Kafka 4.x/KIP-1082. The v1 response
@@ -1572,10 +1578,11 @@ Implemented evidence:
   offset results while preserving throttle and group errors. Focused wire,
   mock, and fault-injection tests cover both paths. The existing Kafka 4.3.1
   single-node and multi-broker PLAINTEXT, SASL_PLAINTEXT, and SASL_SSL/SCRAM
-  live qualification still covers the v9 member-aware calls; a fresh live and
-  published-artifact v10 Admin qualification remains open.
-  Target authorization and broader member-failure workloads remain release
-  gates. The live DeleteRecords, DescribeProducers, DescribeTransactions,
+  live qualification now covers the v10 member-aware calls in the complete
+  Kafka 4.3.1 matrix (`32339508792`). Published `0.3.1` also passed the fresh
+  external-project v10 Admin gate (`32341534974`), including Kafka CLI offset
+  verification. Target authorization and broader member-failure workloads
+  remain release gates. The live DeleteRecords, DescribeProducers, DescribeTransactions,
   DescribeGroups, OffsetFetch, exact-offset OffsetCommit, DescribeConfigs, and
   ListGroups
   broker-stop gates are covered by
@@ -2668,9 +2675,9 @@ Implemented evidence:
   high-level foreground group path are implemented with assignment
   application, member-epoch heartbeats/rejoin, negotiated OffsetFetch and
   OffsetCommit v10 with v9 fallback, explicit leave, and injected low-level
-  roundtrip coverage. The current source path still needs a fresh live run
-  after this negotiation change before the published compatibility claim is
-  updated.
+  roundtrip coverage. The current source path passed the fresh live negotiation
+  matrix in [`32339508792`](https://github.com/TaeeunKil/kafrust/actions/runs/32339508792),
+  including the Kafka 4.3.1 v10 Admin and regex v1 paths.
 - KIP-848 background heartbeats share member epoch and broker assignment state
   with the owning group handle. Assignment responses are applied once per
   response, nullable assignments preserve existing ownership, and a rejoin

@@ -23,12 +23,11 @@ response definitions, and checks message identity, API key, and local version
 bounds. It is an API identity/version guard only; it does not establish
 field-level or byte-for-byte parity, which still requires generated or golden
 schema fixtures and targeted live qualification.
-  OffsetCommit and OffsetFetch v10 now have UUID-based protocol types and
-  low-level `Client` methods, but the existing high-level name-based group/Admin
-  workflows still intentionally use their v9 or older negotiated paths. The
-  snapshot is an identity and version guard, not field-level or byte-for-byte
-  parity; expanding it to all implemented APIs and adding generated/golden byte
-  comparisons remain open.
+  OffsetCommit and OffsetFetch v10 now have UUID-based protocol types,
+  low-level `Client` methods, and high-level group/Admin negotiation with a v9
+  fallback. The snapshot is an identity and version guard, not field-level or
+  byte-for-byte parity; expanding it to all implemented APIs and adding
+  generated/golden byte comparisons remain open.
 
 kafrust compatibility claims are scoped to behavior that has been verified against a real broker. Protocol types can exist before the high-level client path has been validated against every broker version or deployment mode.
 
@@ -129,9 +128,12 @@ behavior. Complete topic UUIDs supplied through
 `ConsumerGroupOffsetQuery::topic_id` and `ConsumerGroupOffset::topic_id` avoid
 metadata discovery; name-only calls resolve UUIDs through Metadata v12 before
 using v10 and fall back to v9 when resolution or broker capability is absent.
-Admin response UUIDs are mapped back to the caller's topic names, but this
-source-level coverage does not yet count as a published-artifact or live Kafka
-4.x Admin v10 qualification.
+Admin response UUIDs are mapped back to the caller's topic names. The current
+source live matrix passed the Kafka 4.3.1 v10 path in
+[`32339508792`](https://github.com/TaeeunKil/kafrust/actions/runs/32339508792),
+and published `kafrust 0.3.1` passed a fresh external-project v10 OffsetFetch /
+OffsetCommit smoke with Kafka CLI offset verification in
+[`32341534974`](https://github.com/TaeeunKil/kafrust/actions/runs/32341534974).
 
 The current source also implements API key 74 across Kafka's version split:
 v0 `ListClientMetricsResources` compatibility for Kafka 3.9-era brokers and
@@ -786,6 +788,7 @@ other coordinator-routed writes remain separate qualification items.
 | Apache Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1 | single-node KRaft | DescribeProducers v0 leader routing and DescribeTransactions v0 coordinator routing | [`Live Kafka Smoke`, run `31589394777`](https://github.com/TaeeunKil/kafrust/actions/runs/31589394777) on 2026-08-12 | Passing |
 | Apache Kafka 3.7.2 | three-broker KRaft; PLAINTEXT and SASL_SSL SCRAM failover profiles | DescribeProducers v0 leader routing; DescribeTransactions v0 coordinator routing | [`Live Kafka Smoke`, run `31589394777`](https://github.com/TaeeunKil/kafrust/actions/runs/31589394777) on 2026-08-12 | Passing |
 | Apache Kafka 4.3.1 | single-node and three-broker KRaft; three-broker SASL_PLAINTEXT and SASL_SSL/SCRAM | KIP-848 member-aware Admin OffsetFetch v9 and OffsetCommit v9 | [`Live Kafka Smoke`, run `31607006237`](https://github.com/TaeeunKil/kafrust/actions/runs/31607006237) on 2026-08-12 | Passing; plaintext and secured profiles |
+| Published `kafrust 0.3.1` and `kafrust-protocol 0.3.1` | fresh external Cargo project with no workspace path dependency; Kafka 4.3.1 single-node KRaft | published member-aware Admin OffsetFetch v10 and OffsetCommit v10; committed offset verified by Kafka CLI | [`Published Member Offset Smoke`, run `32341534974`](https://github.com/TaeeunKil/kafrust/actions/runs/32341534974) on 2026-08-20 | Passing; crates.io resolution and API version marker verified |
 | Apache Kafka 3.7.2 | three-broker KRaft | In-flight leader-routed DeleteRecords v1 and DescribeProducers v0, coordinator-routed DescribeTransactions v0, DescribeGroups v1, OffsetFetch v2, and exact-offset OffsetCommit v2, plus broker-routed DescribeConfigs v1 and ListGroups v1, pre-transmission gates, broker stops, fresh discovery/retry | [`Live Kafka Smoke`, run `31616181960`](https://github.com/TaeeunKil/kafrust/actions/runs/31616181960) on 2026-08-12 | Passing; ListGroups recorded `retries=7` |
 | Apache Kafka 3.7.2 | three-broker KRaft with SASL_SSL/SCRAM-SHA-256 | In-flight coordinator-routed Admin DescribeGroups v1, OffsetFetch v2, and exact-offset OffsetCommit v2, coordinator stop, secured rediscovery/retry | [`Live Kafka Smoke`, run `31698102459`](https://github.com/TaeeunKil/kafrust/actions/runs/31698102459) on 2026-08-13 | Passing; all recorded `retries=1` |
 | Apache Kafka 3.7.2, 3.8.1, 3.9.1, 4.3.1 | single-node KRaft; Kafka 3.7.2 also three-broker KRaft; Kafka 3.7.2 TLS, SASL_PLAINTEXT, and SASL_SSL SCRAM single-node profiles | classic AlterConfigs v1 complete-map topic replacement followed by IncrementalAlterConfigs v0 | [Plaintext run `31669906872`](https://github.com/TaeeunKil/kafrust/actions/runs/31669906872); [secured run `31674680581`](https://github.com/TaeeunKil/kafrust/actions/runs/31674680581) on 2026-08-13 | Passing; plaintext and secured admin lifecycle profiles |
