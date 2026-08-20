@@ -160,11 +160,12 @@ currently uses its stable v0 request shape.
 These are controller mutations. A transport failure after transmission is
 reported as `Error::AdminMutationOutcomeUnknown` and the request is never
 replayed automatically. Protocol, low-level Client, and injected controller
-routing tests cover the flexible request and response shapes. Live voter
-addition/removal qualification remains intentionally open because it must use
-an isolated multi-controller KRaft cluster and verify quorum membership after
-each mutation; the current source therefore does not claim live dynamic-quorum
-compatibility yet.
+routing tests cover the flexible request and response shapes. The isolated
+Kafka 4.3.1 dynamic-quorum gate
+[`32344895847`](https://github.com/TaeeunKil/kafrust/actions/runs/32344895847)
+verified observer-to-voter convergence after AddRaftVoter and voter removal
+after RemoveRaftVoter. Broader controller failure and authorization matrices
+remain separate qualification gates.
 
 ## Unregister Broker
 
