@@ -481,11 +481,11 @@ impl StreamsGroupSession {
                 process_id: self.config.process_id.clone(),
                 user_endpoint: self.config.user_endpoint.clone(),
                 client_tags: self.config.client_tags.clone(),
-                active_tasks: None,
-                standby_tasks: None,
-                warmup_tasks: None,
-                task_offsets: None,
-                task_end_offsets: None,
+                active_tasks: Some(Vec::new()),
+                standby_tasks: Some(Vec::new()),
+                warmup_tasks: Some(Vec::new()),
+                task_offsets: Some(Vec::new()),
+                task_end_offsets: Some(Vec::new()),
                 shutdown_application: false,
             })
             .await?;
@@ -814,9 +814,9 @@ mod tests {
             assert_eq!(decoder.read_compact_array_length(), Some(0));
             decoder.read_tagged_fields().unwrap();
             decoder.read_tagged_fields().unwrap();
-            assert_eq!(decoder.read_compact_array_length(), None);
-            assert_eq!(decoder.read_compact_array_length(), None);
-            assert_eq!(decoder.read_compact_array_length(), None);
+            assert_eq!(decoder.read_compact_array_length(), Some(0));
+            assert_eq!(decoder.read_compact_array_length(), Some(0));
+            assert_eq!(decoder.read_compact_array_length(), Some(0));
             assert_eq!(
                 decoder.read_compact_nullable_string().unwrap(),
                 Some("process-a".to_owned())
@@ -829,8 +829,8 @@ mod tests {
             assert_eq!(decoder.read_compact_string().unwrap(), "zone");
             assert_eq!(decoder.read_compact_string().unwrap(), "a");
             decoder.read_tagged_fields().unwrap();
-            assert_eq!(decoder.read_compact_array_length(), None);
-            assert_eq!(decoder.read_compact_array_length(), None);
+            assert_eq!(decoder.read_compact_array_length(), Some(0));
+            assert_eq!(decoder.read_compact_array_length(), Some(0));
             assert!(!decoder.read_bool().unwrap());
             decoder.read_tagged_fields().unwrap();
             write_streams_response(&mut broker_stream, correlation_id, "member-1", 2, 4).await;
