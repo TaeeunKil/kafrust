@@ -171,6 +171,12 @@ Kafka 3.7.2 and 4.3.1 runs are
 and
 [`32357381879`](https://github.com/TaeeunKil/kafrust/actions/runs/32357381879).
 
+The separate `live-unregister-broker-rejoin.yml` workflow is the next gate for
+the full operational claim: it stops a broker, unregisters it through the
+surviving controller quorum, restarts the same node, and verifies registration
+again. Until that gate passes, multi-controller re-registration remains
+unqualified.
+
 ## Describe Share Groups
 
 `AdminClient::describe_share_groups` exposes Kafka's stable KIP-932

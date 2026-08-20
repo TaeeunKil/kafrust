@@ -1,0 +1,117 @@
+name: Live Kafka Unregister Broker Re-registration
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "47 4 * * 3"
+
+env:
+  CARGO_TERM_COLOR: always
+  KAFRUST_UNREGISTER_BROKER_ID: "1"
+
+jobs:
+  unregister-rejoin:
+    name: Kafka 4.3.1 unregister and re-register broker
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.81.0"
+
+      - name: Start three-broker KRaft cluster
+        run: |
+          docker network create kafrust-unregister-rejoin
+          cluster_id="$(docker run --rm apache/kafka:4.3.1 /opt/kafka/bin/kafka-storage.sh random-uuid)"
+          echo "KAFRUST_CLUSTER_ID=$cluster_id" >> "$GITHUB_ENV"
+          for node in 1 2 3; do
+            external_port=$((19091 + node))
+            controller_port=$((29091 + node))
+            docker run -d --name "kafrust-unregister-${node}" \
+              --network kafrust-unregister-rejoin \
+              -p "${external_port}:9092" \
+              -p "${controller_port}:9093" \
+              -e KAFKA_CLUSTER_ID="$cluster_id" \
+              -e KAFKA_NODE_ID="$node" \
+              -e KAFKA_PROCESS_ROLES=broker,controller \
+              -e KAFKA_LISTENERS=INTERNAL://:29092,EXTERNAL://:9092,CONTROLLER://:9093 \
+              -e KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafrust-unregister-${node}:29092,EXTERNAL://localhost:${external_port} \
+              -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+              -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT \
+              -e KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL \
+              -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafrust-unregister-1:9093,2@kafrust-unregister-2:9093,3@kafrust-unregister-3:9093 \
+              -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=3 \
+              -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=3 \
+              -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=2 \
+              -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 \
+              apache/kafka:4.3.1
+          done
+
+      - name: Wait for cluster
+        run: |
+          for attempt in {1..120}; do
+            if docker exec kafrust-unregister-2 /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server kafrust-unregister-2:29092 >/tmp/kafrust-unregister-probe.log 2>&1; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/kafrust-unregister-probe.log || true
+          docker logs kafrust-unregister-1
+          docker logs kafrust-unregister-2
+          docker logs kafrust-unregister-3
+          exit 1
+
+      - name: Stop target broker and wait for controller quorum
+        run: |
+          docker stop kafrust-unregister-1
+          for attempt in {1..60}; do
+            if docker exec kafrust-unregister-2 /opt/kafka/bin/kafka-metadata-quorum.sh \
+              --bootstrap-controller kafrust-unregister-2:9093 describe --status >/tmp/kafrust-quorum.log 2>&1; then
+              cat /tmp/kafrust-quorum.log
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/kafrust-quorum.log || true
+          exit 1
+
+      - name: Unregister stopped broker and verify removal
+        env:
+          KAFRUST_BOOTSTRAP_SERVERS: localhost:19093,localhost:19094
+          KAFRUST_CONTROLLER_BOOTSTRAP_SERVERS: localhost:29093,localhost:29094
+          KAFRUST_UNREGISTER_PHASE: unregister
+        run: cargo run -p kafrust --example admin_unregister_broker_rejoin
+
+      - name: Restart target broker
+        run: docker start kafrust-unregister-1
+
+      - name: Verify broker re-registration
+        env:
+          KAFRUST_BOOTSTRAP_SERVERS: localhost:19093,localhost:19094
+          KAFRUST_CONTROLLER_BOOTSTRAP_SERVERS: localhost:29093,localhost:29094
+          KAFRUST_UNREGISTER_PHASE: rejoin
+        run: cargo run -p kafrust --example admin_unregister_broker_rejoin
+
+      - name: Verify controller quorum after re-registration
+        run: |
+          docker exec kafrust-unregister-2 /opt/kafka/bin/kafka-metadata-quorum.sh \
+            --bootstrap-controller kafrust-unregister-2:9093 describe --status
+
+      - name: Dump Kafka diagnostics
+        if: failure()
+        run: |
+          docker logs kafrust-unregister-1 || true
+          docker logs kafrust-unregister-2 || true
+          docker logs kafrust-unregister-3 || true
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker rm -f kafrust-unregister-1 kafrust-unregister-2 kafrust-unregister-3 || true
+          docker network rm kafrust-unregister-rejoin || true
