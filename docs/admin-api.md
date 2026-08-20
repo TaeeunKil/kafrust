@@ -42,8 +42,12 @@ protocol, low-level client, and Admin routing are covered by injected-broker
 tests. The manual
 [`live-list-config-resources.yml`](../.github/workflows/live-list-config-resources.yml)
 workflow qualifies discovery and the opt-in DescribeConfigs v4 metadata path
-against Kafka 4.1.0, 4.2.0, or 4.3.1; a passing run is still required before
-this path is included in the published compatibility claim.
+against Kafka 4.1.0, 4.2.0, or 4.3.1. The current-source Kafka 4.3.1 gate
+passed in [`32342304005`](https://github.com/TaeeunKil/kafrust/actions/runs/32342304005),
+and published `kafrust 0.3.1` checks passed for Kafka 4.3.1 v1 in
+[`32343030081`](https://github.com/TaeeunKil/kafrust/actions/runs/32343030081)
+and Kafka 3.9.1 v0 in
+[`32343145837`](https://github.com/TaeeunKil/kafrust/actions/runs/32343145837).
 
 ```rust,no_run
 use kafrust::{

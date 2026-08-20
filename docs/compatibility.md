@@ -149,11 +149,14 @@ manual [`live-list-config-resources.yml`](../.github/workflows/live-list-config-
 workflow passed the v1 path together with the opt-in DescribeConfigs v4
 metadata path and DescribeCluster v1 on Kafka 4.3.1 in
 [`32342304005`](https://github.com/TaeeunKil/kafrust/actions/runs/32342304005).
-A live v0 result remains open before adding that older-broker compatibility
-path to the published claim, and published-artifact evidence remains open.
-The Kafka 3.9.1 v0 path was then verified with the client-metrics resource
-filter in [`32342680037`](https://github.com/TaeeunKil/kafrust/actions/runs/32342680037);
-published-artifact evidence remains open.
+The Kafka 3.9.1 v0 path was then separately verified with the client-metrics
+resource filter in
+[`32342680037`](https://github.com/TaeeunKil/kafrust/actions/runs/32342680037);
+the published `kafrust 0.3.1` v0 path passed the same filter in
+[`32343145837`](https://github.com/TaeeunKil/kafrust/actions/runs/32343145837).
+The published `kafrust 0.3.1` v1 path and documentation-aware configuration
+inspection also passed on Kafka 4.3.1 in
+[`32343030081`](https://github.com/TaeeunKil/kafrust/actions/runs/32343030081).
 
 The current source also implements Kafka 4.x `StreamsGroupDescribe` v0 (API key
 89) through the typed protocol, low-level `Client`, and coordinator-routed
@@ -184,7 +187,9 @@ DescribeConfigs v4 after capability negotiation and preserves Kafka's raw
 configuration type and documentation fields. The v4 protocol and Admin
 capability tests pass locally, and the Kafka 4.3.1 live check passed in
 [`32342304005`](https://github.com/TaeeunKil/kafrust/actions/runs/32342304005).
-Published-artifact evidence remains open.
+The published `kafrust 0.3.1` external check also preserved configuration
+type and documentation fields in
+[`32343030081`](https://github.com/TaeeunKil/kafrust/actions/runs/32343030081).
 
 The current source also exposes an opt-in `AdminClient::describe_cluster_with_options`
 path using Kafka `DescribeCluster` API 60 v1, preserving cluster ID, endpoint
@@ -800,6 +805,8 @@ other coordinator-routed writes remain separate qualification items.
 | Apache Kafka 4.3.1 | single-node and three-broker KRaft; three-broker SASL_PLAINTEXT and SASL_SSL/SCRAM | KIP-848 member-aware Admin OffsetFetch v9 and OffsetCommit v9 | [`Live Kafka Smoke`, run `31607006237`](https://github.com/TaeeunKil/kafrust/actions/runs/31607006237) on 2026-08-12 | Passing; plaintext and secured profiles |
 | Apache Kafka 4.3.1 | single-node KRaft | API 74 `ListConfigResources` v1, documentation-aware `DescribeConfigs` v4, and `DescribeCluster` v1 | [`Live ListConfigResources Compatibility`, run `32342304005`](https://github.com/TaeeunKil/kafrust/actions/runs/32342304005) on 2026-08-20 | Passing; current-source MSRV gate |
 | Apache Kafka 3.9.1 | single-node KRaft | API 74 `ListClientMetricsResources` v0 with the client-metrics resource filter | [`Live ListConfigResources Compatibility`, run `32342680037`](https://github.com/TaeeunKil/kafrust/actions/runs/32342680037) on 2026-08-20 | Passing; current-source MSRV gate |
+| Published `kafrust 0.3.1` | fresh external Cargo project with no workspace path dependency; Kafka 4.3.1 single-node KRaft | API 74 `ListConfigResources` v1 and documentation-aware `DescribeConfigs` v4 | [`Published API 74 Configuration Smoke`, run `32343030081`](https://github.com/TaeeunKil/kafrust/actions/runs/32343030081) on 2026-08-20 | Passing; crates.io resolution and v4 metadata verified |
+| Published `kafrust 0.3.1` | fresh external Cargo project with no workspace path dependency; Kafka 3.9.1 single-node KRaft | API 74 `ListClientMetricsResources` v0 with the client-metrics resource filter | [`Published API 74 Configuration Smoke`, run `32343145837`](https://github.com/TaeeunKil/kafrust/actions/runs/32343145837) on 2026-08-20 | Passing; crates.io resolution verified |
 | Published `kafrust 0.3.1` and `kafrust-protocol 0.3.1` | fresh external Cargo project with no workspace path dependency; Kafka 4.3.1 single-node KRaft | published member-aware Admin OffsetFetch v10 and OffsetCommit v10; committed offset verified by Kafka CLI | [`Published Member Offset Smoke`, run `32341534974`](https://github.com/TaeeunKil/kafrust/actions/runs/32341534974) on 2026-08-20 | Passing; crates.io resolution and API version marker verified |
 | Published `kafrust 0.3.1` and `kafrust-protocol 0.3.1` | fresh external Cargo project with no workspace path dependency; Kafka 4.3.1 single-node KRaft | KIP-848 regex v1 member assignment, dynamic topic discovery/record, offset commit, and explicit rejoin | [`Published KIP-848 Regex Smoke`, run `32341967051`](https://github.com/TaeeunKil/kafrust/actions/runs/32341967051) on 2026-08-20 | Passing; API key 68 v1 and UUID-shaped member ID observed in logs |
 | Apache Kafka 3.7.2 | three-broker KRaft | In-flight leader-routed DeleteRecords v1 and DescribeProducers v0, coordinator-routed DescribeTransactions v0, DescribeGroups v1, OffsetFetch v2, and exact-offset OffsetCommit v2, plus broker-routed DescribeConfigs v1 and ListGroups v1, pre-transmission gates, broker stops, fresh discovery/retry | [`Live Kafka Smoke`, run `31616181960`](https://github.com/TaeeunKil/kafrust/actions/runs/31616181960) on 2026-08-12 | Passing; ListGroups recorded `retries=7` |

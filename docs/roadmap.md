@@ -2331,7 +2331,9 @@ Implemented evidence:
   capability and a real Admin roundtrip on Kafka 4.1.0, 4.2.0, or 4.3.1.
   The Kafka 3.9.1 v0 client-metrics filter path also passed in
   [`32342680037`](https://github.com/TaeeunKil/kafrust/actions/runs/32342680037);
-  published-artifact evidence remains open for both version branches.
+  published `kafrust 0.3.1` external projects passed both branches in
+  [`32343145837`](https://github.com/TaeeunKil/kafrust/actions/runs/32343145837)
+  and [`32343030081`](https://github.com/TaeeunKil/kafrust/actions/runs/32343030081).
 
 - Kafka `DescribeCluster` API 60 v0/v1 is now implemented through the typed
   protocol, low-level `Client`, and an opt-in `AdminClient` path. The result
@@ -2362,7 +2364,8 @@ Implemented evidence:
   creates a real topic and qualifies both ListConfigResources v1 and
   DescribeConfigs v4 on Kafka 4.1+. The Kafka 4.3.1 current-source gate passed
   in [`32342304005`](https://github.com/TaeeunKil/kafrust/actions/runs/32342304005);
-  published-artifact evidence remains open.
+  the published `0.3.1` external project preserved v4 configuration metadata in
+  [`32343030081`](https://github.com/TaeeunKil/kafrust/actions/runs/32343030081).
 
 - Stable KIP-932 v1 wire types now cover `ShareGroupHeartbeat` (API key 76),
   `ShareFetch` (API key 78), and `ShareAcknowledge` (API key 79), including
