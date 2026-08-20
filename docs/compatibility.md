@@ -161,6 +161,10 @@ re-authentication on the same connection after the configured session
 lifetime threshold; the client trace also confirmed the expected re-authentication
 wire versions. This qualifies the local signed re-authentication path;
 provider discovery, key rotation, and outage behavior remain separate gates.
+If a provider fails after the re-authentication handshake has started, the
+client marks that connection unusable so a higher-level pool can replace it;
+this deterministic callback-failure behavior does not qualify external
+provider outage semantics.
 
 The current-source `UpdateFeatures` gate now sends a non-empty v1
 `validate_only` request for the broker's finalized `metadata.version` level

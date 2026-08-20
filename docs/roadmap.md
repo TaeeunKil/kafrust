@@ -1365,6 +1365,11 @@ Evidence:
   `SaslAuthenticate v1` again on the existing connection before requests after
   half of the broker-advertised session lifetime has elapsed; the focused
   client test and published Kafka 3.7.2 gate cover this lifecycle.
+- If the token provider fails after the re-authentication handshake has begun,
+  the client returns the provider error and poisons the connection rather than
+  reusing a socket whose broker-side SASL exchange is partial. This is covered
+  by a deterministic injected-stream regression test; external provider outage
+  semantics remain a separate qualification gate.
 - `SaslAuthenticate v1` responses remain decoded for PLAIN and SCRAM and
   provider-backed OAUTHBEARER re-authentication, while flexible `v2` is used
   for OAUTHBEARER initial authentication. `Client::sasl_session_lifetime_ms`

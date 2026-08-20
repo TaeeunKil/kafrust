@@ -696,6 +696,11 @@ impl Client {
         }
         .await;
         self.sasl_authentication_in_progress = false;
+        if result.is_err() {
+            // The broker is in the re-authentication exchange after the
+            // handshake; do not reuse a connection whose SASL state is partial.
+            self.connection_poisoned = true;
+        }
         result
     }
 
@@ -5490,6 +5495,50 @@ mod tests {
 
         assert_eq!(client.sasl_session_lifetime_ms(), Some(1000));
         assert!(!client.sasl_authentication_in_progress);
+        broker.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn poisons_connection_when_oauthbearer_provider_fails_after_handshake() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(1024);
+        let broker = tokio::spawn(async move {
+            let request = read_test_frame(&mut broker_stream).await;
+            assert_eq!(&request[0..4], &[0, 17, 0, 1]);
+
+            let response = [
+                0, 0, 0, 1, // correlation id
+                0, 0, // error code
+                0, 0, 0, 1, // one enabled mechanism
+                0, 11, b'O', b'A', b'U', b'T', b'H', b'B', b'E', b'A', b'R', b'E', b'R',
+            ];
+            broker_stream
+                .write_all(&(response.len() as i32).to_be_bytes())
+                .await
+                .unwrap();
+            broker_stream.write_all(&response).await.unwrap();
+            broker_stream.flush().await.unwrap();
+        });
+
+        let mut client =
+            Client::from_stream(Box::new(client_stream), None, Some(Duration::from_secs(1)));
+        client.sasl_credentials = Some(SaslCredentials::oauthbearer_with_provider(|| async {
+            Err::<String, _>(Error::Unsupported("oauth provider unavailable"))
+        }));
+        client.sasl_session_lifetime_ms = Some(1);
+        client.sasl_authenticated_at = Some(std::time::Instant::now() - Duration::from_secs(1));
+
+        let error = client.maybe_reauthenticate().await.unwrap_err();
+
+        assert!(matches!(
+            error,
+            Error::Unsupported("oauth provider unavailable")
+        ));
+        assert!(!client.sasl_authentication_in_progress);
+        assert!(client.connection_poisoned);
+        assert!(matches!(
+            client.ensure_connection_usable(),
+            Err(Error::Io(_))
+        ));
         broker.await.unwrap();
     }
 
