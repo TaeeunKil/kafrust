@@ -210,10 +210,10 @@ impl StreamsGroupConfig {
 
 /// An active Kafka Streams group membership session.
 ///
-/// A session starts by sending API 88 with member epoch zero and the configured
-/// topology. Subsequent calls send the broker-assigned member epoch and only
-/// transmit changed membership data according to Kafka's nullable protocol
-/// fields. Call [`Self::close`] to leave gracefully.
+/// A session starts by sending API 88 with a client-generated member ID, member
+/// epoch zero, and the configured topology. Subsequent calls send the current
+/// member epoch and only transmit changed membership data according to Kafka's
+/// nullable protocol fields. Call [`Self::close`] to leave gracefully.
 pub struct StreamsGroupSession {
     config: StreamsGroupConfig,
     coordinator: Option<Client>,
@@ -292,7 +292,7 @@ impl StreamsGroupSession {
         let mut session = Self {
             config,
             coordinator: None,
-            member_id: String::new(),
+            member_id: new_streams_member_id(),
             member_epoch: 0,
             endpoint_information_epoch: 0,
             heartbeat_interval: Duration::from_secs(1),
@@ -313,12 +313,12 @@ impl StreamsGroupSession {
         self.config.group_id()
     }
 
-    /// Returns the broker-assigned member ID.
+    /// Returns the client-generated member ID used for this Streams session.
     pub fn member_id(&self) -> &str {
         &self.member_id
     }
 
-    /// Returns the current broker-assigned member epoch.
+    /// Returns the current member epoch.
     pub fn member_epoch(&self) -> i32 {
         self.member_epoch
     }
@@ -425,7 +425,9 @@ impl StreamsGroupSession {
             let result = async {
                 self.reconnect().await?;
                 if rejoin {
-                    self.member_id.clear();
+                    if self.member_epoch != 0 {
+                        self.member_id = new_streams_member_id();
+                    }
                     self.member_epoch = 0;
                     self.send_initial_heartbeat().await?;
                 }
@@ -636,6 +638,31 @@ fn coordinator_addr(coordinator: &FindCoordinatorResponseV1) -> String {
     format!("{}:{}", coordinator.host, coordinator.port)
 }
 
+fn new_streams_member_id() -> String {
+    use rand::RngCore;
+
+    let mut bytes = [0_u8; 16];
+    rand::thread_rng().fill_bytes(&mut bytes);
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    let hex = bytes
+        .iter()
+        .fold(String::with_capacity(32), |mut hex, byte| {
+            use std::fmt::Write;
+
+            let _ = write!(hex, "{byte:02x}");
+            hex
+        });
+    format!(
+        "{}-{}-{}-{}-{}",
+        &hex[..8],
+        &hex[8..12],
+        &hex[12..16],
+        &hex[16..20],
+        &hex[20..]
+    )
+}
+
 fn is_retryable_streams_error(error: &Error) -> bool {
     if matches!(error, Error::Io(_)) {
         return true;
@@ -742,6 +769,18 @@ mod tests {
         assert_eq!(streams_retry_backoff(1), Duration::from_millis(50));
     }
 
+    #[test]
+    fn generates_uuid_shaped_streams_member_ids() {
+        let member_id = super::new_streams_member_id();
+        assert_eq!(member_id.len(), 36);
+        assert_eq!(&member_id[8..9], "-");
+        assert_eq!(&member_id[13..14], "-");
+        assert_eq!(&member_id[18..19], "-");
+        assert_eq!(&member_id[23..24], "-");
+        assert_eq!(&member_id[14..15], "4");
+        assert!(matches!(&member_id[19..20], "8" | "9" | "a" | "b"));
+    }
+
     #[tokio::test]
     async fn preserves_streams_group_lifecycle_on_the_wire() {
         let (client_stream, mut broker_stream) = tokio::io::duplex(16 * 1024);
@@ -750,7 +789,7 @@ mod tests {
             let (correlation_id, mut decoder) = request_header(&request);
             assert_eq!(correlation_id, 1);
             assert_eq!(decoder.read_compact_string().unwrap(), "orders");
-            assert_eq!(decoder.read_compact_string().unwrap(), "");
+            assert_eq!(decoder.read_compact_string().unwrap(), "client-member");
             assert_eq!(decoder.read_i32().unwrap(), 0);
             assert_eq!(decoder.read_i32().unwrap(), 0);
             assert_eq!(
@@ -878,7 +917,7 @@ mod tests {
         let mut session = StreamsGroupSession {
             config,
             coordinator: Some(client),
-            member_id: String::new(),
+            member_id: "client-member".to_owned(),
             member_epoch: 0,
             endpoint_information_epoch: 0,
             heartbeat_interval: Duration::from_secs(1),

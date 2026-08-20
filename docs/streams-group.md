@@ -10,7 +10,7 @@ the Kafka Streams DSL to the application.
 The current session supports:
 
 - topology publication during the initial heartbeat
-- broker-assigned member and endpoint information epochs
+- client-generated member ID and broker-provided member and endpoint epochs
 - nullable active, standby, warmup, task-offset, and end-offset updates
 - a typed `StreamsGroupSessionAssignment` snapshot containing the latest
   broker status entries, task assignment, recovery-lag, offset-interval, and
