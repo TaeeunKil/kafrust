@@ -2555,20 +2555,25 @@ Implemented evidence:
   surface. Initialize, Write, and Delete preserve the existing ambiguous-mutation
   contract. Protocol and local capability/routing coverage pass, and the live
   Share smoke workflow now covers metadata UUID discovery, initialize, v1
-  write, full read, v1 summary, and delete. A successful run is still required
-  before this advanced path is claimed; coordinator failure and replicated
-  state recovery remain open gates. The new
+  write, full read, v1 summary, and delete. Multi-topic and multi-partition
+  Admin requests now split by the per-resource v6 coordinator and merge
+  partition-level results; injected tests cover two coordinators across all
+  five state APIs. The replicated gate passed in
+  [`32351976899`](https://github.com/TaeeunKil/kafrust/actions/runs/32351976899):
+  it verified the replicated `__share_group_state` topic, discovered the
+  written Share coordinator, stopped it, observed reassignment, and completed
+  post-failover read, summary, and delete. The new
   `.github/workflows/share-kafka-state-failover.yml` workflow adds the
   replicated-state gate: it verifies the internal `__share_group_state` topic
   is fully replicated, discovers the written share group's coordinator,
   stops that coordinator, waits for coordinator reassignment, then reads the
-  full state and summary and deletes it through the surviving brokers. A
-  successful run remains required before replicated recovery is claimed. The
+  full state and summary and deletes it through the surviving brokers. The
   first post-routing dispatch exposed the earlier v1/type-only lookup as
   Kafka `INVALID_REQUEST` (run
   [`32348148841`](https://github.com/TaeeunKil/kafrust/actions/runs/32348148841));
-  the v6 per-partition routing fix is covered by protocol, injected Admin, and
-  local full-suite tests, and still requires a fresh live dispatch.
+  the v6 per-partition routing fix and the follow-up workflow corrections are
+  recorded in the subsequent commits and successful run above. This gate does
+  not claim general ShareConsumer or `rust-rdkafka` replacement compatibility.
 - `.github/workflows/live-update-features.yml` now provides a broker matrix
   gate for the negotiated path. Kafka 3.7.2 and 4.3.1 both advertise and pass
   an empty v1 `validate_only` request in

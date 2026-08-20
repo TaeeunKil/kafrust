@@ -163,8 +163,14 @@ coordinator, while durable state uses Kafka 4.x KIP-932 FindCoordinator v6
 with a per-resource `group:topic-id:partition` key. The topic-id segment uses
 Kafka's URL-safe Base64-without-padding `Uuid::toString()` representation.
 Write and summary v1
-fields are preserved without silent downgrade; live state lifecycle and
-replicated recovery qualification remain open.
+fields are preserved without silent downgrade. Multi-topic and multi-partition
+requests are split by the KIP-932 coordinator returned for each resource and
+their partition-level results are merged; injected coverage verifies two
+different coordinators. The Kafka 4.3.1 live replicated-state gate passed in
+[`32351976899`](https://github.com/TaeeunKil/kafrust/actions/runs/32351976899),
+including coordinator reassignment after broker loss and post-failover read,
+summary, and delete. This remains an unstable broker-internal API qualification,
+not general ShareConsumer or `rust-rdkafka` replacement evidence.
 `list_consumer_group_offsets` and `alter_consumer_group_offsets` expose typed
 classic consumer-group offset inspection and administrative reset through the
 group coordinator, preserving partition-level outcomes.

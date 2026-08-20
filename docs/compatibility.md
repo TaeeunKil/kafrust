@@ -280,9 +280,15 @@ coordinator for membership/admin operations and KIP-932 FindCoordinator v6
 with a per-partition `group:topic-id:partition` key for durable state. The
 topic-id segment follows Kafka's URL-safe Base64-without-padding
 `Uuid::toString()` representation.
-Live lifecycle and replicated-recovery qualification remain open; a passing
-state workflow must not be interpreted as general ShareConsumer or
-`rust-rdkafka` replacement evidence.
+Multi-topic and multi-partition Admin requests are split by the per-resource
+FindCoordinator v6 result and their partition-level responses are merged;
+injected coverage exercises two different coordinators for Initialize, Read,
+Write, Delete, and Summary. The Kafka 4.3.1 replicated-state gate passed in
+[`32351976899`](https://github.com/TaeeunKil/kafrust/actions/runs/32351976899):
+the workflow verified replicated internal state, moved the Share coordinator
+after broker loss, and completed post-failover read, summary, and delete. This
+is still an unstable broker-internal API qualification, not general
+ShareConsumer or `rust-rdkafka` replacement evidence.
 
 The complete 17-job `Live Kafka Smoke` matrix also passed on the current
 connection-lifecycle hardening commit `e0e7e03` in
