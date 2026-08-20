@@ -21,6 +21,18 @@ async fn main() -> kafrust::Result<()> {
             .client_id("kafrust-admin-alter-client-quotas-authorization-example"),
     )?;
     let admin = AdminClient::new(config);
+
+    if std::env::var_os("KAFRUST_VERIFY_QUOTA_ABSENT").is_some() {
+        if let Some(value) = describe_quota(&admin, &quota_user).await? {
+            return Err(Error::Broker {
+                code: 0,
+                context: format!("quota was unexpectedly present with value {value}"),
+            });
+        }
+        println!("AlterClientQuotas denial left user {quota_user} without {QUOTA_KEY}");
+        return Ok(());
+    }
+
     let alteration = ClientQuotaAlteration::new(ClientQuotaEntity::user(&quota_user))
         .set(QUOTA_KEY, QUOTA_VALUE);
 
@@ -39,53 +51,48 @@ async fn main() -> kafrust::Result<()> {
         });
     }
 
-    let applied_value = describe_quota(&admin, &quota_user).await?;
-    if expected_error == 0 {
-        if !outcome.is_success() {
-            return Err(Error::Broker {
-                code: outcome.error_code(),
-                context: "AlterClientQuotas success expectation was not successful".to_owned(),
-            });
-        }
-        if applied_value != Some(QUOTA_VALUE) {
+    if expected_error != 0 {
+        if outcome.is_success() {
             return Err(Error::Broker {
                 code: expected_error,
-                context: format!(
-                    "AlterClientQuotas returned success but {QUOTA_KEY} is {applied_value:?}"
-                ),
+                context: "AlterClientQuotas succeeded despite the expected authorization error"
+                    .to_owned(),
             });
         }
-        let cleanup =
-            ClientQuotaAlteration::new(ClientQuotaEntity::user(&quota_user)).remove(QUOTA_KEY);
-        let cleanup_result = admin.alter_client_quotas(&[cleanup], false).await?;
-        if !cleanup_result.is_success() {
-            return Err(Error::Broker {
-                code: cleanup_result
-                    .entries()
-                    .first()
-                    .map_or(-1, |entry| entry.error_code()),
-                context: "AlterClientQuotas cleanup failed".to_owned(),
-            });
-        }
-        println!("AlterClientQuotas allowed for user {quota_user}");
+        println!(
+            "AlterClientQuotas denied with expected error {expected_error}; broker response preserved"
+        );
         return Ok(());
     }
 
-    if outcome.is_success() {
+    if !outcome.is_success() {
         return Err(Error::Broker {
-            code: expected_error,
-            context: "AlterClientQuotas succeeded despite the expected authorization error"
-                .to_owned(),
+            code: outcome.error_code(),
+            context: "AlterClientQuotas success expectation was not successful".to_owned(),
         });
     }
-    if applied_value == Some(QUOTA_VALUE) {
+    let applied_value = describe_quota(&admin, &quota_user).await?;
+    if applied_value != Some(QUOTA_VALUE) {
         return Err(Error::Broker {
             code: expected_error,
-            context: "AlterClientQuotas applied the quota despite the expected authorization error"
-                .to_owned(),
+            context: format!(
+                "AlterClientQuotas returned success but {QUOTA_KEY} is {applied_value:?}"
+            ),
         });
     }
-    println!("AlterClientQuotas denied with expected error {expected_error}; quota unchanged");
+    let cleanup =
+        ClientQuotaAlteration::new(ClientQuotaEntity::user(&quota_user)).remove(QUOTA_KEY);
+    let cleanup_result = admin.alter_client_quotas(&[cleanup], false).await?;
+    if !cleanup_result.is_success() {
+        return Err(Error::Broker {
+            code: cleanup_result
+                .entries()
+                .first()
+                .map_or(-1, |entry| entry.error_code()),
+            context: "AlterClientQuotas cleanup failed".to_owned(),
+        });
+    }
+    println!("AlterClientQuotas allowed for user {quota_user}");
     Ok(())
 }
 

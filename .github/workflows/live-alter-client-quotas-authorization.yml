@@ -105,6 +105,13 @@ jobs:
           KAFRUST_EXPECT_ALTER_CLIENT_QUOTAS_ERROR: "31"
         run: cargo run -p kafrust --example admin_alter_client_quotas_authorization
 
+      - name: Verify restricted mutation was not applied
+        env:
+          KAFRUST_SASL_USERNAME: admin
+          KAFRUST_SASL_PASSWORD: admin-secret
+          KAFRUST_VERIFY_QUOTA_ABSENT: "1"
+        run: cargo run -p kafrust --example admin_alter_client_quotas_authorization
+
       - name: Verify administrator is allowed
         env:
           KAFRUST_SASL_USERNAME: admin
