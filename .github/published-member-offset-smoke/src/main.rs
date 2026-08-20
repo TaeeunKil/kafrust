@@ -81,7 +81,9 @@ async fn main() -> kafrust::Result<()> {
             ),
         });
     }
-    println!("member-aware after {group_id}/{topic}-{partition} offset={committed}");
+    println!(
+        "member-aware after {group_id}/{topic}-{partition} api_version=10 offset={committed}"
+    );
     group.leave().await?;
     Ok(())
 }
