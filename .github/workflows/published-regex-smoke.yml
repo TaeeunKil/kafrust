@@ -6,7 +6,7 @@ on:
       kafrust_version:
         description: "Published kafrust version to execute from crates.io"
         required: true
-        default: "0.3.3"
+        default: "0.3.5"
 
 permissions:
   contents: read

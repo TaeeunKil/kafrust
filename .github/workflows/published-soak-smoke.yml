@@ -6,7 +6,7 @@ on:
       kafrust_version:
         description: "Published kafrust version to qualify from crates.io"
         required: true
-        default: "0.3.3"
+        default: "0.3.5"
       duration_seconds:
         description: "Soak duration before final drain (minimum 60)"
         required: true

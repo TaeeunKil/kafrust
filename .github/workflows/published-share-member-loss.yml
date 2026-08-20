@@ -6,7 +6,7 @@ on:
       kafrust_version:
         description: "Published kafrust version to run from crates.io"
         required: true
-        default: "0.3.3"
+        default: "0.3.5"
       run_seconds:
         description: "Seconds the surviving published member remains active"
         required: true
@@ -98,7 +98,7 @@ jobs:
 
       - name: Create fresh external published project
         env:
-          KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version || '0.3.3' }}
+          KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version || '0.3.5' }}
         run: |
           project_dir="$RUNNER_TEMP/kafrust-published-share-member-loss"
           cargo new --bin "$project_dir"
@@ -183,7 +183,7 @@ jobs:
 
       - name: Verify published dependency versions
         env:
-          KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version || '0.3.3' }}
+          KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version || '0.3.5' }}
         run: |
           lockfile="$RUNNER_TEMP/kafrust-published-share-member-loss/Cargo.lock"
           grep -A1 -q 'name = "kafrust"' "$lockfile"
