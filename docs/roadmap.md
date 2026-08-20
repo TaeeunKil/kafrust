@@ -14,6 +14,18 @@ Status legend:
 
 ## Current Release Qualification
 
+`0.3.4` is now published on crates.io in protocol-first order. Fresh external
+projects resolved both packages and passed the published `DescribeCluster` API
+60 broker and controller endpoint gate on Kafka 3.7.2 and 4.3.1 in
+[`32403253526`](https://github.com/TaeeunKil/kafrust/actions/runs/32403253526)
+and [`32403253688`](https://github.com/TaeeunKil/kafrust/actions/runs/32403253688),
+including lockfile verification, cluster identity, authorized operations,
+broker metadata, and Metadata fallback. The explicit controller path requires
+`ClientConfig::controller_bootstrap_servers`. crates.io publication succeeded;
+both generated docs.rs pages now return HTTP 200:
+[`kafrust 0.3.4`](https://docs.rs/kafrust/0.3.4/kafrust/) and
+[`kafrust-protocol 0.3.4`](https://docs.rs/kafrust-protocol/0.3.4/kafrust_protocol/).
+
 `0.3.3` is now published on crates.io in protocol-first order. Its package
 verification passed after `kafrust-protocol 0.3.3` became available from the
 registry, and a fresh external project compiled the published Streams public
@@ -2533,9 +2545,13 @@ Implemented evidence:
   and 4.3.1 in [`32400851719`](https://github.com/TaeeunKil/kafrust/actions/runs/32400851719)
   and [`32400851830`](https://github.com/TaeeunKil/kafrust/actions/runs/32400851830),
   including crates.io lockfile verification and API 60 cluster/authorized-
-  operation checks. The controller endpoint is not yet qualified because it
-  requires a controller bootstrap endpoint rather than an ordinary broker
-  listener; this remains a separate 1.0 compatibility task.
+  operation checks. The published `kafrust 0.3.4` gate then qualified both the
+  broker and explicit controller endpoint sets on Kafka 3.7.2 and 4.3.1 in
+  [`32403253526`](https://github.com/TaeeunKil/kafrust/actions/runs/32403253526)
+  and [`32403253688`](https://github.com/TaeeunKil/kafrust/actions/runs/32403253688).
+  `DescribeClusterEndpointType::Controllers` requires
+  `ClientConfig::controller_bootstrap_servers`; broader Admin version,
+  security, and failure matrices remain separate 1.0 gates.
 
 - KRaft `AddRaftVoter` API 80 v0/v1 and `RemoveRaftVoter` API 81 v0 are now
   implemented through typed flexible protocol messages, low-level Client

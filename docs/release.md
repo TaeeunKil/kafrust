@@ -191,6 +191,18 @@ broker endpoint metadata, and Metadata fallback. This qualifies the published
 broker-bootstrap path only; controller-endpoint bootstrap and broader Admin
 version/security/failure matrices remain open.
 
+The `0.3.4` packages were published protocol-first after routing explicit
+`DescribeCluster` controller requests through
+`ClientConfig::controller_bootstrap_servers`. Fresh external projects resolved
+both packages from crates.io and passed Kafka 3.7.2 and 4.3.1 broker and
+controller endpoint checks in [run 32403253526](https://github.com/TaeeunKil/kafrust/actions/runs/32403253526)
+and [run 32403253688](https://github.com/TaeeunKil/kafrust/actions/runs/32403253688),
+including cluster identity, authorized operations, broker metadata, Metadata
+fallback, and generated lockfile verification. crates.io returned HTTP 200 for
+both packages, and the generated documentation pages now return HTTP 200:
+[`kafrust 0.3.4`](https://docs.rs/kafrust/0.3.4/kafrust/) and
+[`kafrust-protocol 0.3.4`](https://docs.rs/kafrust-protocol/0.3.4/kafrust_protocol/).
+
 The `0.2.18` packages passed Cargo publish verification and both staged
 all-feature package-documentation builds on commit `373de00`. The matching
 `kafrust-protocol` and `kafrust` packages were published in that order; both

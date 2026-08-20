@@ -318,6 +318,15 @@ requesting `Controllers` through a broker listener returns Kafka's
 `MISMATCHED_ENDPOINT_TYPE`, so controller bootstrap configuration and a
 controller-endpoint qualification remain open.
 
+The published `kafrust 0.3.4` path now passes from fresh external projects on
+Kafka 3.7.2 and 4.3.1 in [`32403253526`](https://github.com/TaeeunKil/kafrust/actions/runs/32403253526)
+and [`32403253688`](https://github.com/TaeeunKil/kafrust/actions/runs/32403253688).
+The gate resolves both crates from crates.io, verifies the generated lockfile,
+checks API 60 broker and controller endpoint sets, cluster identity, authorized
+operations, broker metadata, and Metadata fallback. This qualifies the
+explicit controller-bootstrap path; broader Admin version, security, and
+failure matrices remain open.
+
 The current-source `DescribeTopicPartitions` qualification passed on commit
 `d833f9f`: Kafka 3.7.2 correctly returned the explicit unsupported capability
 result, while Kafka 4.3.1 returned and decoded topic UUID, partition leader/ISR,
@@ -1079,6 +1088,8 @@ other coordinator-routed writes remain separate qualification items.
 | Apache Kafka 4.3.1 | single-node KRaft | API 74 `ListConfigResources` v1, documentation-aware `DescribeConfigs` v4, and `DescribeCluster` v1 | [`Live ListConfigResources Compatibility`, run `32342304005`](https://github.com/TaeeunKil/kafrust/actions/runs/32342304005) on 2026-08-20 | Passing; current-source MSRV gate |
 | Published `kafrust 0.3.3` | fresh external Cargo project with no workspace path dependency; Kafka 3.7.2 single-node KRaft; stable Rust and Rust 1.81 | `DescribeCluster` API 60 v1 broker endpoint, cluster ID, authorized operations, broker metadata, and Metadata fallback | [`Published DescribeCluster`, run `32400851719`](https://github.com/TaeeunKil/kafrust/actions/runs/32400851719) on 2026-08-21 | Passing; published broker-bootstrap path and lockfile verification; controller endpoint remains unqualified |
 | Published `kafrust 0.3.3` | fresh external Cargo project with no workspace path dependency; Kafka 4.3.1 single-node KRaft; stable Rust and Rust 1.81 | `DescribeCluster` API 60 v1 broker endpoint, cluster ID, authorized operations, broker metadata, and Metadata fallback | [`Published DescribeCluster`, run `32400851830`](https://github.com/TaeeunKil/kafrust/actions/runs/32400851830) on 2026-08-21 | Passing; published broker-bootstrap path and lockfile verification; controller endpoint remains unqualified |
+| Published `kafrust 0.3.4` | fresh external Cargo project with no workspace path dependency; Kafka 3.7.2 single-node KRaft; stable Rust and Rust 1.81; dedicated controller bootstrap | `DescribeCluster` API 60 v1 broker and controller endpoint sets, cluster ID, authorized operations, broker metadata, and Metadata fallback | [`Published DescribeCluster`, run `32403253526`](https://github.com/TaeeunKil/kafrust/actions/runs/32403253526) on 2026-08-21 | Passing; crates.io resolution, generated lockfile, explicit controller-bootstrap routing, and [`kafrust 0.3.4` docs.rs](https://docs.rs/kafrust/0.3.4/kafrust/) verified |
+| Published `kafrust 0.3.4` | fresh external Cargo project with no workspace path dependency; Kafka 4.3.1 single-node KRaft; stable Rust and Rust 1.81; dedicated controller bootstrap | `DescribeCluster` API 60 v1 broker and controller endpoint sets, cluster ID, authorized operations, broker metadata, and Metadata fallback | [`Published DescribeCluster`, run `32403253688`](https://github.com/TaeeunKil/kafrust/actions/runs/32403253688) on 2026-08-21 | Passing; crates.io resolution, generated lockfile, explicit controller-bootstrap routing, and [`kafrust 0.3.4` docs.rs](https://docs.rs/kafrust/0.3.4/kafrust/) verified |
 | Apache Kafka 3.9.1 | single-node KRaft | API 74 `ListClientMetricsResources` v0 with the client-metrics resource filter | [`Live ListConfigResources Compatibility`, run `32342680037`](https://github.com/TaeeunKil/kafrust/actions/runs/32342680037) on 2026-08-20 | Passing; current-source MSRV gate |
 | Apache Kafka 3.7.2 | single-node KRaft with required client certificates | current-source mTLS handshake, Admin, producer, direct consumer, classic consumer group, transactional/read-committed, low-level, and coordinator roundtrips | [`Live Mutual TLS`, run `32343983601`](https://github.com/TaeeunKil/kafrust/actions/runs/32343983601) on 2026-08-20 | Passing; short-lived generated certificates; rotation remains separate |
 | Apache Kafka 4.3.1 | single-node KRaft with required client certificates | current-source mTLS handshake, Admin, producer, direct consumer, KIP-848 consumer group, transactional/read-committed, low-level, and coordinator roundtrips | [`Live Mutual TLS`, run `32343983397`](https://github.com/TaeeunKil/kafrust/actions/runs/32343983397) on 2026-08-20 | Passing; short-lived generated certificates; rotation remains separate |

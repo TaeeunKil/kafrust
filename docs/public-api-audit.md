@@ -29,12 +29,16 @@ and the published `kafrust 0.3.3` external-project gate passed in
 [`32399284180`](https://github.com/TaeeunKil/kafrust/actions/runs/32399284180).
 This remains an unstable broker-internal API qualification; broader version,
 security, long-running, and general Kafka replacement evidence remain open.
-The published `DescribeCluster` API 60 broker-bootstrap path also passed from
+The published `DescribeCluster` API 60 broker-bootstrap baseline passed from
 fresh `kafrust 0.3.3` projects on Kafka 3.7.2 and 4.3.1 in
 [`32400851719`](https://github.com/TaeeunKil/kafrust/actions/runs/32400851719)
 and [`32400851830`](https://github.com/TaeeunKil/kafrust/actions/runs/32400851830).
-The `Controllers` endpoint is intentionally not counted as qualified because
-it requires controller bootstrap configuration rather than a broker listener.
+The published `kafrust 0.3.4` controller-bootstrap path then passed both Kafka
+versions in [`32403253526`](https://github.com/TaeeunKil/kafrust/actions/runs/32403253526)
+and [`32403253688`](https://github.com/TaeeunKil/kafrust/actions/runs/32403253688).
+`DescribeClusterEndpointType::Controllers` now requires and uses
+`ClientConfig::controller_bootstrap_servers`; omitting that configuration is
+rejected explicitly rather than attempting a broker-listener request.
 
 ## Module Visibility
 

@@ -15,7 +15,7 @@ visible in public APIs: bootstrap servers, client IDs, topics, partitions,
 offsets, acknowledgements, metadata refresh, consumer groups, heartbeats, and
 commits.
 
-Current release: `0.3.3`.
+Current release: `0.3.4`.
 
 Use kafrust today for experiments, local broker checks, simple internal tools,
 and API evaluation. For broad production Kafka workloads that need mature
@@ -134,7 +134,9 @@ for topic in result.topics() {
 `describe_cluster` and `list_topics` provide typed Metadata v1 views. The
 opt-in `describe_cluster_with_options` path negotiates Kafka DescribeCluster
 API 60 and preserves cluster ID, endpoint type, rack, and authorized-operation
-metadata with Metadata fallback. Topic config APIs expose values, sources, synonyms, and incremental
+metadata with Metadata fallback. Explicit controller endpoint requests use
+`ClientConfig::controller_bootstrap_servers`; the published controller path is
+qualified on Kafka 3.7.2 and 4.3.1. Topic config APIs expose values, sources, synonyms, and incremental
 Set/Delete/Append/Subtract operations. `describe_consumer_groups` discovers
 each group coordinator and preserves member protocol bytes.
 `list_groups` queries all advertised brokers and negotiates ListGroups v4/v5
@@ -751,8 +753,8 @@ Primary public entry points:
 
 Generated API documentation:
 
-- [`kafrust`](https://docs.rs/kafrust/0.3.3/kafrust/)
-- [`kafrust-protocol`](https://docs.rs/kafrust-protocol/0.3.3/kafrust_protocol/)
+- [`kafrust`](https://docs.rs/kafrust/0.3.4/kafrust/)
+- [`kafrust-protocol`](https://docs.rs/kafrust-protocol/0.3.4/kafrust_protocol/)
 
 ## Documentation
 
