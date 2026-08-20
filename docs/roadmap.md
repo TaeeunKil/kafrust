@@ -2794,8 +2794,8 @@ Implemented evidence:
   write, full read, v1 summary, and delete. Multi-topic and multi-partition
   Admin requests now split by the per-resource v6 coordinator and merge
   partition-level results; injected tests cover two coordinators across all
-  five state APIs. The replicated gate passed in
-  [`32351976899`](https://github.com/TaeeunKil/kafrust/actions/runs/32351976899):
+  five state APIs. The current replicated gate passed in
+  [`32398034582`](https://github.com/TaeeunKil/kafrust/actions/runs/32398034582):
   it verified the replicated `__share_group_state` topic, discovered the
   written Share coordinator, stopped it, observed reassignment, and completed
   post-failover read, summary, and delete. The new

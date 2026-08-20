@@ -414,8 +414,8 @@ topic-id segment follows Kafka's URL-safe Base64-without-padding
 Multi-topic and multi-partition Admin requests are split by the per-resource
 FindCoordinator v6 result and their partition-level responses are merged;
 injected coverage exercises two different coordinators for Initialize, Read,
-Write, Delete, and Summary. The Kafka 4.3.1 replicated-state gate passed in
-[`32351976899`](https://github.com/TaeeunKil/kafrust/actions/runs/32351976899):
+Write, Delete, and Summary. The current Kafka 4.3.1 replicated-state gate
+passed in [`32398034582`](https://github.com/TaeeunKil/kafrust/actions/runs/32398034582):
 the workflow verified replicated internal state, moved the Share coordinator
 after broker loss, and completed post-failover read, summary, and delete. This
 is still an unstable broker-internal API qualification, not general
