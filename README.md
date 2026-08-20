@@ -497,8 +497,10 @@ Kafka's dedicated Streams group heartbeat protocol. It publishes the initial
 topology, tracks member and endpoint epochs, reports task state, reconnects and
 rejoins within a bounded retry budget, and leaves with
 `shutdown_application=true`. It is a broker membership layer only; it does not
-execute a Kafka Streams DSL, state stores, or stream-processing tasks, and the
-caller currently drives `heartbeat()`.
+execute a Kafka Streams DSL, state stores, or stream-processing tasks. A joined
+session can be moved into a bounded `StreamsGroupSessionHandle`, which owns
+periodic heartbeats and publishes assignment snapshots; the application still
+reconciles task state and must await `close()` for a graceful leave.
 
 ```rust,no_run
 use kafrust::streams::{
@@ -519,12 +521,13 @@ let topology = StreamsGroupHeartbeatTopology {
         copartition_groups: Vec::new(),
     }],
 };
-let mut session = StreamsGroupSession::join(
+let session = StreamsGroupSession::join(
     StreamsGroupConfig::new(["localhost:9092"], "orders-streams", topology),
 )
 .await?;
-session.heartbeat().await?;
-session.close().await?;
+let handle = session.spawn_heartbeat_task();
+handle.heartbeat_now().await?;
+handle.close().await?;
 # Ok(())
 # }
 ```

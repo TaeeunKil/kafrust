@@ -14,6 +14,8 @@ pub use kafrust_protocol::api::streams_group_heartbeat::{
     StreamsGroupHeartbeatTopology,
 };
 use std::time::Duration;
+use tokio::sync::{mpsc, oneshot, watch};
+use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use tracing::debug;
 
@@ -21,6 +23,7 @@ const STREAMS_GROUP_HEARTBEAT_API_KEY: i16 = 88;
 const DEFAULT_STREAMS_GROUP_MAX_RETRIES: u32 = 5;
 const STREAMS_GROUP_RETRY_BACKOFF: Duration = Duration::from_millis(50);
 const STREAMS_GROUP_MAX_RETRY_BACKOFF: Duration = Duration::from_secs(1);
+const STREAMS_GROUP_COMMAND_CAPACITY: usize = 16;
 
 /// Configuration for a Kafka Streams group membership session.
 ///
@@ -230,6 +233,37 @@ pub struct StreamsGroupSession {
     closed: bool,
 }
 
+enum StreamsGroupCommand {
+    SetTaskState {
+        active_tasks: Vec<StreamsGroupHeartbeatTask>,
+        standby_tasks: Vec<StreamsGroupHeartbeatTask>,
+        warmup_tasks: Vec<StreamsGroupHeartbeatTask>,
+        task_offsets: Option<Vec<StreamsGroupHeartbeatTaskOffset>>,
+        task_end_offsets: Option<Vec<StreamsGroupHeartbeatTaskOffset>>,
+        acknowledged: oneshot::Sender<()>,
+    },
+    Heartbeat {
+        response: oneshot::Sender<Result<StreamsGroupHeartbeatResponseV0>>,
+    },
+    Close,
+}
+
+/// A handle for a Streams session whose heartbeat lifecycle is owned by one
+/// background Tokio task.
+///
+/// The task owns [`StreamsGroupSession`] and is the only code that mutates its
+/// member epoch, coordinator connection, pending task state, and assignment.
+/// Commands use a bounded channel, so task-state updates apply backpressure
+/// instead of growing an unbounded queue. Call [`Self::close`] and await it for
+/// a graceful member-epoch `-1` leave; dropping the handle aborts the task and
+/// cannot provide that broker-side leave guarantee.
+#[must_use = "a StreamsGroupSessionHandle must be closed or kept alive"]
+pub struct StreamsGroupSessionHandle {
+    commands: mpsc::Sender<StreamsGroupCommand>,
+    assignment: watch::Receiver<StreamsGroupSessionAssignment>,
+    task: Option<JoinHandle<Result<()>>>,
+}
+
 struct StreamsHeartbeatPayload {
     member_epoch: i32,
     topology: Option<StreamsGroupHeartbeatTopology>,
@@ -437,6 +471,27 @@ impl StreamsGroupSession {
         }
     }
 
+    /// Moves this session into a background heartbeat task.
+    ///
+    /// The session must already be joined. The task sends heartbeats using the
+    /// interval most recently returned by Kafka, publishes every successful
+    /// assignment through [`StreamsGroupSessionHandle::subscribe_assignment`],
+    /// and preserves the existing bounded retry and rejoin behavior.
+    pub fn spawn_heartbeat_task(self) -> StreamsGroupSessionHandle {
+        let (commands, command_receiver) = mpsc::channel(STREAMS_GROUP_COMMAND_CAPACITY);
+        let (assignment_sender, assignment_receiver) = watch::channel(self.assignment.clone());
+        let task = tokio::spawn(run_streams_heartbeat_task(
+            self,
+            command_receiver,
+            assignment_sender,
+        ));
+        StreamsGroupSessionHandle {
+            commands,
+            assignment: assignment_receiver,
+            task: Some(task),
+        }
+    }
+
     async fn join_with_retry(&mut self) -> Result<()> {
         let mut retry = 0;
         self.recover_streams_session(true, &mut retry).await
@@ -641,6 +696,130 @@ impl StreamsGroupSession {
             return Err(Error::Unsupported("Streams group session is closed"));
         }
         Ok(())
+    }
+}
+
+impl StreamsGroupSessionHandle {
+    /// Returns the latest successful broker assignment snapshot.
+    pub fn assignment(&self) -> StreamsGroupSessionAssignment {
+        self.assignment.borrow().clone()
+    }
+
+    /// Subscribes to successful assignment snapshots produced by the heartbeat
+    /// task. The receiver always retains the newest snapshot when the caller is
+    /// temporarily slower than the heartbeat interval.
+    pub fn subscribe_assignment(&self) -> watch::Receiver<StreamsGroupSessionAssignment> {
+        self.assignment.clone()
+    }
+
+    /// Replaces the task state reported by the next background heartbeat.
+    pub async fn set_task_state(
+        &self,
+        active_tasks: Vec<StreamsGroupHeartbeatTask>,
+        standby_tasks: Vec<StreamsGroupHeartbeatTask>,
+        warmup_tasks: Vec<StreamsGroupHeartbeatTask>,
+        task_offsets: Option<Vec<StreamsGroupHeartbeatTaskOffset>>,
+        task_end_offsets: Option<Vec<StreamsGroupHeartbeatTaskOffset>>,
+    ) -> Result<()> {
+        let (acknowledged, completion) = oneshot::channel();
+        self.commands
+            .send(StreamsGroupCommand::SetTaskState {
+                active_tasks,
+                standby_tasks,
+                warmup_tasks,
+                task_offsets,
+                task_end_offsets,
+                acknowledged,
+            })
+            .await
+            .map_err(|_| Error::StreamsGroupBackgroundTaskClosed)?;
+        completion
+            .await
+            .map_err(|_| Error::StreamsGroupBackgroundTaskClosed)
+    }
+
+    /// Sends a heartbeat immediately instead of waiting for the broker's
+    /// advertised interval and returns its response.
+    pub async fn heartbeat_now(&self) -> Result<StreamsGroupHeartbeatResponseV0> {
+        let (response, completion) = oneshot::channel();
+        self.commands
+            .send(StreamsGroupCommand::Heartbeat { response })
+            .await
+            .map_err(|_| Error::StreamsGroupBackgroundTaskClosed)?;
+        completion
+            .await
+            .map_err(|_| Error::StreamsGroupBackgroundTaskClosed)?
+    }
+
+    /// Gracefully leaves the Streams group and waits for the background task to
+    /// finish. This consumes the handle so no later command can race with the
+    /// leave operation.
+    pub async fn close(mut self) -> Result<()> {
+        let Some(task) = self.task.take() else {
+            return Ok(());
+        };
+        if self
+            .commands
+            .send(StreamsGroupCommand::Close)
+            .await
+            .is_err()
+        {
+            return task.await.map_err(Error::from)?;
+        }
+        task.await.map_err(Error::from)?
+    }
+}
+
+impl Drop for StreamsGroupSessionHandle {
+    fn drop(&mut self) {
+        if let Some(task) = self.task.as_ref() {
+            task.abort();
+        }
+    }
+}
+
+async fn run_streams_heartbeat_task(
+    mut session: StreamsGroupSession,
+    mut commands: mpsc::Receiver<StreamsGroupCommand>,
+    assignment_sender: watch::Sender<StreamsGroupSessionAssignment>,
+) -> Result<()> {
+    loop {
+        let heartbeat = sleep(session.heartbeat_interval());
+        tokio::pin!(heartbeat);
+        tokio::select! {
+            command = commands.recv() => match command {
+                Some(StreamsGroupCommand::SetTaskState {
+                    active_tasks,
+                    standby_tasks,
+                    warmup_tasks,
+                    task_offsets,
+                    task_end_offsets,
+                    acknowledged,
+                }) => {
+                    session.set_task_state_with_optional_offsets(
+                        active_tasks,
+                        standby_tasks,
+                        warmup_tasks,
+                        task_offsets,
+                        task_end_offsets,
+                    );
+                    let _ = acknowledged.send(());
+                }
+                Some(StreamsGroupCommand::Heartbeat { response }) => {
+                    let result = session.heartbeat().await;
+                    if result.is_ok() {
+                        let _ = assignment_sender.send(session.assignment.clone());
+                    }
+                    let _ = response.send(result);
+                }
+                Some(StreamsGroupCommand::Close) => return session.close().await,
+                None => return Ok(()),
+            },
+            _ = &mut heartbeat => {
+                session.heartbeat().await?;
+                let _ = assignment_sender.send(session.assignment.clone());
+            }
+        }
     }
 }
 
@@ -980,6 +1159,100 @@ mod tests {
         assert_eq!(session.member_epoch(), 3);
         session.close().await.unwrap();
         assert!(session.is_closed());
+        broker.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn background_streams_session_owns_heartbeat_and_graceful_close() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(16 * 1024);
+        let broker = tokio::spawn(async move {
+            let request = read_frame(&mut broker_stream).await;
+            let (correlation_id, mut decoder) = request_header(&request);
+            assert_eq!(decoder.read_compact_string().unwrap(), "orders");
+            assert_eq!(decoder.read_compact_string().unwrap(), "member-1");
+            assert_eq!(decoder.read_i32().unwrap(), 2);
+            assert_eq!(decoder.read_i32().unwrap(), 4);
+            assert_eq!(decoder.read_compact_nullable_string().unwrap(), None);
+            assert_eq!(decoder.read_compact_nullable_string().unwrap(), None);
+            assert_eq!(decoder.read_i32().unwrap(), 30_000);
+            assert_eq!(decoder.read_i8().unwrap(), -1);
+            assert_eq!(decoder.read_compact_array_length(), Some(0));
+            assert_eq!(decoder.read_compact_array_length(), Some(0));
+            assert_eq!(decoder.read_compact_array_length(), Some(0));
+            assert_eq!(decoder.read_compact_nullable_string().unwrap(), None);
+            assert_eq!(decoder.read_i8().unwrap(), -1);
+            assert_eq!(decoder.read_compact_array_length(), None);
+            assert_eq!(decoder.read_compact_array_length(), Some(0));
+            assert_eq!(decoder.read_compact_array_length(), Some(0));
+            assert!(!decoder.read_bool().unwrap());
+            decoder.read_tagged_fields().unwrap();
+            write_streams_response(&mut broker_stream, correlation_id, "member-1", 3, 5).await;
+
+            let request = read_frame(&mut broker_stream).await;
+            let (correlation_id, mut decoder) = request_header(&request);
+            assert_eq!(decoder.read_compact_string().unwrap(), "orders");
+            assert_eq!(decoder.read_compact_string().unwrap(), "member-1");
+            assert_eq!(decoder.read_i32().unwrap(), -1);
+            assert_eq!(decoder.read_i32().unwrap(), 5);
+            assert_eq!(decoder.read_compact_nullable_string().unwrap(), None);
+            assert_eq!(decoder.read_compact_nullable_string().unwrap(), None);
+            assert_eq!(decoder.read_i32().unwrap(), -1);
+            assert_eq!(decoder.read_i8().unwrap(), -1);
+            assert_eq!(decoder.read_compact_array_length(), None);
+            assert_eq!(decoder.read_compact_array_length(), None);
+            assert_eq!(decoder.read_compact_array_length(), None);
+            assert_eq!(decoder.read_compact_nullable_string().unwrap(), None);
+            assert_eq!(decoder.read_i8().unwrap(), -1);
+            assert_eq!(decoder.read_compact_array_length(), None);
+            assert_eq!(decoder.read_compact_array_length(), None);
+            assert_eq!(decoder.read_compact_array_length(), None);
+            assert!(decoder.read_bool().unwrap());
+            decoder.read_tagged_fields().unwrap();
+            write_streams_response(&mut broker_stream, correlation_id, "member-1", -1, 5).await;
+        });
+
+        let config = StreamsGroupConfig::new(["localhost:9092"], "orders", topology())
+            .client_id("streams-test")
+            .max_retries(0);
+        let client = Client::from_stream(
+            Box::new(client_stream),
+            Some("streams-test".to_owned()),
+            Some(Duration::from_secs(1)),
+        );
+        let session = StreamsGroupSession {
+            config,
+            coordinator: Some(client),
+            member_id: "member-1".to_owned(),
+            member_epoch: 2,
+            endpoint_information_epoch: 4,
+            heartbeat_interval: Duration::from_millis(100),
+            pending_active_tasks: None,
+            pending_standby_tasks: None,
+            pending_warmup_tasks: None,
+            pending_task_offsets: None,
+            pending_task_end_offsets: None,
+            assignment: StreamsGroupSessionAssignment::default(),
+            closed: false,
+        };
+
+        let handle = session.spawn_heartbeat_task();
+        handle
+            .set_task_state(
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                Some(Vec::new()),
+                Some(Vec::new()),
+            )
+            .await
+            .unwrap();
+        let mut assignments = handle.subscribe_assignment();
+        tokio::time::timeout(Duration::from_secs(2), assignments.changed())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(handle.assignment().task_offset_interval_ms, 100);
+        handle.close().await.unwrap();
         broker.await.unwrap();
     }
 

@@ -119,7 +119,10 @@ pub use share_consumer::{
     ShareAcknowledgementMode, ShareAcknowledgementType, ShareAcquireMode, ShareConsumer,
     ShareConsumerConfig, ShareConsumerHeartbeat, ShareRecord,
 };
-pub use streams::{StreamsGroupConfig, StreamsGroupSession, StreamsGroupSessionAssignment};
+pub use streams::{
+    StreamsGroupConfig, StreamsGroupSession, StreamsGroupSessionAssignment,
+    StreamsGroupSessionHandle,
+};
 #[cfg(feature = "otlp")]
 pub use telemetry::ClientMetricsTelemetryProvider;
 pub use telemetry::{

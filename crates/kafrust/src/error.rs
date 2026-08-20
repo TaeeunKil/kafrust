@@ -373,6 +373,8 @@ pub enum Error {
     Io(std::io::Error),
     /// A background Tokio task failed before returning its Kafka result.
     TaskJoin(tokio::task::JoinError),
+    /// A Streams heartbeat task stopped before accepting another command.
+    StreamsGroupBackgroundTaskClosed,
     /// Kafka protocol encoding or decoding failure.
     Protocol(kafrust_protocol::Error),
 }
@@ -529,6 +531,9 @@ impl fmt::Display for Error {
             Self::Unsupported(feature) => write!(f, "unsupported feature: {feature}"),
             Self::Io(error) => write!(f, "I/O error: {error}"),
             Self::TaskJoin(error) => write!(f, "background task join error: {error}"),
+            Self::StreamsGroupBackgroundTaskClosed => {
+                f.write_str("Streams group background heartbeat task is closed")
+            }
             Self::Protocol(error) => write!(f, "Kafka protocol error: {error}"),
         }
     }
@@ -573,6 +578,7 @@ impl std::error::Error for Error {
             | Self::ShareRecordAlreadyAcknowledged { .. }
             | Self::TelemetryPayloadTooLarge { .. }
             | Self::ShareRecordNotAcquired { .. }
+            | Self::StreamsGroupBackgroundTaskClosed
             | Self::Unsupported(_) => None,
         }
     }

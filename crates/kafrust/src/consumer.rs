@@ -2012,6 +2012,7 @@ fn can_retry_fetch(error: &Error) -> bool {
         | Error::TelemetryPayloadTooLarge { .. }
         | Error::ShareRecordNotAcquired { .. }
         | Error::Unsupported(_)
+        | Error::StreamsGroupBackgroundTaskClosed
         | Error::TaskJoin(_)
         | Error::Protocol(_) => false,
     }

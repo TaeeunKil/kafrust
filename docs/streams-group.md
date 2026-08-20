@@ -19,10 +19,13 @@ The current session supports:
 - graceful leave with member epoch `-1` and `shutdown_application=true`
 
 It does not implement a Kafka Streams processor, state store, task scheduler,
-source/sink processing, or a background heartbeat worker yet. The caller must
-invoke `heartbeat()` within the interval returned by
-`StreamsGroupSession::heartbeat_interval()` and reconcile the returned
-`StreamsGroupSessionAssignment` with its task runtime.
+or source/sink processing. After joining, callers can move the session into a
+`StreamsGroupSessionHandle` with `spawn_heartbeat_task()`. That handle owns a
+bounded command queue, sends heartbeats at Kafka's advertised interval, and
+publishes the latest assignment through `subscribe_assignment()`. The caller
+still owns task-runtime reconciliation and must await `close()` when a graceful
+member leave is required; dropping the handle aborts the task without a broker
+leave guarantee.
 
 ## Example
 
@@ -46,6 +49,7 @@ it does not establish compatibility with a complete Kafka Streams application.
 
 This is an alpha, expert-level API. The session now preserves the latest
 successful assignment snapshot without collapsing nullable fields. Before
-`1.0`, the project still needs a cancellable background heartbeat lifecycle,
-automatic assignment/task-runtime reconciliation, multi-member and
-coordinator-failure qualification, and a real Kafka Streams application test.
+`1.0`, the project still needs published-artifact qualification of the
+background handle, automatic assignment/task-runtime reconciliation,
+multi-member and coordinator-failure qualification, and a real Kafka Streams
+application test.

@@ -1642,6 +1642,7 @@ fn delivery_error_from_request_error(error: &Error) -> Error {
         },
         Error::Unsupported(feature) => Error::Unsupported(feature),
         Error::Io(error) => Error::Io(std::io::Error::new(error.kind(), error.to_string())),
+        Error::StreamsGroupBackgroundTaskClosed => Error::StreamsGroupBackgroundTaskClosed,
         Error::TaskJoin(_) => Error::Unsupported("buffered producer task join failed"),
         Error::Protocol(error) => Error::Protocol(error.clone()),
     }
@@ -4860,6 +4861,7 @@ fn can_retry_send(error: &Error) -> bool {
         | Error::TelemetryPayloadTooLarge { .. }
         | Error::ShareRecordNotAcquired { .. }
         | Error::Unsupported(_)
+        | Error::StreamsGroupBackgroundTaskClosed
         | Error::TaskJoin(_)
         | Error::Protocol(_) => false,
     }
