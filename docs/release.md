@@ -130,6 +130,10 @@ Rust 1.81 in [run 32380345199](https://github.com/TaeeunKil/kafrust/actions/runs
 The crates.io package metadata returned HTTP 200 for both packages; docs.rs
 `0.3.3` indexing was still pending immediately after publication and is not
 claimed by this release note until its build returns successfully.
+The published single-broker Streams runtime gate later passed in
+[run 32381356444](https://github.com/TaeeunKil/kafrust/actions/runs/32381356444),
+using a fresh external project on Kafka 4.3.1 and Rust 1.81; this is a
+membership/runtime gate, not complete Kafka Streams processor compatibility.
 
 The `0.2.18` packages passed Cargo publish verification and both staged
 all-feature package-documentation builds on commit `373de00`. The matching

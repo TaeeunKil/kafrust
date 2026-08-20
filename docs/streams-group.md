@@ -76,7 +76,12 @@ published `kafrust 0.3.3` surface was also compiled from a fresh external Cargo
 project with no workspace path dependency on both stable Rust and Rust 1.81 in
 [run 32380345199](https://github.com/TaeeunKil/kafrust/actions/runs/32380345199);
 this proves package/API availability, not broker runtime compatibility or
-compatibility with a complete Kafka Streams application.
+compatibility with a complete Kafka Streams application. The published
+single-broker runtime gate also passed on Rust 1.81 in
+[run 32381356444](https://github.com/TaeeunKil/kafrust/actions/runs/32381356444),
+covering published-crate join, background heartbeat, task-runtime
+reconciliation, dependency verification, and graceful leave against Kafka
+4.3.1.
 
 ## Stability
 
@@ -84,7 +89,8 @@ This is an alpha, expert-level API. The session preserves the latest
 successful assignment snapshot without collapsing nullable fields, and the
 task-runtime reconciliation primitive now provides deterministic local
 lifecycle transitions. Before `1.0`, the project still needs a real Kafka
-Streams application test, a published broker-runtime gate for this API, and
+Streams application test and
 integration of transitions with consumer assignment, state restoration, and
 processing execution. The published artifact surface check is defined in
-`.github/workflows/published-streams-surface.yml`.
+`.github/workflows/published-streams-surface.yml`; the published broker runtime
+gate is defined in `.github/workflows/published-streams-group-runtime.yml`.
