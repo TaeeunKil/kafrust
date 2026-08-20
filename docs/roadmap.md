@@ -262,7 +262,13 @@ coverage toward a release candidate that can be qualified in staging.
   the bounded background handle lifecycle and broker-side member observation
   on a single broker. Published artifact qualification, a complete Kafka
   Streams application, assignment/task-runtime reconciliation, and
-  coordinator-broker failure evidence remain outside the compatibility claim.
+  coordinator-broker failure evidence remain outside the compatibility claim
+  for this single-broker job. The separate three-broker coordinator-stop gate
+  passed on commit `21ec3fd` in
+  [`32374858753`](https://github.com/TaeeunKil/kafrust/actions/runs/32374858753),
+  proving post-stop heartbeat recovery and clean leave through the replacement
+  coordinator. Published artifact qualification, assignment/task-runtime
+  reconciliation, and a complete Kafka Streams application remain open.
 - A standalone `fuzz/` workspace now provides ten libFuzzer targets, tracked
   seed corpora, and a manual/weekly corpus-backed campaign workflow. Each
   target has bounded RSS and input-time budgets, and the workflow uploads

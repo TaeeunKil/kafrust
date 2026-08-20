@@ -279,8 +279,11 @@ close. The current Kafka 4.3.1 live gate passed in
 [`32373425539`](https://github.com/TaeeunKil/kafrust/actions/runs/32373425539)
 with join, assignment notification, background heartbeat, nullable task-offset
 omission, two-member membership, member departure convergence, and clean leave.
-Published-artifact compatibility, topology and assignment/task-runtime
-reconciliation, coordinator-broker failure behavior, and a live Kafka Streams
+The separate three-broker Kafka 4.3.1 gate passed in
+[`32374858753`](https://github.com/TaeeunKil/kafrust/actions/runs/32374858753)
+after stopping the elected Streams coordinator and observing a successful
+post-stop heartbeat and clean leave. Published-artifact compatibility,
+topology and assignment/task-runtime reconciliation, and a live Kafka Streams
 application remain open.
 
 Topic configuration inspection remains DescribeConfigs v1 by default. An
