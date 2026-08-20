@@ -1,3 +1,4 @@
+use crate::broker_client_cache::{SharedBrokerClientCache, SharedBrokerClientCacheHandle};
 use crate::client::{Client, DEFAULT_MAX_RESPONSE_BYTES};
 use crate::error::{Error, Result};
 use crate::metrics::ClientMetrics;
@@ -414,7 +415,7 @@ impl fmt::Debug for SaslCredentials {
     }
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone)]
 /// Connection settings shared by low-level clients, producers, and consumers.
 pub struct ClientConfig {
     bootstrap_servers: Vec<String>,
@@ -432,7 +433,30 @@ pub struct ClientConfig {
     tls_client_private_key_der: Option<Vec<u8>>,
     sasl_credentials: Option<SaslCredentials>,
     metrics: ClientMetrics,
+    shared_broker_clients: SharedBrokerClientCacheHandle,
 }
+
+impl PartialEq for ClientConfig {
+    fn eq(&self, other: &Self) -> bool {
+        self.bootstrap_servers == other.bootstrap_servers
+            && self.controller_bootstrap_servers == other.controller_bootstrap_servers
+            && self.client_id == other.client_id
+            && self.client_rack == other.client_rack
+            && self.request_timeout == other.request_timeout
+            && self.max_response_bytes == other.max_response_bytes
+            && self.max_idle_broker_connections == other.max_idle_broker_connections
+            && self.decode_limits == other.decode_limits
+            && self.security_protocol == other.security_protocol
+            && self.tls_server_name == other.tls_server_name
+            && self.tls_root_certificates_der == other.tls_root_certificates_der
+            && self.tls_client_certificates_der == other.tls_client_certificates_der
+            && self.tls_client_private_key_der == other.tls_client_private_key_der
+            && self.sasl_credentials == other.sasl_credentials
+            && self.metrics == other.metrics
+    }
+}
+
+impl Eq for ClientConfig {}
 
 impl fmt::Debug for ClientConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -493,11 +517,17 @@ impl ClientConfig {
             tls_client_private_key_der: None,
             sasl_credentials: None,
             metrics: ClientMetrics::new(),
+            shared_broker_clients: std::sync::Arc::new(SharedBrokerClientCache::default()),
         }
+    }
+
+    fn reset_shared_broker_clients(&mut self) {
+        self.shared_broker_clients = std::sync::Arc::new(SharedBrokerClientCache::default());
     }
 
     /// Sets the Kafka client ID sent in request headers.
     pub fn client_id(mut self, client_id: impl Into<String>) -> Self {
+        self.reset_shared_broker_clients();
         self.client_id = Some(client_id.into());
         self
     }
@@ -530,12 +560,14 @@ impl ClientConfig {
 
     /// Sets the request timeout applied after a broker connection is established.
     pub fn request_timeout_ms(mut self, request_timeout_ms: u64) -> Self {
+        self.reset_shared_broker_clients();
         self.request_timeout = Duration::from_millis(request_timeout_ms);
         self
     }
 
     /// Sets the maximum broker response payload allocated for one request.
     pub fn max_response_bytes(mut self, max_response_bytes: usize) -> Self {
+        self.reset_shared_broker_clients();
         self.max_response_bytes = max_response_bytes;
         self
     }
@@ -546,30 +578,35 @@ impl ClientConfig {
     /// Connections are evicted in FIFO order after a successful request. A
     /// value of zero is rejected during [`Self::validate`].
     pub fn max_idle_broker_connections(mut self, max: usize) -> Self {
+        self.reset_shared_broker_clients();
         self.max_idle_broker_connections = max;
         self
     }
 
     /// Sets the maximum number of elements allocated for one Kafka array.
     pub fn max_decode_array_elements(mut self, max: usize) -> Self {
+        self.reset_shared_broker_clients();
         self.decode_limits = self.decode_limits.with_max_array_elements(max);
         self
     }
 
     /// Sets the maximum uncompressed size of one fetched record batch.
     pub fn max_decompressed_record_bytes(mut self, max: usize) -> Self {
+        self.reset_shared_broker_clients();
         self.decode_limits = self.decode_limits.with_max_decompressed_record_bytes(max);
         self
     }
 
     /// Sets the shared metrics handle used by every connection from this configuration.
     pub fn metrics(mut self, metrics: ClientMetrics) -> Self {
+        self.reset_shared_broker_clients();
         self.metrics = metrics;
         self
     }
 
     /// Sets the Kafka security protocol used for broker connections.
     pub fn security_protocol(mut self, security_protocol: SecurityProtocol) -> Self {
+        self.reset_shared_broker_clients();
         self.security_protocol = security_protocol;
         self
     }
@@ -581,6 +618,7 @@ impl ClientConfig {
     /// subject alternative name. The value is used by [`SecurityProtocol::Tls`]
     /// and [`SecurityProtocol::SaslTls`].
     pub fn tls_server_name(mut self, server_name: impl Into<String>) -> Self {
+        self.reset_shared_broker_clients();
         self.tls_server_name = Some(server_name.into());
         self
     }
@@ -590,6 +628,7 @@ impl ClientConfig {
     /// Extra roots augment the platform verifier when [`SecurityProtocol::Tls`]
     /// or [`SecurityProtocol::SaslTls`] is used. Platform roots are still used.
     pub fn tls_root_certificate_der(mut self, certificate: impl Into<Vec<u8>>) -> Self {
+        self.reset_shared_broker_clients();
         self.tls_root_certificates_der.push(certificate.into());
         self
     }
@@ -602,6 +641,7 @@ impl ClientConfig {
     /// connections. The bytes are retained as configuration material and are
     /// never included in `Debug` output.
     pub fn tls_client_certificate_der(mut self, certificate: impl Into<Vec<u8>>) -> Self {
+        self.reset_shared_broker_clients();
         self.tls_client_certificates_der.push(certificate.into());
         self
     }
@@ -613,6 +653,7 @@ impl ClientConfig {
     /// certificate must also be configured with
     /// [`Self::tls_client_certificate_der`].
     pub fn tls_client_private_key_der(mut self, key: impl Into<Vec<u8>>) -> Self {
+        self.reset_shared_broker_clients();
         self.tls_client_private_key_der = Some(key.into());
         self
     }
@@ -623,6 +664,7 @@ impl ClientConfig {
     /// to choose the transport. This separation mirrors Kafka's
     /// `security.protocol` and `sasl.mechanism` configuration model.
     pub fn sasl_plain(mut self, username: impl Into<String>, password: impl Into<String>) -> Self {
+        self.reset_shared_broker_clients();
         self.sasl_credentials = Some(SaslCredentials::plain(username, password));
         self
     }
@@ -633,6 +675,7 @@ impl ClientConfig {
         username: impl Into<String>,
         password: impl Into<String>,
     ) -> Self {
+        self.reset_shared_broker_clients();
         self.sasl_credentials = Some(SaslCredentials::scram_sha_256(username, password));
         self
     }
@@ -643,12 +686,14 @@ impl ClientConfig {
         username: impl Into<String>,
         password: impl Into<String>,
     ) -> Self {
+        self.reset_shared_broker_clients();
         self.sasl_credentials = Some(SaslCredentials::scram_sha_512(username, password));
         self
     }
 
     /// Sets SASL/OAUTHBEARER credentials without changing the configured security protocol.
     pub fn sasl_oauthbearer(mut self, token: impl Into<String>) -> Self {
+        self.reset_shared_broker_clients();
         self.sasl_credentials = Some(SaslCredentials::oauthbearer(token));
         self
     }
@@ -659,6 +704,7 @@ impl ClientConfig {
         username: impl Into<String>,
         token: impl Into<String>,
     ) -> Self {
+        self.reset_shared_broker_clients();
         self.sasl_credentials = Some(SaslCredentials::oauthbearer_with_username(username, token));
         self
     }
@@ -668,6 +714,7 @@ impl ClientConfig {
     where
         P: OAuthBearerTokenProvider + 'static,
     {
+        self.reset_shared_broker_clients();
         self.sasl_credentials = Some(SaslCredentials::oauthbearer_with_provider(provider));
         self
     }
@@ -682,6 +729,7 @@ impl ClientConfig {
     where
         P: OAuthBearerTokenProvider + 'static,
     {
+        self.reset_shared_broker_clients();
         self.sasl_credentials = Some(SaslCredentials::oauthbearer_with_username_and_provider(
             username, provider,
         ));
@@ -732,6 +780,10 @@ impl ClientConfig {
     /// Returns the shared metrics handle used by connections from this configuration.
     pub fn metrics_ref(&self) -> ClientMetrics {
         self.metrics.clone()
+    }
+
+    pub(crate) fn shared_broker_clients(&self) -> SharedBrokerClientCacheHandle {
+        std::sync::Arc::clone(&self.shared_broker_clients)
     }
 
     pub(crate) fn record_retry(&self) {

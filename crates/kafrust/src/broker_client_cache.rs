@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, VecDeque};
+use std::sync::Arc;
 
 use crate::client::Client;
 
@@ -65,11 +66,45 @@ impl BrokerClientCache {
     }
 }
 
+/// Shared idle broker cache carried by cloned [`ClientConfig`](crate::config::ClientConfig)
+/// values.
+///
+/// The mutex protects only cache bookkeeping. Callers take ownership of a
+/// connection before awaiting broker I/O and return it after a successful
+/// request, so a poisoned connection is never reinserted and the cache lock
+/// is not held across network work.
+#[derive(Debug, Default)]
+pub(crate) struct SharedBrokerClientCache {
+    cache: tokio::sync::Mutex<BrokerClientCache>,
+}
+
+impl SharedBrokerClientCache {
+    pub(crate) async fn take(&self, broker_addr: &str) -> Option<Client> {
+        self.cache.lock().await.take(broker_addr)
+    }
+
+    pub(crate) async fn insert(&self, broker_addr: String, client: Client, max_connections: usize) {
+        self.cache
+            .lock()
+            .await
+            .insert(broker_addr, client, max_connections);
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn len(&self) -> usize {
+        self.cache.lock().await.len()
+    }
+}
+
+pub(crate) type SharedBrokerClientCacheHandle = Arc<SharedBrokerClientCache>;
+
 #[cfg(test)]
 #[allow(clippy::expect_used)]
 mod tests {
     use super::BrokerClientCache;
     use crate::client::Client;
+    use crate::config::{ClientConfig, SecurityProtocol};
+    use std::sync::Arc;
     use tokio::io::duplex;
 
     fn client() -> Client {
@@ -101,5 +136,38 @@ mod tests {
         assert_eq!(cache.len(), 1);
         assert!(cache.take("broker-a").is_none());
         assert!(cache.take("broker-b").is_some());
+    }
+
+    #[tokio::test]
+    async fn cloned_client_configs_share_idle_connections() {
+        let config = ClientConfig::new(["broker-a"]);
+        let cloned = config.clone();
+        let first = config.shared_broker_clients();
+        let second = cloned.shared_broker_clients();
+        let (stream, _peer) = duplex(16);
+
+        first
+            .insert(
+                "broker-a".to_owned(),
+                Client::from_stream(Box::new(stream), None, None),
+                2,
+            )
+            .await;
+
+        assert!(second.take("broker-a").await.is_some());
+        assert_eq!(first.len().await, 0);
+    }
+
+    #[test]
+    fn connection_identity_changes_reset_the_shared_cache() {
+        let config = ClientConfig::new(["broker-a"]);
+        let changed = config
+            .clone()
+            .security_protocol(SecurityProtocol::SaslPlaintext);
+
+        assert!(!Arc::ptr_eq(
+            &config.shared_broker_clients(),
+            &changed.shared_broker_clients()
+        ));
     }
 }
