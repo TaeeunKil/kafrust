@@ -29,7 +29,6 @@ async fn main() -> kafrust::Result<()> {
 }
 
 async fn unregister_broker(admin: &AdminClient, broker_id: i32) -> kafrust::Result<()> {
-    wait_for_broker(admin, broker_id, true, Duration::from_secs(30)).await?;
     let result = admin.unregister_broker(broker_id).await?;
     if !result.is_success() {
         return Err(Error::Broker {
