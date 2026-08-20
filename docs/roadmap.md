@@ -1377,6 +1377,13 @@ Evidence:
   readback. This closes the published basic OAuth gate only; signed OIDC/JWKS,
   provider discovery, key rotation, and provider-specific outage behavior
   remain open.
+- Published `kafrust 0.3.4` then passed the signed local OIDC/JWKS variant in
+  [`32412721829`](https://github.com/TaeeunKil/kafrust/actions/runs/32412721829).
+  Kafka 3.7.2 validated the RS256 signature, issuer, audience, and subject,
+  and the fresh crates.io project completed the same Admin, `acks=all`
+  producer, and direct-consumer checks through the async token provider. This
+  closes the published signed local fixture gate; external provider
+  discovery, token endpoints, key rotation, and outage semantics remain open.
 - The signed local OIDC/JWKS fixture passed Kafka's validator, the Java Kafka
   client, and kafrust static and provider-backed paths in the OIDC job
   [`31584760474`](https://github.com/TaeeunKil/kafrust/actions/runs/31584760474/job/94078116567).

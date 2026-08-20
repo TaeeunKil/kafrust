@@ -254,6 +254,14 @@ produce, and direct-consumer readback. This is published basic
 OAUTHBEARER/TLS evidence, not a claim of signed OIDC/JWKS provider
 compatibility or provider discovery and outage semantics.
 
+The published `kafrust 0.3.4` signed OAUTHBEARER gate also passed on Kafka
+3.7.2 in [run 32412721829](https://github.com/TaeeunKil/kafrust/actions/runs/32412721829).
+The external project used a local OIDC/JWKS fixture and an RS256-signed token;
+Kafka verified the signature and required claims while the published async
+provider completed `describe_cluster`, `acks=all` produce, and direct-consumer
+readback. This qualifies the published signed local fixture path, not an
+external identity provider's discovery, key rotation, or outage behavior.
+
 The `0.2.18` packages passed Cargo publish verification and both staged
 all-feature package-documentation builds on commit `373de00`. The matching
 `kafrust-protocol` and `kafrust` packages were published in that order; both

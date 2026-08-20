@@ -90,6 +90,16 @@ crates.io. It passed the broker's built-in unsecured validator and read back
 the produced record. Signed OIDC/JWKS, provider discovery, and
 provider-specific failure behavior remain unqualified.
 
+The published `kafrust 0.3.4` signed OAUTHBEARER gate also exercises the same
+public API against a Kafka 3.7.2 broker backed by a local OIDC/JWKS validator
+in [`32412721829`](https://github.com/TaeeunKil/kafrust/actions/runs/32412721829).
+The fresh crates.io project supplied an RS256 token through
+`ClientConfig::sasl_oauthbearer_provider` and completed
+`AdminClient::describe_cluster`, `ProducerConfig::with_client_config`, and
+`ConsumerConfig::with_client_config` after Kafka validated its signature,
+issuer, audience, and subject. External provider discovery and rotation remain
+unqualified.
+
 ## Module Visibility
 
 The crate also exposes public modules:
