@@ -2329,22 +2329,11 @@ impl Client {
         topic_id: [u8; 16],
         partition: i32,
     ) -> Result<FindCoordinatorResultV6> {
-        let coordinator_key = format!(
-            "{}:{}:{}",
-            group_id.as_ref(),
-            format_topic_id(topic_id),
-            partition
-        );
-        let request = FindCoordinatorRequestV6 {
-            correlation_id: self.next_correlation_id(),
-            client_id: self.client_id.clone(),
-            coordinator_type: CoordinatorType::Share,
-            coordinator_keys: vec![coordinator_key.clone()],
-        };
-        let response = self.send_request(&request.encode()?).await?;
-        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
-        let _header = ResponseHeader::decode_v1(&mut decoder)?;
-        let response = FindCoordinatorResponseV6::decode_body(&mut decoder)?;
+        let coordinator_key =
+            format_share_partition_coordinator_key(group_id.as_ref(), topic_id, partition);
+        let response = self
+            .find_share_partition_coordinators(group_id, &[(topic_id, partition)])
+            .await?;
         response
             .coordinators
             .into_iter()
@@ -2352,6 +2341,40 @@ impl Client {
             .ok_or(Error::Unsupported(
                 "FindCoordinator v6 returned no share-partition result",
             ))
+    }
+
+    /// Sends FindCoordinator v6 for multiple KIP-932 share-partition resources.
+    ///
+    /// Kafka may assign different share partitions in one request to different
+    /// brokers. Callers that send a multi-partition Share Group State request
+    /// must use the returned per-key coordinator results to split the request.
+    pub async fn find_share_partition_coordinators(
+        &mut self,
+        group_id: impl AsRef<str>,
+        resources: &[([u8; 16], i32)],
+    ) -> Result<FindCoordinatorResponseV6> {
+        if resources.is_empty() {
+            return Err(Error::Unsupported(
+                "FindCoordinator v6 requires at least one share partition",
+            ));
+        }
+        let group_id = group_id.as_ref();
+        let coordinator_keys = resources
+            .iter()
+            .map(|(topic_id, partition)| {
+                format_share_partition_coordinator_key(group_id, *topic_id, *partition)
+            })
+            .collect();
+        let request = FindCoordinatorRequestV6 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            coordinator_type: CoordinatorType::Share,
+            coordinator_keys,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(FindCoordinatorResponseV6::decode_body(&mut decoder)?)
     }
 
     /// Sends FindCoordinator v1 for a transactional ID.
@@ -4046,6 +4069,14 @@ fn format_topic_id(topic_id: [u8; 16]) -> String {
     // Kafka's Uuid::toString uses URL-safe base64 without padding, not the
     // conventional RFC-4122 hyphenated representation.
     base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(topic_id)
+}
+
+pub(crate) fn format_share_partition_coordinator_key(
+    group_id: &str,
+    topic_id: [u8; 16],
+    partition: i32,
+) -> String {
+    format!("{group_id}:{}:{partition}", format_topic_id(topic_id))
 }
 
 impl fmt::Debug for Client {

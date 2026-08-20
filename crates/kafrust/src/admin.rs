@@ -147,7 +147,7 @@ use kafrust_protocol::api::streams_group_describe::{
 use kafrust_protocol::api::unregister_broker::UnregisterBrokerResponseV0;
 use kafrust_protocol::api::update_features::UpdateFeaturesResponseV0;
 
-use crate::client::Client;
+use crate::client::{format_share_partition_coordinator_key, Client};
 use crate::config::ClientConfig;
 use crate::error::{BrokerErrorKind, Error, Result};
 use crate::metrics::ClientMetrics;
@@ -157,6 +157,18 @@ use rand::RngCore;
 const ADMIN_COORDINATOR_MAX_RETRIES: u32 = 5;
 const ADMIN_COORDINATOR_RETRY_BACKOFF_BASE: Duration = Duration::from_millis(50);
 const ADMIN_COORDINATOR_MAX_RETRY_BACKOFF: Duration = Duration::from_millis(800);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+struct ShareStateResource {
+    topic_id: [u8; 16],
+    partition: i32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct ShareStateCoordinatorEndpoint {
+    host: String,
+    port: i32,
+}
 
 struct MemberOffsetFetchV10Request {
     group_id: String,
@@ -2676,79 +2688,111 @@ impl AdminClient {
         group_id: &str,
         topics: &[ShareGroupStateInitializeTopic],
     ) -> Result<ShareGroupStateResult> {
-        let protocol_topics = topics
-            .iter()
-            .map(|topic| InitializeShareGroupStateTopic {
-                topic_id: topic.topic_id,
-                partitions: topic
-                    .partitions
-                    .iter()
-                    .map(|partition| InitializeShareGroupStatePartition {
-                        partition: partition.partition,
-                        state_epoch: partition.state_epoch,
-                        start_offset: partition.start_offset,
-                    })
-                    .collect(),
-            })
-            .collect::<Vec<_>>();
-        let (route_topic_id, route_partition) = topics
+        let resources = topics
             .iter()
             .flat_map(|topic| {
                 topic
                     .partitions
                     .iter()
-                    .map(move |partition| (topic.topic_id, partition.partition))
+                    .map(move |partition| ShareStateResource {
+                        topic_id: topic.topic_id,
+                        partition: partition.partition,
+                    })
             })
-            .next()
-            .ok_or(Error::Unsupported(
-                "InitializeShareGroupState requires at least one partition",
-            ))?;
-        let mut retry = 0;
-        let response = loop {
-            let mut coordinator = self
-                .share_state_coordinator_client(group_id, route_topic_id, route_partition)
-                .await?;
-            let api_versions = match coordinator
-                .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
-                .await
-            {
-                Ok(api_versions) => api_versions,
-                Err(error)
-                    if retry < self.max_retries && is_retryable_admin_coordinator_error(&error) =>
+            .collect::<Vec<_>>();
+        let routes = self
+            .share_state_coordinator_routes(group_id, &resources)
+            .await?;
+        let mut results = Vec::new();
+        for (endpoint, route_resources) in routes {
+            let protocol_topics = topics
+                .iter()
+                .filter_map(|topic| {
+                    let partitions = topic
+                        .partitions
+                        .iter()
+                        .filter(|partition| {
+                            route_resources.contains(&ShareStateResource {
+                                topic_id: topic.topic_id,
+                                partition: partition.partition,
+                            })
+                        })
+                        .map(|partition| InitializeShareGroupStatePartition {
+                            partition: partition.partition,
+                            state_epoch: partition.state_epoch,
+                            start_offset: partition.start_offset,
+                        })
+                        .collect::<Vec<_>>();
+                    (!partitions.is_empty()).then_some(InitializeShareGroupStateTopic {
+                        topic_id: topic.topic_id,
+                        partitions,
+                    })
+                })
+                .collect::<Vec<_>>();
+            let mut retry = 0;
+            let response = loop {
+                let mut coordinator = match self
+                    .config
+                    .connect_broker(format!("{}:{}", endpoint.host, endpoint.port))
+                    .await
                 {
+                    Ok(coordinator) => coordinator,
+                    Err(error)
+                        if retry < self.max_retries
+                            && is_retryable_admin_coordinator_error(&error) =>
+                    {
+                        retry += 1;
+                        self.config.record_retry();
+                        tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                        continue;
+                    }
+                    Err(error) => return Err(error),
+                };
+                let api_versions = match coordinator
+                    .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
+                    .await
+                {
+                    Ok(api_versions) => api_versions,
+                    Err(error)
+                        if retry < self.max_retries
+                            && is_retryable_admin_coordinator_error(&error) =>
+                    {
+                        retry += 1;
+                        self.config.record_retry();
+                        tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                        continue;
+                    }
+                    Err(error) => return Err(error),
+                };
+                if api_versions.highest_supported_version(83, 0).is_none() {
+                    return Err(Error::Unsupported(
+                        "broker does not advertise InitializeShareGroupState v0",
+                    ));
+                }
+                let response = coordinator
+                    .initialize_share_group_state_v0(group_id, protocol_topics.clone())
+                    .await
+                    .map_err(|error| {
+                        admin_mutation_error(&coordinator, "InitializeShareGroupState", error)
+                    })?;
+                let retryable = response.results.iter().any(|topic| {
+                    topic
+                        .partitions
+                        .iter()
+                        .any(|partition| is_retryable_admin_coordinator_code(partition.error_code))
+                });
+                if retry < self.max_retries && retryable {
+                    self.config.record_broker_error();
                     retry += 1;
                     self.config.record_retry();
                     tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
                     continue;
                 }
-                Err(error) => return Err(error),
+                break response;
             };
-            if api_versions.highest_supported_version(83, 0).is_none() {
-                return Err(Error::Unsupported(
-                    "broker does not advertise InitializeShareGroupState v0",
-                ));
-            }
-            let response = coordinator
-                .initialize_share_group_state_v0(group_id, protocol_topics.clone())
-                .await
-                .map_err(|error| {
-                    admin_mutation_error(&coordinator, "InitializeShareGroupState", error)
-                })?;
-            let retryable = response.results.iter().any(|topic| {
-                topic
-                    .partitions
-                    .iter()
-                    .any(|partition| is_retryable_admin_coordinator_code(partition.error_code))
-            });
-            if retry < self.max_retries && retryable {
-                self.config.record_broker_error();
-                retry += 1;
-                self.config.record_retry();
-                tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
-                continue;
-            }
-            break response;
-        };
+            results.extend(response.results);
+        }
+        let response = ShareGroupStateResultResponse { results };
         if response.results.iter().any(|topic| {
             topic
                 .partitions
@@ -2773,87 +2817,120 @@ impl AdminClient {
         group_id: &str,
         topics: &[ShareGroupStateReadTopic],
     ) -> Result<ReadShareGroupStateResult> {
-        let protocol_topics = topics
-            .iter()
-            .map(|topic| ReadShareGroupStateTopic {
-                topic_id: topic.topic_id,
-                partitions: topic
-                    .partitions
-                    .iter()
-                    .map(|partition| ReadShareGroupStatePartition {
-                        partition: partition.partition,
-                        leader_epoch: partition.leader_epoch,
-                    })
-                    .collect(),
-            })
-            .collect::<Vec<_>>();
-        let (route_topic_id, route_partition) = topics
+        let resources = topics
             .iter()
             .flat_map(|topic| {
                 topic
                     .partitions
                     .iter()
-                    .map(move |partition| (topic.topic_id, partition.partition))
+                    .map(move |partition| ShareStateResource {
+                        topic_id: topic.topic_id,
+                        partition: partition.partition,
+                    })
             })
-            .next()
-            .ok_or(Error::Unsupported(
-                "ReadShareGroupState requires at least one partition",
-            ))?;
-        let mut retry = 0;
-        let response = loop {
-            let mut coordinator = self
-                .share_state_coordinator_client(group_id, route_topic_id, route_partition)
-                .await?;
-            let api_versions = match coordinator
-                .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
-                .await
-            {
-                Ok(api_versions) => api_versions,
-                Err(error)
-                    if retry < self.max_retries && is_retryable_admin_coordinator_error(&error) =>
+            .collect::<Vec<_>>();
+        let routes = self
+            .share_state_coordinator_routes(group_id, &resources)
+            .await?;
+        let mut results = Vec::new();
+        for (endpoint, route_resources) in routes {
+            let protocol_topics = topics
+                .iter()
+                .filter_map(|topic| {
+                    let partitions = topic
+                        .partitions
+                        .iter()
+                        .filter(|partition| {
+                            route_resources.contains(&ShareStateResource {
+                                topic_id: topic.topic_id,
+                                partition: partition.partition,
+                            })
+                        })
+                        .map(|partition| ReadShareGroupStatePartition {
+                            partition: partition.partition,
+                            leader_epoch: partition.leader_epoch,
+                        })
+                        .collect::<Vec<_>>();
+                    (!partitions.is_empty()).then_some(ReadShareGroupStateTopic {
+                        topic_id: topic.topic_id,
+                        partitions,
+                    })
+                })
+                .collect::<Vec<_>>();
+            let mut retry = 0;
+            let response = loop {
+                let mut coordinator = match self
+                    .config
+                    .connect_broker(format!("{}:{}", endpoint.host, endpoint.port))
+                    .await
                 {
+                    Ok(coordinator) => coordinator,
+                    Err(error)
+                        if retry < self.max_retries
+                            && is_retryable_admin_coordinator_error(&error) =>
+                    {
+                        retry += 1;
+                        self.config.record_retry();
+                        tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                        continue;
+                    }
+                    Err(error) => return Err(error),
+                };
+                let api_versions = match coordinator
+                    .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
+                    .await
+                {
+                    Ok(api_versions) => api_versions,
+                    Err(error)
+                        if retry < self.max_retries
+                            && is_retryable_admin_coordinator_error(&error) =>
+                    {
+                        retry += 1;
+                        self.config.record_retry();
+                        tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                        continue;
+                    }
+                    Err(error) => return Err(error),
+                };
+                if api_versions.highest_supported_version(84, 0).is_none() {
+                    return Err(Error::Unsupported(
+                        "broker does not advertise ReadShareGroupState v0",
+                    ));
+                }
+                let response = match coordinator
+                    .read_share_group_state_v0(group_id, protocol_topics.clone())
+                    .await
+                {
+                    Ok(response) => response,
+                    Err(error)
+                        if retry < self.max_retries
+                            && is_retryable_admin_coordinator_error(&error) =>
+                    {
+                        retry += 1;
+                        self.config.record_retry();
+                        tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                        continue;
+                    }
+                    Err(error) => return Err(error),
+                };
+                let retryable = response.results.iter().any(|topic| {
+                    topic
+                        .partitions
+                        .iter()
+                        .any(|partition| is_retryable_admin_coordinator_code(partition.error_code))
+                });
+                if retry < self.max_retries && retryable {
+                    self.config.record_broker_error();
                     retry += 1;
                     self.config.record_retry();
                     tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
                     continue;
                 }
-                Err(error) => return Err(error),
+                break response;
             };
-            if api_versions.highest_supported_version(84, 0).is_none() {
-                return Err(Error::Unsupported(
-                    "broker does not advertise ReadShareGroupState v0",
-                ));
-            }
-            let response = match coordinator
-                .read_share_group_state_v0(group_id, protocol_topics.clone())
-                .await
-            {
-                Ok(response) => response,
-                Err(error)
-                    if retry < self.max_retries && is_retryable_admin_coordinator_error(&error) =>
-                {
-                    retry += 1;
-                    self.config.record_retry();
-                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
-                    continue;
-                }
-                Err(error) => return Err(error),
-            };
-            let retryable = response.results.iter().any(|topic| {
-                topic
-                    .partitions
-                    .iter()
-                    .any(|partition| is_retryable_admin_coordinator_code(partition.error_code))
-            });
-            if retry < self.max_retries && retryable {
-                self.config.record_broker_error();
-                retry += 1;
-                self.config.record_retry();
-                tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
-                continue;
-            }
-            break response;
-        };
+            results.extend(response.results);
+        }
+        let response = ReadShareGroupStateResponseV0 { results };
         if response.results.iter().any(|topic| {
             topic
                 .partitions
@@ -2882,137 +2959,173 @@ impl AdminClient {
         group_id: &str,
         topics: &[ShareGroupStateWriteTopic],
     ) -> Result<ShareGroupStateResult> {
-        let (route_topic_id, route_partition) = topics
+        let resources = topics
             .iter()
             .flat_map(|topic| {
                 topic
                     .partitions
                     .iter()
-                    .map(move |partition| (topic.topic_id, partition.partition))
+                    .map(move |partition| ShareStateResource {
+                        topic_id: topic.topic_id,
+                        partition: partition.partition,
+                    })
             })
-            .next()
-            .ok_or(Error::Unsupported(
-                "WriteShareGroupState requires at least one partition",
-            ))?;
-        let requires_v1 = topics.iter().any(|topic| {
-            topic
-                .partitions
+            .collect::<Vec<_>>();
+        let routes = self
+            .share_state_coordinator_routes(group_id, &resources)
+            .await?;
+        let mut results = Vec::new();
+        for (endpoint, route_resources) in routes {
+            let route_topics = topics
                 .iter()
-                .any(|partition| partition.delivery_complete_count.is_some())
-        });
-        let mut retry = 0;
-        let response = loop {
-            let mut coordinator = self
-                .share_state_coordinator_client(group_id, route_topic_id, route_partition)
-                .await?;
-            let api_versions = match coordinator
-                .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
-                .await
-            {
-                Ok(api_versions) => api_versions,
-                Err(error)
-                    if retry < self.max_retries && is_retryable_admin_coordinator_error(&error) =>
+                .filter_map(|topic| {
+                    let partitions = topic
+                        .partitions
+                        .iter()
+                        .filter(|partition| {
+                            route_resources.contains(&ShareStateResource {
+                                topic_id: topic.topic_id,
+                                partition: partition.partition,
+                            })
+                        })
+                        .collect::<Vec<_>>();
+                    (!partitions.is_empty()).then_some((topic, partitions))
+                })
+                .collect::<Vec<_>>();
+            let requires_v1 = route_topics.iter().any(|(_, partitions)| {
+                partitions
+                    .iter()
+                    .any(|partition| partition.delivery_complete_count.is_some())
+            });
+            let mut retry = 0;
+            let response = loop {
+                let mut coordinator = match self
+                    .config
+                    .connect_broker(format!("{}:{}", endpoint.host, endpoint.port))
+                    .await
                 {
+                    Ok(coordinator) => coordinator,
+                    Err(error)
+                        if retry < self.max_retries
+                            && is_retryable_admin_coordinator_error(&error) =>
+                    {
+                        retry += 1;
+                        self.config.record_retry();
+                        tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                        continue;
+                    }
+                    Err(error) => return Err(error),
+                };
+                let api_versions = match coordinator
+                    .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
+                    .await
+                {
+                    Ok(api_versions) => api_versions,
+                    Err(error)
+                        if retry < self.max_retries
+                            && is_retryable_admin_coordinator_error(&error) =>
+                    {
+                        retry += 1;
+                        self.config.record_retry();
+                        tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                        continue;
+                    }
+                    Err(error) => return Err(error),
+                };
+                let Some(version) = api_versions.highest_supported_version(85, 1) else {
+                    return Err(Error::Unsupported(
+                        "broker does not advertise WriteShareGroupState",
+                    ));
+                };
+                let response = match version {
+                    1 => {
+                        let protocol_topics = route_topics
+                            .iter()
+                            .map(|(topic, partitions)| WriteShareGroupStateTopicV1 {
+                                topic_id: topic.topic_id,
+                                partitions: partitions
+                                    .iter()
+                                    .map(|partition| WriteShareGroupStatePartitionV1 {
+                                        partition: partition.partition,
+                                        state_epoch: partition.state_epoch,
+                                        leader_epoch: partition.leader_epoch,
+                                        start_offset: partition.start_offset,
+                                        delivery_complete_count: partition
+                                            .delivery_complete_count
+                                            .unwrap_or(0),
+                                        state_batches: partition
+                                            .state_batches
+                                            .iter()
+                                            .map(ProtocolShareGroupStateBatch::from)
+                                            .collect(),
+                                    })
+                                    .collect(),
+                            })
+                            .collect();
+                        coordinator
+                            .write_share_group_state_v1(group_id, protocol_topics)
+                            .await
+                            .map_err(|error| {
+                                admin_mutation_error(&coordinator, "WriteShareGroupState", error)
+                            })?
+                    }
+                    0 if !requires_v1 => {
+                        let protocol_topics = route_topics
+                            .iter()
+                            .map(|(topic, partitions)| WriteShareGroupStateTopicV0 {
+                                topic_id: topic.topic_id,
+                                partitions: partitions
+                                    .iter()
+                                    .map(|partition| WriteShareGroupStatePartitionV0 {
+                                        partition: partition.partition,
+                                        state_epoch: partition.state_epoch,
+                                        leader_epoch: partition.leader_epoch,
+                                        start_offset: partition.start_offset,
+                                        state_batches: partition
+                                            .state_batches
+                                            .iter()
+                                            .map(ProtocolShareGroupStateBatch::from)
+                                            .collect(),
+                                    })
+                                    .collect(),
+                            })
+                            .collect();
+                        coordinator
+                            .write_share_group_state_v0(group_id, protocol_topics)
+                            .await
+                            .map_err(|error| {
+                                admin_mutation_error(&coordinator, "WriteShareGroupState", error)
+                            })?
+                    }
+                    0 => {
+                        return Err(Error::Unsupported(
+                            "WriteShareGroupState v1 is required for delivery_complete_count",
+                        ));
+                    }
+                    _ => {
+                        return Err(Error::Unsupported(
+                            "unsupported WriteShareGroupState version",
+                        ))
+                    }
+                };
+                let retryable = response.results.iter().any(|topic| {
+                    topic
+                        .partitions
+                        .iter()
+                        .any(|partition| is_retryable_admin_coordinator_code(partition.error_code))
+                });
+                if retry < self.max_retries && retryable {
+                    self.config.record_broker_error();
                     retry += 1;
                     self.config.record_retry();
                     tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
                     continue;
                 }
-                Err(error) => return Err(error),
+                break response;
             };
-            let Some(version) = api_versions.highest_supported_version(85, 1) else {
-                return Err(Error::Unsupported(
-                    "broker does not advertise WriteShareGroupState",
-                ));
-            };
-            let response = match version {
-                1 => {
-                    let protocol_topics = topics
-                        .iter()
-                        .map(|topic| WriteShareGroupStateTopicV1 {
-                            topic_id: topic.topic_id,
-                            partitions: topic
-                                .partitions
-                                .iter()
-                                .map(|partition| WriteShareGroupStatePartitionV1 {
-                                    partition: partition.partition,
-                                    state_epoch: partition.state_epoch,
-                                    leader_epoch: partition.leader_epoch,
-                                    start_offset: partition.start_offset,
-                                    delivery_complete_count: partition
-                                        .delivery_complete_count
-                                        .unwrap_or(0),
-                                    state_batches: partition
-                                        .state_batches
-                                        .iter()
-                                        .map(ProtocolShareGroupStateBatch::from)
-                                        .collect(),
-                                })
-                                .collect(),
-                        })
-                        .collect();
-                    coordinator
-                        .write_share_group_state_v1(group_id, protocol_topics)
-                        .await
-                        .map_err(|error| {
-                            admin_mutation_error(&coordinator, "WriteShareGroupState", error)
-                        })?
-                }
-                0 if !requires_v1 => {
-                    let protocol_topics = topics
-                        .iter()
-                        .map(|topic| WriteShareGroupStateTopicV0 {
-                            topic_id: topic.topic_id,
-                            partitions: topic
-                                .partitions
-                                .iter()
-                                .map(|partition| WriteShareGroupStatePartitionV0 {
-                                    partition: partition.partition,
-                                    state_epoch: partition.state_epoch,
-                                    leader_epoch: partition.leader_epoch,
-                                    start_offset: partition.start_offset,
-                                    state_batches: partition
-                                        .state_batches
-                                        .iter()
-                                        .map(ProtocolShareGroupStateBatch::from)
-                                        .collect(),
-                                })
-                                .collect(),
-                        })
-                        .collect();
-                    coordinator
-                        .write_share_group_state_v0(group_id, protocol_topics)
-                        .await
-                        .map_err(|error| {
-                            admin_mutation_error(&coordinator, "WriteShareGroupState", error)
-                        })?
-                }
-                0 => {
-                    return Err(Error::Unsupported(
-                        "WriteShareGroupState v1 is required for delivery_complete_count",
-                    ));
-                }
-                _ => {
-                    return Err(Error::Unsupported(
-                        "unsupported WriteShareGroupState version",
-                    ))
-                }
-            };
-            let retryable = response.results.iter().any(|topic| {
-                topic
-                    .partitions
-                    .iter()
-                    .any(|partition| is_retryable_admin_coordinator_code(partition.error_code))
-            });
-            if retry < self.max_retries && retryable {
-                self.config.record_broker_error();
-                retry += 1;
-                self.config.record_retry();
-                tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
-                continue;
-            }
-            break response;
-        };
+            results.extend(response.results);
+        }
+        let response = ShareGroupStateResultResponse { results };
         if response.results.iter().any(|topic| {
             topic
                 .partitions
@@ -3037,71 +3150,107 @@ impl AdminClient {
         group_id: &str,
         topics: &[ShareGroupStateDeleteTopic],
     ) -> Result<ShareGroupStateResult> {
-        let protocol_topics = topics
-            .iter()
-            .map(|topic| DeleteShareGroupStateTopic {
-                topic_id: topic.topic_id,
-                partitions: topic.partitions.clone(),
-            })
-            .collect::<Vec<_>>();
-        let (route_topic_id, route_partition) = topics
+        let resources = topics
             .iter()
             .flat_map(|topic| {
                 topic
                     .partitions
                     .iter()
-                    .map(move |partition| (topic.topic_id, *partition))
+                    .map(move |partition| ShareStateResource {
+                        topic_id: topic.topic_id,
+                        partition: *partition,
+                    })
             })
-            .next()
-            .ok_or(Error::Unsupported(
-                "DeleteShareGroupState requires at least one partition",
-            ))?;
-        let mut retry = 0;
-        let response = loop {
-            let mut coordinator = self
-                .share_state_coordinator_client(group_id, route_topic_id, route_partition)
-                .await?;
-            let api_versions = match coordinator
-                .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
-                .await
-            {
-                Ok(api_versions) => api_versions,
-                Err(error)
-                    if retry < self.max_retries && is_retryable_admin_coordinator_error(&error) =>
+            .collect::<Vec<_>>();
+        let routes = self
+            .share_state_coordinator_routes(group_id, &resources)
+            .await?;
+        let mut results = Vec::new();
+        for (endpoint, route_resources) in routes {
+            let protocol_topics = topics
+                .iter()
+                .filter_map(|topic| {
+                    let partitions = topic
+                        .partitions
+                        .iter()
+                        .copied()
+                        .filter(|partition| {
+                            route_resources.contains(&ShareStateResource {
+                                topic_id: topic.topic_id,
+                                partition: *partition,
+                            })
+                        })
+                        .collect::<Vec<_>>();
+                    (!partitions.is_empty()).then_some(DeleteShareGroupStateTopic {
+                        topic_id: topic.topic_id,
+                        partitions,
+                    })
+                })
+                .collect::<Vec<_>>();
+            let mut retry = 0;
+            let response = loop {
+                let mut coordinator = match self
+                    .config
+                    .connect_broker(format!("{}:{}", endpoint.host, endpoint.port))
+                    .await
                 {
+                    Ok(coordinator) => coordinator,
+                    Err(error)
+                        if retry < self.max_retries
+                            && is_retryable_admin_coordinator_error(&error) =>
+                    {
+                        retry += 1;
+                        self.config.record_retry();
+                        tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                        continue;
+                    }
+                    Err(error) => return Err(error),
+                };
+                let api_versions = match coordinator
+                    .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
+                    .await
+                {
+                    Ok(api_versions) => api_versions,
+                    Err(error)
+                        if retry < self.max_retries
+                            && is_retryable_admin_coordinator_error(&error) =>
+                    {
+                        retry += 1;
+                        self.config.record_retry();
+                        tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                        continue;
+                    }
+                    Err(error) => return Err(error),
+                };
+                if api_versions.highest_supported_version(86, 0).is_none() {
+                    return Err(Error::Unsupported(
+                        "broker does not advertise DeleteShareGroupState v0",
+                    ));
+                }
+                let response = coordinator
+                    .delete_share_group_state_v0(group_id, protocol_topics.clone())
+                    .await
+                    .map_err(|error| {
+                        admin_mutation_error(&coordinator, "DeleteShareGroupState", error)
+                    })?;
+                let retryable = response.results.iter().any(|topic| {
+                    topic
+                        .partitions
+                        .iter()
+                        .any(|partition| is_retryable_admin_coordinator_code(partition.error_code))
+                });
+                if retry < self.max_retries && retryable {
+                    self.config.record_broker_error();
                     retry += 1;
                     self.config.record_retry();
                     tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
                     continue;
                 }
-                Err(error) => return Err(error),
+                break response;
             };
-            if api_versions.highest_supported_version(86, 0).is_none() {
-                return Err(Error::Unsupported(
-                    "broker does not advertise DeleteShareGroupState v0",
-                ));
-            }
-            let response = coordinator
-                .delete_share_group_state_v0(group_id, protocol_topics.clone())
-                .await
-                .map_err(|error| {
-                    admin_mutation_error(&coordinator, "DeleteShareGroupState", error)
-                })?;
-            let retryable = response.results.iter().any(|topic| {
-                topic
-                    .partitions
-                    .iter()
-                    .any(|partition| is_retryable_admin_coordinator_code(partition.error_code))
-            });
-            if retry < self.max_retries && retryable {
-                self.config.record_broker_error();
-                retry += 1;
-                self.config.record_retry();
-                tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
-                continue;
-            }
-            break response;
-        };
+            results.extend(response.results);
+        }
+        let response = ShareGroupStateResultResponse { results };
         if response.results.iter().any(|topic| {
             topic
                 .partitions
@@ -3127,98 +3276,136 @@ impl AdminClient {
         group_id: &str,
         topics: &[ShareGroupStateReadTopic],
     ) -> Result<ReadShareGroupStateSummaryResult> {
-        let protocol_topics = topics
-            .iter()
-            .map(|topic| ReadShareGroupStateTopic {
-                topic_id: topic.topic_id,
-                partitions: topic
-                    .partitions
-                    .iter()
-                    .map(|partition| ReadShareGroupStatePartition {
-                        partition: partition.partition,
-                        leader_epoch: partition.leader_epoch,
-                    })
-                    .collect(),
-            })
-            .collect::<Vec<_>>();
-        let (route_topic_id, route_partition) = topics
+        let resources = topics
             .iter()
             .flat_map(|topic| {
                 topic
                     .partitions
                     .iter()
-                    .map(move |partition| (topic.topic_id, partition.partition))
+                    .map(move |partition| ShareStateResource {
+                        topic_id: topic.topic_id,
+                        partition: partition.partition,
+                    })
             })
-            .next()
-            .ok_or(Error::Unsupported(
-                "ReadShareGroupStateSummary requires at least one partition",
-            ))?;
-        let mut retry = 0;
-        let response = loop {
-            let mut coordinator = self
-                .share_state_coordinator_client(group_id, route_topic_id, route_partition)
-                .await?;
-            let api_versions = match coordinator
-                .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
-                .await
-            {
-                Ok(api_versions) => api_versions,
-                Err(error)
-                    if retry < self.max_retries && is_retryable_admin_coordinator_error(&error) =>
+            .collect::<Vec<_>>();
+        let routes = self
+            .share_state_coordinator_routes(group_id, &resources)
+            .await?;
+        let mut results = Vec::new();
+        for (endpoint, route_resources) in routes {
+            let protocol_topics = topics
+                .iter()
+                .filter_map(|topic| {
+                    let partitions = topic
+                        .partitions
+                        .iter()
+                        .filter(|partition| {
+                            route_resources.contains(&ShareStateResource {
+                                topic_id: topic.topic_id,
+                                partition: partition.partition,
+                            })
+                        })
+                        .map(|partition| ReadShareGroupStatePartition {
+                            partition: partition.partition,
+                            leader_epoch: partition.leader_epoch,
+                        })
+                        .collect::<Vec<_>>();
+                    (!partitions.is_empty()).then_some(ReadShareGroupStateTopic {
+                        topic_id: topic.topic_id,
+                        partitions,
+                    })
+                })
+                .collect::<Vec<_>>();
+            let mut retry = 0;
+            let response = loop {
+                let mut coordinator = match self
+                    .config
+                    .connect_broker(format!("{}:{}", endpoint.host, endpoint.port))
+                    .await
                 {
-                    retry += 1;
-                    self.config.record_retry();
-                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
-                    continue;
-                }
-                Err(error) => return Err(error),
-            };
-            let Some(version) = api_versions.highest_supported_version(87, 1) else {
-                return Err(Error::Unsupported(
-                    "broker does not advertise ReadShareGroupStateSummary",
-                ));
-            };
-            let response = match version {
-                1 => coordinator
-                    .read_share_group_state_summary_v1(group_id, protocol_topics.clone())
+                    Ok(coordinator) => coordinator,
+                    Err(error)
+                        if retry < self.max_retries
+                            && is_retryable_admin_coordinator_error(&error) =>
+                    {
+                        retry += 1;
+                        self.config.record_retry();
+                        tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                        continue;
+                    }
+                    Err(error) => return Err(error),
+                };
+                let api_versions = match coordinator
+                    .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
                     .await
-                    .map(ReadShareGroupStateSummaryResponse::V1),
-                0 => coordinator
-                    .read_share_group_state_summary_v0(group_id, protocol_topics.clone())
-                    .await
-                    .map(ReadShareGroupStateSummaryResponse::V0),
-                _ => {
+                {
+                    Ok(api_versions) => api_versions,
+                    Err(error)
+                        if retry < self.max_retries
+                            && is_retryable_admin_coordinator_error(&error) =>
+                    {
+                        retry += 1;
+                        self.config.record_retry();
+                        tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                        continue;
+                    }
+                    Err(error) => return Err(error),
+                };
+                let Some(version) = api_versions.highest_supported_version(87, 1) else {
                     return Err(Error::Unsupported(
-                        "unsupported ReadShareGroupStateSummary version",
-                    ))
-                }
-            };
-            let response = match response {
-                Ok(response) => response,
-                Err(error)
-                    if retry < self.max_retries && is_retryable_admin_coordinator_error(&error) =>
-                {
+                        "broker does not advertise ReadShareGroupStateSummary",
+                    ));
+                };
+                let response = match version {
+                    1 => coordinator
+                        .read_share_group_state_summary_v1(group_id, protocol_topics.clone())
+                        .await
+                        .map(ReadShareGroupStateSummaryResponse::V1),
+                    0 => coordinator
+                        .read_share_group_state_summary_v0(group_id, protocol_topics.clone())
+                        .await
+                        .map(ReadShareGroupStateSummaryResponse::V0),
+                    _ => {
+                        return Err(Error::Unsupported(
+                            "unsupported ReadShareGroupStateSummary version",
+                        ))
+                    }
+                };
+                let response = match response {
+                    Ok(response) => response,
+                    Err(error)
+                        if retry < self.max_retries
+                            && is_retryable_admin_coordinator_error(&error) =>
+                    {
+                        retry += 1;
+                        self.config.record_retry();
+                        tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                        continue;
+                    }
+                    Err(error) => return Err(error),
+                };
+                let retryable = response.has_retryable_error();
+                if retry < self.max_retries && retryable {
+                    self.config.record_broker_error();
                     retry += 1;
                     self.config.record_retry();
                     tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
                     continue;
                 }
-                Err(error) => return Err(error),
+                break response;
             };
-            let retryable = response.has_retryable_error();
-            if retry < self.max_retries && retryable {
-                self.config.record_broker_error();
-                retry += 1;
-                self.config.record_retry();
-                tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
-                continue;
-            }
-            break response;
-        };
-        if response.has_error() {
+            results.extend(response.into_topics());
+        }
+        let response = ReadShareGroupStateSummaryResult { topics: results };
+        if response.topics.iter().any(|topic| {
+            topic
+                .partitions
+                .iter()
+                .any(|partition| partition.error_code != 0)
+        }) {
             self.config.record_broker_error();
         }
-        Ok(ReadShareGroupStateSummaryResult::from_protocol(response))
+        Ok(response)
     }
 
     /// Sets share-group offsets through AlterShareGroupOffsets.
@@ -4588,35 +4775,67 @@ impl AdminClient {
             .await
     }
 
-    async fn share_state_coordinator_client(
+    async fn share_state_coordinator_routes(
         &self,
         group_id: &str,
-        topic_id: [u8; 16],
-        partition: i32,
-    ) -> Result<Client> {
+        resources: &[ShareStateResource],
+    ) -> Result<BTreeMap<ShareStateCoordinatorEndpoint, BTreeSet<ShareStateResource>>> {
+        if resources.is_empty() {
+            return Err(Error::Unsupported(
+                "Share Group State requires at least one partition",
+            ));
+        }
         let mut retry = 0;
         loop {
             let result = async {
                 let mut bootstrap = self.config.clone().connect().await?;
-                let coordinator = bootstrap
-                    .find_share_partition_coordinator(group_id, topic_id, partition)
+                let coordinator_resources = resources
+                    .iter()
+                    .map(|resource| (resource.topic_id, resource.partition))
+                    .collect::<Vec<_>>();
+                let response = bootstrap
+                    .find_share_partition_coordinators(group_id, &coordinator_resources)
                     .await?;
-                if coordinator.error_code != 0 {
-                    self.config.record_broker_error();
-                    return Err(Error::Broker {
-                        code: coordinator.error_code,
-                        context: format!(
-                            "find share partition coordinator for group {group_id}, partition {partition}"
-                        ),
-                    });
+                let mut routes = BTreeMap::<
+                    ShareStateCoordinatorEndpoint,
+                    BTreeSet<ShareStateResource>,
+                >::new();
+                for resource in resources {
+                    let key = format_share_partition_coordinator_key(
+                        group_id,
+                        resource.topic_id,
+                        resource.partition,
+                    );
+                    let coordinator = response
+                        .coordinators
+                        .iter()
+                        .find(|coordinator| coordinator.coordinator_key == key)
+                        .ok_or(Error::Unsupported(
+                            "FindCoordinator v6 returned no share-partition result",
+                        ))?;
+                    if coordinator.error_code != 0 {
+                        self.config.record_broker_error();
+                        return Err(Error::Broker {
+                            code: coordinator.error_code,
+                            context: format!(
+                                "find share partition coordinator for group {group_id}, partition {}",
+                                resource.partition
+                            ),
+                        });
+                    }
+                    routes
+                        .entry(ShareStateCoordinatorEndpoint {
+                            host: coordinator.host.clone(),
+                            port: coordinator.port,
+                        })
+                        .or_default()
+                        .insert(*resource);
                 }
-                self.config
-                    .connect_broker(format!("{}:{}", coordinator.host, coordinator.port))
-                    .await
+                Ok(routes)
             }
             .await;
             match result {
-                Ok(client) => return Ok(client),
+                Ok(routes) => return Ok(routes),
                 Err(error)
                     if retry < self.max_retries && is_retryable_admin_coordinator_error(&error) =>
                 {
@@ -12635,12 +12854,6 @@ impl ReadShareGroupStateSummaryResult {
             .iter()
             .all(ReadShareGroupStateSummaryTopicResult::is_success)
     }
-
-    fn from_protocol(response: ReadShareGroupStateSummaryResponse) -> Self {
-        Self {
-            topics: response.into_topics(),
-        }
-    }
 }
 
 /// One topic returned by ReadShareGroupStateSummary.
@@ -12767,23 +12980,6 @@ impl ReadShareGroupStateSummaryResponse {
                 .into_iter()
                 .map(ReadShareGroupStateSummaryTopicResult::from_protocol)
                 .collect(),
-        }
-    }
-
-    fn has_error(&self) -> bool {
-        match self {
-            Self::V0(response) => response.results.iter().any(|topic| {
-                topic
-                    .partitions
-                    .iter()
-                    .any(|partition| partition.error_code != 0)
-            }),
-            Self::V1(response) => response.results.iter().any(|topic| {
-                topic
-                    .partitions
-                    .iter()
-                    .any(|partition| partition.error_code != 0)
-            }),
         }
     }
 
@@ -15687,7 +15883,8 @@ mod tests {
         PartitionReassignment, PartitionReassignmentOptions, PartitionReassignmentQuery,
         RaftVoterListener, RemoveRaftVoterOptions, ReplicaLogDirAssignment,
         ScramCredentialDeletion, ScramCredentialMechanism, ScramCredentialUpsertion,
-        ShareGroupStateBatch, ShareGroupStateInitializePartition, ShareGroupStateInitializeTopic,
+        ShareGroupStateBatch, ShareGroupStateDeleteTopic, ShareGroupStateInitializePartition,
+        ShareGroupStateInitializeTopic, ShareGroupStateReadPartition, ShareGroupStateReadTopic,
         ShareGroupStateWritePartition, ShareGroupStateWriteTopic, TopicConfigAlteration,
         TopicConfigResource, TopicConfigUpdate,
     };
@@ -15697,6 +15894,38 @@ mod tests {
     use std::time::Duration;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
+
+    async fn bind_test_listener() -> (TcpListener, std::net::SocketAddr) {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        (listener, address)
+    }
+
+    async fn serve_multi_route_share_state(listener: TcpListener, topic_id: [u8; 16]) {
+        for _ in 0..4 {
+            let (mut coordinator, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut coordinator).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut coordinator, &api_versions_with_share_group_state()).await;
+
+            let request = read_frame(&mut coordinator).await;
+            assert!(request.windows(16).any(|window| window == topic_id));
+            assert!(!request.windows(16).any(|window| window
+                == if topic_id == [7; 16] {
+                    [8; 16]
+                } else {
+                    [7; 16]
+                }));
+            let api_key = i16::from_be_bytes([request[0], request[1]]);
+            let response = match api_key {
+                84 => read_share_group_state_response_for(topic_id, 0),
+                85 | 86 => share_group_state_result_response_for(topic_id, 0),
+                87 => share_group_state_summary_response_for(topic_id, 0),
+                _ => return,
+            };
+            write_frame(&mut coordinator, &response).await;
+        }
+    }
 
     #[test]
     fn admin_coordinator_retry_backoff_is_bounded_and_exponential() {
@@ -17602,6 +17831,213 @@ mod tests {
             .unwrap();
         assert!(written.is_success());
         server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn splits_share_group_state_across_partition_coordinators() {
+        let (bootstrap_listener, bootstrap_addr) = bind_test_listener().await;
+        let (first_listener, first_addr) = bind_test_listener().await;
+        let (second_listener, second_addr) = bind_test_listener().await;
+        let first_key = "share-orders:BwcHBwcHBwcHBwcHBwcHBw:0".to_owned();
+        let second_key = "share-orders:CAgICAgICAgICAgICAgICA:0".to_owned();
+
+        let bootstrap_key_one = first_key.clone();
+        let bootstrap_key_two = second_key.clone();
+        let bootstrap_server = tokio::spawn(async move {
+            let (mut bootstrap, _) = bootstrap_listener.accept().await.unwrap();
+            let request = read_frame(&mut bootstrap).await;
+            assert_eq!(&request[0..4], &[0, 10, 0, 6]);
+            assert!(request
+                .windows(bootstrap_key_one.len())
+                .any(|window| window == bootstrap_key_one.as_bytes()));
+            assert!(request
+                .windows(bootstrap_key_two.len())
+                .any(|window| window == bootstrap_key_two.as_bytes()));
+            write_frame(
+                &mut bootstrap,
+                &find_share_partition_coordinators_response(&[
+                    (first_addr.port(), bootstrap_key_one.as_str()),
+                    (second_addr.port(), bootstrap_key_two.as_str()),
+                ]),
+            )
+            .await;
+        });
+
+        let first_server = tokio::spawn(async move {
+            let (mut coordinator, _) = first_listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut coordinator).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut coordinator, &api_versions_with_share_group_state()).await;
+            let request = read_frame(&mut coordinator).await;
+            assert_eq!(&request[0..4], &[0, 83, 0, 0]);
+            assert!(request.windows(16).any(|window| window == [7; 16]));
+            assert!(!request.windows(16).any(|window| window == [8; 16]));
+            write_frame(
+                &mut coordinator,
+                &share_group_state_result_response_for([7; 16], 0),
+            )
+            .await;
+        });
+
+        let second_server = tokio::spawn(async move {
+            let (mut coordinator, _) = second_listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut coordinator).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut coordinator, &api_versions_with_share_group_state()).await;
+            let request = read_frame(&mut coordinator).await;
+            assert_eq!(&request[0..4], &[0, 83, 0, 0]);
+            assert!(request.windows(16).any(|window| window == [8; 16]));
+            assert!(!request.windows(16).any(|window| window == [7; 16]));
+            write_frame(
+                &mut coordinator,
+                &share_group_state_result_response_for([8; 16], 0),
+            )
+            .await;
+        });
+
+        let admin = AdminClient::new(
+            ClientConfig::new([bootstrap_addr.to_string()]).request_timeout_ms(1_000),
+        );
+        let result = admin
+            .initialize_share_group_state(
+                "share-orders",
+                &[
+                    ShareGroupStateInitializeTopic::new(
+                        [7; 16],
+                        [ShareGroupStateInitializePartition::new(0, 1, 0)],
+                    ),
+                    ShareGroupStateInitializeTopic::new(
+                        [8; 16],
+                        [ShareGroupStateInitializePartition::new(0, 1, 0)],
+                    ),
+                ],
+            )
+            .await
+            .unwrap();
+        assert!(result.is_success());
+        assert_eq!(result.topics().len(), 2);
+        assert!(result
+            .topics()
+            .iter()
+            .any(|topic| topic.topic_id() == &[7; 16]));
+        assert!(result
+            .topics()
+            .iter()
+            .any(|topic| topic.topic_id() == &[8; 16]));
+
+        bootstrap_server.await.unwrap();
+        first_server.await.unwrap();
+        second_server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn routes_all_share_group_state_reads_and_mutations_per_coordinator() {
+        let (bootstrap_listener, bootstrap_addr) = bind_test_listener().await;
+        let (first_listener, first_addr) = bind_test_listener().await;
+        let (second_listener, second_addr) = bind_test_listener().await;
+        let first_key = "share-orders:BwcHBwcHBwcHBwcHBwcHBw:0".to_owned();
+        let second_key = "share-orders:CAgICAgICAgICAgICAgICA:0".to_owned();
+
+        let bootstrap_key_one = first_key.clone();
+        let bootstrap_key_two = second_key.clone();
+        let bootstrap_server = tokio::spawn(async move {
+            for _ in 0..4 {
+                let (mut bootstrap, _) = bootstrap_listener.accept().await.unwrap();
+                let request = read_frame(&mut bootstrap).await;
+                assert_eq!(&request[0..4], &[0, 10, 0, 6]);
+                assert!(request
+                    .windows(bootstrap_key_one.len())
+                    .any(|window| window == bootstrap_key_one.as_bytes()));
+                assert!(request
+                    .windows(bootstrap_key_two.len())
+                    .any(|window| window == bootstrap_key_two.as_bytes()));
+                write_frame(
+                    &mut bootstrap,
+                    &find_share_partition_coordinators_response(&[
+                        (first_addr.port(), bootstrap_key_one.as_str()),
+                        (second_addr.port(), bootstrap_key_two.as_str()),
+                    ]),
+                )
+                .await;
+            }
+        });
+        let first_server = tokio::spawn(serve_multi_route_share_state(first_listener, [7; 16]));
+        let second_server = tokio::spawn(serve_multi_route_share_state(second_listener, [8; 16]));
+        let admin = AdminClient::new(
+            ClientConfig::new([bootstrap_addr.to_string()]).request_timeout_ms(1_000),
+        );
+        let read_topics = [
+            ShareGroupStateReadTopic::new([7; 16], [ShareGroupStateReadPartition::new(0, 2)]),
+            ShareGroupStateReadTopic::new([8; 16], [ShareGroupStateReadPartition::new(0, 2)]),
+        ];
+
+        let read = admin
+            .read_share_group_state("share-orders", &read_topics)
+            .await
+            .unwrap();
+        assert!(read.is_success());
+        assert_eq!(read.topics().len(), 2);
+
+        let write = admin
+            .write_share_group_state(
+                "share-orders",
+                &[
+                    ShareGroupStateWriteTopic::new(
+                        [7; 16],
+                        [ShareGroupStateWritePartition::new(
+                            0,
+                            1,
+                            2,
+                            0,
+                            [ShareGroupStateBatch::new(0, 1, 0, 1)],
+                        )
+                        .with_delivery_complete_count(3)],
+                    ),
+                    ShareGroupStateWriteTopic::new(
+                        [8; 16],
+                        [ShareGroupStateWritePartition::new(
+                            0,
+                            1,
+                            2,
+                            0,
+                            [ShareGroupStateBatch::new(0, 1, 0, 1)],
+                        )
+                        .with_delivery_complete_count(3)],
+                    ),
+                ],
+            )
+            .await
+            .unwrap();
+        assert!(write.is_success());
+        assert_eq!(write.topics().len(), 2);
+
+        let deleted = admin
+            .delete_share_group_state(
+                "share-orders",
+                &[
+                    ShareGroupStateDeleteTopic::new([7; 16], [0]),
+                    ShareGroupStateDeleteTopic::new([8; 16], [0]),
+                ],
+            )
+            .await
+            .unwrap();
+        assert!(deleted.is_success());
+        assert_eq!(deleted.topics().len(), 2);
+
+        let summary = admin
+            .read_share_group_state_summary("share-orders", &read_topics)
+            .await
+            .unwrap();
+        assert!(summary.is_success());
+        assert_eq!(summary.topics().len(), 2);
+        assert_eq!(
+            summary.topics()[0].partitions()[0].delivery_complete_count(),
+            Some(3)
+        );
+
+        bootstrap_server.await.unwrap();
+        first_server.await.unwrap();
+        second_server.await.unwrap();
     }
 
     #[tokio::test]
@@ -20153,16 +20589,78 @@ mod tests {
     }
 
     fn share_group_state_result_response() -> Vec<u8> {
+        share_group_state_result_response_for([7; 16], 0)
+    }
+
+    fn share_group_state_result_response_for(topic_id: [u8; 16], partition: i32) -> Vec<u8> {
         let mut encoder = Encoder::new();
         encoder.write_i32(1); // correlation ID
         encoder.write_empty_tagged_fields(); // response header tags
         encoder
             .write_compact_array(Some(&[()]), |encoder, ()| {
-                encoder.write_uuid(&[7; 16]);
+                encoder.write_uuid(&topic_id);
                 encoder.write_compact_array(Some(&[()]), |encoder, ()| {
-                    encoder.write_i32(0);
+                    encoder.write_i32(partition);
                     encoder.write_i16(0);
                     encoder.write_compact_nullable_string(None)?;
+                    encoder.write_empty_tagged_fields();
+                    Ok(())
+                })?;
+                encoder.write_empty_tagged_fields();
+                Ok(())
+            })
+            .unwrap();
+        encoder.write_empty_tagged_fields();
+        encoder.into_bytes()
+    }
+
+    fn read_share_group_state_response_for(topic_id: [u8; 16], partition: i32) -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_empty_tagged_fields(); // response header tags
+        encoder
+            .write_compact_array(Some(&[()]), |encoder, ()| {
+                encoder.write_uuid(&topic_id);
+                encoder.write_compact_array(Some(&[()]), |encoder, ()| {
+                    encoder.write_i32(partition);
+                    encoder.write_i16(0);
+                    encoder.write_compact_nullable_string(None)?;
+                    encoder.write_i32(1); // state epoch
+                    encoder.write_i64(0); // start offset
+                    encoder.write_compact_array(Some(&[()]), |encoder, ()| {
+                        encoder.write_i64(0);
+                        encoder.write_i64(1);
+                        encoder.write_i8(0);
+                        encoder.write_i16(1);
+                        encoder.write_empty_tagged_fields();
+                        Ok(())
+                    })?;
+                    encoder.write_empty_tagged_fields();
+                    Ok(())
+                })?;
+                encoder.write_empty_tagged_fields();
+                Ok(())
+            })
+            .unwrap();
+        encoder.write_empty_tagged_fields();
+        encoder.into_bytes()
+    }
+
+    fn share_group_state_summary_response_for(topic_id: [u8; 16], partition: i32) -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_empty_tagged_fields(); // response header tags
+        encoder
+            .write_compact_array(Some(&[()]), |encoder, ()| {
+                encoder.write_uuid(&topic_id);
+                encoder.write_compact_array(Some(&[()]), |encoder, ()| {
+                    encoder.write_i32(partition);
+                    encoder.write_i16(0);
+                    encoder.write_compact_nullable_string(None)?;
+                    encoder.write_i32(1); // state epoch
+                    encoder.write_i32(2); // leader epoch
+                    encoder.write_i64(0); // start offset
+                    encoder.write_i32(3); // delivery complete count, v1
                     encoder.write_empty_tagged_fields();
                     Ok(())
                 })?;
@@ -21100,16 +21598,20 @@ mod tests {
     }
 
     fn find_share_partition_coordinator_response(port: u16, key: &str) -> Vec<u8> {
+        find_share_partition_coordinators_response(&[(port, key)])
+    }
+
+    fn find_share_partition_coordinators_response(entries: &[(u16, &str)]) -> Vec<u8> {
         let mut response = Encoder::new();
         response.write_i32(1); // correlation ID
         response.write_empty_tagged_fields(); // response header tags
         response.write_i32(0); // throttle time
         response
-            .write_compact_array(Some(&[key]), |encoder, key| {
+            .write_compact_array(Some(entries), |encoder, (port, key)| {
                 encoder.write_compact_string(key)?;
                 encoder.write_i32(1); // node ID
                 encoder.write_compact_string("127.0.0.1")?;
-                encoder.write_i32(i32::from(port));
+                encoder.write_i32(i32::from(*port));
                 encoder.write_i16(0); // success
                 encoder.write_compact_nullable_string(None)?;
                 encoder.write_empty_tagged_fields();
