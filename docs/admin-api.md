@@ -1381,6 +1381,16 @@ The current alpha path uses CreateTopics v2, which keeps the request
 non-flexible and compatible with the project's Kafka 3.7-to-current support
 window.
 
+The current-source
+[`live-create-topics-authorization.yml`](../.github/workflows/live-create-topics-authorization.yml)
+gate passed on Kafka 3.7.2 and 4.3.1 in
+[`32364633106`](https://github.com/TaeeunKil/kafrust/actions/runs/32364633106).
+A SASL/PLAIN principal with only cluster `Describe` received the per-topic
+`TopicAuthorizationFailed` result (error 29) and the topic was not created;
+the administrator then created and deleted the same topic. This is an
+operation-specific current-source authorization proof, not a universal ACL
+policy claim.
+
 ## Expand Topic Partitions
 
 ```rust

@@ -459,6 +459,14 @@ The follow-up `d73511c` gate applies the same response-drop proxy to
 DeleteTopics and confirms deletion through list_topics on Kafka 3.7.2 and
 4.3.1 in [`31771419625`](https://github.com/TaeeunKil/kafrust/actions/runs/31771419625)
 and [`31771419124`](https://github.com/TaeeunKil/kafrust/actions/runs/31771419124).
+The current-source
+`.github/workflows/live-create-topics-authorization.yml` matrix also passed
+on Kafka 3.7.2 and 4.3.1 in
+[`32364633106`](https://github.com/TaeeunKil/kafrust/actions/runs/32364633106):
+the restricted SASL/PLAIN principal received per-topic
+`TopicAuthorizationFailed` (29) and no topic was created, while the
+administrator completed create and cleanup. This is operation-specific
+authorization evidence.
 The current-source gate also qualifies API 64 `UnregisterBroker`: Kafka 3.7.2
 and 4.3.1 both drop the first response, return a typed unknown outcome without
 replay, and reconcile broker 1 as absent through `DescribeCluster` in

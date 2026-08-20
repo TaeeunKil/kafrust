@@ -427,6 +427,13 @@ coverage toward a release candidate that can be qualified in staging.
   and reconciled the applied topic through ListTopics. This closes the
   current-source CreateTopics ambiguity sub-gate; other mutation families still
   require their own broker-fault evidence.
+- The current-source `live-create-topics-authorization.yml` matrix passed on
+  Kafka 3.7.2 and 4.3.1 in
+  [`32364633106`](https://github.com/TaeeunKil/kafrust/actions/runs/32364633106).
+  A restricted SASL/PLAIN principal with only cluster `Describe` received the
+  per-topic `TopicAuthorizationFailed` result (29) and the topic remained
+  absent; the administrator then completed create and cleanup. This closes the
+  current-source CreateTopics authorization sub-gate only.
 - The reusable current-source response-drop gate now also covers DeleteTopics.
   It created a topic, dropped the real DeleteTopics response, observed
   `Error::AdminMutationOutcomeUnknown { operation: "DeleteTopics" }`, and
