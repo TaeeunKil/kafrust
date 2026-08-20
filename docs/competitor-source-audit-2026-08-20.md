@@ -95,9 +95,12 @@ surfaces separate.
   The same published workflow now passes a third member-loss/rejoin cycle,
   with 18 unique offsets and the final survivor draining its metrics to
   `in_flight=0` in [`32392994232`](https://github.com/TaeeunKil/kafrust/actions/runs/32392994232).
-  The remaining Share gaps are higher-cycle churn, long-running ownership and
-  backpressure qualification, Streams background heartbeat/assignment
-  ownership, and broader published coverage.
+  A fourth member-loss/rejoin cycle then passed with 24 unique offsets, four
+  records per partition, and the final survivor draining its metrics to
+  `in_flight=0` in [`32394453120`](https://github.com/TaeeunKil/kafrust/actions/runs/32394453120).
+  The remaining Share gaps are higher-cycle churn beyond four cycles,
+  long-running ownership and backpressure qualification, Streams background
+  heartbeat/assignment ownership, and broader published coverage.
 
 The fresh source checkout also makes the implementation boundary explicit:
 

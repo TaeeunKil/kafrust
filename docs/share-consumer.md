@@ -112,6 +112,11 @@ Current evidence:
   per partition and unique offsets; the final survivor reported
   `consumed=6`, `in_flight=0`, and no failed requests in
   [run 32392994232](https://github.com/TaeeunKil/kafrust/actions/runs/32392994232).
+- The published group then passed a fourth forced-loss cycle, moving ownership
+  back to member 2. Twenty-four records were reconciled with four records per
+  partition and unique offsets; the final survivor reported
+  `consumed=6`, `in_flight=0`, and no failed requests in
+  [run 32394453120](https://github.com/TaeeunKil/kafrust/actions/runs/32394453120).
 
 The live gate is wired in
 `.github/workflows/share-kafka-smoke.yml`. It starts Kafka 4.3.1 with the
@@ -153,9 +158,8 @@ single-node profile, and live ambiguous acknowledgement reconciliation. It
 also proves that the bounded published multi-member run's consumed-record
 counter matched accepted records and that all request connections drained
 before close. It does not prove long-running multi-broker ownership,
- higher-cycle dynamic assignment/member-loss/rebalance behavior beyond this
- three-cycle profile, broad published-artifact coverage, or production
- readiness.
+higher-cycle dynamic assignment/member-loss/rebalance behavior beyond this
+four-cycle profile, broad published-artifact coverage, or production readiness.
 
 ## Basic Usage
 
@@ -363,7 +367,8 @@ complete all of the following:
   [run 32389641275](https://github.com/TaeeunKil/kafrust/actions/runs/32389641275),
   and forced member-loss recovery passed in
   [run 32390219711](https://github.com/TaeeunKil/kafrust/actions/runs/32390219711),
-  but longer backpressure and higher-cycle rebalance coverage remain open;
+  but longer backpressure and higher-cycle rebalance coverage beyond four
+  cycles remain open;
 - stable public API review and a `rust-rdkafka` migration example for queue
   workloads.
 

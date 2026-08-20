@@ -232,15 +232,19 @@ coverage toward a release candidate that can be qualified in staging.
   A two-cycle same-group churn profile also passed: the rejoined peer took
   over all six partitions after the second forced loss, with 12 unique offsets,
   in [`32391027028`](https://github.com/TaeeunKil/kafrust/actions/runs/32391027028).
-  The same published group then passed three forced-loss cycles, moving
-  ownership to member 1, member 2, and a rejoined member 1 again; 18 records
-  with three per partition were unique, and the final survivor drained to
-  `in_flight=0` in [`32392994232`](https://github.com/TaeeunKil/kafrust/actions/runs/32392994232).
+   The same published group then passed three forced-loss cycles, moving
+   ownership to member 1, member 2, and a rejoined member 1 again; 18 records
+   with three per partition were unique, and the final survivor drained to
+   `in_flight=0` in [`32392994232`](https://github.com/TaeeunKil/kafrust/actions/runs/32392994232).
+   A fourth forced-loss cycle then moved ownership back to member 2; 24 records
+   with four per partition were unique, and the final survivor drained to
+   `in_flight=0` with no failed requests in
+   [`32394453120`](https://github.com/TaeeunKil/kafrust/actions/runs/32394453120).
   The metrics-enabled 60-second published soak also matched each member's
   `consumed` count to its 192 accepted records and reached `in_flight=0` before
   close in [`32391918666`](https://github.com/TaeeunKil/kafrust/actions/runs/32391918666).
-  Higher-cycle churn, longer ownership, and backpressure qualification remain
-  separate 1.0 gates.
+   Higher-cycle churn beyond four cycles, longer ownership, and backpressure
+   qualification remain separate 1.0 gates.
 - Stable `ShareGroupDescribe` v1 (API key 77) is now implemented through the
   typed protocol, low-level `Client`, and coordinator-aware `AdminClient`
   layers. The public result preserves share-group state and epochs, member

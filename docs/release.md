@@ -168,8 +168,12 @@ A three-cycle rerun then moved ownership back to a rejoined member 1, reconciled
 18 unique records with three per partition, and ended with the survivor at
 `consumed=6` and `in_flight=0` in
 [run 32392994232](https://github.com/TaeeunKil/kafrust/actions/runs/32392994232).
+A four-cycle rerun then moved ownership back to member 2, reconciled 24 unique
+records with four per partition, and ended with the survivor at `consumed=6`
+and `in_flight=0` in
+[run 32394453120](https://github.com/TaeeunKil/kafrust/actions/runs/32394453120).
 Longer ownership/backpressure campaigns, higher-cycle rebalance matrices beyond
-three cycles, and production readiness remain unqualified.
+four cycles, and production readiness remain unqualified.
 
 The `0.2.18` packages passed Cargo publish verification and both staged
 all-feature package-documentation builds on commit `373de00`. The matching
