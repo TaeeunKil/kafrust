@@ -63,6 +63,13 @@ mechanics. The high-level `kafrust` crate should not hide that boundary:
 Current decision: keep `kafrust::protocol` as an alpha expert escape hatch and
 avoid adding more root-level protocol type re-exports.
 
+The low-level `FetchRequestV13` and `FetchRequestV14` protocol structs expose
+Kafka's legacy top-level `replica_id` field because it remains part of the
+wire schema through v14; Kafka moves replica identity into the tagged
+`FetchReplicaStateV15` structure starting with v15. Expert callers should use
+`-1` for ordinary consumer requests. The high-level `Client::fetch_v13` and
+`Client::fetch_v14` methods supply that value automatically.
+
 ## Pre-`1.0` Review Checklist
 
 Before claiming a stable candidate API:

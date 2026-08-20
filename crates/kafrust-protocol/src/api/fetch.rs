@@ -67,14 +67,16 @@ pub struct FetchRequestV12 {
 
 /// Fetch request version 13 with topic UUIDs (KIP-516).
 ///
-/// Version 13 removes the legacy top-level `ReplicaId` field. The optional
-/// cluster ID is represented as tag 0; omitting it is the normal consumer
-/// request shape.
+/// Version 13 adds topic UUIDs but retains the legacy top-level `ReplicaId`
+/// field. The optional cluster ID is represented as tag 0; omitting it is the
+/// normal consumer request shape. Kafka moves replica identity into the
+/// tagged `ReplicaState` structure starting with version 15.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FetchRequestV13 {
     pub correlation_id: i32,
     pub client_id: Option<String>,
     pub cluster_id: Option<String>,
+    pub replica_id: i32,
     pub max_wait_ms: i32,
     pub min_bytes: i32,
     pub max_bytes: i32,
@@ -130,6 +132,7 @@ impl FetchRequestV13 {
         }
         .encode_v2(&mut encoder)?;
         write_cluster_id_tag(&mut encoder, self.cluster_id.as_deref())?;
+        encoder.write_i32(self.replica_id);
         encoder.write_i32(self.max_wait_ms);
         encoder.write_i32(self.min_bytes);
         encoder.write_i32(self.max_bytes);
@@ -155,6 +158,7 @@ pub struct FetchRequestV14 {
     pub correlation_id: i32,
     pub client_id: Option<String>,
     pub cluster_id: Option<String>,
+    pub replica_id: i32,
     pub max_wait_ms: i32,
     pub min_bytes: i32,
     pub max_bytes: i32,
@@ -172,6 +176,7 @@ impl FetchRequestV14 {
             correlation_id: self.correlation_id,
             client_id: self.client_id.clone(),
             cluster_id: self.cluster_id.clone(),
+            replica_id: self.replica_id,
             max_wait_ms: self.max_wait_ms,
             min_bytes: self.min_bytes,
             max_bytes: self.max_bytes,
@@ -1727,6 +1732,7 @@ mod tests {
             correlation_id: 11,
             client_id: Some("kafrust".to_owned()),
             cluster_id: Some("cluster-a".to_owned()),
+            replica_id: -1,
             max_wait_ms: 500,
             min_bytes: 1,
             max_bytes: 1_048_576,
@@ -1764,6 +1770,7 @@ mod tests {
         assert_eq!(fields[0].tag, 0);
         assert_eq!(cluster_decoder.read_compact_string().unwrap(), "cluster-a");
         assert!(cluster_decoder.is_empty());
+        assert_eq!(decoder.read_i32().unwrap(), -1);
         assert_eq!(decoder.read_i32().unwrap(), 500);
         assert_eq!(decoder.read_i32().unwrap(), 1);
         assert_eq!(decoder.read_i32().unwrap(), 1_048_576);
@@ -1861,6 +1868,7 @@ mod tests {
             correlation_id: 12,
             client_id: None,
             cluster_id: None,
+            replica_id: -1,
             max_wait_ms: 500,
             min_bytes: 1,
             max_bytes: 1_048_576,
