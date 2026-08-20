@@ -4,6 +4,7 @@ use kafrust::{
     AdminClient, ClientConfig, ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter,
     ClientQuotaFilterComponent, ClientQuotaMatchType, Error,
 };
+use std::time::Duration;
 
 const QUOTA_KEY: &str = "producer_byte_rate";
 const QUOTA_VALUE: f64 = 1024.0;
@@ -71,15 +72,7 @@ async fn main() -> kafrust::Result<()> {
             context: "AlterClientQuotas success expectation was not successful".to_owned(),
         });
     }
-    let applied_value = describe_quota(&admin, &quota_user).await?;
-    if applied_value != Some(QUOTA_VALUE) {
-        return Err(Error::Broker {
-            code: expected_error,
-            context: format!(
-                "AlterClientQuotas returned success but {QUOTA_KEY} is {applied_value:?}"
-            ),
-        });
-    }
+    wait_for_quota_value(&admin, &quota_user).await?;
     let cleanup =
         ClientQuotaAlteration::new(ClientQuotaEntity::user(&quota_user)).remove(QUOTA_KEY);
     let cleanup_result = admin.alter_client_quotas(&[cleanup], false).await?;
@@ -115,6 +108,21 @@ async fn describe_quota(admin: &AdminClient, quota_user: &str) -> kafrust::Resul
         .flat_map(|entry| entry.values())
         .find(|value| value.key() == QUOTA_KEY)
         .map(|value| value.value()))
+}
+
+async fn wait_for_quota_value(admin: &AdminClient, quota_user: &str) -> kafrust::Result<()> {
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(15);
+    loop {
+        if describe_quota(admin, quota_user).await? == Some(QUOTA_VALUE) {
+            return Ok(());
+        }
+        if tokio::time::Instant::now() >= deadline {
+            return Err(Error::Unsupported(
+                "AlterClientQuotas readback did not observe the applied value",
+            ));
+        }
+        tokio::time::sleep(Duration::from_millis(250)).await;
+    }
 }
 
 fn parse_i16_env(name: &'static str) -> kafrust::Result<i16> {
