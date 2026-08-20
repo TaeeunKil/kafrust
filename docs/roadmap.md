@@ -2321,10 +2321,12 @@ Implemented evidence:
   `ListConfigResources` for Kafka 4.1+. The typed protocol, low-level `Client`,
   and `AdminClient::list_config_resources` select v0 only for an exact
   client-metrics filter and retain typed resource kinds for v1. Protocol,
-  Client, and injected Admin fallback tests pass. A Kafka 4.1+ live
-  qualification and published-artifact check remain open before adding the v1
-  path to the claim; a live v0 result is also required for the older-broker
-  compatibility claim. The manual
+  Client, and injected Admin fallback tests pass. The Kafka 4.3.1 live v1
+  qualification passed in [`32342304005`](https://github.com/TaeeunKil/kafrust/actions/runs/32342304005),
+  including the real Admin roundtrip and the opt-in DescribeConfigs v4 path.
+  A published-artifact check remains open before adding the v1 path to the
+  claim; a live v0 result is also required for the older-broker compatibility
+  claim. The manual
   `.github/workflows/live-list-config-resources.yml` workflow checks the v1
   capability and a real Admin roundtrip on Kafka 4.1.0, 4.2.0, or 4.3.1.
 
@@ -2355,8 +2357,9 @@ Implemented evidence:
   the default compatibility path. Protocol, capability, and Admin injected
   broker tests pass. The manual `live-list-config-resources.yml` workflow now
   creates a real topic and qualifies both ListConfigResources v1 and
-  DescribeConfigs v4 on Kafka 4.1+, but a passing run and published-artifact
-  evidence remain open.
+  DescribeConfigs v4 on Kafka 4.1+. The Kafka 4.3.1 current-source gate passed
+  in [`32342304005`](https://github.com/TaeeunKil/kafrust/actions/runs/32342304005);
+  published-artifact evidence remains open.
 
 - Stable KIP-932 v1 wire types now cover `ShareGroupHeartbeat` (API key 76),
   `ShareFetch` (API key 78), and `ShareAcknowledge` (API key 79), including
