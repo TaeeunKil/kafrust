@@ -24,6 +24,7 @@ use kafrust_protocol::api::txn_offset_commit::{
 };
 use kafrust_protocol::record_batch::RecordBatchCompression;
 
+use crate::broker_client_cache::BrokerClientCache;
 use crate::client::Client;
 use crate::config::{ClientConfig, OAuthBearerTokenProvider, SecurityProtocol};
 use crate::consumer::ConsumerAssignment;
@@ -415,7 +416,7 @@ pub struct Producer {
     leader_hints: BTreeMap<(String, i32), ProduceLeaderHint>,
     topic_id_cache: BTreeMap<String, [u8; 16]>,
     keyless_partition_indexes: BTreeMap<String, usize>,
-    broker_clients: BTreeMap<String, Client>,
+    broker_clients: BrokerClientCache,
     idempotent_state: Option<IdempotentProducerState>,
     transaction_state: Option<TransactionState>,
 }
@@ -2606,8 +2607,7 @@ impl Producer {
         }
         .await;
         if result.is_ok() {
-            self.broker_clients
-                .insert(key.broker_addr.clone(), leader_client);
+            self.cache_broker_client(key.broker_addr.clone(), leader_client);
         }
         result
     }
@@ -2941,7 +2941,7 @@ impl Producer {
         }
         .await;
         if result.is_ok() {
-            self.broker_clients.insert(broker_addr, leader_client);
+            self.cache_broker_client(broker_addr, leader_client);
         }
         result
     }
@@ -2984,13 +2984,21 @@ impl Producer {
     }
 
     async fn connect_or_reuse_broker(&mut self, broker_addr: &str) -> Result<Client> {
-        if let Some(client) = self.broker_clients.remove(broker_addr) {
+        if let Some(client) = self.broker_clients.take(broker_addr) {
             return Ok(client);
         }
         self.config
             .client
             .connect_broker(broker_addr.to_owned())
             .await
+    }
+
+    fn cache_broker_client(&mut self, broker_addr: String, client: Client) {
+        self.broker_clients.insert(
+            broker_addr,
+            client,
+            self.config.client.max_idle_broker_connections_ref(),
+        );
     }
 
     fn ensure_transaction_active(&self) -> Result<()> {
@@ -3575,6 +3583,13 @@ impl ProducerConfig {
         self
     }
 
+    /// Sets the maximum number of idle broker connections retained by this
+    /// producer. A value of zero is rejected during validation.
+    pub fn max_idle_broker_connections(mut self, max: usize) -> Self {
+        self.client = self.client.max_idle_broker_connections(max);
+        self
+    }
+
     /// Sets the maximum number of elements allocated for one Kafka response array.
     pub fn max_decode_array_elements(mut self, max: usize) -> Self {
         self.client = self.client.max_decode_array_elements(max);
@@ -3921,7 +3936,7 @@ impl ProducerConfig {
             leader_hints: BTreeMap::new(),
             topic_id_cache: BTreeMap::new(),
             keyless_partition_indexes: BTreeMap::new(),
-            broker_clients: BTreeMap::new(),
+            broker_clients: BrokerClientCache::default(),
             idempotent_state,
             transaction_state,
         })
@@ -4929,6 +4944,7 @@ mod tests {
         ProducerDelivery, ProducerRecord, RecordMetadata, SecurityProtocol, TransactionState,
         TransactionStatus,
     };
+    use crate::broker_client_cache::BrokerClientCache;
     use crate::consumer::ConsumerAssignment;
     use crate::{BrokerErrorKind, Client, ClientMetrics, Error};
     use kafrust_protocol::api::api_versions::{ApiKeyVersion, ApiVersionsResponseV0};
@@ -5767,6 +5783,7 @@ mod tests {
         let config = ProducerConfig::new(["localhost:9092"])
             .client_id("orders-api")
             .request_timeout_ms(5_000)
+            .max_idle_broker_connections(3)
             .security_protocol(SecurityProtocol::SaslTls)
             .tls_server_name("broker.example.com")
             .tls_root_certificate_der([1, 2, 3])
@@ -5781,6 +5798,7 @@ mod tests {
 
         assert_eq!(config.acks_ref(), Acks::All);
         assert_eq!(config.max_retries_ref(), 3);
+        assert_eq!(config.client_config().max_idle_broker_connections_ref(), 3);
         assert_eq!(config.max_records_per_batch_ref(), 128);
         assert_eq!(config.max_batch_bytes_ref(), 64 * 1024);
         assert_eq!(config.linger(), std::time::Duration::from_millis(5));
@@ -6022,7 +6040,7 @@ mod tests {
             leader_hints: BTreeMap::new(),
             topic_id_cache: BTreeMap::new(),
             keyless_partition_indexes: BTreeMap::new(),
-            broker_clients: BTreeMap::new(),
+            broker_clients: BrokerClientCache::default(),
             idempotent_state: Some(IdempotentProducerState::new(42, 3)),
             transaction_state: Some(transaction_state),
         };
@@ -6078,7 +6096,7 @@ mod tests {
             leader_hints: BTreeMap::new(),
             topic_id_cache: BTreeMap::new(),
             keyless_partition_indexes: BTreeMap::new(),
-            broker_clients: BTreeMap::new(),
+            broker_clients: BrokerClientCache::default(),
             idempotent_state: Some(IdempotentProducerState::new(42, 3)),
             transaction_state: Some(transaction_state),
         };
@@ -6138,7 +6156,7 @@ mod tests {
             leader_hints: BTreeMap::new(),
             topic_id_cache: BTreeMap::new(),
             keyless_partition_indexes: BTreeMap::new(),
-            broker_clients: BTreeMap::new(),
+            broker_clients: BrokerClientCache::default(),
             idempotent_state: Some(IdempotentProducerState::new(42, 3)),
             transaction_state: Some(transaction_state),
         };
@@ -7123,7 +7141,7 @@ mod tests {
             leader_hints: BTreeMap::new(),
             topic_id_cache: BTreeMap::new(),
             keyless_partition_indexes: BTreeMap::new(),
-            broker_clients: BTreeMap::new(),
+            broker_clients: BrokerClientCache::default(),
             idempotent_state: None,
             transaction_state: None,
         };
@@ -7174,7 +7192,7 @@ mod tests {
             leader_hints: BTreeMap::new(),
             topic_id_cache: BTreeMap::new(),
             keyless_partition_indexes: BTreeMap::new(),
-            broker_clients: BTreeMap::new(),
+            broker_clients: BrokerClientCache::default(),
             idempotent_state: None,
             transaction_state: None,
         };
@@ -7248,7 +7266,7 @@ mod tests {
             leader_hints: BTreeMap::new(),
             topic_id_cache: BTreeMap::new(),
             keyless_partition_indexes: BTreeMap::new(),
-            broker_clients: BTreeMap::new(),
+            broker_clients: BrokerClientCache::default(),
             idempotent_state: Some(IdempotentProducerState::new(42, 3)),
             transaction_state: None,
         };

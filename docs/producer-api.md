@@ -278,6 +278,7 @@ Current implementation status:
   when the broker advertises only an older path. The topic UUID is cached per
   topic and invalidated with producer metadata after a retryable send failure.
 - `ProducerConfig::request_timeout_ms` controls the request timeout used for metadata and produce roundtrips.
+- `ProducerConfig::max_idle_broker_connections` bounds the idle leader/coordinator connections retained by this producer. It defaults to 64 and evicts the oldest idle entry in FIFO order; a value of zero is rejected during validation.
 - `ProducerConfig::security_protocol` stores the Kafka security protocol for producer broker connections. `Plaintext` is the default transport; TLS requires the non-default `tls` crate feature; `tls_server_name(name)` overrides the certificate validation name when the bootstrap host differs from the broker certificate; `tls_root_certificate_der(bytes)` adds DER-encoded root certificates while keeping platform roots enabled; `sasl_plain(username, password)`, `sasl_scram_sha_256(username, password)`, and `sasl_scram_sha_512(username, password)` provide SASL credentials for `SaslPlaintext` or `SaslTls`.
 - `ProducerConfig::max_retries` controls retry attempts for stale metadata, unknown topic-partition entries in cached metadata, missing leader or broker metadata, transient leader errors classified by `BrokerErrorKind`, request timeouts, and connection I/O failures.
 - `ProducerConfig::max_records_per_batch` limits how many records are sent in one Produce request for a topic-partition group. Values below 1 are treated as 1.

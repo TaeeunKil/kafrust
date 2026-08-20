@@ -53,6 +53,14 @@ Requests made through `ClientConfig`, `ProducerConfig`, `ConsumerConfig`, and `C
 
 Broker response payload allocation is limited to 100 MiB per request by default. Override it with `max_response_bytes` on the same four configuration builders. A declared frame above the limit returns `Error::ResponseTooLarge { size, max }` before payload allocation; choose a limit large enough for the workload's metadata and fetch responses. After a request has been sent, a timeout, transport error, or framing error permanently retires that low-level connection so a later request cannot consume a stale partial response; high-level retry paths establish a replacement connection.
 
+`ClientConfig::max_idle_broker_connections` bounds the idle broker connections
+retained by `Producer` and direct `Consumer` instances built from the shared
+configuration. The default is 64. A request takes its broker connection out
+of the cache and returns it only after success; failed or poisoned connections
+are therefore not reused. When the bound is reached, the oldest idle entry is
+evicted in FIFO order. This is a per-client bounded cache, not yet a global
+pool shared between producer, consumer, Admin, group, and Share instances.
+
 `ClientConfig::security_protocol` and the matching producer, consumer, and group builders default to `SecurityProtocol::Plaintext`. `SecurityProtocol::Tls` uses the non-default `tls` crate feature and is covered by the recorded broker roundtrip, producer, direct consumer, and consumer group smoke profile. TLS server name validation defaults to the bootstrap host and can be overridden with `tls_server_name(name)` or `KAFRUST_TLS_SERVER_NAME` for examples and broker checks. Extra DER root certificates can be added with `tls_root_certificate_der(bytes)` or `KAFRUST_TLS_ROOT_CERT_DER_PATH` for examples and broker checks. SASL/PLAIN and SASL/SCRAM-SHA-256/512 authentication are implemented for configured `SaslPlaintext` and `SaslTls` connections; SASL/PLAIN over `SaslPlaintext` and SASL/SCRAM-SHA-256 over `SaslTls` are covered by recorded broker roundtrip, producer, direct consumer, and consumer group smoke profiles.
 
 TLS mutual authentication is configured with `ClientConfig::tls_client_certificate_der` (repeat for the certificate chain) and `ClientConfig::tls_client_private_key_der`. The matching producer, direct consumer, consumer-group, ShareConsumer, and Streams-group setters forward to the same shared configuration. The certificate and private key must be provided together, are rejected for plaintext, and the private-key bytes are redacted from `Debug`. This path is implemented behind the `tls` feature; a live mTLS broker qualification remains open.

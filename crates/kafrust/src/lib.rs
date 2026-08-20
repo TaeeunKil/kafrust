@@ -25,6 +25,7 @@ pub mod streams;
 /// KIP-714 client telemetry API.
 pub mod telemetry;
 
+mod broker_client_cache;
 mod scram;
 
 pub use admin::{

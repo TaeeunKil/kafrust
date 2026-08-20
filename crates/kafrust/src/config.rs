@@ -11,6 +11,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 const DEFAULT_REQUEST_TIMEOUT_MS: u64 = 30_000;
+const DEFAULT_MAX_IDLE_BROKER_CONNECTIONS: usize = 64;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Kafka client security protocol.
@@ -281,6 +282,7 @@ pub struct ClientConfig {
     client_rack: Option<String>,
     request_timeout: Duration,
     max_response_bytes: usize,
+    max_idle_broker_connections: usize,
     decode_limits: DecodeLimits,
     security_protocol: SecurityProtocol,
     tls_server_name: Option<String>,
@@ -303,6 +305,10 @@ impl fmt::Debug for ClientConfig {
             .field("client_rack", &self.client_rack)
             .field("request_timeout", &self.request_timeout)
             .field("max_response_bytes", &self.max_response_bytes)
+            .field(
+                "max_idle_broker_connections",
+                &self.max_idle_broker_connections,
+            )
             .field("decode_limits", &self.decode_limits)
             .field("security_protocol", &self.security_protocol)
             .field("tls_server_name", &self.tls_server_name)
@@ -337,6 +343,7 @@ impl ClientConfig {
             client_rack: None,
             request_timeout: Duration::from_millis(DEFAULT_REQUEST_TIMEOUT_MS),
             max_response_bytes: DEFAULT_MAX_RESPONSE_BYTES,
+            max_idle_broker_connections: DEFAULT_MAX_IDLE_BROKER_CONNECTIONS,
             decode_limits: DecodeLimits::default(),
             security_protocol: SecurityProtocol::Plaintext,
             tls_server_name: None,
@@ -389,6 +396,16 @@ impl ClientConfig {
     /// Sets the maximum broker response payload allocated for one request.
     pub fn max_response_bytes(mut self, max_response_bytes: usize) -> Self {
         self.max_response_bytes = max_response_bytes;
+        self
+    }
+
+    /// Sets the maximum number of idle broker connections retained by a
+    /// producer or direct consumer built from this configuration.
+    ///
+    /// Connections are evicted in FIFO order after a successful request. A
+    /// value of zero is rejected during [`Self::validate`].
+    pub fn max_idle_broker_connections(mut self, max: usize) -> Self {
+        self.max_idle_broker_connections = max;
         self
     }
 
@@ -560,6 +577,12 @@ impl ClientConfig {
         self.max_response_bytes
     }
 
+    /// Returns the maximum number of idle broker connections retained by a
+    /// high-level client built from this configuration.
+    pub fn max_idle_broker_connections_ref(&self) -> usize {
+        self.max_idle_broker_connections
+    }
+
     /// Returns the resource limits applied while decoding broker responses.
     pub fn decode_limits(&self) -> DecodeLimits {
         self.decode_limits
@@ -664,6 +687,12 @@ impl ClientConfig {
         if self.max_response_bytes == 0 {
             return Err(Error::InvalidConfiguration {
                 field: "max_response_bytes",
+                reason: "must be greater than zero",
+            });
+        }
+        if self.max_idle_broker_connections == 0 {
+            return Err(Error::InvalidConfiguration {
+                field: "max_idle_broker_connections",
                 reason: "must be greater than zero",
             });
         }
@@ -1183,6 +1212,7 @@ mod tests {
             .client_rack("rack-a")
             .request_timeout_ms(5_000)
             .max_response_bytes(8 * 1024 * 1024)
+            .max_idle_broker_connections(3)
             .max_decode_array_elements(12_345)
             .max_decompressed_record_bytes(4 * 1024 * 1024);
 
@@ -1195,6 +1225,7 @@ mod tests {
         assert_eq!(config.client_rack_ref(), Some("rack-a"));
         assert_eq!(config.request_timeout(), Duration::from_millis(5_000));
         assert_eq!(config.max_response_bytes_ref(), 8 * 1024 * 1024);
+        assert_eq!(config.max_idle_broker_connections_ref(), 3);
         assert_eq!(config.decode_limits().max_array_elements(), 12_345);
         assert_eq!(
             config.decode_limits().max_decompressed_record_bytes(),
@@ -1296,6 +1327,12 @@ mod tests {
                     .max_response_bytes(0)
                     .validate(),
                 "max_response_bytes",
+            ),
+            (
+                ClientConfig::new(["localhost:9092"])
+                    .max_idle_broker_connections(0)
+                    .validate(),
+                "max_idle_broker_connections",
             ),
             (
                 ClientConfig::new(["localhost:9092"])

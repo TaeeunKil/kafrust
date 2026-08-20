@@ -230,6 +230,7 @@ Current implementation status:
   starts cleanly. The current session claim is limited to the rack-aware v11/v12
   path; the v4 compatibility fallback does not claim fetch-session reuse.
 - `ConsumerConfig::request_timeout_ms` controls the request timeout used for metadata and fetch roundtrips.
+- `ConsumerConfig::max_idle_broker_connections` bounds the idle leader/read-replica connections retained by this consumer. It defaults to 64 and evicts the oldest idle entry in FIFO order; a value of zero is rejected during validation.
 - `ConsumerConfig::security_protocol` stores the Kafka security protocol for consumer broker connections. `Plaintext` is the default transport; TLS requires the non-default `tls` crate feature; `tls_server_name(name)` overrides the certificate validation name when the bootstrap host differs from the broker certificate; `tls_root_certificate_der(bytes)` adds DER-encoded root certificates while keeping platform roots enabled; `sasl_plain(username, password)`, `sasl_scram_sha_256(username, password)`, and `sasl_scram_sha_512(username, password)` provide SASL credentials for `SaslPlaintext` or `SaslTls`.
 - `ConsumerConfig::max_retries` controls retry attempts for stale metadata, unknown topic-partition entries in cached metadata, missing leader or broker metadata, transient fetch broker errors, request timeouts, and connection I/O failures.
 - `ConsumerConfig::max_poll_records` limits how many records one `poll` call returns.

@@ -2990,6 +2990,14 @@ Implemented evidence:
 - Direct consumer fetch and watermark paths reuse a successful partition-leader
   `Client` by broker address and evict it on request failure. A focused
   injected-broker test verifies two sequential Fetch requests on one socket.
+- Producer and direct-consumer idle broker connections now use a bounded FIFO
+  cache controlled by `ClientConfig::max_idle_broker_connections` (default 64).
+  Requests remove a connection while it is in flight and return it only after
+  success; the oldest idle entry is evicted when the bound is reached. This
+  prevents unbounded broker-address growth while preserving the existing
+  poisoned-connection rule. It is a per-client cache, so a global pool shared
+  across producer, consumer, Admin, group, and Share clients remains a 1.0
+  architecture gap.
 - Producer capability negotiation now prefers topic-ID Produce v13 when the
   broker advertises it and Metadata v12 returns a topic UUID, then falls back
   to name-based flexible Produce v12, v11, and v9 for RecordBatch sends,

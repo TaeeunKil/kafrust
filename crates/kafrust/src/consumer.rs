@@ -18,6 +18,7 @@ use kafrust_protocol::api::offset_for_leader_epoch::{
     OffsetForLeaderEpochTopicResponseV3, OffsetForLeaderEpochTopicV3,
 };
 
+use crate::broker_client_cache::BrokerClientCache;
 use crate::client::{Client, FetchOneRequestV11, FetchOneRequestV12, FetchOneRequestV4};
 use crate::config::{ClientConfig, OAuthBearerTokenProvider, SecurityProtocol};
 use crate::error::{BrokerErrorKind, Error, Result};
@@ -289,7 +290,7 @@ pub struct Consumer {
     partition_queues: BTreeMap<(String, i32), mpsc::Sender<ConsumerRecord>>,
     metadata_cache: BTreeMap<String, MetadataResponseV1>,
     fetch_topic_ids: BTreeMap<String, [u8; 16]>,
-    broker_clients: BTreeMap<String, Client>,
+    broker_clients: BrokerClientCache,
     fetch_sessions: BTreeMap<String, FetchSessionState>,
     preferred_read_replicas: BTreeMap<(String, i32), i32>,
 }
@@ -326,7 +327,7 @@ impl Consumer {
             partition_queues: BTreeMap::new(),
             metadata_cache: BTreeMap::new(),
             fetch_topic_ids: BTreeMap::new(),
-            broker_clients: BTreeMap::new(),
+            broker_clients: BrokerClientCache::default(),
             fetch_sessions: BTreeMap::new(),
             preferred_read_replicas: BTreeMap::new(),
         }
@@ -575,7 +576,7 @@ impl Consumer {
                 format!("offset for leader epoch {topic}-{partition}"),
             ));
         }
-        self.broker_clients.insert(broker_addr, leader_client);
+        self.cache_broker_client(broker_addr, leader_client);
         Ok(LeaderEpochOffset {
             leader_epoch: partition_response.leader_epoch,
             end_offset: partition_response.end_offset,
@@ -597,7 +598,7 @@ impl Consumer {
         let high = self
             .request_partition_offset(&mut leader_client, topic, partition, LATEST_TIMESTAMP)
             .await?;
-        self.broker_clients.insert(broker_addr, leader_client);
+        self.cache_broker_client(broker_addr, leader_client);
         Ok(PartitionWatermarks { low, high })
     }
 
@@ -1190,7 +1191,7 @@ impl Consumer {
             .into_iter()
             .map(|record| ConsumerRecord::from_message_set(topic, partition, record))
             .collect();
-        self.broker_clients.insert(broker_addr, leader_client);
+        self.cache_broker_client(broker_addr, leader_client);
         Ok(FetchedPartition {
             records,
             next_offset,
@@ -1288,7 +1289,7 @@ impl Consumer {
     }
 
     async fn connect_or_reuse_broker(&mut self, broker_addr: &str) -> Result<Client> {
-        if let Some(client) = self.broker_clients.remove(broker_addr) {
+        if let Some(client) = self.broker_clients.take(broker_addr) {
             return Ok(client);
         }
         self.fetch_sessions.remove(broker_addr);
@@ -1296,6 +1297,14 @@ impl Consumer {
             .client
             .connect_broker(broker_addr.to_owned())
             .await
+    }
+
+    fn cache_broker_client(&mut self, broker_addr: String, client: Client) {
+        self.broker_clients.insert(
+            broker_addr,
+            client,
+            self.config.client.max_idle_broker_connections_ref(),
+        );
     }
 
     async fn request_metadata_for_topic(&mut self, topic: &str) -> Result<MetadataResponseV1> {
@@ -1472,6 +1481,13 @@ impl ConsumerConfig {
     /// Sets the maximum broker response payload allocated for one consumer request.
     pub fn max_response_bytes(mut self, max_response_bytes: usize) -> Self {
         self.client = self.client.max_response_bytes(max_response_bytes);
+        self
+    }
+
+    /// Sets the maximum number of idle broker connections retained by this
+    /// consumer. A value of zero is rejected during validation.
+    pub fn max_idle_broker_connections(mut self, max: usize) -> Self {
+        self.client = self.client.max_idle_broker_connections(max);
         self
     }
 
@@ -1698,7 +1714,7 @@ impl ConsumerConfig {
             partition_queues: BTreeMap::new(),
             metadata_cache: BTreeMap::new(),
             fetch_topic_ids: BTreeMap::new(),
-            broker_clients: BTreeMap::new(),
+            broker_clients: BrokerClientCache::default(),
             fetch_sessions: BTreeMap::new(),
             preferred_read_replicas: BTreeMap::new(),
         })
@@ -2085,6 +2101,7 @@ mod tests {
             .client_id("orders-reader")
             .client_rack("rack-a")
             .request_timeout_ms(5_000)
+            .max_idle_broker_connections(3)
             .security_protocol(SecurityProtocol::Tls)
             .tls_server_name("broker.example.com")
             .tls_root_certificate_der([1, 2, 3])
@@ -2123,6 +2140,7 @@ mod tests {
             "alice"
         );
         assert_eq!(config.max_retries_ref(), 3);
+        assert_eq!(config.client_config().max_idle_broker_connections_ref(), 3);
         assert_eq!(config.max_poll_records_ref(), 10);
         assert_eq!(config.partition_queue_capacity_ref(), 7);
         assert_eq!(config.isolation_level_ref(), IsolationLevel::ReadCommitted);
