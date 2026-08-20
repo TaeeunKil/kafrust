@@ -15,8 +15,12 @@ fn parse_bootstrap_servers(value: &str) -> Vec<String> {
 async fn main() -> kafrust::Result<()> {
     let bootstrap = std::env::var("KAFRUST_BOOTSTRAP_SERVERS")
         .map_err(|_| kafrust::Error::Unsupported("KAFRUST_BOOTSTRAP_SERVERS is required"))?;
+    let controller_bootstrap = std::env::var("KAFRUST_CONTROLLER_BOOTSTRAP_SERVERS").map_err(
+        |_| kafrust::Error::Unsupported("KAFRUST_CONTROLLER_BOOTSTRAP_SERVERS is required"),
+    )?;
     let admin = AdminClient::new(
         ClientConfig::new(parse_bootstrap_servers(&bootstrap))
+            .controller_bootstrap_servers(parse_bootstrap_servers(&controller_bootstrap))
             .client_id("kafrust-published-describe-cluster"),
     );
 
@@ -49,6 +53,23 @@ async fn main() -> kafrust::Result<()> {
         ));
     }
 
+    let controllers = admin
+        .describe_cluster_with_options(
+            DescribeClusterOptions::new()
+                .include_cluster_authorized_operations(true)
+                .endpoint_type(DescribeClusterEndpointType::Controllers),
+        )
+        .await?;
+    if controllers.cluster_id().is_none()
+        || controllers.endpoint_type() != Some(DescribeClusterEndpointType::Controllers)
+        || controllers.cluster_authorized_operations().is_none()
+        || controllers.brokers().is_empty()
+    {
+        return Err(kafrust::Error::Unsupported(
+            "DescribeCluster v1 returned incomplete controller metadata",
+        ));
+    }
+
     println!(
         "api60 cluster_id_present=true endpoint_type={:?} authorized_ops_present=true brokers={}",
         dedicated.endpoint_type(),
@@ -58,6 +79,11 @@ async fn main() -> kafrust::Result<()> {
         "metadata controller_id={} brokers={}",
         metadata.controller_id(),
         metadata.brokers().len()
+    );
+    println!(
+        "api60_controller cluster_id_present=true endpoint_type={:?} authorized_ops_present=true brokers={}",
+        controllers.endpoint_type(),
+        controllers.brokers().len()
     );
     Ok(())
 }

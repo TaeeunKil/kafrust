@@ -608,9 +608,12 @@ impl AdminClient {
     ///
     /// Kafka 3.7 and newer brokers advertise API 60. The v1 path preserves
     /// endpoint type and the v0 fallback remains available for brokers that
-    /// only advertise the original flexible version. If API 60 is absent,
-    /// this method falls back to Metadata so older deployments retain the
-    /// established cluster description behavior.
+    /// only advertise the original flexible version. If API 60 is absent and
+    /// no endpoint type was explicitly requested, this method falls back to
+    /// Metadata so older deployments retain the established cluster
+    /// description behavior. Selecting `Controllers` requires
+    /// `ClientConfig::controller_bootstrap_servers` because Kafka controller
+    /// endpoints cannot be requested through an ordinary broker listener.
     #[tracing::instrument(
         level = "debug",
         name = "kafka.admin.describe_cluster_with_options",
@@ -621,9 +624,28 @@ impl AdminClient {
         &self,
         options: DescribeClusterOptions,
     ) -> Result<ClusterDescription> {
+        if matches!(
+            options.endpoint_type,
+            Some(DescribeClusterEndpointType::Controllers)
+        ) && self.config.controller_bootstrap_servers_ref().is_empty()
+        {
+            return Err(Error::InvalidConfiguration {
+                field: "controller_bootstrap_servers",
+                reason:
+                    "DescribeCluster controller endpoints require a controller bootstrap server",
+            });
+        }
         let mut retry = 0;
         loop {
-            let mut client = match self.config.clone().connect().await {
+            let connection = if matches!(
+                options.endpoint_type,
+                Some(DescribeClusterEndpointType::Controllers)
+            ) {
+                self.config.connect_controller().await
+            } else {
+                self.config.clone().connect().await
+            };
+            let mut client = match connection {
                 Ok(client) => client,
                 Err(error) if retry < self.max_retries && is_retryable_admin_read_error(&error) => {
                     retry += 1;
@@ -654,6 +676,11 @@ impl AdminClient {
             }
 
             let Some(api_version) = api_versions.highest_supported_version(60, 1) else {
+                if options.endpoint_type.is_some() {
+                    return Err(Error::Unsupported(
+                        "DescribeCluster endpoint selection requires API 60 v1",
+                    ));
+                }
                 let metadata = self
                     .metadata_with_admin_retries_from(Some(Vec::new()), &mut retry)
                     .await?;
@@ -16357,7 +16384,8 @@ mod tests {
             write_frame(&mut connection, &describe_cluster_response()).await;
         });
         let admin = AdminClient::new(
-            ClientConfig::new([addr.to_string()])
+            ClientConfig::new(["bootstrap:9092"])
+                .controller_bootstrap_servers([addr.to_string()])
                 .client_id("kafrust-admin-test")
                 .request_timeout_ms(1_000),
         );
@@ -16380,6 +16408,27 @@ mod tests {
         assert_eq!(cluster.controller_id(), 1);
         assert_eq!(cluster.brokers()[0].rack(), Some("rack-a"));
         server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn requires_controller_bootstrap_for_describe_cluster_controller_endpoints() {
+        let admin = AdminClient::new(ClientConfig::new(["broker:9092"]));
+
+        let error = admin
+            .describe_cluster_with_options(
+                DescribeClusterOptions::new()
+                    .endpoint_type(DescribeClusterEndpointType::Controllers),
+            )
+            .await
+            .unwrap_err();
+
+        assert!(matches!(
+            error,
+            Error::InvalidConfiguration {
+                field: "controller_bootstrap_servers",
+                ..
+            }
+        ));
     }
 
     #[tokio::test]

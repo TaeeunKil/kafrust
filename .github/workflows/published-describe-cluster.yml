@@ -26,6 +26,7 @@ jobs:
     timeout-minutes: 15
     env:
       KAFRUST_BOOTSTRAP_SERVERS: localhost:39200
+      KAFRUST_CONTROLLER_BOOTSTRAP_SERVERS: localhost:39203
       CARGO_TERM_COLOR: never
 
     steps:
@@ -44,6 +45,7 @@ jobs:
           docker run -d --name kafrust-published-describe-cluster-broker \
             --network kafrust-published-describe-cluster \
             -p 39200:9092 \
+            -p 39203:9093 \
             -e KAFKA_CLUSTER_ID="$cluster_id" \
             -e KAFKA_NODE_ID=1 \
             -e KAFKA_PROCESS_ROLES=broker,controller \
@@ -97,6 +99,8 @@ jobs:
             /tmp/kafrust-published-describe-cluster.log
           grep -Fq "metadata controller_id=" \
             /tmp/kafrust-published-describe-cluster.log
+          grep -Fq "api60_controller cluster_id_present=true" \
+            /tmp/kafrust-published-describe-cluster.log
 
       - name: Verify published dependency versions
         env:
@@ -106,7 +110,7 @@ jobs:
           grep -A1 -q 'name = "kafrust"' "$lockfile"
           grep -A1 -q "version = \"$KAFRUST_PUBLISHED_VERSION\"" "$lockfile"
           grep -A1 -q 'name = "kafrust-protocol"' "$lockfile"
-          printf '{"kafrust_version":"%s","kafka_version":"%s","api60":true,"metadata_baseline":true}\n' \
+          printf '{"kafrust_version":"%s","kafka_version":"%s","api60":true,"controller_endpoint":true,"metadata_baseline":true}\n' \
             "$KAFRUST_PUBLISHED_VERSION" "${{ inputs.kafka_version }}" > \
             "$RUNNER_TEMP/published-describe-cluster.json"
 
