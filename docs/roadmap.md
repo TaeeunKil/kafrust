@@ -44,6 +44,13 @@ goal. Remaining gates include broader protocol and Admin coverage, longer
 multi-broker and security soak workloads, public API stabilization, and
 compatibility evidence against the remaining declared limits.
 
+The current development line now consumes a complete Produce v9-v13
+`CurrentLeader` plus `NodeEndpoints` hint after a retryable broker error. The
+hint is bounded to the next producer attempt and is discarded when consumed;
+incomplete or invalid endpoint data falls back to the existing metadata
+refresh path. This closes a producer response-to-routing slice, but live
+leader-movement qualification and broader routing/fault evidence remain open.
+
 The published `0.3.0` artifact also passed a 600-second Kafka 4.3.1
 three-broker soak with brokers 1 and 2 stopped simultaneously in
 [`32230130048`](https://github.com/TaeeunKil/kafrust/actions/runs/32230130048).
@@ -53,12 +60,50 @@ zero buffered records. This closes the published simultaneous-loss soak
 slice; repeated runs, secured variants, and longer-duration evidence remain
 open.
 
+The published secure multi-broker soak workflow now defaults to the current
+`0.3.0` artifact, Kafka 4.3.1, simultaneous broker loss, and a 600-second
+campaign, and it runs on a weekly schedule as well as manually. The workflow
+configuration is in place; a passing scheduled result is still required before
+this closes the longer secured-soak evidence gate.
+
 The verification-hardening slice now includes a standalone pure-Rust fuzz
-workspace with six libFuzzer targets covering primitive/flexible decoding,
+workspace with ten libFuzzer targets covering primitive/flexible decoding,
 framing, classic and modern group descriptions, share-group offsets, and all
 five supported compression codecs. The targets compile with the repository
-MSRV after pinning their fuzz-only build dependencies; crash corpus reduction,
-scheduled campaigns, and fault-injecting broker coverage remain open.
+MSRV after pinning their fuzz-only build dependencies. Each target now has a
+tracked seed corpus and the weekly/manual workflow runs a bounded corpus-backed
+campaign with per-target RSS/timeout limits and uploaded crash/corpus artifacts;
+recurring crash-free evidence, corpus reduction, and broad fault-injecting
+broker coverage remain open. A reusable in-process scripted TCP broker now
+provides connection-aware request observation, connection drops, and response
+  injection for focused integration regressions. The first gates cover Admin
+  metadata retry after a dropped response, idempotent Produce retry with the
+  same batch sequence and duplicate-response handling. The idempotent producer
+  gate also treats `OUT_OF_ORDER_SEQUENCE_NUMBER`, `INVALID_PRODUCER_EPOCH`, and
+  `PRODUCER_FENCED` as terminal: none is retried, the first broker error is
+  retained, and subsequent sends fail before transmission. The transactional
+  EndTxn gate covers response loss with unknown-outcome and defunct-producer
+  transitions. A direct
+  consumer Fetch response-loss path now also covers metadata re-discovery,
+  ApiVersions renegotiation, and one-record recovery. A classic consumer-group
+  gate also covers transient `COORDINATOR_NOT_AVAILABLE` retry through
+  JoinGroup, SyncGroup, and OffsetFetch assignment restoration. The harness
+  keeps an idle post-join connection alive until the test finishes so the gate
+  covers the same connection lifecycle as the public group API. A second group
+  gate drops the active coordinator heartbeat, routes the rejoin to a replacement
+  coordinator, and verifies the new generation through the public `poll()` path.
+  A third group gate preserves a non-empty assignment through the same fault,
+  restores the committed position with OffsetFetch, and completes a
+  post-rejoin Fetch from the partition leader. A fourth gate covers the KIP-848
+  path itself: repeated `REBALANCE_IN_PROGRESS` heartbeat responses trigger
+  coordinator rediscovery and full modern-protocol rejoin. The replacement
+  coordinator negotiates OffsetFetch v10 and OffsetCommit v10 when available,
+  while mixed-version fixtures verify the v9 fallback for both operations,
+  before the partition-leader Fetch. A fifth
+  gate exercises the public Admin member-aware `OffsetCommit v9` path: after
+  coordinator discovery, a dropped response is classified as
+  `AdminMutationOutcomeUnknown` without replay, and the request is verified to
+  use v9 rather than the classic v2 path.
 
 The first KIP-714 broker-side qualification slice passed in
 [`32229640441`](https://github.com/TaeeunKil/kafrust/actions/runs/32229640441)
@@ -94,9 +139,12 @@ and on Kafka 4.3.1 KIP-848 for normal departure in
 [`32234514848`](https://github.com/TaeeunKil/kafrust/actions/runs/32234514848)
 and abrupt connection drop in
 [`32234518025`](https://github.com/TaeeunKil/kafrust/actions/runs/32234518025).
-This closes the bounded committed-offset restoration slice; longer-duration
-group churn, retention/restart combinations, and broader assignor matrices
-remain separate follow-up gates.
+This closes the bounded committed-offset restoration slice. The published
+group workflow now also supports a bounded repeated-churn campaign across
+independent group IDs, with current defaults of ten cycles on Kafka 4.3.1
+KIP-848 and abrupt member exit; a passing scheduled result is still required
+before longer-duration group churn is closed. Retention/restart combinations
+and broader assignor matrices remain separate follow-up gates.
 
 The same smoke was rerun with the second member's coordinator connection
 dropped without `LeaveGroup`. The remaining member still reacquired all six
@@ -157,11 +205,98 @@ coverage toward a release candidate that can be qualified in staging.
    coordinator-routing tests. The combined Kafka 4.3.1 live lifecycle gate
    passed in [`32225957928`](https://github.com/TaeeunKil/kafrust/actions/runs/32225957928);
    long-running operational evidence remains open.
-- A standalone `fuzz/` workspace now provides six libFuzzer targets and a
-  manual/weekly compile-and-smoke workflow. The public bounded compression helpers have
-  an all-codec roundtrip regression test. This closes the initial fuzz-harness
-  scaffolding slice; corpus growth, minimized crash regressions, and sustained
-  campaigns remain part of the production-hardening gate.
+- Kafka 4.x `StreamsGroupDescribe` v0 (API key 89) is now implemented through
+  the typed protocol, low-level `Client`, and coordinator-aware `AdminClient`
+  layers. The public result preserves topology, subtopology, managed-topic
+  configuration, member endpoint and tag data, task offsets, assignments, and
+  authorization bits. Focused wire and injected-broker routing tests pass.
+  Live qualification against a real Kafka Streams application remains open,
+  and `StreamsGroupHeartbeat` v0 (API key 88) is the next required lifecycle
+  slice; this does not expand the published compatibility claim yet.
+- The Kafka 4.x `StreamsGroupHeartbeat` v0 wire shape (API key 88) is now
+  implemented in the protocol crate and exposed through the low-level
+  `Client` and the alpha `StreamsGroupSession`. The session covers initial
+  topology publication, member and endpoint epochs, nullable task-state
+  updates, bounded coordinator reconnect/rejoin, and graceful leave. Focused
+  tests cover configuration validation, retry backoff, and the full injected
+  wire lifecycle from topology initialization through task-state heartbeat and
+  graceful shutdown. The session now preserves the latest successful broker
+  assignment in a typed `StreamsGroupSessionAssignment` snapshot. Background
+  heartbeat ownership, automatic assignment/task-runtime reconciliation, and
+  live Kafka Streams qualification remain open. This is not yet a published
+  Streams compatibility claim.
+- `crates/kafrust/examples/streams_group_smoke.rs` and
+  `.github/workflows/live-streams-group.yml` now provide a Kafka 4.3.1
+  real-broker qualification entry point. The workflow enables the broker
+  Streams protocol, creates a source topic, and exercises join, task-state
+  heartbeat, repeated heartbeat, and graceful leave. A passing workflow run
+  is still required before the source-level Streams session enters the
+  compatibility claim.
+- A standalone `fuzz/` workspace now provides ten libFuzzer targets, tracked
+  seed corpora, and a manual/weekly corpus-backed campaign workflow. Each
+  target has bounded RSS and input-time budgets, and the workflow uploads
+  generated corpus and crash artifacts. The public bounded compression helpers
+  have an all-codec roundtrip regression test, and the OffsetCommit v2/v7/v9/v10
+  plus OffsetFetch v2/v9/v10 response decoders now have dedicated targets. This
+  closes the initial fuzz
+  campaign plumbing slice; recurring crash-free evidence, minimized crash
+  regressions, and sustained campaign history remain part of the
+  production-hardening gate.
+- `scripts/check_protocol_api_surface.py` now runs in the main CI workflow and
+  checks that every protocol source module is registered, every declared API
+  key is unique, and the reviewed Kafka API-key manifest is unchanged. This is
+  the first layer of the offline protocol-parity guard. The companion
+  `scripts/check_apache_schema_versions.py` now checks a pinned Apache Kafka
+  4.3.1 metadata snapshot for Produce, Fetch, OffsetCommit, OffsetFetch, and
+  ConsumerGroupHeartbeat request/response schemas, including API identity,
+  valid-version bounds, and flexible-version boundaries. It reports local lag
+  without treating an intentionally older implementation as a failure. Full
+  field-level parity for every implemented API and byte-level golden fixtures
+  remain open. The scheduled/manual `Apache Schema Audit` workflow runs the
+  same checker in `--online-all` mode across all 76 local request schemas and
+  their 76 matching responses, so API identity and version drift is checked
+  beyond the deterministic ten-schema snapshot gate.
+- Kafka 4.x topic-UUID `OffsetCommit v10` and `OffsetFetch v10` are now
+  implemented in the protocol crate and exposed through low-level `Client`
+  methods. Focused request/response wire tests and the existing offset fuzz
+  targets cover the flexible UUID shape. High-level consumer groups negotiate
+  v10 from Metadata v12 topic IDs with v9 fallback. Member-aware Admin offset
+  methods now resolve names through Metadata v12 for the same v10/v9
+  negotiation; callers can attach complete topic UUIDs through the public
+  offset/query builders to skip discovery. Live and
+  published-artifact Admin v10 evidence remains open.
+- `ConsumerGroupHeartbeat` v1 is now implemented in the protocol crate and
+  exposed through low-level `Client`, including the nullable
+  `SubscribedTopicRegex` field added by Kafka 4.x/KIP-1082. The v1 response
+  reuses the v0 wire shape with a typed alias. High-level regex subscriptions
+  now select v1 for join, foreground/background heartbeat, and leave while
+  explicit topic-name subscriptions retain v0. The high-level path still
+  resolves names locally for assignment and refreshes Metadata when a new
+  assignment contains an unknown topic UUID. Live v1 and dynamic topic
+  qualification remain open; the deterministic fault-injection suite covers
+  the refresh, OffsetFetch v9, and subsequent Fetch v12 path. The live smoke
+  workflow now also provisions a matching topic after join and waits for the
+  KIP-848 assignment and record; a passing run remains required.
+- Flexible topic-UUID `Fetch` v13 is now implemented in the protocol crate and
+  exposed through low-level `Client`. Direct and group consumers select it when
+  broker capabilities and Metadata v12 provide a stable topic ID, while the
+  existing name-based v12/v11/v4 fallback remains available. The request
+  covers the Kafka 4.x cluster-ID tag, fetch sessions, UUID topics, forgotten
+  UUID topics, and rack selection; the response preserves session,
+  transaction, and leader metadata from v12. Low-level `Client` now also
+  exposes Fetch v14, whose request shape is wire-equivalent to v13 and whose
+  response preserves the tiered-storage error code. Low-level `Client` also
+  exposes Fetch v15's tagged replica-state request field. Low-level `Client`
+  now also exposes Fetch v16-v18, including v16 node-endpoint decoding, v17
+  follower directory IDs, and v18 follower high-watermarks. Live broker
+  qualification and high-level follower selection remain open.
+- Produce flexible responses v9-v13 now decode Kafka's tagged `NodeEndpoints`
+  field into typed `ProduceNodeEndpointV10` values, preserving broker ID,
+  host, port, and nullable rack data. A v13 tag-0 fixture covers the decode;
+  partition current-leader decoding is covered by the same fixture. The
+  high-level producer now consumes a complete `CurrentLeader` plus endpoint
+  hint after retryable broker errors for the next attempt; live endpoint and
+  leader-movement qualification remain open.
 - Flexible `DescribeTopicPartitions` v0 is now implemented through the typed
   protocol and `AdminClient` layers, including topic UUIDs, partition leader/
   ISR state, nullable ELR fields, authorized operations, and paging cursors.
@@ -820,7 +955,7 @@ Evidence:
 - `ProducerConfig::linger_ms` and `ProducerConfig::build_buffered` provide the first buffered producer lifecycle skeleton with `flush`, `close`, and `is_closed`.
 - `BufferedProducer::send` queues records through a bounded channel and returns per-record `ProducerDelivery` handles; `flush` and `close` send pending records through `send_batch_report` and complete delivery handles from per-record outcomes.
 - Automatic buffered flush triggers cover `linger_ms`, `max_records_per_batch`, and `max_batch_bytes`, with `linger_ms(0)` meaning no intentional wait before background flush.
-- Focused unit tests cover buffered enqueue, delivery cancellation, pending delivery failure, per-record delivery completion, defensive handling for missing batch outcomes, and flush trigger selection.
+- Focused unit tests cover buffered enqueue, cloneable non-transactional handle sharing, transactional handle rejection, delivery cancellation, pending delivery failure, per-record delivery completion, defensive handling for missing batch outcomes, and flush trigger selection.
 
 ## M11 Security And Connectivity
 
@@ -1425,15 +1560,17 @@ Implemented evidence:
   transmitted. The retry helper has deterministic coverage for the retry
   budget; transport failures after the mutation request remain single-attempt
   for the same ambiguous-outcome reason.
-- KIP-848 member-aware administrative offsets now use OffsetFetch v9 and
-  OffsetCommit v9 with the joined member ID, member epoch, optional static
-  instance ID, `require_stable`, and committed leader epoch. The APIs reuse
-  the typed classic offset results while preserving v9 throttle and group
-  errors. Focused wire/mock tests and the
-  `admin_consumer_group_offsets_member` example cover the active-member path;
-  Kafka 4.3.1 single-node and multi-broker PLAINTEXT, SASL_PLAINTEXT, and
-  SASL_SSL/SCRAM live qualification passed in
-  [`31607006237`](https://github.com/TaeeunKil/kafrust/actions/runs/31607006237).
+- KIP-848 member-aware administrative offsets negotiate OffsetFetch and
+  OffsetCommit v10 when the coordinator advertises the API and Metadata v12
+  resolves topic names. Complete topic UUIDs can be attached to the public
+  query and offset builders to skip discovery. The APIs map UUID responses
+  back to names and fall back to v9 for older coordinators or incomplete
+  metadata. The APIs reuse the typed classic
+  offset results while preserving throttle and group errors. Focused wire,
+  mock, and fault-injection tests cover both paths. The existing Kafka 4.3.1
+  single-node and multi-broker PLAINTEXT, SASL_PLAINTEXT, and SASL_SSL/SCRAM
+  live qualification still covers the v9 member-aware calls; a fresh live and
+  published-artifact v10 Admin qualification remains open.
   Target authorization and broader member-failure workloads remain release
   gates. The live DeleteRecords, DescribeProducers, DescribeTransactions,
   DescribeGroups, OffsetFetch, exact-offset OffsetCommit, DescribeConfigs, and
@@ -2108,6 +2245,105 @@ Strategic role:
 
 Implemented evidence:
 
+- Producer, direct consumer, classic/KIP-848 consumer-group, share-group,
+  and Streams-group builders now accept a shared `ClientConfig` through
+  `with_client_config(...)`. This keeps bootstrap rotation, controller
+  bootstrap servers, security, decode limits, and metrics policy consistent
+  across clients while retaining per-builder setters for local overrides.
+  The same builders now expose `build_config()` for connection-free validation
+  and return the validated configuration for later async construction;
+  `AdminClient` exposes the same preflight after construction. The
+  public-surface integration test locks these common client contracts.
+
+- TLS mutual authentication is now available through DER-encoded client
+  certificate-chain and private-key settings on the shared `ClientConfig`,
+  with matching producer, direct consumer, classic group, ShareConsumer, and
+  Streams-group forwarding methods. Configuration validation rejects an
+  incomplete certificate/key pair, empty material, or plaintext use. The
+  custom `ClientConfig` debug implementation reports counts and redacts the
+  private key rather than formatting credential bytes. Focused all-feature
+  tests pass. The `live-mtls.yml` workflow now generates a short-lived CA,
+  requires client authentication on Kafka 3.7.2 or 4.3.1, verifies the
+  handshake independently, and runs Admin, producer, direct-consumer,
+  consumer-group, transactional/read-committed, low-level, and coordinator
+  roundtrips; a passing workflow run and certificate-rotation behavior remain
+  open security gates.
+
+- The test suite now includes a reusable in-process scripted broker harness
+  under `crates/kafrust/tests/support/`. It records API key, version,
+  correlation ID, and request frames, and can deterministically drop or answer
+  connections while keeping multi-request sessions open. Regression gates now
+  verify Admin metadata reconnect, idempotent Produce retry, transactional
+  EndTxn response loss, and direct-consumer Fetch recovery. The Produce path
+  preserves the original batch frame and accepts Kafka's duplicate sequence
+  response without replaying a new sequence; the transaction path returns an
+  unknown outcome and defuncts the producer rather than claiming a commit; the
+  consumer path recovers one record after metadata and Fetch re-discovery. This
+  closes the absence of any reusable fault-injection baseline, but not the
+  broader producer, consumer, group, transaction, security, and long-soak
+  fault matrices required by M21.
+
+- Flexible capability discovery now includes explicit `ApiVersions` v4 and v5
+  request types. The opt-in `Client::api_versions_cached` helper prefers v4 and
+  retries with v3 on Kafka's `UNSUPPORTED_VERSION` response; v5 encodes the
+  optional cluster ID and node ID checks without changing the existing v3/v4
+  response decoder. Protocol and injected-broker regression tests cover both
+  request shapes and the fallback sequence. Live v4 qualification remains a
+  release evidence follow-up before changing established higher-level paths.
+
+- Modern `ListGroups` API versions 4 and 5 are now covered by typed flexible
+  protocol messages and low-level `Client` methods. The new
+  `AdminClient::list_groups_with_options` negotiates the highest supported
+  version, sends state/type filters without loss, and preserves group state,
+  group type, throttle time, coordinator ID, and selected API version in
+  `GroupListing`. The low-level v1 method remains available for older callers.
+  Protocol bytes and an injected Kafka-style v5 negotiation roundtrip pass.
+  The live smoke gate now asserts v4 negotiation on Kafka 3.7.2 and v5
+  state/type-filter negotiation on Kafka 4.3.1; a successful workflow run is
+  still required before counting the modern path as released evidence.
+
+- Kafka API key 74 now preserves the Kafka version split: v0
+  `ListClientMetricsResources` compatibility for Kafka 3.9-era brokers and v1
+  `ListConfigResources` for Kafka 4.1+. The typed protocol, low-level `Client`,
+  and `AdminClient::list_config_resources` select v0 only for an exact
+  client-metrics filter and retain typed resource kinds for v1. Protocol,
+  Client, and injected Admin fallback tests pass. A Kafka 4.1+ live
+  qualification and published-artifact check remain open before adding the v1
+  path to the claim; a live v0 result is also required for the older-broker
+  compatibility claim. The manual
+  `.github/workflows/live-list-config-resources.yml` workflow checks the v1
+  capability and a real Admin roundtrip on Kafka 4.1.0, 4.2.0, or 4.3.1.
+
+- Kafka `DescribeCluster` API 60 v0/v1 is now implemented through the typed
+  protocol, low-level `Client`, and an opt-in `AdminClient` path. The result
+  preserves cluster ID, endpoint type, broker rack, and cluster authorized
+  operations, with Metadata fallback when API 60 is absent. Protocol,
+  injected-client, and Admin capability-routing tests pass. The existing
+  Metadata-based method remains unchanged for compatibility; live and
+  published-artifact qualification are part of the next Kafka 4.x workflow
+  run.
+
+- KRaft `AddRaftVoter` API 80 v0/v1 and `RemoveRaftVoter` API 81 v0 are now
+  implemented through typed flexible protocol messages, low-level Client
+  methods, and controller-routed Admin methods. AddRaftVoter v1 exposes
+  committed-acknowledgement semantics and rejects a v0 downgrade when that
+  semantic is requested. Focused wire tests, injected Client tests, and
+  injected controller-routing tests pass. The new
+  `admin_dynamic_quorum` example and
+  `.github/workflows/live-dynamic-quorum.yml` provision a Kafka 4.3.1
+  standalone/dynamic controller pair and exercise Add/RemoveRaftVoter with
+  DescribeQuorum convergence checks. A successful live run remains required
+  before this is included in the compatibility claim.
+
+- DescribeConfigs v4 is now available as an opt-in documentation-aware path.
+  `DescribeConfigsOptions::include_documentation(true)` negotiates API 32 v4,
+  preserves configuration type and documentation fields, and retains v1 as
+  the default compatibility path. Protocol, capability, and Admin injected
+  broker tests pass. The manual `live-list-config-resources.yml` workflow now
+  creates a real topic and qualifies both ListConfigResources v1 and
+  DescribeConfigs v4 on Kafka 4.1+, but a passing run and published-artifact
+  evidence remain open.
+
 - Stable KIP-932 v1 wire types now cover `ShareGroupHeartbeat` (API key 76),
   `ShareFetch` (API key 78), and `ShareAcknowledge` (API key 79), including
   flexible headers, share-session epochs, acknowledgement batches, acquired
@@ -2122,15 +2358,34 @@ Implemented evidence:
   a dedicated coordinator connection, supports bounded reconnect attempts, and
   cancels an in-flight request during shutdown in a focused test. Foreground
   heartbeat failures now rediscover the group coordinator instead of reconnecting
-  only to a stale address. Lost ShareAcknowledge responses are classified as a
-  typed unknown outcome and are never replayed automatically. The Kafka 4.3.1
+  only to a stale address. The public fault-injection harness now exercises the
+  `ShareConsumerConfig::build() -> poll() -> acknowledge() -> commit()` path
+  with a dropped ShareAcknowledge response, proving typed unknown-outcome
+  classification, no automatic replay, redelivery after session reset, and a
+  successful replacement acknowledgement.
+  Lost ShareAcknowledge responses are classified as a typed unknown outcome and
+  are never replayed automatically. The Kafka 4.3.1
   single-node live gate passed the complete poll/Renew/poll,
   acquisition-lock expiry/redelivery, Accept/commit, and close path in
   [`32213499877`](https://github.com/TaeeunKil/kafrust/actions/runs/32213499877).
   One three-broker leader-movement path, three independent active-heartbeat
   coordinator recovery attempts, and three consecutive in-process coordinator
-  churn cycles are now live-qualified; ambiguous acknowledgement
-  reconciliation remains open.
+  churn cycles are now live-qualified. Lost ShareAcknowledge responses are
+   tracked as typed unknown outcomes and the public
+   `reconcile_acknowledgement_outcomes` path discards the affected sessions
+   without replay; a subsequent poll accepts only broker-redelivered records.
+   The reconciliation path now permits that subsequent poll while continuing
+   to block `commit()` until redelivery clears the unknown state. Focused
+   regression coverage passes. The dedicated
+   `.github/workflows/share-kafka-acknowledgement-ambiguity.yml` gate now drops
+   the first `ShareAcknowledge` response for a `Release` and verifies
+   redelivery plus replacement `Accept`; a passing live result and long-running
+   acknowledgement reconciliation remain open.
+  `close()` now skips unknown acknowledgements without replaying them, completes
+  known shutdown releases, closes share sessions, leaves the group, and returns
+  the unknown-outcome error only after cleanup. A focused regression test keeps
+  this shutdown safety contract explicit; the live ambiguity and long-running
+  reconciliation gates remain open.
   KIP-1206 ShareFetch v2 is now negotiated when advertised: the high-level
   consumer exposes `BatchOptimized` (the backward-compatible default) and
   `RecordLimit`, which fails on brokers that cannot provide v2 rather than
@@ -2195,8 +2450,11 @@ Implemented evidence:
   pool, refresh metadata, and retry with refreshed routing. Injected tests cover
   the response semantics; the three-broker leader movement workflow passed in
   run [`32214201983`](https://github.com/TaeeunKil/kafrust/actions/runs/32214201983),
-  while acknowledgement reconciliation and soak remain open. The live runs
-  exposed and fixed stale broker-connection reuse,
+  while long-running acknowledgement reconciliation remains open. The
+  `ShareConsumer::reconcile_acknowledgement_outcomes` API now discards the
+  affected broker session after an ambiguous response and lets a later poll
+  observe redelivery without replaying the original acknowledgement. The live
+  runs exposed and fixed stale broker-connection reuse,
   partition fetches split across replacement leaders, and stale coordinator
   connections during group leave. Bootstrap reconnects now rotate across
   configured addresses when a dead broker resets requests after TCP connect.
@@ -2210,13 +2468,68 @@ Implemented evidence:
   this API while a real member is joined and verifies that the returned member
   set contains that member; the resulting workflow run remains the live
   qualification gate.
-- The 2026-08-19 competitor recheck adds `kacrab` to the comparison set. Its
+- ApiVersions v3 feature tags are now decoded into typed supported-feature and
+  finalized-feature metadata while unknown tags remain preserved. The new
+  `AdminClient::describe_features` read path exposes broker capability ranges,
+  the finalized-feature epoch, and the ZooKeeper-migration-ready flag.
+  Focused protocol and Admin conversion tests pass, and the existing broker
+  roundtrip smoke now exercises both the low-level v3 response and high-level
+  Admin method. Live matrix execution remains the qualification gate across
+  the declared Kafka versions.
+- KRaft `UpdateFeatures` v0/v1 is now implemented through a flexible typed wire
+  path, low-level `Client::update_features_v0/v1`, and controller-aware
+  `AdminClient::update_features`. The Admin path prefers v1 and falls back to
+  v0 only when validation-only and unsafe-downgrade semantics are not needed.
+  Top-level and per-feature outcomes are preserved, and transmitted-request
+  failures use the existing `AdminMutationOutcomeUnknown` contract instead of
+  replaying a feature change. Focused protocol and injected-client coverage is
+  in place; live authorization, downgrade, and controller-failover
+  qualification remain open.
+- Kafka `UnregisterBroker` API 64 v0 is now implemented through a flexible
+  typed protocol path, low-level `Client::unregister_broker_v0`, and the
+  controller-routed `AdminClient::unregister_broker` method. The result keeps
+  throttle and broker error metadata typed, and a transmitted-request failure
+  uses `AdminMutationOutcomeUnknown` rather than replaying the unregister
+  mutation. Protocol, injected Client, and injected controller-routing tests
+  pass. Live broker unregister/re-registration and controller-quorum health
+  qualification remain open.
+- Kafka Share Group State APIs 83-87 are now implemented through flexible
+  typed protocol requests and responses, low-level Client methods, and typed
+  coordinator-routed Admin methods. WriteShareGroupState v1 and
+  ReadShareGroupStateSummary v1 preserve `delivery_complete_count`; requests
+  that need those fields reject a v0-only broker rather than silently losing
+  data. Kafka currently marks these wire APIs unstable, so they are tracked as
+  an advanced protocol qualification rather than a required public client
+  surface. Initialize, Write, and Delete preserve the existing ambiguous-mutation
+  contract. Protocol and local capability/routing coverage pass, and the live
+  Share smoke workflow now covers metadata UUID discovery, initialize, v1
+  write, full read, v1 summary, and delete. A successful run is still required
+  before this advanced path is claimed; coordinator failure and replicated
+  state recovery remain open gates. The new
+  `.github/workflows/share-kafka-state-failover.yml` workflow adds the
+  replicated-state gate: it verifies the internal `__share_group_state` topic
+  is fully replicated, discovers the written share group's coordinator,
+  stops that coordinator, waits for coordinator reassignment, then reads the
+  full state and summary and deletes it through the surviving brokers. A
+  successful run remains required before replicated recovery is claimed.
+- `.github/workflows/live-update-features.yml` now provides a broker matrix
+  gate for the negotiated path: Kafka 3.7.2 exercises a harmless empty v0
+  mutation, while Kafka 4.3.1 exercises an empty v1 `validate_only` request.
+  The workflow is intentionally non-mutating at the feature level; live
+  authorization, non-empty downgrade semantics, and controller-failover
+  qualification remain separate gates.
+- The 2026-08-20 competitor recheck adds `kacrab` to the comparison set. Its
   published `0.4.0` docs claim Kafka 4.3 producer, consumer, share-consumer,
   and 62-operation Admin parity with a broker-matrix and fuzzing posture;
-  `krafka` remains ahead in modern protocol breadth and test infrastructure.
+  published `krafka` docs.rs currently resolve to `0.19.0`, while its current
+  source tree claims Kafka 4.3 parity, 2,350+ tests, six fuzz targets, and an
+  in-process fault-injecting broker; `krafka` remains ahead in modern protocol
+  breadth and test infrastructure.
   Kafrust's differentiator remains a Kafka 3.7-to-current compatibility target
   with a pure-Rust default codec and no librdkafka dependency, but that is not
   a substitute for the competitors' missing live and long-duration evidence.
+  The source-level inspection and remaining-gate matrix are recorded in
+  [`docs/competitor-source-audit-2026-08-20.md`](competitor-source-audit-2026-08-20.md).
 - Flexible `ApiVersions v3` request and response types report broker API
   version ranges, preserve unknown top-level tagged fields, and share a common
   capability lookup with the legacy v0 response. The high-level producer now
@@ -2347,10 +2660,14 @@ Implemented evidence:
   live example, which asserts Before/After callbacks in
   [`Live Kafka Smoke` run `31557534371`](https://github.com/TaeeunKil/kafrust/actions/runs/31557534371);
   target-workload timing and cancellation qualification remain open.
-- KIP-848 `ConsumerGroupHeartbeat v0` protocol types, Metadata v12 UUID
-  mappings, and a selectable high-level foreground group path are implemented
-  with assignment application, member-epoch heartbeats/rejoin, OffsetFetch v9,
-  OffsetCommit v9, explicit leave, and injected low-level roundtrip coverage.
+- KIP-848 `ConsumerGroupHeartbeat v0` protocol types for explicit topic names
+  and v1 for regex subscriptions, Metadata v12 UUID mappings, and a selectable
+  high-level foreground group path are implemented with assignment
+  application, member-epoch heartbeats/rejoin, negotiated OffsetFetch and
+  OffsetCommit v10 with v9 fallback, explicit leave, and injected low-level
+  roundtrip coverage. The current source path still needs a fresh live run
+  after this negotiation change before the published compatibility claim is
+  updated.
 - KIP-848 background heartbeats share member epoch and broker assignment state
   with the owning group handle. Assignment responses are applied once per
   response, nullable assignments preserve existing ownership, and a rejoin
