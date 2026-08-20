@@ -11,9 +11,19 @@ env:
 
 jobs:
   unregister-rejoin:
-    name: Kafka 4.3.1 unregister and re-register broker
+    name: Kafka ${{ matrix.kafka-version }} unregister and re-register broker
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        kafka-version:
+          - 3.7.2
+          - 3.8.1
+          - 3.9.1
+          - 4.3.1
+    env:
+      KAFKA_VERSION: ${{ matrix.kafka-version }}
 
     steps:
       - name: Checkout
@@ -27,7 +37,8 @@ jobs:
       - name: Start three-broker KRaft cluster
         run: |
           docker network create kafrust-unregister-rejoin
-          cluster_id="$(docker run --rm apache/kafka:4.3.1 /opt/kafka/bin/kafka-storage.sh random-uuid)"
+          kafka_image="apache/kafka:${KAFKA_VERSION}"
+          cluster_id="$(docker run --rm "$kafka_image" /opt/kafka/bin/kafka-storage.sh random-uuid)"
           echo "KAFRUST_CLUSTER_ID=$cluster_id" >> "$GITHUB_ENV"
           for node in 1 2 3; do
             external_port=$((19091 + node))
@@ -49,7 +60,7 @@ jobs:
               -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=3 \
               -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=2 \
               -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 \
-              apache/kafka:4.3.1
+              "$kafka_image"
           done
 
       - name: Wait for cluster
