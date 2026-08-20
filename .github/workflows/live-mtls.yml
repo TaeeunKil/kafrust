@@ -21,7 +21,7 @@ env:
   KAFRUST_TLS_CLIENT_CERT_DER_PATH: ${{ github.workspace }}/mtls/client.der
   KAFRUST_TLS_CLIENT_KEY_DER_PATH: ${{ github.workspace }}/mtls/client-key.der
   KAFRUST_ADMIN_TOPIC: kafrust-mtls-admin-${{ github.run_id }}
-  KAFRUST_TOPIC: kafrust-mtls-admin-${{ github.run_id }}
+  KAFRUST_TOPIC: kafrust-mtls-data-${{ github.run_id }}
   KAFRUST_GROUP_ID: kafrust-mtls-group-${{ github.run_id }}
   KAFRUST_TRANSACTIONAL_ID: kafrust-mtls-transaction-${{ github.run_id }}
   KAFRUST_KEY: mtls-key
