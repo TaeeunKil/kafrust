@@ -229,6 +229,16 @@ async fn api_versions_and_metadata_roundtrip_when_broker_is_configured() {
                     .expect("valid UpdateFeatures error code")
             })
             .unwrap_or(0);
+        let allow_downgrade = std::env::var("KAFRUST_UPDATE_FEATURES_ALLOW_DOWNGRADE")
+            .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE"))
+            .unwrap_or(false);
+        let verify_level = std::env::var("KAFRUST_UPDATE_FEATURES_VERIFY_LEVEL")
+            .ok()
+            .map(|value| {
+                value
+                    .parse::<i16>()
+                    .expect("valid UpdateFeatures verification level")
+            });
         let updates = feature_name
             .as_ref()
             .map(|feature_name| {
@@ -255,10 +265,10 @@ async fn api_versions_and_metadata_roundtrip_when_broker_is_configured() {
                             })
                     })
                     .expect("configured UpdateFeatures feature must be supported or finalized");
-                vec![kafrust::FeatureUpdate::new(
-                    feature_name.clone(),
-                    feature_level,
-                )]
+                vec![
+                    kafrust::FeatureUpdate::new(feature_name.clone(), feature_level)
+                        .allow_downgrade(allow_downgrade),
+                ]
             })
             .unwrap_or_default();
         let result = admin
@@ -287,6 +297,19 @@ async fn api_versions_and_metadata_roundtrip_when_broker_is_configured() {
                     feature_result.error_code(),
                     feature_result.error_message()
                 );
+                if let Some(expected_level) = verify_level {
+                    let after = admin
+                        .describe_features()
+                        .await
+                        .expect("feature state should be readable after UpdateFeatures");
+                    let actual_level = after
+                        .finalized_features()
+                        .iter()
+                        .find(|feature| feature.name() == feature_name)
+                        .map(|feature| feature.max_version_level())
+                        .expect("verified UpdateFeatures feature should be finalized");
+                    assert_eq!(actual_level, expected_level);
+                }
             }
         }
     }
