@@ -484,8 +484,8 @@ impl StreamsGroupSession {
                 active_tasks: Some(Vec::new()),
                 standby_tasks: Some(Vec::new()),
                 warmup_tasks: Some(Vec::new()),
-                task_offsets: Some(Vec::new()),
-                task_end_offsets: Some(Vec::new()),
+                task_offsets: None,
+                task_end_offsets: None,
                 shutdown_application: false,
             })
             .await?;
@@ -829,8 +829,8 @@ mod tests {
             assert_eq!(decoder.read_compact_string().unwrap(), "zone");
             assert_eq!(decoder.read_compact_string().unwrap(), "a");
             decoder.read_tagged_fields().unwrap();
-            assert_eq!(decoder.read_compact_array_length(), Some(0));
-            assert_eq!(decoder.read_compact_array_length(), Some(0));
+            assert_eq!(decoder.read_compact_array_length(), None);
+            assert_eq!(decoder.read_compact_array_length(), None);
             assert!(!decoder.read_bool().unwrap());
             decoder.read_tagged_fields().unwrap();
             write_streams_response(&mut broker_stream, correlation_id, "member-1", 2, 4).await;
