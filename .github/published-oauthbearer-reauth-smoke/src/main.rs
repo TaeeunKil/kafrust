@@ -14,6 +14,10 @@ fn required_env(name: &'static str) -> kafrust::Result<String> {
 
 #[tokio::main]
 async fn main() -> kafrust::Result<()> {
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .try_init();
+
     let bootstrap = required_env("KAFRUST_BOOTSTRAP_SERVERS")?;
     let ca_path = required_env("KAFRUST_TLS_ROOT_CERT_DER_PATH")?;
     let token = Arc::new(required_env("KAFRUST_OAUTH_TOKEN")?);
