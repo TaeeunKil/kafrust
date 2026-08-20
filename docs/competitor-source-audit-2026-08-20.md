@@ -1,6 +1,6 @@
 # Competitor Source Audit
 
-Date: 2026-08-20
+Date: 2026-08-21
 
 This is a source-level comparison of the current pure-Rust Kafka client
 alternatives. It is not a benchmark and it does not treat a README claim as
@@ -17,8 +17,9 @@ The audit used shallow source snapshots for the following revisions:
 | [kacrab](https://github.com/pirumu/kacrab) | `cf206a0` | published `0.4.0` |
 | [rskafka](https://github.com/influxdata/rskafka) | [`9b7699d`](https://github.com/influxdata/rskafka/tree/9b7699d2ed818c19145a2728bfc7a9c456a04b66) | published `0.6.0` |
 | [rust-rdkafka](https://github.com/fede1024/rust-rdkafka) | [`3f54ff1`](https://github.com/fede1024/rust-rdkafka/tree/3f54ff1dabe7eece876b9635e22462b04478a445) | published `0.39.0` / `librdkafka 2.12.1` |
+| [kafka-rust](https://github.com/kafka-rust/kafka-rust) | [`6681c81`](https://github.com/kafka-rust/kafka-rust/tree/6681c81e0f7a84547e972ec545f3ed278d2ecfec) | published `0.11.0` |
 | [kafkit-client](https://docs.rs/kafkit-client/0.1.9/kafkit_client/) | crates.io `0.1.9` source archive | published `0.1.9` |
-| kafrust | [`e799c96`](https://github.com/TaeeunKil/kafrust/tree/e799c96) | published `0.3.1` |
+| kafrust | [`81471fe`](https://github.com/TaeeunKil/kafrust/tree/81471fe12c5352746e84586377f57dac47b34ee7) | published `0.3.3` |
 
 The `kafkit-client` Cargo metadata points at a GitHub repository that currently
 returns 404, so the published crates.io archive was used instead of inventing
@@ -28,10 +29,11 @@ kafrust.
 
 The refreshed comparison also inspected the current source manifests and
 module trees directly. Approximate Rust source size, including comments and
-tests, was: kafrust application plus protocol crates 79.9k lines in 86 files;
-krafka 144.8k lines in 133 files; rskafka 14.5k lines in 45 files; and the
-rust-rdkafka wrapper 10.4k lines in 19 files, excluding its native librdkafka
-tree. These counts indicate engineering surface, not quality or compatibility.
+tests, was: kafrust application plus protocol crates 74.1k lines in 86 files;
+krafka 135.2k lines in 133 files; rskafka 15.0k lines in 45 files;
+kafka-rust 10.5k lines in 30 files; and the rust-rdkafka wrapper 15.4k lines in
+19 source files plus 22 test files, excluding its native librdkafka tree.
+These counts indicate engineering surface, not quality or compatibility.
 
 The current pure-Rust source snapshot shows 63 named kafrust protocol API
 modules, 54 named krafka protocol message modules, and 12 named rskafka
@@ -50,6 +52,13 @@ surfaces separate.
   built-in buffering. It has useful pure-Rust transport, compression, SASL/TLS,
   fuzzing, and benchmark patterns, but it is not a competing drop-in client
   for kafrust's target.
+- `kafka-rust` `0.11.0` is a maintained legacy-style client with a synchronous
+  `KafkaClient`/`Producer`/consumer surface. Its source exposes the classic
+  Produce, Fetch, Metadata, OffsetCommit, and OffsetFetch paths plus optional
+  compression and security, but no AdminClient, transaction state machine,
+  modern consumer-group protocol, ShareConsumer, or client telemetry. It is
+  useful for migration ergonomics and legacy wire fixtures, not a breadth
+  leader for the 1.0 target.
 - `krafka` `0.20.0` is the closest current pure-Rust comparison. Its source
   contains producer batching/idempotence/transactions, classic and KIP-848
   consumer runtime code, ShareConsumer, broad Admin APIs, telemetry, several
@@ -83,9 +92,22 @@ surfaces separate.
   A same-group two-cycle churn run then verified member 2 rejoining and taking
   over all six partitions after member 1 stopped, with 12 unique offsets, in
   [`32391027028`](https://github.com/TaeeunKil/kafrust/actions/runs/32391027028).
+  The same published workflow now passes a third member-loss/rejoin cycle,
+  with 18 unique offsets and the final survivor draining its metrics to
+  `in_flight=0` in [`32392994232`](https://github.com/TaeeunKil/kafrust/actions/runs/32392994232).
   The remaining Share gaps are higher-cycle churn, long-running ownership and
   backpressure qualification, Streams background heartbeat/assignment
   ownership, and broader published coverage.
+
+The fresh source checkout also makes the implementation boundary explicit:
+
+| Project | Production implementation boundary | What the source actually proves |
+| --- | --- | --- |
+| `rust-rdkafka` | Rust API over `rdkafka-sys` and librdkafka; native build/bindings and unsafe FFI are part of the dependency graph | Broad mature behavior, but not a pure-Rust implementation target |
+| `rskafka` | Pure-Rust async transport and a small Produce/Fetch-oriented protocol client; `rdkafka` appears only in dev-dependencies for comparison tests | Good transport/codec/security reference, intentionally not a full Kafka client |
+| `kafka-rust` | Pure-Rust synchronous legacy client with hand-written classic protocol modules | Useful compatibility reference, but no modern Admin, transaction, Share, or telemetry surface |
+| `krafka` | Pure-Rust async client with hand-written protocol modules, shared transport, producer state machines, Admin, groups, Share, telemetry, and a fake broker | Closest feature and test-infrastructure competitor; its optional Zstd feature still uses `zstd-sys` |
+| `kafrust` | Pure-Rust async client with separate typed runtime and protocol crates, no required native client binding, and strict no-unsafe linting | Broader named protocol surface than the smaller clients, but published runtime evidence and long-running operational semantics remain the main gap |
 
 ## Findings By Project
 
