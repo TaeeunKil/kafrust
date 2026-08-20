@@ -437,7 +437,13 @@ replay, and reconcile broker 1 as absent through `DescribeCluster` in
 [`32357381909`](https://github.com/TaeeunKil/kafrust/actions/runs/32357381909)
 and [`32357381879`](https://github.com/TaeeunKil/kafrust/actions/runs/32357381879).
 These are operation-specific proofs, not a universal claim for every Admin
-mutation. The same current-source gate also qualifies CreatePartitions by
+mutation. A separate three-node Kafka 4.3.1 KRaft run stopped broker 1,
+unregistered it through the surviving controller quorum, restarted the same
+node, and verified broker re-registration plus quorum health in
+[`32358666947`](https://github.com/TaeeunKil/kafrust/actions/runs/32358666947).
+This qualifies the multi-controller operational path for Kafka 4.3.1; it does
+not replace version-, authorization-, or workload-specific gates. The same
+current-source gate also qualifies CreatePartitions by
 expanding a topic from one to two partitions before dropping the response, on
 Kafka 3.7.2 in [`31771635710`](https://github.com/TaeeunKil/kafrust/actions/runs/31771635710)
 and Kafka 4.3.1 in [`31771636082`](https://github.com/TaeeunKil/kafrust/actions/runs/31771636082).

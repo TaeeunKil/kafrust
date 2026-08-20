@@ -2560,20 +2560,25 @@ Implemented evidence:
   throttle and broker error metadata typed, and a transmitted-request failure
   uses `AdminMutationOutcomeUnknown` rather than replaying the unregister
   mutation. Protocol, injected Client, and injected controller-routing tests
-  pass. Live broker unregister/re-registration and controller-quorum health
-  qualification remain open.
+  pass. The live multi-controller operational path is qualified for Kafka 4.3.1
+  in [`32358666947`](https://github.com/TaeeunKil/kafrust/actions/runs/32358666947):
+  a three-node KRaft cluster stopped broker 1, unregistered it through the
+  surviving controller quorum, restarted the same node, and verified
+  re-registration plus quorum health.
 - The reusable current-source Admin response-drop gate now includes API 64:
   the first `UnregisterBroker` response is dropped, the client returns
   `AdminMutationOutcomeUnknown` without replay, and `DescribeCluster` observes
   broker 1 absent. This closes transport-ambiguity evidence only; the
-  multi-controller unregister/re-registration gate remains open. Kafka 3.7.2
+  multi-controller gate is recorded separately below. Kafka 3.7.2
   and 4.3.1 passed in [`32357381909`](https://github.com/TaeeunKil/kafrust/actions/runs/32357381909)
   and [`32357381879`](https://github.com/TaeeunKil/kafrust/actions/runs/32357381879).
-- The new `live-unregister-broker-rejoin.yml` gate is prepared for the remaining
-  operational proof. It uses a three-node Kafka 4.3.1 KRaft cluster, stops the
-  target broker, unregisters it through the surviving controller quorum,
-  restarts the same node, and verifies broker re-registration plus quorum
-  health. This remains unqualified until the workflow passes.
+- The `live-unregister-broker-rejoin.yml` gate now qualifies the remaining
+  operational proof for Kafka 4.3.1 in
+  [`32358666947`](https://github.com/TaeeunKil/kafrust/actions/runs/32358666947).
+  It uses a three-node KRaft cluster, stops the target broker, unregisters it
+  through the surviving controller quorum, restarts the same node, and verifies
+  broker re-registration plus quorum health. Other broker versions and
+  workload-specific failure policy remain separate gates.
 - Kafka Share Group State APIs 83-87 are now implemented through flexible
   typed protocol requests and responses, low-level Client methods, and typed
   coordinator-routed Admin methods. Share-group membership/admin operations
