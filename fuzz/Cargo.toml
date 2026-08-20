@@ -55,8 +55,36 @@ doc = false
 bench = false
 
 [[bin]]
+name = "streams_groups_response"
+path = "fuzz_targets/streams_groups_response.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "offset_commit_response"
+path = "fuzz_targets/offset_commit_response.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "offset_fetch_response"
+path = "fuzz_targets/offset_fetch_response.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "compression"
 path = "fuzz_targets/compression.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "list_groups_response"
+path = "fuzz_targets/list_groups_response.rs"
 test = false
 doc = false
 bench = false

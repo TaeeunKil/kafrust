@@ -23,9 +23,14 @@ expected result. A crash, abort, or sanitizer report is a protocol defect and
 must be reduced to a regression test before the target is restarted.
 
 The current targets cover primitive/flexible decoding, request framing,
-classic and modern group descriptions, share-group offsets, and all five
-Kafka record compression codecs.
+classic and modern group descriptions, Streams group responses, share-group
+offsets, classic, member-aware, and topic-UUID OffsetCommit and OffsetFetch
+responses, ListGroups v1/v4/v5 responses, and all five Kafka record
+compression codecs.
 
-The GitHub workflow compiles every target and runs a bounded smoke campaign
-for each target. This catches immediate crashes without pretending that a
-short scheduled run is equivalent to a sustained corpus campaign.
+The GitHub workflow compiles every target and runs a corpus-backed campaign
+for each target. Each weekly/manual run gives every target a bounded time,
+RSS, and per-input timeout budget, then uploads the generated corpus and any
+libFuzzer crash artifacts. A crash must be reduced to a deterministic
+regression test before the target is restarted; an uploaded corpus is
+qualification evidence, not a substitute for the regression test.
