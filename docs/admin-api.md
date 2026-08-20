@@ -105,7 +105,10 @@ qualified the same non-empty `metadata.version` request on Kafka 3.7.2 and
 4.3.1: a restricted principal with only cluster `Describe` was rejected with
 `ClusterAuthorizationFailed` (31), while an administrator with `Alter Cluster`
 was accepted in [`32362301496`](https://github.com/TaeeunKil/kafrust/actions/runs/32362301496).
-Actual upgrade/downgrade and controller-failover qualification remain open.
+The controller-routed validation path also survived an active-controller
+failure on both versions in [`32363072430`](https://github.com/TaeeunKil/kafrust/actions/runs/32363072430).
+Actual upgrade/downgrade and state-changing mutation during controller failover
+remain open.
 
 ## DescribeTopicPartitions
 

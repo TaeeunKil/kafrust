@@ -125,12 +125,16 @@ passed in [`32360936437`](https://github.com/TaeeunKil/kafrust/actions/runs/3236
 and Kafka 4.3.1 passed in
 [`32361035007`](https://github.com/TaeeunKil/kafrust/actions/runs/32361035007).
 This qualifies the populated request and response mapping only; it does not
-claim a finalized upgrade/downgrade or controller failover behavior. A
+claim a finalized upgrade/downgrade or state-changing mutation during
+controller failover. A
 separate SASL/PLAIN StandardAuthorizer matrix qualified UpdateFeatures
 authorization on both Kafka versions in
 [`32362301496`](https://github.com/TaeeunKil/kafrust/actions/runs/32362301496):
 the restricted principal was rejected with error 31 and the administrator was
-accepted.
+accepted. The separate three-broker controller-failover matrix
+[`32363072430`](https://github.com/TaeeunKil/kafrust/actions/runs/32363072430)
+stopped the active controller, waited for a new leader, and passed the same
+v1 validation through the surviving broker quorum on both versions.
 
 The low-level `Client::api_versions_cached` helper now prefers flexible
 `ApiVersions` v4 and falls back to v3 when a broker returns
