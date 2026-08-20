@@ -222,9 +222,9 @@ through configured broker addresses so a broker that accepts TCP but resets
 Kafka requests does not consume the entire retry budget. The multi-broker
 workflow now exercises three consecutive coordinator-loss/recovery cycles in
 one process. The deterministic public response-loss gate now covers the
-  unknown-outcome classification and deterministic redelivery recovery, while live
-  acknowledgement reconciliation,
-assignment/rebalance behavior, and long-running heartbeat soak tests remain
+unknown-outcome classification and deterministic redelivery recovery. Live
+acknowledgement reconciliation now also passes against Kafka 4.3.1;
+assignment/rebalance behavior and long-running heartbeat soak tests remain
 open hardening work.
 
 The implementation reuses kafrust's bounded fetch decoder, including record
@@ -242,6 +242,10 @@ reconciliation is exercised by the separate
 drops the first `ShareAcknowledge` response for a `Release`, requires the client
 to classify the outcome as unknown without replaying it, then verifies broker
 redelivery, replacement `Accept`, and successful completion.
+The ordinary acknowledgement soak passed in
+[`32346739498`](https://github.com/TaeeunKil/kafrust/actions/runs/32346739498),
+and the live response-loss reconciliation gate passed in
+[`32347035522`](https://github.com/TaeeunKil/kafrust/actions/runs/32347035522).
 
 ## Release Gate
 

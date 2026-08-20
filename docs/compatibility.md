@@ -264,8 +264,11 @@ remain separate.
 
 The high-level `ShareConsumer` path now has recorded Kafka 4.3.1 single-node,
 three-broker leader-movement, active-heartbeat coordinator-loss, and repeated
-in-process churn results in the Share workflows. The remaining Share claim is
-narrower: ambiguous acknowledgement response loss, long reconciliation soak,
+in-process churn results in the Share workflows. Kafka 4.3.1 also passed the
+response-loss ambiguity workflow, including unknown-outcome classification,
+redelivery, and replacement acknowledgement, in
+[`32347035522`](https://github.com/TaeeunKil/kafrust/actions/runs/32347035522).
+The remaining Share claim is narrower: long-running ambiguous reconciliation
 and published-artifact qualification remain open. The current evidence is
 listed in `docs/share-consumer.md` and the corresponding workflow history.
 

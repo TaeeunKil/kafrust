@@ -2426,13 +2426,14 @@ Implemented evidence:
    regression coverage passes. The dedicated
    `.github/workflows/share-kafka-acknowledgement-ambiguity.yml` gate now drops
    the first `ShareAcknowledge` response for a `Release` and verifies
-   redelivery plus replacement `Accept`; a passing live result and long-running
-   acknowledgement reconciliation remain open.
+   redelivery plus replacement `Accept`; Kafka 4.3.1 passed this gate in
+   [`32347035522`](https://github.com/TaeeunKil/kafrust/actions/runs/32347035522).
+   Long-running ambiguous reconciliation remains open.
   `close()` now skips unknown acknowledgements without replaying them, completes
   known shutdown releases, closes share sessions, leaves the group, and returns
   the unknown-outcome error only after cleanup. A focused regression test keeps
-  this shutdown safety contract explicit; the live ambiguity and long-running
-  reconciliation gates remain open.
+  this shutdown safety contract explicit; long-running ambiguous reconciliation
+  remains open.
   KIP-1206 ShareFetch v2 is now negotiated when advertised: the high-level
   consumer exposes `BatchOptimized` (the backward-compatible default) and
   `RecordLimit`, which fails on brokers that cannot provide v2 rather than
