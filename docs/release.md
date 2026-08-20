@@ -7,6 +7,39 @@ kafrust publishes two crates:
 
 Publish `kafrust-protocol` before `kafrust` because the client crate depends on the protocol crate by version.
 
+## 0.3.5 Release Preparation
+
+This patch release carries the OAUTHBEARER connection re-authentication fix.
+The client now follows Kafka's negotiated re-authentication sequence with
+SASL handshake v1 and SASL authenticate v1 on the existing connection, while
+preserving the provider-backed session lifetime behavior.
+
+### Breaking changes
+
+None intended.
+
+### Migration notes
+
+None. Existing OAUTHBEARER configuration remains the same.
+
+### Compatibility evidence
+
+The published signed OAUTHBEARER re-authentication gate is pending the
+`0.3.5` crates.io artifacts. The earlier failing runs resolved the already
+published `0.3.4` artifact and do not qualify this fix.
+
+### Verification
+
+The required local workspace validation must pass before publication. After
+protocol-first publication, rerun
+`.github/workflows/published-signed-oauthbearer-smoke.yml` with `0.3.5` and
+record the external result here.
+
+### Known limits
+
+This release does not close the broader provider discovery, key rotation,
+outage behavior, or Kafka 1.0 replacement gates.
+
 ## Versioning
 
 The public alpha line starts at `0.1.0`. Until the protocol and runtime behavior stabilize, keep public API additions small and document alpha limits in the affected API direction document.

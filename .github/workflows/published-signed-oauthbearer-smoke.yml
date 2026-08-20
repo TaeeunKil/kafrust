@@ -6,7 +6,7 @@ on:
       kafrust_version:
         description: "Published kafrust version to execute from crates.io"
         required: true
-        default: "0.3.4"
+        default: "0.3.5"
 
 permissions:
   contents: read
@@ -191,7 +191,7 @@ jobs:
 
       - name: Create fresh external published project
         env:
-          KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version || '0.3.4' }}
+          KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version || '0.3.5' }}
         run: |
           project_dir="$RUNNER_TEMP/kafrust-published-signed-oauthbearer"
           cargo new --bin "$project_dir"
@@ -214,7 +214,7 @@ jobs:
 
       - name: Create fresh external re-authentication project
         env:
-          KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version || '0.3.4' }}
+          KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version || '0.3.5' }}
         run: |
           project_dir="$RUNNER_TEMP/kafrust-published-oauthbearer-reauth"
           cargo new --bin "$project_dir"
@@ -238,7 +238,7 @@ jobs:
 
       - name: Verify published dependency versions
         env:
-          KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version || '0.3.4' }}
+          KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version || '0.3.5' }}
         run: |
           lockfile="$RUNNER_TEMP/kafrust-published-signed-oauthbearer/Cargo.lock"
           grep -A1 -q 'name = "kafrust"' "$lockfile"
