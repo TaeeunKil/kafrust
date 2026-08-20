@@ -147,6 +147,7 @@ use kafrust_protocol::api::streams_group_describe::{
 use kafrust_protocol::api::unregister_broker::UnregisterBrokerResponseV0;
 use kafrust_protocol::api::update_features::UpdateFeaturesResponseV0;
 
+use crate::broker_client_cache::SharedBrokerClientCacheHandle;
 use crate::client::{format_share_partition_coordinator_key, Client};
 use crate::config::ClientConfig;
 use crate::error::{BrokerErrorKind, Error, Result};
@@ -291,6 +292,7 @@ fn admin_mutation_error(client: &Client, operation: &'static str, error: Error) 
 pub struct AdminClient {
     config: ClientConfig,
     max_retries: u32,
+    broker_clients: SharedBrokerClientCacheHandle,
 }
 
 impl AdminClient {
@@ -299,6 +301,9 @@ impl AdminClient {
         Self {
             config,
             max_retries: ADMIN_COORDINATOR_MAX_RETRIES,
+            broker_clients: std::sync::Arc::new(
+                crate::broker_client_cache::SharedBrokerClientCache::default(),
+            ),
         }
     }
 
@@ -332,6 +337,39 @@ impl AdminClient {
         self.config.metrics_ref()
     }
 
+    async fn connect_admin_broker(&self, broker_addr: String) -> Result<Client> {
+        if let Some(client) = self.broker_clients.take(&broker_addr).await {
+            return Ok(client);
+        }
+        self.config.connect_broker(broker_addr).await
+    }
+
+    async fn cache_admin_broker(&self, broker_addr: String, client: Client) {
+        self.broker_clients
+            .insert(
+                broker_addr,
+                client,
+                self.config.max_idle_broker_connections_ref(),
+            )
+            .await;
+    }
+
+    async fn connect_admin_bootstrap(&self) -> Result<(String, Client)> {
+        self.config.validate()?;
+        let servers = self.config.bootstrap_servers();
+        if servers.is_empty() {
+            return Err(Error::MissingBootstrapServer);
+        }
+        let mut last_error = None;
+        for server in servers {
+            match self.connect_admin_broker(server.clone()).await {
+                Ok(client) => return Ok((server.clone(), client)),
+                Err(error) => last_error = Some(error),
+            }
+        }
+        Err(last_error.unwrap_or(Error::MissingBootstrapServer))
+    }
+
     async fn metadata_with_admin_retries(
         &self,
         topics: Option<Vec<String>>,
@@ -347,8 +385,8 @@ impl AdminClient {
         retry: &mut u32,
     ) -> Result<MetadataResponseV1> {
         loop {
-            let mut client = match self.config.clone().connect().await {
-                Ok(client) => client,
+            let (broker_addr, mut client) = match self.connect_admin_bootstrap().await {
+                Ok(connection) => connection,
                 Err(error)
                     if *retry < self.max_retries && is_retryable_admin_read_error(&error) =>
                 {
@@ -368,7 +406,10 @@ impl AdminClient {
                     self.config.record_retry();
                     tokio::time::sleep(admin_coordinator_retry_backoff(*retry)).await;
                 }
-                Ok(metadata) => return Ok(metadata),
+                Ok(metadata) => {
+                    self.cache_admin_broker(broker_addr, client).await;
+                    return Ok(metadata);
+                }
                 Err(error)
                     if *retry < self.max_retries && is_retryable_admin_read_error(&error) =>
                 {
@@ -16262,6 +16303,32 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn reuses_admin_bootstrap_connection_for_sequential_metadata_reads() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut connection, _) = listener.accept().await.unwrap();
+            for _ in 0..2 {
+                let request = read_frame(&mut connection).await;
+                assert_eq!(&request[0..4], &[0, 3, 0, 1]);
+                write_frame(&mut connection, &metadata_response(addr.port())).await;
+            }
+        });
+        let admin =
+            AdminClient::new(ClientConfig::new([addr.to_string()]).request_timeout_ms(1_000));
+        let cloned = admin.clone();
+        assert!(!std::sync::Arc::ptr_eq(
+            &admin.broker_clients,
+            &admin.config.shared_broker_clients(),
+        ));
+
+        admin.describe_cluster().await.unwrap();
+        cloned.describe_cluster().await.unwrap();
+
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn adds_raft_voter_through_the_dedicated_controller() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -17048,10 +17115,9 @@ mod tests {
             assert_eq!(&request[0..4], &[0, 46, 0, 0]);
             drop(first_controller);
 
-            let (mut second_bootstrap, _) = listener.accept().await.unwrap();
-            let metadata_request = read_frame(&mut second_bootstrap).await;
+            let metadata_request = read_frame(&mut first_bootstrap).await;
             assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
-            write_frame(&mut second_bootstrap, &metadata_response(addr.port())).await;
+            write_frame(&mut first_bootstrap, &metadata_response(addr.port())).await;
 
             let (mut second_controller, _) = listener.accept().await.unwrap();
             let request = read_frame(&mut second_controller).await;
@@ -17104,10 +17170,9 @@ mod tests {
             )
             .await;
 
-            let (mut second_bootstrap, _) = listener.accept().await.unwrap();
-            let metadata_request = read_frame(&mut second_bootstrap).await;
+            let metadata_request = read_frame(&mut first_bootstrap).await;
             assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
-            write_frame(&mut second_bootstrap, &metadata_response(addr.port())).await;
+            write_frame(&mut first_bootstrap, &metadata_response(addr.port())).await;
 
             let (mut second_controller, _) = listener.accept().await.unwrap();
             let request = read_frame(&mut second_controller).await;
@@ -19706,11 +19771,10 @@ mod tests {
             assert_eq!(&request[0..4], &[0, 21, 0, 1]);
             drop(dropped_leader);
 
-            let (mut retry_bootstrap, _) = listener.accept().await.unwrap();
-            let metadata_request = read_frame(&mut retry_bootstrap).await;
+            let metadata_request = read_frame(&mut bootstrap).await;
             assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
             write_frame(
-                &mut retry_bootstrap,
+                &mut bootstrap,
                 &delete_records_metadata_response(addr.port()),
             )
             .await;
@@ -19867,7 +19931,6 @@ mod tests {
             read_frame(&mut leader).await;
             drop(leader);
 
-            let (mut bootstrap, _) = listener.accept().await.unwrap();
             read_frame(&mut bootstrap).await;
             write_frame(
                 &mut bootstrap,
@@ -19916,7 +19979,6 @@ mod tests {
             read_frame(&mut leader).await;
             write_frame(&mut leader, &describe_producers_error_response(6)).await;
 
-            let (mut bootstrap, _) = listener.accept().await.unwrap();
             read_frame(&mut bootstrap).await;
             write_frame(
                 &mut bootstrap,

@@ -984,6 +984,16 @@ impl ClientConfig {
     }
 
     async fn connect_servers_rotating(&self, servers: &[String], start: usize) -> Result<Client> {
+        self.connect_servers_rotating_with_address(servers, start)
+            .await
+            .map(|(_, client)| client)
+    }
+
+    async fn connect_servers_rotating_with_address(
+        &self,
+        servers: &[String],
+        start: usize,
+    ) -> Result<(String, Client)> {
         if servers.is_empty() {
             return Err(Error::MissingBootstrapServer);
         }
@@ -992,7 +1002,7 @@ impl ClientConfig {
         for offset in 0..servers.len() {
             let server = &servers[(start + offset) % servers.len()];
             match self.connect_broker(server.clone()).await {
-                Ok(client) => return Ok(client),
+                Ok(client) => return Ok((server.clone(), client)),
                 Err(error) => last_error = Some(error),
             }
         }

@@ -158,6 +158,15 @@ published acknowledgement/commit slice; multi-member churn, broker-failover
 acknowledgement under load, secured Share, and production-SLO evidence remain
 open.
 
+The runtime connection-lifecycle slice now gives `AdminClient` its own idle
+connection cache, shared only by clones of that AdminClient. Sequential Admin
+metadata reads reuse a healthy broker connection, while transport failures are
+not returned to the cache. Producer cache sharing remains separate; direct
+consumer Fetch sessions, ShareFetch sessions, and group heartbeat/membership
+connections remain instance- or operation-owned until their session-aware lease
+contracts are implemented. The focused Admin reuse regression passes; broader
+Admin broker-operation reuse and live connection-churn evidence remain open.
+
 The verification-hardening slice now includes a standalone pure-Rust fuzz
 workspace with ten libFuzzer targets covering primitive/flexible decoding,
 framing, classic and modern group descriptions, share-group offsets, and all

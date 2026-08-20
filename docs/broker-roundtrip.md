@@ -60,8 +60,13 @@ poisoned connections are therefore not reused. When the bound is reached, the
 oldest idle entry is evicted in FIFO order. Producer instances built from
 cloned `ClientConfig` values share the producer cache. Direct consumers retain
 an instance-local cache because Kafka Fetch session state belongs to one
-consumer instance; Admin, group, and Share clients have separate
-connection-lifecycle paths.
+consumer instance. `AdminClient` clones share a separate Admin-only idle cache;
+the metadata read path returns a connection to that cache only after a complete
+response, while controller and coordinator operations remain explicitly
+owned by their operation until their retry/lifecycle contracts are lease-aware.
+Group and Share clients likewise retain separate connection-lifecycle paths so
+heartbeat, membership, and ShareFetch session state cannot cross client
+instances.
 
 `ClientConfig::security_protocol` and the matching producer, consumer, and group builders default to `SecurityProtocol::Plaintext`. `SecurityProtocol::Tls` uses the non-default `tls` crate feature and is covered by the recorded broker roundtrip, producer, direct consumer, and consumer group smoke profile. TLS server name validation defaults to the bootstrap host and can be overridden with `tls_server_name(name)` or `KAFRUST_TLS_SERVER_NAME` for examples and broker checks. Extra DER root certificates can be added with `tls_root_certificate_der(bytes)` or `KAFRUST_TLS_ROOT_CERT_DER_PATH` for examples and broker checks. SASL/PLAIN and SASL/SCRAM-SHA-256/512 authentication are implemented for configured `SaslPlaintext` and `SaslTls` connections; SASL/PLAIN over `SaslPlaintext` and SASL/SCRAM-SHA-256 over `SaslTls` are covered by recorded broker roundtrip, producer, direct consumer, and consumer group smoke profiles.
 
