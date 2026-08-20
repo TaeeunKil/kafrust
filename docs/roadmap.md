@@ -2284,8 +2284,14 @@ Implemented evidence:
   [`32343983601`](https://github.com/TaeeunKil/kafrust/actions/runs/32343983601)
   and Kafka 4.3.1 passed in
   [`32343983397`](https://github.com/TaeeunKil/kafrust/actions/runs/32343983397).
-  Certificate rotation behavior and published-artifact mTLS evidence remain
-  separate security gates.
+  Published `kafrust 0.3.1` then passed the same mTLS workflow from fresh
+  external Cargo projects on Kafka 3.7.2 in
+  [`32344673371`](https://github.com/TaeeunKil/kafrust/actions/runs/32344673371)
+  and Kafka 4.3.1 in
+  [`32344673373`](https://github.com/TaeeunKil/kafrust/actions/runs/32344673373),
+  covering Admin, producer, direct consumer, consumer group, and
+  transactional/read-committed paths. Certificate rotation behavior remains a
+  separate security gate.
 
 - The test suite now includes a reusable in-process scripted broker harness
   under `crates/kafrust/tests/support/`. It records API key, version,
