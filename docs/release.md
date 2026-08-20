@@ -563,6 +563,15 @@ builds `librdkafka` only in this external benchmark project and does not add a C
 dependency to kafrust. This is one reproducible throughput baseline, not API or
 feature parity, production SLO evidence, or a universal performance ranking.
 
+The published `kafrust 0.3.4` comparison passed in
+[run 32407748417](https://github.com/TaeeunKil/kafrust/actions/runs/32407748417)
+against Kafka 4.3.1. With three repetitions of 20,000 1-KiB records in
+batches of 200, kafrust reached median throughput of 62,392.59 producer and
+330,812.61 consumer records/s; `rust-rdkafka 0.39.0` reached 149,516.77
+producer and 580,226.56 consumer records/s. This is a single published
+produce/fetch baseline and does not claim feature parity, failure compatibility,
+or production SLO equivalence.
+
 The published soak workflow
 [`31744827441`](https://github.com/TaeeunKil/kafrust/actions/runs/31744827441)
 passed a fresh external `kafrust 0.2.28` project against Kafka 4.3.1. The

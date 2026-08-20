@@ -3588,6 +3588,14 @@ Implemented evidence:
   consumer records/s; rust-rdkafka measured 48,452 producer and 252,306
   consumer records/s. This closes the direct benchmark evidence gap, but not
   API/feature parity, production SLO, or universal performance claims.
+- The current published `kafrust 0.3.4` comparison passed in
+  [`32407748417`](https://github.com/TaeeunKil/kafrust/actions/runs/32407748417).
+  Across three repetitions of the 20,000-record, 1-KiB, batch-size-200
+  Kafka 4.3.1 profile, kafrust reached median throughput of 62,392.59 producer
+  and 330,812.61 consumer records/s, while `rust-rdkafka 0.39.0` reached
+  149,516.77 producer and 580,226.56 consumer records/s. This is the current
+  published workload baseline; feature parity, failure compatibility, and
+  production SLO gates remain open.
 - The published single-node soak gate then passed in
   [`31744827441`](https://github.com/TaeeunKil/kafrust/actions/runs/31744827441).
   A fresh external `0.2.28` project ran for 120 seconds against Kafka 4.3.1,
