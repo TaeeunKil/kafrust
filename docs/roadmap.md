@@ -2761,8 +2761,13 @@ Implemented evidence:
   ApiVersions negotiation and the v1 response mapping. The existing
   `admin_consumer_group_offsets_member` Kafka 4.3.1 KIP-848 workflow now calls
   this API while a real member is joined and verifies that the returned member
-  set contains that member; the resulting workflow run remains the live
-  qualification gate.
+  set contains that member. The published `kafrust 0.3.4` gate now qualifies
+  the same public read path from a fresh external project on Kafka 4.3.1 in
+  [`32408765709`](https://github.com/TaeeunKil/kafrust/actions/runs/32408765709):
+  it observed `state=Stable`, group/assignment epochs `2/2`, `member_type=1`,
+  `member_epoch=2`, and current/target assignment of topic partition 0.
+  Kafka 3.7.2 remains outside this gate because API 69 is advertised from Kafka
+  3.8 onward; security and multi-member qualification remain open.
 - ApiVersions v3 feature tags are now decoded into typed supported-feature and
   finalized-feature metadata while unknown tags remain preserved. The new
   `AdminClient::describe_features` read path exposes broker capability ranges,

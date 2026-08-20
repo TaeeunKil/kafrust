@@ -62,6 +62,14 @@ The external artifacts observed supported/finalized feature counts of `1/1`
 and `1/6`, with finalized epochs `68` and `80`, respectively. Feature mutation,
 security, and broader version matrices remain open.
 
+The published `kafrust 0.3.4` external gate also qualifies
+`AdminClient::describe_consumer_groups_modern` (ConsumerGroupDescribe API 69)
+on Kafka 4.3.1 in [`32408765709`](https://github.com/TaeeunKil/kafrust/actions/runs/32408765709).
+The fixture joined a real KIP-848 member and observed `state=Stable`, group and
+assignment epochs `2/2`, `member_type=1`, `member_epoch=2`, and both current and
+target assignment for topic partition 0. Kafka versions that do not advertise
+API 69, security variants, and multi-member churn remain separate gates.
+
 ## Module Visibility
 
 The crate also exposes public modules:

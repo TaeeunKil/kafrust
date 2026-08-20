@@ -228,6 +228,14 @@ and Kafka 4.3.1 returned one supported and six finalized features at epoch 80
 in [run 32406914237](https://github.com/TaeeunKil/kafrust/actions/runs/32406914237).
 Both published artifacts recorded `feature_metadata=true`.
 
+The published `ConsumerGroupDescribe` gate also passed on Kafka 4.3.1 in
+[run 32408765709](https://github.com/TaeeunKil/kafrust/actions/runs/32408765709).
+A fresh external `kafrust 0.3.4` project joined a KIP-848 member and verified
+the modern Admin response's stable state, group/assignment epochs, consumer
+member type and epoch, and current/target assignment for partition 0. This
+qualifies the published API 69 read path on Kafka 4.3.1; older Kafka versions
+without the advertised API remain a separate compatibility boundary.
+
 The `0.2.18` packages passed Cargo publish verification and both staged
 all-feature package-documentation builds on commit `373de00`. The matching
 `kafrust-protocol` and `kafrust` packages were published in that order; both
