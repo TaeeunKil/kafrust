@@ -41,9 +41,10 @@ async fn main() -> kafrust::Result<()> {
         }
         "delete_consumer_groups" => qualify_delete_consumer_groups(&admin, &topic).await?,
         "delete_topics" => qualify_delete_topics(&admin, &topic).await?,
+        "unregister_broker" => qualify_unregister_broker(&admin).await?,
         _ => {
             return Err(Error::Unsupported(
-                "KAFRUST_ADMIN_MUTATION must be create_topics, create_partitions, incremental_alter_configs, alter_configs, create_acls, delete_acls, alter_client_quotas, alter_user_scram_credentials, create_delegation_token, alter_consumer_group_offsets, delete_consumer_group_offsets, delete_consumer_groups, or delete_topics",
+                "KAFRUST_ADMIN_MUTATION must be create_topics, create_partitions, incremental_alter_configs, alter_configs, create_acls, delete_acls, alter_client_quotas, alter_user_scram_credentials, create_delegation_token, alter_consumer_group_offsets, delete_consumer_group_offsets, delete_consumer_groups, delete_topics, or unregister_broker",
             ))
         }
     }
@@ -522,6 +523,32 @@ async fn qualify_delete_consumer_groups(admin: &AdminClient, topic: &str) -> kaf
     wait_for_group_absence(admin, &group_id).await
 }
 
+async fn qualify_unregister_broker(admin: &AdminClient) -> kafrust::Result<()> {
+    let error = match admin.unregister_broker(1).await {
+        Ok(result) if result.is_success() => {
+            return Err(Error::Unsupported(
+                "the response-drop proxy did not make UnregisterBroker ambiguous",
+            ))
+        }
+        Ok(_) => {
+            return Err(Error::Unsupported(
+                "UnregisterBroker returned a broker error before the response was dropped",
+            ))
+        }
+        Err(error) => error,
+    };
+    if !matches!(
+        error,
+        Error::AdminMutationOutcomeUnknown {
+            operation: "UnregisterBroker"
+        }
+    ) {
+        return Err(error);
+    }
+    println!("UnregisterBroker response was lost; outcome is explicitly unknown");
+    wait_for_broker_absence(admin, 1).await
+}
+
 fn ambiguity_acl_binding(topic: &str) -> AclBinding {
     AclBinding::new(
         AclResourceType::Topic,
@@ -804,6 +831,27 @@ async fn wait_for_group_absence(admin: &AdminClient, group_id: &str) -> kafrust:
         if tokio::time::Instant::now() >= deadline {
             return Err(Error::Unsupported(
                 "ambiguous DeleteGroups reconciliation did not observe group deletion",
+            ));
+        }
+        tokio::time::sleep(Duration::from_millis(250)).await;
+    }
+}
+
+async fn wait_for_broker_absence(admin: &AdminClient, broker_id: i32) -> kafrust::Result<()> {
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(15);
+    loop {
+        let cluster = admin.describe_cluster().await?;
+        if !cluster
+            .brokers()
+            .iter()
+            .any(|broker| broker.id() == broker_id)
+        {
+            println!("reconciled unregistered broker {broker_id}");
+            return Ok(());
+        }
+        if tokio::time::Instant::now() >= deadline {
+            return Err(Error::Unsupported(
+                "ambiguous UnregisterBroker reconciliation did not observe broker removal",
             ));
         }
         tokio::time::sleep(Duration::from_millis(250)).await;

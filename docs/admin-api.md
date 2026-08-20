@@ -162,6 +162,11 @@ negotiation. A live qualification against an isolated multi-controller KRaft
 cluster remains open because unregistering a broker must be verified together
 with controller quorum health and broker re-registration behavior.
 
+The reusable current-source Admin response-drop gate also covers API 64: it
+drops the first `UnregisterBroker` response and reconciles the missing broker
+through `DescribeCluster` without replaying the mutation. This is a transport
+ambiguity proof, not the multi-controller unregister/re-registration gate.
+
 ## Describe Share Groups
 
 `AdminClient::describe_share_groups` exposes Kafka's stable KIP-932

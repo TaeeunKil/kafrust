@@ -30,6 +30,7 @@ on:
           - "delete_consumer_group_offsets"
           - "delete_consumer_groups"
           - "delete_topics"
+          - "unregister_broker"
 
 env:
   CARGO_TERM_COLOR: always
@@ -139,6 +140,7 @@ jobs:
             delete_consumer_group_offsets) drop_api_key=47 ;;
             delete_consumer_groups) drop_api_key=42 ;;
             delete_topics) drop_api_key=20 ;;
+            unregister_broker) drop_api_key=64 ;;
             *) echo "unsupported mutation: ${{ inputs.mutation }}"; exit 1 ;;
           esac
           python3 -u scripts/kafka_response_drop_proxy.py \

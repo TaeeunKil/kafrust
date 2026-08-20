@@ -2562,6 +2562,11 @@ Implemented evidence:
   mutation. Protocol, injected Client, and injected controller-routing tests
   pass. Live broker unregister/re-registration and controller-quorum health
   qualification remain open.
+- The reusable current-source Admin response-drop gate now includes API 64:
+  the first `UnregisterBroker` response is dropped, the client returns
+  `AdminMutationOutcomeUnknown` without replay, and `DescribeCluster` observes
+  broker 1 absent. This closes transport-ambiguity evidence only; the
+  multi-controller unregister/re-registration gate remains open.
 - Kafka Share Group State APIs 83-87 are now implemented through flexible
   typed protocol requests and responses, low-level Client methods, and typed
   coordinator-routed Admin methods. Share-group membership/admin operations
