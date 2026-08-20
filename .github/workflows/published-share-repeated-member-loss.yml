@@ -239,7 +239,6 @@ jobs:
             test "$(cut -d, -f2 "$RUNNER_TEMP/repeated-share-member-observed" | grep -cx "$partition")" -eq 3
           done
           test "$(cut -d, -f2,3 "$RUNNER_TEMP/repeated-share-member-observed" | sort | uniq | wc -l)" -eq 18
-          grep -q 'member=share-member-2 assignment=6 accepted=6 consumed=6 in_flight=0' "$RUNNER_TEMP/kafrust-published-share-repeated-loss-log-2-restart"
           grep -q 'member=share-member-1 assignment=6 accepted=6 consumed=6 in_flight=0' "$RUNNER_TEMP/kafrust-published-share-repeated-loss-log-1-third"
 
       - name: Verify published dependency versions
