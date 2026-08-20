@@ -1,0 +1,126 @@
+name: Published ShareGroupDescribe Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      kafrust_version:
+        description: "Published kafrust version to execute from crates.io"
+        required: true
+        default: "0.3.4"
+
+permissions:
+  contents: read
+
+jobs:
+  published-share-group-describe:
+    name: Published kafrust ${{ inputs.kafrust_version }} ShareGroupDescribe
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      KAFRUST_BOOTSTRAP_SERVERS: localhost:39098
+      KAFRUST_SHARE_TOPIC: kafrust-published-share-group-describe-topic-${{ github.run_id }}
+      KAFRUST_SHARE_GROUP_ID: kafrust-published-share-group-describe-${{ github.run_id }}
+      CARGO_TERM_COLOR: never
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.81.0"
+
+      - name: Start Kafka 4.3.1 with share groups enabled
+        run: |
+          docker network create kafrust-published-share-group-describe
+          cluster_id="$(docker run --rm apache/kafka:4.3.1 /opt/kafka/bin/kafka-storage.sh random-uuid)"
+          docker run -d --name kafrust-published-share-group-describe-broker \
+            --network kafrust-published-share-group-describe \
+            -p 39098:9092 \
+            -e KAFKA_CLUSTER_ID="$cluster_id" \
+            -e KAFKA_NODE_ID=1 \
+            -e KAFKA_PROCESS_ROLES=broker,controller \
+            -e KAFKA_LISTENERS=INTERNAL://:29092,EXTERNAL://:9092,CONTROLLER://:9093 \
+            -e KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafrust-published-share-group-describe-broker:29092,EXTERNAL://localhost:39098 \
+            -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+            -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT \
+            -e KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL \
+            -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafrust-published-share-group-describe-broker:9093 \
+            -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
+            -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1 \
+            -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1 \
+            -e KAFKA_SHARE_COORDINATOR_STATE_TOPIC_REPLICATION_FACTOR=1 \
+            -e KAFKA_SHARE_COORDINATOR_STATE_TOPIC_MIN_ISR=1 \
+            -e KAFKA_SHARE_RENEW_ACKNOWLEDGE_ENABLE=true \
+            -e KAFKA_GROUP_COORDINATOR_REBALANCE_PROTOCOLS=classic,consumer,share \
+            -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 \
+            apache/kafka:4.3.1
+
+      - name: Wait for Kafka
+        run: |
+          for attempt in {1..120}; do
+            if docker exec kafrust-published-share-group-describe-broker \
+              /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server kafrust-published-share-group-describe-broker:29092 \
+              >/tmp/kafrust-published-share-group-describe-probe.log 2>&1; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/kafrust-published-share-group-describe-probe.log || true
+          docker logs kafrust-published-share-group-describe-broker
+          exit 1
+
+      - name: Create share topic
+        run: |
+          docker exec kafrust-published-share-group-describe-broker /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server kafrust-published-share-group-describe-broker:29092 \
+            --create \
+            --topic "$KAFRUST_SHARE_TOPIC" \
+            --partitions 1 \
+            --replication-factor 1
+
+      - name: Create fresh external published project
+        env:
+          KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version || '0.3.4' }}
+        run: |
+          project_dir="$RUNNER_TEMP/kafrust-published-share-group-describe"
+          cargo new --bin "$project_dir"
+          cp .github/published-share-group-describe-smoke/src/main.rs "$project_dir/src/main.rs"
+          sed "s/__KAFRUST_VERSION__/$KAFRUST_PUBLISHED_VERSION/" \
+            .github/published-share-group-describe-smoke/Cargo.toml > "$project_dir/Cargo.toml"
+          if [ "$project_dir" = "$GITHUB_WORKSPACE" ]; then
+            echo "the published smoke project must be outside the repository"
+            exit 1
+          fi
+
+      - name: Run published ShareGroupDescribe
+        run: |
+          project_dir="$RUNNER_TEMP/kafrust-published-share-group-describe"
+          cargo run --manifest-path "$project_dir/Cargo.toml" 2>&1 \
+            | tee /tmp/kafrust-published-share-group-describe.log
+          grep -Fq "share group group_id=" /tmp/kafrust-published-share-group-describe.log
+          grep -Fq "assignment_partition=0" /tmp/kafrust-published-share-group-describe.log
+          grep -Fq "subscribed_topic=true" /tmp/kafrust-published-share-group-describe.log
+
+      - name: Verify published dependency versions
+        env:
+          KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version || '0.3.4' }}
+        run: |
+          lockfile="$RUNNER_TEMP/kafrust-published-share-group-describe/Cargo.lock"
+          grep -A1 -q 'name = "kafrust"' "$lockfile"
+          grep -A1 -q "version = \"$KAFRUST_PUBLISHED_VERSION\"" "$lockfile"
+          grep -A1 -q 'name = "kafrust-protocol"' "$lockfile"
+
+      - name: Dump diagnostics
+        if: failure()
+        run: |
+          cat /tmp/kafrust-published-share-group-describe.log || true
+          docker logs kafrust-published-share-group-describe-broker || true
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker rm -f kafrust-published-share-group-describe-broker || true
+          docker network rm kafrust-published-share-group-describe || true
