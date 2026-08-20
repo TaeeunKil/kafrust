@@ -349,8 +349,11 @@ three areas:
   [run 32216383214](https://github.com/TaeeunKil/kafrust/actions/runs/32216383214),
   plus three consecutive in-process coordinator churn cycles in
   [run 32219147942](https://github.com/TaeeunKil/kafrust/actions/runs/32219147942);
-  expiry/reconciliation soak and live ambiguous-acknowledgement fault injection
-  remain open; the runtime now exposes a safe
+  the same leader-failover and three-attempt active-heartbeat gates were
+  revalidated on current source commit `35e7cec` in
+  [run 32356279940](https://github.com/TaeeunKil/kafrust/actions/runs/32356279940)
+  and [run 32356280155](https://github.com/TaeeunKil/kafrust/actions/runs/32356280155);
+  long-running expiry/reconciliation soak remains open; the runtime now exposes a safe
   `reconcile_acknowledgement_outcomes` session-reset path that never replays an
   unknown acknowledgement; ShareGroupDescribe plus Share Group offset mutation,
   and deletion APIs 77, 90, 91, and 92 are now implemented with focused wire,

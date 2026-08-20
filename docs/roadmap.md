@@ -2506,6 +2506,13 @@ Implemented evidence:
   The workflow now also passes three consecutive coordinator-loss/recovery
   cycles inside one ShareConsumer process in all three matrix attempts in
   [`32219147942`](https://github.com/TaeeunKil/kafrust/actions/runs/32219147942).
+- The Share failover gates were revalidated on current source commit `35e7cec`:
+  the three-broker leader-loss path passed in
+  [`32356279940`](https://github.com/TaeeunKil/kafrust/actions/runs/32356279940),
+  and all three active-heartbeat coordinator-loss attempts passed in
+  [`32356280155`](https://github.com/TaeeunKil/kafrust/actions/runs/32356280155).
+  This strengthens current-source evidence but does not close long-running
+  multi-broker ownership, assignment/rebalance, or resource/backpressure gates.
 - ShareFetch success responses preserve the broker that served the request,
   while `CurrentLeader` is used only for the leader-error responses where Kafka
   populates it. Retryable ShareFetch leader errors return the connection to the

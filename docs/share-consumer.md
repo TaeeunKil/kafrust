@@ -53,6 +53,11 @@ Current evidence:
   coordinator-loss/recovery cycles inside each long-running ShareConsumer
   process; all three matrix attempts passed in
   [run 32219147942](https://github.com/TaeeunKil/kafrust/actions/runs/32219147942).
+- current-source revalidation on commit `35e7cec` passing the three-broker
+  leader-failover path in
+  [run 32356279940](https://github.com/TaeeunKil/kafrust/actions/runs/32356279940)
+  and all three active-heartbeat coordinator-loss attempts in
+  [run 32356280155](https://github.com/TaeeunKil/kafrust/actions/runs/32356280155).
 
 The live gate is wired in
 `.github/workflows/share-kafka-smoke.yml`. It starts Kafka 4.3.1 with the
@@ -68,8 +73,10 @@ Kafka 4.3.1 KRaft cluster, selects a partition led by broker 1, consumes and
 accepts a pre-failover record, stops broker 1, waits for a replacement leader,
 and then verifies that a fresh ShareConsumer using the same group reads and
 accepts a post-failover record from the surviving brokers. This workflow is a
-manual and scheduled qualification gate. The first successful run is recorded
-in [run 32214201983](https://github.com/TaeeunKil/kafrust/actions/runs/32214201983).
+manual and scheduled qualification gate. The original successful run is
+recorded in [run 32214201983](https://github.com/TaeeunKil/kafrust/actions/runs/32214201983);
+the current-source revalidation passed in
+[run 32356279940](https://github.com/TaeeunKil/kafrust/actions/runs/32356279940).
 
 The active-heartbeat gate is wired in
 `.github/workflows/share-kafka-heartbeat-failover.yml`. It joins a three-broker
@@ -80,6 +87,8 @@ the path in [run
 32215845737](https://github.com/TaeeunKil/kafrust/actions/runs/32215845737),
 and three independent matrix attempts passed in [run
 32216383214](https://github.com/TaeeunKil/kafrust/actions/runs/32216383214).
+The same three-attempt matrix was revalidated on the current source in [run
+32356280155](https://github.com/TaeeunKil/kafrust/actions/runs/32356280155).
 
 This evidence proves the client-side wire and state-machine slice, the
 deterministic response-loss safety boundary, the single-node Kafka 4.3.1
