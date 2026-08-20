@@ -52,7 +52,8 @@ covering a coordinator node stop, post-stop heartbeat recovery, and clean
 leave. Together these qualify the bounded Streams membership and background
 heartbeat lifecycle on single- and multi-broker plaintext clusters. The
 published `kafrust 0.3.2` surface was also compiled from a fresh external Cargo
-project with no workspace path dependency on both stable Rust and Rust 1.81;
+project with no workspace path dependency on both stable Rust and Rust 1.81 in
+[run 32377502460](https://github.com/TaeeunKil/kafrust/actions/runs/32377502460);
 this proves package/API availability, not broker runtime compatibility,
 assignment/task-runtime reconciliation, or compatibility with a complete Kafka
 Streams application.

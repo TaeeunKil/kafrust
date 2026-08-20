@@ -116,8 +116,9 @@ the previous source tree could not package safely while both crates reused the
 `0.3.1` version. A fresh external project with no workspace path dependency
 compiled the published Streams surface, including
 `StreamsGroupSessionHandle` and assignment-watch APIs, on stable Rust and Rust
-1.81 with `cargo check --all-features`. The repeatable CI gate is
-`.github/workflows/published-streams-surface.yml`; docs.rs indexing was still
+1.81 with `cargo check --all-features`. The repeatable CI gate passed in
+[run 32377502460](https://github.com/TaeeunKil/kafrust/actions/runs/32377502460)
+from `.github/workflows/published-streams-surface.yml`; docs.rs indexing was still
 pending immediately after publication and must be recorded separately once its
 build completes.
 

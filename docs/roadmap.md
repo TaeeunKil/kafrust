@@ -17,7 +17,9 @@ Status legend:
 `0.3.2` is now published on crates.io in protocol-first order. Its package
 verification passed after `kafrust-protocol 0.3.2` became available from the
 registry, and a fresh external project compiled the published Streams public
-surface on stable Rust and Rust 1.81. The previous `0.3.1` artifact remains
+surface on stable Rust and Rust 1.81 in
+[`32377502460`](https://github.com/TaeeunKil/kafrust/actions/runs/32377502460).
+The previous `0.3.1` artifact remains
 published on crates.io. The `0.3.0` release's complete seven-profile external
 smoke passed in
 [`31770895344`](https://github.com/TaeeunKil/kafrust/actions/runs/31770895344)
@@ -256,7 +258,8 @@ coverage toward a release candidate that can be qualified in staging.
   automatic assignment/task-runtime reconciliation, and multi-member failure
   evidence remain open. The published `0.3.2` surface now also compiles the
   handle and assignment-watch API from a fresh external project on stable and
-  Rust 1.81. Automatic assignment/task-runtime reconciliation, published
+  Rust 1.81 in [`32377502460`](https://github.com/TaeeunKil/kafrust/actions/runs/32377502460).
+  Automatic assignment/task-runtime reconciliation, published
   broker-runtime qualification, and a complete Kafka Streams application
   remain open.
 - `crates/kafrust/examples/streams_group_smoke.rs` and
