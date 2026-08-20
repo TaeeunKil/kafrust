@@ -667,6 +667,17 @@ unrelated dynamic settings must be preserved automatically. Resource failures,
 broker throttle time, and `validate_only(true)` are exposed through the same
 typed `AlterConfigsResult` used by the incremental API.
 
+The current-source
+[`live-alter-configs-authorization.yml`](../.github/workflows/live-alter-configs-authorization.yml)
+gate passed on Kafka 3.7.2 and 4.3.1 in
+[`32365666970`](https://github.com/TaeeunKil/kafrust/actions/runs/32365666970).
+A restricted SASL/PLAIN principal with cluster/topic discovery and
+`DescribeConfigs`, but without `AlterConfigs`, received
+`TopicAuthorizationFailed` (error 29) and the existing `retention.ms` value
+remained unchanged. The administrator then applied the replacement value and
+cleaned up the topic. This is an operation-specific current-source
+authorization proof, not a universal ACL or Admin mutation parity claim.
+
 ## Describe Consumer Groups
 
 ```rust

@@ -151,6 +151,16 @@ topic remained present; the administrator then deleted it. This closes the
 DeleteTopics authorization sub-gate only and does not establish universal ACL
 or Admin mutation parity.
 
+The current-source
+`.github/workflows/live-alter-configs-authorization.yml` matrix passed on Kafka
+3.7.2 and 4.3.1 in
+[`32365666970`](https://github.com/TaeeunKil/kafrust/actions/runs/32365666970).
+A restricted SASL/PLAIN principal with cluster/topic discovery and
+`DescribeConfigs`, but without `AlterConfigs`, received
+`TopicAuthorizationFailed` (29) and the existing `retention.ms` value remained
+unchanged; the administrator then applied the replacement value and cleaned up
+the topic. This closes the classic AlterConfigs authorization sub-gate only.
+
 The low-level `Client::api_versions_cached` helper now prefers flexible
 `ApiVersions` v4 and falls back to v3 when a broker returns
 `UNSUPPORTED_VERSION`. Existing higher-level paths retain their established
@@ -918,6 +928,7 @@ other coordinator-routed writes remain separate qualification items.
 | Apache Kafka 3.7.2 | single-node KRaft with StandardAuthorizer | PLAINTEXT ACL and client-quota admin | `Live Kafka Smoke` ACL authorizer job, manual run `31459874329` on 2026-08-11 | Passing |
 | Apache Kafka 3.7.2 and 4.3.1 | single-node KRaft with StandardAuthorizer; SASL/PLAIN | `UnregisterBroker` authorization: restricted cluster-discovery principal denied with error code 31 and administrator allowed | [`Live Unregister Broker Authorization`, run `32360499520`](https://github.com/TaeeunKil/kafrust/actions/runs/32360499520) on 2026-08-20 | Passing; operation-specific permission evidence only |
 | Apache Kafka 3.7.2 and 4.3.1 | single-node KRaft with StandardAuthorizer; SASL/PLAIN | `DeleteTopics` authorization: restricted principal with cluster and target-topic `Describe` denied with error code 29, administrator allowed, and target topic retained after denial | [`Live DeleteTopics Authorization`, run `32365120994`](https://github.com/TaeeunKil/kafrust/actions/runs/32365120994) on 2026-08-20 | Passing; operation-specific permission evidence only |
+| Apache Kafka 3.7.2 and 4.3.1 | single-node KRaft with StandardAuthorizer; SASL/PLAIN | classic `AlterConfigs` authorization: restricted principal with discovery and `DescribeConfigs` denied with error code 29, existing config retained, and administrator allowed | [`Live AlterConfigs Authorization`, run `32365666970`](https://github.com/TaeeunKil/kafrust/actions/runs/32365666970) on 2026-08-20 | Passing; operation-specific permission evidence only |
 | Apache Kafka 3.7.2 | single-node KRaft | SASL_SSL SCRAM credential administration | `Live Kafka Smoke` SASL_SSL SCRAM job, manual run `31461980967` on 2026-08-11 | Passing |
 | Apache Kafka 3.7.2 | three-broker KRaft | controller-routed partition reassignment | `Live Kafka Smoke` multi-broker job, manual run `31462962605` on 2026-08-11 | Passing |
 | Apache Kafka 3.7.2 | three-broker KRaft | cooperative-sticky consumer protocol, multi-member transfer, transient-member rollback, member-loss recovery, and rebalance listener lifecycle | [`Live Kafka Smoke`, run `31557534371`](https://github.com/TaeeunKil/kafrust/actions/runs/31557534371) on 2026-08-12 | Passing |
