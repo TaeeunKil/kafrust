@@ -18,7 +18,7 @@ use kafrust_protocol::api::offset_for_leader_epoch::{
     OffsetForLeaderEpochTopicResponseV3, OffsetForLeaderEpochTopicV3,
 };
 
-use crate::broker_client_cache::SharedBrokerClientCacheHandle;
+use crate::broker_client_cache::BrokerClientCache;
 use crate::client::{Client, FetchOneRequestV11, FetchOneRequestV12, FetchOneRequestV4};
 use crate::config::{ClientConfig, OAuthBearerTokenProvider, SecurityProtocol};
 use crate::error::{BrokerErrorKind, Error, Result};
@@ -290,7 +290,7 @@ pub struct Consumer {
     partition_queues: BTreeMap<(String, i32), mpsc::Sender<ConsumerRecord>>,
     metadata_cache: BTreeMap<String, MetadataResponseV1>,
     fetch_topic_ids: BTreeMap<String, [u8; 16]>,
-    broker_clients: SharedBrokerClientCacheHandle,
+    broker_clients: BrokerClientCache,
     fetch_sessions: BTreeMap<String, FetchSessionState>,
     preferred_read_replicas: BTreeMap<(String, i32), i32>,
 }
@@ -320,7 +320,6 @@ impl Consumer {
         config: ConsumerConfig,
         assignments: Vec<ConsumerAssignment>,
     ) -> Self {
-        let broker_clients = config.client.shared_broker_clients();
         Self {
             client,
             config,
@@ -328,7 +327,7 @@ impl Consumer {
             partition_queues: BTreeMap::new(),
             metadata_cache: BTreeMap::new(),
             fetch_topic_ids: BTreeMap::new(),
-            broker_clients,
+            broker_clients: BrokerClientCache::default(),
             fetch_sessions: BTreeMap::new(),
             preferred_read_replicas: BTreeMap::new(),
         }
@@ -577,7 +576,7 @@ impl Consumer {
                 format!("offset for leader epoch {topic}-{partition}"),
             ));
         }
-        self.cache_broker_client(broker_addr, leader_client).await;
+        self.cache_broker_client(broker_addr, leader_client);
         Ok(LeaderEpochOffset {
             leader_epoch: partition_response.leader_epoch,
             end_offset: partition_response.end_offset,
@@ -599,7 +598,7 @@ impl Consumer {
         let high = self
             .request_partition_offset(&mut leader_client, topic, partition, LATEST_TIMESTAMP)
             .await?;
-        self.cache_broker_client(broker_addr, leader_client).await;
+        self.cache_broker_client(broker_addr, leader_client);
         Ok(PartitionWatermarks { low, high })
     }
 
@@ -1192,7 +1191,7 @@ impl Consumer {
             .into_iter()
             .map(|record| ConsumerRecord::from_message_set(topic, partition, record))
             .collect();
-        self.cache_broker_client(broker_addr, leader_client).await;
+        self.cache_broker_client(broker_addr, leader_client);
         Ok(FetchedPartition {
             records,
             next_offset,
@@ -1290,7 +1289,7 @@ impl Consumer {
     }
 
     async fn connect_or_reuse_broker(&mut self, broker_addr: &str) -> Result<Client> {
-        if let Some(client) = self.broker_clients.take(broker_addr).await {
+        if let Some(client) = self.broker_clients.take(broker_addr) {
             return Ok(client);
         }
         self.fetch_sessions.remove(broker_addr);
@@ -1300,14 +1299,12 @@ impl Consumer {
             .await
     }
 
-    async fn cache_broker_client(&self, broker_addr: String, client: Client) {
-        self.broker_clients
-            .insert(
-                broker_addr,
-                client,
-                self.config.client.max_idle_broker_connections_ref(),
-            )
-            .await;
+    fn cache_broker_client(&mut self, broker_addr: String, client: Client) {
+        self.broker_clients.insert(
+            broker_addr,
+            client,
+            self.config.client.max_idle_broker_connections_ref(),
+        );
     }
 
     async fn request_metadata_for_topic(&mut self, topic: &str) -> Result<MetadataResponseV1> {
@@ -1709,7 +1706,6 @@ impl ConsumerConfig {
     /// Connects to Kafka and builds a direct consumer.
     pub async fn build(self) -> Result<Consumer> {
         self.validate()?;
-        let broker_clients = self.client.shared_broker_clients();
         let client = self.client.clone().connect().await?;
         Ok(Consumer {
             client,
@@ -1718,7 +1714,7 @@ impl ConsumerConfig {
             partition_queues: BTreeMap::new(),
             metadata_cache: BTreeMap::new(),
             fetch_topic_ids: BTreeMap::new(),
-            broker_clients,
+            broker_clients: BrokerClientCache::default(),
             fetch_sessions: BTreeMap::new(),
             preferred_read_replicas: BTreeMap::new(),
         })
@@ -3228,7 +3224,7 @@ mod tests {
 
         assert_eq!(first.len(), 1);
         assert_eq!(second.len(), 1);
-        assert_eq!(consumer.broker_clients.len().await, 1);
+        assert_eq!(consumer.broker_clients.len(), 1);
         assert_eq!(consumer.fetch_sessions[&addr.to_string()].session_id, 17);
         assert_eq!(consumer.fetch_sessions[&addr.to_string()].next_epoch, 2);
         server.await.unwrap();
