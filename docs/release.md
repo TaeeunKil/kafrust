@@ -164,8 +164,12 @@ A two-cycle published churn profile then passed in one group: member 2 took
 over after member 1's first peer loss, rejoined, and later took over after
 member 1 stopped, with 12 unique partition/offset records in
 [run 32391027028](https://github.com/TaeeunKil/kafrust/actions/runs/32391027028).
-Longer ownership/backpressure campaigns, higher-cycle rebalance matrices, and
-production readiness remain unqualified.
+A three-cycle rerun then moved ownership back to a rejoined member 1, reconciled
+18 unique records with three per partition, and ended with the survivor at
+`consumed=6` and `in_flight=0` in
+[run 32392994232](https://github.com/TaeeunKil/kafrust/actions/runs/32392994232).
+Longer ownership/backpressure campaigns, higher-cycle rebalance matrices beyond
+three cycles, and production readiness remain unqualified.
 
 The `0.2.18` packages passed Cargo publish verification and both staged
 all-feature package-documentation builds on commit `373de00`. The matching

@@ -106,6 +106,12 @@ Current evidence:
   stopped, member 2 rejoined, and then member 2 took over all six after member
   1 stopped. Twelve records were reconciled without duplicate offsets in
   [run 32391027028](https://github.com/TaeeunKil/kafrust/actions/runs/32391027028).
+- The same published group then passed three forced-loss cycles in one
+  three-broker cluster: ownership moved to member 1, then member 2, then a
+  rejoined member 1 again. Eighteen records were reconciled with three records
+  per partition and unique offsets; the final survivor reported
+  `consumed=6`, `in_flight=0`, and no failed requests in
+  [run 32392994232](https://github.com/TaeeunKil/kafrust/actions/runs/32392994232).
 
 The live gate is wired in
 `.github/workflows/share-kafka-smoke.yml`. It starts Kafka 4.3.1 with the
@@ -147,8 +153,9 @@ single-node profile, and live ambiguous acknowledgement reconciliation. It
 also proves that the bounded published multi-member run's consumed-record
 counter matched accepted records and that all request connections drained
 before close. It does not prove long-running multi-broker ownership,
-higher-cycle dynamic assignment/member-loss/rebalance behavior, broad
-published-artifact coverage, or production readiness.
+ higher-cycle dynamic assignment/member-loss/rebalance behavior beyond this
+ three-cycle profile, broad published-artifact coverage, or production
+ readiness.
 
 ## Basic Usage
 
