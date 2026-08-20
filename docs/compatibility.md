@@ -375,10 +375,14 @@ The published `kafrust 0.3.3` artifact also passed a fresh external single-node
 runtime in [`32384767744`](https://github.com/TaeeunKil/kafrust/actions/runs/32384767744)
 and a 64-record acknowledgement/commit soak in
 [`32385522647`](https://github.com/TaeeunKil/kafrust/actions/runs/32385522647).
+Its fresh external three-broker leader-failover path also passed: the client
+accepted a pre-failover record, survived broker 1 leader loss, and accepted a
+post-failover record through surviving bootstrap servers in
+[`32386637555`](https://github.com/TaeeunKil/kafrust/actions/runs/32386637555).
 The remaining Share claim is narrower: long-running ambiguous reconciliation,
-multi-broker ownership/assignment, and broad published-artifact coverage remain
-open. The current evidence is listed in `docs/share-consumer.md` and the
-corresponding workflow history.
+multi-member assignment/rebalance, long-running multi-broker ownership, and
+broad published-artifact coverage remain open. The current evidence is listed
+in `docs/share-consumer.md` and the corresponding workflow history.
 
 The current-source acknowledgement soak additionally passed in
 [`32369562416`](https://github.com/TaeeunKil/kafrust/actions/runs/32369562416),

@@ -72,6 +72,11 @@ Current evidence:
   `Accept` and `commit` operations, unique value/offset reconciliation, clean
   heartbeat shutdown, clean close, and lockfile verification in
   [run 32385522647](https://github.com/TaeeunKil/kafrust/actions/runs/32385522647).
+- published `kafrust 0.3.3` passing a fresh external three-broker Kafka 4.3.1
+  leader-failover path: a pre-failover record was accepted, broker 1 was
+  stopped, replacement leadership was observed, and a post-failover record was
+  produced and accepted through surviving bootstrap servers in
+  [run 32386637555](https://github.com/TaeeunKil/kafrust/actions/runs/32386637555).
 
 The live gate is wired in
 `.github/workflows/share-kafka-smoke.yml`. It starts Kafka 4.3.1 with the
@@ -309,8 +314,9 @@ complete all of the following:
 - long-running multi-broker share-group soak and resource/backpressure
   measurements (the single-node 64-record soak passed in
   [run 32355746726](https://github.com/TaeeunKil/kafrust/actions/runs/32355746726));
-- published-artifact multi-broker Share ownership, assignment/rebalance, and
-  resource/backpressure qualification beyond the single-node `0.3.3` soak;
+- long-running published-artifact multi-broker Share ownership,
+  multi-member assignment/rebalance, and resource/backpressure qualification
+  beyond the tested `0.3.3` leader-failover path;
 - stable public API review and a `rust-rdkafka` migration example for queue
   workloads.
 

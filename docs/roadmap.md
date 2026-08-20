@@ -2639,8 +2639,13 @@ Implemented evidence:
   heartbeat shutdown, close, and lockfile verification, in
   [`32385522647`](https://github.com/TaeeunKil/kafrust/actions/runs/32385522647).
   This closes bounded current-source and single-node published-artifact
-  acknowledgement-progress gates; long-running multi-broker ownership,
-  assignment/rebalance, and resource/backpressure evidence remain open.
+  acknowledgement-progress gates. The published `0.3.3` three-broker
+  leader-failover path also passed in
+  [`32386637555`](https://github.com/TaeeunKil/kafrust/actions/runs/32386637555),
+  covering pre-failover acceptance, broker 1 leader loss, replacement
+  leadership, and post-failover acceptance from surviving bootstrap servers.
+  Long-running multi-broker ownership, multi-member assignment/rebalance, and
+  resource/backpressure evidence remain open.
 - ShareFetch success responses preserve the broker that served the request,
   while `CurrentLeader` is used only for the leader-error responses where Kafka
   populates it. Retryable ShareFetch leader errors return the connection to the

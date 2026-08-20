@@ -486,11 +486,15 @@ Three independent repeats of the active-heartbeat path also passed in [run 32216
 The published artifact additionally passed a fresh external single-record
 runtime in [run 32384767744](https://github.com/TaeeunKil/kafrust/actions/runs/32384767744)
 and a 64-record acknowledgement/commit soak in [run 32385522647](https://github.com/TaeeunKil/kafrust/actions/runs/32385522647).
+It also passed a fresh external three-broker leader-failover path in
+[run 32386637555](https://github.com/TaeeunKil/kafrust/actions/runs/32386637555),
+including broker 1 leader loss and post-failover acceptance through surviving
+bootstrap servers.
 In-process repeated recovery, long-running qualification, and ambiguous
 acknowledgement responses are surfaced as a typed unknown-outcome error and are
 not replayed automatically. Multi-broker long-running ownership,
-assignment/rebalance coverage, and broader published-artifact qualification
-remain open. `BatchOptimized` is the default acquisition mode;
+multi-member assignment/rebalance coverage, and broader published-artifact
+qualification remain open. `BatchOptimized` is the default acquisition mode;
 `RecordLimit` uses KIP-1206 and requires a broker advertising ShareFetch v2;
 `Renew` uses ShareAcknowledge v2 and retains the record for later completion.
 See [Share Consumer](docs/share-consumer.md) for the exact alpha contract.

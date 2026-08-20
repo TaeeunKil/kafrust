@@ -65,9 +65,11 @@ surfaces separate.
   runtime and 64-record acknowledgement soak now pass on Kafka 4.3.1 in
   [`32384767744`](https://github.com/TaeeunKil/kafrust/actions/runs/32384767744)
   and [`32385522647`](https://github.com/TaeeunKil/kafrust/actions/runs/32385522647).
-  The remaining gap is multi-broker Share ownership/assignment qualification,
-  Streams background heartbeat/assignment ownership, and broader long-running
-  published coverage.
+  A fresh external three-broker leader-failover path also passes in
+  [`32386637555`](https://github.com/TaeeunKil/kafrust/actions/runs/32386637555).
+  The remaining gap is long-running and multi-member Share ownership/assignment
+  qualification, Streams background heartbeat/assignment ownership, and
+  broader published coverage.
 
 ## Findings By Project
 

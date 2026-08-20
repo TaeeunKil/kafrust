@@ -140,8 +140,11 @@ The published ShareConsumer runtime gate then passed in
 and the published 64-record acknowledgement/commit soak passed in
 [run 32385522647](https://github.com/TaeeunKil/kafrust/actions/runs/32385522647),
 both from fresh external projects on Kafka 4.3.1 and Rust 1.81. These are
-single-node published-artifact profiles; they do not qualify multi-broker
-Share ownership, assignment/rebalance, or production readiness.
+single-node published-artifact profiles. A fresh external three-broker
+leader-failover profile also passed in
+[run 32386637555](https://github.com/TaeeunKil/kafrust/actions/runs/32386637555);
+long-running ownership, multi-member assignment/rebalance, and production
+readiness remain unqualified.
 
 The `0.2.18` packages passed Cargo publish verification and both staged
 all-feature package-documentation builds on commit `373de00`. The matching
