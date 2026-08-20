@@ -15,7 +15,6 @@ async fn main() -> kafrust::Result<()> {
             field: "KAFRUST_QUOTA_USER",
             reason: "the authorization example requires a unique quota user",
         })?;
-    let expected_error = parse_i16_env("KAFRUST_EXPECT_ALTER_CLIENT_QUOTAS_ERROR")?;
     let config = common::apply_security(
         ClientConfig::new(common::bootstrap_servers_from_env())
             .client_id("kafrust-admin-alter-client-quotas-authorization-example"),
@@ -33,6 +32,7 @@ async fn main() -> kafrust::Result<()> {
         return Ok(());
     }
 
+    let expected_error = parse_i16_env("KAFRUST_EXPECT_ALTER_CLIENT_QUOTAS_ERROR")?;
     let alteration = ClientQuotaAlteration::new(ClientQuotaEntity::user(&quota_user))
         .set(QUOTA_KEY, QUOTA_VALUE);
 
