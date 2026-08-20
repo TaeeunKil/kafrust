@@ -18,6 +18,7 @@ jobs:
       KAFRUST_PARTITION: "0"
       KAFRUST_ADMIN_OFFSET: "42"
       RUST_LOG: kafrust=debug
+      CARGO_TERM_COLOR: never
 
     steps:
       - name: Checkout
@@ -94,10 +95,13 @@ jobs:
 
       - name: Run member-aware ambiguity and reconciliation example
         run: |
-          cargo run -p kafrust --example admin_member_offset_ambiguity 2>&1 | tee /tmp/kafrust-member-offset-example.log
-          grep -q "using member-aware Admin OffsetFetch" /tmp/kafrust-member-offset-example.log
-          grep -q "using member-aware Admin OffsetCommit" /tmp/kafrust-member-offset-example.log
-          grep -q "api_version=10" /tmp/kafrust-member-offset-example.log
+          cargo run -p kafrust --example admin_member_offset_ambiguity 2>&1 | tee /tmp/kafrust-member-offset-example-raw.log
+          sed -r 's/\x1B\[[0-9;]*[[:alpha:]]//g' \
+            /tmp/kafrust-member-offset-example-raw.log \
+            > /tmp/kafrust-member-offset-example.log
+          grep -Fq "using member-aware Admin OffsetFetch" /tmp/kafrust-member-offset-example.log
+          grep -Fq "using member-aware Admin OffsetCommit" /tmp/kafrust-member-offset-example.log
+          grep -Fq "api_version=10" /tmp/kafrust-member-offset-example.log
 
       - name: Verify response was dropped
         run: test -f /tmp/kafrust-member-offset-dropped
