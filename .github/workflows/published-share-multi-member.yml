@@ -1,0 +1,183 @@
+name: Published ShareConsumer Multi-Member Ownership
+
+on:
+  workflow_dispatch:
+    inputs:
+      kafrust_version:
+        description: "Published kafrust version to run from crates.io"
+        required: true
+        default: "0.3.3"
+      run_seconds:
+        description: "Seconds each published member remains active"
+        required: true
+        default: "20"
+  schedule:
+    - cron: "57 5 * * 2"
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTUP_TOOLCHAIN: "1.81.0"
+  KAFRUST_BOOTSTRAP_SERVERS: localhost:21092,localhost:21093,localhost:21094
+  KAFRUST_SHARE_TOPIC: kafrust-published-share-members-${{ github.run_id }}
+  KAFRUST_SHARE_GROUP_ID: kafrust-published-share-members-group-${{ github.run_id }}
+  KAFRUST_SHARE_VALUE_PREFIX: published-share-member-
+  KAFRUST_SHARE_MEMBER_RUN_SECONDS: ${{ inputs.run_seconds || '20' }}
+
+jobs:
+  published-share-multi-member:
+    name: Published kafrust ShareConsumer multi-member ownership
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.81.0"
+
+      - name: Start three-broker Kafka 4.3.1 with share groups enabled
+        run: |
+          docker network create kafrust-published-share-members
+          cluster_id="$(docker run --rm apache/kafka:4.3.1 /opt/kafka/bin/kafka-storage.sh random-uuid)"
+          for node in 1 2 3; do
+            external_port=$((21091 + node))
+            docker run -d --name "kafrust-published-share-members-${node}" \
+              --network kafrust-published-share-members \
+              -p "${external_port}:9092" \
+              -e KAFKA_CLUSTER_ID="${cluster_id}" \
+              -e KAFKA_NODE_ID="${node}" \
+              -e KAFKA_PROCESS_ROLES=broker,controller \
+              -e KAFKA_LISTENERS=INTERNAL://:29092,EXTERNAL://:9092,CONTROLLER://:9093 \
+              -e KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafrust-published-share-members-${node}:29092,EXTERNAL://localhost:${external_port} \
+              -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+              -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT \
+              -e KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL \
+              -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafrust-published-share-members-1:9093,2@kafrust-published-share-members-2:9093,3@kafrust-published-share-members-3:9093 \
+              -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=3 \
+              -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=3 \
+              -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=2 \
+              -e KAFKA_SHARE_COORDINATOR_STATE_TOPIC_REPLICATION_FACTOR=3 \
+              -e KAFKA_SHARE_COORDINATOR_STATE_TOPIC_MIN_ISR=2 \
+              -e KAFKA_SHARE_RENEW_ACKNOWLEDGE_ENABLE=true \
+              -e KAFKA_GROUP_COORDINATOR_REBALANCE_PROTOCOLS=classic,consumer,share \
+              -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 \
+              apache/kafka:4.3.1
+          done
+
+      - name: Wait for Kafka cluster
+        run: |
+          for attempt in {1..120}; do
+            if docker exec kafrust-published-share-members-1 \
+              /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server kafrust-published-share-members-1:29092 \
+              >/tmp/kafrust-published-share-members-probe.log 2>&1; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/kafrust-published-share-members-probe.log || true
+          docker logs kafrust-published-share-members-1
+          docker logs kafrust-published-share-members-2
+          docker logs kafrust-published-share-members-3
+          exit 1
+
+      - name: Create replicated share topic
+        run: |
+          docker exec kafrust-published-share-members-1 /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server kafrust-published-share-members-1:29092 \
+            --create --if-not-exists --topic "$KAFRUST_SHARE_TOPIC" \
+            --partitions 6 --replication-factor 3
+          docker exec kafrust-published-share-members-1 /opt/kafka/bin/kafka-configs.sh \
+            --bootstrap-server kafrust-published-share-members-1:29092 \
+            --alter --entity-type groups --entity-name "$KAFRUST_SHARE_GROUP_ID" \
+            --add-config share.auto.offset.reset=earliest
+
+      - name: Create fresh external published project
+        env:
+          KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version || '0.3.3' }}
+        run: |
+          project_dir="$RUNNER_TEMP/kafrust-published-share-multi-member"
+          cargo new --bin "$project_dir"
+          cp .github/published-share-multi-member/src/main.rs "$project_dir/src/main.rs"
+          sed "s/__KAFRUST_VERSION__/$KAFRUST_PUBLISHED_VERSION/" \
+            .github/published-share-multi-member/Cargo.toml > "$project_dir/Cargo.toml"
+          cargo build --release --manifest-path "$project_dir/Cargo.toml"
+
+      - name: Join two published ShareConsumer members
+        run: |
+          set -euo pipefail
+          project_dir="$RUNNER_TEMP/kafrust-published-share-multi-member"
+          ready_base="$RUNNER_TEMP/kafrust-published-share-member-ready"
+          start_file="$RUNNER_TEMP/kafrust-published-share-member-start"
+          output_base="$RUNNER_TEMP/kafrust-published-share-member-output"
+          log_base="$RUNNER_TEMP/kafrust-published-share-member-log"
+          rm -f "$ready_base"-* "$start_file" "$output_base"-* "$log_base"-*
+          for member in 1 2; do
+            KAFRUST_OPERATION=member \
+              KAFRUST_SHARE_MEMBER_ID="share-member-${member}" \
+              KAFRUST_SHARE_MEMBER_READY_FILE="$ready_base-${member}" \
+              KAFRUST_SHARE_MEMBER_START_FILE="$start_file" \
+              KAFRUST_SHARE_MEMBER_OUTPUT_FILE="$output_base-${member}" \
+              cargo run --quiet --release \
+              --manifest-path "$project_dir/Cargo.toml" \
+              > "$log_base-${member}" 2>&1 &
+            echo "$!" >> "$RUNNER_TEMP/kafrust-published-share-member-pids"
+          done
+
+          wait_for_marker() {
+            marker="$1"
+            for attempt in {1..180}; do
+              if [ -f "$marker" ]; then
+                return 0
+              fi
+              sleep 1
+            done
+            echo "timed out waiting for $marker"
+            return 1
+          }
+          wait_for_marker "$ready_base-1"
+          wait_for_marker "$ready_base-2"
+          touch "$start_file"
+
+          KAFRUST_OPERATION=seed cargo run --quiet --release \
+            --manifest-path "$project_dir/Cargo.toml"
+
+          set +e
+          while read -r pid; do
+            wait "$pid"
+            status=$?
+            if [ "$status" -ne 0 ]; then
+              cat "$log_base-1" "$log_base-2"
+              exit "$status"
+            fi
+          done < "$RUNNER_TEMP/kafrust-published-share-member-pids"
+          cat "$log_base-1" "$log_base-2"
+
+      - name: Verify disjoint published Share ownership
+        run: |
+          set -euo pipefail
+          output_base="$RUNNER_TEMP/kafrust-published-share-member-output"
+          cat "$output_base-1" "$output_base-2" | sort -t, -k2,2n -k3,3n > "$RUNNER_TEMP/share-member-observed"
+          test "$(wc -l < "$RUNNER_TEMP/share-member-observed")" -eq 6
+          test "$(cut -d, -f2 "$RUNNER_TEMP/share-member-observed" | sort -n | uniq | paste -sd, -)" = "0,1,2,3,4,5"
+          test "$(cut -d, -f2,3 "$output_base-1" | sort | uniq | wc -l)" -eq "$(wc -l < "$output_base-1")"
+          test "$(cut -d, -f2,3 "$output_base-2" | sort | uniq | wc -l)" -eq "$(wc -l < "$output_base-2")"
+
+      - name: Verify published dependency versions
+        env:
+          KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version || '0.3.3' }}
+        run: |
+          lockfile="$RUNNER_TEMP/kafrust-published-share-multi-member/Cargo.lock"
+          grep -A1 -q 'name = "kafrust"' "$lockfile"
+          grep -A1 -q "version = \"$KAFRUST_PUBLISHED_VERSION\"" "$lockfile"
+          grep -A1 -q 'name = "kafrust-protocol"' "$lockfile"
+
+      - name: Dump Kafka diagnostics
+        if: failure()
+        run: |
+          docker logs kafrust-published-share-members-1 || true
+          docker logs kafrust-published-share-members-2 || true
+          docker logs kafrust-published-share-members-3 || true
