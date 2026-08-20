@@ -552,6 +552,16 @@ retries with no high-level operation errors, then reported `recovered=true` and
 zero final in-flight or buffered records. This is a published plaintext
 simultaneous-loss profile, not secured or production SLO evidence.
 
+The same simultaneous-loss workflow now passes with the published `kafrust
+0.3.3` artifact in [`32395288682`](https://github.com/TaeeunKil/kafrust/actions/runs/32395288682).
+The fresh external project ran for 120 seconds against Kafka 4.3.1, stopped
+brokers 1 and 2 simultaneously after one third of the run, restarted them after
+ten seconds, and reconciled 4,099,200 records. It observed one operation error,
+11 failed requests, and 1,018 retries, then reported `recovered=true` with zero
+final in-flight and buffered records. This closes the current published
+plaintext simultaneous-loss evidence for `0.3.3`, not secured loss, unclean
+election data-loss, or production SLO readiness.
+
 The same published simultaneous broker-loss workflow passed Kafka 3.7.2 in
 [`31748860976`](https://github.com/TaeeunKil/kafrust/actions/runs/31748860976).
 The fresh external `0.2.28` project processed 4,620,200 records across three

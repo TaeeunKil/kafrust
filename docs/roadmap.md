@@ -68,8 +68,16 @@ zero buffered records. This closes the published simultaneous-loss soak
 slice; repeated runs, secured variants, and longer-duration evidence remain
 open.
 
+The current published `0.3.3` artifact also passed a fresh external 120-second
+Kafka 4.3.1 three-broker simultaneous-loss run in
+[`32395288682`](https://github.com/TaeeunKil/kafrust/actions/runs/32395288682).
+It reconciled 4,099,200 records after brokers 1 and 2 were stopped together,
+recorded one operation error and 1,018 retries, and ended with zero in-flight
+and buffered records. Longer current-version and secured production SLO gates
+remain separate.
+
 The published secure multi-broker soak workflow now defaults to the current
-`0.3.1` artifact, Kafka 4.3.1, simultaneous broker loss, and a 600-second
+`0.3.3` artifact, Kafka 4.3.1, simultaneous broker loss, and a 600-second
 campaign, and it runs on a weekly schedule as well as manually. The workflow
 configuration is in place; recurring scheduled evidence remains required for
 the longer secured-soak campaign.
