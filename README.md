@@ -497,6 +497,9 @@ The published two-member ownership path also passed in
 [run 32388813780](https://github.com/TaeeunKil/kafrust/actions/runs/32388813780):
 two external members joined one Share group, each accepted three records, and
 all six seeded partitions were observed exactly once across the members.
+The same published workflow also passed a 60-second 384-record extension in
+[run 32389641275](https://github.com/TaeeunKil/kafrust/actions/runs/32389641275),
+with each member accepting 192 records and all partition/offset pairs unique.
 In-process repeated recovery, long-running qualification, and ambiguous
 acknowledgement responses are surfaced as a typed unknown-outcome error and are
 not replayed automatically. Multi-broker long-running ownership,

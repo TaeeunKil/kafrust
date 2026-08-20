@@ -254,6 +254,10 @@ expiry/redelivery, 최종 Accept, broker failover, coordinator 복구가 검증�
 [run 32388813780](https://github.com/TaeeunKil/kafrust/actions/runs/32388813780)에서
 통과했습니다. 응답이 유실된 acknowledgement는 typed
 unknown-outcome 오류로 노출하며 자동 재전송하지 않습니다. 정확한 알파 계약은
+같은 published workflow에서 60초 동안 384개 record를 처리하는 확장도
+[run 32389641275](https://github.com/TaeeunKil/kafrust/actions/runs/32389641275)에서
+통과했으며, 두 member가 각각 192개를 처리하고 모든 partition/offset 조합이
+중복되지 않았습니다.
 `BatchOptimized`가 기본 모드이며, `RecordLimit`은 ShareFetch v2를 광고하는
 broker가 필요합니다. `Renew`는 ShareAcknowledge v2에서 record를 완료하지
 않고 lock을 연장한 뒤 다음 poll에서 재처리할 수 있게 합니다. 정확한 알파

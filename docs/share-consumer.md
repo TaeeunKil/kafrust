@@ -87,6 +87,11 @@ Current evidence:
   Share group, each accepted three records, and the six seeded partitions were
   observed exactly once across the members in
   [run 32388813780](https://github.com/TaeeunKil/kafrust/actions/runs/32388813780).
+- The same published two-member gate also passed a 60-second run with 64
+  records seeded into each of six partitions. Each member accepted 192
+  records; the workflow verified all 384 records, exact per-partition counts,
+  and global `(partition, offset)` uniqueness in
+  [run 32389641275](https://github.com/TaeeunKil/kafrust/actions/runs/32389641275).
 
 The live gate is wired in
 `.github/workflows/share-kafka-smoke.yml`. It starts Kafka 4.3.1 with the
@@ -331,7 +336,10 @@ complete all of the following:
   resource/backpressure qualification beyond the tested `0.3.3` paths. A
   bounded two-member ownership/assignment run passed in
   [run 32388813780](https://github.com/TaeeunKil/kafrust/actions/runs/32388813780),
-  but dynamic member-loss/rebalance and long-running coverage remain open;
+  and the 384-record/60-second extension passed in
+  [run 32389641275](https://github.com/TaeeunKil/kafrust/actions/runs/32389641275),
+  but dynamic member-loss/rebalance and longer backpressure coverage remain
+  open;
 - stable public API review and a `rust-rdkafka` migration example for queue
   workloads.
 

@@ -74,6 +74,9 @@ surfaces separate.
   members accepted three records and the six seeded partitions were observed
   exactly once in
   [`32388813780`](https://github.com/TaeeunKil/kafrust/actions/runs/32388813780).
+  The same published workflow then passed a 60-second, 384-record extension;
+  each member accepted 192 records and all partition/offset pairs remained
+  unique in [`32389641275`](https://github.com/TaeeunKil/kafrust/actions/runs/32389641275).
   The remaining Share gaps are long-running ownership, dynamic member-loss and
   rebalance qualification, Streams background heartbeat/assignment ownership,
   and broader published coverage.

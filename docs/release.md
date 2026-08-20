@@ -149,6 +149,10 @@ coordinator-loss cycles in
 the published two-member Share ownership profile then passed with all six
 partitions observed exactly once across two external members in
 [run 32388813780](https://github.com/TaeeunKil/kafrust/actions/runs/32388813780).
+The same published workflow then processed 384 records over a 60-second
+two-member run, with each member accepting 192 records and all partition/offset
+pairs unique, in
+[run 32389641275](https://github.com/TaeeunKil/kafrust/actions/runs/32389641275).
 Long-running ownership, dynamic member-loss/rebalance, and production
 readiness remain unqualified.
 

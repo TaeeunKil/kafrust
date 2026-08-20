@@ -223,9 +223,12 @@ coverage toward a release candidate that can be qualified in staging.
   group, each accepted three records, and the six seeded partitions were
   observed exactly once across the members in
   [`32388813780`](https://github.com/TaeeunKil/kafrust/actions/runs/32388813780).
-  This closes the basic published assignment slice; dynamic member-loss,
-  rebalance, long-running ownership, and backpressure qualification remain
-  separate 1.0 gates.
+  A 60-second extension then processed 384 records, with each member accepting
+  192 and exact partition/offset reconciliation passing in
+  [`32389641275`](https://github.com/TaeeunKil/kafrust/actions/runs/32389641275).
+  This closes the basic published assignment and bounded soak slices; dynamic
+  member-loss, rebalance, longer ownership, and backpressure qualification
+  remain separate 1.0 gates.
 - Stable `ShareGroupDescribe` v1 (API key 77) is now implemented through the
   typed protocol, low-level `Client`, and coordinator-aware `AdminClient`
   layers. The public result preserves share-group state and epochs, member
