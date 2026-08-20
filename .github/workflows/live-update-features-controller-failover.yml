@@ -87,7 +87,7 @@ jobs:
               --bootstrap-controller kafrust-update-features-2:9093 \
               describe --status 2>/tmp/kafrust-update-features-quorum.log || true)"
             leader_id="$(printf '%s\n' "$quorum_output" | \
-              sed -n 's/^[[:space:]]*LeaderId: \([0-9][0-9]*\).*/\1/p' | head -n 1)"
+              sed -n 's/^[[:space:]]*LeaderId:[[:space:]]*\([0-9][0-9]*\).*/\1/p' | head -n 1)"
             if [ "$leader_id" = 1 -o "$leader_id" = 2 -o "$leader_id" = 3 ]; then
               break
             fi
@@ -119,7 +119,7 @@ jobs:
               --bootstrap-controller "kafrust-update-features-${probe_node}:9093" \
               describe --status 2>/tmp/kafrust-update-features-failover-quorum.log || true)"
             new_leader_id="$(printf '%s\n' "$failover_output" | \
-              sed -n 's/^[[:space:]]*LeaderId: \([0-9][0-9]*\).*/\1/p' | head -n 1)"
+              sed -n 's/^[[:space:]]*LeaderId:[[:space:]]*\([0-9][0-9]*\).*/\1/p' | head -n 1)"
             if [ -n "$new_leader_id" ] && [ "$new_leader_id" != "$leader_id" ]; then
               printf '%s\n' "$failover_output"
               echo "controller failover completed: $leader_id -> $new_leader_id"
