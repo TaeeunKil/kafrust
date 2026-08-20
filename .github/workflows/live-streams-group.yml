@@ -10,6 +10,7 @@ env:
   KAFRUST_BOOTSTRAP_SERVERS: localhost:9092
   KAFRUST_STREAMS_TOPIC: kafrust-streams-smoke
   KAFRUST_STREAMS_GROUP_ID: kafrust-streams-smoke-${{ github.run_id }}
+  KAFRUST_STREAMS_MULTI_GROUP_ID: kafrust-streams-multi-${{ github.run_id }}
   KAFRUST_STREAMS_PROCESS_ID: kafrust-streams-process-${{ github.run_id }}
 
 jobs:
@@ -69,6 +70,9 @@ jobs:
 
       - name: Run Streams group background lifecycle smoke
         run: cargo run -p kafrust --example streams_group_smoke
+
+      - name: Run Streams group multi-member membership smoke
+        run: cargo run -p kafrust --example streams_group_multi_member
 
       - name: Dump Kafka logs
         if: failure()
