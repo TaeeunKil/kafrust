@@ -77,6 +77,11 @@ Current evidence:
   stopped, replacement leadership was observed, and a post-failover record was
   produced and accepted through surviving bootstrap servers in
   [run 32386637555](https://github.com/TaeeunKil/kafrust/actions/runs/32386637555).
+- published `kafrust 0.3.3` passing three consecutive external coordinator-loss
+  cycles on a three-broker Kafka 4.3.1 cluster. The workflow dynamically stopped
+  coordinators 1, 3, and 1, produced through surviving bootstrap servers, and
+  verified the heartbeat task remained alive through each recovery in
+  [run 32387564503](https://github.com/TaeeunKil/kafrust/actions/runs/32387564503).
 
 The live gate is wired in
 `.github/workflows/share-kafka-smoke.yml`. It starts Kafka 4.3.1 with the

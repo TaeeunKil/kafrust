@@ -2644,6 +2644,10 @@ Implemented evidence:
   [`32386637555`](https://github.com/TaeeunKil/kafrust/actions/runs/32386637555),
   covering pre-failover acceptance, broker 1 leader loss, replacement
   leadership, and post-failover acceptance from surviving bootstrap servers.
+  The published active-heartbeat workflow then passed three consecutive
+  coordinator-loss cycles, with dynamic coordinator stops and heartbeat-task
+  liveness checks, in
+  [`32387564503`](https://github.com/TaeeunKil/kafrust/actions/runs/32387564503).
   Long-running multi-broker ownership, multi-member assignment/rebalance, and
   resource/backpressure evidence remain open.
 - ShareFetch success responses preserve the broker that served the request,

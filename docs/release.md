@@ -143,6 +143,9 @@ both from fresh external projects on Kafka 4.3.1 and Rust 1.81. These are
 single-node published-artifact profiles. A fresh external three-broker
 leader-failover profile also passed in
 [run 32386637555](https://github.com/TaeeunKil/kafrust/actions/runs/32386637555);
+the published active-heartbeat profile then passed three consecutive dynamic
+coordinator-loss cycles in
+[run 32387564503](https://github.com/TaeeunKil/kafrust/actions/runs/32387564503);
 long-running ownership, multi-member assignment/rebalance, and production
 readiness remain unqualified.
 

@@ -490,6 +490,9 @@ It also passed a fresh external three-broker leader-failover path in
 [run 32386637555](https://github.com/TaeeunKil/kafrust/actions/runs/32386637555),
 including broker 1 leader loss and post-failover acceptance through surviving
 bootstrap servers.
+The published active-heartbeat path also passed three consecutive dynamic
+coordinator-loss cycles in [run 32387564503](https://github.com/TaeeunKil/kafrust/actions/runs/32387564503),
+with the heartbeat task remaining alive through recovery.
 In-process repeated recovery, long-running qualification, and ambiguous
 acknowledgement responses are surfaced as a typed unknown-outcome error and are
 not replayed automatically. Multi-broker long-running ownership,

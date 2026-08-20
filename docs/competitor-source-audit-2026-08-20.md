@@ -67,6 +67,9 @@ surfaces separate.
   and [`32385522647`](https://github.com/TaeeunKil/kafrust/actions/runs/32385522647).
   A fresh external three-broker leader-failover path also passes in
   [`32386637555`](https://github.com/TaeeunKil/kafrust/actions/runs/32386637555).
+  The published active-heartbeat path also passes three consecutive dynamic
+  coordinator-loss cycles in
+  [`32387564503`](https://github.com/TaeeunKil/kafrust/actions/runs/32387564503).
   The remaining gap is long-running and multi-member Share ownership/assignment
   qualification, Streams background heartbeat/assignment ownership, and
   broader published coverage.
