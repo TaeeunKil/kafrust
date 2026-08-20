@@ -22,11 +22,12 @@ SASL_SSL/SCRAM, and Gzip/Snappy/LZ4/Zstd paths. The release also includes the
 typed Admin mutation ambiguity contract and its current-source response-drop
 qualification.
 
-The current-source `Live Kafka Smoke` matrix passed on commit `ef766cd` in
-[`32221883090`](https://github.com/TaeeunKil/kafrust/actions/runs/32221883090).
+The current-source `Live Kafka Smoke` matrix passed on commit `dc7446b` in
+[`32339508792`](https://github.com/TaeeunKil/kafrust/actions/runs/32339508792).
 This run covered Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 profiles, plaintext,
 TLS, SASL/PLAIN, SASL_SSL/SCRAM, OAUTHBEARER, ACL authorization,
-multi-broker failover, transaction reconciliation, and KIP-848 paths. The
+multi-broker failover, transaction reconciliation, KIP-848 paths, and the
+Kafka 4.3.1 regex v1 initial and dynamic topic-assignment paths. The
 plain and secured three-broker coordinator-stop gates now explicitly verify
 that a transmitted classic `OffsetCommit` whose response is lost returns
 `AdminMutationOutcomeUnknown` with no replay, matching the safety contract;
@@ -273,13 +274,12 @@ coverage toward a release candidate that can be qualified in staging.
   `SubscribedTopicRegex` field added by Kafka 4.x/KIP-1082. The v1 response
   reuses the v0 wire shape with a typed alias. High-level regex subscriptions
   now select v1 for join, foreground/background heartbeat, and leave while
-  explicit topic-name subscriptions retain v0. The high-level path still
-  resolves names locally for assignment and refreshes Metadata when a new
-  assignment contains an unknown topic UUID. Live v1 and dynamic topic
-  qualification remain open; the deterministic fault-injection suite covers
-  the refresh, OffsetFetch v9, and subsequent Fetch v12 path. The live smoke
-  workflow now also provisions a matching topic after join and waits for the
-  KIP-848 assignment and record; a passing run remains required.
+  explicit topic-name subscriptions retain v0. Regex v1 joins generate and
+  retain a client-generated UUID-shaped member ID as required by Kafka 4.3.1;
+  the high-level path resolves names locally for assignment and refreshes
+  Metadata when a new assignment contains an unknown topic UUID. The complete
+  live matrix passed the v1 initial join and dynamic post-join topic
+  assignment/record path in [`32339508792`](https://github.com/TaeeunKil/kafrust/actions/runs/32339508792).
 - Flexible topic-UUID `Fetch` v13 is now implemented in the protocol crate and
   exposed through low-level `Client`. Direct and group consumers select it when
   broker capabilities and Metadata v12 provide a stable topic ID, while the
