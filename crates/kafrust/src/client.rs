@@ -660,6 +660,15 @@ impl Client {
 
         self.sasl_authentication_in_progress = true;
         let result = async {
+            let handshake = self
+                .sasl_handshake_v1_unchecked(credentials.mechanism().as_str())
+                .await?;
+            if handshake.error_code != 0 {
+                return Err(self.broker_error(
+                    handshake.error_code,
+                    "sasl re-authenticate handshake".to_owned(),
+                ));
+            }
             let token = credentials
                 .oauthbearer_token_for_auth(self.request_timeout)
                 .await?;
@@ -700,7 +709,27 @@ impl Client {
             mechanism: mechanism.into(),
         };
         let response = self.send_request(&request.encode()?).await?;
-        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        Self::decode_sasl_handshake_response(&response, self.decode_limits)
+    }
+
+    async fn sasl_handshake_v1_unchecked(
+        &mut self,
+        mechanism: impl Into<String>,
+    ) -> Result<SaslHandshakeResponseV1> {
+        let request = SaslHandshakeRequestV1 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            mechanism: mechanism.into(),
+        };
+        let response = self.send_request_traced(&request.encode()?).await?;
+        Self::decode_sasl_handshake_response(&response, self.decode_limits)
+    }
+
+    fn decode_sasl_handshake_response(
+        response: &[u8],
+        decode_limits: DecodeLimits,
+    ) -> Result<SaslHandshakeResponseV1> {
+        let mut decoder = Decoder::with_limits(response, decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(SaslHandshakeResponseV1::decode_body(&mut decoder)?)
     }
@@ -5406,8 +5435,30 @@ mod tests {
         let (client_stream, mut broker_stream) = tokio::io::duplex(1024);
         let broker = tokio::spawn(async move {
             let request = read_test_frame(&mut broker_stream).await;
-            assert_eq!(&request[0..4], &[0, 36, 0, 2]);
+            assert_eq!(&request[0..4], &[0, 17, 0, 1]);
             assert_eq!(&request[4..8], &[0, 0, 0, 1]);
+            assert_eq!(&request[8..10], &[0xff, 0xff]);
+            assert_eq!(
+                &request[10..23],
+                &[0, 11, b'O', b'A', b'U', b'T', b'H', b'B', b'E', b'A', b'R', b'E', b'R']
+            );
+
+            let handshake_response = [
+                0, 0, 0, 1, // correlation id
+                0, 0, // error code
+                0, 0, 0, 1, // one enabled mechanism
+                0, 11, b'O', b'A', b'U', b'T', b'H', b'B', b'E', b'A', b'R', b'E', b'R',
+            ];
+            broker_stream
+                .write_all(&(handshake_response.len() as i32).to_be_bytes())
+                .await
+                .unwrap();
+            broker_stream.write_all(&handshake_response).await.unwrap();
+            broker_stream.flush().await.unwrap();
+
+            let request = read_test_frame(&mut broker_stream).await;
+            assert_eq!(&request[0..4], &[0, 36, 0, 2]);
+            assert_eq!(&request[4..8], &[0, 0, 0, 2]);
             assert_eq!(&request[8..10], &[0xff, 0xff]);
             assert_eq!(request[10], 0); // request header tagged fields
             assert_eq!(request[11], 30); // compact auth bytes length plus one
@@ -5415,7 +5466,7 @@ mod tests {
             assert_eq!(request[41], 0); // request tagged fields
 
             let response = [
-                0, 0, 0, 1, // correlation id
+                0, 0, 0, 2, // correlation id
                 0, // response header tagged fields
                 0, 0, // error code
                 0, // null compact error message
