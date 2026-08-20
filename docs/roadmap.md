@@ -2809,7 +2809,15 @@ Implemented evidence:
   [`32348148841`](https://github.com/TaeeunKil/kafrust/actions/runs/32348148841));
   the v6 per-partition routing fix and the follow-up workflow corrections are
   recorded in the subsequent commits and successful run above. This gate does
-  not claim general ShareConsumer or `rust-rdkafka` replacement compatibility.
+   not claim general ShareConsumer or `rust-rdkafka` replacement compatibility.
+   The published `kafrust 0.3.3` version of this gate also passed in
+   [`32399284180`](https://github.com/TaeeunKil/kafrust/actions/runs/32399284180):
+   a fresh external Cargo project resolved both published packages, verified
+   the replicated state topic, survived Share coordinator loss, completed
+   post-failover read/summary/delete, and checked the generated lockfile.
+   This closes the published-artifact evidence for the tested unstable state
+   path; it does not close general ShareConsumer replacement, long-running SLO,
+   or broader Kafka-version/security evidence.
 - `.github/workflows/live-update-features.yml` now provides a broker matrix
   gate for the negotiated path. The earlier empty v1 `validate_only` requests
   passed on Kafka 3.7.2 and 4.3.1 in

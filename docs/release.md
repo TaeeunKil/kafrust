@@ -172,6 +172,12 @@ A four-cycle rerun then moved ownership back to member 2, reconciled 24 unique
 records with four per partition, and ended with the survivor at `consumed=6`
 and `in_flight=0` in
 [run 32394453120](https://github.com/TaeeunKil/kafrust/actions/runs/32394453120).
+The published Share Group State failover qualification then passed in
+[run 32399284180](https://github.com/TaeeunKil/kafrust/actions/runs/32399284180):
+a fresh external project resolved `kafrust 0.3.3` and `kafrust-protocol 0.3.3`
+from crates.io, verified replicated `__share_group_state` on Kafka 4.3.1,
+survived loss of the Share coordinator, and completed post-failover
+read/summary/delete. This qualifies the published unstable state path only.
 Longer ownership/backpressure campaigns, higher-cycle rebalance matrices beyond
 four cycles, and production readiness remain unqualified.
 

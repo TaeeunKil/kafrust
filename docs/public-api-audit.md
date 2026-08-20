@@ -22,6 +22,14 @@ The `kafrust` crate currently re-exports the high-level client surface from
 | Protocol escape hatch | `protocol` (`kafrust_protocol`) | Alpha, expert-level | Keep as a convenience re-export for now. Do not promote protocol request/response structs into the `kafrust` root prelude unless a high-level client API requires them. |
 | Version | `version()` | Stable enough | Keep as a simple compile-time package version helper. |
 
+The Admin qualification above now has both current-source and published-artifact
+evidence for replicated Share Group State failover: the live Kafka 4.3.1 gate
+passed in [`32398034582`](https://github.com/TaeeunKil/kafrust/actions/runs/32398034582),
+and the published `kafrust 0.3.3` external-project gate passed in
+[`32399284180`](https://github.com/TaeeunKil/kafrust/actions/runs/32399284180).
+This remains an unstable broker-internal API qualification; broader version,
+security, long-running, and general Kafka replacement evidence remain open.
+
 ## Module Visibility
 
 The crate also exposes public modules:
