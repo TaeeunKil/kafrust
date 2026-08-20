@@ -100,8 +100,12 @@ feature-level result. Kafka 3.7.2 passed in
 and Kafka 4.3.1 passed in
 [`32361035007`](https://github.com/TaeeunKil/kafrust/actions/runs/32361035007).
 These runs qualify request population and result mapping without changing the
-cluster's finalized feature state; downgrade, authorization, and controller
-failover remain separate gates.
+cluster's finalized feature state. A separate SASL/PLAIN authorizer gate
+qualified the same non-empty `metadata.version` request on Kafka 3.7.2 and
+4.3.1: a restricted principal with only cluster `Describe` was rejected with
+`ClusterAuthorizationFailed` (31), while an administrator with `Alter Cluster`
+was accepted in [`32362301496`](https://github.com/TaeeunKil/kafrust/actions/runs/32362301496).
+Actual upgrade/downgrade and controller-failover qualification remain open.
 
 ## DescribeTopicPartitions
 

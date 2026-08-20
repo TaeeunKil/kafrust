@@ -2552,8 +2552,11 @@ Implemented evidence:
   Top-level and per-feature outcomes are preserved, and transmitted-request
   failures use the existing `AdminMutationOutcomeUnknown` contract instead of
   replaying a feature change. Focused protocol and injected-client coverage is
-  in place; live authorization, downgrade, and controller-failover
-  qualification remain open.
+  in place. The live authorization matrix
+  [`32362301496`](https://github.com/TaeeunKil/kafrust/actions/runs/32362301496)
+  now qualifies restricted-user rejection and administrator success on Kafka
+  3.7.2 and 4.3.1; actual downgrade and controller-failover qualification
+  remain open.
 - Kafka `UnregisterBroker` API 64 v0 is now implemented through a flexible
   typed protocol path, low-level `Client::unregister_broker_v0`, and the
   controller-routed `AdminClient::unregister_broker` method. The result keeps
@@ -2628,8 +2631,11 @@ Implemented evidence:
   and Kafka 4.3.1 passed in
   [`32361035007`](https://github.com/TaeeunKil/kafrust/actions/runs/32361035007).
   The workflow remains non-mutating at the feature level; v0 fallback remains
-  covered by typed and injected-client tests, while actual upgrade/downgrade,
-  authorization, and controller-failover qualification remain separate gates.
+  covered by typed and injected-client tests. The separate authorizer matrix
+  [`32362301496`](https://github.com/TaeeunKil/kafrust/actions/runs/32362301496)
+  also passes for Kafka 3.7.2 and 4.3.1, with restricted-user rejection and
+  administrator success. Actual upgrade/downgrade and controller-failover
+  qualification remain separate gates.
 - The 2026-08-20 competitor recheck adds `kacrab` to the comparison set. Its
   published `0.4.0` docs claim Kafka 4.3 producer, consumer, share-consumer,
   and 62-operation Admin parity with a broker-matrix and fuzzing posture;
