@@ -39,6 +39,15 @@ jobs:
 
       - name: Start Kafka
         run: |
+          kafka_extra_args=()
+          if [[ "${KAFKA_VERSION}" == "4.3.1" ]]; then
+            # KIP-848 regex discovery defaults to ten minutes on Kafka 4.3.1.
+            # Keep the live qualification deterministic without changing the
+            # client behavior being tested.
+            kafka_extra_args+=(
+              -e KAFKA_GROUP_CONSUMER_REGEX_REFRESH_INTERVAL_MS=10000
+            )
+          fi
           docker run -d --name kafrust-kafka \
             -p 9092:9092 \
             -e KAFKA_NODE_ID=1 \
@@ -53,6 +62,7 @@ jobs:
             -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1 \
             -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1 \
             -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 \
+            "${kafka_extra_args[@]}" \
             "apache/kafka:${KAFKA_VERSION}"
 
       - name: Wait for Kafka

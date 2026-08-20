@@ -124,7 +124,7 @@ async fn main() -> kafrust::Result<()> {
             )
             .await?;
 
-        let deadline = Instant::now() + Duration::from_secs(15);
+        let deadline = Instant::now() + Duration::from_secs(30);
         let dynamic_records = loop {
             let records = group.poll().await?;
             if records.iter().any(|record| record.topic() == dynamic_topic) {
