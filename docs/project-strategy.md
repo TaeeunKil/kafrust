@@ -39,7 +39,7 @@ That does not make kafrust redundant. kafrust's reason to exist is different:
 - Kafka terminology preserved instead of abstracted away
 
 Pure Rust alternatives also exist. This comparison is a source-documented
-snapshot from 2026-08-20, not an independent benchmark:
+snapshot from 2026-08-21, not an independent benchmark:
 
 The reproducible source inspection behind this comparison is recorded in the
 [competitor source audit](competitor-source-audit-2026-08-20.md). It keeps
