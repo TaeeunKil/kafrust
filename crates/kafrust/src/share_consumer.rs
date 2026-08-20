@@ -2164,8 +2164,11 @@ async fn share_coordinator_address(
     client: &ClientConfig,
     group_id: &str,
 ) -> Result<String> {
+    // Share-group membership is managed by Kafka's ordinary group
+    // coordinator. The Share coordinator type is reserved for durable
+    // share-partition state lookups keyed by group, topic UUID, and partition.
     let response = bootstrap
-        .find_share_group_coordinator(group_id.to_owned())
+        .find_group_coordinator(group_id.to_owned())
         .await?;
     if response.error_code != 0 {
         return Err(client.broker_error(
@@ -2549,6 +2552,11 @@ mod tests {
             let request = read_test_frame(&mut broker_stream).await;
             assert_eq!(i16::from_be_bytes([request[0], request[1]]), 10);
             assert_eq!(i16::from_be_bytes([request[2], request[3]]), 1);
+            let mut decoder = Decoder::new(&request[4..]);
+            decoder.read_i32().unwrap();
+            decoder.read_nullable_string().unwrap();
+            decoder.read_string().unwrap();
+            assert_eq!(decoder.read_i8().unwrap(), 0);
             let correlation_id =
                 i32::from_be_bytes([request[8], request[9], request[10], request[11]]);
 

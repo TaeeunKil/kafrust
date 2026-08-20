@@ -2543,7 +2543,9 @@ Implemented evidence:
   qualification remain open.
 - Kafka Share Group State APIs 83-87 are now implemented through flexible
   typed protocol requests and responses, low-level Client methods, and typed
-  coordinator-routed Admin methods. WriteShareGroupState v1 and
+  coordinator-routed Admin methods. Share-group membership/admin operations
+  use the ordinary Group coordinator; durable state uses KIP-932
+  FindCoordinator v6 with a `group:topic-id:partition` key. WriteShareGroupState v1 and
   ReadShareGroupStateSummary v1 preserve `delivery_complete_count`; requests
   that need those fields reject a v0-only broker rather than silently losing
   data. Kafka currently marks these wire APIs unstable, so they are tracked as
@@ -2559,7 +2561,12 @@ Implemented evidence:
   is fully replicated, discovers the written share group's coordinator,
   stops that coordinator, waits for coordinator reassignment, then reads the
   full state and summary and deletes it through the surviving brokers. A
-  successful run remains required before replicated recovery is claimed.
+  successful run remains required before replicated recovery is claimed. The
+  first post-routing dispatch exposed the earlier v1/type-only lookup as
+  Kafka `INVALID_REQUEST` (run
+  [`32348148841`](https://github.com/TaeeunKil/kafrust/actions/runs/32348148841));
+  the v6 per-partition routing fix is covered by protocol, injected Admin, and
+  local full-suite tests, and still requires a fresh live dispatch.
 - `.github/workflows/live-update-features.yml` now provides a broker matrix
   gate for the negotiated path. Kafka 3.7.2 and 4.3.1 both advertise and pass
   an empty v1 `validate_only` request in

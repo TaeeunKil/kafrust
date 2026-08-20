@@ -2691,9 +2691,23 @@ impl AdminClient {
                     .collect(),
             })
             .collect::<Vec<_>>();
+        let (route_topic_id, route_partition) = topics
+            .iter()
+            .flat_map(|topic| {
+                topic
+                    .partitions
+                    .iter()
+                    .map(move |partition| (topic.topic_id, partition.partition))
+            })
+            .next()
+            .ok_or(Error::Unsupported(
+                "InitializeShareGroupState requires at least one partition",
+            ))?;
         let mut retry = 0;
         let response = loop {
-            let mut coordinator = self.share_group_coordinator_client(group_id).await?;
+            let mut coordinator = self
+                .share_state_coordinator_client(group_id, route_topic_id, route_partition)
+                .await?;
             let api_versions = match coordinator
                 .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
                 .await
@@ -2773,9 +2787,23 @@ impl AdminClient {
                     .collect(),
             })
             .collect::<Vec<_>>();
+        let (route_topic_id, route_partition) = topics
+            .iter()
+            .flat_map(|topic| {
+                topic
+                    .partitions
+                    .iter()
+                    .map(move |partition| (topic.topic_id, partition.partition))
+            })
+            .next()
+            .ok_or(Error::Unsupported(
+                "ReadShareGroupState requires at least one partition",
+            ))?;
         let mut retry = 0;
         let response = loop {
-            let mut coordinator = self.share_group_coordinator_client(group_id).await?;
+            let mut coordinator = self
+                .share_state_coordinator_client(group_id, route_topic_id, route_partition)
+                .await?;
             let api_versions = match coordinator
                 .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
                 .await
@@ -2854,6 +2882,18 @@ impl AdminClient {
         group_id: &str,
         topics: &[ShareGroupStateWriteTopic],
     ) -> Result<ShareGroupStateResult> {
+        let (route_topic_id, route_partition) = topics
+            .iter()
+            .flat_map(|topic| {
+                topic
+                    .partitions
+                    .iter()
+                    .map(move |partition| (topic.topic_id, partition.partition))
+            })
+            .next()
+            .ok_or(Error::Unsupported(
+                "WriteShareGroupState requires at least one partition",
+            ))?;
         let requires_v1 = topics.iter().any(|topic| {
             topic
                 .partitions
@@ -2862,7 +2902,9 @@ impl AdminClient {
         });
         let mut retry = 0;
         let response = loop {
-            let mut coordinator = self.share_group_coordinator_client(group_id).await?;
+            let mut coordinator = self
+                .share_state_coordinator_client(group_id, route_topic_id, route_partition)
+                .await?;
             let api_versions = match coordinator
                 .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
                 .await
@@ -3002,9 +3044,23 @@ impl AdminClient {
                 partitions: topic.partitions.clone(),
             })
             .collect::<Vec<_>>();
+        let (route_topic_id, route_partition) = topics
+            .iter()
+            .flat_map(|topic| {
+                topic
+                    .partitions
+                    .iter()
+                    .map(move |partition| (topic.topic_id, *partition))
+            })
+            .next()
+            .ok_or(Error::Unsupported(
+                "DeleteShareGroupState requires at least one partition",
+            ))?;
         let mut retry = 0;
         let response = loop {
-            let mut coordinator = self.share_group_coordinator_client(group_id).await?;
+            let mut coordinator = self
+                .share_state_coordinator_client(group_id, route_topic_id, route_partition)
+                .await?;
             let api_versions = match coordinator
                 .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
                 .await
@@ -3085,9 +3141,23 @@ impl AdminClient {
                     .collect(),
             })
             .collect::<Vec<_>>();
+        let (route_topic_id, route_partition) = topics
+            .iter()
+            .flat_map(|topic| {
+                topic
+                    .partitions
+                    .iter()
+                    .map(move |partition| (topic.topic_id, partition.partition))
+            })
+            .next()
+            .ok_or(Error::Unsupported(
+                "ReadShareGroupStateSummary requires at least one partition",
+            ))?;
         let mut retry = 0;
         let response = loop {
-            let mut coordinator = self.share_group_coordinator_client(group_id).await?;
+            let mut coordinator = self
+                .share_state_coordinator_client(group_id, route_topic_id, route_partition)
+                .await?;
             let api_versions = match coordinator
                 .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
                 .await
@@ -4511,8 +4581,52 @@ impl AdminClient {
     }
 
     async fn share_group_coordinator_client(&self, group_id: &str) -> Result<Client> {
-        self.coordinator_client(group_id, CoordinatorType::Share)
+        // Share-group membership and share-group admin APIs are owned by the
+        // ordinary group coordinator. Share-partition state uses the separate
+        // v6 lookup below.
+        self.coordinator_client(group_id, CoordinatorType::Group)
             .await
+    }
+
+    async fn share_state_coordinator_client(
+        &self,
+        group_id: &str,
+        topic_id: [u8; 16],
+        partition: i32,
+    ) -> Result<Client> {
+        let mut retry = 0;
+        loop {
+            let result = async {
+                let mut bootstrap = self.config.clone().connect().await?;
+                let coordinator = bootstrap
+                    .find_share_partition_coordinator(group_id, topic_id, partition)
+                    .await?;
+                if coordinator.error_code != 0 {
+                    self.config.record_broker_error();
+                    return Err(Error::Broker {
+                        code: coordinator.error_code,
+                        context: format!(
+                            "find share partition coordinator for group {group_id}, partition {partition}"
+                        ),
+                    });
+                }
+                self.config
+                    .connect_broker(format!("{}:{}", coordinator.host, coordinator.port))
+                    .await
+            }
+            .await;
+            match result {
+                Ok(client) => return Ok(client),
+                Err(error)
+                    if retry < self.max_retries && is_retryable_admin_coordinator_error(&error) =>
+                {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                }
+                Err(error) => return Err(error),
+            }
+        }
     }
 
     async fn coordinator_client(
@@ -17412,10 +17526,13 @@ mod tests {
         let server = tokio::spawn(async move {
             let (mut bootstrap, _) = listener.accept().await.unwrap();
             let coordinator_request = read_frame(&mut bootstrap).await;
-            assert_eq!(&coordinator_request[0..4], &[0, 10, 0, 1]);
+            assert_eq!(&coordinator_request[0..4], &[0, 10, 0, 6]);
             write_frame(
                 &mut bootstrap,
-                &find_group_coordinator_response(addr.port()),
+                &find_share_partition_coordinator_response(
+                    addr.port(),
+                    "share-orders:07070707-0707-0707-0707-070707070707:0",
+                ),
             )
             .await;
 
@@ -17429,10 +17546,13 @@ mod tests {
 
             let (mut bootstrap, _) = listener.accept().await.unwrap();
             let coordinator_request = read_frame(&mut bootstrap).await;
-            assert_eq!(&coordinator_request[0..4], &[0, 10, 0, 1]);
+            assert_eq!(&coordinator_request[0..4], &[0, 10, 0, 6]);
             write_frame(
                 &mut bootstrap,
-                &find_group_coordinator_response(addr.port()),
+                &find_share_partition_coordinator_response(
+                    addr.port(),
+                    "share-orders:07070707-0707-0707-0707-070707070707:0",
+                ),
             )
             .await;
 
@@ -20977,6 +21097,27 @@ mod tests {
         ];
         response.extend_from_slice(&i32::from(port).to_be_bytes());
         response
+    }
+
+    fn find_share_partition_coordinator_response(port: u16, key: &str) -> Vec<u8> {
+        let mut response = Encoder::new();
+        response.write_i32(1); // correlation ID
+        response.write_empty_tagged_fields(); // response header tags
+        response.write_i32(0); // throttle time
+        response
+            .write_compact_array(Some(&[key]), |encoder, key| {
+                encoder.write_compact_string(key)?;
+                encoder.write_i32(1); // node ID
+                encoder.write_compact_string("127.0.0.1")?;
+                encoder.write_i32(i32::from(port));
+                encoder.write_i16(0); // success
+                encoder.write_compact_nullable_string(None)?;
+                encoder.write_empty_tagged_fields();
+                Ok(())
+            })
+            .unwrap();
+        response.write_empty_tagged_fields(); // response body tags
+        response.into_bytes()
     }
 
     fn find_group_coordinator_error_response(error_code: i16) -> Vec<u8> {

@@ -157,9 +157,12 @@ is still required before production compatibility is claimed.
 `unregister_broker` exposes Kafka's controller-routed UnregisterBroker API 64
 v0 with typed throttle and broker-error results; live unregister and
 re-registration qualification remains open.
-Share Group State APIs 83-87 are available through typed `AdminClient` methods
-and share-coordinator routing. Write and summary v1 fields are preserved
-without silent downgrade; live state lifecycle qualification remains open.
+Share Group State APIs 83-87 are available through typed `AdminClient` methods.
+Share-group membership and group-admin operations use the ordinary Group
+coordinator, while durable state uses Kafka 4.x KIP-932 FindCoordinator v6
+with a per-resource `group:topic-id:partition` key. Write and summary v1
+fields are preserved without silent downgrade; live state lifecycle and
+replicated recovery qualification remain open.
 `list_consumer_group_offsets` and `alter_consumer_group_offsets` expose typed
 classic consumer-group offset inspection and administrative reset through the
 group coordinator, preserving partition-level outcomes.

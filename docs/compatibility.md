@@ -275,9 +275,12 @@ listed in `docs/share-consumer.md` and the corresponding workflow history.
 Share Group State APIs 83-87 are tracked separately from this public
 ShareConsumer claim. Kafka currently marks those wire APIs unstable, and broad
 clients such as krafka intentionally omit the broker-internal state-persister
-surface. Kafrust's typed implementation and failover workflow are advanced
-qualification work; a passing state workflow must not be interpreted as
-general ShareConsumer or `rust-rdkafka` replacement evidence.
+surface. Kafrust's typed implementation now uses the ordinary Group
+coordinator for membership/admin operations and KIP-932 FindCoordinator v6
+with a per-partition `group:topic-id:partition` key for durable state.
+Live lifecycle and replicated-recovery qualification remain open; a passing
+state workflow must not be interpreted as general ShareConsumer or
+`rust-rdkafka` replacement evidence.
 
 The complete 17-job `Live Kafka Smoke` matrix also passed on the current
 connection-lifecycle hardening commit `e0e7e03` in

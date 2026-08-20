@@ -100,7 +100,8 @@ use kafrust_protocol::api::fetch::{
     FetchTopicV17, FetchTopicV18, FetchTopicV2, API_KEY as FETCH_API_KEY,
 };
 use kafrust_protocol::api::find_coordinator::{
-    CoordinatorType, FindCoordinatorRequestV1, FindCoordinatorResponseV1,
+    CoordinatorType, FindCoordinatorRequestV1, FindCoordinatorRequestV6, FindCoordinatorResponseV1,
+    FindCoordinatorResponseV6, FindCoordinatorResultV6,
 };
 use kafrust_protocol::api::heartbeat::{
     HeartbeatRequestV2, HeartbeatRequestV3, HeartbeatResponseV2,
@@ -2316,6 +2317,42 @@ impl Client {
             .await
     }
 
+    /// Sends FindCoordinator v6 for one KIP-932 share-partition resource.
+    ///
+    /// Share-group membership uses the ordinary group coordinator. Durable
+    /// share-partition state uses a separate coordinator selected by the
+    /// `group:topic-id:partition` key and the Share coordinator type.
+    pub async fn find_share_partition_coordinator(
+        &mut self,
+        group_id: impl AsRef<str>,
+        topic_id: [u8; 16],
+        partition: i32,
+    ) -> Result<FindCoordinatorResultV6> {
+        let coordinator_key = format!(
+            "{}:{}:{}",
+            group_id.as_ref(),
+            format_topic_id(topic_id),
+            partition
+        );
+        let request = FindCoordinatorRequestV6 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            coordinator_type: CoordinatorType::Share,
+            coordinator_keys: vec![coordinator_key.clone()],
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        let response = FindCoordinatorResponseV6::decode_body(&mut decoder)?;
+        response
+            .coordinators
+            .into_iter()
+            .find(|coordinator| coordinator.coordinator_key == coordinator_key)
+            .ok_or(Error::Unsupported(
+                "FindCoordinator v6 returned no share-partition result",
+            ))
+    }
+
     /// Sends FindCoordinator v1 for a transactional ID.
     pub async fn find_transaction_coordinator(
         &mut self,
@@ -4002,6 +4039,28 @@ impl Client {
         self.next_correlation_id = self.next_correlation_id.wrapping_add(1).max(1);
         correlation_id
     }
+}
+
+fn format_topic_id(topic_id: [u8; 16]) -> String {
+    format!(
+        "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
+        topic_id[0],
+        topic_id[1],
+        topic_id[2],
+        topic_id[3],
+        topic_id[4],
+        topic_id[5],
+        topic_id[6],
+        topic_id[7],
+        topic_id[8],
+        topic_id[9],
+        topic_id[10],
+        topic_id[11],
+        topic_id[12],
+        topic_id[13],
+        topic_id[14],
+        topic_id[15]
+    )
 }
 
 impl fmt::Debug for Client {
