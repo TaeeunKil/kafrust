@@ -420,17 +420,6 @@ impl Client {
         Ok(ApiVersionsResponseV0::decode_body(&mut decoder)?)
     }
 
-    async fn api_versions_v0_unchecked(&mut self) -> Result<ApiVersionsResponseV0> {
-        let request = ApiVersionsRequestV0 {
-            correlation_id: self.next_correlation_id(),
-            client_id: self.client_id.clone(),
-        };
-        let response = self.send_request_traced(&request.encode()?).await?;
-        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
-        let _header = ResponseHeader::decode_v0(&mut decoder)?;
-        Ok(ApiVersionsResponseV0::decode_body(&mut decoder)?)
-    }
-
     /// Sends flexible ApiVersions v3 and decodes the broker capability ranges.
     ///
     /// The legacy [`Self::api_versions`] method remains available for callers
@@ -671,13 +660,6 @@ impl Client {
 
         self.sasl_authentication_in_progress = true;
         let result = async {
-            let api_versions = self.api_versions_v0_unchecked().await?;
-            if api_versions.error_code != 0 {
-                return Err(self.broker_error(
-                    api_versions.error_code,
-                    "sasl re-authenticate api versions".to_owned(),
-                ));
-            }
             let handshake = self
                 .sasl_handshake_v1_unchecked(credentials.mechanism().as_str())
                 .await?;
@@ -691,7 +673,7 @@ impl Client {
                 .oauthbearer_token_for_auth(self.request_timeout)
                 .await?;
             let response = self
-                .sasl_authenticate_v2(sasl_oauthbearer_auth_bytes_with_token(
+                .sasl_authenticate_v1(sasl_oauthbearer_auth_bytes_with_token(
                     &credentials,
                     &token,
                 )?)
@@ -5453,30 +5435,8 @@ mod tests {
         let (client_stream, mut broker_stream) = tokio::io::duplex(1024);
         let broker = tokio::spawn(async move {
             let request = read_test_frame(&mut broker_stream).await;
-            assert_eq!(&request[0..4], &[0, 18, 0, 0]);
-            assert_eq!(&request[4..8], &[0, 0, 0, 1]);
-            assert_eq!(&request[8..10], &[0xff, 0xff]);
-
-            let api_versions_response = [
-                0, 0, 0, 1, // correlation id
-                0, 0, // error code
-                0, 0, 0, 2, // two API versions
-                0, 17, 0, 0, 0, 1, // SaslHandshake v1
-                0, 36, 0, 0, 0, 2, // SaslAuthenticate v2
-            ];
-            broker_stream
-                .write_all(&(api_versions_response.len() as i32).to_be_bytes())
-                .await
-                .unwrap();
-            broker_stream
-                .write_all(&api_versions_response)
-                .await
-                .unwrap();
-            broker_stream.flush().await.unwrap();
-
-            let request = read_test_frame(&mut broker_stream).await;
             assert_eq!(&request[0..4], &[0, 17, 0, 1]);
-            assert_eq!(&request[4..8], &[0, 0, 0, 2]);
+            assert_eq!(&request[4..8], &[0, 0, 0, 1]);
             assert_eq!(&request[8..10], &[0xff, 0xff]);
             assert_eq!(
                 &request[10..23],
@@ -5484,7 +5444,7 @@ mod tests {
             );
 
             let handshake_response = [
-                0, 0, 0, 2, // correlation id
+                0, 0, 0, 1, // correlation id
                 0, 0, // error code
                 0, 0, 0, 1, // one enabled mechanism
                 0, 11, b'O', b'A', b'U', b'T', b'H', b'B', b'E', b'A', b'R', b'E', b'R',
@@ -5497,22 +5457,18 @@ mod tests {
             broker_stream.flush().await.unwrap();
 
             let request = read_test_frame(&mut broker_stream).await;
-            assert_eq!(&request[0..4], &[0, 36, 0, 2]);
-            assert_eq!(&request[4..8], &[0, 0, 0, 3]);
+            assert_eq!(&request[0..4], &[0, 36, 0, 1]);
+            assert_eq!(&request[4..8], &[0, 0, 0, 2]);
             assert_eq!(&request[8..10], &[0xff, 0xff]);
-            assert_eq!(request[10], 0); // request header tagged fields
-            assert_eq!(request[11], 30); // compact auth bytes length plus one
-            assert_eq!(&request[12..41], b"n,,\x01auth=Bearer fresh-token\x01\x01");
-            assert_eq!(request[41], 0); // request tagged fields
+            assert_eq!(&request[10..14], &[0, 0, 0, 29]);
+            assert_eq!(&request[14..43], b"n,,\x01auth=Bearer fresh-token\x01\x01");
 
             let response = [
-                0, 0, 0, 3, // correlation id
-                0, // response header tagged fields
+                0, 0, 0, 2, // correlation id
                 0, 0, // error code
-                0, // null compact error message
-                1, // empty compact auth bytes
+                0xff, 0xff, // null error message
+                0, 0, 0, 0, // empty auth bytes
                 0, 0, 0, 0, 0, 0, 3, 0xe8, // session lifetime ms: 1000
-                0,    // response tagged fields
             ];
             broker_stream
                 .write_all(&(response.len() as i32).to_be_bytes())

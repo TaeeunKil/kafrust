@@ -59,7 +59,7 @@ async fn main() -> kafrust::Result<()> {
         ));
     }
     println!(
-        "published oauthbearer reauth ok session_lifetime_ms={} provider_calls={} sasl_v2=true same_connection=true",
+        "published oauthbearer reauth ok session_lifetime_ms={} provider_calls={} sasl_auth_version=1 same_connection=true",
         session_lifetime_ms, calls
     );
     Ok(())
