@@ -58,6 +58,10 @@ Current evidence:
   [run 32356279940](https://github.com/TaeeunKil/kafrust/actions/runs/32356279940)
   and all three active-heartbeat coordinator-loss attempts in
   [run 32356280155](https://github.com/TaeeunKil/kafrust/actions/runs/32356280155).
+- current-source bounded acknowledgement soak on Kafka 4.3.1 passing 64
+  independently seeded records with `max_records(1)`, one acknowledgement and
+  commit per record, unique accepted values and offsets, and clean close in
+  [run 32369562416](https://github.com/TaeeunKil/kafrust/actions/runs/32369562416).
 
 The live gate is wired in
 `.github/workflows/share-kafka-smoke.yml`. It starts Kafka 4.3.1 with the
@@ -93,9 +97,10 @@ The same three-attempt matrix was revalidated on the current source in [run
 This evidence proves the client-side wire and state-machine slice, the
 deterministic response-loss safety boundary, the single-node Kafka 4.3.1
 lifecycle, three-broker leader movement, repeated coordinator churn within one
-long-running process, ordinary acknowledgement progress, and live ambiguous
+long-running process, bounded acknowledgement progress, and live ambiguous
 acknowledgement reconciliation. It does not prove long-running multi-broker
-ownership, assignment/rebalance qualification, or production readiness.
+ownership, assignment/rebalance qualification, published-artifact Share
+compatibility, or production readiness.
 
 ## Basic Usage
 

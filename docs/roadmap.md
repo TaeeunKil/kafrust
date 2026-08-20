@@ -2582,6 +2582,14 @@ Implemented evidence:
   [`32356280155`](https://github.com/TaeeunKil/kafrust/actions/runs/32356280155).
   This strengthens current-source evidence but does not close long-running
   multi-broker ownership, assignment/rebalance, or resource/backpressure gates.
+- The current-source Share acknowledgement soak passed on Kafka 4.3.1 in
+  [`32369562416`](https://github.com/TaeeunKil/kafrust/actions/runs/32369562416):
+  64 independently seeded records were acquired one at a time, acknowledged
+  and committed individually, checked for unique values and offsets, and the
+  ShareConsumer closed cleanly. This closes a bounded current-source
+  acknowledgement-progress gate; published-artifact Share qualification,
+  long-running multi-broker ownership, assignment/rebalance, and
+  resource/backpressure evidence remain open.
 - ShareFetch success responses preserve the broker that served the request,
   while `CurrentLeader` is used only for the leader-error responses where Kafka
   populates it. Retryable ShareFetch leader errors return the connection to the

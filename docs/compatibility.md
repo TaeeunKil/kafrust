@@ -358,6 +358,13 @@ The remaining Share claim is narrower: long-running ambiguous reconciliation
 and published-artifact qualification remain open. The current evidence is
 listed in `docs/share-consumer.md` and the corresponding workflow history.
 
+The current-source acknowledgement soak additionally passed in
+[`32369562416`](https://github.com/TaeeunKil/kafrust/actions/runs/32369562416),
+processing 64 independently seeded records with one-at-a-time acknowledgement
+and commit checks plus unique value/offset reconciliation. This is bounded
+single-node evidence; it does not establish published-artifact Share
+compatibility, long-running multi-broker ownership, or production readiness.
+
 Share Group State APIs 83-87 are tracked separately from this public
 ShareConsumer claim. Kafka currently marks those wire APIs unstable, and broad
 clients such as krafka intentionally omit the broker-internal state-persister
