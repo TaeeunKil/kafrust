@@ -245,8 +245,16 @@ async fn api_versions_and_metadata_roundtrip_when_broker_is_configured() {
                             .iter()
                             .find(|feature| feature.name() == feature_name)
                             .map(|feature| feature.max_version_level())
+                            // Kafka may omit a supported feature from finalized_features at level 0.
+                            .or_else(|| {
+                                features
+                                    .supported_features()
+                                    .iter()
+                                    .find(|feature| feature.name() == feature_name)
+                                    .map(|_| 0)
+                            })
                     })
-                    .expect("configured UpdateFeatures feature must be finalized");
+                    .expect("configured UpdateFeatures feature must be supported or finalized");
                 vec![kafrust::FeatureUpdate::new(
                     feature_name.clone(),
                     feature_level,
