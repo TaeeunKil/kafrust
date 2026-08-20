@@ -24,9 +24,15 @@ None. Existing OAUTHBEARER configuration remains the same.
 
 ### Compatibility evidence
 
-The published signed OAUTHBEARER re-authentication gate is pending the
-`0.3.5` crates.io artifacts. The earlier failing runs resolved the already
-published `0.3.4` artifact and do not qualify this fix.
+The protocol-first `0.3.5` packages were published to crates.io, and the
+fresh external signed OAUTHBEARER gate passed on Kafka 3.7.2 in
+[run 32419795744](https://github.com/TaeeunKil/kafrust/actions/runs/32419795744).
+The run resolved `kafrust 0.3.5` and `kafrust-protocol 0.3.5` from crates.io,
+completed signed RS256 OIDC/JWKS validation, and re-authenticated on the same
+connection after the broker session lifetime threshold. The earlier failing
+runs resolved the already published `0.3.4` artifact and do not qualify this
+fix. docs.rs indexing for `0.3.5` was still pending when this note was
+recorded.
 
 ### Verification
 
