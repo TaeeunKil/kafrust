@@ -10,6 +10,7 @@ use kafrust::{
 
 #[tokio::main]
 async fn main() -> kafrust::Result<()> {
+    common::init_tracing()?;
     let bootstrap_servers = common::bootstrap_servers_from_env();
     let group_id = std::env::var("KAFRUST_GROUP_ID")
         .unwrap_or_else(|_| "kafrust-regex-consumer-group".to_owned());
