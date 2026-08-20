@@ -28,7 +28,7 @@ jobs:
       KAFRUST_EXPECT_DESCRIBE_CLUSTER_VERSION: "1"
       KAFRUST_EXPECT_LIST_CONFIG_RESOURCES_VERSION: ${{ inputs.kafka_version == '3.9.1' && '0' || '1' }}
       KAFRUST_LIST_CONFIG_RESOURCES_RESOURCE_TYPE: ${{ inputs.kafka_version == '3.9.1' && '16' || '2' }}
-      KAFRUST_EXPECT_DESCRIBE_CONFIGS_VERSION: ${{ inputs.kafka_version == '3.9.1' && '' || '4' }}
+      KAFRUST_EXPECT_DESCRIBE_CONFIGS_VERSION: "4"
 
     steps:
       - name: Checkout
@@ -88,6 +88,9 @@ jobs:
 
       - name: Run current-source configuration API roundtrip
         run: |
+          if [ "${{ inputs.kafka_version }}" = "3.9.1" ]; then
+            unset KAFRUST_EXPECT_DESCRIBE_CONFIGS_VERSION
+          fi
           cargo test -p kafrust --test broker_roundtrip \
             api_versions_and_metadata_roundtrip_when_broker_is_configured \
             -- --nocapture
