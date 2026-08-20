@@ -1,5 +1,6 @@
 use kafrust::{
-    ProducerConfig, ProducerRecord, ShareAcknowledgementType, ShareAcquireMode, ShareConsumerConfig,
+    ClientMetrics, ProducerConfig, ProducerRecord, ShareAcknowledgementType, ShareAcquireMode,
+    ShareConsumerConfig,
 };
 use std::collections::BTreeSet;
 use std::io::Write;
@@ -120,6 +121,7 @@ async fn member() -> kafrust::Result<()> {
     let output_path = required_env("KAFRUST_SHARE_MEMBER_OUTPUT_FILE")?;
     let heartbeat_ready_path = std::env::var("KAFRUST_SHARE_MEMBER_HEARTBEAT_READY_FILE").ok();
     let run_seconds = run_seconds()?;
+    let metrics = ClientMetrics::new();
 
     let mut consumer = ShareConsumerConfig::new(bootstrap_servers()?, group_id)
         .client_id(member_id.clone())
@@ -129,6 +131,7 @@ async fn member() -> kafrust::Result<()> {
         .batch_size(1)
         .max_retries(10)
         .acquire_mode(ShareAcquireMode::RecordLimit)
+        .metrics(metrics.clone())
         .build()
         .await?;
     std::fs::write(&ready_path, b"joined\n").map_err(kafrust::Error::Io)?;
@@ -196,11 +199,28 @@ async fn member() -> kafrust::Result<()> {
     let assignment_count = consumer.assignment_count();
     consumer.stop_heartbeat_task().await?;
     consumer.close().await?;
+    let snapshot = metrics.snapshot();
+    if snapshot.consumed_records != accepted.len() as u64 {
+        return Err(kafrust::Error::InvalidConfiguration {
+            field: "KAFRUST_SHARE_MEMBER_OUTPUT_FILE",
+            reason: "published Share metrics consumed count differs from accepted records",
+        });
+    }
+    if snapshot.in_flight_requests != 0 {
+        return Err(kafrust::Error::InvalidConfiguration {
+            field: "KAFRUST_SHARE_MEMBER_OUTPUT_FILE",
+            reason: "published Share member closed with in-flight requests",
+        });
+    }
     println!(
-        "published Share multi-member member={} assignment={} accepted={}",
+        "published Share multi-member member={} assignment={} accepted={} consumed={} in_flight={} failed={} retries={}",
         member_id,
         assignment_count,
-        accepted.len()
+        accepted.len(),
+        snapshot.consumed_records,
+        snapshot.in_flight_requests,
+        snapshot.requests_failed,
+        snapshot.retries,
     );
     Ok(())
 }
