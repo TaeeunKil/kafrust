@@ -726,6 +726,7 @@ Generated API documentation:
 - [Agent instructions](AGENTS.md)
 - [Agentic development workflow](docs/agentic-development.md)
 - [Project strategy](docs/project-strategy.md)
+- [Competitor source audit](docs/competitor-source-audit-2026-08-20.md)
 - [Performance benchmarks](docs/performance.md)
 - [Roadmap](docs/roadmap.md)
 - [Broker roundtrip](docs/broker-roundtrip.md)

@@ -13,17 +13,58 @@ The audit used shallow source snapshots for the following revisions:
 
 | Project | Source snapshot | Release baseline |
 | --- | --- | --- |
-| [krafka](https://github.com/hupe1980/krafka) | `e3f2799` | published `0.19.0` |
+| [krafka](https://github.com/hupe1980/krafka) | [`e535c61`](https://github.com/hupe1980/krafka/tree/e535c616636a1862a9ab2654b1b2d8fc6902be63) | `0.20.0` on `main` |
 | [kacrab](https://github.com/pirumu/kacrab) | `cf206a0` | published `0.4.0` |
-| [rskafka](https://github.com/influxdata/rskafka) | `9b7699d` | published `0.6.0` |
+| [rskafka](https://github.com/influxdata/rskafka) | [`9b7699d`](https://github.com/influxdata/rskafka/tree/9b7699d2ed818c19145a2728bfc7a9c456a04b66) | published `0.6.0` |
+| [rust-rdkafka](https://github.com/fede1024/rust-rdkafka) | [`3f54ff1`](https://github.com/fede1024/rust-rdkafka/tree/3f54ff1dabe7eece876b9635e22462b04478a445) | published `0.39.0` / `librdkafka 2.12.1` |
 | [kafkit-client](https://docs.rs/kafkit-client/0.1.9/kafkit_client/) | crates.io `0.1.9` source archive | published `0.1.9` |
-| kafrust | worktree based on `27d5507` plus uncommitted changes | published `0.3.0` |
+| kafrust | [`e799c96`](https://github.com/TaeeunKil/kafrust/tree/e799c96) | published `0.3.1` |
 
 The `kafkit-client` Cargo metadata points at a GitHub repository that currently
 returns 404, so the published crates.io archive was used instead of inventing
 a current repository snapshot. The local competitor copies were kept outside
 the repository under a temporary audit directory and are not dependencies of
 kafrust.
+
+The refreshed comparison also inspected the current source manifests and
+module trees directly. Approximate Rust source size, including comments and
+tests, was: kafrust application plus protocol crates 79.9k lines in 86 files;
+krafka 144.8k lines in 133 files; rskafka 14.5k lines in 45 files; and the
+rust-rdkafka wrapper 10.4k lines in 19 files, excluding its native librdkafka
+tree. These counts indicate engineering surface, not quality or compatibility.
+
+The current pure-Rust source snapshot shows 63 named kafrust protocol API
+modules, 54 named krafka protocol message modules, and 12 named rskafka
+message modules. File counts are not an API compatibility score: krafka folds
+some APIs together, while kafrust keeps several versioned or broker-internal
+surfaces separate.
+
+### Refreshed source observations
+
+- `rust-rdkafka` remains the mature adoption baseline, but its `rdkafka-sys`
+  crate declares a native build script, bindgen-generated C bindings, and
+  librdkafka 2.12.1. Its breadth comes from the native library, so it is not a
+  pure-Rust implementation target for this project.
+- `rskafka` is the official InfluxData repository at `0.6.0`. Its README
+  explicitly excludes offset tracking, consumer groups, transactions, and
+  built-in buffering. It has useful pure-Rust transport, compression, SASL/TLS,
+  fuzzing, and benchmark patterns, but it is not a competing drop-in client
+  for kafrust's target.
+- `krafka` `0.20.0` is the closest current pure-Rust comparison. Its source
+  contains producer batching/idempotence/transactions, classic and KIP-848
+  consumer runtime code, ShareConsumer, broad Admin APIs, telemetry, several
+  authentication providers, and a real in-process TCP fake broker. Its README
+  explicitly says KIP-1071 Streams group runtime and KIP-1258 OAuth client
+  assertions are not implemented. Default compression is pure Rust; its
+  optional `compression-all` Zstd path uses `zstd-sys`, so the strict
+  no-required-C posture still differentiates kafrust.
+- `kafrust` `0.3.1` has broader explicitly named protocol coverage in the
+  checked tree, including the alpha Streams group APIs and a large typed Admin
+  surface. The source also contains all four record-batch codecs using
+  Rust-native codec dependencies. The gap is runtime qualification: Streams
+  background heartbeat/assignment ownership remains open, and the newest
+  Share acknowledgement result is bounded current-source evidence rather than
+  a published multi-broker soak.
 
 ## Findings By Project
 
