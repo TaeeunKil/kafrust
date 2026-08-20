@@ -91,7 +91,7 @@ jobs:
               --topic __share_group_state 2>/dev/null || true)"
             printf '%s\n' "$state_topic"
             if printf '%s\n' "$state_topic" | grep -q 'ReplicationFactor: 3'; then
-              isr="$(printf '%s\n' "$state_topic" | sed -n 's/.*Isr: //p' | tr -d ' ' | head -n 1)"
+              isr="$(printf '%s\n' "$state_topic" | awk '{ for (i = 1; i <= NF; i++) if ($i == "Isr:") { print $(i + 1); exit } }')"
               state_replicated=true
               for broker_id in 1 2 3; do
                 case ",$isr," in
@@ -107,7 +107,7 @@ jobs:
           done
           test -n "$state_topic"
           printf '%s\n' "$state_topic" | grep -q 'ReplicationFactor: 3'
-          isr="$(printf '%s\n' "$state_topic" | sed -n 's/.*Isr: //p' | tr -d ' ' | head -n 1)"
+          isr="$(printf '%s\n' "$state_topic" | awk '{ for (i = 1; i <= NF; i++) if ($i == "Isr:") { print $(i + 1); exit } }')"
           case ",$isr," in *,1,* ) ;; *) echo "state topic is missing broker 1 from ISR: $isr"; exit 1;; esac
           case ",$isr," in *,2,* ) ;; *) echo "state topic is missing broker 2 from ISR: $isr"; exit 1;; esac
           case ",$isr," in *,3,* ) ;; *) echo "state topic is missing broker 3 from ISR: $isr"; exit 1;; esac
