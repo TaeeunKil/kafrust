@@ -1,5 +1,7 @@
 use kafrust::streams::{StreamsGroupHeartbeatSubtopology, StreamsGroupHeartbeatTopology};
-use kafrust::{StreamsGroupConfig, StreamsGroupSession};
+use kafrust::{
+    StreamsGroupConfig, StreamsGroupSession, StreamsTaskRuntime,
+};
 
 #[tokio::main]
 async fn main() -> kafrust::Result<()> {
@@ -25,6 +27,8 @@ async fn main() -> kafrust::Result<()> {
     let handle = session.spawn_heartbeat_task();
     let _assignment = handle.assignment();
     let _updates = handle.subscribe_assignment();
+    let mut task_runtime = StreamsTaskRuntime::new();
+    let _transitions = handle.reconcile_task_runtime(&mut task_runtime)?;
     handle.close().await?;
     Ok(())
 }

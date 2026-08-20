@@ -15,6 +15,9 @@ The current session supports:
 - a typed `StreamsGroupSessionAssignment` snapshot containing the latest
   broker status entries, task assignment, recovery-lag, offset-interval, and
   Interactive Queries endpoint information
+- a `StreamsTaskRuntime` reconciliation primitive with canonical task IDs,
+  active/standby/warmup roles, deterministic add/remove/role-change
+  transitions, and assignment conflict validation
 - bounded coordinator reconnect and member rejoin
 - graceful leave with member epoch `-1` and `shutdown_application=true`
 
@@ -23,9 +26,27 @@ or source/sink processing. After joining, callers can move the session into a
 `StreamsGroupSessionHandle` with `spawn_heartbeat_task()`. That handle owns a
 bounded command queue, sends heartbeats at Kafka's advertised interval, and
 publishes the latest assignment through `subscribe_assignment()`. The caller
-still owns task-runtime reconciliation and must await `close()` when a graceful
-member leave is required; dropping the handle aborts the task without a broker
-leave guarantee.
+can reconcile the latest snapshot with `reconcile_task_runtime()` and remains
+responsible for creating, processing, and closing the actual stream tasks. It
+must await `close()` when a graceful member leave is required; dropping the
+handle aborts the task without a broker leave guarantee.
+
+## Task runtime reconciliation
+
+`StreamsTaskRuntime::reconcile_assignment()` follows the Kafka response
+contract: a `null` active, standby, or warmup field means that role is
+unchanged, while `Some(Vec::new())` explicitly removes every task in that
+role. Task IDs are canonicalized as `(subtopology_id, sorted partitions)` so a
+partition-order-only broker update produces no lifecycle event. Before the
+state is committed, the runtime rejects empty or invalid task IDs, duplicate
+partitions, and a partition claimed by more than one local task. A failed
+reconciliation leaves the previous runtime state intact.
+
+The returned `StreamsTaskTransition` values are an application boundary, not a
+processor implementation. Applications still need to apply them to their
+consumer assignments, state stores, changelog restoration, and processing
+loops. The runtime is intentionally bounded to assignment lifecycle and does
+not claim Kafka Streams DSL compatibility.
 
 ## Example
 
@@ -60,9 +81,11 @@ Streams application.
 
 ## Stability
 
-This is an alpha, expert-level API. The session now preserves the latest
-successful assignment snapshot without collapsing nullable fields. Before
-`1.0`, the project still needs automatic assignment/task-runtime
-reconciliation, a real Kafka Streams application test, and a published
-broker-runtime gate for this API. The published artifact surface check is
-defined in `.github/workflows/published-streams-surface.yml`.
+This is an alpha, expert-level API. The session preserves the latest
+successful assignment snapshot without collapsing nullable fields, and the
+task-runtime reconciliation primitive now provides deterministic local
+lifecycle transitions. Before `1.0`, the project still needs a real Kafka
+Streams application test, a published broker-runtime gate for this API, and
+integration of transitions with consumer assignment, state restoration, and
+processing execution. The published artifact surface check is defined in
+`.github/workflows/published-streams-surface.yml`.

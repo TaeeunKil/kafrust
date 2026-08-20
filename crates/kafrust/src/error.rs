@@ -375,6 +375,20 @@ pub enum Error {
     TaskJoin(tokio::task::JoinError),
     /// A Streams heartbeat task stopped before accepting another command.
     StreamsGroupBackgroundTaskClosed,
+    /// A Streams assignment contained an invalid task identifier or partition list.
+    StreamsTaskAssignmentInvalid {
+        /// Subtopology identifier carried by the invalid task, if available.
+        subtopology_id: String,
+        /// Stable reason for rejecting the assignment.
+        reason: &'static str,
+    },
+    /// A Streams assignment reused an input partition across local tasks.
+    StreamsTaskAssignmentConflict {
+        /// Subtopology in which the conflicting partition appeared.
+        subtopology_id: String,
+        /// Input partition claimed by more than one local task.
+        partition: i32,
+    },
     /// Kafka protocol encoding or decoding failure.
     Protocol(kafrust_protocol::Error),
 }
@@ -534,6 +548,20 @@ impl fmt::Display for Error {
             Self::StreamsGroupBackgroundTaskClosed => {
                 f.write_str("Streams group background heartbeat task is closed")
             }
+            Self::StreamsTaskAssignmentInvalid {
+                subtopology_id,
+                reason,
+            } => write!(
+                f,
+                "invalid Streams task assignment for subtopology {subtopology_id:?}: {reason}"
+            ),
+            Self::StreamsTaskAssignmentConflict {
+                subtopology_id,
+                partition,
+            } => write!(
+                f,
+                "Streams task assignment conflicts in subtopology {subtopology_id:?} on partition {partition}"
+            ),
             Self::Protocol(error) => write!(f, "Kafka protocol error: {error}"),
         }
     }
@@ -579,6 +607,8 @@ impl std::error::Error for Error {
             | Self::TelemetryPayloadTooLarge { .. }
             | Self::ShareRecordNotAcquired { .. }
             | Self::StreamsGroupBackgroundTaskClosed
+            | Self::StreamsTaskAssignmentInvalid { .. }
+            | Self::StreamsTaskAssignmentConflict { .. }
             | Self::Unsupported(_) => None,
         }
     }

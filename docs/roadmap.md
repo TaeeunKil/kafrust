@@ -248,20 +248,21 @@ coverage toward a release candidate that can be qualified in staging.
   tests cover configuration validation, retry backoff, and the full injected
   wire lifecycle from topology initialization through task-state heartbeat and
   graceful shutdown. The session now preserves the latest successful broker
-  assignment in a typed `StreamsGroupSessionAssignment` snapshot. Automatic
-  assignment/task-runtime reconciliation remains open. A bounded
+  assignment in a typed `StreamsGroupSessionAssignment` snapshot. A bounded
+  `StreamsTaskRuntime` now applies Kafka's nullable role updates, canonicalizes
+  task IDs, validates partition conflicts, and emits deterministic task
+  lifecycle transitions. A bounded
   `StreamsGroupSessionHandle` now owns periodic
   heartbeat scheduling through a Tokio task, exposes a backpressured task-state
   command path, publishes latest assignments through a watch snapshot, and
   waits for graceful close. Focused wire coverage verifies the automatic
   heartbeat and member-epoch `-1` leave; published-handle qualification,
-  automatic assignment/task-runtime reconciliation, and multi-member failure
-  evidence remain open. The published `0.3.2` surface now also compiles the
+  transition application inside a complete Kafka Streams application, and
+  multi-member failure evidence remain open. The published `0.3.2` surface now also compiles the
   handle and assignment-watch API from a fresh external project on stable and
   Rust 1.81 in [`32377502460`](https://github.com/TaeeunKil/kafrust/actions/runs/32377502460).
-  Automatic assignment/task-runtime reconciliation, published
-  broker-runtime qualification, and a complete Kafka Streams application
-  remain open.
+  Published broker-runtime qualification and a complete Kafka Streams
+  application remain open.
 - `crates/kafrust/examples/streams_group_smoke.rs` and
   `.github/workflows/live-streams-group.yml` now provide a Kafka 4.3.1
   real-broker qualification entry point. The workflow enables the broker

@@ -13,6 +13,7 @@ pub use kafrust_protocol::api::streams_group_heartbeat::{
     StreamsGroupHeartbeatTaskOffset, StreamsGroupHeartbeatTopic, StreamsGroupHeartbeatTopicConfig,
     StreamsGroupHeartbeatTopology,
 };
+use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
 use tokio::sync::{mpsc, oneshot, watch};
 use tokio::task::JoinHandle;
@@ -316,6 +317,258 @@ impl StreamsGroupSessionAssignment {
             task_offset_interval_ms: response.task_offset_interval_ms,
             partitions_by_user_endpoint: response.partitions_by_user_endpoint.clone(),
         }
+    }
+}
+
+/// The role a Kafka Streams task has on this member.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum StreamsTaskRole {
+    /// The task actively processes its input partitions.
+    Active,
+    /// The task maintains standby state without processing records actively.
+    Standby,
+    /// The task is warming up before it can become active.
+    Warmup,
+}
+
+impl StreamsTaskRole {
+    /// Returns the stable role name used in diagnostics and logs.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Active => "active",
+            Self::Standby => "standby",
+            Self::Warmup => "warmup",
+        }
+    }
+}
+
+/// The canonical identity of one Kafka Streams task assignment.
+///
+/// Kafka identifies the task by its subtopology and the input partitions it
+/// processes. Partition order is not semantic, so this type stores partitions
+/// in sorted order and rejects duplicates or negative partition indexes.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct StreamsTaskId {
+    subtopology_id: String,
+    partitions: Vec<i32>,
+}
+
+impl StreamsTaskId {
+    /// Creates a canonical task identity from a subtopology and partitions.
+    pub fn new(subtopology_id: impl Into<String>, mut partitions: Vec<i32>) -> Result<Self> {
+        let subtopology_id = subtopology_id.into();
+        if subtopology_id.trim().is_empty() {
+            return Err(Error::StreamsTaskAssignmentInvalid {
+                subtopology_id,
+                reason: "subtopology ID must not be empty",
+            });
+        }
+        if partitions.is_empty() {
+            return Err(Error::StreamsTaskAssignmentInvalid {
+                subtopology_id,
+                reason: "task must contain at least one partition",
+            });
+        }
+        if partitions.iter().any(|partition| *partition < 0) {
+            return Err(Error::StreamsTaskAssignmentInvalid {
+                subtopology_id,
+                reason: "task partitions must not be negative",
+            });
+        }
+        partitions.sort_unstable();
+        if partitions.windows(2).any(|window| window[0] == window[1]) {
+            return Err(Error::StreamsTaskAssignmentInvalid {
+                subtopology_id,
+                reason: "task partitions must not contain duplicates",
+            });
+        }
+        Ok(Self {
+            subtopology_id,
+            partitions,
+        })
+    }
+
+    fn from_heartbeat_task(task: &StreamsGroupHeartbeatTask) -> Result<Self> {
+        Self::new(task.subtopology_id.clone(), task.partitions.clone())
+    }
+
+    /// Returns the subtopology identifier.
+    pub fn subtopology_id(&self) -> &str {
+        &self.subtopology_id
+    }
+
+    /// Returns the canonical, sorted input partitions.
+    pub fn partitions(&self) -> &[i32] {
+        &self.partitions
+    }
+}
+
+/// A task and its currently reconciled role.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StreamsTaskAssignment {
+    /// Canonical task identity.
+    pub task: StreamsTaskId,
+    /// Role currently held by the task.
+    pub role: StreamsTaskRole,
+}
+
+/// A deterministic lifecycle change produced by [`StreamsTaskRuntime`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StreamsTaskTransition {
+    /// A task became assigned to this member.
+    Added {
+        /// Canonical task identity.
+        task: StreamsTaskId,
+        /// New task role.
+        role: StreamsTaskRole,
+    },
+    /// A task was removed from this member.
+    Removed {
+        /// Canonical task identity.
+        task: StreamsTaskId,
+        /// Role held before removal.
+        role: StreamsTaskRole,
+    },
+    /// A task stayed on this member but changed role.
+    RoleChanged {
+        /// Canonical task identity.
+        task: StreamsTaskId,
+        /// Role held before the assignment update.
+        previous_role: StreamsTaskRole,
+        /// Role after the assignment update.
+        role: StreamsTaskRole,
+    },
+}
+
+/// Bounded, deterministic reconciliation state for Streams task assignments.
+///
+/// This type intentionally stops at assignment lifecycle. It does not spawn
+/// processors, own consumer assignments, or manage state stores. Applications
+/// can apply the returned transitions to those components while keeping Kafka's
+/// nullable response semantics and task identity rules in one place.
+#[derive(Debug, Default)]
+pub struct StreamsTaskRuntime {
+    tasks: BTreeMap<StreamsTaskId, StreamsTaskRole>,
+}
+
+impl StreamsTaskRuntime {
+    /// Creates an empty task runtime.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Returns the current task assignment in canonical order.
+    pub fn assignment(&self) -> Vec<StreamsTaskAssignment> {
+        self.tasks
+            .iter()
+            .map(|(task, role)| StreamsTaskAssignment {
+                task: task.clone(),
+                role: *role,
+            })
+            .collect()
+    }
+
+    /// Returns the current role for a task, if it is assigned.
+    pub fn role(&self, task: &StreamsTaskId) -> Option<StreamsTaskRole> {
+        self.tasks.get(task).copied()
+    }
+
+    /// Applies the changed task-role fields from a broker assignment.
+    ///
+    /// A `None` role field means that Kafka did not change that role since the
+    /// previous heartbeat and is therefore retained. `Some(Vec::new())` is an
+    /// explicit revocation of that role. The returned transitions are sorted by
+    /// canonical task identity and the runtime is left unchanged if validation
+    /// fails.
+    pub fn reconcile_assignment(
+        &mut self,
+        assignment: &StreamsGroupSessionAssignment,
+    ) -> Result<Vec<StreamsTaskTransition>> {
+        let mut desired = self.tasks.clone();
+        let updates = [
+            (StreamsTaskRole::Active, assignment.active_tasks.as_ref()),
+            (StreamsTaskRole::Standby, assignment.standby_tasks.as_ref()),
+            (StreamsTaskRole::Warmup, assignment.warmup_tasks.as_ref()),
+        ];
+
+        for (role, tasks) in updates {
+            if tasks.is_some() {
+                desired.retain(|_, current_role| *current_role != role);
+            }
+        }
+
+        let mut occupied = BTreeSet::new();
+        for task in desired.keys() {
+            for partition in task.partitions() {
+                if !occupied.insert((task.subtopology_id().to_owned(), *partition)) {
+                    return Err(Error::StreamsTaskAssignmentConflict {
+                        subtopology_id: task.subtopology_id().to_owned(),
+                        partition: *partition,
+                    });
+                }
+            }
+        }
+
+        for (role, tasks) in updates {
+            let Some(tasks) = tasks else {
+                continue;
+            };
+            for task in tasks {
+                let task = StreamsTaskId::from_heartbeat_task(task)?;
+                for partition in task.partitions() {
+                    if !occupied.insert((task.subtopology_id().to_owned(), *partition)) {
+                        return Err(Error::StreamsTaskAssignmentConflict {
+                            subtopology_id: task.subtopology_id().to_owned(),
+                            partition: *partition,
+                        });
+                    }
+                }
+                if desired.insert(task.clone(), role).is_some() {
+                    return Err(Error::StreamsTaskAssignmentConflict {
+                        subtopology_id: task.subtopology_id().to_owned(),
+                        partition: task.partitions()[0],
+                    });
+                }
+            }
+        }
+
+        let mut transitions = Vec::new();
+        for (task, previous_role) in &self.tasks {
+            match desired.get(task) {
+                None => transitions.push(StreamsTaskTransition::Removed {
+                    task: task.clone(),
+                    role: *previous_role,
+                }),
+                Some(role) if role != previous_role => {
+                    transitions.push(StreamsTaskTransition::RoleChanged {
+                        task: task.clone(),
+                        previous_role: *previous_role,
+                        role: *role,
+                    });
+                }
+                Some(_) => {}
+            }
+        }
+        for (task, role) in &desired {
+            if !self.tasks.contains_key(task) {
+                transitions.push(StreamsTaskTransition::Added {
+                    task: task.clone(),
+                    role: *role,
+                });
+            }
+        }
+        self.tasks = desired;
+        Ok(transitions)
+    }
+}
+
+impl StreamsGroupSessionHandle {
+    /// Reconciles the latest broker assignment into an application-owned task runtime.
+    pub fn reconcile_task_runtime(
+        &self,
+        runtime: &mut StreamsTaskRuntime,
+    ) -> Result<Vec<StreamsTaskTransition>> {
+        runtime.reconcile_assignment(&self.assignment())
     }
 }
 
@@ -908,9 +1161,11 @@ mod tests {
         streams_retry_backoff, StreamsGroupConfig, StreamsGroupHeartbeatEndpoint,
         StreamsGroupHeartbeatKeyValue, StreamsGroupHeartbeatTask, StreamsGroupHeartbeatTaskOffset,
         StreamsGroupHeartbeatTopology, StreamsGroupSession, StreamsGroupSessionAssignment,
+        StreamsTaskRole, StreamsTaskRuntime, StreamsTaskTransition,
         STREAMS_GROUP_MAX_RETRY_BACKOFF,
     };
     use crate::client::Client;
+    use crate::error::Error;
     use kafrust_protocol::api::streams_group_heartbeat::StreamsGroupHeartbeatSubtopology;
     use kafrust_protocol::codec::{Decoder, Encoder};
     use std::time::Duration;
@@ -1254,6 +1509,113 @@ mod tests {
         assert_eq!(handle.assignment().task_offset_interval_ms, 100);
         handle.close().await.unwrap();
         broker.await.unwrap();
+    }
+
+    fn assignment(
+        active_tasks: Option<Vec<StreamsGroupHeartbeatTask>>,
+        standby_tasks: Option<Vec<StreamsGroupHeartbeatTask>>,
+        warmup_tasks: Option<Vec<StreamsGroupHeartbeatTask>>,
+    ) -> StreamsGroupSessionAssignment {
+        StreamsGroupSessionAssignment {
+            active_tasks,
+            standby_tasks,
+            warmup_tasks,
+            ..StreamsGroupSessionAssignment::default()
+        }
+    }
+
+    fn task(subtopology_id: &str, partitions: &[i32]) -> StreamsGroupHeartbeatTask {
+        StreamsGroupHeartbeatTask {
+            subtopology_id: subtopology_id.to_owned(),
+            partitions: partitions.to_vec(),
+        }
+    }
+
+    #[test]
+    fn task_runtime_reconciles_nullable_roles_and_canonical_task_ids() {
+        let mut runtime = StreamsTaskRuntime::new();
+        let transitions = runtime
+            .reconcile_assignment(&assignment(
+                Some(vec![task("subtopology-0", &[2, 1])]),
+                Some(vec![task("subtopology-0", &[3])]),
+                Some(Vec::new()),
+            ))
+            .unwrap();
+        assert_eq!(transitions.len(), 2);
+        assert!(matches!(
+            &transitions[0],
+            StreamsTaskTransition::Added {
+                role: StreamsTaskRole::Active,
+                ..
+            }
+        ));
+        assert!(matches!(
+            &transitions[1],
+            StreamsTaskTransition::Added {
+                role: StreamsTaskRole::Standby,
+                ..
+            }
+        ));
+        assert_eq!(runtime.assignment()[0].task.partitions(), &[1, 2]);
+
+        let unchanged = runtime
+            .reconcile_assignment(&assignment(None, None, None))
+            .unwrap();
+        assert!(unchanged.is_empty());
+
+        let transitions = runtime
+            .reconcile_assignment(&assignment(
+                Some(Vec::new()),
+                Some(vec![task("subtopology-0", &[2, 1])]),
+                None,
+            ))
+            .unwrap();
+        assert_eq!(
+            transitions,
+            vec![
+                StreamsTaskTransition::RoleChanged {
+                    task: super::StreamsTaskId::new("subtopology-0", vec![1, 2]).unwrap(),
+                    previous_role: StreamsTaskRole::Active,
+                    role: StreamsTaskRole::Standby,
+                },
+                StreamsTaskTransition::Removed {
+                    task: super::StreamsTaskId::new("subtopology-0", vec![3]).unwrap(),
+                    role: StreamsTaskRole::Standby,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn task_runtime_rejects_conflicting_assignment_without_mutating_state() {
+        let mut runtime = StreamsTaskRuntime::new();
+        runtime
+            .reconcile_assignment(&assignment(
+                Some(vec![task("subtopology-0", &[0])]),
+                Some(Vec::new()),
+                Some(Vec::new()),
+            ))
+            .unwrap();
+        let before = runtime.assignment();
+
+        let error = runtime
+            .reconcile_assignment(&assignment(
+                Some(vec![
+                    task("subtopology-0", &[1]),
+                    task("subtopology-0", &[1]),
+                ]),
+                Some(Vec::new()),
+                Some(Vec::new()),
+            ))
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            Error::StreamsTaskAssignmentConflict {
+                subtopology_id,
+                partition: 1,
+            } if subtopology_id == "subtopology-0"
+        ));
+        assert_eq!(runtime.assignment(), before);
     }
 
     fn request_header(request: &[u8]) -> (i32, Decoder<'_>) {

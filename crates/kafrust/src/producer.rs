@@ -1643,6 +1643,20 @@ fn delivery_error_from_request_error(error: &Error) -> Error {
         Error::Unsupported(feature) => Error::Unsupported(feature),
         Error::Io(error) => Error::Io(std::io::Error::new(error.kind(), error.to_string())),
         Error::StreamsGroupBackgroundTaskClosed => Error::StreamsGroupBackgroundTaskClosed,
+        Error::StreamsTaskAssignmentInvalid {
+            subtopology_id,
+            reason,
+        } => Error::StreamsTaskAssignmentInvalid {
+            subtopology_id: subtopology_id.clone(),
+            reason,
+        },
+        Error::StreamsTaskAssignmentConflict {
+            subtopology_id,
+            partition,
+        } => Error::StreamsTaskAssignmentConflict {
+            subtopology_id: subtopology_id.clone(),
+            partition: *partition,
+        },
         Error::TaskJoin(_) => Error::Unsupported("buffered producer task join failed"),
         Error::Protocol(error) => Error::Protocol(error.clone()),
     }
@@ -4862,6 +4876,8 @@ fn can_retry_send(error: &Error) -> bool {
         | Error::ShareRecordNotAcquired { .. }
         | Error::Unsupported(_)
         | Error::StreamsGroupBackgroundTaskClosed
+        | Error::StreamsTaskAssignmentInvalid { .. }
+        | Error::StreamsTaskAssignmentConflict { .. }
         | Error::TaskJoin(_)
         | Error::Protocol(_) => false,
     }

@@ -499,8 +499,9 @@ rejoins within a bounded retry budget, and leaves with
 `shutdown_application=true`. It is a broker membership layer only; it does not
 execute a Kafka Streams DSL, state stores, or stream-processing tasks. A joined
 session can be moved into a bounded `StreamsGroupSessionHandle`, which owns
-periodic heartbeats and publishes assignment snapshots; the application still
-reconciles task state and must await `close()` for a graceful leave.
+periodic heartbeats and publishes assignment snapshots. The application can
+use `StreamsTaskRuntime` to turn nullable broker updates into deterministic
+task lifecycle transitions, and must await `close()` for a graceful leave.
 
 ```rust,no_run
 use kafrust::streams::{
@@ -526,6 +527,8 @@ let session = StreamsGroupSession::join(
 )
 .await?;
 let handle = session.spawn_heartbeat_task();
+let mut task_runtime = kafrust::StreamsTaskRuntime::new();
+let _transitions = handle.reconcile_task_runtime(&mut task_runtime)?;
 handle.heartbeat_now().await?;
 handle.close().await?;
 # Ok(())

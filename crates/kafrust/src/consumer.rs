@@ -2013,6 +2013,8 @@ fn can_retry_fetch(error: &Error) -> bool {
         | Error::ShareRecordNotAcquired { .. }
         | Error::Unsupported(_)
         | Error::StreamsGroupBackgroundTaskClosed
+        | Error::StreamsTaskAssignmentInvalid { .. }
+        | Error::StreamsTaskAssignmentConflict { .. }
         | Error::TaskJoin(_)
         | Error::Protocol(_) => false,
     }

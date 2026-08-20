@@ -121,7 +121,8 @@ pub use share_consumer::{
 };
 pub use streams::{
     StreamsGroupConfig, StreamsGroupSession, StreamsGroupSessionAssignment,
-    StreamsGroupSessionHandle,
+    StreamsGroupSessionHandle, StreamsTaskAssignment, StreamsTaskId, StreamsTaskRole,
+    StreamsTaskRuntime, StreamsTaskTransition,
 };
 #[cfg(feature = "otlp")]
 pub use telemetry::ClientMetricsTelemetryProvider;
