@@ -67,6 +67,147 @@ impl SaslMechanism {
 /// Future returned by an [`OAuthBearerTokenProvider`].
 pub type OAuthBearerTokenFuture = Pin<Box<dyn Future<Output = Result<String>> + Send>>;
 
+/// A bearer token together with the time at which the issuer says it expires.
+///
+/// The token is redacted from `Debug` output. Applications should derive the
+/// expiration time from the issuer response rather than guessing it from a
+/// local refresh interval.
+#[derive(Clone)]
+pub struct OAuthBearerToken {
+    token: String,
+    expires_at: std::time::SystemTime,
+}
+
+impl OAuthBearerToken {
+    /// Creates a token value with its issuer-provided expiration time.
+    pub fn new(token: impl Into<String>, expires_at: std::time::SystemTime) -> Self {
+        Self {
+            token: token.into(),
+            expires_at,
+        }
+    }
+
+    /// Returns the bearer token for SASL authentication.
+    pub fn token(&self) -> &str {
+        &self.token
+    }
+
+    /// Returns the issuer-provided expiration time.
+    pub fn expires_at(&self) -> std::time::SystemTime {
+        self.expires_at
+    }
+
+    fn is_fresh(&self, now: std::time::SystemTime, refresh_before: Duration) -> bool {
+        self.expires_at
+            .duration_since(now)
+            .is_ok_and(|remaining| remaining > refresh_before)
+    }
+
+    fn is_valid(&self, now: std::time::SystemTime) -> bool {
+        self.expires_at.duration_since(now).is_ok()
+    }
+}
+
+impl fmt::Debug for OAuthBearerToken {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("OAuthBearerToken")
+            .field("token", &"<redacted>")
+            .field("expires_at", &self.expires_at)
+            .finish()
+    }
+}
+
+/// Future returned by an [`OAuthBearerTokenSource`].
+pub type OAuthBearerTokenSourceFuture =
+    Pin<Box<dyn Future<Output = Result<OAuthBearerToken>> + Send>>;
+
+/// Supplies an issuer token and its expiration metadata to a cached provider.
+pub trait OAuthBearerTokenSource: Send + Sync {
+    /// Fetches a token without exposing it to tracing or debug output.
+    fn fetch_token(&self) -> OAuthBearerTokenSourceFuture;
+}
+
+impl<F, Fut> OAuthBearerTokenSource for F
+where
+    F: Fn() -> Fut + Send + Sync,
+    Fut: Future<Output = Result<OAuthBearerToken>> + Send + 'static,
+{
+    fn fetch_token(&self) -> OAuthBearerTokenSourceFuture {
+        Box::pin(self())
+    }
+}
+
+/// OAUTHBEARER provider that caches a token until its refresh window.
+///
+/// A refresh failure falls back to the cached token while it is still valid.
+/// Once that token has expired, the provider returns the refresh error so the
+/// connection cannot authenticate with stale credentials. The cache is safe
+/// to share across the broker connections created from one client config.
+pub struct CachedOAuthBearerTokenProvider<S> {
+    source: Arc<S>,
+    refresh_before: Duration,
+    cached: Arc<tokio::sync::Mutex<Option<OAuthBearerToken>>>,
+}
+
+impl<S> CachedOAuthBearerTokenProvider<S> {
+    /// Creates a cached provider with a refresh window before token expiry.
+    pub fn new(source: S, refresh_before: Duration) -> Self {
+        Self {
+            source: Arc::new(source),
+            refresh_before,
+            cached: Arc::new(tokio::sync::Mutex::new(None)),
+        }
+    }
+}
+
+impl<S> fmt::Debug for CachedOAuthBearerTokenProvider<S> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CachedOAuthBearerTokenProvider")
+            .field("refresh_before", &self.refresh_before)
+            .field("cached", &"<redacted>")
+            .finish()
+    }
+}
+
+impl<S> OAuthBearerTokenProvider for CachedOAuthBearerTokenProvider<S>
+where
+    S: OAuthBearerTokenSource + 'static,
+{
+    fn fetch_token(&self) -> OAuthBearerTokenFuture {
+        let source = Arc::clone(&self.source);
+        let cached = Arc::clone(&self.cached);
+        let refresh_before = self.refresh_before;
+        Box::pin(async move {
+            let now = std::time::SystemTime::now();
+            let cached_token = { cached.lock().await.clone() };
+            if let Some(token) = cached_token
+                .as_ref()
+                .filter(|token| token.is_fresh(now, refresh_before))
+            {
+                return Ok(token.token.clone());
+            }
+
+            match source.fetch_token().await {
+                Ok(token) => {
+                    let value = token.token.clone();
+                    *cached.lock().await = Some(token);
+                    Ok(value)
+                }
+                Err(error) => {
+                    if let Some(token) = cached_token
+                        .as_ref()
+                        .filter(|token| token.is_valid(std::time::SystemTime::now()))
+                    {
+                        Ok(token.token.clone())
+                    } else {
+                        Err(error)
+                    }
+                }
+            }
+        })
+    }
+}
+
 /// Supplies a fresh SASL/OAUTHBEARER token for a broker connection.
 ///
 /// The provider is called whenever kafrust authenticates a new broker
@@ -1192,7 +1333,8 @@ fn tls_server_name_from_bootstrap_server(server: &str) -> Result<String> {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::{
-        sasl_oauthbearer_auth_bytes, tls_server_name_from_bootstrap_server, ClientConfig,
+        sasl_oauthbearer_auth_bytes, tls_server_name_from_bootstrap_server,
+        CachedOAuthBearerTokenProvider, ClientConfig, OAuthBearerToken, OAuthBearerTokenProvider,
         SaslCredentials, SaslMechanism, SecurityProtocol,
     };
     use crate::scram::{self, ScramHash};
@@ -1200,7 +1342,7 @@ mod tests {
     use base64::engine::general_purpose::STANDARD as BASE64;
     use base64::Engine as _;
     use std::str;
-    use std::time::Duration;
+    use std::time::{Duration, SystemTime};
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
 
@@ -1500,6 +1642,90 @@ mod tests {
         assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 2);
         assert!(format!("{credentials:?}").contains("<configured>"));
         assert!(!format!("{credentials:?}").contains("fresh-jwt-token"));
+    }
+
+    #[tokio::test]
+    async fn cached_oauth_provider_reuses_unexpired_tokens() {
+        let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let source_calls = calls.clone();
+        let provider = CachedOAuthBearerTokenProvider::new(
+            move || {
+                let source_calls = source_calls.clone();
+                async move {
+                    let call = source_calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    Ok(OAuthBearerToken::new(
+                        format!("cached-token-{call}"),
+                        SystemTime::now() + Duration::from_secs(3_600),
+                    ))
+                }
+            },
+            Duration::from_secs(60),
+        );
+
+        assert_eq!(provider.fetch_token().await.unwrap(), "cached-token-0");
+        assert_eq!(provider.fetch_token().await.unwrap(), "cached-token-0");
+        assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert!(!format!("{provider:?}").contains("cached-token-0"));
+    }
+
+    #[tokio::test]
+    async fn cached_oauth_provider_rotates_inside_refresh_window() {
+        let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let source_calls = calls.clone();
+        let provider = CachedOAuthBearerTokenProvider::new(
+            move || {
+                let source_calls = source_calls.clone();
+                async move {
+                    let call = source_calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    let lifetime = if call == 0 {
+                        Duration::from_millis(10)
+                    } else {
+                        Duration::from_secs(3_600)
+                    };
+                    Ok(OAuthBearerToken::new(
+                        format!("rotated-token-{call}"),
+                        SystemTime::now() + lifetime,
+                    ))
+                }
+            },
+            Duration::from_secs(1),
+        );
+
+        assert_eq!(provider.fetch_token().await.unwrap(), "rotated-token-0");
+        assert_eq!(provider.fetch_token().await.unwrap(), "rotated-token-1");
+        assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 2);
+    }
+
+    #[tokio::test]
+    async fn cached_oauth_provider_uses_valid_token_during_source_outage() {
+        let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let source_calls = calls.clone();
+        let provider = CachedOAuthBearerTokenProvider::new(
+            move || {
+                let source_calls = source_calls.clone();
+                async move {
+                    if source_calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0 {
+                        Ok(OAuthBearerToken::new(
+                            "outage-fallback-token",
+                            SystemTime::now() + Duration::from_secs(3_600),
+                        ))
+                    } else {
+                        Err(Error::Unsupported("oauth issuer unavailable"))
+                    }
+                }
+            },
+            Duration::from_secs(7_200),
+        );
+
+        assert_eq!(
+            provider.fetch_token().await.unwrap(),
+            "outage-fallback-token"
+        );
+        assert_eq!(
+            provider.fetch_token().await.unwrap(),
+            "outage-fallback-token"
+        );
+        assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 2);
     }
 
     #[tokio::test]

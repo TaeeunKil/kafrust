@@ -63,6 +63,14 @@ pool shared between producer, consumer, Admin, group, and Share instances.
 
 `ClientConfig::security_protocol` and the matching producer, consumer, and group builders default to `SecurityProtocol::Plaintext`. `SecurityProtocol::Tls` uses the non-default `tls` crate feature and is covered by the recorded broker roundtrip, producer, direct consumer, and consumer group smoke profile. TLS server name validation defaults to the bootstrap host and can be overridden with `tls_server_name(name)` or `KAFRUST_TLS_SERVER_NAME` for examples and broker checks. Extra DER root certificates can be added with `tls_root_certificate_der(bytes)` or `KAFRUST_TLS_ROOT_CERT_DER_PATH` for examples and broker checks. SASL/PLAIN and SASL/SCRAM-SHA-256/512 authentication are implemented for configured `SaslPlaintext` and `SaslTls` connections; SASL/PLAIN over `SaslPlaintext` and SASL/SCRAM-SHA-256 over `SaslTls` are covered by recorded broker roundtrip, producer, direct consumer, and consumer group smoke profiles.
 
+For issuer-aware OAUTHBEARER refresh, wrap an application-owned token source
+with `CachedOAuthBearerTokenProvider`. The source returns
+`OAuthBearerToken::new(value, expires_at)`. The wrapper refreshes inside the
+configured window and temporarily uses a still-valid cached token when the
+issuer is unavailable; after expiry it returns the issuer error instead of
+authenticating with stale credentials. HTTP discovery, JWKS retrieval, and
+provider-specific endpoint policy remain application-owned.
+
 TLS mutual authentication is configured with `ClientConfig::tls_client_certificate_der` (repeat for the certificate chain) and `ClientConfig::tls_client_private_key_der`. The matching producer, direct consumer, consumer-group, ShareConsumer, and Streams-group setters forward to the same shared configuration. The certificate and private key must be provided together, are rejected for plaintext, and the private-key bytes are redacted from `Debug`. This path is implemented behind the `tls` feature; a live mTLS broker qualification remains open.
 
 The broker-roundtrip test accepts `KAFRUST_TLS_CLIENT_CERT_DER_PATH` and

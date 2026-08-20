@@ -1810,7 +1810,10 @@ The profile also passes a signed local OIDC/JWKS fixture that exercises
 signature, issuer, audience, and provider-backed token loading in the
 [`31584760474` OIDC job](https://github.com/TaeeunKil/kafrust/actions/runs/31584760474/job/94075906934).
 The public API also supports an async token provider for new broker
-authentications. External provider-specific behavior remains unclaimed.
+authentications. `CachedOAuthBearerTokenProvider` adds source-provided expiry,
+refresh-window rotation, and valid-token fallback during a temporary source
+outage; this deterministic policy is covered by unit tests. External
+provider-specific behavior remains unclaimed.
 - The low-level `Client` records the broker-advertised SASL session lifetime;
   provider-backed OAUTHBEARER re-authentication is covered by focused injected
   tests and the published signed OIDC live job above. OAUTHBEARER uses
@@ -1828,10 +1831,11 @@ The current compatibility claim does not cover:
   runs listed above.
 - SASL workflows beyond the listed SASL_PLAINTEXT and SASL_SSL smoke examples.
 - Production SASL/OAUTHBEARER provider compatibility beyond the local signed
-  OIDC/JWKS fixture, including discovery/token endpoints, key rotation,
-  provider-specific failure behavior, and operational outage semantics. The
-  async token-provider callback is implemented and bounded by
-  `ClientConfig::request_timeout_ms`.
+  OIDC/JWKS fixture, including discovery/token endpoints, key rotation, and
+  provider-specific failure behavior. The async token-provider callback and
+  the opt-in cached expiry/rotation wrapper are implemented and bounded by
+  `ClientConfig::request_timeout_ms`, but HTTP discovery, JWKS retrieval, and
+  external outage qualification remain open.
 - Production OAuth/OIDC provider compatibility beyond the local signed
   OIDC/JWKS fixture.
 - The SCRAM multi-broker group-coordinator, partition-leader, and safe

@@ -95,8 +95,9 @@ pub use admin::{
 };
 pub use client::Client;
 pub use config::{
-    ClientConfig, OAuthBearerTokenFuture, OAuthBearerTokenProvider, SaslCredentials, SaslMechanism,
-    SecurityProtocol,
+    CachedOAuthBearerTokenProvider, ClientConfig, OAuthBearerToken, OAuthBearerTokenFuture,
+    OAuthBearerTokenProvider, OAuthBearerTokenSource, OAuthBearerTokenSourceFuture,
+    SaslCredentials, SaslMechanism, SecurityProtocol,
 };
 pub use consumer::{
     Consumer, ConsumerAssignment, ConsumerConfig, ConsumerPartitionQueue, ConsumerRecord,

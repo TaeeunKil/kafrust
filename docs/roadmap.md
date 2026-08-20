@@ -1385,6 +1385,14 @@ Evidence:
   exposing it through `Debug` output. Provider calls are bounded by
   `ClientConfig::request_timeout_ms` and return the typed
   `Error::OAuthBearerTokenTimeout` when the callback exceeds that limit.
+- `OAuthBearerToken`, `OAuthBearerTokenSource`, and
+  `CachedOAuthBearerTokenProvider` now provide an opt-in expiry-aware policy
+  without breaking the existing string-returning provider trait. The wrapper
+  refreshes inside a caller-selected window, rotates when the source returns a
+  new token, and falls back to a still-valid cached token during a temporary
+  source outage. Once the cached token expires, the original source error is
+  returned. HTTP discovery, JWKS retrieval, and provider-specific endpoint
+  policy remain application-owned.
 - Provider-backed OAUTHBEARER connections also refresh the token and send
   `SaslAuthenticate v1` again on the existing connection before requests after
   half of the broker-advertised session lifetime has elapsed; the focused
@@ -1400,7 +1408,7 @@ Evidence:
   exposes the broker's re-authentication window. Provider-backed OAUTHBEARER
   connections use that window to re-authenticate on the existing connection
   before requests after half the lifetime; detached refresh workers and
-  production provider policy remain open.
+  production external-provider qualification remains open.
 - The `Live Kafka Smoke` workflow includes a SASL_SSL SCRAM profile that
   creates separate Kafka SCRAM-SHA-256 and SCRAM-SHA-512 credentials, configures
   kafrust with `KAFRUST_SECURITY_PROTOCOL=sasl_tls`, the selected
