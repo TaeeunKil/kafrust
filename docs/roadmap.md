@@ -2363,8 +2363,12 @@ Implemented evidence:
   `admin_dynamic_quorum` example and
   `.github/workflows/live-dynamic-quorum.yml` provision a Kafka 4.3.1
   standalone/dynamic controller pair and exercise Add/RemoveRaftVoter with
-  DescribeQuorum convergence checks. A successful live run remains required
-  before this is included in the compatibility claim.
+  DescribeQuorum convergence checks. The live qualification passed in
+  [`32344895847`](https://github.com/TaeeunKil/kafrust/actions/runs/32344895847),
+  recording `voters=1 observers=1` before the mutation, `voters=2
+  observers=0` after AddRaftVoter, and `voters=1 observers=1` after
+  RemoveRaftVoter. Broader controller failure and authorization matrices remain
+  separate M21 gates.
 
 - DescribeConfigs v4 is now available as an opt-in documentation-aware path.
   `DescribeConfigsOptions::include_documentation(true)` negotiates API 32 v4,

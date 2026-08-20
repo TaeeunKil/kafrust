@@ -232,9 +232,12 @@ focused and injected-controller coverage. The new
 dynamic quorum from a standalone controller, provisions a second controller
 with `--no-initial-controllers`, and runs the public
 `admin_dynamic_quorum` example through Add/RemoveRaftVoter plus
-DescribeQuorum convergence checks. No successful run has been recorded yet;
-these APIs remain outside the compatibility claim until that workflow verifies
-membership changes and post-mutation quorum health.
+DescribeQuorum convergence checks. The workflow passed in
+[`32344895847`](https://github.com/TaeeunKil/kafrust/actions/runs/32344895847)
+on 2026-08-20, recording voter/observer membership before the mutation, after
+AddRaftVoter, and after RemoveRaftVoter. This qualifies the tested Kafka 4.3.1
+dynamic membership path; broader controller failure and authorization matrices
+remain separate.
 
 The high-level `ShareConsumer` path now has recorded Kafka 4.3.1 single-node,
 three-broker leader-movement, active-heartbeat coordinator-loss, and repeated
