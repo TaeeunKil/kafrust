@@ -13,7 +13,7 @@ The current session supports:
 - broker-assigned member and endpoint information epochs
 - nullable active, standby, warmup, task-offset, and end-offset updates
 - a typed `StreamsGroupSessionAssignment` snapshot containing the latest
-  broker status, task assignment, recovery-lag, offset-interval, and
+  broker status entries, task assignment, recovery-lag, offset-interval, and
   Interactive Queries endpoint information
 - bounded coordinator reconnect and member rejoin
 - graceful leave with member epoch `-1` and `shutdown_application=true`

@@ -5,7 +5,7 @@
 // typed here avoids lossy reuse and leaves the protocol boundary auditable.
 
 use crate::codec::{Decoder, Encoder};
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::header::RequestHeader;
 
 /// Kafka StreamsGroupHeartbeat API key.
@@ -461,7 +461,7 @@ pub struct StreamsGroupHeartbeatResponseV0 {
     pub heartbeat_interval_ms: i32,
     pub acceptable_recovery_lag: i32,
     pub task_offset_interval_ms: i32,
-    pub status: Option<StreamsGroupHeartbeatStatus>,
+    pub status: Option<Vec<StreamsGroupHeartbeatStatus>>,
     pub active_tasks: Option<Vec<StreamsGroupHeartbeatTask>>,
     pub standby_tasks: Option<Vec<StreamsGroupHeartbeatTask>>,
     pub warmup_tasks: Option<Vec<StreamsGroupHeartbeatTask>>,
@@ -480,7 +480,10 @@ impl StreamsGroupHeartbeatResponseV0 {
         let heartbeat_interval_ms = decoder.read_i32()?;
         let acceptable_recovery_lag = decoder.read_i32()?;
         let task_offset_interval_ms = decoder.read_i32()?;
-        let status = decode_nullable_struct(decoder, StreamsGroupHeartbeatStatus::decode)?;
+        let status = decoder.read_compact_array(
+            "streams heartbeat statuses",
+            StreamsGroupHeartbeatStatus::decode,
+        )?;
         let active_tasks = decoder.read_compact_array(
             "streams heartbeat active tasks",
             StreamsGroupHeartbeatTask::decode,
@@ -533,17 +536,6 @@ fn write_nullable_struct<T>(
     Ok(())
 }
 
-fn decode_nullable_struct<T>(
-    decoder: &mut Decoder<'_>,
-    decode: impl FnOnce(&mut Decoder<'_>) -> Result<T>,
-) -> Result<Option<T>> {
-    match decoder.read_i8()? {
-        -1 => Ok(None),
-        1 => decode(decoder).map(Some),
-        marker => Err(Error::InvalidNullableStruct(marker)),
-    }
-}
-
 fn write_string_array(encoder: &mut Encoder, values: &[String]) -> Result<()> {
     encoder.write_compact_array(Some(values), |encoder, value| {
         encoder.write_compact_string(value)
@@ -586,8 +578,9 @@ fn read_i32_array(decoder: &mut Decoder<'_>, kind: &'static str) -> Result<Vec<i
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::{
-        StreamsGroupHeartbeatRequestV0, StreamsGroupHeartbeatResponseV0, StreamsGroupHeartbeatTask,
-        StreamsGroupHeartbeatTopology, API_KEY,
+        StreamsGroupHeartbeatRequestV0, StreamsGroupHeartbeatResponseV0,
+        StreamsGroupHeartbeatStatus, StreamsGroupHeartbeatTask, StreamsGroupHeartbeatTopology,
+        API_KEY,
     };
     use crate::codec::{Decoder, Encoder};
 
@@ -640,10 +633,18 @@ mod tests {
         bytes.write_i32(2500);
         bytes.write_i32(10);
         bytes.write_i32(1000);
-        bytes.write_i8(1);
-        bytes.write_i8(2);
-        bytes.write_compact_string("running")?;
-        bytes.write_empty_tagged_fields();
+        bytes.write_compact_array(
+            Some(&[StreamsGroupHeartbeatStatus {
+                status_code: 2,
+                status_detail: "running".to_owned(),
+            }]),
+            |encoder, status| {
+                encoder.write_i8(status.status_code);
+                encoder.write_compact_string(&status.status_detail)?;
+                encoder.write_empty_tagged_fields();
+                Ok(())
+            },
+        )?;
         bytes.write_compact_array(
             Some(&[StreamsGroupHeartbeatTask {
                 subtopology_id: "subtopology-0".to_owned(),
@@ -663,7 +664,7 @@ mod tests {
 
         assert_eq!(response.throttle_time_ms, 12);
         assert_eq!(response.member_id, "member-a");
-        assert_eq!(response.status.as_ref().unwrap().status_code, 2);
+        assert_eq!(response.status.as_ref().unwrap()[0].status_code, 2);
         assert_eq!(
             response.active_tasks.as_ref().unwrap()[0].partitions,
             [0, 1]

@@ -5780,7 +5780,7 @@ mod tests {
             response.write_i32(2500);
             response.write_i32(10);
             response.write_i32(1000);
-            response.write_i8(-1);
+            response.write_unsigned_varint(0);
             response
                 .write_compact_array::<i8>(Some(&[]), |_, _| Ok(()))
                 .unwrap();

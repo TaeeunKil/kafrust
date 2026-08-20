@@ -255,8 +255,8 @@ struct StreamsHeartbeatPayload {
 /// omitted update into an empty assignment.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct StreamsGroupSessionAssignment {
-    /// Broker status for the current member, when present.
-    pub status: Option<StreamsGroupHeartbeatStatus>,
+    /// Broker status entries for the current member, when present.
+    pub status: Option<Vec<StreamsGroupHeartbeatStatus>>,
     /// Active tasks assigned to this member, if the broker sent the field.
     pub active_tasks: Option<Vec<StreamsGroupHeartbeatTask>>,
     /// Standby tasks assigned to this member, if the broker sent the field.
@@ -953,7 +953,7 @@ mod tests {
         response.write_i32(1_000);
         response.write_i32(0);
         response.write_i32(100);
-        response.write_i8(-1);
+        response.write_unsigned_varint(0);
         response.write_unsigned_varint(0);
         response.write_unsigned_varint(0);
         response.write_unsigned_varint(0);
