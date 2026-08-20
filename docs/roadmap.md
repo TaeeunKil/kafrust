@@ -443,6 +443,13 @@ coverage toward a release candidate that can be qualified in staging.
   remained unchanged; the administrator then applied the replacement value and
   cleaned up the topic. This closes the current-source classic AlterConfigs
   authorization sub-gate only.
+- The current-source `live-incremental-alter-configs-authorization.yml` matrix
+  passed on Kafka 3.7.2 and 4.3.1 in
+  [`32366418605`](https://github.com/TaeeunKil/kafrust/actions/runs/32366418605).
+  The restricted SASL/PLAIN principal received `TopicAuthorizationFailed` (29)
+  and the existing `retention.ms` value remained unchanged, while the
+  administrator applied the incremental alteration. This closes the
+  current-source IncrementalAlterConfigs authorization sub-gate only.
 - The current-source `live-create-partitions-authorization.yml` matrix passed
   on Kafka 3.7.2 and 4.3.1 in
   [`32366048755`](https://github.com/TaeeunKil/kafrust/actions/runs/32366048755).

@@ -678,6 +678,15 @@ remained unchanged. The administrator then applied the replacement value and
 cleaned up the topic. This is an operation-specific current-source
 authorization proof, not a universal ACL or Admin mutation parity claim.
 
+The same example can run the incremental path through
+[`live-incremental-alter-configs-authorization.yml`](../.github/workflows/live-incremental-alter-configs-authorization.yml).
+That matrix passed on Kafka 3.7.2 and 4.3.1 in
+[`32366418605`](https://github.com/TaeeunKil/kafrust/actions/runs/32366418605):
+the restricted principal received `TopicAuthorizationFailed` (29) and the
+existing value remained unchanged, while the administrator applied the
+incremental alteration. This closes the incremental authorization sub-gate
+only.
+
 ## Describe Consumer Groups
 
 ```rust
