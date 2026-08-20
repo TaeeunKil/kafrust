@@ -229,7 +229,7 @@ jobs:
       - name: Run published OAUTHBEARER re-authentication client
         run: |
           project_dir="$RUNNER_TEMP/kafrust-published-oauthbearer-reauth"
-          cargo run --manifest-path "$project_dir/Cargo.toml" 2>&1 \
+          RUST_LOG=kafrust=debug cargo run --manifest-path "$project_dir/Cargo.toml" 2>&1 \
             | tee /tmp/kafrust-published-oauthbearer-reauth.log
           grep -Fq "published oauthbearer reauth ok" /tmp/kafrust-published-oauthbearer-reauth.log
           grep -Fq "provider_calls=" /tmp/kafrust-published-oauthbearer-reauth.log
