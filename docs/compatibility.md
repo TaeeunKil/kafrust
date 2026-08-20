@@ -43,6 +43,15 @@ passes a repeated coordinator broker-stop sequence, with separate groups
 recovering through different coordinators, in
 [`31695433295`](https://github.com/TaeeunKil/kafrust/actions/runs/31695433295).
 
+The published `kafrust 0.3.1` artifact also passed ten independent abrupt-member
+churn cycles on a three-broker Kafka 4.3.1 cluster for both classic group
+protocol in [`32369216807`](https://github.com/TaeeunKil/kafrust/actions/runs/32369216807)
+and KIP-848 consumer protocol in
+[`32369216929`](https://github.com/TaeeunKil/kafrust/actions/runs/32369216929).
+This is a bounded published rejoin/assignment gate. It does not claim
+unbounded group churn, retention/restart combinations, every assignor, or
+service-canary behavior.
+
 High-level regex subscriptions now select `ConsumerGroupHeartbeat v1` and send
 the regex as the broker subscription field while omitting the resolved topic
 name list; explicit-name subscriptions continue to use v0. A duplex wire

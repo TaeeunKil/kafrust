@@ -154,9 +154,14 @@ and abrupt connection drop in
 This closes the bounded committed-offset restoration slice. The published
 group workflow now also supports a bounded repeated-churn campaign across
 independent group IDs, with current defaults of ten cycles on Kafka 4.3.1
-KIP-848 and abrupt member exit; a passing scheduled result is still required
-before longer-duration group churn is closed. Retention/restart combinations
-and broader assignor matrices remain separate follow-up gates.
+KIP-848 and abrupt member exit. The current published `0.3.1` artifact passed
+the same ten-cycle campaign for Kafka 4.3.1 classic in
+[`32369216807`](https://github.com/TaeeunKil/kafrust/actions/runs/32369216807)
+and KIP-848 in
+[`32369216929`](https://github.com/TaeeunKil/kafrust/actions/runs/32369216929).
+This closes the current bounded published churn gate; recurring scheduled
+evidence, longer-duration campaigns, retention/restart combinations, and
+broader assignor matrices remain separate follow-up gates.
 
 The same smoke was rerun with the second member's coordinator connection
 dropped without `LeaveGroup`. The remaining member still reacquired all six
