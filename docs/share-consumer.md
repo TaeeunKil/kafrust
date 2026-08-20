@@ -11,9 +11,10 @@ partition offset.
 The current development branch implements the stable KIP-932 v1 wire shape for
 `ShareGroupHeartbeat`, `ShareFetch`, and `ShareAcknowledge`, plus the optional
 KIP-1206 ShareFetch v2 acquisition mode and KIP-1222 ShareAcknowledge v2
-renewal, and provides a high-level `ShareConsumer` runtime. The API is pre-1.0
-and is not included in
-the published `0.3.1` crate until a release gate is completed.
+renewal, and provides a high-level `ShareConsumer` runtime. The API is pre-1.0.
+The published `0.3.3` crate now has a fresh external single-node runtime and
+acknowledgement-soak qualification, but this does not make the API stable or
+complete.
 
 Current evidence:
 
@@ -62,6 +63,15 @@ Current evidence:
   independently seeded records with `max_records(1)`, one acknowledgement and
   commit per record, unique accepted values and offsets, and clean close in
   [run 32369562416](https://github.com/TaeeunKil/kafrust/actions/runs/32369562416).
+- published `kafrust 0.3.3` passing a fresh external Kafka 4.3.1 runtime that
+  received the seeded record, validated its value and offset, accepted and
+  committed it, stopped the heartbeat task, and closed cleanly in
+  [run 32384767744](https://github.com/TaeeunKil/kafrust/actions/runs/32384767744).
+- published `kafrust 0.3.3` passing a fresh external Kafka 4.3.1
+  acknowledgement soak with 64 independently seeded records, one-at-a-time
+  `Accept` and `commit` operations, unique value/offset reconciliation, clean
+  heartbeat shutdown, clean close, and lockfile verification in
+  [run 32385522647](https://github.com/TaeeunKil/kafrust/actions/runs/32385522647).
 
 The live gate is wired in
 `.github/workflows/share-kafka-smoke.yml`. It starts Kafka 4.3.1 with the
@@ -97,10 +107,11 @@ The same three-attempt matrix was revalidated on the current source in [run
 This evidence proves the client-side wire and state-machine slice, the
 deterministic response-loss safety boundary, the single-node Kafka 4.3.1
 lifecycle, three-broker leader movement, repeated coordinator churn within one
-long-running process, bounded acknowledgement progress, and live ambiguous
+long-running process, bounded acknowledgement progress, published-artifact
+runtime/soak behavior on one single-node profile, and live ambiguous
 acknowledgement reconciliation. It does not prove long-running multi-broker
-ownership, assignment/rebalance qualification, published-artifact Share
-compatibility, or production readiness.
+ownership, assignment/rebalance qualification, broad published-artifact
+coverage, or production readiness.
 
 ## Basic Usage
 
@@ -256,10 +267,12 @@ reconciliation is exercised by the separate
 drops the first `ShareAcknowledge` response for a `Release`, requires the client
 to classify the outcome as unknown without replaying it, then verifies broker
 redelivery, replacement `Accept`, and successful completion.
-The ordinary acknowledgement soak passed in
+The current-source ordinary acknowledgement soak passed in
 [`32346739498`](https://github.com/TaeeunKil/kafrust/actions/runs/32346739498),
 and again from the current `main` commit in
 [`32355746726`](https://github.com/TaeeunKil/kafrust/actions/runs/32355746726).
+The published-artifact acknowledgement soak passed for `kafrust 0.3.3` in
+[`32385522647`](https://github.com/TaeeunKil/kafrust/actions/runs/32385522647).
 The live response-loss reconciliation gate passed in
 [`32347035522`](https://github.com/TaeeunKil/kafrust/actions/runs/32347035522),
 and again from the current `main` commit in
@@ -296,6 +309,8 @@ complete all of the following:
 - long-running multi-broker share-group soak and resource/backpressure
   measurements (the single-node 64-record soak passed in
   [run 32355746726](https://github.com/TaeeunKil/kafrust/actions/runs/32355746726));
+- published-artifact multi-broker Share ownership, assignment/rebalance, and
+  resource/backpressure qualification beyond the single-node `0.3.3` soak;
 - stable public API review and a `rust-rdkafka` migration example for queue
   workloads.
 

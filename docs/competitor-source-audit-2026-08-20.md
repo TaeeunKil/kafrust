@@ -58,13 +58,16 @@ surfaces separate.
   assertions are not implemented. Default compression is pure Rust; its
   optional `compression-all` Zstd path uses `zstd-sys`, so the strict
   no-required-C posture still differentiates kafrust.
-- `kafrust` `0.3.1` has broader explicitly named protocol coverage in the
+- `kafrust` `0.3.3` has broader explicitly named protocol coverage in the
   checked tree, including the alpha Streams group APIs and a large typed Admin
   surface. The source also contains all four record-batch codecs using
-  Rust-native codec dependencies. The gap is runtime qualification: Streams
-  background heartbeat/assignment ownership remains open, and the newest
-  Share acknowledgement result is bounded current-source evidence rather than
-  a published multi-broker soak.
+  Rust-native codec dependencies. A fresh external published `0.3.3` Share
+  runtime and 64-record acknowledgement soak now pass on Kafka 4.3.1 in
+  [`32384767744`](https://github.com/TaeeunKil/kafrust/actions/runs/32384767744)
+  and [`32385522647`](https://github.com/TaeeunKil/kafrust/actions/runs/32385522647).
+  The remaining gap is multi-broker Share ownership/assignment qualification,
+  Streams background heartbeat/assignment ownership, and broader long-running
+  published coverage.
 
 ## Findings By Project
 

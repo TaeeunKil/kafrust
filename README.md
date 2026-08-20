@@ -475,17 +475,22 @@ async fn main() -> kafrust::Result<()> {
 }
 ```
 
-This API is on the development branch and is not part of the published `0.3.3`
-artifact yet. It has focused protocol tests and an injected-broker wire
-roundtrip test, plus an opt-in cancellable background heartbeat task. A Kafka
-4.3.1 single-node live smoke passed the KIP-1222 renewal, expiry/redelivery,
-and final acceptance path in [run 32213499877](https://github.com/TaeeunKil/kafrust/actions/runs/32213499877).
+The API is pre-1.0, but the published `0.3.3` artifact now includes this
+surface. It has focused protocol tests and an injected-broker wire roundtrip
+test, plus an opt-in cancellable background heartbeat task. A Kafka 4.3.1
+single-node live smoke passed the KIP-1222 renewal, expiry/redelivery, and
+final acceptance path in [run 32213499877](https://github.com/TaeeunKil/kafrust/actions/runs/32213499877).
 A three-broker fresh-consumer failover path passed in [run 32214201983](https://github.com/TaeeunKil/kafrust/actions/runs/32214201983),
 and an active-heartbeat coordinator failover path passed in [run 32215845737](https://github.com/TaeeunKil/kafrust/actions/runs/32215845737).
 Three independent repeats of the active-heartbeat path also passed in [run 32216383214](https://github.com/TaeeunKil/kafrust/actions/runs/32216383214).
+The published artifact additionally passed a fresh external single-record
+runtime in [run 32384767744](https://github.com/TaeeunKil/kafrust/actions/runs/32384767744)
+and a 64-record acknowledgement/commit soak in [run 32385522647](https://github.com/TaeeunKil/kafrust/actions/runs/32385522647).
 In-process repeated recovery, long-running qualification, and ambiguous
 acknowledgement responses are surfaced as a typed unknown-outcome error and are
-not replayed automatically. `BatchOptimized` is the default acquisition mode;
+not replayed automatically. Multi-broker long-running ownership,
+assignment/rebalance coverage, and broader published-artifact qualification
+remain open. `BatchOptimized` is the default acquisition mode;
 `RecordLimit` uses KIP-1206 and requires a broker advertising ShareFetch v2;
 `Renew` uses ShareAcknowledge v2 and retains the record for later completion.
 See [Share Consumer](docs/share-consumer.md) for the exact alpha contract.

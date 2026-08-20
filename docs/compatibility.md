@@ -371,16 +371,23 @@ in-process churn results in the Share workflows. Kafka 4.3.1 also passed the
 response-loss ambiguity workflow, including unknown-outcome classification,
 redelivery, and replacement acknowledgement, in
 [`32347035522`](https://github.com/TaeeunKil/kafrust/actions/runs/32347035522).
-The remaining Share claim is narrower: long-running ambiguous reconciliation
-and published-artifact qualification remain open. The current evidence is
-listed in `docs/share-consumer.md` and the corresponding workflow history.
+The published `kafrust 0.3.3` artifact also passed a fresh external single-node
+runtime in [`32384767744`](https://github.com/TaeeunKil/kafrust/actions/runs/32384767744)
+and a 64-record acknowledgement/commit soak in
+[`32385522647`](https://github.com/TaeeunKil/kafrust/actions/runs/32385522647).
+The remaining Share claim is narrower: long-running ambiguous reconciliation,
+multi-broker ownership/assignment, and broad published-artifact coverage remain
+open. The current evidence is listed in `docs/share-consumer.md` and the
+corresponding workflow history.
 
 The current-source acknowledgement soak additionally passed in
 [`32369562416`](https://github.com/TaeeunKil/kafrust/actions/runs/32369562416),
 processing 64 independently seeded records with one-at-a-time acknowledgement
-and commit checks plus unique value/offset reconciliation. This is bounded
-single-node evidence; it does not establish published-artifact Share
-compatibility, long-running multi-broker ownership, or production readiness.
+and commit checks plus unique value/offset reconciliation. The published
+`0.3.3` soak repeats that flow from a fresh external project and additionally
+checks heartbeat shutdown and lockfile resolution. This remains bounded
+single-node evidence; it does not establish long-running multi-broker
+ownership, assignment/rebalance behavior, or production readiness.
 
 Share Group State APIs 83-87 are tracked separately from this public
 ShareConsumer claim. Kafka currently marks those wire APIs unstable, and broad

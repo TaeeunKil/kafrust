@@ -135,6 +135,13 @@ The published single-broker Streams runtime gate later passed in
 [run 32381356444](https://github.com/TaeeunKil/kafrust/actions/runs/32381356444),
 using a fresh external project on Kafka 4.3.1 and Rust 1.81; this is a
 membership/runtime gate, not complete Kafka Streams processor compatibility.
+The published ShareConsumer runtime gate then passed in
+[run 32384767744](https://github.com/TaeeunKil/kafrust/actions/runs/32384767744),
+and the published 64-record acknowledgement/commit soak passed in
+[run 32385522647](https://github.com/TaeeunKil/kafrust/actions/runs/32385522647),
+both from fresh external projects on Kafka 4.3.1 and Rust 1.81. These are
+single-node published-artifact profiles; they do not qualify multi-broker
+Share ownership, assignment/rebalance, or production readiness.
 
 The `0.2.18` packages passed Cargo publish verification and both staged
 all-feature package-documentation builds on commit `373de00`. The matching

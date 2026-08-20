@@ -2634,10 +2634,13 @@ Implemented evidence:
   [`32369562416`](https://github.com/TaeeunKil/kafrust/actions/runs/32369562416):
   64 independently seeded records were acquired one at a time, acknowledged
   and committed individually, checked for unique values and offsets, and the
-  ShareConsumer closed cleanly. This closes a bounded current-source
-  acknowledgement-progress gate; published-artifact Share qualification,
-  long-running multi-broker ownership, assignment/rebalance, and
-  resource/backpressure evidence remain open.
+  ShareConsumer closed cleanly. The published `kafrust 0.3.3` artifact then
+  passed the same 64-record flow from a fresh external project, including
+  heartbeat shutdown, close, and lockfile verification, in
+  [`32385522647`](https://github.com/TaeeunKil/kafrust/actions/runs/32385522647).
+  This closes bounded current-source and single-node published-artifact
+  acknowledgement-progress gates; long-running multi-broker ownership,
+  assignment/rebalance, and resource/backpressure evidence remain open.
 - ShareFetch success responses preserve the broker that served the request,
   while `CurrentLeader` is used only for the leader-error responses where Kafka
   populates it. Retryable ShareFetch leader errors return the connection to the
