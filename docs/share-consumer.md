@@ -82,6 +82,11 @@ Current evidence:
   coordinators 1, 3, and 1, produced through surviving bootstrap servers, and
   verified the heartbeat task remained alive through each recovery in
   [run 32387564503](https://github.com/TaeeunKil/kafrust/actions/runs/32387564503).
+- published `kafrust 0.3.3` passing a bounded two-member ownership gate on a
+  fresh external three-broker Kafka 4.3.1 cluster. Two members joined the same
+  Share group, each accepted three records, and the six seeded partitions were
+  observed exactly once across the members in
+  [run 32388813780](https://github.com/TaeeunKil/kafrust/actions/runs/32388813780).
 
 The live gate is wired in
 `.github/workflows/share-kafka-smoke.yml`. It starts Kafka 4.3.1 with the
@@ -117,11 +122,12 @@ The same three-attempt matrix was revalidated on the current source in [run
 This evidence proves the client-side wire and state-machine slice, the
 deterministic response-loss safety boundary, the single-node Kafka 4.3.1
 lifecycle, three-broker leader movement, repeated coordinator churn within one
-long-running process, bounded acknowledgement progress, published-artifact
-runtime/soak behavior on one single-node profile, and live ambiguous
-acknowledgement reconciliation. It does not prove long-running multi-broker
-ownership, assignment/rebalance qualification, broad published-artifact
-coverage, or production readiness.
+long-running process, bounded acknowledgement progress, bounded two-member
+partition ownership, published-artifact runtime/soak behavior on one
+single-node profile, and live ambiguous acknowledgement reconciliation. It
+does not prove long-running multi-broker ownership, dynamic assignment and
+member-loss/rebalance behavior, broad published-artifact coverage, or
+production readiness.
 
 ## Basic Usage
 
@@ -259,8 +265,10 @@ workflow now exercises three consecutive coordinator-loss/recovery cycles in
 one process. The deterministic public response-loss gate and live Kafka 4.3.1
 response-loss gate now cover unknown-outcome classification and redelivery
 recovery. The 64-record live acknowledgement soak also passes;
-multi-broker long-running ownership, assignment/rebalance behavior, and
-resource/backpressure measurements remain open hardening work.
+multi-broker long-running ownership, dynamic assignment/rebalance behavior,
+and resource/backpressure measurements remain open hardening work. A bounded
+published two-member ownership gate passed separately in
+[run 32388813780](https://github.com/TaeeunKil/kafrust/actions/runs/32388813780).
 
 The implementation reuses kafrust's bounded fetch decoder, including record
 batch decompression, header decoding, and configured response/decompression
@@ -319,9 +327,11 @@ complete all of the following:
 - long-running multi-broker share-group soak and resource/backpressure
   measurements (the single-node 64-record soak passed in
   [run 32355746726](https://github.com/TaeeunKil/kafrust/actions/runs/32355746726));
-- long-running published-artifact multi-broker Share ownership,
-  multi-member assignment/rebalance, and resource/backpressure qualification
-  beyond the tested `0.3.3` leader-failover path;
+- long-running published-artifact multi-broker Share ownership and
+  resource/backpressure qualification beyond the tested `0.3.3` paths. A
+  bounded two-member ownership/assignment run passed in
+  [run 32388813780](https://github.com/TaeeunKil/kafrust/actions/runs/32388813780),
+  but dynamic member-loss/rebalance and long-running coverage remain open;
 - stable public API review and a `rust-rdkafka` migration example for queue
   workloads.
 

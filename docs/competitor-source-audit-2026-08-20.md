@@ -70,9 +70,13 @@ surfaces separate.
   The published active-heartbeat path also passes three consecutive dynamic
   coordinator-loss cycles in
   [`32387564503`](https://github.com/TaeeunKil/kafrust/actions/runs/32387564503).
-  The remaining gap is long-running and multi-member Share ownership/assignment
-  qualification, Streams background heartbeat/assignment ownership, and
-  broader published coverage.
+  A bounded two-member published Share ownership gate also passes: both
+  members accepted three records and the six seeded partitions were observed
+  exactly once in
+  [`32388813780`](https://github.com/TaeeunKil/kafrust/actions/runs/32388813780).
+  The remaining Share gaps are long-running ownership, dynamic member-loss and
+  rebalance qualification, Streams background heartbeat/assignment ownership,
+  and broader published coverage.
 
 ## Findings By Project
 

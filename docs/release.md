@@ -146,7 +146,10 @@ leader-failover profile also passed in
 the published active-heartbeat profile then passed three consecutive dynamic
 coordinator-loss cycles in
 [run 32387564503](https://github.com/TaeeunKil/kafrust/actions/runs/32387564503);
-long-running ownership, multi-member assignment/rebalance, and production
+the published two-member Share ownership profile then passed with all six
+partitions observed exactly once across two external members in
+[run 32388813780](https://github.com/TaeeunKil/kafrust/actions/runs/32388813780).
+Long-running ownership, dynamic member-loss/rebalance, and production
 readiness remain unqualified.
 
 The `0.2.18` packages passed Cargo publish verification and both staged

@@ -218,6 +218,14 @@ coverage toward a release candidate that can be qualified in staging.
 
 ### Progress Recorded
 
+- The published `0.3.3` ShareConsumer now has a bounded multi-member
+  ownership gate. Two fresh external members joined one Kafka 4.3.1 Share
+  group, each accepted three records, and the six seeded partitions were
+  observed exactly once across the members in
+  [`32388813780`](https://github.com/TaeeunKil/kafrust/actions/runs/32388813780).
+  This closes the basic published assignment slice; dynamic member-loss,
+  rebalance, long-running ownership, and backpressure qualification remain
+  separate 1.0 gates.
 - Stable `ShareGroupDescribe` v1 (API key 77) is now implemented through the
   typed protocol, low-level `Client`, and coordinator-aware `AdminClient`
   layers. The public result preserves share-group state and epochs, member
@@ -2648,7 +2656,9 @@ Implemented evidence:
   coordinator-loss cycles, with dynamic coordinator stops and heartbeat-task
   liveness checks, in
   [`32387564503`](https://github.com/TaeeunKil/kafrust/actions/runs/32387564503).
-  Long-running multi-broker ownership, multi-member assignment/rebalance, and
+  A bounded two-member published ownership/assignment gate then passed in
+  [`32388813780`](https://github.com/TaeeunKil/kafrust/actions/runs/32388813780).
+  Long-running multi-broker ownership, dynamic member-loss/rebalance, and
   resource/backpressure evidence remain open.
 - ShareFetch success responses preserve the broker that served the request,
   while `CurrentLeader` is used only for the leader-error responses where Kafka

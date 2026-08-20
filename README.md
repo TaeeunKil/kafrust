@@ -493,11 +493,15 @@ bootstrap servers.
 The published active-heartbeat path also passed three consecutive dynamic
 coordinator-loss cycles in [run 32387564503](https://github.com/TaeeunKil/kafrust/actions/runs/32387564503),
 with the heartbeat task remaining alive through recovery.
+The published two-member ownership path also passed in
+[run 32388813780](https://github.com/TaeeunKil/kafrust/actions/runs/32388813780):
+two external members joined one Share group, each accepted three records, and
+all six seeded partitions were observed exactly once across the members.
 In-process repeated recovery, long-running qualification, and ambiguous
 acknowledgement responses are surfaced as a typed unknown-outcome error and are
 not replayed automatically. Multi-broker long-running ownership,
-multi-member assignment/rebalance coverage, and broader published-artifact
-qualification remain open. `BatchOptimized` is the default acquisition mode;
+dynamic member-loss/rebalance, and broader published-artifact qualification
+remain open. `BatchOptimized` is the default acquisition mode;
 `RecordLimit` uses KIP-1206 and requires a broker advertising ShareFetch v2;
 `Renew` uses ShareAcknowledge v2 and retains the record for later completion.
 See [Share Consumer](docs/share-consumer.md) for the exact alpha contract.

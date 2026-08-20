@@ -246,11 +246,13 @@ async fn main() -> kafrust::Result<()> {
 }
 ```
 
-이 API는 개발 브랜치에 있으며 아직 공개된 `0.3.3` artifact에는 포함되지
-않았습니다. protocol test와 injected-broker wire 왕복 테스트를 통과했고,
-취소 가능한 background heartbeat task도 추가했습니다. 실제 Kafka 4.x 검증과
-coordinator 복구는 아직 남아 있지만 live workflow는 KIP-1222 renewal 후
-최종 Accept까지 검증하도록 구성했습니다. 응답이 유실된 acknowledgement는 typed
+이 API는 아직 pre-`1.0`이지만 공개된 `0.3.3` artifact에 포함되어 있습니다.
+protocol test와 injected-broker wire 왕복 테스트를 통과했고, 취소 가능한
+background heartbeat task도 추가했습니다. Kafka 4.3.1에서 KIP-1222 renewal,
+expiry/redelivery, 최종 Accept, broker failover, coordinator 복구가 검증됐고,
+두 published member가 6개 partition을 중복 없이 나눠 처리하는 bounded gate도
+[run 32388813780](https://github.com/TaeeunKil/kafrust/actions/runs/32388813780)에서
+통과했습니다. 응답이 유실된 acknowledgement는 typed
 unknown-outcome 오류로 노출하며 자동 재전송하지 않습니다. 정확한 알파 계약은
 `BatchOptimized`가 기본 모드이며, `RecordLimit`은 ShareFetch v2를 광고하는
 broker가 필요합니다. `Renew`는 ShareAcknowledge v2에서 record를 완료하지
@@ -300,6 +302,9 @@ kafrust의 호환성 주장은 실제 broker로 검증된 동작으로 제한합
   qualification이 필요합니다.
 - transactions의 broker 응답을 관찰할 수 없는 경우 결과는 의도적으로
   `TransactionOutcomeUnknown`으로 보고되며 producer를 폐기해야 합니다.
+- ShareConsumer의 dynamic member-loss/rebalance, long-running ownership,
+  backpressure, 그리고 broader published-artifact qualification은 아직
+  1.0 release gate입니다.
 - KIP-848 member-aware offset semantics, 더 넓은 fault-injection, target
   broker 권한/정책, 실제 서비스 canary는 아직 1.0 release gate입니다.
 - `rust-rdkafka`의 전체 config passthrough와 non-Tokio/synchronous API는

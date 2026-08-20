@@ -384,9 +384,12 @@ coordinator-loss cycles, stopping coordinators 1, 3, and 1 while the external
 heartbeat task remained alive and recovered through surviving bootstrap servers,
 in [`32387564503`](https://github.com/TaeeunKil/kafrust/actions/runs/32387564503).
 The remaining Share claim is narrower: long-running ambiguous reconciliation,
-multi-member assignment/rebalance, long-running multi-broker ownership, and
-broad published-artifact coverage remain open. The current evidence is listed
-in `docs/share-consumer.md` and the corresponding workflow history.
+dynamic member-loss/rebalance, long-running multi-broker ownership, and broad
+published-artifact coverage remain open. A bounded two-member published
+ownership/assignment gate passed in
+[`32388813780`](https://github.com/TaeeunKil/kafrust/actions/runs/32388813780).
+The current evidence is listed in `docs/share-consumer.md` and the
+corresponding workflow history.
 
 The current-source acknowledgement soak additionally passed in
 [`32369562416`](https://github.com/TaeeunKil/kafrust/actions/runs/32369562416),
@@ -395,7 +398,7 @@ and commit checks plus unique value/offset reconciliation. The published
 `0.3.3` soak repeats that flow from a fresh external project and additionally
 checks heartbeat shutdown and lockfile resolution. This remains bounded
 single-node evidence; it does not establish long-running multi-broker
-ownership, assignment/rebalance behavior, or production readiness.
+ownership, dynamic assignment/rebalance behavior, or production readiness.
 
 Share Group State APIs 83-87 are tracked separately from this public
 ShareConsumer claim. Kafka currently marks those wire APIs unstable, and broad
@@ -1088,6 +1091,7 @@ other coordinator-routed writes remain separate qualification items.
 | Published `kafrust 0.3.3` and `kafrust-protocol 0.3.3` | fresh external Cargo project with no workspace path dependency; stable Rust and Rust 1.81 | published `StreamsGroupSession`, `StreamsGroupSessionHandle`, `StreamsTaskRuntime`, canonical task IDs, and task transition API compile | crates.io [`kafrust 0.3.3`](https://crates.io/crates/kafrust/0.3.3), [`kafrust-protocol 0.3.3`](https://crates.io/crates/kafrust-protocol/0.3.3); [`Published Streams Surface`, run `32380345199`](https://github.com/TaeeunKil/kafrust/actions/runs/32380345199) on 2026-08-20 | Passing; package/API surface only, not broker runtime or complete Kafka Streams application compatibility |
 | Published `kafrust 0.3.3` | fresh external Cargo project with no workspace path dependency; Kafka 4.3.1 single-node KRaft with Streams groups enabled; Rust 1.81 | published Streams group join, background heartbeat, `StreamsTaskRuntime` reconciliation call, dependency verification, and graceful leave | [`Published Streams Group Runtime`, run `32381356444`](https://github.com/TaeeunKil/kafrust/actions/runs/32381356444) on 2026-08-20 | Passing; published membership/runtime gate, not a complete Kafka Streams processor, state-store, or DSL compatibility claim |
 | Published `kafrust 0.3.3` | fresh external Cargo project with no workspace path dependency; Kafka 4.3.1 three-broker KRaft with share groups enabled; Rust 1.81 | published ShareConsumer pre/post leader failover plus three consecutive active-heartbeat coordinator-loss recoveries | [`Published Share Multi-Broker Failover`, run `32386637555`](https://github.com/TaeeunKil/kafrust/actions/runs/32386637555); [`Published Share Heartbeat Failover`, run `32387564503`](https://github.com/TaeeunKil/kafrust/actions/runs/32387564503) on 2026-08-20 | Passing; published Share failover evidence, not long-running ownership, multi-member assignment/rebalance, or production SLO |
+| Published `kafrust 0.3.3` | fresh external Cargo project with no workspace path dependency; Kafka 4.3.1 three-broker KRaft with share groups enabled; Rust 1.81 | two published ShareConsumer members joined one group, each accepted three records, and all six seeded partitions were observed exactly once across the members | [`Published ShareConsumer Multi-Member Ownership`, run `32388813780`](https://github.com/TaeeunKil/kafrust/actions/runs/32388813780) on 2026-08-20 | Passing; bounded two-member ownership/assignment evidence only; dynamic member-loss/rebalance, long-running soak, and production SLO remain open |
 | Published `kafrust 0.3.3` versus `rust-rdkafka 0.39.0` | fresh external Cargo project with no workspace path dependency; Kafka 4.3.1 single-node KRaft; comparison-only `librdkafka` build isolated from kafrust release dependencies | three independent repetitions of identical 20,000-record, 1-KiB payload, batch-size-200 produce/fetch profiles on fresh one-partition topics | [`Published rust-rdkafka Comparison`, run `32381987301`](https://github.com/TaeeunKil/kafrust/actions/runs/32381987301) on 2026-08-20 | Passing; kafrust median 70,279.61 producer and 388,288.51 consumer records/s; rust-rdkafka median 161,271.11 producer and 795,363.67 consumer records/s; one workload baseline only |
 | Published `kafrust 0.2.27` and `kafrust-protocol 0.2.27` | fresh external Cargo projects with no workspace path dependency; Kafka 3.7.2 and 4.3.1 single-node profiles | published Admin `describe_cluster`, idempotent producer, direct consumer, and classic/KIP-848 consumer-group poll and leave | [`Published Crate Smoke`, run `31729003352`](https://github.com/TaeeunKil/kafrust/actions/runs/31729003352) on 2026-08-13 | Passing; validates published runtime linkage for these representative profiles, not the full replacement or multi-broker claim |
 | Published `kafrust 0.2.27` with `tls` and matching protocol crate | fresh external Cargo project with no workspace path dependency; Kafka 3.7.2 single-node `SASL_SSL` with SCRAM-SHA-256 | published TLS/SCRAM Admin, idempotent producer, direct consumer, and classic consumer-group poll and leave | [`Published Crate Smoke`, run `31729868783`](https://github.com/TaeeunKil/kafrust/actions/runs/31729868783) on 2026-08-13 | Passing; validates the tested published security profile, not every security provider, topology, or failure mode |
