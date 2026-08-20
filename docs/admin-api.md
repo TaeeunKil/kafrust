@@ -165,7 +165,11 @@ with controller quorum health and broker re-registration behavior.
 The reusable current-source Admin response-drop gate also covers API 64: it
 drops the first `UnregisterBroker` response and reconciles the missing broker
 through `DescribeCluster` without replaying the mutation. This is a transport
-ambiguity proof, not the multi-controller unregister/re-registration gate.
+ambiguity proof, not the multi-controller unregister/re-registration gate. The
+Kafka 3.7.2 and 4.3.1 runs are
+[`32357381909`](https://github.com/TaeeunKil/kafrust/actions/runs/32357381909)
+and
+[`32357381879`](https://github.com/TaeeunKil/kafrust/actions/runs/32357381879).
 
 ## Describe Share Groups
 

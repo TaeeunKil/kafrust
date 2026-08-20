@@ -2566,7 +2566,9 @@ Implemented evidence:
   the first `UnregisterBroker` response is dropped, the client returns
   `AdminMutationOutcomeUnknown` without replay, and `DescribeCluster` observes
   broker 1 absent. This closes transport-ambiguity evidence only; the
-  multi-controller unregister/re-registration gate remains open.
+  multi-controller unregister/re-registration gate remains open. Kafka 3.7.2
+  and 4.3.1 passed in [`32357381909`](https://github.com/TaeeunKil/kafrust/actions/runs/32357381909)
+  and [`32357381879`](https://github.com/TaeeunKil/kafrust/actions/runs/32357381879).
 - Kafka Share Group State APIs 83-87 are now implemented through flexible
   typed protocol requests and responses, low-level Client methods, and typed
   coordinator-routed Admin methods. Share-group membership/admin operations

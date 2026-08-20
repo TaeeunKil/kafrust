@@ -431,6 +431,11 @@ The follow-up `d73511c` gate applies the same response-drop proxy to
 DeleteTopics and confirms deletion through list_topics on Kafka 3.7.2 and
 4.3.1 in [`31771419625`](https://github.com/TaeeunKil/kafrust/actions/runs/31771419625)
 and [`31771419124`](https://github.com/TaeeunKil/kafrust/actions/runs/31771419124).
+The current-source gate also qualifies API 64 `UnregisterBroker`: Kafka 3.7.2
+and 4.3.1 both drop the first response, return a typed unknown outcome without
+replay, and reconcile broker 1 as absent through `DescribeCluster` in
+[`32357381909`](https://github.com/TaeeunKil/kafrust/actions/runs/32357381909)
+and [`32357381879`](https://github.com/TaeeunKil/kafrust/actions/runs/32357381879).
 These are operation-specific proofs, not a universal claim for every Admin
 mutation. The same current-source gate also qualifies CreatePartitions by
 expanding a topic from one to two partitions before dropping the response, on

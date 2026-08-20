@@ -410,6 +410,13 @@ and [`31770443484`](https://github.com/TaeeunKil/kafrust/actions/runs/3177044348
 DeleteTopics passed in
 [`31771419625`](https://github.com/TaeeunKil/kafrust/actions/runs/31771419625)
 and [`31771419124`](https://github.com/TaeeunKil/kafrust/actions/runs/31771419124).
+The same response-loss contract is now qualified for `UnregisterBroker` on
+Kafka 3.7.2 and 4.3.1 in
+[`32357381909`](https://github.com/TaeeunKil/kafrust/actions/runs/32357381909)
+and [`32357381879`](https://github.com/TaeeunKil/kafrust/actions/runs/32357381879);
+the broker is reconciled through `DescribeCluster` and the mutation is not
+replayed. This remains a single-broker transport proof, not a complete
+multi-controller unregister/re-registration qualification.
 CreatePartitions passed in
 [`31771635710`](https://github.com/TaeeunKil/kafrust/actions/runs/31771635710)
 and [`31771636082`](https://github.com/TaeeunKil/kafrust/actions/runs/31771636082),
