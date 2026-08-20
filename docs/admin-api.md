@@ -1456,6 +1456,16 @@ DeleteTopics v3 also routes to the active controller and preserves independent
 topic outcomes. Version 3 responses contain topic names and error codes but no
 broker error-message field.
 
+The current-source
+[`live-delete-topics-authorization.yml`](../.github/workflows/live-delete-topics-authorization.yml)
+gate passed on Kafka 3.7.2 and 4.3.1 in
+[`32365120994`](https://github.com/TaeeunKil/kafrust/actions/runs/32365120994).
+A restricted SASL/PLAIN principal with cluster and target-topic `Describe`, but
+without delete permission, received `TopicAuthorizationFailed` (error 29) and
+the topic remained present. The administrator then deleted the topic. This is
+an operation-specific current-source authorization proof, not a universal ACL
+or Admin mutation parity claim.
+
 ## Describe, Create, and Delete ACLs
 
 ```rust

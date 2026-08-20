@@ -434,6 +434,13 @@ coverage toward a release candidate that can be qualified in staging.
   per-topic `TopicAuthorizationFailed` result (29) and the topic remained
   absent; the administrator then completed create and cleanup. This closes the
   current-source CreateTopics authorization sub-gate only.
+- The current-source `live-delete-topics-authorization.yml` matrix passed on
+  Kafka 3.7.2 and 4.3.1 in
+  [`32365120994`](https://github.com/TaeeunKil/kafrust/actions/runs/32365120994).
+  A restricted SASL/PLAIN principal with cluster and target-topic `Describe`,
+  but without delete permission, received `TopicAuthorizationFailed` (29) and
+  the topic remained present; the administrator then deleted it. This closes
+  the current-source DeleteTopics authorization sub-gate only.
 - The reusable current-source response-drop gate now also covers DeleteTopics.
   It created a topic, dropped the real DeleteTopics response, observed
   `Error::AdminMutationOutcomeUnknown { operation: "DeleteTopics" }`, and
