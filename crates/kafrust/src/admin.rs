@@ -78,6 +78,7 @@ use kafrust_protocol::api::elect_leaders::{
     ElectLeadersResponseV0, ElectLeadersResponseV1, ElectLeadersResponseV2,
     ElectLeadersTopicResultV0, ElectLeadersTopicV0,
 };
+use kafrust_protocol::api::find_coordinator::CoordinatorType;
 use kafrust_protocol::api::incremental_alter_configs::{
     IncrementalAlterConfigsEntryV0, IncrementalAlterConfigsResourceResponseV0,
     IncrementalAlterConfigsResourceV0,
@@ -2485,7 +2486,7 @@ impl AdminClient {
         for group_id in group_ids {
             let mut retry = 0;
             let (throttle_time_ms, group) = loop {
-                let mut coordinator = self.group_coordinator_client(group_id).await?;
+                let mut coordinator = self.share_group_coordinator_client(group_id).await?;
                 let api_versions = match coordinator
                     .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
                     .await
@@ -2692,7 +2693,7 @@ impl AdminClient {
             .collect::<Vec<_>>();
         let mut retry = 0;
         let response = loop {
-            let mut coordinator = self.group_coordinator_client(group_id).await?;
+            let mut coordinator = self.share_group_coordinator_client(group_id).await?;
             let api_versions = match coordinator
                 .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
                 .await
@@ -2774,7 +2775,7 @@ impl AdminClient {
             .collect::<Vec<_>>();
         let mut retry = 0;
         let response = loop {
-            let mut coordinator = self.group_coordinator_client(group_id).await?;
+            let mut coordinator = self.share_group_coordinator_client(group_id).await?;
             let api_versions = match coordinator
                 .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
                 .await
@@ -2861,7 +2862,7 @@ impl AdminClient {
         });
         let mut retry = 0;
         let response = loop {
-            let mut coordinator = self.group_coordinator_client(group_id).await?;
+            let mut coordinator = self.share_group_coordinator_client(group_id).await?;
             let api_versions = match coordinator
                 .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
                 .await
@@ -3003,7 +3004,7 @@ impl AdminClient {
             .collect::<Vec<_>>();
         let mut retry = 0;
         let response = loop {
-            let mut coordinator = self.group_coordinator_client(group_id).await?;
+            let mut coordinator = self.share_group_coordinator_client(group_id).await?;
             let api_versions = match coordinator
                 .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
                 .await
@@ -3086,7 +3087,7 @@ impl AdminClient {
             .collect::<Vec<_>>();
         let mut retry = 0;
         let response = loop {
-            let mut coordinator = self.group_coordinator_client(group_id).await?;
+            let mut coordinator = self.share_group_coordinator_client(group_id).await?;
             let api_versions = match coordinator
                 .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
                 .await
@@ -3188,7 +3189,7 @@ impl AdminClient {
 
         let mut retry = 0;
         let response = loop {
-            let mut coordinator = self.group_coordinator_client(group_id).await?;
+            let mut coordinator = self.share_group_coordinator_client(group_id).await?;
             let api_versions = match coordinator
                 .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
                 .await
@@ -3270,7 +3271,7 @@ impl AdminClient {
             .collect();
         let mut retry = 0;
         let response = loop {
-            let mut coordinator = self.group_coordinator_client(group_id).await?;
+            let mut coordinator = self.share_group_coordinator_client(group_id).await?;
             let api_versions = match coordinator
                 .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
                 .await
@@ -3345,7 +3346,7 @@ impl AdminClient {
         });
         let mut retry = 0;
         let result = loop {
-            let mut coordinator = self.group_coordinator_client(group_id).await?;
+            let mut coordinator = self.share_group_coordinator_client(group_id).await?;
             let api_versions = match coordinator
                 .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
                 .await
@@ -4505,9 +4506,26 @@ impl AdminClient {
     }
 
     async fn group_coordinator_client(&self, group_id: &str) -> Result<Client> {
+        self.coordinator_client(group_id, CoordinatorType::Group)
+            .await
+    }
+
+    async fn share_group_coordinator_client(&self, group_id: &str) -> Result<Client> {
+        self.coordinator_client(group_id, CoordinatorType::Share)
+            .await
+    }
+
+    async fn coordinator_client(
+        &self,
+        group_id: &str,
+        coordinator_type: CoordinatorType,
+    ) -> Result<Client> {
         let mut retry = 0;
         loop {
-            match self.group_coordinator_client_once(group_id).await {
+            match self
+                .coordinator_client_once(group_id, coordinator_type)
+                .await
+            {
                 Ok(client) => return Ok(client),
                 Err(error)
                     if retry < self.max_retries && is_retryable_admin_coordinator_error(&error) =>
@@ -4521,14 +4539,24 @@ impl AdminClient {
         }
     }
 
-    async fn group_coordinator_client_once(&self, group_id: &str) -> Result<Client> {
+    async fn coordinator_client_once(
+        &self,
+        group_id: &str,
+        coordinator_type: CoordinatorType,
+    ) -> Result<Client> {
         let mut bootstrap = self.config.clone().connect().await?;
-        let coordinator = bootstrap.find_group_coordinator(group_id).await?;
+        let coordinator = match coordinator_type {
+            CoordinatorType::Group => bootstrap.find_group_coordinator(group_id).await?,
+            CoordinatorType::Share => bootstrap.find_share_group_coordinator(group_id).await?,
+            CoordinatorType::Transaction => {
+                bootstrap.find_transaction_coordinator(group_id).await?
+            }
+        };
         if coordinator.error_code != 0 {
             self.config.record_broker_error();
             return Err(Error::Broker {
                 code: coordinator.error_code,
-                context: format!("find coordinator for consumer group {group_id}"),
+                context: format!("find coordinator for group {group_id}"),
             });
         }
         self.config

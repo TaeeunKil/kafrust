@@ -2165,7 +2165,7 @@ async fn share_coordinator_address(
     group_id: &str,
 ) -> Result<String> {
     let response = bootstrap
-        .find_group_coordinator(group_id.to_owned())
+        .find_share_group_coordinator(group_id.to_owned())
         .await?;
     if response.error_code != 0 {
         return Err(client.broker_error(

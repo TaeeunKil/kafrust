@@ -2307,6 +2307,15 @@ impl Client {
             .await
     }
 
+    /// Sends FindCoordinator v1 for a share group ID.
+    pub async fn find_share_group_coordinator(
+        &mut self,
+        group_id: impl Into<String>,
+    ) -> Result<FindCoordinatorResponseV1> {
+        self.find_coordinator_v1(group_id.into(), CoordinatorType::Share)
+            .await
+    }
+
     /// Sends FindCoordinator v1 for a transactional ID.
     pub async fn find_transaction_coordinator(
         &mut self,

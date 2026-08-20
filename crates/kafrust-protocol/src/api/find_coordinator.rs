@@ -8,6 +8,7 @@ pub const API_KEY: i16 = 10;
 pub enum CoordinatorType {
     Group,
     Transaction,
+    Share,
 }
 
 impl CoordinatorType {
@@ -15,6 +16,7 @@ impl CoordinatorType {
         match self {
             Self::Group => 0,
             Self::Transaction => 1,
+            Self::Share => 2,
         }
     }
 }
@@ -106,6 +108,18 @@ mod tests {
         };
 
         assert_eq!(request.encode().unwrap().last(), Some(&1));
+    }
+
+    #[test]
+    fn encodes_find_coordinator_v1_for_share_group() {
+        let request = FindCoordinatorRequestV1 {
+            correlation_id: 13,
+            client_id: Some("kafrust".to_owned()),
+            coordinator_key: "share-group".to_owned(),
+            coordinator_type: CoordinatorType::Share,
+        };
+
+        assert_eq!(request.encode().unwrap().last(), Some(&2));
     }
 
     #[test]
