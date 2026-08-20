@@ -70,6 +70,15 @@ assignment epochs `2/2`, `member_type=1`, `member_epoch=2`, and both current and
 target assignment for topic partition 0. Kafka versions that do not advertise
 API 69, security variants, and multi-member churn remain separate gates.
 
+The published `kafrust 0.3.4` external gate also qualifies
+`AdminClient::describe_share_groups` (stable ShareGroupDescribe API 77) on
+Kafka 4.3.1 in [`32410690294`](https://github.com/TaeeunKil/kafrust/actions/runs/32410690294).
+The fixture kept a real ShareConsumer member active and observed `state=Stable`,
+group/assignment epochs `3/3`, `member_epoch=3`, the subscribed topic and
+partition 0 assignment, and `authorized_operations=3400`. Kafka 4.0's removed
+early-access v0, security variants, and multi-member Admin reads remain separate
+gates.
+
 ## Module Visibility
 
 The crate also exposes public modules:

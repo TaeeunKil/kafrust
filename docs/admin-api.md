@@ -231,6 +231,11 @@ as the other coordinator-scoped Admin reads.
 The Kafka 4.3.1 ShareConsumer smoke also keeps a member active while calling
 this method and verifies the returned group and member state in
 [`32223573332`](https://github.com/TaeeunKil/kafrust/actions/runs/32223573332).
+The published `kafrust 0.3.4` external gate also verifies the same public read
+path from crates.io on Kafka 4.3.1 in
+[`32410690294`](https://github.com/TaeeunKil/kafrust/actions/runs/32410690294),
+including stable state, epochs `3/3`, member epoch `3`, topic partition 0
+assignment, subscription metadata, and `authorized_operations=3400`.
 
 `AdminClient::alter_share_group_offsets` and
 `AdminClient::delete_share_group_offsets` cover Kafka's flexible v0 APIs 91

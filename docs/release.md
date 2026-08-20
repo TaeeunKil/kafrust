@@ -236,6 +236,15 @@ member type and epoch, and current/target assignment for partition 0. This
 qualifies the published API 69 read path on Kafka 4.3.1; older Kafka versions
 without the advertised API remain a separate compatibility boundary.
 
+The published `ShareGroupDescribe` gate also passed on Kafka 4.3.1 in
+[run 32410690294](https://github.com/TaeeunKil/kafrust/actions/runs/32410690294).
+A fresh external `kafrust 0.3.4` project kept a ShareConsumer member active and
+verified `state=Stable`, group/assignment epochs `3/3`, member epoch `3`,
+subscription metadata, topic partition 0 assignment, and
+`authorized_operations=3400`. This qualifies the published API 77 v1 read path
+only; the removed Kafka 4.0 early-access v0, security, and multi-member Admin
+matrices remain open.
+
 The `0.2.18` packages passed Cargo publish verification and both staged
 all-feature package-documentation builds on commit `373de00`. The matching
 `kafrust-protocol` and `kafrust` packages were published in that order; both

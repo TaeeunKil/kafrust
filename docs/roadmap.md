@@ -289,6 +289,12 @@ coverage toward a release candidate that can be qualified in staging.
   bits. Focused wire, injected-broker, and Admin routing tests pass; the Kafka
   4.3.1 live ShareConsumer smoke now also inspects its active group through
   this API in [`32223573332`](https://github.com/TaeeunKil/kafrust/actions/runs/32223573332).
+  The published `kafrust 0.3.4` external gate then qualified the same public
+  API 77 v1 path on Kafka 4.3.1 in
+  [`32410690294`](https://github.com/TaeeunKil/kafrust/actions/runs/32410690294),
+  observing `state=Stable`, group/assignment epochs `3/3`, `member_epoch=3`,
+  subscription metadata, partition 0 assignment, and
+  `authorized_operations=3400` from the crates.io artifact.
   Share Group offset mutation APIs 91 and 92 are also implemented with typed
   top-level and per-topic/per-partition results; the Kafka 4.3.1 set/delete
   gate passed in [`32224302754`](https://github.com/TaeeunKil/kafrust/actions/runs/32224302754).
