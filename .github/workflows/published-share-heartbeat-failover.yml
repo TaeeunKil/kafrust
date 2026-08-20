@@ -1,0 +1,251 @@
+name: Published ShareConsumer Heartbeat Failover
+
+on:
+  workflow_dispatch:
+    inputs:
+      kafrust_version:
+        description: "Published kafrust version to run from crates.io"
+        required: true
+        default: "0.3.3"
+      cycles:
+        description: "Coordinator-loss and recovery cycles"
+        required: true
+        default: "3"
+  schedule:
+    - cron: "37 5 * * 2"
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTUP_TOOLCHAIN: "1.81.0"
+  KAFRUST_BOOTSTRAP_SERVERS: localhost:19092,localhost:19093,localhost:19094
+  KAFRUST_SHARE_TOPIC: kafrust-published-share-heartbeat-${{ github.run_id }}
+  KAFRUST_SHARE_GROUP_ID: kafrust-published-share-heartbeat-group-${{ github.run_id }}
+  KAFRUST_SHARE_PARTITION: "0"
+  KAFRUST_SHARE_HEARTBEAT_CYCLES: ${{ inputs.cycles || '3' }}
+  KAFRUST_SHARE_HEARTBEAT_VALUE_PREFIX: published-share-heartbeat-cycle-
+
+jobs:
+  published-share-heartbeat:
+    name: Published kafrust ShareConsumer active heartbeat failover
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.81.0"
+
+      - name: Start three-broker Kafka 4.3.1 with share groups enabled
+        run: |
+          docker network create kafrust-published-share-heartbeat
+          cluster_id="$(docker run --rm apache/kafka:4.3.1 /opt/kafka/bin/kafka-storage.sh random-uuid)"
+          for node in 1 2 3; do
+            external_port=$((19091 + node))
+            docker run -d --name "kafrust-published-share-heartbeat-${node}" \
+              --network kafrust-published-share-heartbeat \
+              -p "${external_port}:9092" \
+              -e KAFKA_CLUSTER_ID="${cluster_id}" \
+              -e KAFKA_NODE_ID="${node}" \
+              -e KAFKA_PROCESS_ROLES=broker,controller \
+              -e KAFKA_LISTENERS=INTERNAL://:29092,EXTERNAL://:9092,CONTROLLER://:9093 \
+              -e KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafrust-published-share-heartbeat-${node}:29092,EXTERNAL://localhost:${external_port} \
+              -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+              -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT \
+              -e KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL \
+              -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafrust-published-share-heartbeat-1:9093,2@kafrust-published-share-heartbeat-2:9093,3@kafrust-published-share-heartbeat-3:9093 \
+              -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=3 \
+              -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=3 \
+              -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=2 \
+              -e KAFKA_SHARE_COORDINATOR_STATE_TOPIC_REPLICATION_FACTOR=3 \
+              -e KAFKA_SHARE_COORDINATOR_STATE_TOPIC_MIN_ISR=2 \
+              -e KAFKA_SHARE_RENEW_ACKNOWLEDGE_ENABLE=true \
+              -e KAFKA_GROUP_COORDINATOR_REBALANCE_PROTOCOLS=classic,consumer,share \
+              -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 \
+              apache/kafka:4.3.1
+          done
+
+      - name: Wait for Kafka cluster
+        run: |
+          for attempt in {1..120}; do
+            if docker exec kafrust-published-share-heartbeat-1 \
+              /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server kafrust-published-share-heartbeat-1:29092 \
+              >/tmp/kafrust-published-share-heartbeat-probe.log 2>&1; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/kafrust-published-share-heartbeat-probe.log || true
+          docker logs kafrust-published-share-heartbeat-1
+          docker logs kafrust-published-share-heartbeat-2
+          docker logs kafrust-published-share-heartbeat-3
+          exit 1
+
+      - name: Create replicated share topic and choose broker 1 leader
+        run: |
+          docker exec kafrust-published-share-heartbeat-1 /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server kafrust-published-share-heartbeat-1:29092 \
+            --create --if-not-exists --topic "$KAFRUST_SHARE_TOPIC" \
+            --partitions 6 --replication-factor 3
+          docker exec kafrust-published-share-heartbeat-1 /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server kafrust-published-share-heartbeat-1:29092 --describe \
+            --topic "$KAFRUST_SHARE_TOPIC" | tee /tmp/kafrust-published-share-heartbeat-topic.log
+          failover_partition="$(awk '/Partition:/ && /Leader: 1/ { for (i = 1; i <= NF; i++) if ($i == "Partition:") { print $(i + 1); exit } }' /tmp/kafrust-published-share-heartbeat-topic.log)"
+          if [ -z "$failover_partition" ]; then
+            echo "could not find a partition led by broker 1"
+            exit 1
+          fi
+          echo "KAFRUST_SHARE_PARTITION=${failover_partition}" >> "$GITHUB_ENV"
+
+      - name: Configure share group offset reset
+        run: |
+          docker exec kafrust-published-share-heartbeat-1 /opt/kafka/bin/kafka-configs.sh \
+            --bootstrap-server kafrust-published-share-heartbeat-1:29092 \
+            --alter --entity-type groups --entity-name "$KAFRUST_SHARE_GROUP_ID" \
+            --add-config share.auto.offset.reset=earliest
+
+      - name: Create fresh external published project
+        env:
+          KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version || '0.3.3' }}
+        run: |
+          project_dir="$RUNNER_TEMP/kafrust-published-share-heartbeat"
+          cargo new --bin "$project_dir"
+          cp .github/published-share-multi-broker/src/main.rs "$project_dir/src/main.rs"
+          sed "s/__KAFRUST_VERSION__/$KAFRUST_PUBLISHED_VERSION/" \
+            .github/published-share-multi-broker/Cargo.toml > "$project_dir/Cargo.toml"
+          cargo build --release --manifest-path "$project_dir/Cargo.toml"
+
+      - name: Produce pre-heartbeat record through published producer
+        env:
+          KAFRUST_OPERATION: produce
+          KAFRUST_SHARE_VALUE: published-share-heartbeat-pre-${{ github.run_id }}
+        run: |
+          cargo run --quiet --release \
+            --manifest-path "$RUNNER_TEMP/kafrust-published-share-heartbeat/Cargo.toml"
+
+      - name: Repeat coordinator loss with published heartbeat active
+        env:
+          KAFRUST_OPERATION: heartbeat-consume
+          KAFRUST_SHARE_PRE_VALUE: published-share-heartbeat-pre-${{ github.run_id }}
+          KAFRUST_SHARE_HEARTBEAT_READY_FILE: ${{ runner.temp }}/kafrust-published-share-heartbeat-ready
+        run: |
+          set -euo pipefail
+          project_dir="$RUNNER_TEMP/kafrust-published-share-heartbeat"
+          ready_base="$KAFRUST_SHARE_HEARTBEAT_READY_FILE"
+          log_file="/tmp/kafrust-published-share-heartbeat.log"
+          rm -f "$ready_base"-* "$log_file"
+          set +e
+          cargo run --quiet --release \
+            --manifest-path "$project_dir/Cargo.toml" > "$log_file" 2>&1 &
+          test_pid=$!
+          set -e
+
+          wait_for_marker() {
+            marker="$1"
+            for attempt in {1..180}; do
+              if [ -f "$marker" ]; then
+                return 0
+              fi
+              if ! kill -0 "$test_pid" 2>/dev/null; then
+                cat "$log_file"
+                return 1
+              fi
+              sleep 1
+            done
+            echo "timed out waiting for $marker"
+            cat "$log_file"
+            return 1
+          }
+
+          find_share_coordinator() {
+            for candidate in 1 2 3; do
+              if ! docker ps --format '{{.Names}}' | grep -qx "kafrust-published-share-heartbeat-${candidate}"; then
+                continue
+              fi
+              state="$(docker exec "kafrust-published-share-heartbeat-${candidate}" \
+                /opt/kafka/bin/kafka-share-groups.sh \
+                --bootstrap-server "kafrust-published-share-heartbeat-${candidate}:29092" \
+                --describe --group "$KAFRUST_SHARE_GROUP_ID" --state 2>/dev/null || true)"
+              if [ -n "$state" ]; then
+                printf '%s\n' "$state"
+                return 0
+              fi
+            done
+            return 1
+          }
+
+          for cycle in $(seq 1 "$KAFRUST_SHARE_HEARTBEAT_CYCLES"); do
+            ready_file="$ready_base-${cycle}-ready"
+            recovered_file="$ready_base-${cycle}-recovered"
+            continue_file="$ready_base-${cycle}-continue"
+            wait_for_marker "$ready_file"
+            share_state="$(find_share_coordinator)"
+            printf '%s\n' "$share_state"
+            coordinator_id="$(printf '%s\n' "$share_state" | sed -n 's/.*(\([0-9-]*\)).*/\1/p' | head -n 1)"
+            if [ -z "$coordinator_id" ] || [ "$coordinator_id" -lt 1 ] || [ "$coordinator_id" -gt 3 ]; then
+              echo "could not resolve the active share coordinator for cycle $cycle"
+              cat "$log_file"
+              kill "$test_pid" 2>/dev/null || true
+              wait "$test_pid" || true
+              exit 1
+            fi
+            echo "stopping coordinator broker $coordinator_id for cycle $cycle"
+            docker stop "kafrust-published-share-heartbeat-${coordinator_id}"
+            case "$coordinator_id" in
+              1) surviving_bootstrap="localhost:19093,localhost:19094" ;;
+              2) surviving_bootstrap="localhost:19092,localhost:19094" ;;
+              3) surviving_bootstrap="localhost:19092,localhost:19093" ;;
+            esac
+            KAFRUST_BOOTSTRAP_SERVERS="$surviving_bootstrap" \
+              KAFRUST_OPERATION=produce \
+              KAFRUST_SHARE_VALUE="${KAFRUST_SHARE_HEARTBEAT_VALUE_PREFIX}${cycle}" \
+              cargo run --quiet --release \
+              --manifest-path "$project_dir/Cargo.toml"
+            wait_for_marker "$recovered_file"
+
+            if [ "$cycle" -lt "$KAFRUST_SHARE_HEARTBEAT_CYCLES" ]; then
+              docker start "kafrust-published-share-heartbeat-${coordinator_id}"
+              broker_ready=0
+              for attempt in {1..90}; do
+                if docker exec "kafrust-published-share-heartbeat-${coordinator_id}" \
+                  /opt/kafka/bin/kafka-broker-api-versions.sh \
+                  --bootstrap-server "kafrust-published-share-heartbeat-${coordinator_id}:29092" \
+                  >/dev/null 2>&1; then
+                  broker_ready=1
+                  break
+                fi
+                sleep 2
+              done
+              if [ "$broker_ready" -ne 1 ]; then
+                echo "broker $coordinator_id did not restart before cycle $cycle continued"
+                exit 1
+              fi
+              touch "$continue_file"
+            fi
+          done
+
+          set +e
+          wait "$test_pid"
+          test_status=$?
+          cat "$log_file"
+          exit "$test_status"
+
+      - name: Verify published dependency versions
+        env:
+          KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version || '0.3.3' }}
+        run: |
+          lockfile="$RUNNER_TEMP/kafrust-published-share-heartbeat/Cargo.lock"
+          grep -A1 -q 'name = "kafrust"' "$lockfile"
+          grep -A1 -q "version = \"$KAFRUST_PUBLISHED_VERSION\"" "$lockfile"
+          grep -A1 -q 'name = "kafrust-protocol"' "$lockfile"
+
+      - name: Dump Kafka diagnostics
+        if: failure()
+        run: |
+          docker logs kafrust-published-share-heartbeat-1 || true
+          docker logs kafrust-published-share-heartbeat-2 || true
+          docker logs kafrust-published-share-heartbeat-3 || true
