@@ -15,7 +15,7 @@ visible in public APIs: bootstrap servers, client IDs, topics, partitions,
 offsets, acknowledgements, metadata refresh, consumer groups, heartbeats, and
 commits.
 
-Current release: `0.3.2`.
+Current release: `0.3.3`.
 
 Use kafrust today for experiments, local broker checks, simple internal tools,
 and API evaluation. For broad production Kafka workloads that need mature
@@ -475,7 +475,7 @@ async fn main() -> kafrust::Result<()> {
 }
 ```
 
-This API is on the development branch and is not part of the published `0.3.2`
+This API is on the development branch and is not part of the published `0.3.3`
 artifact yet. It has focused protocol tests and an injected-broker wire
 roundtrip test, plus an opt-in cancellable background heartbeat task. A Kafka
 4.3.1 single-node live smoke passed the KIP-1222 renewal, expiry/redelivery,
@@ -492,7 +492,8 @@ See [Share Consumer](docs/share-consumer.md) for the exact alpha contract.
 
 ## Streams Group
 
-The published `0.3.2` artifact includes an alpha `StreamsGroupSession` for
+The published `0.3.3` artifact includes an alpha `StreamsGroupSession` and
+`StreamsTaskRuntime` for
 Kafka's dedicated Streams group heartbeat protocol. It publishes the initial
 topology, tracks member and endpoint epochs, reports task state, reconnects and
 rejoins within a bounded retry budget, and leaves with
@@ -723,8 +724,8 @@ Primary public entry points:
 
 Generated API documentation:
 
-- [`kafrust`](https://docs.rs/kafrust/0.3.2/kafrust/)
-- [`kafrust-protocol`](https://docs.rs/kafrust-protocol/0.3.2/kafrust_protocol/)
+- [`kafrust`](https://docs.rs/kafrust/0.3.3/kafrust/)
+- [`kafrust-protocol`](https://docs.rs/kafrust-protocol/0.3.3/kafrust_protocol/)
 
 ## Documentation
 

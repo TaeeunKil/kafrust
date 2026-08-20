@@ -14,11 +14,11 @@ Status legend:
 
 ## Current Release Qualification
 
-`0.3.2` is now published on crates.io in protocol-first order. Its package
-verification passed after `kafrust-protocol 0.3.2` became available from the
+`0.3.3` is now published on crates.io in protocol-first order. Its package
+verification passed after `kafrust-protocol 0.3.3` became available from the
 registry, and a fresh external project compiled the published Streams public
-surface on stable Rust and Rust 1.81 in
-[`32377502460`](https://github.com/TaeeunKil/kafrust/actions/runs/32377502460).
+surface, including task-runtime transitions, on stable Rust and Rust 1.81 in
+[`32380345199`](https://github.com/TaeeunKil/kafrust/actions/runs/32380345199).
 The previous `0.3.1` artifact remains
 published on crates.io. The `0.3.0` release's complete seven-profile external
 smoke passed in
@@ -188,11 +188,11 @@ Both published docs.rs pages returned HTTP 200 for
 
 ## 0.3 Release Target
 
-Status: Published as `0.3.2` in protocol-first order. The `0.3.2` package/API
+Status: Published as `0.3.3` in protocol-first order. The `0.3.3` package/API
 surface resolves from crates.io and the published Streams surface compiles in
-a fresh external project on stable Rust and Rust 1.81. The `0.3.1` published
+a fresh external project on stable Rust and Rust 1.81. The `0.3.2` published
 member-aware Admin v10 and broader fresh-project evidence remain recorded
-below; docs.rs `0.3.2` build status is tracked separately from registry
+below; docs.rs `0.3.3` build status is tracked separately from registry
 publication.
 
 `0.3.x` is a meaningful client milestone, not the complete Kafka replacement
@@ -258,9 +258,10 @@ coverage toward a release candidate that can be qualified in staging.
   waits for graceful close. Focused wire coverage verifies the automatic
   heartbeat and member-epoch `-1` leave; published-handle qualification,
   transition application inside a complete Kafka Streams application, and
-  multi-member failure evidence remain open. The published `0.3.2` surface now also compiles the
-  handle and assignment-watch API from a fresh external project on stable and
-  Rust 1.81 in [`32377502460`](https://github.com/TaeeunKil/kafrust/actions/runs/32377502460).
+  multi-member failure evidence remain open. The published `0.3.3` surface now also compiles the
+  handle, assignment-watch, and task-runtime APIs from a fresh external
+  project on stable and Rust 1.81 in
+  [`32380345199`](https://github.com/TaeeunKil/kafrust/actions/runs/32380345199).
   Published broker-runtime qualification and a complete Kafka Streams
   application remain open.
 - `crates/kafrust/examples/streams_group_smoke.rs` and

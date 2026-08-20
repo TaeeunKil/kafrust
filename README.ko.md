@@ -14,7 +14,7 @@ kafrust는 `librdkafka` 래핑 없이 Kafka 프로토콜 호환성이 필요한 
 server, client ID, topic, partition, offset, acknowledgement, metadata refresh,
 consumer group, heartbeat, commit 같은 Kafka 개념을 그대로 드러냅니다.
 
-현재 릴리즈: `0.3.2`.
+현재 릴리즈: `0.3.3`.
 
 지금 kafrust는 실험, 로컬 브로커 확인, 단순 내부 도구, API 평가에 적합합니다.
 넓은 범위의 성숙한 production Kafka 기능이 즉시 필요하다면 Rust에서는 여전히
@@ -246,7 +246,7 @@ async fn main() -> kafrust::Result<()> {
 }
 ```
 
-이 API는 개발 브랜치에 있으며 아직 공개된 `0.3.2` artifact에는 포함되지
+이 API는 개발 브랜치에 있으며 아직 공개된 `0.3.3` artifact에는 포함되지
 않았습니다. protocol test와 injected-broker wire 왕복 테스트를 통과했고,
 취소 가능한 background heartbeat task도 추가했습니다. 실제 Kafka 4.x 검증과
 coordinator 복구는 아직 남아 있지만 live workflow는 KIP-1222 renewal 후
@@ -321,8 +321,8 @@ kafrust의 호환성 주장은 실제 broker로 검증된 동작으로 제한합
 
 생성된 API 문서:
 
-- [`kafrust`](https://docs.rs/kafrust/0.3.2/kafrust/)
-- [`kafrust-protocol`](https://docs.rs/kafrust-protocol/0.3.2/kafrust_protocol/)
+- [`kafrust`](https://docs.rs/kafrust/0.3.3/kafrust/)
+- [`kafrust-protocol`](https://docs.rs/kafrust-protocol/0.3.3/kafrust_protocol/)
 
 ## 문서
 

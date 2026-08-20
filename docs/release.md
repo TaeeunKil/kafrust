@@ -122,6 +122,15 @@ from `.github/workflows/published-streams-surface.yml`; docs.rs indexing was sti
 pending immediately after publication and must be recorded separately once its
 build completes.
 
+The `0.3.3` packages were published protocol-first on 2026-08-20 after adding
+the bounded `StreamsTaskRuntime` assignment reconciliation API. A fresh
+external project with no workspace path dependency compiled the published
+Streams session, canonical task runtime, and transition API on stable Rust and
+Rust 1.81 in [run 32380345199](https://github.com/TaeeunKil/kafrust/actions/runs/32380345199).
+The crates.io package metadata returned HTTP 200 for both packages; docs.rs
+`0.3.3` indexing was still pending immediately after publication and is not
+claimed by this release note until its build returns successfully.
+
 The `0.2.18` packages passed Cargo publish verification and both staged
 all-feature package-documentation builds on commit `373de00`. The matching
 `kafrust-protocol` and `kafrust` packages were published in that order; both
