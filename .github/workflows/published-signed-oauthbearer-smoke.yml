@@ -1,0 +1,231 @@
+name: Published Signed OAUTHBEARER Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      kafrust_version:
+        description: "Published kafrust version to execute from crates.io"
+        required: true
+        default: "0.3.4"
+
+permissions:
+  contents: read
+
+jobs:
+  published-signed-oauthbearer:
+    name: Published kafrust ${{ inputs.kafrust_version }} signed OAUTHBEARER
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      KAFRUST_BOOTSTRAP_SERVERS: localhost:39101
+      KAFRUST_TOPIC: kafrust-published-signed-oauthbearer-${{ github.run_id }}
+      KAFRUST_TLS_ROOT_CERT_DER_PATH: ${{ github.workspace }}/sasl-ssl-oauth-oidc/ca.der
+      CARGO_TERM_COLOR: never
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.81.0"
+
+      - name: Generate TLS certificates
+        run: |
+          mkdir -p sasl-ssl-oauth-oidc
+          openssl req -x509 -newkey rsa:2048 -days 1 -nodes \
+            -subj "/CN=kafrust-test-ca" \
+            -keyout sasl-ssl-oauth-oidc/ca.key \
+            -out sasl-ssl-oauth-oidc/ca.crt
+          openssl x509 -in sasl-ssl-oauth-oidc/ca.crt -outform DER \
+            -out sasl-ssl-oauth-oidc/ca.der
+          openssl req -newkey rsa:2048 -nodes \
+            -subj "/CN=localhost" \
+            -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" \
+            -keyout sasl-ssl-oauth-oidc/server.key \
+            -out sasl-ssl-oauth-oidc/server.csr
+          openssl x509 -req \
+            -in sasl-ssl-oauth-oidc/server.csr \
+            -CA sasl-ssl-oauth-oidc/ca.crt \
+            -CAkey sasl-ssl-oauth-oidc/ca.key \
+            -CAcreateserial \
+            -days 1 \
+            -sha256 \
+            -copy_extensions copy \
+            -out sasl-ssl-oauth-oidc/server.crt
+          openssl pkcs12 -export \
+            -in sasl-ssl-oauth-oidc/server.crt \
+            -inkey sasl-ssl-oauth-oidc/server.key \
+            -certfile sasl-ssl-oauth-oidc/ca.crt \
+            -name localhost \
+            -out sasl-ssl-oauth-oidc/kafka.server.keystore.p12 \
+            -password pass:kafrust
+          printf kafrust > sasl-ssl-oauth-oidc/keystore-password
+          printf kafrust > sasl-ssl-oauth-oidc/key-password
+          chmod 644 sasl-ssl-oauth-oidc/*
+
+      - name: Start local OIDC and JWKS provider
+        run: |
+          mkdir -p sasl-ssl-oauth-oidc/oidc
+          python3 scripts/create_oauth_jwks_fixture.py \
+            --output-dir sasl-ssl-oauth-oidc/oidc \
+            --issuer http://host.docker.internal:8090/issuer \
+            --jwks-uri http://host.docker.internal:8090/jwks.json \
+            --audience kafrust-client \
+            --subject kafrust
+          nohup python3 -m http.server 8090 \
+            --bind 0.0.0.0 \
+            --directory sasl-ssl-oauth-oidc/oidc \
+            > /tmp/kafrust-published-oidc-provider.log 2>&1 &
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:8090/jwks.json >/dev/null && \
+              curl --fail --silent http://127.0.0.1:8090/openid-configuration >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/kafrust-published-oidc-provider.log
+          exit 1
+
+      - name: Configure signed OAUTHBEARER validator
+        run: |
+          cat > sasl-ssl-oauth-oidc/kafka_server_jaas.conf <<'EOF'
+          KafkaServer {
+            org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;
+          };
+          EOF
+          chmod 644 sasl-ssl-oauth-oidc/kafka_server_jaas.conf
+
+      - name: Start Kafka 3.7.2 signed SASL_SSL OAUTHBEARER
+        run: |
+          docker run -d --name kafrust-published-signed-oauthbearer \
+            --add-host host.docker.internal:host-gateway \
+            -p 39101:9097 \
+            -v "$PWD/sasl-ssl-oauth-oidc:/etc/kafka/secrets:ro" \
+            -e KAFKA_OPTS="-Djava.security.auth.login.config=/etc/kafka/secrets/kafka_server_jaas.conf" \
+            -e KAFKA_NODE_ID=1 \
+            -e KAFKA_PROCESS_ROLES=broker,controller \
+            -e KAFKA_LISTENERS=PLAINTEXT://:9092,SASL_SSL://:9097,CONTROLLER://:9093 \
+            -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092,SASL_SSL://localhost:39101 \
+            -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+            -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,SASL_SSL:SASL_SSL \
+            -e KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT \
+            -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@localhost:9093 \
+            -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
+            -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1 \
+            -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1 \
+            -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 \
+            -e KAFKA_SASL_ENABLED_MECHANISMS=OAUTHBEARER \
+            -e KAFKA_SASL_SERVER_CALLBACK_HANDLER_CLASS=org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallbackHandler \
+            -e KAFKA_SASL_OAUTHBEARER_JWKS_ENDPOINT_URL=http://host.docker.internal:8090/jwks.json \
+            -e KAFKA_SASL_OAUTHBEARER_EXPECTED_ISSUER=http://host.docker.internal:8090/issuer \
+            -e KAFKA_SASL_OAUTHBEARER_EXPECTED_AUDIENCE=kafrust-client \
+            -e KAFKA_SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS=2 \
+            -e KAFKA_SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS=1000 \
+            -e KAFKA_LISTENER_NAME_SASL__SSL_OAUTHBEARER_SASL_JAAS_CONFIG="org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;" \
+            -e KAFKA_LISTENER_NAME_SASL__SSL_OAUTHBEARER_SASL_SERVER_CALLBACK_HANDLER_CLASS=org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallbackHandler \
+            -e KAFKA_LISTENER_NAME_SASL__SSL_OAUTHBEARER_SASL_OAUTHBEARER_JWKS_ENDPOINT_URL=http://host.docker.internal:8090/jwks.json \
+            -e KAFKA_LISTENER_NAME_SASL__SSL_OAUTHBEARER_SASL_OAUTHBEARER_EXPECTED_ISSUER=http://host.docker.internal:8090/issuer \
+            -e KAFKA_LISTENER_NAME_SASL__SSL_OAUTHBEARER_SASL_OAUTHBEARER_EXPECTED_AUDIENCE=kafrust-client \
+            -e KAFKA_LISTENER_NAME_SASL__SSL_OAUTHBEARER_SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS=2 \
+            -e KAFKA_LISTENER_NAME_SASL__SSL_OAUTHBEARER_SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS=1000 \
+            -e KAFKA_LISTENER_NAME_SASL__SSL_OAUTHBEARER_SASL_OAUTHBEARER_SCOPE_CLAIM_NAME=scope \
+            -e KAFKA_LISTENER_NAME_SASL__SSL_OAUTHBEARER_SASL_OAUTHBEARER_SUB_CLAIM_NAME=sub \
+            -e KAFKA_SSL_KEYSTORE_FILENAME=kafka.server.keystore.p12 \
+            -e KAFKA_SSL_KEYSTORE_CREDENTIALS=keystore-password \
+            -e KAFKA_SSL_KEY_CREDENTIALS=key-password \
+            -e KAFKA_SSL_KEYSTORE_TYPE=PKCS12 \
+            -e KAFKA_SSL_CLIENT_AUTH=none \
+            apache/kafka:3.7.2
+
+      - name: Wait for Kafka
+        run: |
+          for attempt in {1..120}; do
+            if docker exec kafrust-published-signed-oauthbearer \
+              /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server localhost:9092 \
+              >/tmp/kafrust-published-signed-oauth-startup.log 2>&1; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/kafrust-published-signed-oauth-startup.log || true
+          docker logs kafrust-published-signed-oauthbearer
+          exit 1
+
+      - name: Create topic and export signed token
+        run: |
+          docker exec kafrust-published-signed-oauthbearer /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server localhost:9092 \
+            --create --topic "$KAFRUST_TOPIC" --partitions 1 --replication-factor 1
+          cp sasl-ssl-oauth-oidc/oidc/oauth-token sasl-ssl-oauth-oidc/oauth-token
+          echo "KAFRUST_OAUTH_TOKEN=$(cat sasl-ssl-oauth-oidc/oauth-token)" >> "$GITHUB_ENV"
+
+      - name: Verify JWKS and signed token claims
+        run: |
+          curl --fail --silent http://127.0.0.1:8090/jwks.json >/dev/null
+          python3 - <<'PY'
+          import base64
+          import json
+
+          token = open("sasl-ssl-oauth-oidc/oauth-token", encoding="utf-8").read().strip()
+          header, payload, signature = token.split(".")
+
+          def decode(value):
+              return json.loads(base64.urlsafe_b64decode(value + "=" * (-len(value) % 4)))
+
+          parsed_header = decode(header)
+          parsed_payload = decode(payload)
+          if parsed_header.get("alg") != "RS256" or parsed_header.get("kid") != "kafrust-live-rs256":
+              raise SystemExit("unexpected signed token header")
+          if parsed_payload.get("iss") != "http://host.docker.internal:8090/issuer":
+              raise SystemExit("unexpected token issuer")
+          if parsed_payload.get("aud") != "kafrust-client" or parsed_payload.get("sub") != "kafrust":
+              raise SystemExit("unexpected token claims")
+          print("signed_token=RS256 issuer=validated audience=validated subject=validated")
+          print("signature_bytes=", len(base64.urlsafe_b64decode(signature + "=" * (-len(signature) % 4))))
+          PY
+
+      - name: Create fresh external published project
+        env:
+          KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version || '0.3.4' }}
+        run: |
+          project_dir="$RUNNER_TEMP/kafrust-published-signed-oauthbearer"
+          cargo new --bin "$project_dir"
+          cp .github/published-oauthbearer-smoke/src/main.rs "$project_dir/src/main.rs"
+          sed "s/__KAFRUST_VERSION__/$KAFRUST_PUBLISHED_VERSION/" \
+            .github/published-oauthbearer-smoke/Cargo.toml > "$project_dir/Cargo.toml"
+          if [ "$project_dir" = "$GITHUB_WORKSPACE" ]; then
+            echo "the published signed OAUTHBEARER project must be outside the repository"
+            exit 1
+          fi
+
+      - name: Run published signed OAUTHBEARER client
+        run: |
+          project_dir="$RUNNER_TEMP/kafrust-published-signed-oauthbearer"
+          cargo run --manifest-path "$project_dir/Cargo.toml" 2>&1 \
+            | tee /tmp/kafrust-published-signed-oauthbearer.log
+          grep -Fq "published oauthbearer ok" /tmp/kafrust-published-signed-oauthbearer.log
+          grep -Fq "token_provider=true" /tmp/kafrust-published-signed-oauthbearer.log
+          grep -Fq "consumed=true" /tmp/kafrust-published-signed-oauthbearer.log
+
+      - name: Verify published dependency versions
+        env:
+          KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version || '0.3.4' }}
+        run: |
+          lockfile="$RUNNER_TEMP/kafrust-published-signed-oauthbearer/Cargo.lock"
+          grep -A1 -q 'name = "kafrust"' "$lockfile"
+          grep -A1 -q "version = \"$KAFRUST_PUBLISHED_VERSION\"" "$lockfile"
+          grep -A1 -q 'name = "kafrust-protocol"' "$lockfile"
+
+      - name: Dump diagnostics
+        if: failure()
+        run: |
+          cat /tmp/kafrust-published-signed-oauthbearer.log || true
+          cat /tmp/kafrust-published-oidc-provider.log || true
+          docker logs kafrust-published-signed-oauthbearer || true
+
+      - name: Cleanup
+        if: always()
+        run: docker rm -f kafrust-published-signed-oauthbearer || true
