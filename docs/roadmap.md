@@ -450,6 +450,14 @@ coverage toward a release candidate that can be qualified in staging.
   and the existing `retention.ms` value remained unchanged, while the
   administrator applied the incremental alteration. This closes the
   current-source IncrementalAlterConfigs authorization sub-gate only.
+- The current-source `live-alter-client-quotas-authorization.yml` matrix passed
+  on Kafka 3.7.2 and 4.3.1 in
+  [`32367537887`](https://github.com/TaeeunKil/kafrust/actions/runs/32367537887).
+  A restricted SASL/PLAIN principal with cluster discovery but without the
+  quota mutation permission received `ClusterAuthorizationFailed` (31); a
+  separate administrator readback confirmed no quota was applied before the
+  administrator applied and removed it. This closes the current-source
+  AlterClientQuotas authorization sub-gate only.
 - The current-source `live-create-partitions-authorization.yml` matrix passed
   on Kafka 3.7.2 and 4.3.1 in
   [`32366048755`](https://github.com/TaeeunKil/kafrust/actions/runs/32366048755).

@@ -1593,6 +1593,17 @@ mode, throttle time, and per-entity error outcomes remain typed. Use
 `FLOAT64`, but Kafka validates individual quota keys; for example,
 `producer_byte_rate` must be a whole number of bytes per second.
 
+The current-source
+[`live-alter-client-quotas-authorization.yml`](../.github/workflows/live-alter-client-quotas-authorization.yml)
+gate passed on Kafka 3.7.2 and 4.3.1 in
+[`32367537887`](https://github.com/TaeeunKil/kafrust/actions/runs/32367537887).
+A restricted SASL/PLAIN principal with cluster discovery but without the
+required quota mutation permission received `ClusterAuthorizationFailed`
+(error 31). A separate administrator readback confirmed that no quota was
+applied, and the administrator then applied and removed the quota. This is an
+operation-specific current-source authorization proof, not a universal ACL or
+Admin mutation parity claim.
+
 ## Manage SCRAM Credentials
 
 ```rust

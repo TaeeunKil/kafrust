@@ -180,6 +180,16 @@ and the existing `retention.ms` value remained unchanged, while the
 administrator applied the incremental alteration. This closes the
 IncrementalAlterConfigs authorization sub-gate only.
 
+The current-source
+`.github/workflows/live-alter-client-quotas-authorization.yml` matrix passed on
+Kafka 3.7.2 and 4.3.1 in
+[`32367537887`](https://github.com/TaeeunKil/kafrust/actions/runs/32367537887).
+A restricted SASL/PLAIN principal with cluster discovery but without the quota
+mutation permission received `ClusterAuthorizationFailed` (31); a separate
+administrator readback confirmed no quota was applied before the administrator
+applied and removed it. This closes the AlterClientQuotas authorization
+sub-gate only.
+
 The low-level `Client::api_versions_cached` helper now prefers flexible
 `ApiVersions` v4 and falls back to v3 when a broker returns
 `UNSUPPORTED_VERSION`. Existing higher-level paths retain their established
@@ -949,6 +959,7 @@ other coordinator-routed writes remain separate qualification items.
 | Apache Kafka 3.7.2 and 4.3.1 | single-node KRaft with StandardAuthorizer; SASL/PLAIN | `DeleteTopics` authorization: restricted principal with cluster and target-topic `Describe` denied with error code 29, administrator allowed, and target topic retained after denial | [`Live DeleteTopics Authorization`, run `32365120994`](https://github.com/TaeeunKil/kafrust/actions/runs/32365120994) on 2026-08-20 | Passing; operation-specific permission evidence only |
 | Apache Kafka 3.7.2 and 4.3.1 | single-node KRaft with StandardAuthorizer; SASL/PLAIN | classic `AlterConfigs` authorization: restricted principal with discovery and `DescribeConfigs` denied with error code 29, existing config retained, and administrator allowed | [`Live AlterConfigs Authorization`, run `32365666970`](https://github.com/TaeeunKil/kafrust/actions/runs/32365666970) on 2026-08-20 | Passing; operation-specific permission evidence only |
 | Apache Kafka 3.7.2 and 4.3.1 | single-node KRaft with StandardAuthorizer; SASL/PLAIN | `IncrementalAlterConfigs` authorization: restricted principal denied with error code 29, existing config retained, and administrator allowed | [`Live IncrementalAlterConfigs Authorization`, run `32366418605`](https://github.com/TaeeunKil/kafrust/actions/runs/32366418605) on 2026-08-20 | Passing; operation-specific permission evidence only |
+| Apache Kafka 3.7.2 and 4.3.1 | single-node KRaft with StandardAuthorizer; SASL/PLAIN | `AlterClientQuotas` authorization: restricted cluster-discovery principal denied with error code 31, administrator readback confirmed no quota mutation, administrator then allowed and removed quota | [`Live AlterClientQuotas Authorization`, run `32367537887`](https://github.com/TaeeunKil/kafrust/actions/runs/32367537887) on 2026-08-20 | Passing; operation-specific permission evidence only |
 | Apache Kafka 3.7.2 and 4.3.1 | single-node KRaft with StandardAuthorizer; SASL/PLAIN | `CreatePartitions` authorization: restricted principal with cluster/topic discovery denied with error code 29 and one-partition topic retained, administrator allowed | [`Live CreatePartitions Authorization`, run `32366048755`](https://github.com/TaeeunKil/kafrust/actions/runs/32366048755) on 2026-08-20 | Passing; operation-specific permission evidence only |
 | Apache Kafka 3.7.2 | single-node KRaft | SASL_SSL SCRAM credential administration | `Live Kafka Smoke` SASL_SSL SCRAM job, manual run `31461980967` on 2026-08-11 | Passing |
 | Apache Kafka 3.7.2 | three-broker KRaft | controller-routed partition reassignment | `Live Kafka Smoke` multi-broker job, manual run `31462962605` on 2026-08-11 | Passing |
