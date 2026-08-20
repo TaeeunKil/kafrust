@@ -21,7 +21,17 @@ the published `kafrust 0.3.5` client completed RS256 OIDC/JWKS validation,
 initial authentication, produce/readback, and SASL re-authentication on the
 same connection after the broker session lifetime threshold. The prior
 `0.3.4` failures used the already published artifact and are not evidence
-against this fix. docs.rs indexing for `0.3.5` remains pending.
+against this fix. Both docs.rs pages now return HTTP 200:
+[`kafrust 0.3.5`](https://docs.rs/kafrust/0.3.5/kafrust/) and
+[`kafrust-protocol 0.3.5`](https://docs.rs/kafrust-protocol/0.3.5/kafrust_protocol/).
+
+The fresh external seven-profile `Published Crate Smoke` also passed with
+`kafrust 0.3.5` in
+[`32420987547`](https://github.com/TaeeunKil/kafrust/actions/runs/32420987547),
+covering Kafka 3.7.2 classic, Kafka 4.3.1 KIP-848, Kafka 3.7.2
+SASL_SSL/SCRAM, and Gzip, Snappy, LZ4, and Zstd. This refreshes the published
+artifact baseline; it remains representative evidence rather than a complete
+replacement, multi-broker, authorization, or workload claim.
 
 `0.3.4` is now published on crates.io in protocol-first order. Fresh external
 projects resolved both packages and passed the published `DescribeCluster` API

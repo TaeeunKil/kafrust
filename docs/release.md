@@ -7,7 +7,7 @@ kafrust publishes two crates:
 
 Publish `kafrust-protocol` before `kafrust` because the client crate depends on the protocol crate by version.
 
-## 0.3.5 Release Preparation
+## 0.3.5 Release Notes
 
 This patch release carries the OAUTHBEARER connection re-authentication fix.
 The client now follows Kafka's negotiated re-authentication sequence with
@@ -33,15 +33,22 @@ connection after the broker session lifetime threshold. Its trace also
 verified the re-authentication handshake and authenticate requests at their
 expected wire versions. The earlier failing
 runs resolved the already published `0.3.4` artifact and do not qualify this
-fix. docs.rs indexing for `0.3.5` was still pending when this note was
-recorded.
+fix. Both docs.rs pages now return HTTP 200:
+[`kafrust 0.3.5`](https://docs.rs/kafrust/0.3.5/kafrust/) and
+[`kafrust-protocol 0.3.5`](https://docs.rs/kafrust-protocol/0.3.5/kafrust_protocol/).
+
+The fresh external seven-profile `Published Crate Smoke` passed with
+`kafrust 0.3.5` in
+[run 32420987547](https://github.com/TaeeunKil/kafrust/actions/runs/32420987547),
+covering Kafka 3.7.2 classic, Kafka 4.3.1 KIP-848, Kafka 3.7.2
+SASL_SSL/SCRAM, and Gzip, Snappy, LZ4, and Zstd. This is representative
+published-artifact evidence, not a full replacement or workload claim.
 
 ### Verification
 
-The required local workspace validation must pass before publication. After
-protocol-first publication, rerun
-`.github/workflows/published-signed-oauthbearer-smoke.yml` with `0.3.5` and
-record the external result here.
+The required local workspace validation passed before publication. The
+post-publish signed OAUTHBEARER and seven-profile smoke results are recorded
+above.
 
 ### Known limits
 
