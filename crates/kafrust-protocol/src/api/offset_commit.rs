@@ -106,6 +106,44 @@ impl OffsetCommitRequestV9 {
     }
 }
 
+/// OffsetCommit v10, which uses topic UUIDs instead of topic names.
+///
+/// Kafka v10 is the topic-ID form used by the current consumer protocol. The
+/// request keeps the flexible v8/v9 body shape and changes only the topic
+/// identity field.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OffsetCommitRequestV10 {
+    pub correlation_id: i32,
+    pub client_id: Option<String>,
+    pub group_id: String,
+    pub generation_id_or_member_epoch: i32,
+    pub member_id: String,
+    pub group_instance_id: Option<String>,
+    pub topics: Vec<OffsetCommitTopicV10>,
+}
+
+impl OffsetCommitRequestV10 {
+    pub fn encode(&self) -> Result<Vec<u8>> {
+        let mut encoder = Encoder::new();
+        RequestHeader {
+            api_key: API_KEY,
+            api_version: 10,
+            correlation_id: self.correlation_id,
+            client_id: self.client_id.clone(),
+        }
+        .encode_v2(&mut encoder)?;
+        encoder.write_compact_string(&self.group_id)?;
+        encoder.write_i32(self.generation_id_or_member_epoch);
+        encoder.write_compact_string(&self.member_id)?;
+        encoder.write_compact_nullable_string(self.group_instance_id.as_deref())?;
+        encoder.write_compact_array(Some(self.topics.as_slice()), |encoder, topic| {
+            topic.encode(encoder)
+        })?;
+        encoder.write_empty_tagged_fields();
+        Ok(encoder.into_bytes())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OffsetCommitTopic {
     pub name: String,
@@ -145,6 +183,23 @@ pub struct OffsetCommitTopicV9 {
 impl OffsetCommitTopicV9 {
     fn encode(&self, encoder: &mut Encoder) -> Result<()> {
         encoder.write_compact_string(&self.name)?;
+        encoder.write_compact_array(Some(self.partitions.as_slice()), |encoder, partition| {
+            partition.encode(encoder)
+        })?;
+        encoder.write_empty_tagged_fields();
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OffsetCommitTopicV10 {
+    pub topic_id: [u8; 16],
+    pub partitions: Vec<OffsetCommitPartitionV10>,
+}
+
+impl OffsetCommitTopicV10 {
+    fn encode(&self, encoder: &mut Encoder) -> Result<()> {
+        encoder.write_uuid(&self.topic_id);
         encoder.write_compact_array(Some(self.partitions.as_slice()), |encoder, partition| {
             partition.encode(encoder)
         })?;
@@ -194,6 +249,25 @@ pub struct OffsetCommitPartitionV9 {
 }
 
 impl OffsetCommitPartitionV9 {
+    fn encode(&self, encoder: &mut Encoder) -> Result<()> {
+        encoder.write_i32(self.partition_index);
+        encoder.write_i64(self.committed_offset);
+        encoder.write_i32(self.committed_leader_epoch);
+        encoder.write_compact_nullable_string(self.committed_metadata.as_deref())?;
+        encoder.write_empty_tagged_fields();
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OffsetCommitPartitionV10 {
+    pub partition_index: i32,
+    pub committed_offset: i64,
+    pub committed_leader_epoch: i32,
+    pub committed_metadata: Option<String>,
+}
+
+impl OffsetCommitPartitionV10 {
     fn encode(&self, encoder: &mut Encoder) -> Result<()> {
         encoder.write_i32(self.partition_index);
         encoder.write_i64(self.committed_offset);
@@ -277,9 +351,54 @@ impl OffsetCommitResponseV9 {
     }
 }
 
+/// OffsetCommit v10 response with topic UUIDs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OffsetCommitResponseV10 {
+    pub throttle_time_ms: i32,
+    pub topics: Vec<OffsetCommitTopicResponseV10>,
+}
+
+impl OffsetCommitResponseV10 {
+    pub fn decode_body(decoder: &mut Decoder<'_>) -> Result<Self> {
+        let throttle_time_ms = decoder.read_i32()?;
+        let topics = decoder
+            .read_compact_array("offset commit topic UUID responses", |decoder| {
+                let topic_id = decoder.read_uuid()?;
+                let partitions = decoder
+                    .read_compact_array("offset commit partition responses", |decoder| {
+                        let partition_index = decoder.read_i32()?;
+                        let error_code = decoder.read_i16()?;
+                        decoder.read_tagged_fields()?;
+                        Ok(OffsetCommitPartitionResponse {
+                            partition_index,
+                            error_code,
+                        })
+                    })?
+                    .unwrap_or_default();
+                decoder.read_tagged_fields()?;
+                Ok(OffsetCommitTopicResponseV10 {
+                    topic_id,
+                    partitions,
+                })
+            })?
+            .unwrap_or_default();
+        decoder.read_tagged_fields()?;
+        Ok(Self {
+            throttle_time_ms,
+            topics,
+        })
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OffsetCommitTopicResponse {
     pub name: String,
+    pub partitions: Vec<OffsetCommitPartitionResponse>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OffsetCommitTopicResponseV10 {
+    pub topic_id: [u8; 16],
     pub partitions: Vec<OffsetCommitPartitionResponse>,
 }
 
@@ -316,11 +435,12 @@ impl OffsetCommitPartitionResponse {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::{
-        OffsetCommitPartition, OffsetCommitPartitionResponse, OffsetCommitPartitionV7,
-        OffsetCommitPartitionV9, OffsetCommitRequestV2, OffsetCommitRequestV7,
-        OffsetCommitRequestV9, OffsetCommitResponseV2, OffsetCommitResponseV7,
-        OffsetCommitResponseV9, OffsetCommitTopic, OffsetCommitTopicResponse, OffsetCommitTopicV7,
-        OffsetCommitTopicV9,
+        OffsetCommitPartition, OffsetCommitPartitionResponse, OffsetCommitPartitionV10,
+        OffsetCommitPartitionV7, OffsetCommitPartitionV9, OffsetCommitRequestV10,
+        OffsetCommitRequestV2, OffsetCommitRequestV7, OffsetCommitRequestV9,
+        OffsetCommitResponseV10, OffsetCommitResponseV2, OffsetCommitResponseV7,
+        OffsetCommitResponseV9, OffsetCommitTopic, OffsetCommitTopicResponse, OffsetCommitTopicV10,
+        OffsetCommitTopicV7, OffsetCommitTopicV9,
     };
     use crate::codec::{Decoder, Encoder};
 
@@ -530,6 +650,94 @@ mod tests {
 
         assert_eq!(response.throttle_time_ms, 12);
         assert_eq!(response.topics[0].name, "orders");
+        assert_eq!(response.topics[0].partitions[0].partition_index, 0);
+        assert_eq!(response.topics[0].partitions[0].error_code, 0);
+        assert!(decoder.is_empty());
+    }
+
+    #[test]
+    fn encodes_offset_commit_v10_request_with_topic_uuid() {
+        let request = OffsetCommitRequestV10 {
+            correlation_id: 37,
+            client_id: Some("kafrust".to_owned()),
+            group_id: "orders-group".to_owned(),
+            generation_id_or_member_epoch: 7,
+            member_id: "member-a".to_owned(),
+            group_instance_id: None,
+            topics: vec![OffsetCommitTopicV10 {
+                topic_id: [7; 16],
+                partitions: vec![OffsetCommitPartitionV10 {
+                    partition_index: 2,
+                    committed_offset: 42,
+                    committed_leader_epoch: 9,
+                    committed_metadata: Some("processed".to_owned()),
+                }],
+            }],
+        };
+
+        let encoded = request.encode().unwrap();
+        assert_eq!(&encoded[0..4], &[0, 8, 0, 10]);
+        let mut decoder = Decoder::new(&encoded[18..]);
+        assert_eq!(decoder.read_compact_string().unwrap(), "orders-group");
+        assert_eq!(decoder.read_i32().unwrap(), 7);
+        assert_eq!(decoder.read_compact_string().unwrap(), "member-a");
+        assert_eq!(decoder.read_compact_nullable_string().unwrap(), None);
+        let topics = decoder
+            .read_compact_array("offset commit topics", |decoder| {
+                let topic_id = decoder.read_uuid()?;
+                let partitions = decoder
+                    .read_compact_array("offset commit partitions", |decoder| {
+                        let partition_index = decoder.read_i32()?;
+                        let committed_offset = decoder.read_i64()?;
+                        let committed_leader_epoch = decoder.read_i32()?;
+                        let committed_metadata = decoder.read_compact_nullable_string()?;
+                        decoder.read_tagged_fields()?;
+                        Ok((
+                            partition_index,
+                            committed_offset,
+                            committed_leader_epoch,
+                            committed_metadata,
+                        ))
+                    })?
+                    .unwrap_or_default();
+                decoder.read_tagged_fields()?;
+                Ok((topic_id, partitions))
+            })
+            .unwrap()
+            .unwrap();
+        assert_eq!(topics[0].0, [7; 16]);
+        assert_eq!(topics[0].1[0].0, 2);
+        assert_eq!(topics[0].1[0].1, 42);
+        assert_eq!(topics[0].1[0].2, 9);
+        assert_eq!(topics[0].1[0].3, Some("processed".to_owned()));
+        decoder.read_tagged_fields().unwrap();
+        assert!(decoder.is_empty());
+    }
+
+    #[test]
+    fn decodes_offset_commit_v10_response_with_topic_uuid() {
+        let mut bytes = Encoder::new();
+        bytes.write_i32(12);
+        bytes
+            .write_compact_array(Some(&[()]), |encoder, ()| {
+                encoder.write_uuid(&[8; 16]);
+                encoder.write_compact_array(Some(&[()]), |encoder, ()| {
+                    encoder.write_i32(0);
+                    encoder.write_i16(0);
+                    encoder.write_empty_tagged_fields();
+                    Ok(())
+                })?;
+                encoder.write_empty_tagged_fields();
+                Ok(())
+            })
+            .unwrap();
+        bytes.write_empty_tagged_fields();
+
+        let bytes = bytes.into_bytes();
+        let mut decoder = Decoder::new(&bytes);
+        let response = OffsetCommitResponseV10::decode_body(&mut decoder).unwrap();
+        assert_eq!(response.throttle_time_ms, 12);
+        assert_eq!(response.topics[0].topic_id, [8; 16]);
         assert_eq!(response.topics[0].partitions[0].partition_index, 0);
         assert_eq!(response.topics[0].partitions[0].error_code, 0);
         assert!(decoder.is_empty());

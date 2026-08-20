@@ -82,6 +82,57 @@ impl ConsumerGroupHeartbeatRequestV0 {
     }
 }
 
+/// KIP-848 ConsumerGroupHeartbeat v1 request.
+///
+/// Version 1 keeps the v0 flexible wire shape and adds the nullable topic
+/// subscription regular expression introduced by KIP-848. It also lets the
+/// consumer provide a stable member ID, which is represented by the existing
+/// `member_id` field.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConsumerGroupHeartbeatRequestV1 {
+    pub correlation_id: i32,
+    pub client_id: Option<String>,
+    pub group_id: String,
+    pub member_id: String,
+    pub member_epoch: i32,
+    pub instance_id: Option<String>,
+    pub rack_id: Option<String>,
+    pub rebalance_timeout_ms: i32,
+    pub subscribed_topic_names: Option<Vec<String>>,
+    pub subscribed_topic_regex: Option<String>,
+    pub server_assignor: Option<String>,
+    pub topic_partitions: Option<Vec<ConsumerGroupHeartbeatTopicPartitions>>,
+}
+
+impl ConsumerGroupHeartbeatRequestV1 {
+    pub fn encode(&self) -> Result<Vec<u8>> {
+        let mut encoder = Encoder::new();
+        RequestHeader {
+            api_key: API_KEY,
+            api_version: 1,
+            correlation_id: self.correlation_id,
+            client_id: self.client_id.clone(),
+        }
+        .encode_v2(&mut encoder)?;
+        encoder.write_compact_string(&self.group_id)?;
+        encoder.write_compact_string(&self.member_id)?;
+        encoder.write_i32(self.member_epoch);
+        encoder.write_compact_nullable_string(self.instance_id.as_deref())?;
+        encoder.write_compact_nullable_string(self.rack_id.as_deref())?;
+        encoder.write_i32(self.rebalance_timeout_ms);
+        encoder.write_compact_array(self.subscribed_topic_names.as_deref(), |encoder, topic| {
+            encoder.write_compact_string(topic)
+        })?;
+        encoder.write_compact_nullable_string(self.subscribed_topic_regex.as_deref())?;
+        encoder.write_compact_nullable_string(self.server_assignor.as_deref())?;
+        encoder.write_compact_array(self.topic_partitions.as_deref(), |encoder, topic| {
+            topic.encode(encoder)
+        })?;
+        encoder.write_empty_tagged_fields();
+        Ok(encoder.into_bytes())
+    }
+}
+
 /// KIP-848 ConsumerGroupHeartbeat v0 response.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConsumerGroupHeartbeatResponseV0 {
@@ -130,11 +181,15 @@ impl ConsumerGroupHeartbeatResponseV0 {
     }
 }
 
+/// ConsumerGroupHeartbeat v1 has the same response wire shape as v0.
+pub type ConsumerGroupHeartbeatResponseV1 = ConsumerGroupHeartbeatResponseV0;
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::{
-        ConsumerGroupHeartbeatRequestV0, ConsumerGroupHeartbeatResponseV0,
+        ConsumerGroupHeartbeatRequestV0, ConsumerGroupHeartbeatRequestV1,
+        ConsumerGroupHeartbeatResponseV0, ConsumerGroupHeartbeatResponseV1,
         ConsumerGroupHeartbeatTopicPartitions,
     };
     use crate::codec::{Decoder, Encoder};
@@ -244,6 +299,51 @@ mod tests {
         let encoded = request.encode().unwrap();
         assert_eq!(&encoded[0..10], &[0, 68, 0, 0, 0, 0, 0, 1, 0xff, 0xff]);
         assert_eq!(encoded[10], 0); // request-header tagged fields
-        assert!(encoded.ends_with(&[0, 0, 0]));
+        assert!(encoded.ends_with(&[0, 0]));
+    }
+
+    #[test]
+    fn encodes_kip_848_heartbeat_v1_with_topic_regex() {
+        let request = ConsumerGroupHeartbeatRequestV1 {
+            correlation_id: 9,
+            client_id: Some("kafrust".to_owned()),
+            group_id: "orders-group".to_owned(),
+            member_id: "member-a".to_owned(),
+            member_epoch: 2,
+            instance_id: None,
+            rack_id: Some("rack-a".to_owned()),
+            rebalance_timeout_ms: 30_000,
+            subscribed_topic_names: None,
+            subscribed_topic_regex: Some("orders-.*".to_owned()),
+            server_assignor: Some("uniform".to_owned()),
+            topic_partitions: None,
+        };
+
+        let encoded = request.encode().unwrap();
+        assert_eq!(&encoded[0..4], &[0, 68, 0, 1]);
+        assert!(encoded.windows(9).any(|bytes| bytes == b"orders-.*"));
+        assert!(encoded.ends_with(&[0, 0]));
+    }
+
+    #[test]
+    fn v1_response_alias_decodes_the_v0_wire_shape() {
+        let mut bytes = Encoder::new();
+        bytes.write_i32(0);
+        bytes.write_i16(0);
+        bytes.write_compact_nullable_string(None).unwrap();
+        bytes
+            .write_compact_nullable_string(Some("member-a"))
+            .unwrap();
+        bytes.write_i32(3);
+        bytes.write_i32(2500);
+        bytes.write_i8(-1);
+        bytes.write_empty_tagged_fields();
+
+        let bytes = bytes.into_bytes();
+        let mut decoder = Decoder::new(&bytes);
+        let response = ConsumerGroupHeartbeatResponseV1::decode_body(&mut decoder).unwrap();
+        assert_eq!(response.member_epoch, 3);
+        assert!(response.assignment.is_none());
+        assert!(decoder.is_empty());
     }
 }

@@ -68,6 +68,44 @@ impl OffsetFetchRequestV9 {
     }
 }
 
+/// OffsetFetch v10 request using topic UUIDs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OffsetFetchRequestV10 {
+    pub correlation_id: i32,
+    pub client_id: Option<String>,
+    pub group_id: String,
+    pub member_id: Option<String>,
+    pub member_epoch: i32,
+    pub topics: Option<Vec<OffsetFetchTopicV10>>,
+    pub require_stable: bool,
+}
+
+impl OffsetFetchRequestV10 {
+    pub fn encode(&self) -> Result<Vec<u8>> {
+        let mut encoder = Encoder::new();
+        RequestHeader {
+            api_key: API_KEY,
+            api_version: 10,
+            correlation_id: self.correlation_id,
+            client_id: self.client_id.clone(),
+        }
+        .encode_v2(&mut encoder)?;
+        encoder.write_compact_array(Some(&[()]), |encoder, ()| {
+            encoder.write_compact_string(&self.group_id)?;
+            encoder.write_compact_nullable_string(self.member_id.as_deref())?;
+            encoder.write_i32(self.member_epoch);
+            encoder.write_compact_array(self.topics.as_deref(), |encoder, topic| {
+                topic.encode(encoder)
+            })?;
+            encoder.write_empty_tagged_fields();
+            Ok(())
+        })?;
+        encoder.write_bool(self.require_stable);
+        encoder.write_empty_tagged_fields();
+        Ok(encoder.into_bytes())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OffsetFetchTopic {
     pub name: String,
@@ -96,6 +134,27 @@ pub struct OffsetFetchTopicV9 {
 impl OffsetFetchTopicV9 {
     fn encode(&self, encoder: &mut Encoder) -> Result<()> {
         encoder.write_compact_string(&self.name)?;
+        encoder.write_compact_array(
+            Some(self.partition_indexes.as_slice()),
+            |encoder, partition| {
+                encoder.write_i32(*partition);
+                Ok(())
+            },
+        )?;
+        encoder.write_empty_tagged_fields();
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OffsetFetchTopicV10 {
+    pub topic_id: [u8; 16],
+    pub partition_indexes: Vec<i32>,
+}
+
+impl OffsetFetchTopicV10 {
+    fn encode(&self, encoder: &mut Encoder) -> Result<()> {
+        encoder.write_uuid(&self.topic_id);
         encoder.write_compact_array(
             Some(self.partition_indexes.as_slice()),
             |encoder, partition| {
@@ -180,6 +239,62 @@ impl OffsetFetchResponseV9 {
     }
 }
 
+/// OffsetFetch v10 response using topic UUIDs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OffsetFetchResponseV10 {
+    pub throttle_time_ms: i32,
+    pub groups: Vec<OffsetFetchGroupResponseV10>,
+}
+
+impl OffsetFetchResponseV10 {
+    pub fn decode_body(decoder: &mut Decoder<'_>) -> Result<Self> {
+        let throttle_time_ms = decoder.read_i32()?;
+        let groups = decoder
+            .read_compact_array("offset fetch group UUID responses", |decoder| {
+                let group_id = decoder.read_compact_string()?;
+                let topics = decoder
+                    .read_compact_array("offset fetch topic UUID responses", |decoder| {
+                        let topic_id = decoder.read_uuid()?;
+                        let partitions = decoder
+                            .read_compact_array("offset fetch partition responses", |decoder| {
+                                let partition_index = decoder.read_i32()?;
+                                let committed_offset = decoder.read_i64()?;
+                                let _committed_leader_epoch = decoder.read_i32()?;
+                                let metadata = decoder.read_compact_nullable_string()?;
+                                let error_code = decoder.read_i16()?;
+                                decoder.read_tagged_fields()?;
+                                Ok(OffsetFetchPartitionResponse {
+                                    partition_index,
+                                    committed_offset,
+                                    metadata,
+                                    error_code,
+                                })
+                            })?
+                            .unwrap_or_default();
+                        decoder.read_tagged_fields()?;
+                        Ok(OffsetFetchTopicResponseV10 {
+                            topic_id,
+                            partitions,
+                        })
+                    })?
+                    .unwrap_or_default();
+                let error_code = decoder.read_i16()?;
+                decoder.read_tagged_fields()?;
+                Ok(OffsetFetchGroupResponseV10 {
+                    group_id,
+                    topics,
+                    error_code,
+                })
+            })?
+            .unwrap_or_default();
+        decoder.read_tagged_fields()?;
+        Ok(Self {
+            throttle_time_ms,
+            groups,
+        })
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OffsetFetchGroupResponse {
     pub group_id: String,
@@ -188,8 +303,21 @@ pub struct OffsetFetchGroupResponse {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OffsetFetchGroupResponseV10 {
+    pub group_id: String,
+    pub topics: Vec<OffsetFetchTopicResponseV10>,
+    pub error_code: i16,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OffsetFetchTopicResponse {
     pub name: String,
+    pub partitions: Vec<OffsetFetchPartitionResponse>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OffsetFetchTopicResponseV10 {
+    pub topic_id: [u8; 16],
     pub partitions: Vec<OffsetFetchPartitionResponse>,
 }
 
@@ -230,9 +358,10 @@ impl OffsetFetchPartitionResponse {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::{
-        OffsetFetchGroupResponse, OffsetFetchPartitionResponse, OffsetFetchRequestV2,
-        OffsetFetchRequestV9, OffsetFetchResponseV2, OffsetFetchResponseV9, OffsetFetchTopic,
-        OffsetFetchTopicResponse, OffsetFetchTopicV9,
+        OffsetFetchGroupResponse, OffsetFetchPartitionResponse, OffsetFetchRequestV10,
+        OffsetFetchRequestV2, OffsetFetchRequestV9, OffsetFetchResponseV10, OffsetFetchResponseV2,
+        OffsetFetchResponseV9, OffsetFetchTopic, OffsetFetchTopicResponse, OffsetFetchTopicV10,
+        OffsetFetchTopicV9,
     };
     use crate::codec::{Decoder, Encoder};
 
@@ -421,6 +550,102 @@ mod tests {
                 }],
                 error_code: 0,
             }]
+        );
+        assert!(decoder.is_empty());
+    }
+
+    #[test]
+    fn encodes_offset_fetch_v10_request_with_topic_uuid() {
+        let request = OffsetFetchRequestV10 {
+            correlation_id: 41,
+            client_id: Some("kafrust".to_owned()),
+            group_id: "orders-group".to_owned(),
+            member_id: Some("member-a".to_owned()),
+            member_epoch: 7,
+            topics: Some(vec![OffsetFetchTopicV10 {
+                topic_id: [9; 16],
+                partition_indexes: vec![0, 1],
+            }]),
+            require_stable: true,
+        };
+
+        let encoded = request.encode().unwrap();
+        assert_eq!(&encoded[0..4], &[0, 9, 0, 10]);
+        let mut decoder = Decoder::new(&encoded[18..]);
+        let groups = decoder
+            .read_compact_array("offset fetch groups", |decoder| {
+                let group_id = decoder.read_compact_string()?;
+                let member_id = decoder.read_compact_nullable_string()?;
+                let member_epoch = decoder.read_i32()?;
+                let topics = decoder
+                    .read_compact_array("offset fetch topics", |decoder| {
+                        let topic_id = decoder.read_uuid()?;
+                        let partitions = decoder
+                            .read_compact_array("offset fetch partitions", |decoder| {
+                                decoder.read_i32()
+                            })?
+                            .unwrap_or_default();
+                        decoder.read_tagged_fields()?;
+                        Ok((topic_id, partitions))
+                    })?
+                    .unwrap_or_default();
+                decoder.read_tagged_fields()?;
+                Ok((group_id, member_id, member_epoch, topics))
+            })
+            .unwrap()
+            .unwrap();
+        assert_eq!(groups[0].0, "orders-group");
+        assert_eq!(groups[0].1, Some("member-a".to_owned()));
+        assert_eq!(groups[0].2, 7);
+        assert_eq!(groups[0].3[0].0, [9; 16]);
+        assert_eq!(groups[0].3[0].1, vec![0, 1]);
+        assert!(decoder.read_bool().unwrap());
+        decoder.read_tagged_fields().unwrap();
+        assert!(decoder.is_empty());
+    }
+
+    #[test]
+    fn decodes_offset_fetch_v10_response_with_topic_uuid() {
+        let mut bytes = Encoder::new();
+        bytes.write_i32(12);
+        bytes
+            .write_compact_array(Some(&[()]), |encoder, ()| {
+                encoder.write_compact_string("orders-group")?;
+                encoder.write_compact_array(Some(&[()]), |encoder, ()| {
+                    encoder.write_uuid(&[10; 16]);
+                    encoder.write_compact_array(Some(&[()]), |encoder, ()| {
+                        encoder.write_i32(0);
+                        encoder.write_i64(42);
+                        encoder.write_i32(9);
+                        encoder.write_compact_nullable_string(Some("processed"))?;
+                        encoder.write_i16(0);
+                        encoder.write_empty_tagged_fields();
+                        Ok(())
+                    })?;
+                    encoder.write_empty_tagged_fields();
+                    Ok(())
+                })?;
+                encoder.write_i16(0);
+                encoder.write_empty_tagged_fields();
+                Ok(())
+            })
+            .unwrap();
+        bytes.write_empty_tagged_fields();
+
+        let bytes = bytes.into_bytes();
+        let mut decoder = Decoder::new(&bytes);
+        let response = OffsetFetchResponseV10::decode_body(&mut decoder).unwrap();
+        assert_eq!(response.throttle_time_ms, 12);
+        assert_eq!(response.groups[0].group_id, "orders-group");
+        assert_eq!(response.groups[0].topics[0].topic_id, [10; 16]);
+        assert_eq!(
+            response.groups[0].topics[0].partitions[0],
+            OffsetFetchPartitionResponse {
+                partition_index: 0,
+                committed_offset: 42,
+                metadata: Some("processed".to_owned()),
+                error_code: 0,
+            }
         );
         assert!(decoder.is_empty());
     }

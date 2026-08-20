@@ -48,16 +48,18 @@ client paths:
 - `IncrementalAlterConfigs v0`
 - `FindCoordinator v1`
 - `Produce v2` MessageSet and `Produce v3` RecordBatch paths
-- `Fetch v2`, `Fetch v4`, and non-flexible `Fetch v11` request/response
-  decoding for MessageSet and RecordBatch records, including rack IDs and
-  preferred read replicas in v11
+- `Fetch v2`, `Fetch v4`, non-flexible `Fetch v11`, flexible `Fetch v12`, and
+  topic-UUID `Fetch v13-v18` request/response decoding for MessageSet and
+  RecordBatch records, including rack IDs and preferred read replicas
 - `JoinGroup v2` and `JoinGroup v5`
 - `SyncGroup v2` and `SyncGroup v3`
 - `Heartbeat v2` and `Heartbeat v3`
-- `ConsumerGroupHeartbeat v0` (KIP-848 flexible protocol foundation)
+- `ConsumerGroupHeartbeat v0` and `v1` (KIP-848 flexible protocol, including
+  topic-regex subscriptions)
 - `LeaveGroup v3`
-- `OffsetFetch v2`
-- `OffsetCommit v2` and `OffsetCommit v7`
+- `OffsetFetch v2`, `OffsetFetch v9`, and topic-UUID `OffsetFetch v10`
+- `OffsetCommit v2`, `OffsetCommit v7`, `OffsetCommit v9`, and topic-UUID
+  `OffsetCommit v10`
 - `SaslHandshake v1`
 - `SaslAuthenticate v0`
 - `InitProducerId v0`, `AddPartitionsToTxn v0`, `AddOffsetsToTxn v0`,

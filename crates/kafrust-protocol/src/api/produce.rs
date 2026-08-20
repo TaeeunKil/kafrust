@@ -1,4 +1,4 @@
-use crate::codec::{Decoder, Encoder};
+use crate::codec::{DecodeLimits, Decoder, Encoder};
 use crate::error::{Error, Result};
 use crate::header::RequestHeader;
 use crate::record_batch::{compress_record_batch_records, RecordBatchCompression};
@@ -524,6 +524,8 @@ pub struct ProduceResponseV7 {
 pub struct ProduceResponseV9 {
     pub responses: Vec<ProduceTopicResponseV9>,
     pub throttle_time_ms: i32,
+    /// Broker endpoints advertised by the v10+ tagged response field.
+    pub node_endpoints: Vec<ProduceNodeEndpointV10>,
 }
 
 /// Flexible Produce response used by Kafka API versions 11 and newer.
@@ -537,6 +539,8 @@ pub type ProduceResponseV12 = ProduceResponseV9;
 pub struct ProduceResponseV13 {
     pub responses: Vec<ProduceTopicResponseV13>,
     pub throttle_time_ms: i32,
+    /// Broker endpoints advertised by the v10+ tagged response field.
+    pub node_endpoints: Vec<ProduceNodeEndpointV10>,
 }
 
 impl ProduceResponseV13 {
@@ -545,10 +549,15 @@ impl ProduceResponseV13 {
             .read_compact_array("produce responses", ProduceTopicResponseV13::decode)?
             .unwrap_or_default();
         let throttle_time_ms = decoder.read_i32()?;
-        decoder.read_tagged_fields()?;
+        let tagged_fields = decoder.read_tagged_fields()?;
+        let node_endpoints = tagged_field_data(&tagged_fields, 0)
+            .map(|data| decode_produce_node_endpoints(data, decoder.limits()))
+            .transpose()?
+            .unwrap_or_default();
         Ok(Self {
             responses,
             throttle_time_ms,
+            node_endpoints,
         })
     }
 }
@@ -557,6 +566,22 @@ impl ProduceResponseV13 {
 pub struct ProduceTopicResponseV13 {
     pub topic_id: [u8; 16],
     pub partitions: Vec<ProducePartitionResponseV9>,
+}
+
+/// The current partition leader advertised by Produce response v10 and newer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProduceLeaderIdAndEpochV10 {
+    pub leader_id: i32,
+    pub leader_epoch: i32,
+}
+
+/// A broker endpoint advertised by Produce response v10 and newer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProduceNodeEndpointV10 {
+    pub node_id: i32,
+    pub host: String,
+    pub port: i32,
+    pub rack: Option<String>,
 }
 
 impl ProduceTopicResponseV13 {
@@ -582,12 +607,46 @@ impl ProduceResponseV9 {
             .read_compact_array("produce responses", ProduceTopicResponseV9::decode)?
             .unwrap_or_default();
         let throttle_time_ms = decoder.read_i32()?;
-        decoder.read_tagged_fields()?;
+        let tagged_fields = decoder.read_tagged_fields()?;
+        let node_endpoints = tagged_field_data(&tagged_fields, 0)
+            .map(|data| decode_produce_node_endpoints(data, decoder.limits()))
+            .transpose()?
+            .unwrap_or_default();
         Ok(Self {
             responses,
             throttle_time_ms,
+            node_endpoints,
         })
     }
+}
+
+fn tagged_field_data(fields: &[crate::codec::TaggedField], tag: u32) -> Option<&[u8]> {
+    fields
+        .iter()
+        .find(|field| field.tag == tag)
+        .map(|field| field.data.as_slice())
+}
+
+fn decode_produce_node_endpoints(
+    data: &[u8],
+    limits: DecodeLimits,
+) -> Result<Vec<ProduceNodeEndpointV10>> {
+    let mut decoder = Decoder::with_limits(data, limits);
+    Ok(decoder
+        .read_compact_array("produce node endpoints", |decoder| {
+            let node_id = decoder.read_i32()?;
+            let host = decoder.read_compact_string()?;
+            let port = decoder.read_i32()?;
+            let rack = decoder.read_compact_nullable_string()?;
+            decoder.read_tagged_fields()?;
+            Ok(ProduceNodeEndpointV10 {
+                node_id,
+                host,
+                port,
+                rack,
+            })
+        })?
+        .unwrap_or_default())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -619,6 +678,8 @@ pub struct ProducePartitionResponseV9 {
     pub log_start_offset: i64,
     pub record_errors: Vec<ProduceRecordErrorV9>,
     pub error_message: Option<String>,
+    /// The broker's current leader hint, when present in the v10+ tag set.
+    pub current_leader: Option<ProduceLeaderIdAndEpochV10>,
 }
 
 impl ProducePartitionResponseV9 {
@@ -632,7 +693,10 @@ impl ProducePartitionResponseV9 {
             .read_compact_array("produce record errors", ProduceRecordErrorV9::decode)?
             .unwrap_or_default();
         let error_message = decoder.read_compact_nullable_string()?;
-        decoder.read_tagged_fields()?;
+        let tagged_fields = decoder.read_tagged_fields()?;
+        let current_leader = tagged_field_data(&tagged_fields, 0)
+            .map(|data| decode_produce_current_leader(data, decoder.limits()))
+            .transpose()?;
         Ok(Self {
             partition_index,
             error_code,
@@ -641,8 +705,23 @@ impl ProducePartitionResponseV9 {
             log_start_offset,
             record_errors,
             error_message,
+            current_leader,
         })
     }
+}
+
+fn decode_produce_current_leader(
+    data: &[u8],
+    limits: DecodeLimits,
+) -> Result<ProduceLeaderIdAndEpochV10> {
+    let mut decoder = Decoder::with_limits(data, limits);
+    let leader_id = decoder.read_i32()?;
+    let leader_epoch = decoder.read_i32()?;
+    decoder.read_tagged_fields()?;
+    Ok(ProduceLeaderIdAndEpochV10 {
+        leader_id,
+        leader_epoch,
+    })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -898,11 +977,11 @@ mod tests {
         encode_record_batch_set_with_compression,
         encode_record_batch_set_with_compression_and_identity,
         encode_record_batch_set_with_compression_identity_and_transaction, encoded_message_set_len,
-        encoded_record_batch_set_len, MessageSetMessage, ProducePartitionV2, ProducePartitionV3,
-        ProduceRequestV11, ProduceRequestV12, ProduceRequestV13, ProduceRequestV2,
-        ProduceRequestV3, ProduceRequestV7, ProduceRequestV9, ProduceResponseV13,
-        ProduceResponseV2, ProduceResponseV7, ProduceResponseV9, ProduceTopicV13, ProduceTopicV2,
-        ProduceTopicV3, RecordBatchIdentity, RecordBatchMessage,
+        encoded_record_batch_set_len, MessageSetMessage, ProduceLeaderIdAndEpochV10,
+        ProducePartitionV2, ProducePartitionV3, ProduceRequestV11, ProduceRequestV12,
+        ProduceRequestV13, ProduceRequestV2, ProduceRequestV3, ProduceRequestV7, ProduceRequestV9,
+        ProduceResponseV13, ProduceResponseV2, ProduceResponseV7, ProduceResponseV9,
+        ProduceTopicV13, ProduceTopicV2, ProduceTopicV3, RecordBatchIdentity, RecordBatchMessage,
     };
     use crate::codec::{DecodeLimits, Decoder};
     use crate::record_batch::RecordBatchCompression;
@@ -1487,7 +1566,15 @@ mod tests {
                     encoder.write_i64(7);
                     encoder.write_unsigned_varint(1);
                     encoder.write_compact_nullable_string(None)?;
-                    encoder.write_empty_tagged_fields();
+                    let mut current_leader = Encoder::new();
+                    current_leader.write_i32(4);
+                    current_leader.write_i32(12);
+                    current_leader.write_empty_tagged_fields();
+                    let current_leader = current_leader.into_bytes();
+                    encoder.write_unsigned_varint(1);
+                    encoder.write_unsigned_varint(0);
+                    encoder.write_unsigned_varint(u32::try_from(current_leader.len()).unwrap());
+                    encoder.write_raw(&current_leader);
                     Ok(())
                 })?;
                 encoder.write_empty_tagged_fields();
@@ -1504,6 +1591,51 @@ mod tests {
         assert_eq!(response.responses[0].topic_id, [7; 16]);
         assert_eq!(response.responses[0].partitions[0].base_offset, 42);
         assert_eq!(response.responses[0].partitions[0].log_start_offset, 7);
+        assert_eq!(
+            response.responses[0].partitions[0].current_leader,
+            Some(ProduceLeaderIdAndEpochV10 {
+                leader_id: 4,
+                leader_epoch: 12,
+            })
+        );
+        assert!(response.node_endpoints.is_empty());
+        assert!(decoder.is_empty());
+    }
+
+    #[test]
+    fn decodes_produce_response_node_endpoints_from_tag_zero() {
+        let mut bytes = Encoder::new();
+        bytes
+            .write_compact_array::<()>(Some(&[]), |_, _| Ok(()))
+            .unwrap();
+        bytes.write_i32(0);
+
+        let mut endpoint = Encoder::new();
+        endpoint
+            .write_compact_array(Some(&[()]), |encoder, _| {
+                encoder.write_i32(4);
+                encoder.write_compact_string("broker-4")?;
+                encoder.write_i32(9_092);
+                encoder.write_compact_nullable_string(Some("rack-a"))?;
+                encoder.write_empty_tagged_fields();
+                Ok(())
+            })
+            .unwrap();
+        let endpoint = endpoint.into_bytes();
+        bytes.write_unsigned_varint(1);
+        bytes.write_unsigned_varint(0);
+        bytes.write_unsigned_varint(u32::try_from(endpoint.len()).unwrap());
+        bytes.write_raw(&endpoint);
+
+        let bytes = bytes.into_bytes();
+        let mut decoder = Decoder::new(&bytes);
+        let response = ProduceResponseV13::decode_body(&mut decoder).unwrap();
+
+        assert_eq!(response.node_endpoints.len(), 1);
+        assert_eq!(response.node_endpoints[0].node_id, 4);
+        assert_eq!(response.node_endpoints[0].host, "broker-4");
+        assert_eq!(response.node_endpoints[0].port, 9_092);
+        assert_eq!(response.node_endpoints[0].rack.as_deref(), Some("rack-a"));
         assert!(decoder.is_empty());
     }
 }
