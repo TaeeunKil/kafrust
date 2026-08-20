@@ -153,6 +153,9 @@ The same published workflow then processed 384 records over a 60-second
 two-member run, with each member accepting 192 records and all partition/offset
 pairs unique, in
 [run 32389641275](https://github.com/TaeeunKil/kafrust/actions/runs/32389641275).
+The metrics-enabled rerun also reported `consumed=192` and `in_flight=0` for
+each member, with no failed requests, in
+[run 32391918666](https://github.com/TaeeunKil/kafrust/actions/runs/32391918666).
 The forced member-loss profile then terminated the second member after both
 heartbeats were active; the surviving published member rebalanced to all six
 partitions and accepted one record from each in

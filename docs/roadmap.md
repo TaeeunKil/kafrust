@@ -232,6 +232,9 @@ coverage toward a release candidate that can be qualified in staging.
   A two-cycle same-group churn profile also passed: the rejoined peer took
   over all six partitions after the second forced loss, with 12 unique offsets,
   in [`32391027028`](https://github.com/TaeeunKil/kafrust/actions/runs/32391027028).
+  The metrics-enabled 60-second published soak also matched each member's
+  `consumed` count to its 192 accepted records and reached `in_flight=0` before
+  close in [`32391918666`](https://github.com/TaeeunKil/kafrust/actions/runs/32391918666).
   Higher-cycle churn, longer ownership, and backpressure qualification remain
   separate 1.0 gates.
 - Stable `ShareGroupDescribe` v1 (API key 77) is now implemented through the

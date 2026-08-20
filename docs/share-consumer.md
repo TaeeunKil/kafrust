@@ -92,6 +92,11 @@ Current evidence:
   records; the workflow verified all 384 records, exact per-partition counts,
   and global `(partition, offset)` uniqueness in
   [run 32389641275](https://github.com/TaeeunKil/kafrust/actions/runs/32389641275).
+- The metrics-enabled version of that published 60-second gate passed with
+  the same 384-record reconciliation. Each member reported `consumed=192`,
+  `in_flight=0`, and no failed requests; the observed retry counters were 5
+  and 4 during normal multi-member coordination in
+  [run 32391918666](https://github.com/TaeeunKil/kafrust/actions/runs/32391918666).
 - A published member-loss gate then force-terminated member 2 after both
   heartbeat tasks were active. The surviving member rebalanced to all six
   partitions and accepted one record from each while member 2 produced no
@@ -139,9 +144,11 @@ lifecycle, three-broker leader movement, repeated coordinator churn within one
 long-running process, bounded acknowledgement progress, bounded two-member
 partition ownership, published-artifact runtime/soak behavior on one
 single-node profile, and live ambiguous acknowledgement reconciliation. It
-does not prove long-running multi-broker ownership, higher-cycle dynamic
-assignment/member-loss/rebalance behavior, broad published-artifact coverage,
-or production readiness.
+also proves that the bounded published multi-member run's consumed-record
+counter matched accepted records and that all request connections drained
+before close. It does not prove long-running multi-broker ownership,
+higher-cycle dynamic assignment/member-loss/rebalance behavior, broad
+published-artifact coverage, or production readiness.
 
 ## Basic Usage
 
