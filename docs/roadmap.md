@@ -2329,6 +2329,9 @@ Implemented evidence:
   claim. The manual
   `.github/workflows/live-list-config-resources.yml` workflow checks the v1
   capability and a real Admin roundtrip on Kafka 4.1.0, 4.2.0, or 4.3.1.
+  The Kafka 3.9.1 v0 client-metrics filter path also passed in
+  [`32342680037`](https://github.com/TaeeunKil/kafrust/actions/runs/32342680037);
+  published-artifact evidence remains open for both version branches.
 
 - Kafka `DescribeCluster` API 60 v0/v1 is now implemented through the typed
   protocol, low-level `Client`, and an opt-in `AdminClient` path. The result
