@@ -64,8 +64,18 @@ open.
 The published secure multi-broker soak workflow now defaults to the current
 `0.3.0` artifact, Kafka 4.3.1, simultaneous broker loss, and a 600-second
 campaign, and it runs on a weekly schedule as well as manually. The workflow
-configuration is in place; a passing scheduled result is still required before
-this closes the longer secured-soak evidence gate.
+configuration is in place; recurring scheduled evidence remains required for
+the longer secured-soak campaign.
+
+The same secured simultaneous-loss campaign passed manually from a fresh
+published `kafrust 0.3.1` project in
+[`32345082487`](https://github.com/TaeeunKil/kafrust/actions/runs/32345082487).
+The Kafka 4.3.1 SASL_SSL/SCRAM run lasted 600 seconds, processed 19,667,500
+records across three replicated partitions, recorded 263 operation errors, 6
+failed requests, and 9 retries, and ended with `recovered=true` plus zero final
+in-flight or buffered records. This closes the current published secured
+simultaneous-loss evidence slice; recurring scheduled evidence, unclean-election
+data loss, production SLOs, and service-canary evidence remain separate gates.
 
 The verification-hardening slice now includes a standalone pure-Rust fuzz
 workspace with ten libFuzzer targets covering primitive/flexible decoding,

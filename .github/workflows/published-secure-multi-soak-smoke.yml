@@ -6,7 +6,7 @@ on:
       kafrust_version:
         description: "Published kafrust version to qualify from crates.io"
         required: true
-        default: "0.3.0"
+        default: "0.3.1"
       kafka_version:
         description: "Apache Kafka broker version"
         required: true
@@ -47,14 +47,14 @@ env:
   KAFRUST_SOAK_SECONDS: ${{ inputs.duration_seconds || '600' }}
   KAFRUST_OUTAGE_SECONDS: ${{ inputs.outage_seconds || '10' }}
   KAFRUST_FAULT_MODE: ${{ inputs.fault_mode || 'simultaneous' }}
-  KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version || '0.3.0' }}
+  KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version || '0.3.1' }}
   KAFRUST_KAFKA_VERSION: ${{ inputs.kafka_version || '4.3.1' }}
   KAFRUST_SOAK_BATCH_SIZE: "100"
   KAFRUST_SOAK_PAYLOAD_BYTES: "1024"
 
 jobs:
   published-secure-multi-soak:
-    name: Published kafrust ${{ inputs.kafrust_version || '0.3.0' }} Kafka ${{ inputs.kafka_version || '4.3.1' }} secure ${{ inputs.fault_mode || 'simultaneous' }} multi-broker restart
+    name: Published kafrust ${{ inputs.kafrust_version || '0.3.1' }} Kafka ${{ inputs.kafka_version || '4.3.1' }} secure ${{ inputs.fault_mode || 'simultaneous' }} multi-broker restart
     runs-on: ubuntu-latest
     timeout-minutes: 35
 
@@ -148,7 +148,7 @@ jobs:
 
       - name: Create fresh external project
         env:
-          KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version || '0.3.0' }}
+          KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version || '0.3.1' }}
         run: |
           project_dir="$RUNNER_TEMP/kafrust-published-secure-multi-soak-smoke"
           cargo new --bin "$project_dir"
@@ -186,7 +186,7 @@ jobs:
       - name: Verify published dependency version
         run: |
           grep -A1 -q 'name = "kafrust"' "$RUNNER_TEMP/kafrust-published-secure-multi-soak-smoke/Cargo.lock"
-          grep -A1 -q "version = \"${{ inputs.kafrust_version || '0.3.0' }}\"" "$RUNNER_TEMP/kafrust-published-secure-multi-soak-smoke/Cargo.lock"
+          grep -A1 -q "version = \"${{ inputs.kafrust_version || '0.3.1' }}\"" "$RUNNER_TEMP/kafrust-published-secure-multi-soak-smoke/Cargo.lock"
 
       - name: Upload published secure soak result
         uses: actions/upload-artifact@v6
