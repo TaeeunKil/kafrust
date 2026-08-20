@@ -124,6 +124,7 @@ jobs:
             -e KAFKA_SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS=2 \
             -e KAFKA_SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS=1000 \
             -e KAFKA_CONNECTIONS_MAX_REAUTH_MS=10000 \
+            -e KAFKA_LOG4J_LOGGERS=org.apache.kafka.common.security.authenticator=DEBUG,org.apache.kafka.common.network.KafkaChannel=DEBUG,kafka.network.SocketServer=DEBUG,kafka.server.KafkaApis=DEBUG \
             -e KAFKA_LISTENER_NAME_SASL__SSL_OAUTHBEARER_SASL_JAAS_CONFIG="org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;" \
             -e KAFKA_LISTENER_NAME_SASL__SSL_OAUTHBEARER_SASL_SERVER_CALLBACK_HANDLER_CLASS=org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallbackHandler \
             -e KAFKA_LISTENER_NAME_SASL__SSL_OAUTHBEARER_SASL_OAUTHBEARER_JWKS_ENDPOINT_URL=http://host.docker.internal:8090/jwks.json \
