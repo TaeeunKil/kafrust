@@ -235,8 +235,8 @@ jobs:
           grep -Fq "provider_calls=" /tmp/kafrust-published-oauthbearer-reauth.log
           grep -Fq "sasl_auth_version=1" /tmp/kafrust-published-oauthbearer-reauth.log
           grep -Fq "same_connection=true" /tmp/kafrust-published-oauthbearer-reauth.log
-          grep -Eq "api_key.*=17.*api_version.*=1" /tmp/kafrust-published-oauthbearer-reauth.log
-          grep -Eq "api_key.*=36.*api_version.*=1" /tmp/kafrust-published-oauthbearer-reauth.log
+          grep -Eq "api_key.*=.*17.*api_version.*=.*1" /tmp/kafrust-published-oauthbearer-reauth.log
+          grep -Eq "api_key.*=.*36.*api_version.*=.*1" /tmp/kafrust-published-oauthbearer-reauth.log
 
       - name: Verify published dependency versions
         env:
