@@ -1795,10 +1795,11 @@ The public API also supports an async token provider for new broker
 authentications. External provider-specific behavior remains unclaimed.
 - The low-level `Client` records the broker-advertised SASL session lifetime;
   provider-backed OAUTHBEARER re-authentication is covered by focused injected
-  tests and the signed OIDC live job above. OAUTHBEARER uses flexible
-  `SaslAuthenticate v2`, while PLAIN and SCRAM remain on `v1`; detached refresh
-  workers and provider-specific production OAuth/OIDC qualification remain
-  unclaimed.
+  tests and the published signed OIDC live job above. OAUTHBEARER uses
+  flexible `SaslAuthenticate v2` for initial authentication and `v1` for
+  same-connection re-authentication, while PLAIN and SCRAM remain on `v1`;
+  detached refresh workers and provider-specific production OAuth/OIDC
+  qualification remain unclaimed.
 
 ## Not Yet Claimed
 

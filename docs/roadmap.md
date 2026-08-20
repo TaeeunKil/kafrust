@@ -1352,11 +1352,12 @@ Evidence:
   `ClientConfig::request_timeout_ms` and return the typed
   `Error::OAuthBearerTokenTimeout` when the callback exceeds that limit.
 - Provider-backed OAUTHBEARER connections also refresh the token and send
-  flexible `SaslAuthenticate v2` again on the existing connection before
-  requests after half of the broker-advertised session lifetime has elapsed;
-  the focused client test covers this lifecycle.
-- `SaslAuthenticate v1` responses remain decoded for PLAIN and SCRAM, while
-  flexible `v2` responses are used for OAUTHBEARER. `Client::sasl_session_lifetime_ms`
+  `SaslAuthenticate v1` again on the existing connection before requests after
+  half of the broker-advertised session lifetime has elapsed; the focused
+  client test and published Kafka 3.7.2 gate cover this lifecycle.
+- `SaslAuthenticate v1` responses remain decoded for PLAIN and SCRAM and
+  provider-backed OAUTHBEARER re-authentication, while flexible `v2` is used
+  for OAUTHBEARER initial authentication. `Client::sasl_session_lifetime_ms`
   exposes the broker's re-authentication window. Provider-backed OAUTHBEARER
   connections use that window to re-authenticate on the existing connection
   before requests after half the lifetime; detached refresh workers and
@@ -1396,10 +1397,10 @@ Evidence:
 - The signed local OIDC/JWKS fixture passed Kafka's validator, the Java Kafka
   client, and kafrust static and provider-backed paths in the OIDC job
   [`31584760474`](https://github.com/TaeeunKil/kafrust/actions/runs/31584760474/job/94078116567).
-  OAUTHBEARER initial authentication and provider re-authentication use
-  flexible `SaslAuthenticate v2`; PLAIN and SCRAM remain on `v1`. Detached
-  refresh workers and external provider-specific OAuth/OIDC qualification
-  remain open.
+  OAUTHBEARER initial authentication uses flexible `SaslAuthenticate v2`,
+  while provider re-authentication uses `SaslAuthenticate v1`; PLAIN and SCRAM
+  remain on `v1`. Detached refresh workers and external provider-specific
+  OAuth/OIDC qualification remain open.
 
 Strategic role:
 
@@ -3029,7 +3030,8 @@ Implemented evidence:
   authorization identity (`n,,`) or an explicit identity (`n,a=<id>,`), keeps
   the bearer token out of `Debug` output, and is exposed through all high-level
   connection builders. OAUTHBEARER uses flexible `SaslAuthenticate v2` for
-  initial authentication and provider re-authentication, and sends Kafka's
+  initial authentication and `SaslAuthenticate v1` for provider
+  re-authentication, and sends Kafka's
   control-A acknowledgement after an error challenge. Injected broker tests
   cover handshake ordering, exact authentication bytes, and error challenge
   acknowledgement; the signed OIDC live job above adds Kafka 3.7.2 coverage.
