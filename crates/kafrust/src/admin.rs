@@ -784,8 +784,8 @@ impl AdminClient {
     pub async fn describe_features(&self) -> Result<FeatureMetadata> {
         let mut retry = 0;
         loop {
-            let mut client = match self.config.clone().connect().await {
-                Ok(client) => client,
+            let (broker_addr, mut client) = match self.connect_admin_bootstrap().await {
+                Ok(connection) => connection,
                 Err(error) if retry < self.max_retries && is_retryable_admin_read_error(&error) => {
                     retry += 1;
                     self.config.record_retry();
@@ -812,6 +812,7 @@ impl AdminClient {
                     client.broker_error(response.error_code, "describe Kafka features".to_owned())
                 );
             }
+            self.cache_admin_broker(broker_addr, client).await;
             return Ok(FeatureMetadata::from_protocol(response));
         }
     }
@@ -16325,6 +16326,27 @@ mod tests {
         admin.describe_cluster().await.unwrap();
         cloned.describe_cluster().await.unwrap();
 
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn reuses_admin_bootstrap_connection_for_sequential_feature_reads() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut connection, _) = listener.accept().await.unwrap();
+            let request = read_frame(&mut connection).await;
+            assert_eq!(&request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut connection, &api_versions_with_describe_cluster()).await;
+        });
+        let admin =
+            AdminClient::new(ClientConfig::new([addr.to_string()]).request_timeout_ms(1_000));
+
+        let first = admin.describe_features().await.unwrap();
+        let second = admin.clone().describe_features().await.unwrap();
+
+        assert_eq!(first, second);
+        assert_eq!(admin.broker_clients.len().await, 1);
         server.await.unwrap();
     }
 
