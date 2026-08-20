@@ -220,6 +220,14 @@ both packages, and the generated documentation pages now return HTTP 200:
 [`kafrust 0.3.4`](https://docs.rs/kafrust/0.3.4/kafrust/) and
 [`kafrust-protocol 0.3.4`](https://docs.rs/kafrust-protocol/0.3.4/kafrust_protocol/).
 
+The same published `DescribeCluster` workflow also verifies
+`AdminClient::describe_features` through ApiVersions v3. Kafka 3.7.2 returned
+one supported and one finalized feature at epoch 68 in
+[run 32406914244](https://github.com/TaeeunKil/kafrust/actions/runs/32406914244),
+and Kafka 4.3.1 returned one supported and six finalized features at epoch 80
+in [run 32406914237](https://github.com/TaeeunKil/kafrust/actions/runs/32406914237).
+Both published artifacts recorded `feature_metadata=true`.
+
 The `0.2.18` packages passed Cargo publish verification and both staged
 all-feature package-documentation builds on commit `373de00`. The matching
 `kafrust-protocol` and `kafrust` packages were published in that order; both

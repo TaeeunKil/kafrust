@@ -25,6 +25,11 @@ broker metadata, and Metadata fallback. The explicit controller path requires
 both generated docs.rs pages now return HTTP 200:
 [`kafrust 0.3.4`](https://docs.rs/kafrust/0.3.4/kafrust/) and
 [`kafrust-protocol 0.3.4`](https://docs.rs/kafrust-protocol/0.3.4/kafrust_protocol/).
+The same published workflow also verified `AdminClient::describe_features`
+through ApiVersions v3 in [`32406914244`](https://github.com/TaeeunKil/kafrust/actions/runs/32406914244)
+for Kafka 3.7.2 (`supported=1`, `finalized=1`, `epoch=68`) and
+[`32406914237`](https://github.com/TaeeunKil/kafrust/actions/runs/32406914237)
+for Kafka 4.3.1 (`supported=1`, `finalized=6`, `epoch=80`).
 
 `0.3.3` is now published on crates.io in protocol-first order. Its package
 verification passed after `kafrust-protocol 0.3.3` became available from the
@@ -2764,8 +2769,12 @@ Implemented evidence:
   the finalized-feature epoch, and the ZooKeeper-migration-ready flag.
   Focused protocol and Admin conversion tests pass, and the existing broker
   roundtrip smoke now exercises both the low-level v3 response and high-level
-  Admin method. Live matrix execution remains the qualification gate across
-  the declared Kafka versions.
+  Admin method. The published `kafrust 0.3.4` external gate now qualifies this
+  path on Kafka 3.7.2 and 4.3.1 in
+  [`32406914244`](https://github.com/TaeeunKil/kafrust/actions/runs/32406914244)
+  and [`32406914237`](https://github.com/TaeeunKil/kafrust/actions/runs/32406914237),
+  including the observed supported/finalized counts and finalized epochs.
+  Feature mutation, security, and broader version matrices remain open.
 - KRaft `UpdateFeatures` v0/v1 is now implemented through a flexible typed wire
   path, low-level `Client::update_features_v0/v1`, and controller-aware
   `AdminClient::update_features`. The Admin path prefers v1 and falls back to

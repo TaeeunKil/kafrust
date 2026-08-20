@@ -54,6 +54,14 @@ unique, and the final survivor reported all six partitions with no in-flight or
 failed requests. Higher-cycle churn, backpressure SLO, and full replacement
 compatibility remain open.
 
+The published `kafrust 0.3.4` `DescribeCluster` gate also qualifies the public
+`AdminClient::describe_features` read path through ApiVersions v3 on Kafka
+3.7.2 and 4.3.1 in [`32406914244`](https://github.com/TaeeunKil/kafrust/actions/runs/32406914244)
+and [`32406914237`](https://github.com/TaeeunKil/kafrust/actions/runs/32406914237).
+The external artifacts observed supported/finalized feature counts of `1/1`
+and `1/6`, with finalized epochs `68` and `80`, respectively. Feature mutation,
+security, and broader version matrices remain open.
+
 ## Module Visibility
 
 The crate also exposes public modules:
