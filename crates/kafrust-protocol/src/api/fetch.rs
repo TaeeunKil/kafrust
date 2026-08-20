@@ -131,7 +131,6 @@ impl FetchRequestV13 {
             client_id: self.client_id.clone(),
         }
         .encode_v2(&mut encoder)?;
-        write_cluster_id_tag(&mut encoder, self.cluster_id.as_deref())?;
         encoder.write_i32(self.replica_id);
         encoder.write_i32(self.max_wait_ms);
         encoder.write_i32(self.min_bytes);
@@ -146,7 +145,7 @@ impl FetchRequestV13 {
             topic.encode(encoder)
         })?;
         encoder.write_compact_string(&self.rack_id)?;
-        encoder.write_empty_tagged_fields();
+        write_cluster_id_tag(&mut encoder, self.cluster_id.as_deref())?;
         Ok(encoder.into_bytes())
     }
 }
@@ -230,11 +229,6 @@ impl FetchRequestV15 {
             client_id: self.client_id.clone(),
         }
         .encode_v2(&mut encoder)?;
-        write_fetch_request_tags(
-            &mut encoder,
-            self.cluster_id.as_deref(),
-            self.replica_state.as_ref(),
-        )?;
         encoder.write_i32(self.max_wait_ms);
         encoder.write_i32(self.min_bytes);
         encoder.write_i32(self.max_bytes);
@@ -248,7 +242,11 @@ impl FetchRequestV15 {
             topic.encode(encoder)
         })?;
         encoder.write_compact_string(&self.rack_id)?;
-        encoder.write_empty_tagged_fields();
+        write_fetch_request_tags(
+            &mut encoder,
+            self.cluster_id.as_deref(),
+            self.replica_state.as_ref(),
+        )?;
         Ok(encoder.into_bytes())
     }
 }
@@ -402,7 +400,6 @@ where
         client_id,
     }
     .encode_v2(&mut encoder)?;
-    write_fetch_request_tags(&mut encoder, cluster_id, replica_state)?;
     encoder.write_i32(max_wait_ms);
     encoder.write_i32(min_bytes);
     encoder.write_i32(max_bytes);
@@ -414,7 +411,7 @@ where
         topic.encode(encoder)
     })?;
     encoder.write_compact_string(rack_id)?;
-    encoder.write_empty_tagged_fields();
+    write_fetch_request_tags(&mut encoder, cluster_id, replica_state)?;
     Ok(encoder.into_bytes())
 }
 
@@ -1764,12 +1761,6 @@ mod tests {
             Some("kafrust")
         );
         assert!(decoder.read_tagged_fields().unwrap().is_empty());
-        let fields = decoder.read_tagged_fields().unwrap();
-        assert_eq!(fields.len(), 1);
-        let mut cluster_decoder = Decoder::new(&fields[0].data);
-        assert_eq!(fields[0].tag, 0);
-        assert_eq!(cluster_decoder.read_compact_string().unwrap(), "cluster-a");
-        assert!(cluster_decoder.is_empty());
         assert_eq!(decoder.read_i32().unwrap(), -1);
         assert_eq!(decoder.read_i32().unwrap(), 500);
         assert_eq!(decoder.read_i32().unwrap(), 1);
@@ -1790,7 +1781,12 @@ mod tests {
         assert!(decoder.read_tagged_fields().unwrap().is_empty());
         assert_eq!(decoder.read_unsigned_varint().unwrap(), 1);
         assert_eq!(decoder.read_compact_string().unwrap(), "rack-a");
-        assert!(decoder.read_tagged_fields().unwrap().is_empty());
+        let fields = decoder.read_tagged_fields().unwrap();
+        assert_eq!(fields.len(), 1);
+        let mut cluster_decoder = Decoder::new(&fields[0].data);
+        assert_eq!(fields[0].tag, 0);
+        assert_eq!(cluster_decoder.read_compact_string().unwrap(), "cluster-a");
+        assert!(cluster_decoder.is_empty());
         assert!(decoder.is_empty());
     }
 
@@ -1882,6 +1878,24 @@ mod tests {
 
         let bytes = request.encode().unwrap();
         assert_eq!(&bytes[0..4], &[0, 1, 0, 14]);
+        let mut decoder = Decoder::new(&bytes);
+        decoder.read_i16().unwrap();
+        decoder.read_i16().unwrap();
+        decoder.read_i32().unwrap();
+        decoder.read_nullable_string().unwrap();
+        assert!(decoder.read_tagged_fields().unwrap().is_empty());
+        assert_eq!(decoder.read_i32().unwrap(), -1);
+        assert_eq!(decoder.read_i32().unwrap(), 500);
+        assert_eq!(decoder.read_i32().unwrap(), 1);
+        assert_eq!(decoder.read_i32().unwrap(), 1_048_576);
+        assert_eq!(decoder.read_i8().unwrap(), 0);
+        assert_eq!(decoder.read_i32().unwrap(), 0);
+        assert_eq!(decoder.read_i32().unwrap(), -1);
+        assert_eq!(decoder.read_unsigned_varint().unwrap(), 1);
+        assert_eq!(decoder.read_unsigned_varint().unwrap(), 1);
+        assert!(decoder.read_compact_string().unwrap().is_empty());
+        assert!(decoder.read_tagged_fields().unwrap().is_empty());
+        assert!(decoder.is_empty());
     }
 
     #[test]
@@ -1915,15 +1929,6 @@ mod tests {
             Some("kafrust")
         );
         assert!(decoder.read_tagged_fields().unwrap().is_empty());
-        let fields = decoder.read_tagged_fields().unwrap();
-        assert_eq!(fields.len(), 2);
-        assert_eq!(fields[0].tag, 0);
-        assert_eq!(fields[1].tag, 1);
-        let mut cluster_decoder = Decoder::new(&fields[0].data);
-        assert_eq!(cluster_decoder.read_compact_string().unwrap(), "cluster-a");
-        let mut replica_decoder = Decoder::new(&fields[1].data);
-        assert_eq!(replica_decoder.read_i32().unwrap(), 4);
-        assert_eq!(replica_decoder.read_i64().unwrap(), 9);
         assert_eq!(decoder.read_i32().unwrap(), 500);
         assert_eq!(decoder.read_i32().unwrap(), 1);
         assert_eq!(decoder.read_i32().unwrap(), 1_048_576);
@@ -1933,7 +1938,15 @@ mod tests {
         assert_eq!(decoder.read_unsigned_varint().unwrap(), 1);
         assert_eq!(decoder.read_unsigned_varint().unwrap(), 1);
         assert!(decoder.read_compact_string().unwrap().is_empty());
-        assert!(decoder.read_tagged_fields().unwrap().is_empty());
+        let fields = decoder.read_tagged_fields().unwrap();
+        assert_eq!(fields.len(), 2);
+        assert_eq!(fields[0].tag, 0);
+        assert_eq!(fields[1].tag, 1);
+        let mut cluster_decoder = Decoder::new(&fields[0].data);
+        assert_eq!(cluster_decoder.read_compact_string().unwrap(), "cluster-a");
+        let mut replica_decoder = Decoder::new(&fields[1].data);
+        assert_eq!(replica_decoder.read_i32().unwrap(), 4);
+        assert_eq!(replica_decoder.read_i64().unwrap(), 9);
         assert!(decoder.is_empty());
     }
 
@@ -1995,7 +2008,6 @@ mod tests {
         decoder.read_i32().unwrap();
         decoder.read_nullable_string().unwrap();
         assert!(decoder.read_tagged_fields().unwrap().is_empty());
-        assert!(decoder.read_tagged_fields().unwrap().is_empty());
         for _ in 0..3 {
             decoder.read_i32().unwrap();
         }
@@ -2015,6 +2027,11 @@ mod tests {
         assert_eq!(fields.len(), 1);
         assert_eq!(fields[0].tag, 0);
         assert_eq!(fields[0].data, vec![8; 16]);
+        assert!(decoder.read_tagged_fields().unwrap().is_empty());
+        assert_eq!(decoder.read_unsigned_varint().unwrap(), 1);
+        assert!(decoder.read_compact_string().unwrap().is_empty());
+        assert!(decoder.read_tagged_fields().unwrap().is_empty());
+        assert!(decoder.is_empty());
     }
 
     #[test]
@@ -2054,7 +2071,6 @@ mod tests {
         decoder.read_i32().unwrap();
         decoder.read_nullable_string().unwrap();
         decoder.read_tagged_fields().unwrap();
-        decoder.read_tagged_fields().unwrap();
         for _ in 0..3 {
             decoder.read_i32().unwrap();
         }
@@ -2076,6 +2092,11 @@ mod tests {
         assert_eq!(fields[0].data, vec![10; 16]);
         assert_eq!(fields[1].tag, 1);
         assert_eq!(fields[1].data, 100_i64.to_be_bytes());
+        assert!(decoder.read_tagged_fields().unwrap().is_empty());
+        assert_eq!(decoder.read_unsigned_varint().unwrap(), 1);
+        assert!(decoder.read_compact_string().unwrap().is_empty());
+        assert!(decoder.read_tagged_fields().unwrap().is_empty());
+        assert!(decoder.is_empty());
     }
 
     #[test]
