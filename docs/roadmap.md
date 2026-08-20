@@ -29,8 +29,8 @@ included the typed Admin mutation ambiguity contract and its current-source
 response-drop qualification. The published `0.3.1` artifact has separate
 fresh-project evidence recorded below.
 
-The current-source `Live Kafka Smoke` matrix passed on commit `dc7446b` in
-[`32339508792`](https://github.com/TaeeunKil/kafrust/actions/runs/32339508792).
+The current-source `Live Kafka Smoke` matrix passed on commit `1aa18d0` in
+[`32382586220`](https://github.com/TaeeunKil/kafrust/actions/runs/32382586220).
 This run covered Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 profiles, plaintext,
 TLS, SASL/PLAIN, SASL_SSL/SCRAM, OAUTHBEARER, ACL authorization,
 multi-broker failover, transaction reconciliation, KIP-848 paths, and the
@@ -2446,8 +2446,10 @@ Implemented evidence:
   `GroupListing`. The low-level v1 method remains available for older callers.
   Protocol bytes and an injected Kafka-style v5 negotiation roundtrip pass.
   The live smoke gate now asserts v4 negotiation on Kafka 3.7.2 and v5
-  state/type-filter negotiation on Kafka 4.3.1; a successful workflow run is
-  still required before counting the modern path as released evidence.
+  state/type-filter negotiation on Kafka 4.3.1. Both assertions passed in the
+  complete current-source matrix [`32382586220`](https://github.com/TaeeunKil/kafrust/actions/runs/32382586220),
+  closing this live version-negotiation evidence slice; authorization and
+  long-duration coordinator-churn behavior remain separate gates.
 
 - Kafka API key 74 now preserves the Kafka version split: v0
   `ListClientMetricsResources` compatibility for Kafka 3.9-era brokers and v1
@@ -2457,9 +2459,11 @@ Implemented evidence:
   Client, and injected Admin fallback tests pass. The Kafka 4.3.1 live v1
   qualification passed in [`32342304005`](https://github.com/TaeeunKil/kafrust/actions/runs/32342304005),
   including the real Admin roundtrip and the opt-in DescribeConfigs v4 path.
-  A published-artifact check remains open before adding the v1 path to the
-  claim; a live v0 result is also required for the older-broker compatibility
-  claim. The manual
+  The published `0.3.3` artifact passed the Kafka 4.3.1 v1 branch in
+  [`32382623298`](https://github.com/TaeeunKil/kafrust/actions/runs/32382623298),
+  including fresh external-project resolution and lockfile verification. The
+  Kafka 3.9.1 v0 branch remains supported by the earlier published `0.3.1`
+  result. The manual
   `.github/workflows/live-list-config-resources.yml` workflow checks the v1
   capability and a real Admin roundtrip on Kafka 4.1.0, 4.2.0, or 4.3.1.
   The Kafka 3.9.1 v0 client-metrics filter path also passed in
