@@ -6,7 +6,7 @@ on:
       kafrust_version:
         description: "Published kafrust version to qualify from crates.io"
         required: true
-        default: "0.2.28"
+        default: "0.3.0"
       kafka_version:
         description: "Apache Kafka broker version"
         required: true
@@ -18,7 +18,7 @@ on:
       duration_seconds:
         description: "Soak duration before final drain (minimum 60)"
         required: true
-        default: "120"
+        default: "600"
       outage_seconds:
         description: "Broker 1 outage duration"
         required: true
@@ -26,11 +26,13 @@ on:
       fault_mode:
         description: "Fault mode: single broker or simultaneous brokers 1 and 2"
         required: true
-        default: "single"
+        default: "simultaneous"
         type: choice
         options:
           - single
           - simultaneous
+  schedule:
+    - cron: "47 4 * * 6"
 
 env:
   CARGO_TERM_COLOR: always
@@ -42,13 +44,17 @@ env:
   KAFRUST_TLS_SERVER_NAME: localhost
   KAFRUST_TLS_ROOT_CERT_DER_PATH: ${{ github.workspace }}/sasl-ssl/ca.der
   KAFRUST_TOPIC: kafrust-published-secure-multi-soak-${{ github.run_id }}
-  KAFRUST_SOAK_SECONDS: ${{ inputs.duration_seconds }}
+  KAFRUST_SOAK_SECONDS: ${{ inputs.duration_seconds || '600' }}
+  KAFRUST_OUTAGE_SECONDS: ${{ inputs.outage_seconds || '10' }}
+  KAFRUST_FAULT_MODE: ${{ inputs.fault_mode || 'simultaneous' }}
+  KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version || '0.3.0' }}
+  KAFRUST_KAFKA_VERSION: ${{ inputs.kafka_version || '4.3.1' }}
   KAFRUST_SOAK_BATCH_SIZE: "100"
   KAFRUST_SOAK_PAYLOAD_BYTES: "1024"
 
 jobs:
   published-secure-multi-soak:
-    name: Published kafrust ${{ inputs.kafrust_version }} Kafka ${{ inputs.kafka_version }} secure ${{ inputs.fault_mode }} multi-broker restart
+    name: Published kafrust ${{ inputs.kafrust_version || '0.3.0' }} Kafka ${{ inputs.kafka_version || '4.3.1' }} secure ${{ inputs.fault_mode || 'simultaneous' }} multi-broker restart
     runs-on: ubuntu-latest
     timeout-minutes: 35
 
@@ -84,10 +90,10 @@ jobs:
           EOF
           chmod 644 sasl-ssl/kafka_server_jaas.conf
 
-      - name: Start three-broker Kafka ${{ inputs.kafka_version }} with SASL_SSL SCRAM
+      - name: Start three-broker Kafka ${{ inputs.kafka_version || '4.3.1' }} with SASL_SSL SCRAM
         run: |
           docker network create kafrust-published-secure-multi-soak
-          cluster_id="$(docker run --rm apache/kafka:${{ inputs.kafka_version }} /opt/kafka/bin/kafka-storage.sh random-uuid)"
+          cluster_id="$(docker run --rm apache/kafka:${{ inputs.kafka_version || '4.3.1' }} /opt/kafka/bin/kafka-storage.sh random-uuid)"
           for node in 1 2 3; do
             external_port=$((22091 + node))
             docker run -d --name "kafrust-published-secure-multi-soak-${node}" \
@@ -116,7 +122,7 @@ jobs:
               -e KAFKA_SSL_KEY_CREDENTIALS=key-password \
               -e KAFKA_SSL_KEYSTORE_TYPE=PKCS12 \
               -e KAFKA_SSL_CLIENT_AUTH=none \
-              apache/kafka:${{ inputs.kafka_version }}
+              apache/kafka:${{ inputs.kafka_version || '4.3.1' }}
           done
 
       - name: Wait for Kafka cluster
@@ -142,7 +148,7 @@ jobs:
 
       - name: Create fresh external project
         env:
-          KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version }}
+          KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version || '0.3.0' }}
         run: |
           project_dir="$RUNNER_TEMP/kafrust-published-secure-multi-soak-smoke"
           cargo new --bin "$project_dir"
@@ -162,13 +168,13 @@ jobs:
           ) &
           soak_pid=$!
           sleep "$((KAFRUST_SOAK_SECONDS / 3))"
-          if [ "${{ inputs.fault_mode }}" = "simultaneous" ]; then
+          if [ "$KAFRUST_FAULT_MODE" = "simultaneous" ]; then
             docker stop -t 1 kafrust-published-secure-multi-soak-1 kafrust-published-secure-multi-soak-2
           else
             docker stop -t 1 kafrust-published-secure-multi-soak-1
           fi
-          sleep "${{ inputs.outage_seconds }}"
-          if [ "${{ inputs.fault_mode }}" = "simultaneous" ]; then
+          sleep "$KAFRUST_OUTAGE_SECONDS"
+          if [ "$KAFRUST_FAULT_MODE" = "simultaneous" ]; then
             docker start kafrust-published-secure-multi-soak-1 kafrust-published-secure-multi-soak-2
           else
             docker start kafrust-published-secure-multi-soak-1
@@ -180,7 +186,7 @@ jobs:
       - name: Verify published dependency version
         run: |
           grep -A1 -q 'name = "kafrust"' "$RUNNER_TEMP/kafrust-published-secure-multi-soak-smoke/Cargo.lock"
-          grep -A1 -q 'version = "${{ inputs.kafrust_version }}"' "$RUNNER_TEMP/kafrust-published-secure-multi-soak-smoke/Cargo.lock"
+          grep -A1 -q "version = \"${{ inputs.kafrust_version || '0.3.0' }}\"" "$RUNNER_TEMP/kafrust-published-secure-multi-soak-smoke/Cargo.lock"
 
       - name: Upload published secure soak result
         uses: actions/upload-artifact@v6

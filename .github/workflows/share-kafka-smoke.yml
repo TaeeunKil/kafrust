@@ -9,7 +9,9 @@ env:
   CARGO_TERM_COLOR: always
   KAFRUST_BOOTSTRAP_SERVERS: localhost:9092
   KAFRUST_SHARE_TOPIC: kafrust-share-smoke
+  KAFRUST_SHARE_STATE_TOPIC: kafrust-share-smoke
   KAFRUST_SHARE_GROUP_ID: kafrust-share-smoke-${{ github.run_id }}
+  KAFRUST_SHARE_STATE_GROUP_ID: kafrust-share-state-smoke-${{ github.run_id }}
   KAFRUST_SHARE_TEST_EXPIRY: "1"
 
 jobs:
@@ -89,6 +91,9 @@ jobs:
 
       - name: Run ShareGroup offset lifecycle live roundtrip
         run: cargo test -p kafrust --test broker_roundtrip share_group_offset_mutations_when_broker_is_configured -- --nocapture
+
+      - name: Run ShareGroup state lifecycle live roundtrip
+        run: cargo test -p kafrust --test broker_roundtrip share_group_state_lifecycle_when_broker_is_configured -- --nocapture
 
       - name: Dump Kafka logs
         if: failure()

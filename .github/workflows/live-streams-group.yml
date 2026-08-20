@@ -1,0 +1,77 @@
+name: Live Kafka Streams Group
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "23 4 * * 2"
+
+env:
+  CARGO_TERM_COLOR: always
+  KAFRUST_BOOTSTRAP_SERVERS: localhost:9092
+  KAFRUST_STREAMS_TOPIC: kafrust-streams-smoke
+  KAFRUST_STREAMS_GROUP_ID: kafrust-streams-smoke-${{ github.run_id }}
+  KAFRUST_STREAMS_PROCESS_ID: kafrust-streams-process-${{ github.run_id }}
+
+jobs:
+  streams-group:
+    name: Kafka 4.3.1 Streams group lifecycle
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.81.0"
+
+      - name: Start Kafka 4.3.1 with Streams groups enabled
+        run: |
+          docker run -d --name kafrust-streams-kafka \
+            -p 9092:9092 \
+            -e KAFKA_NODE_ID=1 \
+            -e KAFKA_PROCESS_ROLES=broker,controller \
+            -e KAFKA_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 \
+            -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092 \
+            -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+            -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
+            -e KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT \
+            -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@localhost:9093 \
+            -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
+            -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1 \
+            -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1 \
+            -e KAFKA_GROUP_COORDINATOR_REBALANCE_PROTOCOLS=classic,consumer,streams \
+            -e KAFKA_GROUP_STREAMS_HEARTBEAT_INTERVAL_MS=1000 \
+            -e KAFKA_GROUP_STREAMS_SESSION_TIMEOUT_MS=10000 \
+            -e KAFKA_GROUP_STREAMS_INITIAL_REBALANCE_DELAY_MS=0 \
+            apache/kafka:4.3.1
+
+      - name: Wait for Kafka
+        run: |
+          for attempt in {1..90}; do
+            if (echo > /dev/tcp/127.0.0.1/9092) >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs kafrust-streams-kafka
+          exit 1
+
+      - name: Create Streams source topic
+        run: |
+          docker exec kafrust-streams-kafka /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server localhost:9092 \
+            --create \
+            --if-not-exists \
+            --topic "$KAFRUST_STREAMS_TOPIC" \
+            --partitions 1 \
+            --replication-factor 1
+
+      - name: Run Streams group lifecycle smoke
+        run: cargo run -p kafrust --example streams_group_smoke
+
+      - name: Dump Kafka logs
+        if: failure()
+        run: docker logs kafrust-streams-kafka || true

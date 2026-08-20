@@ -6,38 +6,45 @@ on:
       kafrust_version:
         description: "Published kafrust version to execute from crates.io"
         required: true
-        default: "0.2.28"
+        default: "0.3.0"
       kafka_version:
         description: "Apache Kafka broker image version"
         required: true
-        default: "3.7.2"
+        default: "4.3.1"
       group_protocol:
         description: "Consumer group protocol: classic or consumer (KIP-848)"
         required: true
-        default: "classic"
+        default: "consumer"
       member_exit:
         description: "How the second member exits: normal LeaveGroup or abrupt connection drop"
         required: true
-        default: "leave"
+        default: "drop"
         type: choice
         options:
           - leave
           - drop
+      churn_cycles:
+        description: "Independent join/leave or drop cycles"
+        required: true
+        default: "10"
+  schedule:
+    - cron: "7 5 * * 2"
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   published-group-rebalance:
-    name: Published kafrust ${{ inputs.kafrust_version }} ${{ inputs.kafka_version }} ${{ inputs.group_protocol }} multi-member rebalance
+    name: Published kafrust ${{ inputs.kafrust_version || '0.3.0' }} ${{ inputs.kafka_version || '4.3.1' }} ${{ inputs.group_protocol || 'consumer' }} group churn
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
       KAFRUST_BOOTSTRAP_SERVERS: localhost:20092,localhost:20093,localhost:20094
       KAFRUST_TOPIC: kafrust-published-group-${{ github.run_id }}
       KAFRUST_GROUP_ID: kafrust-published-group-${{ github.run_id }}
-      KAFRUST_GROUP_PROTOCOL: ${{ inputs.group_protocol }}
-      KAFRUST_MEMBER_EXIT: ${{ inputs.member_exit }}
+      KAFRUST_GROUP_PROTOCOL: ${{ inputs.group_protocol || 'consumer' }}
+      KAFRUST_MEMBER_EXIT: ${{ inputs.member_exit || 'drop' }}
+      KAFRUST_GROUP_CHURN_CYCLES: ${{ inputs.churn_cycles || '10' }}
 
     steps:
       - name: Checkout
@@ -48,12 +55,12 @@ jobs:
         with:
           toolchain: "1.81.0"
 
-      - name: Start three-broker Kafka ${{ inputs.kafka_version }}
+      - name: Start three-broker Kafka ${{ inputs.kafka_version || '4.3.1' }}
         run: |
           docker network create kafrust-published-group
-          cluster_id="$(docker run --rm apache/kafka:${{ inputs.kafka_version }} /opt/kafka/bin/kafka-storage.sh random-uuid)"
+          cluster_id="$(docker run --rm apache/kafka:${{ inputs.kafka_version || '4.3.1' }} /opt/kafka/bin/kafka-storage.sh random-uuid)"
           consumer_group_config=()
-          if [ "${{ inputs.group_protocol }}" = "consumer" ]; then
+          if [ "$KAFRUST_GROUP_PROTOCOL" = "consumer" ]; then
             consumer_group_config=(
               -e KAFKA_GROUP_CONSUMER_MIN_SESSION_TIMEOUT_MS=6000
               -e KAFKA_GROUP_CONSUMER_SESSION_TIMEOUT_MS=6000
@@ -80,7 +87,7 @@ jobs:
               -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=2 \
               -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 \
               "${consumer_group_config[@]}" \
-              apache/kafka:${{ inputs.kafka_version }}
+              apache/kafka:${{ inputs.kafka_version || '4.3.1' }}
           done
 
       - name: Wait for Kafka cluster
@@ -107,7 +114,7 @@ jobs:
 
       - name: Create fresh external project
         env:
-          KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version }}
+          KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version || '0.3.0' }}
         run: |
           project_dir="$RUNNER_TEMP/kafrust-published-group-smoke"
           if [ "$project_dir" = "$GITHUB_WORKSPACE" ]; then
@@ -119,13 +126,13 @@ jobs:
           sed "s/__KAFRUST_VERSION__/$KAFRUST_PUBLISHED_VERSION/; s/__KAFRUST_FEATURES__/[]/" \
             .github/published-group-rebalance-smoke/Cargo.toml > "$project_dir/Cargo.toml"
 
-      - name: Run published multi-member rebalance
+      - name: Run published multi-member rebalance churn
         run: cargo run --manifest-path "$RUNNER_TEMP/kafrust-published-group-smoke/Cargo.toml"
 
       - name: Verify published dependency versions
         run: |
           grep -A1 -q 'name = "kafrust"' "$RUNNER_TEMP/kafrust-published-group-smoke/Cargo.lock"
-          grep -A1 -q "version = \"${{ inputs.kafrust_version }}\"" "$RUNNER_TEMP/kafrust-published-group-smoke/Cargo.lock"
+          grep -A1 -q "version = \"${{ inputs.kafrust_version || '0.3.0' }}\"" "$RUNNER_TEMP/kafrust-published-group-smoke/Cargo.lock"
 
       - name: Dump Kafka diagnostics
         if: failure()

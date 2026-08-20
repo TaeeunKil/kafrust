@@ -33,23 +33,26 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all --check
 
-      - name: Check build
-        run: cargo check --workspace --all-targets
+      - name: Check whitespace
+        run: git diff --check
 
-      - name: Check TLS feature build
-        run: cargo check -p kafrust --features tls --all-targets
+      - name: Check protocol API surface
+        run: python scripts/check_protocol_api_surface.py
+
+      - name: Check Apache schema metadata
+        run: python scripts/check_apache_schema_versions.py
+
+      - name: Test protocol audit scripts
+        run: python -m unittest scripts/test_check_apache_schema_versions.py
+
+      - name: Check build
+        run: cargo check --workspace --all-targets --all-features
 
       - name: Run clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
-
-      - name: Run TLS feature clippy
-        run: cargo clippy -p kafrust --features tls --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
       - name: Run tests
-        run: cargo test --workspace --all-targets
+        run: cargo test --workspace --all-features
 
-      - name: Run kafrust doc tests
-        run: cargo test -p kafrust --doc
-
-      - name: Run TLS feature tests
-        run: cargo test -p kafrust --features tls --all-targets
+      - name: Build documentation
+        run: cargo doc --workspace --all-features --no-deps

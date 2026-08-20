@@ -1,0 +1,191 @@
+name: Live Kafka Share Group State Failover
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "37 4 * * 1"
+
+env:
+  CARGO_TERM_COLOR: always
+  KAFRUST_SHARE_STATE_TOPIC: kafrust-share-state-failover-${{ github.run_id }}
+  KAFRUST_SHARE_STATE_GROUP_ID: kafrust-share-state-failover-group-${{ github.run_id }}
+  KAFRUST_SHARE_STATE_PARTITION: "0"
+
+jobs:
+  share-state-failover:
+    name: Kafka 4.3.1 replicated Share Group State failover
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.81.0"
+
+      - name: Start three-broker Kafka 4.3.1 with replicated share state
+        run: |
+          docker network create kafrust-share-state-failover
+          cluster_id="$(docker run --rm apache/kafka:4.3.1 /opt/kafka/bin/kafka-storage.sh random-uuid)"
+          for node in 1 2 3; do
+            external_port=$((19091 + node))
+            docker run -d --name "kafrust-share-state-${node}" \
+              --network kafrust-share-state-failover \
+              -p "${external_port}:9092" \
+              -e KAFKA_CLUSTER_ID="$cluster_id" \
+              -e KAFKA_NODE_ID="$node" \
+              -e KAFKA_PROCESS_ROLES=broker,controller \
+              -e KAFKA_LISTENERS=INTERNAL://:29092,EXTERNAL://:9092,CONTROLLER://:9093 \
+              -e KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafrust-share-state-${node}:29092,EXTERNAL://localhost:${external_port} \
+              -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+              -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT \
+              -e KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL \
+              -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafrust-share-state-1:9093,2@kafrust-share-state-2:9093,3@kafrust-share-state-3:9093 \
+              -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=3 \
+              -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=3 \
+              -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=2 \
+              -e KAFKA_SHARE_COORDINATOR_STATE_TOPIC_REPLICATION_FACTOR=3 \
+              -e KAFKA_SHARE_COORDINATOR_STATE_TOPIC_MIN_ISR=2 \
+              -e KAFKA_SHARE_RENEW_ACKNOWLEDGE_ENABLE=true \
+              -e KAFKA_GROUP_COORDINATOR_REBALANCE_PROTOCOLS=classic,consumer,share \
+              -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 \
+              apache/kafka:4.3.1
+          done
+
+      - name: Wait for Kafka cluster
+        run: |
+          for attempt in {1..120}; do
+            if docker exec kafrust-share-state-1 /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server kafrust-share-state-1:29092 >/tmp/kafrust-share-state-probe.log 2>&1; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/kafrust-share-state-probe.log || true
+          docker logs kafrust-share-state-1
+          docker logs kafrust-share-state-2
+          docker logs kafrust-share-state-3
+          exit 1
+
+      - name: Create replicated user topic for share state
+        run: |
+          docker exec kafrust-share-state-1 /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server kafrust-share-state-1:29092 \
+            --create --if-not-exists --topic "$KAFRUST_SHARE_STATE_TOPIC" \
+            --partitions 6 --replication-factor 3
+
+      - name: Write replicated Share Group State before leader loss
+        env:
+          KAFRUST_SHARE_STATE_PHASE: write
+          KAFRUST_BOOTSTRAP_SERVERS: localhost:19092,localhost:19093,localhost:19094
+        run: cargo test -p kafrust --test broker_roundtrip share_group_state_replica_failover_when_broker_is_configured -- --nocapture
+
+      - name: Verify replicated internal state and locate share coordinator
+        run: |
+          for attempt in {1..60}; do
+            state_topic="$(docker exec kafrust-share-state-1 /opt/kafka/bin/kafka-topics.sh \
+              --bootstrap-server kafrust-share-state-1:29092 --describe \
+              --topic __share_group_state 2>/dev/null || true)"
+            printf '%s\n' "$state_topic"
+            if printf '%s\n' "$state_topic" | grep -q 'ReplicationFactor: 3'; then
+              isr="$(printf '%s\n' "$state_topic" | sed -n 's/.*Isr: //p' | tr -d ' ' | head -n 1)"
+              state_replicated=true
+              for broker_id in 1 2 3; do
+                case ",$isr," in
+                  *,${broker_id},*) ;;
+                  *) state_replicated=false; break ;;
+                esac
+              done
+              if [ -n "$isr" ] && [ "$state_replicated" = true ]; then
+                break
+              fi
+            fi
+            sleep 2
+          done
+          test -n "$state_topic"
+          printf '%s\n' "$state_topic" | grep -q 'ReplicationFactor: 3'
+          isr="$(printf '%s\n' "$state_topic" | sed -n 's/.*Isr: //p' | tr -d ' ' | head -n 1)"
+          case ",$isr," in *,1,* ) ;; *) echo "state topic is missing broker 1 from ISR: $isr"; exit 1;; esac
+          case ",$isr," in *,2,* ) ;; *) echo "state topic is missing broker 2 from ISR: $isr"; exit 1;; esac
+          case ",$isr," in *,3,* ) ;; *) echo "state topic is missing broker 3 from ISR: $isr"; exit 1;; esac
+
+          for attempt in {1..60}; do
+            coordinator_output="$(docker exec kafrust-share-state-1 /opt/kafka/bin/kafka-share-groups.sh \
+              --bootstrap-server kafrust-share-state-1:29092 --describe \
+              --group "$KAFRUST_SHARE_STATE_GROUP_ID" --state 2>/dev/null || true)"
+            printf '%s\n' "$coordinator_output"
+            coordinator_id="$(printf '%s\n' "$coordinator_output" | \
+              awk '$0 !~ /COORDINATOR/ && $0 ~ /\([0-9]+\)/ { match($0, /\([0-9]+\)/); print substr($0, RSTART + 1, RLENGTH - 2); exit }')"
+            case "$coordinator_id" in
+              1|2|3)
+                echo "share coordinator is broker $coordinator_id"
+                echo "KAFRUST_STATE_COORDINATOR_ID=$coordinator_id" >> "$GITHUB_ENV"
+                exit 0
+                ;;
+            esac
+            sleep 2
+          done
+          echo "could not locate the share coordinator for the written group"
+          exit 1
+
+      - name: Stop share coordinator and wait for replacement
+        run: |
+          coordinator_id="$KAFRUST_STATE_COORDINATOR_ID"
+          docker stop "kafrust-share-state-${coordinator_id}"
+          surviving_node=""
+          for node in 1 2 3; do
+            if [ "$node" != "$coordinator_id" ]; then
+              surviving_node="$node"
+              break
+            fi
+          done
+          for attempt in {1..60}; do
+            output="$(docker exec "kafrust-share-state-${surviving_node}" /opt/kafka/bin/kafka-share-groups.sh \
+              --bootstrap-server "kafrust-share-state-${surviving_node}:29092" --describe \
+              --group "$KAFRUST_SHARE_STATE_GROUP_ID" --state 2>/dev/null || true)"
+            printf '%s\n' "$output"
+            new_coordinator="$(printf '%s\n' "$output" | \
+              awk '$0 !~ /COORDINATOR/ && $0 ~ /\([0-9]+\)/ { match($0, /\([0-9]+\)/); print substr($0, RSTART + 1, RLENGTH - 2); exit }')"
+            case "$new_coordinator" in
+              1|2|3)
+                if [ "$new_coordinator" != "$coordinator_id" ]; then
+                  echo "share coordinator moved from broker $coordinator_id to broker $new_coordinator"
+                  bootstrap_servers=""
+                  for node in 1 2 3; do
+                    if [ "$node" != "$coordinator_id" ]; then
+                      if [ -n "$bootstrap_servers" ]; then bootstrap_servers=",$bootstrap_servers"; fi
+                      bootstrap_servers="localhost:$((19091 + node))$bootstrap_servers"
+                    fi
+                  done
+                  echo "KAFRUST_BOOTSTRAP_SERVERS=$bootstrap_servers" >> "$GITHUB_ENV"
+                  exit 0
+                fi
+                ;;
+            esac
+            sleep 2
+          done
+          docker exec "kafrust-share-state-${surviving_node}" /opt/kafka/bin/kafka-share-groups.sh \
+            --bootstrap-server "kafrust-share-state-${surviving_node}:29092" --describe \
+            --group "$KAFRUST_SHARE_STATE_GROUP_ID" --state || true
+          exit 1
+
+      - name: Read and delete replicated Share Group State after coordinator loss
+        env:
+          KAFRUST_SHARE_STATE_PHASE: read
+        run: cargo test -p kafrust --test broker_roundtrip share_group_state_replica_failover_when_broker_is_configured -- --nocapture
+
+      - name: Dump Kafka diagnostics
+        if: failure()
+        run: |
+          docker logs kafrust-share-state-1 || true
+          docker logs kafrust-share-state-2 || true
+          docker logs kafrust-share-state-3 || true
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker rm -f kafrust-share-state-1 kafrust-share-state-2 kafrust-share-state-3 || true
+          docker network rm kafrust-share-state-failover || true

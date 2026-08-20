@@ -91,6 +91,12 @@ jobs:
       - name: Run broker roundtrip
         run: cargo test -p kafrust --test broker_roundtrip -- --nocapture
 
+      - name: Verify ListGroups version negotiation and filters
+        if: matrix.kafka-version == '3.7.2' || matrix.kafka-version == '4.3.1'
+        env:
+          KAFRUST_EXPECT_LIST_GROUPS_VERSION: ${{ matrix.kafka-version == '4.3.1' && '5' || '4' }}
+        run: cargo test -p kafrust --test broker_roundtrip api_versions_and_metadata_roundtrip_when_broker_is_configured -- --nocapture
+
       - name: Run admin topic lifecycle example
         run: cargo run -p kafrust --example admin_create_topic
 
@@ -251,6 +257,16 @@ jobs:
           KAFRUST_GROUP_PROTOCOL: consumer
           KAFRUST_TOPIC_PATTERN: '^kafrust-regex-(orders|payments)$'
           KAFRUST_REGEX_EXPECTED_TOPICS: kafrust-regex-orders,kafrust-regex-payments
+        run: cargo run -p kafrust --example consumer_group_regex
+
+      - name: Run KIP-848 dynamic regex topic assignment
+        if: matrix.kafka-version == '4.3.1'
+        env:
+          KAFRUST_GROUP_ID: kafrust-regex-dynamic-${{ github.run_id }}
+          KAFRUST_GROUP_PROTOCOL: consumer
+          KAFRUST_TOPIC_PATTERN: '^kafrust-regex-(orders|payments|dynamic-${{ github.run_id }})$'
+          KAFRUST_REGEX_EXPECTED_TOPICS: kafrust-regex-orders,kafrust-regex-payments
+          KAFRUST_REGEX_DYNAMIC_TOPIC: kafrust-regex-dynamic-${{ github.run_id }}
         run: cargo run -p kafrust --example consumer_group_regex
 
       - name: Run KIP-848 consumer group example

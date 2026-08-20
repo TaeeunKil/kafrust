@@ -9,6 +9,7 @@ use kafrust::{
 
 const PARTITION_COUNT: i32 = 6;
 const POLL_ATTEMPTS: usize = 80;
+const MAX_CHURN_CYCLES: usize = 64;
 
 fn required(name: &str) -> Result<String, Error> {
     env::var(name).map_err(|_| Error::Unsupported("published group smoke variable missing"))
@@ -44,6 +45,19 @@ fn member_exit_is_abrupt() -> Result<bool, Error> {
     }
 }
 
+fn churn_cycles() -> Result<usize, Error> {
+    let cycles = env::var("KAFRUST_GROUP_CHURN_CYCLES")
+        .unwrap_or_else(|_| "1".to_owned())
+        .parse::<usize>()
+        .map_err(|_| Error::Unsupported("KAFRUST_GROUP_CHURN_CYCLES must be an integer"))?;
+    if !(1..=MAX_CHURN_CYCLES).contains(&cycles) {
+        return Err(Error::Unsupported(
+            "KAFRUST_GROUP_CHURN_CYCLES must be between 1 and 64",
+        ));
+    }
+    Ok(cycles)
+}
+
 fn group_config(
     bootstrap_servers: &str,
     group_id: &str,
@@ -68,6 +82,7 @@ async fn run() -> kafrust::Result<()> {
     let group_id = required("KAFRUST_GROUP_ID")?;
     let protocol = group_protocol()?;
     let abrupt_member_exit = member_exit_is_abrupt()?;
+    let cycles = churn_cycles()?;
 
     let mut producer = ProducerConfig::new(bootstrap_servers.split(',').map(str::to_owned))
         .client_id("kafrust-published-group-rebalance-producer")
@@ -86,46 +101,58 @@ async fn run() -> kafrust::Result<()> {
             .await?;
     }
 
-    let config = group_config(&bootstrap_servers, &group_id, protocol).subscribe(topic.clone());
-    let mut first = config
-        .clone()
-        .client_id("kafrust-published-group-rebalance-first")
-        .join()
-        .await?;
-    if first.assignments().is_empty() {
-        return Err(Error::Unsupported(
-            "published group smoke first member received no partitions",
-        ));
-    }
-
-    let mut seen_records = BTreeSet::new();
-    let second_join = tokio::spawn(
-        config
+    for cycle in 0..cycles {
+        let cycle_group_id = if cycles == 1 {
+            group_id.clone()
+        } else {
+            format!("{group_id}-{cycle}")
+        };
+        let config =
+            group_config(&bootstrap_servers, &cycle_group_id, protocol).subscribe(topic.clone());
+        let mut first = config
             .clone()
-            .client_id("kafrust-published-group-rebalance-second")
-            .join(),
-    );
-    while !second_join.is_finished() {
-        record_expected_records(&mut seen_records, &topic, first.poll().await?);
-    }
-    let mut second = second_join
-        .await
-        .map_err(|_| Error::Unsupported("published group smoke second member task failed"))??;
+            .client_id("kafrust-published-group-rebalance-first")
+            .join()
+            .await?;
+        if first.assignments().is_empty() {
+            return Err(Error::Unsupported(
+                "published group smoke first member received no partitions",
+            ));
+        }
 
-    wait_for_two_member_coverage(&mut first, &mut second, &topic, seen_records).await?;
-    verify_position_survives_rejoin(&mut first, &topic).await?;
-    if abrupt_member_exit {
-        drop(second);
-    } else {
-        leave_after_member_rejoin(second).await?;
+        let mut seen_records = BTreeSet::new();
+        let second_join = tokio::spawn(
+            config
+                .clone()
+                .client_id("kafrust-published-group-rebalance-second")
+                .join(),
+        );
+        while !second_join.is_finished() {
+            record_expected_records(&mut seen_records, &topic, first.poll().await?);
+        }
+        let mut second = second_join
+            .await
+            .map_err(|_| Error::Unsupported("published group smoke second member task failed"))??;
+
+        wait_for_two_member_coverage(&mut first, &mut second, &topic, seen_records).await?;
+        verify_position_survives_rejoin(&mut first, &topic).await?;
+        if abrupt_member_exit {
+            drop(second);
+        } else {
+            leave_after_member_rejoin(second).await?;
+        }
+        verify_member_departure_rejoin(&mut first, &topic).await?;
+        verify_committed_offset_restore(&config, first, &topic).await?;
+        println!(
+            "published group churn cycle {}/{} passed protocol={protocol:?} exit={}",
+            cycle + 1,
+            cycles,
+            if abrupt_member_exit { "drop" } else { "leave" },
+        );
     }
-    verify_member_departure_rejoin(&mut first, &topic).await?;
-    let first_member_id = first.member_id().to_owned();
-    verify_committed_offset_restore(&config, first, &topic).await?;
     println!(
-        "published group smoke member-departure and committed-offset recovery passed protocol={protocol:?} exit={} first={} partitions={PARTITION_COUNT}",
+        "published group churn passed protocol={protocol:?} exit={} cycles={cycles} partitions={PARTITION_COUNT}",
         if abrupt_member_exit { "drop" } else { "leave" },
-        first_member_id,
     );
     Ok(())
 }
@@ -337,7 +364,7 @@ fn assignment_keys(group: &ConsumerGroup) -> BTreeSet<(String, i32)> {
 
 #[tokio::main]
 async fn main() -> kafrust::Result<()> {
-    tokio::time::timeout(Duration::from_secs(60), run())
+    tokio::time::timeout(Duration::from_secs(300), run())
         .await
         .map_err(|_| Error::Unsupported("published group smoke timed out"))?
 }

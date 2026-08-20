@@ -7,3 +7,7 @@ Cargo.lock
 # reproducible MSRV-compatible fuzz builds.
 !fuzz/Cargo.lock
 fuzz/target/
+
+# Local verification output and Python execution caches are not release inputs.
+.artifacts/
+**/__pycache__/

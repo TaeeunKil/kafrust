@@ -12,7 +12,7 @@ jobs:
   compile-fuzz-targets:
     name: Compile libFuzzer targets
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: fuzz
@@ -34,18 +34,48 @@ jobs:
             api_versions_response \
             group_describe_response \
             share_group_offsets_response \
-            compression; do
+            streams_groups_response \
+            offset_commit_response \
+            offset_fetch_response \
+            compression \
+            list_groups_response; do
             cargo +nightly fuzz check "$target"
           done
 
-      - name: Run bounded fuzz smoke
+      - name: Run corpus-backed fuzz campaign
         run: |
+          set -o pipefail
+          status=0
+          mkdir -p "$RUNNER_TEMP/kafrust-fuzz-artifacts"
           for target in \
             codec \
             frame \
             api_versions_response \
             group_describe_response \
             share_group_offsets_response \
-            compression; do
-            cargo +nightly fuzz run "$target" -- -runs=1000 -max_total_time=5
+            streams_groups_response \
+            offset_commit_response \
+            offset_fetch_response \
+            compression \
+            list_groups_response; do
+            mkdir -p "$RUNNER_TEMP/kafrust-fuzz-artifacts/$target"
+            if ! cargo +nightly fuzz run "$target" "corpus/$target" -- \
+              -max_total_time=30 \
+              -rss_limit_mb=2048 \
+              -timeout=10 \
+              -artifact_prefix="$RUNNER_TEMP/kafrust-fuzz-artifacts/$target/" \
+              -print_final_stats=1; then
+              status=1
+            fi
           done
+          exit "$status"
+
+      - name: Upload fuzz corpus and crash artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kafrust-fuzz-${{ github.run_id }}
+          if-no-files-found: ignore
+          path: |
+            ${{ runner.temp }}/kafrust-fuzz-artifacts
+            fuzz/corpus

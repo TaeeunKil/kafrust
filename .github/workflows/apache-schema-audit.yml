@@ -1,0 +1,25 @@
+name: Apache Schema Audit
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  schema:
+    name: Kafka 4.3.1 schema identity and version audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Audit every local request and response schema
+        run: python scripts/check_apache_schema_versions.py --online-all
