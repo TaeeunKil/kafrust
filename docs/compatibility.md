@@ -433,6 +433,15 @@ measurement repeatability but still covers only the documented produce/fetch
 profile; it does not establish feature parity, failure compatibility, or a
 production SLO.
 
+The repeated published `kafrust 0.3.1` profile passed in
+[`32368443357`](https://github.com/TaeeunKil/kafrust/actions/runs/32368443357).
+Across three repetitions, kafrust ranged from 45,767.55 to 61,927.71
+producer records/s (median 56,239.28) and 217,064.20 to 292,880.32 consumer
+records/s (median 283,033.26). `rust-rdkafka 0.39.0` ranged from 86,085.93 to
+165,229.42 producer records/s (median 153,708.92) and 207,251.77 to
+795,296.43 consumer records/s (median 786,673.72). The broad spread reinforces
+that this is a reproducible profile, not a universal performance ranking.
+
 The published `0.2.30` single-node broker-restart soak passed for 300 seconds
 in [`31768319413`](https://github.com/TaeeunKil/kafrust/actions/runs/31768319413).
 The fresh external project processed 21,597,600 1-KiB records through a

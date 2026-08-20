@@ -392,6 +392,13 @@ coverage toward a release candidate that can be qualified in staging.
   duplicated result sets. Historical red runs remain visible by design and
   must be interpreted against their recorded commit and published version;
   this workflow still qualifies only the documented produce/fetch profile.
+- The repeated published `kafrust 0.3.1` profile passed in
+  [`32368443357`](https://github.com/TaeeunKil/kafrust/actions/runs/32368443357).
+  Across three repetitions, kafrust ranged from 45,767.55 to 61,927.71
+  producer records/s and 217,064.20 to 292,880.32 consumer records/s;
+  `rust-rdkafka 0.39.0` ranged from 86,085.93 to 165,229.42 producer and
+  207,251.77 to 795,296.43 consumer records/s. The spread is recorded as
+  workload evidence, not a universal performance ranking.
 - Published `0.2.30` then passed a 300-second single-node broker-restart soak
   in [`31768319413`](https://github.com/TaeeunKil/kafrust/actions/runs/31768319413),
   processing 21,597,600 records with 180 operation errors, 954 failed
