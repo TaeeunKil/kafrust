@@ -55,6 +55,17 @@ Broker response payload allocation is limited to 100 MiB per request by default.
 
 `ClientConfig::security_protocol` and the matching producer, consumer, and group builders default to `SecurityProtocol::Plaintext`. `SecurityProtocol::Tls` uses the non-default `tls` crate feature and is covered by the recorded broker roundtrip, producer, direct consumer, and consumer group smoke profile. TLS server name validation defaults to the bootstrap host and can be overridden with `tls_server_name(name)` or `KAFRUST_TLS_SERVER_NAME` for examples and broker checks. Extra DER root certificates can be added with `tls_root_certificate_der(bytes)` or `KAFRUST_TLS_ROOT_CERT_DER_PATH` for examples and broker checks. SASL/PLAIN and SASL/SCRAM-SHA-256/512 authentication are implemented for configured `SaslPlaintext` and `SaslTls` connections; SASL/PLAIN over `SaslPlaintext` and SASL/SCRAM-SHA-256 over `SaslTls` are covered by recorded broker roundtrip, producer, direct consumer, and consumer group smoke profiles.
 
+TLS mutual authentication is configured with `ClientConfig::tls_client_certificate_der` (repeat for the certificate chain) and `ClientConfig::tls_client_private_key_der`. The matching producer, direct consumer, consumer-group, ShareConsumer, and Streams-group setters forward to the same shared configuration. The certificate and private key must be provided together, are rejected for plaintext, and the private-key bytes are redacted from `Debug`. This path is implemented behind the `tls` feature; a live mTLS broker qualification remains open.
+
+The broker-roundtrip test accepts `KAFRUST_TLS_CLIENT_CERT_DER_PATH` and
+`KAFRUST_TLS_CLIENT_KEY_DER_PATH` for a live client certificate and private
+key. The common example security adapter accepts the same variables for
+producer, consumer, group, and Admin examples. The manual [`live-mtls.yml`](../.github/workflows/live-mtls.yml)
+workflow generates a short-lived CA, requires client authentication on Kafka,
+checks the TLS handshake with OpenSSL, and then runs the Admin, producer,
+direct-consumer, low-level, and coordinator roundtrips on Kafka 3.7.2 or
+4.3.1.
+
 When multiple bootstrap servers are configured, `ClientConfig::connect` tries them in order until one connection succeeds. Examples and opt-in broker tests parse comma-separated `KAFRUST_BOOTSTRAP_SERVERS` values into that same ordered list.
 
 kafrust emits `tracing` events for Kafka request start, response receipt, request failure, and high-level producer, direct consumer, and consumer group operations. Each request roundtrip runs inside a `kafka.request` span with API key, API version, correlation ID, and request byte count. Events include operational metadata such as topic, partition, offset, group ID, member ID, generation ID, and byte or record counts, but not request, response, key, or value payload contents.

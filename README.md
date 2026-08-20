@@ -34,6 +34,7 @@ features immediately, `rust-rdkafka` is still the practical Rust default.
   - [Direct Consumer](#direct-consumer)
   - [Consumer Group](#consumer-group)
   - [Share Group](#share-group)
+  - [Streams Group](#streams-group)
 - [Compatibility](#compatibility)
 - [Current Limits](#current-limits)
 - [API](#api)
@@ -130,12 +131,17 @@ for topic in result.topics() {
 }
 ```
 
-`describe_cluster` and `list_topics` provide typed Metadata v1 views, and
-topic config APIs expose values, sources, synonyms, and incremental
+`describe_cluster` and `list_topics` provide typed Metadata v1 views. The
+opt-in `describe_cluster_with_options` path negotiates Kafka DescribeCluster
+API 60 and preserves cluster ID, endpoint type, rack, and authorized-operation
+metadata with Metadata fallback. Topic config APIs expose values, sources, synonyms, and incremental
 Set/Delete/Append/Subtract operations. `describe_consumer_groups` discovers
 each group coordinator and preserves member protocol bytes.
-`list_groups` queries all advertised brokers, while `delete_consumer_groups`
-routes each group to its coordinator and retains per-group errors.
+`list_groups` queries all advertised brokers and negotiates ListGroups v4/v5
+when available, while `list_groups_with_options` adds state/type filters.
+The low-level `Client::list_groups_v1` method remains available for exact
+legacy wire compatibility. `delete_consumer_groups` routes each group to its
+coordinator and retains per-group errors.
 `create_partitions` routes CreatePartitions v0 to the controller for automatic
 or explicit topic expansion. `delete_consumer_group_offsets` routes
 OffsetDelete v0 to the coordinator and
@@ -144,6 +150,16 @@ preserves top-level and per-partition Kafka errors.
 DescribeQuorum v0-v2; set `ClientConfig::controller_bootstrap_servers` when the
 controller listener is advertised separately. Kafka 3.7.2 and 4.3.1 are live-
 qualified through the controller-listener workflow.
+`add_raft_voter` and `remove_raft_voter` expose controller-routed KRaft voter
+membership mutations with typed ambiguous-outcome handling. Their protocol and
+injected-controller coverage is present, but live dynamic-quorum qualification
+is still required before production compatibility is claimed.
+`unregister_broker` exposes Kafka's controller-routed UnregisterBroker API 64
+v0 with typed throttle and broker-error results; live unregister and
+re-registration qualification remains open.
+Share Group State APIs 83-87 are available through typed `AdminClient` methods
+and share-coordinator routing. Write and summary v1 fields are preserved
+without silent downgrade; live state lifecycle qualification remains open.
 `list_consumer_group_offsets` and `alter_consumer_group_offsets` expose typed
 classic consumer-group offset inspection and administrative reset through the
 group coordinator, preserving partition-level outcomes.
@@ -332,8 +348,9 @@ Fetched records also expose Kafka RecordBatch headers through
 `value()` returns `Option<&[u8]>` so null header values remain distinguishable
 from empty values. Legacy MessageSet records expose no headers.
 
-Direct and group consumers negotiate Fetch v12, then v11, when the selected
-broker advertises those versions. For rack-aware reads, set
+Direct and group consumers negotiate topic-UUID Fetch v13 when the selected
+broker advertises it and Metadata v12 resolves a stable topic ID; otherwise
+they fall back to Fetch v12, then v11. For rack-aware reads, set
 `ConsumerConfig::client_rack("rack-a")` (or the matching
 `ConsumerGroupConfig` builder); kafrust sends the rack ID using the flexible
 Fetch schema and follows Kafka's `preferred_read_replica` response on the next
@@ -343,10 +360,16 @@ Wire-level and injected multi-broker routing tests cover this path. The Kafka 3.
 three-broker `broker.rack` plus `RackAwareReplicaSelector` profile passed in
 [`Live Kafka Smoke`, run `31640494509`](https://github.com/TaeeunKil/kafrust/actions/runs/31640494509),
 including live Fetch v12 requests and preferred-replica routing.
-Fetch v11/v12 requests reuse a broker-scoped fetch session across sequential
+Fetch v11/v12/v13 requests reuse a broker-scoped fetch session across sequential
 polls; assignment changes, local position controls, reconnects, and fetch errors
 reset that session. Fetch v4 remains a compatibility fallback without a
 fetch-session claim.
+The low-level `Client::fetch_v13` method additionally supports Kafka 4.x
+topic-UUID fetch requests for callers that already resolved metadata IDs, and
+`fetch_v14` through `fetch_v18` expose the corresponding tiered-storage,
+replica-state, node-endpoint, directory-ID, and high-watermark wire variants.
+High-level consumers use v13 when metadata IDs are available and retain the
+older name-based fallback for incomplete broker capabilities.
 The complete 17-job matrix for the general direct-consumer negotiation passed in
 [`31673377685`](https://github.com/TaeeunKil/kafrust/actions/runs/31673377685).
 The complete 17-job matrix for this session path passed in
@@ -456,6 +479,48 @@ not replayed automatically. `BatchOptimized` is the default acquisition mode;
 `Renew` uses ShareAcknowledge v2 and retains the record for later completion.
 See [Share Consumer](docs/share-consumer.md) for the exact alpha contract.
 
+## Streams Group
+
+The development branch also includes an alpha `StreamsGroupSession` for
+Kafka's dedicated Streams group heartbeat protocol. It publishes the initial
+topology, tracks member and endpoint epochs, reports task state, reconnects and
+rejoins within a bounded retry budget, and leaves with
+`shutdown_application=true`. It is a broker membership layer only; it does not
+execute a Kafka Streams DSL, state stores, or stream-processing tasks, and the
+caller currently drives `heartbeat()`.
+
+```rust,no_run
+use kafrust::streams::{
+    StreamsGroupHeartbeatSubtopology, StreamsGroupHeartbeatTopology,
+};
+use kafrust::{StreamsGroupConfig, StreamsGroupSession};
+
+# async fn example() -> kafrust::Result<()> {
+let topology = StreamsGroupHeartbeatTopology {
+    epoch: 1,
+    subtopologies: vec![StreamsGroupHeartbeatSubtopology {
+        subtopology_id: "subtopology-0".to_owned(),
+        source_topics: vec!["orders".to_owned()],
+        source_topic_regex: Vec::new(),
+        state_changelog_topics: Vec::new(),
+        repartition_sink_topics: Vec::new(),
+        repartition_source_topics: Vec::new(),
+        copartition_groups: Vec::new(),
+    }],
+};
+let mut session = StreamsGroupSession::join(
+    StreamsGroupConfig::new(["localhost:9092"], "orders-streams", topology),
+)
+.await?;
+session.heartbeat().await?;
+session.close().await?;
+# Ok(())
+# }
+```
+
+See [Streams group](docs/streams-group.md) for the alpha contract and the
+manual/weekly live Kafka 4.3.1 qualification workflow.
+
 ## Client Telemetry
 
 KIP-714 client telemetry is available through the low-level `Client` methods
@@ -493,8 +558,9 @@ Verified paths currently include:
   flexible Fetch v12 and legacy Fetch v11 rack-aware negotiation and
   preferred-replica routing tests.
 - Classic consumer group join, sync, heartbeat, poll, and offset commit.
-- KIP-848 consumer group assignment, member-epoch heartbeat, OffsetFetch v9,
-  OffsetCommit v9, member-aware administrative offset listing/alteration,
+- KIP-848 consumer group assignment, member-epoch heartbeat, negotiated
+  OffsetFetch/OffsetCommit v10 with v9 fallback, member-aware
+  administrative offset listing/alteration,
   background rejoin, and explicit leave against Kafka `4.3.1` (including the
   PLAINTEXT single-node and three-broker Admin offset smoke in
   [`31607006237`](https://github.com/TaeeunKil/kafrust/actions/runs/31607006237),
@@ -540,6 +606,13 @@ See [Compatibility](docs/compatibility.md) and
   `tls_server_name(name)`. DER-encoded extra root certificates can be added with
   `tls_root_certificate_der(bytes)`. The current ring crypto provider can
   require native build tooling for this optional feature.
+- Mutual TLS client certificate chains and DER private keys are available
+  through `tls_client_certificate_der` and `tls_client_private_key_der` on the
+  shared config and high-level builders. The pair is validated, rejected for
+  plaintext, and the private key is redacted from `Debug`; live mTLS
+  qualification is provided by the manual
+  [`live-mtls.yml`](.github/workflows/live-mtls.yml) workflow and remains open
+  until a passing run is recorded.
 - SASL/PLAIN authentication is verified against Kafka `3.7.2` over
   `SaslPlaintext` for broker roundtrip, producer, direct consumer, and consumer
   group smoke paths. SASL/SCRAM-SHA-256 and SCRAM-SHA-512 are verified over
@@ -654,6 +727,7 @@ Generated API documentation:
 - [Consumer API direction](docs/consumer-api.md)
 - [Consumer group direction](docs/consumer-groups.md)
 - [Share Consumer](docs/share-consumer.md)
+- [Streams group](docs/streams-group.md)
 - [Client telemetry](docs/telemetry.md)
 - [Release preparation](docs/release.md)
 

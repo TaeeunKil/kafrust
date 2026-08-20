@@ -371,11 +371,24 @@ errors. `stop` should be called before application shutdown; `leave` also waits
 for a signaled worker to finish before sending LeaveGroup. This is an opt-in
 commit worker, not a broker-side auto-commit setting.
 
-KIP-848 groups use OffsetCommit v9, including flexible request/response
-encoding and the member epoch in `GenerationIdOrMemberEpoch`. Classic groups
-retain the existing v2/v7 routing. KIP-848 assignment initialization uses
-OffsetFetch v9 with the member ID and member epoch; classic assignment
+KIP-848 groups prefer OffsetCommit v10 when the coordinator advertises the
+UUID-based Kafka 4.x schema and the assignment has complete topic IDs. The
+member epoch remains in `GenerationIdOrMemberEpoch`; brokers without v10 use
+OffsetCommit v9. Classic groups retain the existing v2/v7 routing. KIP-848
+assignment initialization
+negotiates OffsetFetch v10 when the coordinator advertises it and Metadata
+v12 returned a complete set of non-zero topic UUIDs. The UUID response is
+mapped back to the existing topic-name assignment model. Brokers that only
+advertise OffsetFetch v9, or assignments without complete UUID metadata, use
+OffsetFetch v9 with the member ID and member epoch. Classic assignment
 initialization continues to use OffsetFetch v2.
+
+For member-aware Admin offset operations, `ConsumerGroup::topic_id(topic)`
+exposes the UUID cached during this assignment. Pass it to
+`ConsumerGroupOffsetQuery::topic_id` and `ConsumerGroupOffset::topic_id` to
+avoid an extra metadata lookup. Name-only Admin calls resolve topic UUIDs from
+Metadata v12 when the coordinator supports v10, and otherwise retain the v9
+fallback.
 
 Current implementation status:
 

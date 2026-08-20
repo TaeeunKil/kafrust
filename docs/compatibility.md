@@ -1,8 +1,38 @@
 # Compatibility
 
+## Protocol Surface Gate
+
+The repository runs `scripts/check_protocol_api_surface.py` in CI before the
+Rust build. This dependency-free check verifies that every protocol source
+module is registered from `api/mod.rs`, that API keys are unique, and that the
+reviewed Kafka API-key manifest has not drifted. It is a surface guard, not a
+claim of byte-for-byte parity with Apache Kafka schemas; schema snapshots and
+live broker qualification remain separate compatibility gates.
+
+The repository also runs `scripts/check_apache_schema_versions.py`. Its
+offline snapshot records the official Kafka 4.3.1 metadata for the high-risk
+Produce, Fetch, OffsetCommit, OffsetFetch, and ConsumerGroupHeartbeat request
+and response schemas. The gate checks API identity, local version bounds, and
+the flexible-version boundary. It currently reports intentional local lag
+  against newer stable versions (for example Fetch v18) without claiming
+  those versions are implemented.
+The scheduled/manual [`Apache Schema Audit`](../.github/workflows/apache-schema-audit.yml)
+workflow runs the same checker with `--online-all`. That mode discovers every
+top-level local request type, fetches its matching Apache 4.3.1 request and
+response definitions, and checks message identity, API key, and local version
+bounds. It is an API identity/version guard only; it does not establish
+field-level or byte-for-byte parity, which still requires generated or golden
+schema fixtures and targeted live qualification.
+  OffsetCommit and OffsetFetch v10 now have UUID-based protocol types and
+  low-level `Client` methods, but the existing high-level name-based group/Admin
+  workflows still intentionally use their v9 or older negotiated paths. The
+  snapshot is an identity and version guard, not field-level or byte-for-byte
+  parity; expanding it to all implemented APIs and adding generated/golden byte
+  comparisons remain open.
+
 kafrust compatibility claims are scoped to behavior that has been verified against a real broker. Protocol types can exist before the high-level client path has been validated against every broker version or deployment mode.
 
-The KIP-848 `ConsumerGroupHeartbeat v0` wire types, Metadata v12 topic UUID
+The KIP-848 `ConsumerGroupHeartbeat v0` and `v1` wire types, Metadata v12 topic UUID
 mapping, and high-level foreground group path are implemented and covered by
 focused tests. The classic and KIP-848 paths are separate selections through
 `ConsumerGroupProtocol`. The dedicated Kafka 4.3.1 KIP-848 live profile also
@@ -14,17 +44,142 @@ passes a repeated coordinator broker-stop sequence, with separate groups
 recovering through different coordinators, in
 [`31695433295`](https://github.com/TaeeunKil/kafrust/actions/runs/31695433295).
 
+High-level regex subscriptions now select `ConsumerGroupHeartbeat v1` and send
+the regex as the broker subscription field while omitting the resolved topic
+name list; explicit-name subscriptions continue to use v0. A duplex wire
+regression test covers the v1 header and nullable regex field. The recorded
+KIP-848 live runs above predate this selection change and therefore qualify the
+previous v0 path, not the new v1 regex transport; a fresh live v1 matrix and
+dynamic post-join topic-discovery qualification remain open. The source now
+refreshes Metadata v1/v12 and retries assignment mapping when a regex
+assignment contains an unknown topic UUID; this is covered by the same
+runtime path but still needs a live broker topic-creation/assignment result.
+The `Live Kafka Smoke` workflow now has a Kafka 4.3.1-only dynamic regex job
+that creates and produces a matching topic after the group joins, then waits
+for the assignment and record; no passing run is claimed until GitHub Actions
+can execute it.
+
+Direct and group consumers now select flexible topic-UUID Fetch v13 when the
+broker advertises it and Metadata v12 resolves a non-zero topic ID. They retain
+the negotiated name-based Fetch v12/v11/v4 fallback for older or incomplete
+capability responses. Low-level `Client` also exposes the wire-equivalent
+Fetch v14 path with tiered-storage error semantics and Fetch v15's tagged
+replica-state request field. Fetch v16-v18 are also exposed at the low level:
+v16 preserves KIP-951 node endpoints, v17 encodes follower directory IDs, and
+v18 encodes follower high-watermarks. High-level consumers intentionally remain
+on the capability-qualified v13 path until the newer follower-only fields have
+live broker qualification.
+
+Produce response versions 9 through 13 now preserve Kafka 4.3.1's tagged
+`NodeEndpoints` field instead of discarding it. The typed
+`ProduceNodeEndpointV10` result keeps broker ID, host, port, and nullable rack
+data available to callers; a focused v13 fixture covers tag 0 decoding. This
+closes the response-level endpoint and current-leader preservation slice. The
+high-level producer now consumes a complete hint only for a retryable broker
+error and only for the next attempt, avoiding an unconditional metadata
+refresh when Kafka already supplied a usable replacement endpoint. This is
+still covered by deterministic unit tests rather than a live leader-movement
+qualification, so it does not expand the current broker compatibility claim.
+
 ## Current Compatibility Claim
 
-The complete current-main `Live Kafka Smoke` matrix passed on commit
-`bec93cf` in
-[`31761642197`](https://github.com/TaeeunKil/kafrust/actions/runs/31761642197).
-It verified classic and KIP-848 consumer-group failover after a partition
-leader stop across Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1, including plaintext,
-SASL_PLAINTEXT, and SASL_SSL/SCRAM paths. The KIP-848 checks produced and
-consumed an explicit post-failover record, while the consumer preserved its
-in-memory partition position across assignment rebuilds. This is live evidence
-for the tested paths, not a claim of complete Kafka or `rust-rdkafka` parity.
+The current development branch has a newer evidence set than the historical
+release entries below. The latest recorded live matrix covered Kafka 3.7.2,
+3.8.1, 3.9.1, and 4.3.1 with plaintext, TLS, SASL/PLAIN, SASL_SSL/SCRAM,
+OAUTHBEARER, ACL authorization, multi-broker failover, transaction
+reconciliation, and KIP-848 paths in
+[`32221883090`](https://github.com/TaeeunKil/kafrust/actions/runs/32221883090).
+The published `0.3.0` artifact also passed a 600-second Kafka 4.3.1
+three-broker simultaneous-loss soak in
+[`32230130048`](https://github.com/TaeeunKil/kafrust/actions/runs/32230130048).
+These are live results for the named paths, not a claim of complete Kafka or
+`rust-rdkafka` parity.
+
+Mutual TLS client certificate authentication is implemented in the shared
+configuration and high-level builders, but no live broker evidence is claimed
+for it yet. The manual [`live-mtls.yml`](../.github/workflows/live-mtls.yml)
+workflow is the reproducible qualification path for Kafka 3.7.2 and 4.3.1.
+
+The low-level `Client::api_versions_cached` helper now prefers flexible
+`ApiVersions` v4 and falls back to v3 when a broker returns
+`UNSUPPORTED_VERSION`. Existing higher-level paths retain their established
+v3 negotiation until a live broker matrix qualifies making v4 the default.
+The low-level client also exposes v5 request encoding with optional cluster and
+node identity checks; those checks remain opt-in until a broker profile
+explicitly qualifies them. The v4 response decoder preserves the v3 body shape
+while retaining feature minimum version zero, matching Apache Kafka's current
+protocol schema.
+
+The high-level KIP-848 consumer assignment path now negotiates OffsetFetch
+v10 on coordinators that advertise the Kafka 4.x UUID-based schema and when
+Metadata v12 supplies every assigned topic UUID. It maps the response back to
+the public topic-name assignment model and falls back to OffsetFetch v9 for
+older coordinators or incomplete UUID metadata. Focused fault-injection
+coverage exercises both the v9 fallback and v10 path, including a regex
+assignment whose topic UUID changes during rejoin.
+
+The same high-level KIP-848 commit path prefers OffsetCommit v10 when the
+coordinator advertises it and uses the stored topic UUIDs to encode and
+validate the response. OffsetCommit v9 remains the compatibility fallback for
+older coordinators or incomplete topic-ID state. Foreground commits and the
+bounded background commit worker share this negotiation policy; the local
+fault-injection gate covers v10 after coordinator replacement and v9 fallback.
+
+The member-aware Admin offset methods now expose the same negotiated v10/v9
+behavior. Complete topic UUIDs supplied through
+`ConsumerGroupOffsetQuery::topic_id` and `ConsumerGroupOffset::topic_id` avoid
+metadata discovery; name-only calls resolve UUIDs through Metadata v12 before
+using v10 and fall back to v9 when resolution or broker capability is absent.
+Admin response UUIDs are mapped back to the caller's topic names, but this
+source-level coverage does not yet count as a published-artifact or live Kafka
+4.x Admin v10 qualification.
+
+The current source also implements API key 74 across Kafka's version split:
+v0 `ListClientMetricsResources` compatibility for Kafka 3.9-era brokers and
+v1 `ListConfigResources` for Kafka 4.1+. The typed protocol, low-level
+`Client`, and `AdminClient::list_config_resources` preserve the negotiated
+version. v0 is selected only for an exact client-metrics filter; v1 supports
+the full typed resource filter. Both paths have injected-broker coverage. The
+manual [`live-list-config-resources.yml`](../.github/workflows/live-list-config-resources.yml)
+workflow qualifies the v1 path together with the opt-in DescribeConfigs v4
+metadata path on Kafka 4.1.0, 4.2.0, or 4.3.1. A live v0 result remains open
+before adding that compatibility path to the published claim.
+
+The current source also implements Kafka 4.x `StreamsGroupDescribe` v0 (API key
+89) through the typed protocol, low-level `Client`, and coordinator-routed
+`AdminClient::describe_streams_groups` path. Focused wire and injected-broker
+tests cover the flexible request and nested topology/member response. This is
+source-level protocol coverage only: a live Kafka Streams application must
+still qualify topology initialization, member metadata, task offsets, and
+assignment state before this API is added to the published compatibility claim.
+`StreamsGroupHeartbeat` v0 (API key 88) is now also exposed through the
+low-level client and the alpha `StreamsGroupSession`, which manages member
+epochs, nullable topology/task payloads, bounded reconnect/rejoin, and graceful
+leave. The session is a manual heartbeat API, not a Kafka Streams DSL or task
+processor. Background lifecycle management, assignment reconciliation, and a
+live Kafka Streams qualification remain open.
+
+The low-level `Client::streams_group_heartbeat_v0` path now covers the Kafka
+4.x API 88 request and response schemas, including nullable topology metadata,
+task assignments and offsets, member status, and Interactive Queries endpoint
+partitions. The high-level session now covers the source-level member epoch and
+shutdown path, and an injected duplex-broker test verifies initial topology,
+task-state heartbeat, epoch propagation, and graceful shutdown framing. Topology
+reconciliation, background heartbeat ownership, and a live Kafka Streams
+application remain open before claiming Streams client compatibility.
+
+Topic configuration inspection remains DescribeConfigs v1 by default. An
+explicit `DescribeConfigsOptions::include_documentation(true)` request uses
+DescribeConfigs v4 after capability negotiation and preserves Kafka's raw
+configuration type and documentation fields. The v4 protocol and Admin
+capability tests pass locally. The same manual workflow performs the Kafka 4.x
+live check, while published-artifact evidence remains open.
+
+The current source also exposes an opt-in `AdminClient::describe_cluster_with_options`
+path using Kafka `DescribeCluster` API 60 v1, preserving cluster ID, endpoint
+type, broker rack, and cluster authorized operations. The Kafka 4.x manual
+configuration workflow now checks this response as well; no passing live or
+published-artifact result has been recorded yet.
 
 The current-source `DescribeTopicPartitions` qualification passed on commit
 `d833f9f`: Kafka 3.7.2 correctly returned the explicit unsupported capability
@@ -46,12 +201,32 @@ The same jobs also checked the Kafka quorum CLI through the broker listener;
 this is a `DescribeQuorum` qualification, not a claim of complete KRaft admin
 or controller protocol coverage.
 
-The high-level `ShareConsumer` path is not included in the current compatibility
-claim yet. `.github/workflows/share-kafka-smoke.yml` now defines the pending
-Kafka 4.3.1 live gate for ShareGroupHeartbeat, ShareFetch, ShareAcknowledge,
-background heartbeat ownership, and graceful close. Until that workflow has a
-passing run, the ShareConsumer evidence remains protocol and injected-broker
-only.
+The current source also implements KRaft `AddRaftVoter` v0/v1 (API key 80) and
+`RemoveRaftVoter` v0 (API key 81) through typed protocol, low-level Client, and
+controller-routed Admin paths. Flexible request/response encoding,
+`ack_when_committed` version gating, and mutation outcome classification have
+focused and injected-controller coverage. The new
+`.github/workflows/live-dynamic-quorum.yml` workflow formats a Kafka 4.3.1
+dynamic quorum from a standalone controller, provisions a second controller
+with `--no-initial-controllers`, and runs the public
+`admin_dynamic_quorum` example through Add/RemoveRaftVoter plus
+DescribeQuorum convergence checks. No successful run has been recorded yet;
+these APIs remain outside the compatibility claim until that workflow verifies
+membership changes and post-mutation quorum health.
+
+The high-level `ShareConsumer` path now has recorded Kafka 4.3.1 single-node,
+three-broker leader-movement, active-heartbeat coordinator-loss, and repeated
+in-process churn results in the Share workflows. The remaining Share claim is
+narrower: ambiguous acknowledgement response loss, long reconciliation soak,
+and published-artifact qualification remain open. The current evidence is
+listed in `docs/share-consumer.md` and the corresponding workflow history.
+
+Share Group State APIs 83-87 are tracked separately from this public
+ShareConsumer claim. Kafka currently marks those wire APIs unstable, and broad
+clients such as krafka intentionally omit the broker-internal state-persister
+surface. Kafrust's typed implementation and failover workflow are advanced
+qualification work; a passing state workflow must not be interpreted as
+general ShareConsumer or `rust-rdkafka` replacement evidence.
 
 The complete 17-job `Live Kafka Smoke` matrix also passed on the current
 connection-lifecycle hardening commit `e0e7e03` in
@@ -577,6 +752,10 @@ in the three-broker profile in
 [`31616181960`](https://github.com/TaeeunKil/kafrust/actions/runs/31616181960);
 the initial ListGroups Metadata discovery additionally retries a dropped
 bootstrap response before broker enumeration.
+The live smoke workflow now also asserts ListGroups v4 negotiation on Kafka
+3.7.2 and ListGroups v5 state/type-filter negotiation on Kafka 4.3.1; the
+workflow must run successfully before this modern path is counted as released
+compatibility evidence.
 other coordinator-routed writes remain separate qualification items.
 
 | Broker | Mode | Security | Verification | Status |
@@ -1228,6 +1407,8 @@ authentications. External provider-specific behavior remains unclaimed.
 The current compatibility claim does not cover:
 
 - TLS workflows beyond the listed TLS smoke examples.
+- Mutual TLS client certificate authentication until the dedicated
+  `live-mtls.yml` workflow has a passing run recorded here.
 - SASL workflows beyond the listed SASL_PLAINTEXT and SASL_SSL smoke examples.
 - Production SASL/OAUTHBEARER provider compatibility beyond the local signed
   OIDC/JWKS fixture, including discovery/token endpoints, key rotation,

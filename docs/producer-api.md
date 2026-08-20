@@ -172,7 +172,9 @@ partition until the operation reaches a terminal result.
 
 The first producer implementation should stay byte-first. Serialization adapters can be added later without forcing serde or another encoding choice into the core client.
 
-Buffered producer and linger behavior is planned as a separate opt-in path. See [Producer Buffering And Linger Design](producer-buffering.md) for the intended implementation direction.
+Buffered producer and linger behavior is an implemented opt-in path. See
+[Producer Buffering And Linger Design](producer-buffering.md) for its flush
+triggers, bounded queue semantics, and delivery completion contract.
 
 Run the opt-in producer example against a local broker and an existing or auto-created topic:
 
@@ -292,6 +294,7 @@ Current implementation status:
   RecordBatch v2.
 - `ProducerConfig::build_buffered` creates a `BufferedProducer` with configurable bounded enqueue, per-record `ProducerDelivery` handles, `flush`, `close`, and `is_closed`.
 - `BufferedProducer::send` queues records for the buffered path, and `flush` or `close` sends accepted records through the existing batch Produce path before completing delivery handles from per-record outcomes.
+- `BufferedProducer::handle` creates a cloneable `BufferedProducerHandle` for concurrent non-transactional enqueueing from multiple Tokio tasks. The handle uses the same bounded queue and per-record delivery semantics; drop or stop all handles before calling `BufferedProducer::close`. Transactional buffered producers reject handles so transaction boundaries remain ordered through the owner.
 - `BufferedProducer` automatically flushes queued records when a topic and explicit-partition buffer reaches `max_records_per_batch` or `max_batch_bytes`, or when the oldest queued record reaches `linger_ms`. `linger_ms(0)` schedules a flush without intentional delay.
 - Producer metadata is cached by topic and refreshed when a retriable send failure invalidates that topic cache entry.
 - Retryable metadata request I/O failures reconnect the producer's bootstrap

@@ -10,6 +10,85 @@ without opening a broker connection. This includes bootstrap entries, request
 and decode limits, required SASL credentials, and an explicitly configured TLS
 server name.
 
+## Describe Features
+
+`AdminClient::describe_features` reads Kafka's broker-supported and
+cluster-finalized feature metadata from the tagged fields of `ApiVersions` v3
+or newer. The result includes supported version ranges, finalized feature
+ranges, the finalized metadata epoch, and Kafka's ZooKeeper-migration-ready
+flag. This is a capability read, so it does not issue a controller mutation
+and is safe to repeat after reconnecting to another broker.
+
+The protocol layer keeps unknown ApiVersions tags intact for forward
+compatibility. Brokers that only support ApiVersions versions below v3 cannot
+provide this metadata and return the normal negotiated-version error instead
+of an incomplete feature result.
+
+## List Configuration Resources
+
+`AdminClient::list_config_resources` exposes Kafka API key 74 across its two
+wire meanings. It uses flexible `ListConfigResources` v1 on Kafka 4.1+ to list
+configuration-bearing topic, broker, broker-logger, client-metrics, and group
+resources. On Kafka 3.9-era brokers, an exact `ClientMetrics` filter selects
+the compatible v0 `ListClientMetricsResources` shape and maps each result to
+`ConfigResourceType::ClientMetrics`. Empty or broader filters return
+`Error::Unsupported` when only v0 is advertised because v0 cannot represent
+those resource types. Unknown v1 resource codes are preserved as
+`ConfigResourceType::Other` for forward compatibility.
+
+This is a discovery operation only. Use `describe_topic_configs` or the
+corresponding future resource-specific configuration API to read values. The
+protocol, low-level client, and Admin routing are covered by injected-broker
+tests. The manual
+[`live-list-config-resources.yml`](../.github/workflows/live-list-config-resources.yml)
+workflow qualifies discovery and the opt-in DescribeConfigs v4 metadata path
+against Kafka 4.1.0, 4.2.0, or 4.3.1; a passing run is still required before
+this path is included in the published compatibility claim.
+
+```rust,no_run
+use kafrust::{
+    AdminClient, ClientConfig, ConfigResourceType, ListConfigResourcesOptions,
+};
+
+# async fn example() -> kafrust::Result<()> {
+let admin = AdminClient::new(ClientConfig::new(["localhost:9092"]));
+let resources = admin
+    .list_config_resources(
+        ListConfigResourcesOptions::new()
+            .resource_type(ConfigResourceType::Topic)
+            .resource_type(ConfigResourceType::Group),
+    )
+    .await?;
+
+for resource in resources.resources() {
+    println!("{}: {:?}", resource.name(), resource.resource_type());
+}
+# Ok(())
+# }
+```
+
+## Update Features
+
+`AdminClient::update_features` routes Kafka UpdateFeatures v1 to the active
+KRaft controller when the broker advertises it, and falls back to v0 for
+older brokers. `FeatureUpdate::new` sets a finalized feature's maximum
+version level; call `allow_downgrade(true)` for a safe downgrade or use
+`upgrade_type(FeatureUpgradeType::UnsafeDowngrade)` when Kafka's v1 unsafe
+downgrade operation is explicitly intended. The result retains the top-level
+and per-feature error codes and messages.
+
+`UpdateFeaturesOptions::validate_only(true)` performs broker-side validation
+without finalizing changes and requires v1. Unsafe downgrades and validation-
+only requests return `Error::Unsupported` rather than being silently weakened
+when the broker only advertises v0.
+
+This is a controller mutation, so kafrust does not replay it after a request
+may have been transmitted. A transport failure in that window returns
+`Error::AdminMutationOutcomeUnknown`; inspect the controller's feature metadata
+before deciding whether another update is required. The v0 path remains the
+compatibility path for Kafka 3.7-era brokers and newer brokers that advertise
+API key 57 without v1.
+
 ## DescribeTopicPartitions
 
 `AdminClient::describe_topic_partitions` exposes Kafka's flexible
@@ -44,6 +123,40 @@ the current-source qualification runs
 and [`31781264035`](https://github.com/TaeeunKil/kafrust/actions/runs/31781264035).
 The protocol request includes tagged fields at the partition, topic, and
 top-level boundaries; focused tests keep this flexible wire shape auditable.
+
+## KRaft Voter Management
+
+`AdminClient::add_raft_voter` and `AdminClient::remove_raft_voter` expose the
+KRaft controller APIs 80 and 81. They route through the configured controller,
+negotiate AddRaftVoter v1 when available, and retain typed throttle, error-code,
+and error-message outcomes. AddRaftVoter v1 supports
+`ack_when_committed(true)`; kafrust returns `Error::Unsupported` instead of
+silently weakening that request when only v0 is advertised. RemoveRaftVoter
+currently uses its stable v0 request shape.
+
+These are controller mutations. A transport failure after transmission is
+reported as `Error::AdminMutationOutcomeUnknown` and the request is never
+replayed automatically. Protocol, low-level Client, and injected controller
+routing tests cover the flexible request and response shapes. Live voter
+addition/removal qualification remains intentionally open because it must use
+an isolated multi-controller KRaft cluster and verify quorum membership after
+each mutation; the current source therefore does not claim live dynamic-quorum
+compatibility yet.
+
+## Unregister Broker
+
+`AdminClient::unregister_broker` exposes Kafka's `UnregisterBroker` API 64 v0
+through the active KRaft controller. It accepts the broker ID, preserves the
+broker throttle and error message, and returns a typed
+`UnregisterBrokerResult`. The method is a controller mutation and therefore
+does not replay a request after transmission; an ambiguous transport failure
+is reported as `Error::AdminMutationOutcomeUnknown`.
+
+The protocol, low-level `Client`, and injected controller-routing tests cover
+the flexible request header, broker ID, response error fields, and capability
+negotiation. A live qualification against an isolated multi-controller KRaft
+cluster remains open because unregistering a broker must be verified together
+with controller quorum health and broker re-registration behavior.
 
 ## Describe Share Groups
 
@@ -83,6 +196,55 @@ The focused protocol and coordinator-routing tests cover API 90 v0/v1 and
 share-group deletion. The Kafka 4.3.1 live lifecycle gate covers alter, list,
 delete-offsets, and delete-group together in
 [`32225957928`](https://github.com/TaeeunKil/kafrust/actions/runs/32225957928).
+
+## Describe Streams Groups
+
+`AdminClient::describe_streams_groups` exposes Kafka's flexible
+`StreamsGroupDescribe` v0 API (API key 89). It routes each Streams group ID to
+its active coordinator and returns typed group state and epochs, the initialized
+topology, state-changelog and repartition topics, member endpoints and tags,
+task offsets, active/target assignments, and authorized operations.
+
+The protocol, low-level `Client`, and coordinator-routing Admin path are now
+covered by focused wire and injected-broker tests. API 89 is a Kafka 4.x
+Streams-group capability and therefore returns `Error::Unsupported` when the
+broker does not advertise it. A live Kafka Streams application qualification is
+still open: a real application must initialize a topology and exercise member,
+task, and assignment fields before this path is included in the published
+compatibility claim. The complementary `StreamsGroupHeartbeat` API 88 remains
+the next implementation slice for full Streams group lifecycle coverage.
+
+The low-level `Client::streams_group_heartbeat_v0` path now exposes the
+flexible API 88 request and response wire shape, including topology
+initialization, task state, status, and Interactive Queries endpoint
+assignment. It is intentionally low-level for now: a high-level Streams
+consumer lifecycle still needs member-epoch management, topology validation,
+reconciliation, shutdown handling, and a live Kafka Streams application gate.
+
+## Share Group State
+
+The protocol and low-level `Client` expose Kafka 4.3 Share Group State APIs 83
+through 87: `InitializeShareGroupState`, `ReadShareGroupState`,
+`WriteShareGroupState`, `DeleteShareGroupState`, and
+`ReadShareGroupStateSummary`. The high-level `AdminClient` routes these calls
+to the share-group coordinator and returns typed topic, partition, state-batch,
+and delivery-count results.
+
+`WriteShareGroupState` prefers v1 when the broker advertises it. A requested
+`delivery_complete_count` is never silently discarded: a broker that only
+advertises v0 returns `Error::Unsupported`. The summary path likewise prefers
+v1 so its delivery-completion count is retained, while v0 remains available
+for brokers that only expose the earlier response shape. Initialize, Write,
+and Delete classify a response lost after transmission as
+`Error::AdminMutationOutcomeUnknown` and do not replay the mutation.
+
+The wire and injected-client tests cover compact arrays, UUID topic IDs,
+state batches, flexible tagged fields, and the v0/v1 field boundaries. The
+manual/scheduled Kafka 4.3.1 Share smoke workflow now also exercises metadata
+UUID discovery, broker-side state initialization, v1 write, full read, v1
+summary, and deletion. A successful run is still required before this API is
+included in the compatibility claim; coordinator failure and replicated state
+recovery remain separate qualification gates.
 
 ```rust
 use kafrust::{AdminClient, ClientConfig};
@@ -291,10 +453,33 @@ for topic in admin.list_topics().await? {
 ```
 
 `describe_cluster` sends Metadata v1 with an empty topic list so Kafka returns
-broker and controller data without enumerating topics. `list_topics` requests
-all visible topics. Topic-level metadata errors remain available through
+broker and controller data without enumerating topics. For the dedicated Kafka
+API 60 response, use `describe_cluster_with_options`; it negotiates
+DescribeCluster v1 when available and preserves the cluster ID, endpoint type,
+rack values, and optional cluster authorized-operations bitfield. It falls
+back to Metadata when API 60 is unavailable. `list_topics` requests all visible
+topics. Topic-level metadata errors remain available through
 `TopicListing::error_code` and `broker_error_kind` instead of aborting the
 entire listing.
+
+```rust,no_run
+use kafrust::{
+    AdminClient, ClientConfig, DescribeClusterEndpointType, DescribeClusterOptions,
+};
+
+# async fn example() -> kafrust::Result<()> {
+let admin = AdminClient::new(ClientConfig::new(["localhost:9092"]));
+let cluster = admin
+    .describe_cluster_with_options(
+        DescribeClusterOptions::new()
+            .include_cluster_authorized_operations(true)
+            .endpoint_type(DescribeClusterEndpointType::Brokers),
+    )
+    .await?;
+println!("cluster={:?} authorized={:?}", cluster.cluster_id(), cluster.cluster_authorized_operations());
+# Ok(())
+# }
+```
 
 ## Describe Topic Configurations
 
@@ -334,7 +519,10 @@ for resource in result.resources() {
 ```
 
 DescribeConfigs v1 can request all keys or a selected key set and optionally
-include Kafka's config synonyms. Resource failures remain in
+include Kafka's config synonyms. Set `include_documentation(true)` to opt into
+DescribeConfigs v4 on Kafka 4.0+; the returned `ConfigEntry` then preserves
+Kafka's raw config type and documentation text through `config_type()` and
+`documentation()`. Resource failures remain in
 `ConfigResourceResult`; unknown future config-source values are preserved as
 `ConfigSource::Other(raw_code)`. This API intentionally accepts topic resources
 only until broker-specific routing is implemented.
@@ -522,8 +710,46 @@ for result in results {
 # }
 ```
 
-ListGroups v1 is broker-scoped, so `list_groups` discovers the cluster and
-queries every advertised broker before sorting and deduplicating the results.
+ListGroups is broker-scoped, so `list_groups` discovers the cluster and queries
+every advertised broker before sorting and deduplicating the results. It
+negotiates v5, v4, or v1 per broker; the low-level `Client::list_groups_v1`
+method remains available when an exact legacy wire shape is required.
+For modern group metadata, use `list_groups_with_options`:
+
+```rust,no_run
+use kafrust::{AdminClient, ClientConfig, ListGroupsOptions};
+
+# async fn example() -> kafrust::Result<()> {
+let admin = AdminClient::new(ClientConfig::new(["localhost:9092"]));
+let groups = admin
+    .list_groups_with_options(
+        ListGroupsOptions::new()
+            .state("Stable")
+            .group_type("consumer"),
+    )
+    .await?;
+
+for group in groups {
+    println!(
+        "{} state={:?} type={:?} api_version={}",
+        group.group_id(),
+        group.group_state(),
+        group.group_type(),
+        group.api_version()
+    );
+}
+# Ok(())
+# }
+```
+
+The options path negotiates ListGroups v5 when available, v4 when only the
+state filter is representable, and v1 for an older broker. A state
+filter requires v4 and a group-type filter requires v5; kafrust returns
+`Error::Unsupported` instead of silently dropping a requested filter. The
+unfiltered high-level `list_groups` method uses the same negotiated path.
+Results from v4/v5 preserve broker-reported group state/type and the negotiated
+API version through `GroupListing`.
+
 DeleteGroups v1 discovers each requested group's coordinator independently and
 preserves per-group errors. Kafka returns `NonEmptyGroup` when active members
 still belong to a group; members should leave or expire before deletion.
@@ -664,12 +890,22 @@ assert!(offsets.is_success() && altered.is_success());
 # }
 ```
 
-`list_consumer_group_offsets_with_member` sends OffsetFetch v9 with the
-member ID, member epoch, and optional `require_stable` flag. The alteration
-method sends OffsetCommit v9, including optional static-member identity and
-the committed leader epoch. Transient coordinator movement is retried within
+`list_consumer_group_offsets_with_member` prefers OffsetFetch v10 when the
+coordinator advertises v10 and Metadata v12 can resolve the requested topic
+names to non-zero UUIDs. Callers may provide UUIDs directly through
+`ConsumerGroupOffsetQuery::topic_id` to avoid that metadata lookup. The
+response UUIDs are mapped back to the supplied topic names. If Metadata v12 is
+unavailable or cannot resolve every requested name, it sends the name-based
+OffsetFetch v9 fallback. The alteration method uses the same policy for
+OffsetCommit v10/v9, including optional static-member identity and the
+committed leader epoch. Transient coordinator movement is retried within
 `AdminClient::max_retries`; a stale member epoch is returned to the caller and
 is never silently retried with an invalid membership identity.
+
+Topic UUIDs may come from a Metadata v12 response or the joined group's
+metadata snapshot. A zero or missing UUID allows the Admin method to resolve
+the name through Metadata v12; if the broker cannot provide that capability,
+the same API remains usable through the v9 path on Kafka 3.x brokers.
 
 ## Delete Records
 

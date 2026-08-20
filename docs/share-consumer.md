@@ -27,6 +27,12 @@ Current evidence:
   acquisition-lock timeout, plus local renewal state retention tests.
 - an opt-in cancellable background heartbeat task using a dedicated coordinator
   connection, including a test that cancels an in-flight heartbeat request;
+- a reusable in-process fault-injection gate using the public
+  `ShareConsumerConfig::build()`, `poll()`, `acknowledge()`, and `commit()` path:
+  a dropped `ShareAcknowledge` response is classified as
+  `ShareAcknowledgementOutcomeUnknown`, is not retried, and leaves exactly one
+  record pending reconciliation; the public reconciliation path then observes
+  broker redelivery and completes a replacement `Accept`.
 - a Kafka 4.3.1 single-node live gate passing the complete poll/Renew/poll,
   acquisition-lock expiry/redelivery, Accept/commit, and close workflow in
   [run 32213499877](https://github.com/TaeeunKil/kafrust/actions/runs/32213499877).
@@ -76,10 +82,11 @@ and three independent matrix attempts passed in [run
 32216383214](https://github.com/TaeeunKil/kafrust/actions/runs/32216383214).
 
 This evidence proves the client-side wire and state-machine slice, the
-single-node Kafka 4.3.1 lifecycle, three-broker leader movement, and repeated
-coordinator churn within one long-running process. It does not prove
-ambiguous acknowledgement reconciliation, long-running soak behavior,
-assignment/rebalance qualification, or production readiness.
+deterministic response-loss safety boundary, the single-node Kafka 4.3.1
+lifecycle, three-broker leader movement, and repeated coordinator churn within
+one long-running process. It does not prove live ambiguous acknowledgement
+reconciliation, long-running soak behavior, assignment/rebalance qualification,
+or production readiness.
 
 ## Basic Usage
 
@@ -166,6 +173,13 @@ KIP-1206's ShareFetch v2 field so the broker does not acquire more than the
 configured limit. It fails during `build()` when the broker advertises only
 ShareFetch v1 instead of silently changing the requested processing semantics.
 
+Kafka may return the complete record batch even when only some offsets in that
+batch are acquired by this consumer. `AcquiredRecords` is therefore the
+authoritative delivery subset: kafrust decodes the batch for framing and
+limits, but returns only messages whose offsets fall inside an acquired range.
+Messages outside those ranges are not errors and must not be acknowledged by
+the application.
+
 ```rust
 use kafrust::{ShareAcquireMode, ShareConsumerConfig};
 
@@ -179,7 +193,11 @@ failure. If the request may have been transmitted, `commit()` returns
 `ShareAcknowledgementOutcomeUnknown` and leaves the records pending. The broker
 may have applied the acknowledgement before the response was lost, so callers
 must reconcile the broker-side state before choosing whether to replay it. This
-is an intentional safety boundary and a 1.0 exit criterion.
+is an intentional safety boundary and a 1.0 exit criterion. After
+`reconcile_acknowledgement_outcomes()`, the next `poll()` is allowed to fetch
+the broker's authoritative redelivery; `commit()` remains blocked until that
+redelivery clears the unknown state. Kafrust never replays the original
+acknowledgement automatically.
 
 ## Lifecycle and Limits
 
@@ -187,6 +205,11 @@ is an intentional safety boundary and a 1.0 exit criterion.
 per partition leader. Share session epochs are advanced only after a successful
 response; a final epoch of `-1` is used when closing a session. `close()` first
 releases unacknowledged records, closes share sessions, and leaves the group.
+If a prior `ShareAcknowledge` response was lost, shutdown skips that unknown
+acknowledgement rather than replaying it, still performs the session/group
+cleanup, and returns `ShareAcknowledgementOutcomeUnknown` after cleanup. Call
+`reconcile_acknowledgement_outcomes()` before shutdown when the application
+needs to observe broker redelivery and finish that record explicitly.
 
 The runtime has an opt-in detached background heartbeat task. An application may
 call `spawn_heartbeat_task(interval)` when record processing can exceed the
@@ -198,14 +221,27 @@ reconnecting only to a stale address. Bootstrap reconnect attempts rotate
 through configured broker addresses so a broker that accepts TCP but resets
 Kafka requests does not consume the entire retry budget. The multi-broker
 workflow now exercises three consecutive coordinator-loss/recovery cycles in
-one process. Assignment/rebalance behavior, ambiguous acknowledgement
-reconciliation, and long-running heartbeat soak tests remain open hardening
-work.
+one process. The deterministic public response-loss gate now covers the
+  unknown-outcome classification and deterministic redelivery recovery, while live
+  acknowledgement reconciliation,
+assignment/rebalance behavior, and long-running heartbeat soak tests remain
+open hardening work.
 
 The implementation reuses kafrust's bounded fetch decoder, including record
 batch decompression, header decoding, and configured response/decompression
 limits. A ShareFetch response is still untrusted broker input and is subject to
 the same array, frame, and record-size limits as the direct consumer path.
+
+The dedicated
+`.github/workflows/share-kafka-acknowledgement-soak.yml` workflow seeds 64
+records into Kafka 4.3.1 and repeatedly polls, acknowledges, and commits them
+with `RecordLimit`. It is a long-running operational gate for complete-batch
+filtering and ordinary acknowledgement progress; ambiguous response-loss
+reconciliation is exercised by the separate
+`.github/workflows/share-kafka-acknowledgement-ambiguity.yml` gate. That gate
+drops the first `ShareAcknowledge` response for a `Release`, requires the client
+to classify the outcome as unknown without replaying it, then verifies broker
+redelivery, replacement `Accept`, and successful completion.
 
 ## Release Gate
 
@@ -224,8 +260,13 @@ complete all of the following:
   coordinator-loss cycles are live-qualified, while long-running ownership
   remains open);
 - duplicate, delayed, and response-loss acknowledgement reconciliation;
+- the deterministic public response-loss gate in
+  `crates/kafrust/tests/fault_injection.rs` must remain green as the live
+  ambiguity workflow evolves;
 - live renewal expiry, redelivery, and acquisition-lock timeout behavior across
   multiple brokers and repeated runs;
+- response-loss fault injection through
+  `.github/workflows/share-kafka-acknowledgement-ambiguity.yml`;
 - long-running share-group soak and resource/backpressure measurements;
 - stable public API review and a `rust-rdkafka` migration example for queue
   workloads.

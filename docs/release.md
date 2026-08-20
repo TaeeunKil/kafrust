@@ -71,11 +71,16 @@ Run the same checks used by CI:
 
 ```sh
 cargo fmt --all -- --check
-cargo test --workspace
-cargo check -p kafrust --examples
-cargo clippy --workspace --all-targets -- -D warnings
-RUSTDOCFLAGS="-D warnings" cargo doc -p kafrust --no-deps
+git diff --check
+cargo check --workspace --all-targets --all-features
+cargo test --workspace --all-features
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo doc --workspace --all-features --no-deps
 ```
+
+The same validation runs on both the Rust 1.81 MSRV job and stable in the
+main CI workflow. Feature-specific broker smoke tests remain separate because
+they require a running Kafka deployment.
 
 Run the protocol packaging check before publishing:
 
