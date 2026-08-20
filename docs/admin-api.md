@@ -158,11 +158,12 @@ is reported as `Error::AdminMutationOutcomeUnknown`.
 
 The protocol, low-level `Client`, and injected controller-routing tests cover
 the flexible request header, broker ID, response error fields, and capability
-negotiation. The live `live-unregister-broker-rejoin.yml` gate now qualifies
-the operation against a three-node Kafka 4.3.1 KRaft cluster: it stops broker 1,
-unregisters it through the surviving controller quorum, restarts the same node,
-and verifies re-registration plus controller quorum health in
-[`32358666947`](https://github.com/TaeeunKil/kafrust/actions/runs/32358666947).
+negotiation. The live `live-unregister-broker-rejoin.yml` matrix now qualifies
+the operation against three-node KRaft clusters for Kafka 3.7.2, 3.8.1, 3.9.1,
+and 4.3.1: each job stops broker 1, unregisters it through the surviving
+controller quorum, restarts the same node, and verifies re-registration plus
+controller quorum health in
+[`32359316032`](https://github.com/TaeeunKil/kafrust/actions/runs/32359316032).
 
 The reusable current-source Admin response-drop gate also covers API 64: it
 drops the first `UnregisterBroker` response and reconciles the missing broker
@@ -173,9 +174,9 @@ Kafka 3.7.2 and 4.3.1 runs are
 and
 [`32357381879`](https://github.com/TaeeunKil/kafrust/actions/runs/32357381879).
 
-The multi-controller unregister/re-registration gate is now qualified for
-Kafka 4.3.1. This is separate from the response-drop proof above and does not
-claim behavior for every broker version, authorization policy, or failure
+The multi-controller unregister/re-registration gate is now qualified for the
+four tested broker versions. This is separate from the response-drop proof
+above and does not claim behavior for every authorization policy or failure
 workload.
 
 ## Describe Share Groups

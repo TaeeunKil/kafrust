@@ -2560,9 +2560,10 @@ Implemented evidence:
   throttle and broker error metadata typed, and a transmitted-request failure
   uses `AdminMutationOutcomeUnknown` rather than replaying the unregister
   mutation. Protocol, injected Client, and injected controller-routing tests
-  pass. The live multi-controller operational path is qualified for Kafka 4.3.1
-  in [`32358666947`](https://github.com/TaeeunKil/kafrust/actions/runs/32358666947):
-  a three-node KRaft cluster stopped broker 1, unregistered it through the
+  pass. The live multi-controller operational path is qualified for Kafka
+  3.7.2, 3.8.1, 3.9.1, and 4.3.1 in the four-job matrix
+  [`32359316032`](https://github.com/TaeeunKil/kafrust/actions/runs/32359316032):
+  each three-node KRaft cluster stopped broker 1, unregistered it through the
   surviving controller quorum, restarted the same node, and verified
   re-registration plus quorum health.
 - The reusable current-source Admin response-drop gate now includes API 64:
@@ -2573,12 +2574,10 @@ Implemented evidence:
   and 4.3.1 passed in [`32357381909`](https://github.com/TaeeunKil/kafrust/actions/runs/32357381909)
   and [`32357381879`](https://github.com/TaeeunKil/kafrust/actions/runs/32357381879).
 - The `live-unregister-broker-rejoin.yml` gate now qualifies the remaining
-  operational proof for Kafka 4.3.1 in
-  [`32358666947`](https://github.com/TaeeunKil/kafrust/actions/runs/32358666947).
-  It uses a three-node KRaft cluster, stops the target broker, unregisters it
-  through the surviving controller quorum, restarts the same node, and verifies
-  broker re-registration plus quorum health. Other broker versions and
-  workload-specific failure policy remain separate gates.
+  operational proof for Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 in
+  [`32359316032`](https://github.com/TaeeunKil/kafrust/actions/runs/32359316032).
+  Other authorization policies and workload-specific failure behavior remain
+  separate gates.
 - Kafka Share Group State APIs 83-87 are now implemented through flexible
   typed protocol requests and responses, low-level Client methods, and typed
   coordinator-routed Admin methods. Share-group membership/admin operations

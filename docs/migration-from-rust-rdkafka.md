@@ -415,11 +415,11 @@ Kafka 3.7.2 and 4.3.1 in
 [`32357381909`](https://github.com/TaeeunKil/kafrust/actions/runs/32357381909)
 and [`32357381879`](https://github.com/TaeeunKil/kafrust/actions/runs/32357381879);
 the broker is reconciled through `DescribeCluster` and the mutation is not
-replayed. A separate Kafka 4.3.1 three-node KRaft gate then stopped broker 1,
-unregistered it through the surviving controller quorum, restarted the same
-node, and verified re-registration plus quorum health in
-[`32358666947`](https://github.com/TaeeunKil/kafrust/actions/runs/32358666947).
-The operational path is qualified for that broker version; target
+replayed. The four-job Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1 three-node KRaft
+matrix then stopped broker 1, unregistered it through the surviving controller
+quorum, restarted the same node, and verified re-registration plus quorum
+health in [`32359316032`](https://github.com/TaeeunKil/kafrust/actions/runs/32359316032).
+The operational path is qualified for those broker versions; target
 authorization and broader failure workloads remain migration gates.
 CreatePartitions passed in
 [`31771635710`](https://github.com/TaeeunKil/kafrust/actions/runs/31771635710)
