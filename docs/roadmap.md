@@ -150,6 +150,14 @@ bootstrap servers. This closes the current published Share leader-failover
 slice. It does not close long-running multi-broker ownership, multi-member
 churn, secured Share, or production-SLO evidence.
 
+The published `0.3.5` Share acknowledgement soak also passed in
+[`32423629077`](https://github.com/TaeeunKil/kafrust/actions/runs/32423629077).
+From a fresh external project on Kafka 4.3.1, 64 unique records were acquired,
+acknowledged, and committed with `unique_offsets=64`. This closes the bounded
+published acknowledgement/commit slice; multi-member churn, broker-failover
+acknowledgement under load, secured Share, and production-SLO evidence remain
+open.
+
 The verification-hardening slice now includes a standalone pure-Rust fuzz
 workspace with ten libFuzzer targets covering primitive/flexible decoding,
 framing, classic and modern group descriptions, share-group offsets, and all

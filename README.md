@@ -512,6 +512,10 @@ leader-failover run in
 after the selected partition leader was stopped, the surviving published
 producer and ShareConsumer completed the post-failover path through the
 replacement leader.
+The published `0.3.5` acknowledgement soak also passed in
+[run 32423629077](https://github.com/TaeeunKil/kafrust/actions/runs/32423629077):
+64 unique records were acquired, acknowledged, and committed with 64 unique
+offsets from a fresh external project.
 The same-group repeated churn path also passed in
 [run 32391027028](https://github.com/TaeeunKil/kafrust/actions/runs/32391027028):
 member 2 rejoined after the first loss and later took over all six partitions
