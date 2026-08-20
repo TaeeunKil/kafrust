@@ -378,6 +378,14 @@ coverage toward a release candidate that can be qualified in staging.
   records/s; `rust-rdkafka 0.39.0` measured 87,752.37 producer and 176,675.91
   consumer records/s. This closes the published-artifact comparison slice but
   remains one workload baseline, not feature parity or production SLO evidence.
+- The published `0.3.1` comparison passed from a fresh external project in
+  [`32355261735`](https://github.com/TaeeunKil/kafrust/actions/runs/32355261735)
+  after the Fetch v13 flexible-tag schema-order fix. With the same 20,000
+  record, 1-KiB, batch-200 Kafka 4.3.1 profile, kafrust measured 54,613.98
+  producer and 256,404.94 consumer records/s; `rust-rdkafka 0.39.0` measured
+  91,577.21 producer and 323,988.79 consumer records/s. This closes the
+  published `0.3.1` comparison/reliability slice, not replacement, feature
+  parity, or production SLO qualification.
 - Published `0.2.30` then passed a 300-second single-node broker-restart soak
   in [`31768319413`](https://github.com/TaeeunKil/kafrust/actions/runs/31768319413),
   processing 21,597,600 records with 180 operation errors, 954 failed

@@ -332,6 +332,19 @@ records/s, while `rust-rdkafka 0.39.0` measured 87,752.37 producer and
 crates.io project; it remains a single workload baseline, not API/feature
 parity, a production SLO, or a universal performance ranking.
 
+The same comparison now passes from a fresh external project resolving the
+published `kafrust 0.3.1` artifact in
+[`32355261735`](https://github.com/TaeeunKil/kafrust/actions/runs/32355261735).
+Against Kafka 4.3.1 with 20,000 1-KiB records and batch size 200, kafrust
+measured 54,613.98 producer and 256,404.94 consumer records/s, while
+`rust-rdkafka 0.39.0` measured 91,577.21 producer and 323,988.79 consumer
+records/s. Two earlier `0.3.0` attempts failed because the published Fetch
+v13 encoder placed flexible tagged fields before the request body; Kafka
+closed the malformed request and kafrust surfaced `UnexpectedEof`. The
+schema-order fix is in current source and the published `0.3.1` run passes.
+This remains a single workload baseline, not API/feature parity, a production
+SLO, or a universal performance ranking.
+
 The published `0.2.30` single-node broker-restart soak passed for 300 seconds
 in [`31768319413`](https://github.com/TaeeunKil/kafrust/actions/runs/31768319413).
 The fresh external project processed 21,597,600 1-KiB records through a
