@@ -222,16 +222,19 @@ coverage toward a release candidate that can be qualified in staging.
   wire lifecycle from topology initialization through task-state heartbeat and
   graceful shutdown. The session now preserves the latest successful broker
   assignment in a typed `StreamsGroupSessionAssignment` snapshot. Background
-  heartbeat ownership, automatic assignment/task-runtime reconciliation, and
-  live Kafka Streams qualification remain open. This is not yet a published
-  Streams compatibility claim.
+  heartbeat ownership and automatic assignment/task-runtime reconciliation
+  remain open. This is not yet a published Streams compatibility claim.
 - `crates/kafrust/examples/streams_group_smoke.rs` and
   `.github/workflows/live-streams-group.yml` now provide a Kafka 4.3.1
   real-broker qualification entry point. The workflow enables the broker
   Streams protocol, creates a source topic, and exercises join, task-state
-  heartbeat, repeated heartbeat, and graceful leave. A passing workflow run
-  is still required before the source-level Streams session enters the
-  compatibility claim.
+  heartbeat, repeated heartbeat, and graceful leave. The live gate passed on
+  commit `eae39b4` in
+  [`32334600160`](https://github.com/TaeeunKil/kafrust/actions/runs/32334600160),
+  including the broker-required nullable task-offset path. This qualifies the
+  manual membership lifecycle only; a complete Kafka Streams application,
+  background heartbeat worker, assignment/task runtime, and multi-member
+  failure matrix remain outside the compatibility claim.
 - A standalone `fuzz/` workspace now provides ten libFuzzer targets, tracked
   seed corpora, and a manual/weekly corpus-backed campaign workflow. Each
   target has bounded RSS and input-time budgets, and the workflow uploads
