@@ -286,6 +286,10 @@ coverage toward a release candidate that can be qualified in staging.
   Metadata when a new assignment contains an unknown topic UUID. The complete
   live matrix passed the v1 initial join and dynamic post-join topic
   assignment/record path in [`32339508792`](https://github.com/TaeeunKil/kafrust/actions/runs/32339508792).
+  The same regex assignment, dynamic-topic, commit, and rejoin path passed
+  from published `0.3.1` in the fresh external project
+  [`32341967051`](https://github.com/TaeeunKil/kafrust/actions/runs/32341967051),
+  with Kafka CLI group-offset verification.
 - Flexible topic-UUID `Fetch` v13 is now implemented in the protocol crate and
   exposed through low-level `Client`. Direct and group consumers select it when
   broker capabilities and Metadata v12 provide a stable topic ID, while the
