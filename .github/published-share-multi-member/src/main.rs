@@ -31,6 +31,24 @@ fn bootstrap_servers() -> kafrust::Result<Vec<String>> {
     Ok(servers)
 }
 
+fn records_per_partition() -> kafrust::Result<i32> {
+    let value =
+        std::env::var("KAFRUST_SHARE_RECORDS_PER_PARTITION").unwrap_or_else(|_| "1".to_owned());
+    let records = value
+        .parse::<i32>()
+        .map_err(|_| kafrust::Error::InvalidConfiguration {
+            field: "KAFRUST_SHARE_RECORDS_PER_PARTITION",
+            reason: "published Share record count must be a positive integer",
+        })?;
+    if records <= 0 {
+        return Err(kafrust::Error::InvalidConfiguration {
+            field: "KAFRUST_SHARE_RECORDS_PER_PARTITION",
+            reason: "published Share record count must be a positive integer",
+        });
+    }
+    Ok(records)
+}
+
 #[tokio::main]
 async fn main() -> kafrust::Result<()> {
     match required_env("KAFRUST_OPERATION")?.as_str() {
@@ -46,27 +64,32 @@ async fn main() -> kafrust::Result<()> {
 async fn seed() -> kafrust::Result<()> {
     let topic = required_env("KAFRUST_SHARE_TOPIC")?;
     let prefix = required_env("KAFRUST_SHARE_VALUE_PREFIX")?;
+    let records_per_partition = records_per_partition()?;
     let mut producer = ProducerConfig::new(bootstrap_servers()?)
         .client_id("kafrust-published-share-multi-member-seeder")
         .build()
         .await?;
     for partition in 0..PARTITION_COUNT {
-        let value = format!("{prefix}{partition}");
-        let metadata = producer
-            .send(
-                ProducerRecord::to(topic.clone())
-                    .partition(partition)
-                    .value(value.into_bytes()),
-            )
-            .await?;
-        if metadata.partition() != partition {
-            return Err(kafrust::Error::InvalidConfiguration {
-                field: "KAFRUST_SHARE_VALUE_PREFIX",
-                reason: "published Share seeder returned a different partition",
-            });
+        for _ in 0..records_per_partition {
+            let value = format!("{prefix}{partition}");
+            let metadata = producer
+                .send(
+                    ProducerRecord::to(topic.clone())
+                        .partition(partition)
+                        .value(value.into_bytes()),
+                )
+                .await?;
+            if metadata.partition() != partition {
+                return Err(kafrust::Error::InvalidConfiguration {
+                    field: "KAFRUST_SHARE_VALUE_PREFIX",
+                    reason: "published Share seeder returned a different partition",
+                });
+            }
         }
     }
-    println!("published Share multi-member seeded partitions={PARTITION_COUNT}");
+    println!(
+        "published Share multi-member seeded partitions={PARTITION_COUNT} records_per_partition={records_per_partition}"
+    );
     Ok(())
 }
 
