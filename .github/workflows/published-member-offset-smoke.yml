@@ -91,7 +91,7 @@ jobs:
           sed \
             -e "s|__KAFRUST_VERSION__|${KAFRUST_PUBLISHED_VERSION}|" \
             -e 's|__KAFRUST_FEATURES__|[]|' \
-            .github/published-crate-smoke/Cargo.toml > "$project_dir/Cargo.toml"
+            .github/published-member-offset-smoke/Cargo.toml > "$project_dir/Cargo.toml"
           if [ "$project_dir" = "$GITHUB_WORKSPACE" ]; then
             echo "the published smoke project must be outside the repository"
             exit 1
