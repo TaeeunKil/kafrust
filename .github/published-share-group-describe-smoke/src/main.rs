@@ -42,16 +42,14 @@ async fn main() -> kafrust::Result<()> {
         .build()
         .await?;
     let member_id = consumer.member_id().to_owned();
-    let member_epoch = consumer.member_epoch();
-    consumer
-        .spawn_heartbeat_task(Duration::from_secs(1))
-        .await?;
 
     let admin = AdminClient::new(
         ClientConfig::new(bootstrap_servers).client_id("kafrust-published-share-group-describe"),
     );
     let deadline = Instant::now() + Duration::from_secs(30);
     let description = loop {
+        consumer.heartbeat().await?;
+        let member_epoch = consumer.member_epoch();
         let descriptions = admin
             .describe_share_groups(std::slice::from_ref(&group_id), true)
             .await?;
