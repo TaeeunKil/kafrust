@@ -1,0 +1,106 @@
+name: Live Kafka Unregister Broker Authorization
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "37 4 * * 4"
+
+env:
+  CARGO_TERM_COLOR: always
+  KAFRUST_UNREGISTER_BROKER_ID: "1"
+
+jobs:
+  authorization:
+    name: Kafka ${{ matrix.kafka-version }} UnregisterBroker authorization
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        kafka-version:
+          - 3.7.2
+          - 4.3.1
+    env:
+      KAFKA_VERSION: ${{ matrix.kafka-version }}
+      KAFRUST_BOOTSTRAP_SERVERS: localhost:39096
+      KAFRUST_SECURITY_PROTOCOL: sasl_plaintext
+      KAFRUST_SASL_MECHANISM: plain
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.81.0"
+
+      - name: Start authorizer Kafka
+        run: |
+          kafka_image="apache/kafka:${KAFKA_VERSION}"
+          cluster_id="$(docker run --rm "$kafka_image" /opt/kafka/bin/kafka-storage.sh random-uuid)"
+          docker run -d --name kafrust-unregister-auth \
+            -p 39096:9092 \
+            -e KAFKA_CLUSTER_ID="$cluster_id" \
+            -e KAFKA_NODE_ID=1 \
+            -e KAFKA_PROCESS_ROLES=broker,controller \
+            -e KAFKA_LISTENERS=INTERNAL://:29092,SASL_PLAINTEXT://:9092,CONTROLLER://:9093 \
+            -e KAFKA_ADVERTISED_LISTENERS=INTERNAL://localhost:29092,SASL_PLAINTEXT://localhost:39096 \
+            -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+            -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,SASL_PLAINTEXT:SASL_PLAINTEXT \
+            -e KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL \
+            -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@localhost:9093 \
+            -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
+            -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1 \
+            -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1 \
+            -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 \
+            -e KAFKA_AUTHORIZER_CLASS_NAME=org.apache.kafka.metadata.authorizer.StandardAuthorizer \
+            -e KAFKA_ALLOW_EVERYONE_IF_NO_ACL_FOUND=false \
+            -e 'KAFKA_SUPER_USERS=User:ANONYMOUS;User:admin' \
+            -e KAFKA_SASL_ENABLED_MECHANISMS=PLAIN \
+            -e 'KAFKA_LISTENER_NAME_SASL_PLAINTEXT_PLAIN_SASL_JAAS_CONFIG=org.apache.kafka.common.security.plain.PlainLoginModule required username="broker" password="broker-secret" user_admin="admin-secret" user_denied="denied-secret";' \
+            "$kafka_image"
+
+      - name: Wait for Kafka
+        run: |
+          for attempt in {1..90}; do
+            if docker exec kafrust-unregister-auth /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server localhost:29092 >/tmp/kafrust-unregister-auth-probe.log 2>&1; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/kafrust-unregister-auth-probe.log || true
+          docker logs kafrust-unregister-auth
+          exit 1
+
+      - name: Allow restricted principal to discover the cluster only
+        run: |
+          docker exec kafrust-unregister-auth /opt/kafka/bin/kafka-acls.sh \
+            --bootstrap-server localhost:29092 \
+            --add \
+            --allow-principal User:denied \
+            --operation Describe \
+            --cluster
+
+      - name: Verify restricted principal is denied
+        env:
+          KAFRUST_SASL_USERNAME: denied
+          KAFRUST_SASL_PASSWORD: denied-secret
+          KAFRUST_UNREGISTER_AUTH_PHASE: denied
+        run: cargo run -p kafrust --example admin_unregister_broker_authorization
+
+      - name: Verify administrator is allowed
+        env:
+          KAFRUST_SASL_USERNAME: admin
+          KAFRUST_SASL_PASSWORD: admin-secret
+          KAFRUST_UNREGISTER_AUTH_PHASE: allowed
+        run: cargo run -p kafrust --example admin_unregister_broker_authorization
+
+      - name: Dump Kafka diagnostics
+        if: failure()
+        run: docker logs kafrust-unregister-auth || true
+
+      - name: Cleanup
+        if: always()
+        run: docker rm -f kafrust-unregister-auth || true
