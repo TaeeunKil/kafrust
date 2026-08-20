@@ -103,6 +103,12 @@ jobs:
             --allow-principal User:denied \
             --operation Describe \
             --cluster
+          docker exec kafrust-delete-topics-auth /opt/kafka/bin/kafka-acls.sh \
+            --bootstrap-server localhost:29092 \
+            --add \
+            --allow-principal User:denied \
+            --operation Describe \
+            --topic "$KAFRUST_ADMIN_TOPIC"
 
       - name: Verify restricted principal is denied
         env:
