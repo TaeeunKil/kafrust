@@ -1,0 +1,185 @@
+name: Live Kafka Dynamic Quorum Authorization
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "57 4 * * 4"
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  KAFRUST_BOOTSTRAP_SERVERS: localhost:39100
+  KAFRUST_CONTROLLER_BOOTSTRAP_SERVERS: localhost:39100
+  KAFRUST_NEW_VOTER_ID: "2"
+  KAFRUST_NEW_VOTER_LISTENER: CONTROLLER://controller-2:9093
+
+jobs:
+  authorization:
+    name: Kafka 4.3.1 dynamic quorum authorization
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.81.0"
+
+      - name: Create Docker network
+        run: docker network create kafrust-dynamic-quorum-auth
+
+      - name: Start standalone controller
+        run: |
+          cluster_id="$(docker run --rm apache/kafka:4.3.1 /opt/kafka/bin/kafka-storage.sh random-uuid)"
+          echo "KAFRUST_CLUSTER_ID=$cluster_id" >> "$GITHUB_ENV"
+          docker run -d \
+            --name kafrust-dynamic-auth-controller-1 \
+            --hostname controller-1 \
+            --network kafrust-dynamic-quorum-auth \
+            -p 39100:9093 \
+            -e CLUSTER_ID="$cluster_id" \
+            apache/kafka:4.3.1 \
+            bash -ec '
+              cat > /tmp/controller.properties <<EOF
+          process.roles=controller
+          node.id=1
+          listeners=CONTROLLER://:9093
+          controller.listener.names=CONTROLLER
+          listener.security.protocol.map=CONTROLLER:SASL_PLAINTEXT
+          controller.quorum.bootstrap.servers=controller-1:9093,controller-2:9093
+          metadata.log.dir=/tmp/kraft-metadata
+          log.dirs=/tmp/kraft-logs
+          sasl.enabled.mechanisms=PLAIN
+          sasl.mechanism.controller.protocol=PLAIN
+          listener.name.controller.plain.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="broker" password="broker-secret" user_broker="broker-secret" user_admin="admin-secret" user_denied="denied-secret";
+          authorizer.class.name=org.apache.kafka.metadata.authorizer.StandardAuthorizer
+          allow.everyone.if.no.acl.found=false
+          super.users=User:broker;User:admin
+          EOF
+              cat > /tmp/admin.properties <<EOF
+          security.protocol=SASL_PLAINTEXT
+          sasl.mechanism=PLAIN
+          sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="admin" password="admin-secret";
+          EOF
+              /opt/kafka/bin/kafka-storage.sh format --cluster-id "$CLUSTER_ID" --standalone --config /tmp/controller.properties
+              exec /opt/kafka/bin/kafka-server-start.sh /tmp/controller.properties
+            '
+
+      - name: Wait for standalone controller
+        run: |
+          for attempt in {1..90}; do
+            if docker exec kafrust-dynamic-auth-controller-1 \
+              /opt/kafka/bin/kafka-metadata-quorum.sh \
+              --command-config /tmp/admin.properties \
+              --bootstrap-controller controller-1:9093 describe --status \
+              >/tmp/kafrust-dynamic-auth-quorum-status 2>&1; then
+              cat /tmp/kafrust-dynamic-auth-quorum-status
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/kafrust-dynamic-auth-quorum-status || true
+          docker logs kafrust-dynamic-auth-controller-1
+          exit 1
+
+      - name: Start observer controller
+        run: |
+          docker run -d \
+            --name kafrust-dynamic-auth-controller-2 \
+            --hostname controller-2 \
+            --network kafrust-dynamic-quorum-auth \
+            -p 39101:9093 \
+            -e CLUSTER_ID="$KAFRUST_CLUSTER_ID" \
+            apache/kafka:4.3.1 \
+            bash -ec '
+              cat > /tmp/controller.properties <<EOF
+          process.roles=controller
+          node.id=2
+          listeners=CONTROLLER://:9093
+          controller.listener.names=CONTROLLER
+          listener.security.protocol.map=CONTROLLER:SASL_PLAINTEXT
+          controller.quorum.bootstrap.servers=controller-1:9093,controller-2:9093
+          metadata.log.dir=/tmp/kraft-metadata
+          log.dirs=/tmp/kraft-logs
+          sasl.enabled.mechanisms=PLAIN
+          sasl.mechanism.controller.protocol=PLAIN
+          listener.name.controller.plain.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="broker" password="broker-secret" user_broker="broker-secret" user_admin="admin-secret" user_denied="denied-secret";
+          authorizer.class.name=org.apache.kafka.metadata.authorizer.StandardAuthorizer
+          allow.everyone.if.no.acl.found=false
+          super.users=User:broker;User:admin
+          EOF
+              cat > /tmp/admin.properties <<EOF
+          security.protocol=SASL_PLAINTEXT
+          sasl.mechanism=PLAIN
+          sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="admin" password="admin-secret";
+          EOF
+              /opt/kafka/bin/kafka-storage.sh format --cluster-id "$CLUSTER_ID" --no-initial-controllers --config /tmp/controller.properties
+              exec /opt/kafka/bin/kafka-server-start.sh /tmp/controller.properties
+            '
+
+      - name: Wait for observer replication
+        run: |
+          for attempt in {1..90}; do
+            output="$(docker exec kafrust-dynamic-auth-controller-1 \
+              /opt/kafka/bin/kafka-metadata-quorum.sh \
+              --command-config /tmp/admin.properties \
+              --bootstrap-controller controller-1:9093 describe --replication 2>/dev/null || true)"
+            printf '%s\n' "$output"
+            if printf '%s\n' "$output" | awk '$1 == 2 { found = 1 } END { exit found ? 0 : 1 }'; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs kafrust-dynamic-auth-controller-1
+          docker logs kafrust-dynamic-auth-controller-2
+          exit 1
+
+      - name: Read observer directory UUID
+        run: |
+          directory_id="$(docker exec kafrust-dynamic-auth-controller-2 \
+            sh -c "sed -n 's/^directory.id=//p' /tmp/kraft-metadata/meta.properties")"
+          test -n "$directory_id"
+          echo "KAFRUST_NEW_VOTER_DIRECTORY_ID=$directory_id" >> "$GITHUB_ENV"
+          echo "observer directory id discovered"
+
+      - name: Verify restricted principal is denied
+        run: |
+          docker exec kafrust-dynamic-auth-controller-1 \
+            /opt/kafka/bin/kafka-acls.sh \
+            --bootstrap-controller controller-1:9093 \
+            --command-config /tmp/admin.properties \
+            --add \
+            --allow-principal User:denied \
+            --operation Describe \
+            --cluster
+          KAFRUST_SECURITY_PROTOCOL=sasl_plaintext \
+          KAFRUST_SASL_MECHANISM=plain \
+          KAFRUST_SASL_USERNAME=denied \
+          KAFRUST_SASL_PASSWORD=denied-secret \
+          KAFRUST_EXPECT_RAFT_VOTER_ERROR=31 \
+            cargo run -p kafrust --example admin_dynamic_quorum
+
+      - name: Verify administrator is allowed
+        env:
+          KAFRUST_SECURITY_PROTOCOL: sasl_plaintext
+          KAFRUST_SASL_MECHANISM: plain
+          KAFRUST_SASL_USERNAME: admin
+          KAFRUST_SASL_PASSWORD: admin-secret
+        run: cargo run -p kafrust --example admin_dynamic_quorum
+
+      - name: Dump Kafka diagnostics
+        if: failure()
+        run: |
+          docker logs kafrust-dynamic-auth-controller-1 || true
+          docker logs kafrust-dynamic-auth-controller-2 || true
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker rm -f kafrust-dynamic-auth-controller-2 kafrust-dynamic-auth-controller-1 || true
+          docker network rm kafrust-dynamic-quorum-auth || true

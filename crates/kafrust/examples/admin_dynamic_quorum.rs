@@ -40,6 +40,7 @@ async fn main() -> kafrust::Result<()> {
             reason: "the new controller listener is required",
         }
     })?)?;
+    let expected_error = parse_optional_i16_env("KAFRUST_EXPECT_RAFT_VOTER_ERROR")?;
 
     let before = describe_metadata_quorum(&admin).await?;
     println!(
@@ -67,6 +68,37 @@ async fn main() -> kafrust::Result<()> {
                 .ack_when_committed(true),
         )
         .await?;
+    if let Some(expected_error) = expected_error {
+        if add.error_code() != expected_error {
+            return Err(Error::Broker {
+                code: add.error_code(),
+                context: format!(
+                    "AddRaftVoter returned {}, expected {}",
+                    add.error_code(),
+                    expected_error
+                ),
+            });
+        }
+        if expected_error == 0 {
+            return Err(Error::InvalidConfiguration {
+                field: "KAFRUST_EXPECT_RAFT_VOTER_ERROR",
+                reason: "zero is reserved for the success path",
+            });
+        }
+        let after_denied = describe_metadata_quorum(&admin).await?;
+        if after_denied
+            .current_voters()
+            .iter()
+            .any(|voter| voter.replica_id() == voter_id)
+        {
+            return Err(Error::Broker {
+                code: expected_error,
+                context: "AddRaftVoter changed quorum state despite the expected error".to_owned(),
+            });
+        }
+        println!("AddRaftVoter denied with expected error {expected_error}");
+        return Ok(());
+    }
     ensure_mutation_success(&add, "AddRaftVoter")?;
     let after_add = wait_for_voter(&admin, voter_id, true).await?;
     println!(
@@ -157,6 +189,23 @@ fn parse_i32_env(name: &'static str, default: i32) -> kafrust::Result<i32> {
         field: name,
         reason: "value must be a signed 32-bit integer",
     })
+}
+
+fn parse_optional_i16_env(name: &'static str) -> kafrust::Result<Option<i16>> {
+    let Some(value) = std::env::var_os(name) else {
+        return Ok(None);
+    };
+    let value = value.to_str().ok_or(Error::InvalidConfiguration {
+        field: name,
+        reason: "value must be valid UTF-8",
+    })?;
+    value
+        .parse()
+        .map(Some)
+        .map_err(|_| Error::InvalidConfiguration {
+            field: name,
+            reason: "value must be a signed 16-bit integer",
+        })
 }
 
 fn parse_directory_id(value: &str) -> kafrust::Result<[u8; 16]> {
