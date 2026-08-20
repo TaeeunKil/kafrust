@@ -36,11 +36,11 @@ async fn main() -> kafrust::Result<()> {
         .describe_cluster_with_options(
             DescribeClusterOptions::new()
                 .include_cluster_authorized_operations(true)
-                .endpoint_type(DescribeClusterEndpointType::Controllers),
+                .endpoint_type(DescribeClusterEndpointType::Brokers),
         )
         .await?;
     if dedicated.cluster_id().is_none()
-        || dedicated.endpoint_type() != Some(DescribeClusterEndpointType::Controllers)
+        || dedicated.endpoint_type() != Some(DescribeClusterEndpointType::Brokers)
         || dedicated.cluster_authorized_operations().is_none()
         || dedicated.brokers().is_empty()
     {
