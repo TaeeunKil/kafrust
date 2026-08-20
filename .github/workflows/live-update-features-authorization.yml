@@ -91,25 +91,6 @@ jobs:
           docker logs kafrust-update-features-auth
           exit 1
 
-      - name: Read current transaction feature level
-        run: |
-          feature_output="$(docker exec kafrust-update-features-auth \
-            /opt/kafka/bin/kafka-features.sh \
-            --bootstrap-server localhost:29092 describe 2>/tmp/kafrust-update-features-cli.log || true)"
-          if ! printf '%s\n' "$feature_output" | grep -q 'Feature: transaction.version'; then
-            feature_output="$(docker exec kafrust-update-features-auth \
-              /opt/kafka/bin/kafka-features.sh \
-              --describe --bootstrap-server localhost:29092 2>>/tmp/kafrust-update-features-cli.log || true)"
-          fi
-          printf '%s\n' "$feature_output"
-          feature_line="$(printf '%s\n' "$feature_output" | \
-            grep 'Feature: transaction.version')"
-          feature_level="$(printf '%s\n' "$feature_line" | \
-            sed -n 's/.*FinalizedVersionLevel: \([0-9][0-9]*\).*/\1/p')"
-          cat /tmp/kafrust-update-features-cli.log || true
-          test -n "$feature_level"
-          echo "KAFRUST_UPDATE_FEATURES_LEVEL=$feature_level" >> "$GITHUB_ENV"
-
       - name: Allow restricted principal to describe the cluster only
         run: |
           docker exec kafrust-update-features-auth /opt/kafka/bin/kafka-acls.sh \
