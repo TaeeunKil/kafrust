@@ -46,6 +46,16 @@ impl AddPartitionsToTxnTopic {
             Ok(())
         })
     }
+
+    fn encode_flexible(&self, encoder: &mut Encoder) -> Result<()> {
+        encoder.write_compact_string(&self.name)?;
+        encoder.write_compact_array(Some(&self.partitions), |encoder, partition| {
+            encoder.write_i32(*partition);
+            Ok(())
+        })?;
+        encoder.write_empty_tagged_fields();
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -101,15 +111,88 @@ impl AddPartitionsToTxnPartitionResult {
             error_code: decoder.read_i16()?,
         })
     }
+
+    fn decode_flexible(decoder: &mut Decoder<'_>) -> Result<Self> {
+        let result = Self {
+            partition_index: decoder.read_i32()?,
+            error_code: decoder.read_i16()?,
+        };
+        decoder.read_tagged_fields()?;
+        Ok(result)
+    }
+}
+
+/// AddPartitionsToTxn v3, the flexible form used by current Kafka brokers.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AddPartitionsToTxnRequestV3 {
+    pub correlation_id: i32,
+    pub client_id: Option<String>,
+    pub transactional_id: String,
+    pub producer_id: i64,
+    pub producer_epoch: i16,
+    pub topics: Vec<AddPartitionsToTxnTopic>,
+}
+
+impl AddPartitionsToTxnRequestV3 {
+    pub fn encode(&self) -> Result<Vec<u8>> {
+        let mut encoder = Encoder::new();
+        RequestHeader {
+            api_key: API_KEY,
+            api_version: 3,
+            correlation_id: self.correlation_id,
+            client_id: self.client_id.clone(),
+        }
+        .encode_v2(&mut encoder)?;
+        encoder.write_compact_string(&self.transactional_id)?;
+        encoder.write_i64(self.producer_id);
+        encoder.write_i16(self.producer_epoch);
+        encoder.write_compact_array(Some(&self.topics), |encoder, topic| {
+            topic.encode_flexible(encoder)
+        })?;
+        encoder.write_empty_tagged_fields();
+        Ok(encoder.into_bytes())
+    }
+}
+
+/// AddPartitionsToTxn v3 response with flexible tagged fields.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AddPartitionsToTxnResponseV3 {
+    pub throttle_time_ms: i32,
+    pub errors: Vec<AddPartitionsToTxnTopicResult>,
+}
+
+impl AddPartitionsToTxnResponseV3 {
+    pub fn decode_body(decoder: &mut Decoder<'_>) -> Result<Self> {
+        let throttle_time_ms = decoder.read_i32()?;
+        let errors = decoder
+            .read_compact_array("add partitions to transaction topic results", |decoder| {
+                let name = decoder.read_compact_string()?;
+                let partitions = decoder
+                    .read_compact_array(
+                        "add partitions to transaction partition results",
+                        AddPartitionsToTxnPartitionResult::decode_flexible,
+                    )?
+                    .unwrap_or_default();
+                decoder.read_tagged_fields()?;
+                Ok(AddPartitionsToTxnTopicResult { name, partitions })
+            })?
+            .unwrap_or_default();
+        decoder.read_tagged_fields()?;
+        Ok(Self {
+            throttle_time_ms,
+            errors,
+        })
+    }
 }
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::{
-        AddPartitionsToTxnRequestV0, AddPartitionsToTxnResponseV0, AddPartitionsToTxnTopic, API_KEY,
+        AddPartitionsToTxnRequestV0, AddPartitionsToTxnRequestV3, AddPartitionsToTxnResponseV0,
+        AddPartitionsToTxnResponseV3, AddPartitionsToTxnTopic, API_KEY,
     };
-    use crate::codec::Decoder;
+    use crate::codec::{Decoder, Encoder};
 
     #[test]
     fn encodes_add_partitions_to_txn_v0_request() {
@@ -152,6 +235,58 @@ mod tests {
         assert_eq!(response.errors[0].partitions[0].error_code, 0);
         assert_eq!(response.errors[0].partitions[1].partition_index, 2);
         assert_eq!(response.errors[0].partitions[1].error_code, 47);
+        assert!(decoder.is_empty());
+    }
+
+    #[test]
+    fn encodes_add_partitions_to_txn_v3_request_with_flexible_fields() {
+        let request = AddPartitionsToTxnRequestV3 {
+            correlation_id: 42,
+            client_id: Some("kafrust".to_owned()),
+            transactional_id: "orders-tx".to_owned(),
+            producer_id: 42,
+            producer_epoch: 3,
+            topics: vec![AddPartitionsToTxnTopic {
+                name: "orders".to_owned(),
+                partitions: vec![0, 2],
+            }],
+        };
+        let encoded = request.encode().unwrap();
+
+        assert_eq!(&encoded[0..8], &[0, 24, 0, 3, 0, 0, 0, 42]);
+        assert!(encoded
+            .windows(b"orders".len())
+            .any(|window| window == b"orders"));
+        assert_eq!(encoded.last(), Some(&0));
+    }
+
+    #[test]
+    fn decodes_add_partitions_to_txn_v3_response_with_tagged_fields() {
+        let mut bytes = Encoder::new();
+        bytes.write_i32(7);
+        bytes
+            .write_compact_array(Some(&[()]), |encoder, ()| {
+                encoder.write_compact_string("orders")?;
+                encoder.write_compact_array(Some(&[()]), |encoder, ()| {
+                    encoder.write_i32(2);
+                    encoder.write_i16(47);
+                    encoder.write_empty_tagged_fields();
+                    Ok(())
+                })?;
+                encoder.write_empty_tagged_fields();
+                Ok(())
+            })
+            .unwrap();
+        bytes.write_empty_tagged_fields();
+        let encoded = bytes.into_bytes();
+        let mut decoder = Decoder::new(&encoded);
+
+        let response = AddPartitionsToTxnResponseV3::decode_body(&mut decoder).unwrap();
+
+        assert_eq!(response.throttle_time_ms, 7);
+        assert_eq!(response.errors[0].name, "orders");
+        assert_eq!(response.errors[0].partitions[0].partition_index, 2);
+        assert_eq!(response.errors[0].partitions[0].error_code, 47);
         assert!(decoder.is_empty());
     }
 }
