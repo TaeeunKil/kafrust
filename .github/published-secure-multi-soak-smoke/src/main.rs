@@ -213,8 +213,7 @@ async fn main() -> kafrust::Result<()> {
     }
     let duration_seconds = started.elapsed().as_secs_f64();
     let records_per_second = produced as f64 / duration_seconds.max(f64::EPSILON);
-    let operation_error_rate_percent =
-        operation_errors as f64 / (produced.max(1) as f64) * 100.0;
+    let operation_error_rate_percent = operation_errors as f64 / (produced.max(1) as f64) * 100.0;
     let retry_ratio_percent = snapshot.retries as f64 / (produced.max(1) as f64) * 100.0;
     println!("{{\"topic\":\"{}\",\"duration_seconds\":{duration_seconds:.3},\"partitions\":{},\"records\":{},\"records_per_second\":{records_per_second:.3},\"payload_bytes\":{},\"operation_errors\":{},\"operation_error_rate_percent\":{operation_error_rate_percent:.6},\"recovered\":{},\"requests_started\":{},\"requests_failed\":{},\"retries\":{},\"retry_ratio_percent\":{retry_ratio_percent:.6},\"in_flight_requests\":{},\"max_in_flight_requests\":{},\"buffered_records\":{},\"max_buffered_records\":{}}}", topic, PARTITIONS, produced, payload.len(), operation_errors, recovered, snapshot.requests_started, snapshot.requests_failed, snapshot.retries, snapshot.in_flight_requests, snapshot.max_in_flight_requests, snapshot.buffered_records, snapshot.max_buffered_records);
     Ok(())
