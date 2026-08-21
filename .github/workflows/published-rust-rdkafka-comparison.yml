@@ -126,14 +126,22 @@ jobs:
           set -euo pipefail
           project_dir="$RUNNER_TEMP/kafrust-published-rust-rdkafka-comparison"
           repetitions='${{ inputs.repetitions }}'
+          mkdir -p comparison-logs
           : > comparison-results.jsonl
           for repetition in $(seq 1 "$repetitions"); do
             for implementation in kafrust rdkafka; do
-              KAFRUST_COMPARISON_IMPLEMENTATION="$implementation" \
+              log_file="comparison-logs/${implementation}-${repetition}.log"
+              echo "starting implementation=${implementation} repetition=${repetition}"
+              if ! KAFRUST_COMPARISON_IMPLEMENTATION="$implementation" \
                 KAFRUST_COMPARISON_REPETITION="$repetition" \
                 KAFRUST_TOPIC="kafrust-rdkafka-comparison-${GITHUB_RUN_ID}-${implementation}-${repetition}" \
                 cargo run --quiet --release --manifest-path "$project_dir/Cargo.toml" \
-                | tee -a comparison-results.jsonl
+                > >(tee -a comparison-results.jsonl) \
+                2> >(tee "$log_file" >&2); then
+                echo "comparison failed: implementation=${implementation} repetition=${repetition}" >&2
+                echo "stderr log: ${log_file}" >&2
+                exit 1
+              fi
             done
           done
           test "$(wc -l < comparison-results.jsonl)" -eq "$((repetitions * 2))"
@@ -167,10 +175,14 @@ jobs:
           grep -A1 -q 'version = "0.39.0"' "$RUNNER_TEMP/kafrust-published-rust-rdkafka-comparison/Cargo.lock"
 
       - name: Upload comparison results
+        if: always()
         uses: actions/upload-artifact@v6
         with:
           name: kafrust-rust-rdkafka-comparison-${{ github.run_id }}
-          path: comparison-results.jsonl
+          path: |
+            comparison-results.jsonl
+            comparison-logs
+          if-no-files-found: warn
           retention-days: 90
 
       - name: Dump Kafka logs
