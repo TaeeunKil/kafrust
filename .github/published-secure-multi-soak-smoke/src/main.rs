@@ -171,9 +171,7 @@ async fn main() -> kafrust::Result<()> {
                         // Count only records in the acknowledged batch range.
                         let accepted = records
                             .iter()
-                            .filter(|record| {
-                                (batch_start..batch_end).contains(&record.offset())
-                            })
+                            .filter(|record| (batch_start..batch_end).contains(&record.offset()))
                             .count()
                             .min(remaining);
                         consumed += accepted;
@@ -213,7 +211,12 @@ async fn main() -> kafrust::Result<()> {
             "secure multi-soak did not observe retry and recovery",
         ));
     }
-    println!("{{\"topic\":\"{}\",\"duration_seconds\":{:.3},\"partitions\":{},\"records\":{},\"payload_bytes\":{},\"operation_errors\":{},\"recovered\":{},\"requests_started\":{},\"requests_failed\":{},\"retries\":{},\"in_flight_requests\":{},\"buffered_records\":{}}}", topic, started.elapsed().as_secs_f64(), PARTITIONS, produced, payload.len(), operation_errors, recovered, snapshot.requests_started, snapshot.requests_failed, snapshot.retries, snapshot.in_flight_requests, snapshot.buffered_records);
+    let duration_seconds = started.elapsed().as_secs_f64();
+    let records_per_second = produced as f64 / duration_seconds.max(f64::EPSILON);
+    let operation_error_rate_percent =
+        operation_errors as f64 / (produced.max(1) as f64) * 100.0;
+    let retry_ratio_percent = snapshot.retries as f64 / (produced.max(1) as f64) * 100.0;
+    println!("{{\"topic\":\"{}\",\"duration_seconds\":{duration_seconds:.3},\"partitions\":{},\"records\":{},\"records_per_second\":{records_per_second:.3},\"payload_bytes\":{},\"operation_errors\":{},\"operation_error_rate_percent\":{operation_error_rate_percent:.6},\"recovered\":{},\"requests_started\":{},\"requests_failed\":{},\"retries\":{},\"retry_ratio_percent\":{retry_ratio_percent:.6},\"in_flight_requests\":{},\"max_in_flight_requests\":{},\"buffered_records\":{},\"max_buffered_records\":{}}}", topic, PARTITIONS, produced, payload.len(), operation_errors, recovered, snapshot.requests_started, snapshot.requests_failed, snapshot.retries, snapshot.in_flight_requests, snapshot.max_in_flight_requests, snapshot.buffered_records, snapshot.max_buffered_records);
     Ok(())
 }
 

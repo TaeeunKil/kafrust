@@ -106,7 +106,8 @@ async fn main() -> kafrust::Result<()> {
             "\"consume_records_per_second\":{:.2},\"consumed_bytes\":{},",
             "\"batch_p50_ms\":{:.3},\"batch_p95_ms\":{:.3},\"batch_p99_ms\":{:.3},",
             "\"requests_started\":{},\"retries\":{},\"in_flight_requests\":{},",
-            "\"buffered_records\":{}}}"
+            "\"max_in_flight_requests\":{},\"buffered_records\":{},",
+            "\"max_buffered_records\":{}}}"
         ),
         topic,
         compression_name(compression),
@@ -125,6 +126,8 @@ async fn main() -> kafrust::Result<()> {
         snapshot.retries,
         snapshot.in_flight_requests,
         snapshot.buffered_records,
+        snapshot.max_in_flight_requests,
+        snapshot.max_buffered_records,
     );
     Ok(())
 }

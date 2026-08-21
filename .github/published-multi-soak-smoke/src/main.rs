@@ -156,7 +156,8 @@ async fn main() -> kafrust::Result<()> {
             "{{\"topic\":\"{}\",\"duration_seconds\":{:.3},\"partitions\":{},",
             "\"records\":{},\"payload_bytes\":{},\"operation_errors\":{},",
             "\"recovered\":{},\"requests_started\":{},\"requests_failed\":{},",
-            "\"retries\":{},\"in_flight_requests\":{},\"buffered_records\":{}}}"
+            "\"retries\":{},\"in_flight_requests\":{},\"max_in_flight_requests\":{},",
+            "\"buffered_records\":{},\"max_buffered_records\":{}}}"
         ),
         topic,
         started.elapsed().as_secs_f64(),
@@ -170,6 +171,8 @@ async fn main() -> kafrust::Result<()> {
         snapshot.retries,
         snapshot.in_flight_requests,
         snapshot.buffered_records,
+        snapshot.max_in_flight_requests,
+        snapshot.max_buffered_records,
     );
     Ok(())
 }

@@ -113,6 +113,12 @@ jobs:
           wait "$soak_pid"
           test -s published-soak.json
           grep -q '"recovered":true' published-soak.json
+          jq -e '
+            (.in_flight_requests == 0) and
+            (.buffered_records == 0) and
+            (.max_in_flight_requests >= .in_flight_requests) and
+            (.max_buffered_records >= .buffered_records)
+          ' published-soak.json >/dev/null
 
       - name: Verify published dependency version
         run: |

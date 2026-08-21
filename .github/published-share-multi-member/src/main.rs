@@ -1,6 +1,6 @@
 use kafrust::{
-    ClientMetrics, ProducerConfig, ProducerRecord, ShareAcknowledgementType, ShareAcquireMode,
-    ShareConsumerConfig,
+    ClientMetrics, ProducerConfig, ProducerRecord, SecurityProtocol, ShareAcknowledgementType,
+    ShareAcquireMode, ShareConsumerConfig,
 };
 use std::collections::BTreeSet;
 use std::io::Write;
@@ -30,6 +30,42 @@ fn bootstrap_servers() -> kafrust::Result<Vec<String>> {
         });
     }
     Ok(servers)
+}
+
+fn tls_root_certificate_der() -> kafrust::Result<Option<Vec<u8>>> {
+    let Some(path) = std::env::var_os("KAFRUST_TLS_ROOT_CERT_DER_PATH") else {
+        return Ok(None);
+    };
+    let certificate = std::fs::read(path).map_err(kafrust::Error::Io)?;
+    if certificate.is_empty() {
+        return Err(kafrust::Error::InvalidConfiguration {
+            field: "KAFRUST_TLS_ROOT_CERT_DER_PATH",
+            reason: "TLS CA certificate must not be empty",
+        });
+    }
+    Ok(Some(certificate))
+}
+
+fn apply_security(mut config: ProducerConfig, ca: Option<&[u8]>) -> ProducerConfig {
+    if let Some(ca) = ca {
+        config = config
+            .security_protocol(SecurityProtocol::SaslTls)
+            .tls_server_name("localhost")
+            .tls_root_certificate_der(ca.to_vec())
+            .sasl_scram_sha_256("kafrust", "kafrust-secret");
+    }
+    config
+}
+
+fn apply_share_security(mut config: ShareConsumerConfig, ca: Option<&[u8]>) -> ShareConsumerConfig {
+    if let Some(ca) = ca {
+        config = config
+            .security_protocol(SecurityProtocol::SaslTls)
+            .tls_server_name("localhost")
+            .tls_root_certificate_der(ca.to_vec())
+            .sasl_scram_sha_256("kafrust", "kafrust-secret");
+    }
+    config
 }
 
 fn records_per_partition() -> kafrust::Result<i32> {
@@ -66,10 +102,14 @@ async fn seed() -> kafrust::Result<()> {
     let topic = required_env("KAFRUST_SHARE_TOPIC")?;
     let prefix = required_env("KAFRUST_SHARE_VALUE_PREFIX")?;
     let records_per_partition = records_per_partition()?;
-    let mut producer = ProducerConfig::new(bootstrap_servers()?)
-        .client_id("kafrust-published-share-multi-member-seeder")
-        .build()
-        .await?;
+    let ca = tls_root_certificate_der()?;
+    let mut producer = apply_security(
+        ProducerConfig::new(bootstrap_servers()?)
+            .client_id("kafrust-published-share-multi-member-seeder"),
+        ca.as_deref(),
+    )
+    .build()
+    .await?;
     for partition in 0..PARTITION_COUNT {
         for _ in 0..records_per_partition {
             let value = format!("{prefix}{partition}");
@@ -122,18 +162,22 @@ async fn member() -> kafrust::Result<()> {
     let heartbeat_ready_path = std::env::var("KAFRUST_SHARE_MEMBER_HEARTBEAT_READY_FILE").ok();
     let run_seconds = run_seconds()?;
     let metrics = ClientMetrics::new();
+    let ca = tls_root_certificate_der()?;
 
-    let mut consumer = ShareConsumerConfig::new(bootstrap_servers()?, group_id)
-        .client_id(member_id.clone())
-        .subscribe(topic.clone())
-        .max_wait_ms(100)
-        .max_records(1)
-        .batch_size(1)
-        .max_retries(10)
-        .acquire_mode(ShareAcquireMode::RecordLimit)
-        .metrics(metrics.clone())
-        .build()
-        .await?;
+    let mut consumer = apply_share_security(
+        ShareConsumerConfig::new(bootstrap_servers()?, group_id)
+            .client_id(member_id.clone())
+            .subscribe(topic.clone())
+            .max_wait_ms(100)
+            .max_records(1)
+            .batch_size(1)
+            .max_retries(10)
+            .acquire_mode(ShareAcquireMode::RecordLimit)
+            .metrics(metrics.clone()),
+        ca.as_deref(),
+    )
+    .build()
+    .await?;
     std::fs::write(&ready_path, b"joined\n").map_err(kafrust::Error::Io)?;
 
     wait_for_start(&start_path).await?;
@@ -206,21 +250,24 @@ async fn member() -> kafrust::Result<()> {
             reason: "published Share metrics consumed count differs from accepted records",
         });
     }
-    if snapshot.in_flight_requests != 0 {
+    if snapshot.in_flight_requests != 0 || snapshot.buffered_records != 0 {
         return Err(kafrust::Error::InvalidConfiguration {
             field: "KAFRUST_SHARE_MEMBER_OUTPUT_FILE",
-            reason: "published Share member closed with in-flight requests",
+            reason: "published Share member closed with outstanding client resources",
         });
     }
     println!(
-        "published Share multi-member member={} assignment={} accepted={} consumed={} in_flight={} failed={} retries={}",
+        "published Share multi-member member={} assignment={} accepted={} consumed={} in_flight={} buffered={} failed={} retries={} max_in_flight={} max_buffered={}",
         member_id,
         assignment_count,
         accepted.len(),
         snapshot.consumed_records,
         snapshot.in_flight_requests,
+        snapshot.buffered_records,
         snapshot.requests_failed,
         snapshot.retries,
+        snapshot.max_in_flight_requests,
+        snapshot.max_buffered_records,
     );
     Ok(())
 }

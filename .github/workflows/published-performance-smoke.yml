@@ -97,7 +97,13 @@ jobs:
         run: |
           cargo run --release --manifest-path "$RUNNER_TEMP/kafrust-published-performance-smoke/Cargo.toml" \
             | tee published-performance.json
-          grep -q '"records":' published-performance.json
+          jq -e '
+            (.records > 0) and
+            (.in_flight_requests == 0) and
+            (.buffered_records == 0) and
+            (.max_in_flight_requests >= .in_flight_requests) and
+            (.max_buffered_records >= .buffered_records)
+          ' published-performance.json >/dev/null
 
       - name: Verify published dependency versions
         run: |

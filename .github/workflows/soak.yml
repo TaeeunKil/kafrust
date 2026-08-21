@@ -96,6 +96,12 @@ jobs:
           docker start kafrust-kafka
           wait "$soak_pid"
           test -s soak-result.json
+          jq -e '
+            (.in_flight_requests == 0) and
+            (.buffered_records == 0) and
+            (.max_in_flight_requests >= .in_flight_requests) and
+            (.max_buffered_records >= .buffered_records)
+          ' soak-result.json >/dev/null
 
       - name: Upload soak result
         uses: actions/upload-artifact@v6

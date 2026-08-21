@@ -31,6 +31,22 @@ on:
         options:
           - single
           - simultaneous
+      min_records_per_second:
+        description: "Minimum records/s for this qualification workload"
+        required: true
+        default: "10000"
+      max_operation_errors:
+        description: "Maximum high-level operation errors during the soak"
+        required: true
+        default: "1000"
+      max_failed_requests:
+        description: "Maximum failed Kafka requests during the soak"
+        required: true
+        default: "100"
+      max_retry_ratio_percent:
+        description: "Maximum retries as a percentage of acknowledged records"
+        required: true
+        default: "1.0"
   schedule:
     - cron: "47 4 * * 6"
 
@@ -49,6 +65,10 @@ env:
   KAFRUST_FAULT_MODE: ${{ inputs.fault_mode || 'simultaneous' }}
   KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version || '0.3.5' }}
   KAFRUST_KAFKA_VERSION: ${{ inputs.kafka_version || '4.3.1' }}
+  KAFRUST_MIN_RECORDS_PER_SECOND: ${{ inputs.min_records_per_second || '10000' }}
+  KAFRUST_MAX_OPERATION_ERRORS: ${{ inputs.max_operation_errors || '1000' }}
+  KAFRUST_MAX_FAILED_REQUESTS: ${{ inputs.max_failed_requests || '100' }}
+  KAFRUST_MAX_RETRY_RATIO_PERCENT: ${{ inputs.max_retry_ratio_percent || '1.0' }}
   KAFRUST_SOAK_BATCH_SIZE: "100"
   KAFRUST_SOAK_PAYLOAD_BYTES: "1024"
 
@@ -182,6 +202,21 @@ jobs:
           wait "$soak_pid"
           test -s published-secure-multi-soak.json
           grep -q '"recovered":true' published-secure-multi-soak.json
+          jq -e \
+            --argjson min_records_per_second "$KAFRUST_MIN_RECORDS_PER_SECOND" \
+            --argjson max_operation_errors "$KAFRUST_MAX_OPERATION_ERRORS" \
+            --argjson max_failed_requests "$KAFRUST_MAX_FAILED_REQUESTS" \
+            --argjson max_retry_ratio_percent "$KAFRUST_MAX_RETRY_RATIO_PERCENT" \
+            '
+            (.in_flight_requests == 0) and
+            (.buffered_records == 0) and
+            (.max_in_flight_requests >= .in_flight_requests) and
+            (.max_buffered_records >= .buffered_records) and
+            (.records_per_second >= $min_records_per_second) and
+            (.operation_errors <= $max_operation_errors) and
+            (.requests_failed <= $max_failed_requests) and
+            (.retry_ratio_percent <= $max_retry_ratio_percent)
+          ' published-secure-multi-soak.json >/dev/null
 
       - name: Verify published dependency version
         run: |

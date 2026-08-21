@@ -176,6 +176,10 @@ jobs:
           test "$(cut -d, -f2,3 "$RUNNER_TEMP/share-member-observed" | sort | uniq | wc -l)" -eq "$expected_total"
           test "$(cut -d, -f2,3 "$output_base-1" | sort | uniq | wc -l)" -eq "$(wc -l < "$output_base-1")"
           test "$(cut -d, -f2,3 "$output_base-2" | sort | uniq | wc -l)" -eq "$(wc -l < "$output_base-2")"
+          grep -Eq 'in_flight=0 buffered=0' "$log_base-1"
+          grep -Eq 'in_flight=0 buffered=0' "$log_base-2"
+          grep -Eq 'max_in_flight=[0-9]+ max_buffered=[0-9]+' "$log_base-1"
+          grep -Eq 'max_in_flight=[0-9]+ max_buffered=[0-9]+' "$log_base-2"
 
       - name: Verify published dependency versions
         env:

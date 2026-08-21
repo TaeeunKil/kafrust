@@ -85,8 +85,14 @@ jobs:
 
       - name: Build and run published Streams runtime
         run: |
+          set -o pipefail
           project_dir="$RUNNER_TEMP/kafrust-published-streams-group-runtime"
-          cargo run --release --manifest-path "$project_dir/Cargo.toml"
+          cargo run --release --manifest-path "$project_dir/Cargo.toml" \
+            | tee /tmp/kafrust-published-streams-runtime.log
+          grep -Fq "published streams group describe group_id=$KAFRUST_STREAMS_GROUP_ID" \
+            /tmp/kafrust-published-streams-runtime.log
+          grep -Fq "state=Stable" /tmp/kafrust-published-streams-runtime.log
+          grep -Fq "members=1" /tmp/kafrust-published-streams-runtime.log
 
       - name: Verify published dependency versions
         env:

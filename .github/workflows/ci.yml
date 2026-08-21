@@ -33,6 +33,15 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all --check
 
+      - name: Check published external example formatting
+        run: |
+          rustfmt --edition 2021 --check \
+            .github/published-performance-smoke/src/main.rs \
+            .github/published-multi-soak-smoke/src/main.rs \
+            .github/published-secure-multi-soak-smoke/src/main.rs \
+            .github/published-share-multi-member/src/main.rs \
+            .github/published-streams-group-runtime/src/main.rs
+
       - name: Check whitespace
         run: git diff --check
 
@@ -48,6 +57,33 @@ jobs:
       - name: Check build
         run: cargo check --workspace --all-targets --all-features
 
+      - name: Check published Streams example against current source
+        run: |
+          project_dir="$RUNNER_TEMP/kafrust-published-streams-compile"
+          cargo new --bin "$project_dir"
+          cp .github/published-streams-group-runtime/src/main.rs "$project_dir/src/main.rs"
+          sed "s|kafrust = \"__KAFRUST_VERSION__\"|kafrust = { path = \"$GITHUB_WORKSPACE/crates/kafrust\" }|" \
+            .github/published-streams-group-runtime/Cargo.toml > "$project_dir/Cargo.toml"
+          cargo check --manifest-path "$project_dir/Cargo.toml"
+
+      - name: Check published Share example against current source
+        run: |
+          project_dir="$RUNNER_TEMP/kafrust-published-share-compile"
+          cargo new --bin "$project_dir"
+          cp .github/published-share-multi-member/src/main.rs "$project_dir/src/main.rs"
+          sed "s|kafrust = \"__KAFRUST_VERSION__\"|kafrust = { path = \"$GITHUB_WORKSPACE/crates/kafrust\" }|" \
+            .github/published-share-multi-member/Cargo.toml > "$project_dir/Cargo.toml"
+          cargo check --manifest-path "$project_dir/Cargo.toml"
+
+      - name: Check published secure Share example against current source
+        run: |
+          project_dir="$RUNNER_TEMP/kafrust-published-share-secure-compile"
+          cargo new --bin "$project_dir"
+          cp .github/published-share-multi-member/src/main.rs "$project_dir/src/main.rs"
+          sed "s|kafrust = \"__KAFRUST_VERSION__\"|kafrust = { path = \"$GITHUB_WORKSPACE/crates/kafrust\", features = [\"tls\"] }|" \
+            .github/published-share-multi-member/Cargo.toml > "$project_dir/Cargo.toml"
+          cargo check --manifest-path "$project_dir/Cargo.toml"
+
       - name: Run clippy
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
@@ -56,3 +92,6 @@ jobs:
 
       - name: Build documentation
         run: cargo doc --workspace --all-features --no-deps
+
+      - name: Verify kafrust package contents
+        run: cargo package -p kafrust --all-features --locked --no-verify
