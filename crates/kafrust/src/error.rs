@@ -249,6 +249,8 @@ pub enum Error {
         /// Timeout applied to the provider call in milliseconds.
         timeout_ms: u64,
     },
+    /// An OAUTHBEARER token source returned a token that was already expired.
+    OAuthBearerTokenExpired,
     /// The broker outcome of an EndTxn request could not be observed.
     TransactionOutcomeUnknown {
         /// Transaction operation whose outcome is unknown.
@@ -455,6 +457,9 @@ impl fmt::Display for Error {
                 f,
                 "SASL/OAUTHBEARER token provider timed out after {timeout_ms}ms"
             ),
+            Self::OAuthBearerTokenExpired => {
+                f.write_str("SASL/OAUTHBEARER token provider returned an expired token")
+            }
             Self::TransactionOutcomeUnknown { operation } => write!(
                 f,
                 "transaction {operation} outcome is unknown; discard the producer"
@@ -586,6 +591,7 @@ impl std::error::Error for Error {
             | Self::MissingSaslCredentials
             | Self::InvalidSaslResponse { .. }
             | Self::OAuthBearerTokenTimeout { .. }
+            | Self::OAuthBearerTokenExpired
             | Self::TransactionOutcomeUnknown { .. }
             | Self::TransactionProducerDefunct
             | Self::Broker { .. }

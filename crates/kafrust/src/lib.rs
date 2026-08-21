@@ -4,6 +4,9 @@
 
 /// Kafka administration API.
 pub mod admin;
+/// Optional blocking adapters for core producer and direct-consumer APIs.
+#[cfg(feature = "blocking")]
+pub mod blocking;
 /// Low-level Kafka request client.
 pub mod client;
 /// Shared connection configuration.
@@ -92,6 +95,12 @@ pub use admin::{
     TopicConfigResource, TopicConfigUpdate, TopicConfigUpdateEntry, TopicListing,
     TransactionDescription, TransactionDescriptionTopic, UnregisterBrokerResult,
     UpdateFeaturesOptions, UpdateFeaturesResult,
+};
+#[cfg(feature = "blocking")]
+pub use blocking::{
+    BlockingAdminClient, BlockingBufferedProducer, BlockingBufferedProducerHandle,
+    BlockingConsumer, BlockingConsumerGroup, BlockingProducer, BlockingShareConsumer,
+    BlockingStreamsGroupSession,
 };
 pub use client::Client;
 pub use config::{

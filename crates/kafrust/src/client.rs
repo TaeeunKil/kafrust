@@ -1,9 +1,12 @@
 use base64::Engine as _;
 use kafrust_protocol::api::add_offsets_to_txn::{
-    AddOffsetsToTxnRequestV0, AddOffsetsToTxnResponseV0,
+    AddOffsetsToTxnRequestV0, AddOffsetsToTxnRequestV3, AddOffsetsToTxnResponseV0,
+    AddOffsetsToTxnResponseV3, API_KEY as ADD_OFFSETS_TO_TXN_API_KEY,
 };
 use kafrust_protocol::api::add_partitions_to_txn::{
-    AddPartitionsToTxnRequestV0, AddPartitionsToTxnResponseV0, AddPartitionsToTxnTopic,
+    AddPartitionsToTxnRequestV0, AddPartitionsToTxnRequestV3, AddPartitionsToTxnResponseV0,
+    AddPartitionsToTxnResponseV3, AddPartitionsToTxnTopic,
+    API_KEY as ADD_PARTITIONS_TO_TXN_API_KEY,
 };
 use kafrust_protocol::api::alter_client_quotas::{
     AlterClientQuotasRequestV0, AlterClientQuotasResponseV0,
@@ -89,7 +92,10 @@ use kafrust_protocol::api::elect_leaders::{
     ElectLeadersRequestV0, ElectLeadersRequestV1, ElectLeadersRequestV2, ElectLeadersResponseV0,
     ElectLeadersResponseV1, ElectLeadersResponseV2, ElectLeadersTopicV0,
 };
-use kafrust_protocol::api::end_txn::{EndTxnRequestV0, EndTxnResponseV0};
+use kafrust_protocol::api::end_txn::{
+    EndTxnRequestV0, EndTxnRequestV3, EndTxnResponseV0, EndTxnResponseV3,
+    API_KEY as END_TXN_API_KEY,
+};
 use kafrust_protocol::api::fetch::{
     FetchForgottenTopicV13, FetchForgottenTopicV14, FetchForgottenTopicV15, FetchForgottenTopicV16,
     FetchForgottenTopicV17, FetchForgottenTopicV18, FetchPartitionV11, FetchPartitionV12,
@@ -111,7 +117,10 @@ use kafrust_protocol::api::incremental_alter_configs::{
     IncrementalAlterConfigsRequestV0, IncrementalAlterConfigsResourceV0,
     IncrementalAlterConfigsResponseV0,
 };
-use kafrust_protocol::api::init_producer_id::{InitProducerIdRequestV0, InitProducerIdResponseV0};
+use kafrust_protocol::api::init_producer_id::{
+    InitProducerIdRequestV0, InitProducerIdRequestV2, InitProducerIdResponseV0,
+    InitProducerIdResponseV2, API_KEY as INIT_PRODUCER_ID_API_KEY,
+};
 use kafrust_protocol::api::join_group::{
     JoinGroupProtocol, JoinGroupRequestV2, JoinGroupRequestV5, JoinGroupResponseV2,
     JoinGroupResponseV5,
@@ -612,6 +621,42 @@ impl Client {
         Ok(response
             .highest_supported_version(OFFSET_COMMIT_API_KEY, 10)
             .is_some_and(|version| version >= 10))
+    }
+
+    pub(crate) async fn supports_add_partitions_to_txn_v3(&mut self) -> Result<bool> {
+        let response = self
+            .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
+            .await?;
+        Ok(response
+            .highest_supported_version(ADD_PARTITIONS_TO_TXN_API_KEY, 3)
+            .is_some_and(|version| version >= 3))
+    }
+
+    pub(crate) async fn supports_add_offsets_to_txn_v3(&mut self) -> Result<bool> {
+        let response = self
+            .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
+            .await?;
+        Ok(response
+            .highest_supported_version(ADD_OFFSETS_TO_TXN_API_KEY, 3)
+            .is_some_and(|version| version >= 3))
+    }
+
+    pub(crate) async fn supports_init_producer_id_v2(&mut self) -> Result<bool> {
+        let response = self
+            .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
+            .await?;
+        Ok(response
+            .highest_supported_version(INIT_PRODUCER_ID_API_KEY, 2)
+            .is_some_and(|version| version >= 2))
+    }
+
+    pub(crate) async fn supports_end_txn_v3(&mut self) -> Result<bool> {
+        let response = self
+            .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
+            .await?;
+        Ok(response
+            .highest_supported_version(END_TXN_API_KEY, 3)
+            .is_some_and(|version| version >= 3))
     }
 
     /// Returns the broker-advertised SASL session lifetime in milliseconds.
@@ -2312,6 +2357,25 @@ impl Client {
         Ok(InitProducerIdResponseV0::decode_body(&mut decoder)?)
     }
 
+    /// Sends flexible InitProducerId v2 for an idempotent or transactional
+    /// producer session.
+    pub async fn init_producer_id_v2(
+        &mut self,
+        transactional_id: Option<String>,
+        transaction_timeout_ms: i32,
+    ) -> Result<InitProducerIdResponseV2> {
+        let request = InitProducerIdRequestV2 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            transactional_id,
+            transaction_timeout_ms,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(InitProducerIdResponseV2::decode_body(&mut decoder)?)
+    }
+
     /// Sends EndTxn v0 to commit or abort a transactional producer session.
     pub async fn end_txn_v0(
         &mut self,
@@ -2332,6 +2396,29 @@ impl Client {
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(EndTxnResponseV0::decode_body(&mut decoder)?)
+    }
+
+    /// Sends flexible EndTxn v3 to commit or abort a transactional producer
+    /// session.
+    pub async fn end_txn_v3(
+        &mut self,
+        transactional_id: impl Into<String>,
+        producer_id: i64,
+        producer_epoch: i16,
+        committed: bool,
+    ) -> Result<EndTxnResponseV3> {
+        let request = EndTxnRequestV3 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            transactional_id: transactional_id.into(),
+            producer_id,
+            producer_epoch,
+            committed,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(EndTxnResponseV3::decode_body(&mut decoder)?)
     }
 
     /// Sends FindCoordinator v1 for a consumer group ID.
@@ -2459,6 +2546,28 @@ impl Client {
         Ok(AddPartitionsToTxnResponseV0::decode_body(&mut decoder)?)
     }
 
+    /// Sends flexible AddPartitionsToTxn v3 for a transactional producer.
+    pub async fn add_partitions_to_txn_v3(
+        &mut self,
+        transactional_id: impl Into<String>,
+        producer_id: i64,
+        producer_epoch: i16,
+        topics: Vec<AddPartitionsToTxnTopic>,
+    ) -> Result<AddPartitionsToTxnResponseV3> {
+        let request = AddPartitionsToTxnRequestV3 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            transactional_id: transactional_id.into(),
+            producer_id,
+            producer_epoch,
+            topics,
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(AddPartitionsToTxnResponseV3::decode_body(&mut decoder)?)
+    }
+
     /// Sends AddOffsetsToTxn v0 to bind a consumer group to a transaction.
     pub async fn add_offsets_to_txn_v0(
         &mut self,
@@ -2479,6 +2588,28 @@ impl Client {
         let mut decoder = Decoder::with_limits(&response, self.decode_limits);
         let _header = ResponseHeader::decode_v0(&mut decoder)?;
         Ok(AddOffsetsToTxnResponseV0::decode_body(&mut decoder)?)
+    }
+
+    /// Sends flexible AddOffsetsToTxn v3 to bind a consumer group to a transaction.
+    pub async fn add_offsets_to_txn_v3(
+        &mut self,
+        transactional_id: impl Into<String>,
+        producer_id: i64,
+        producer_epoch: i16,
+        group_id: impl Into<String>,
+    ) -> Result<AddOffsetsToTxnResponseV3> {
+        let request = AddOffsetsToTxnRequestV3 {
+            correlation_id: self.next_correlation_id(),
+            client_id: self.client_id.clone(),
+            transactional_id: transactional_id.into(),
+            producer_id,
+            producer_epoch,
+            group_id: group_id.into(),
+        };
+        let response = self.send_request(&request.encode()?).await?;
+        let mut decoder = Decoder::with_limits(&response, self.decode_limits);
+        let _header = ResponseHeader::decode_v1(&mut decoder)?;
+        Ok(AddOffsetsToTxnResponseV3::decode_body(&mut decoder)?)
     }
 
     /// Sends TxnOffsetCommit v0 for offsets included in a transaction.
@@ -4079,6 +4210,15 @@ impl Client {
             )));
         }
         Ok(())
+    }
+
+    pub(crate) fn poison_connection(&mut self) {
+        self.connection_poisoned = true;
+    }
+
+    #[cfg(test)]
+    pub(crate) fn is_connection_poisoned(&self) -> bool {
+        self.connection_poisoned
     }
 
     fn poison_connection_for_request_error<T>(&mut self, result: &Result<T>) {

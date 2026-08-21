@@ -2398,7 +2398,8 @@ impl AdminClient {
         for group_id in group_ids {
             let mut retry = 0;
             let response = loop {
-                let mut coordinator = self.group_coordinator_client(group_id).await?;
+                let (coordinator_addr, mut coordinator) =
+                    self.group_coordinator_read_client(group_id).await?;
                 match coordinator.describe_groups_v1(vec![group_id.clone()]).await {
                     Ok(response) => {
                         let retryable = response.groups.iter().any(|group| {
@@ -2411,6 +2412,7 @@ impl AdminClient {
                             self.config.record_retry();
                             tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
                         } else {
+                            self.cache_admin_broker(coordinator_addr, coordinator).await;
                             break response;
                         }
                     }
@@ -2467,7 +2469,8 @@ impl AdminClient {
         for group_id in group_ids {
             let mut retry = 0;
             let (throttle_time_ms, group) = loop {
-                let mut coordinator = self.group_coordinator_client(group_id).await?;
+                let (coordinator_addr, mut coordinator) =
+                    self.group_coordinator_read_client(group_id).await?;
                 let api_versions = match coordinator
                     .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
                     .await
@@ -2544,6 +2547,7 @@ impl AdminClient {
                     tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
                     continue;
                 }
+                self.cache_admin_broker(coordinator_addr, coordinator).await;
                 break (throttle_time_ms, group);
             };
             if group.error_code != 0 {
@@ -2577,7 +2581,8 @@ impl AdminClient {
         for group_id in group_ids {
             let mut retry = 0;
             let (throttle_time_ms, group) = loop {
-                let mut coordinator = self.share_group_coordinator_client(group_id).await?;
+                let (coordinator_addr, mut coordinator) =
+                    self.share_group_coordinator_read_client(group_id).await?;
                 let api_versions = match coordinator
                     .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
                     .await
@@ -2644,6 +2649,7 @@ impl AdminClient {
                     tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
                     continue;
                 }
+                self.cache_admin_broker(coordinator_addr, coordinator).await;
                 break (throttle_time_ms, group);
             };
             if group.error_code != 0 {
@@ -2678,7 +2684,8 @@ impl AdminClient {
         for group_id in group_ids {
             let mut retry = 0;
             let (throttle_time_ms, group) = loop {
-                let mut coordinator = self.group_coordinator_client(group_id).await?;
+                let (coordinator_addr, mut coordinator) =
+                    self.group_coordinator_read_client(group_id).await?;
                 let api_versions = match coordinator
                     .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
                     .await
@@ -2737,6 +2744,7 @@ impl AdminClient {
                     tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
                     continue;
                 }
+                self.cache_admin_broker(coordinator_addr, coordinator).await;
                 break (throttle_time_ms, group);
             };
             if group.error_code != 0 {
@@ -3865,8 +3873,8 @@ impl AdminClient {
         for broker in metadata.brokers {
             let endpoint = format!("{}:{}", broker.host, broker.port);
             let mut retry = 0;
-            let response = loop {
-                let mut client = match self.config.connect_broker(endpoint.clone()).await {
+            let (response, client) = loop {
+                let mut client = match self.connect_admin_broker(endpoint.clone()).await {
                     Ok(client) => client,
                     Err(error)
                         if retry < self.max_retries && is_retryable_admin_read_error(&error) =>
@@ -3940,7 +3948,7 @@ impl AdminClient {
                         self.config.record_retry();
                         tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
                     }
-                    Ok(response) => break response,
+                    Ok(response) => break (response, client),
                     Err(error)
                         if retry < self.max_retries && is_retryable_admin_read_error(&error) =>
                     {
@@ -3958,6 +3966,7 @@ impl AdminClient {
                     format!("list groups on broker {}", broker.node_id),
                 ));
             }
+            self.cache_admin_broker(endpoint, client).await;
             let throttle_time =
                 Duration::from_millis(nonnegative_i32_to_u64(response.throttle_time_ms()));
             for group in response.into_group_listings(broker.node_id, throttle_time) {
@@ -4022,8 +4031,8 @@ impl AdminClient {
         for broker in selected_brokers {
             let endpoint = format!("{}:{}", broker.host, broker.port);
             let mut retry = 0;
-            let response = loop {
-                let mut client = match self.config.connect_broker(endpoint.clone()).await {
+            let (response, client) = loop {
+                let mut client = match self.connect_admin_broker(endpoint.clone()).await {
                     Ok(client) => client,
                     Err(error)
                         if retry < self.max_retries && is_retryable_admin_read_error(&error) =>
@@ -4072,7 +4081,7 @@ impl AdminClient {
                         self.config.record_retry();
                         tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
                     }
-                    Ok(response) => break response,
+                    Ok(response) => break (response, client),
                     Err(error)
                         if retry < self.max_retries && is_retryable_admin_read_error(&error) =>
                     {
@@ -4086,6 +4095,8 @@ impl AdminClient {
 
             if response.error_code != 0 {
                 self.config.record_broker_error();
+            } else {
+                self.cache_admin_broker(endpoint, client).await;
             }
             for log_dir in &response.results {
                 if log_dir.error_code != 0 {
@@ -4846,11 +4857,26 @@ impl AdminClient {
             .await
     }
 
+    async fn group_coordinator_read_client(&self, group_id: &str) -> Result<(String, Client)> {
+        self.coordinator_read_client(group_id, CoordinatorType::Group)
+            .await
+    }
+
     async fn share_group_coordinator_client(&self, group_id: &str) -> Result<Client> {
         // Share-group membership and share-group admin APIs are owned by the
         // ordinary group coordinator. Share-partition state uses the separate
         // v6 lookup below.
         self.coordinator_client(group_id, CoordinatorType::Group)
+            .await
+    }
+
+    async fn share_group_coordinator_read_client(
+        &self,
+        group_id: &str,
+    ) -> Result<(String, Client)> {
+        // Share-group inspection is stateless; membership and ShareFetch
+        // sessions continue to use their own coordinator connections.
+        self.coordinator_read_client(group_id, CoordinatorType::Group)
             .await
     }
 
@@ -4974,6 +5000,55 @@ impl AdminClient {
         self.config
             .connect_broker(format!("{}:{}", coordinator.host, coordinator.port))
             .await
+    }
+
+    async fn coordinator_read_client(
+        &self,
+        group_id: &str,
+        coordinator_type: CoordinatorType,
+    ) -> Result<(String, Client)> {
+        let mut retry = 0;
+        loop {
+            match self
+                .coordinator_read_client_once(group_id, coordinator_type)
+                .await
+            {
+                Ok(connection) => return Ok(connection),
+                Err(error)
+                    if retry < self.max_retries && is_retryable_admin_coordinator_error(&error) =>
+                {
+                    retry += 1;
+                    self.config.record_retry();
+                    tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
+                }
+                Err(error) => return Err(error),
+            }
+        }
+    }
+
+    async fn coordinator_read_client_once(
+        &self,
+        group_id: &str,
+        coordinator_type: CoordinatorType,
+    ) -> Result<(String, Client)> {
+        let mut bootstrap = self.config.clone().connect().await?;
+        let coordinator = match coordinator_type {
+            CoordinatorType::Group => bootstrap.find_group_coordinator(group_id).await?,
+            CoordinatorType::Share => bootstrap.find_share_group_coordinator(group_id).await?,
+            CoordinatorType::Transaction => {
+                bootstrap.find_transaction_coordinator(group_id).await?
+            }
+        };
+        if coordinator.error_code != 0 {
+            self.config.record_broker_error();
+            return Err(Error::Broker {
+                code: coordinator.error_code,
+                context: format!("find coordinator for group {group_id}"),
+            });
+        }
+        let broker_addr = format!("{}:{}", coordinator.host, coordinator.port);
+        let client = self.connect_admin_broker(broker_addr.clone()).await?;
+        Ok((broker_addr, client))
     }
 
     async fn controller_client(&self) -> Result<Client> {
@@ -5246,7 +5321,7 @@ impl AdminClient {
             };
             let mut responses = Vec::with_capacity(requests.len());
             for (broker_addr, request_topics) in requests {
-                let mut client = match self.config.connect_broker(broker_addr).await {
+                let mut client = match self.connect_admin_broker(broker_addr.clone()).await {
                     Ok(client) => client,
                     Err(error)
                         if retry < self.max_retries && is_retryable_admin_leader_error(&error) =>
@@ -5262,7 +5337,17 @@ impl AdminClient {
                     .delete_records_v1(request_topics, duration_millis_i32(options.timeout))
                     .await
                 {
-                    Ok(response) => responses.push(response),
+                    Ok(response) => {
+                        let retryable_response = response.topics.iter().any(|topic| {
+                            topic.partitions.iter().any(|partition| {
+                                is_retryable_admin_leader_code(partition.error_code)
+                            })
+                        });
+                        if !retryable_response {
+                            self.cache_admin_broker(broker_addr, client).await;
+                        }
+                        responses.push(response);
+                    }
                     Err(error)
                         if retry < self.max_retries && is_retryable_admin_leader_error(&error) =>
                     {
@@ -5364,7 +5449,7 @@ impl AdminClient {
             };
             let mut responses = Vec::with_capacity(requests.len());
             for (broker_addr, request_topics) in requests {
-                let mut client = match self.config.connect_broker(broker_addr).await {
+                let mut client = match self.connect_admin_broker(broker_addr.clone()).await {
                     Ok(client) => client,
                     Err(error)
                         if retry < self.max_retries && is_retryable_admin_leader_error(&error) =>
@@ -5377,7 +5462,17 @@ impl AdminClient {
                     Err(error) => return Err(error),
                 };
                 match client.describe_producers_v0(request_topics).await {
-                    Ok(response) => responses.push(response),
+                    Ok(response) => {
+                        let retryable_response = response.topics.iter().any(|topic| {
+                            topic.partitions.iter().any(|partition| {
+                                is_retryable_admin_leader_code(partition.error_code)
+                            })
+                        });
+                        if !retryable_response {
+                            self.cache_admin_broker(broker_addr, client).await;
+                        }
+                        responses.push(response);
+                    }
                     Err(error)
                         if retry < self.max_retries && is_retryable_admin_leader_error(&error) =>
                     {
@@ -5515,7 +5610,7 @@ impl AdminClient {
 
             let mut responses = Vec::with_capacity(coordinator_ids.len());
             for (broker_addr, request_ids) in coordinator_ids {
-                let mut client = match self.config.connect_broker(broker_addr).await {
+                let mut client = match self.connect_admin_broker(broker_addr.clone()).await {
                     Ok(client) => client,
                     Err(error)
                         if retry < self.max_retries
@@ -5529,7 +5624,16 @@ impl AdminClient {
                     Err(error) => return Err(error),
                 };
                 match client.describe_transactions_v0(request_ids).await {
-                    Ok(response) => responses.push(response),
+                    Ok(response) => {
+                        let retryable_response = response
+                            .transaction_states
+                            .iter()
+                            .any(|state| is_retryable_admin_coordinator_code(state.error_code));
+                        if !retryable_response {
+                            self.cache_admin_broker(broker_addr, client).await;
+                        }
+                        responses.push(response);
+                    }
                     Err(error)
                         if retry < self.max_retries
                             && is_retryable_admin_coordinator_error(&error) =>
@@ -5605,7 +5709,7 @@ impl AdminClient {
             let mut responses = Vec::with_capacity(metadata.brokers.len());
             for broker in metadata.brokers {
                 let broker_addr = format!("{}:{}", broker.host, broker.port);
-                let mut client = match self.config.connect_broker(broker_addr).await {
+                let mut client = match self.connect_admin_broker(broker_addr.clone()).await {
                     Ok(client) => client,
                     Err(error)
                         if retry < self.max_retries && is_retryable_admin_read_error(&error) =>
@@ -5692,6 +5796,7 @@ impl AdminClient {
                     tokio::time::sleep(admin_coordinator_retry_backoff(retry)).await;
                     continue 'attempt;
                 }
+                self.cache_admin_broker(broker_addr, client).await;
                 responses.push(response);
             }
             break responses;
@@ -17714,6 +17819,55 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn reuses_admin_coordinator_connection_for_sequential_group_descriptions() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut first_bootstrap, _) = listener.accept().await.unwrap();
+            read_frame(&mut first_bootstrap).await;
+            write_frame(
+                &mut first_bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let (mut coordinator, _) = listener.accept().await.unwrap();
+            let first_request = read_frame(&mut coordinator).await;
+            assert_eq!(&first_request[0..4], &[0, 15, 0, 1]);
+            write_frame(&mut coordinator, &describe_groups_response()).await;
+
+            let (mut second_bootstrap, _) = listener.accept().await.unwrap();
+            read_frame(&mut second_bootstrap).await;
+            write_frame(
+                &mut second_bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let second_request = read_frame(&mut coordinator).await;
+            assert_eq!(&second_request[0..4], &[0, 15, 0, 1]);
+            write_frame(&mut coordinator, &describe_groups_response()).await;
+        });
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .max_idle_broker_connections(1),
+        );
+        let first = admin
+            .describe_consumer_groups(&["orders-group".to_owned()])
+            .await
+            .unwrap();
+        let second = admin
+            .describe_consumer_groups(&["orders-group".to_owned()])
+            .await
+            .unwrap();
+
+        assert_eq!(first, second);
+        assert_eq!(admin.broker_clients.len().await, 1);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn routes_modern_consumer_group_describe_to_coordinator() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -17768,6 +17922,62 @@ mod tests {
             member.assignment().topic_partitions()[0].partitions(),
             [0, 2]
         );
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn reuses_admin_coordinator_connection_for_sequential_modern_group_descriptions() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut first_bootstrap, _) = listener.accept().await.unwrap();
+            read_frame(&mut first_bootstrap).await;
+            write_frame(
+                &mut first_bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let (mut coordinator, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut coordinator).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(
+                &mut coordinator,
+                &api_versions_with_consumer_group_describe(),
+            )
+            .await;
+            let first_request = read_frame(&mut coordinator).await;
+            assert_eq!(&first_request[0..4], &[0, 69, 0, 1]);
+            write_frame(&mut coordinator, &consumer_group_describe_response()).await;
+
+            let (mut second_bootstrap, _) = listener.accept().await.unwrap();
+            read_frame(&mut second_bootstrap).await;
+            write_frame(
+                &mut second_bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let second_request = read_frame(&mut coordinator).await;
+            assert_eq!(&second_request[0..4], &[0, 69, 0, 1]);
+            write_frame(&mut coordinator, &consumer_group_describe_response()).await;
+        });
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .max_idle_broker_connections(1),
+        );
+        let first = admin
+            .describe_consumer_groups_modern(&["orders-group".to_owned()], true)
+            .await
+            .unwrap();
+        let second = admin
+            .describe_consumer_groups_modern(&["orders-group".to_owned()], true)
+            .await
+            .unwrap();
+
+        assert_eq!(first, second);
+        assert_eq!(admin.broker_clients.len().await, 1);
         server.await.unwrap();
     }
 
@@ -17827,6 +18037,58 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn reuses_admin_coordinator_connection_for_sequential_share_group_descriptions() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut first_bootstrap, _) = listener.accept().await.unwrap();
+            read_frame(&mut first_bootstrap).await;
+            write_frame(
+                &mut first_bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let (mut coordinator, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut coordinator).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut coordinator, &api_versions_with_share_group_describe()).await;
+            let first_request = read_frame(&mut coordinator).await;
+            assert_eq!(&first_request[0..4], &[0, 77, 0, 1]);
+            write_frame(&mut coordinator, &share_group_describe_response()).await;
+
+            let (mut second_bootstrap, _) = listener.accept().await.unwrap();
+            read_frame(&mut second_bootstrap).await;
+            write_frame(
+                &mut second_bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let second_request = read_frame(&mut coordinator).await;
+            assert_eq!(&second_request[0..4], &[0, 77, 0, 1]);
+            write_frame(&mut coordinator, &share_group_describe_response()).await;
+        });
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .max_idle_broker_connections(1),
+        );
+        let first = admin
+            .describe_share_groups(&["share-orders".to_owned()], true)
+            .await
+            .unwrap();
+        let second = admin
+            .describe_share_groups(&["share-orders".to_owned()], true)
+            .await
+            .unwrap();
+
+        assert_eq!(first, second);
+        assert_eq!(admin.broker_clients.len().await, 1);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn routes_streams_group_describe_to_coordinator() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -17870,6 +18132,62 @@ mod tests {
         assert_eq!(description.authorized_operations(), -2147483648);
         assert!(description.topology().is_none());
         assert!(description.members().is_empty());
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn reuses_admin_coordinator_connection_for_sequential_streams_group_descriptions() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut first_bootstrap, _) = listener.accept().await.unwrap();
+            read_frame(&mut first_bootstrap).await;
+            write_frame(
+                &mut first_bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let (mut coordinator, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut coordinator).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(
+                &mut coordinator,
+                &api_versions_with_streams_group_describe(),
+            )
+            .await;
+            let first_request = read_frame(&mut coordinator).await;
+            assert_eq!(&first_request[0..4], &[0, 89, 0, 0]);
+            write_frame(&mut coordinator, &streams_group_describe_response()).await;
+
+            let (mut second_bootstrap, _) = listener.accept().await.unwrap();
+            read_frame(&mut second_bootstrap).await;
+            write_frame(
+                &mut second_bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let second_request = read_frame(&mut coordinator).await;
+            assert_eq!(&second_request[0..4], &[0, 89, 0, 0]);
+            write_frame(&mut coordinator, &streams_group_describe_response()).await;
+        });
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .max_idle_broker_connections(1),
+        );
+        let first = admin
+            .describe_streams_groups(&["streams-orders".to_owned()], true)
+            .await
+            .unwrap();
+        let second = admin
+            .describe_streams_groups(&["streams-orders".to_owned()], true)
+            .await
+            .unwrap();
+
+        assert_eq!(first, second);
+        assert_eq!(admin.broker_clients.len().await, 1);
         server.await.unwrap();
     }
 
@@ -18418,13 +18736,12 @@ mod tests {
             assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
             write_frame(&mut bootstrap, &metadata_response(addr.port())).await;
 
-            let (mut broker, _) = listener.accept().await.unwrap();
-            let api_versions_request = read_frame(&mut broker).await;
+            let api_versions_request = read_frame(&mut bootstrap).await;
             assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
-            write_frame(&mut broker, &api_versions_with_list_groups(1)).await;
-            let list_request = read_frame(&mut broker).await;
+            write_frame(&mut bootstrap, &api_versions_with_list_groups(1)).await;
+            let list_request = read_frame(&mut bootstrap).await;
             assert_eq!(&list_request[0..4], &[0, 16, 0, 1]);
-            write_frame(&mut broker, &list_groups_response()).await;
+            write_frame(&mut bootstrap, &list_groups_response()).await;
         });
         let admin =
             AdminClient::new(ClientConfig::new([addr.to_string()]).request_timeout_ms(1_000));
@@ -18442,6 +18759,44 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn reuses_admin_broker_connection_for_sequential_group_reads() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut connection, _) = listener.accept().await.unwrap();
+
+            let metadata_request = read_frame(&mut connection).await;
+            assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+            write_frame(&mut connection, &metadata_response(addr.port())).await;
+
+            let api_versions_request = read_frame(&mut connection).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut connection, &api_versions_with_list_groups(1)).await;
+
+            let first_list_request = read_frame(&mut connection).await;
+            assert_eq!(&first_list_request[0..4], &[0, 16, 0, 1]);
+            write_frame(&mut connection, &list_groups_response()).await;
+
+            let second_metadata_request = read_frame(&mut connection).await;
+            assert_eq!(&second_metadata_request[0..4], &[0, 3, 0, 1]);
+            write_frame(&mut connection, &metadata_response(addr.port())).await;
+
+            let second_list_request = read_frame(&mut connection).await;
+            assert_eq!(&second_list_request[0..4], &[0, 16, 0, 1]);
+            write_frame(&mut connection, &list_groups_response()).await;
+        });
+        let admin =
+            AdminClient::new(ClientConfig::new([addr.to_string()]).request_timeout_ms(1_000));
+
+        let first = admin.list_groups().await.unwrap();
+        let second = admin.clone().list_groups().await.unwrap();
+
+        assert_eq!(first, second);
+        assert_eq!(admin.broker_clients.len().await, 1);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn negotiates_list_groups_v5_filters_and_preserves_group_metadata() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -18451,14 +18806,13 @@ mod tests {
             assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
             write_frame(&mut bootstrap, &metadata_response(addr.port())).await;
 
-            let (mut broker, _) = listener.accept().await.unwrap();
-            let api_versions_request = read_frame(&mut broker).await;
+            let api_versions_request = read_frame(&mut bootstrap).await;
             assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
-            write_frame(&mut broker, &api_versions_with_list_groups(5)).await;
+            write_frame(&mut bootstrap, &api_versions_with_list_groups(5)).await;
 
-            let list_request = read_frame(&mut broker).await;
+            let list_request = read_frame(&mut bootstrap).await;
             assert_eq!(&list_request[0..4], &[0, 16, 0, 5]);
-            write_frame(&mut broker, &list_groups_v5_response()).await;
+            write_frame(&mut bootstrap, &list_groups_v5_response()).await;
         });
         let admin =
             AdminClient::new(ClientConfig::new([addr.to_string()]).request_timeout_ms(1_000));
@@ -18490,17 +18844,16 @@ mod tests {
             assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
             write_frame(&mut bootstrap, &metadata_response(addr.port())).await;
 
-            let (mut broker, _) = listener.accept().await.unwrap();
-            let api_versions_request = read_frame(&mut broker).await;
+            let api_versions_request = read_frame(&mut bootstrap).await;
             assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
-            write_frame(&mut broker, &api_versions_with_list_groups(4)).await;
+            write_frame(&mut bootstrap, &api_versions_with_list_groups(4)).await;
 
-            let list_request = read_frame(&mut broker).await;
+            let list_request = read_frame(&mut bootstrap).await;
             assert_eq!(&list_request[0..4], &[0, 16, 0, 4]);
             assert!(list_request
                 .windows(b"Stable".len())
                 .any(|window| window == b"Stable"));
-            write_frame(&mut broker, &list_groups_v4_response()).await;
+            write_frame(&mut bootstrap, &list_groups_v4_response()).await;
         });
         let admin =
             AdminClient::new(ClientConfig::new([addr.to_string()]).request_timeout_ms(1_000));
@@ -18528,10 +18881,9 @@ mod tests {
             assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
             write_frame(&mut bootstrap, &metadata_response(addr.port())).await;
 
-            let (mut broker, _) = listener.accept().await.unwrap();
-            let api_versions_request = read_frame(&mut broker).await;
+            let api_versions_request = read_frame(&mut bootstrap).await;
             assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
-            write_frame(&mut broker, &api_versions_without_list_groups()).await;
+            write_frame(&mut bootstrap, &api_versions_without_list_groups()).await;
         });
         let admin =
             AdminClient::new(ClientConfig::new([addr.to_string()]).request_timeout_ms(1_000));
@@ -18557,10 +18909,9 @@ mod tests {
             assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
             write_frame(&mut bootstrap, &metadata_response(addr.port())).await;
 
-            let (mut first, _) = listener.accept().await.unwrap();
-            let api_versions_request = read_frame(&mut first).await;
+            let api_versions_request = read_frame(&mut bootstrap).await;
             assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
-            drop(first);
+            drop(bootstrap);
 
             let (mut second, _) = listener.accept().await.unwrap();
             let api_versions_request = read_frame(&mut second).await;
@@ -18600,13 +18951,12 @@ mod tests {
             assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
             write_frame(&mut second_bootstrap, &metadata_response(addr.port())).await;
 
-            let (mut broker, _) = listener.accept().await.unwrap();
-            let api_versions_request = read_frame(&mut broker).await;
+            let api_versions_request = read_frame(&mut second_bootstrap).await;
             assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
-            write_frame(&mut broker, &api_versions_with_list_groups(1)).await;
-            let list_request = read_frame(&mut broker).await;
+            write_frame(&mut second_bootstrap, &api_versions_with_list_groups(1)).await;
+            let list_request = read_frame(&mut second_bootstrap).await;
             assert_eq!(&list_request[0..4], &[0, 16, 0, 1]);
-            write_frame(&mut broker, &list_groups_response()).await;
+            write_frame(&mut second_bootstrap, &list_groups_response()).await;
         });
         let metrics = ClientMetrics::new();
         let admin = AdminClient::new(
@@ -19564,17 +19914,16 @@ mod tests {
             assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
             write_frame(&mut bootstrap, &metadata_response(addr.port())).await;
 
-            let (mut broker, _) = listener.accept().await.unwrap();
-            let api_versions_request = read_frame(&mut broker).await;
+            let api_versions_request = read_frame(&mut bootstrap).await;
             assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
-            write_frame(&mut broker, &api_versions_with_describe_log_dirs(5)).await;
+            write_frame(&mut bootstrap, &api_versions_with_describe_log_dirs(5)).await;
 
-            let request = read_frame(&mut broker).await;
+            let request = read_frame(&mut bootstrap).await;
             assert_eq!(&request[0..4], &[0, 35, 0, 5]);
             assert!(request
                 .windows(7)
                 .any(|bytes| { bytes == [7, b'o', b'r', b'd', b'e', b'r', b's'] }));
-            write_frame(&mut broker, &describe_log_dirs_v5_response()).await;
+            write_frame(&mut bootstrap, &describe_log_dirs_v5_response()).await;
         });
         let admin =
             AdminClient::new(ClientConfig::new([addr.to_string()]).request_timeout_ms(1_000));
@@ -19597,6 +19946,51 @@ mod tests {
             results[0].log_dirs()[0].topics()[0].partitions()[0].partition_size(),
             4096
         );
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn reuses_admin_broker_connection_for_sequential_log_dir_reads() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut broker, _) = listener.accept().await.unwrap();
+
+            for iteration in 0..2 {
+                let metadata_request = read_frame(&mut broker).await;
+                assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+                write_frame(&mut broker, &metadata_response(addr.port())).await;
+
+                if iteration == 0 {
+                    let api_versions_request = read_frame(&mut broker).await;
+                    assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+                    write_frame(&mut broker, &api_versions_with_describe_log_dirs(5)).await;
+                }
+
+                let request = read_frame(&mut broker).await;
+                assert_eq!(&request[0..4], &[0, 35, 0, 5]);
+                write_frame(&mut broker, &describe_log_dirs_v5_response()).await;
+            }
+        });
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .max_idle_broker_connections(1),
+        );
+        let topics = [LogDirTopic::new("orders").partition(0)];
+
+        let first = admin
+            .describe_log_dirs(Some(&[1]), Some(&topics))
+            .await
+            .unwrap();
+        let second = admin
+            .describe_log_dirs(Some(&[1]), Some(&topics))
+            .await
+            .unwrap();
+
+        assert!(first[0].is_success());
+        assert!(second[0].is_success());
+        assert_eq!(admin.broker_clients.len().await, 1);
         server.await.unwrap();
     }
 
@@ -19724,6 +20118,61 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn classifies_delegation_token_mutation_disconnects_without_replay() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            for api_key in [39_i16, 40_i16] {
+                let (mut bootstrap, _) = listener.accept().await.unwrap();
+                let metadata_request = read_frame(&mut bootstrap).await;
+                assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+                write_frame(&mut bootstrap, &metadata_response(addr.port())).await;
+
+                let (mut controller, _) = listener.accept().await.unwrap();
+                let api_versions_request = read_frame(&mut controller).await;
+                assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+                write_frame(
+                    &mut controller,
+                    &api_versions_with_delegation_token(api_key, 2),
+                )
+                .await;
+
+                let request = read_frame(&mut controller).await;
+                assert_eq!(&request[0..2], &api_key.to_be_bytes());
+                assert_eq!(&request[2..4], &[0, 2]);
+                assert!(request.windows(12).any(|bytes| bytes
+                    == [12, b's', b'e', b'c', b'r', b'e', b't', b'-', b'h', b'm', b'a', b'c']));
+                drop(controller);
+            }
+        });
+        let admin =
+            AdminClient::new(ClientConfig::new([addr.to_string()]).request_timeout_ms(1_000));
+
+        let renew_error = admin
+            .renew_delegation_token(b"secret-hmac", Duration::from_secs(10))
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            renew_error,
+            Error::AdminMutationOutcomeUnknown {
+                operation: "RenewDelegationToken"
+            }
+        ));
+
+        let expire_error = admin
+            .expire_delegation_token(b"secret-hmac", Duration::ZERO)
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            expire_error,
+            Error::AdminMutationOutcomeUnknown {
+                operation: "ExpireDelegationToken"
+            }
+        ));
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn routes_delete_topics_to_controller_and_preserves_partial_result() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -19780,11 +20229,10 @@ mod tests {
             )
             .await;
 
-            let (mut connection, _) = listener.accept().await.unwrap();
-            let request = read_frame(&mut connection).await;
+            let request = read_frame(&mut bootstrap).await;
             assert_eq!(&request[0..4], &[0, 21, 0, 1]);
             assert_eq!(&request[request.len() - 4..], &[0, 0, 117, 48]);
-            write_frame(&mut connection, &delete_records_response()).await;
+            write_frame(&mut bootstrap, &delete_records_response()).await;
         });
         let metrics = ClientMetrics::new();
         let admin = AdminClient::new(
@@ -19824,6 +20272,53 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn reuses_admin_leader_connection_for_sequential_record_deletions() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut connection, _) = listener.accept().await.unwrap();
+
+            for _ in 0..2 {
+                let metadata_request = read_frame(&mut connection).await;
+                assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+                write_frame(
+                    &mut connection,
+                    &delete_records_metadata_response(addr.port()),
+                )
+                .await;
+
+                let request = read_frame(&mut connection).await;
+                assert_eq!(&request[0..4], &[0, 21, 0, 1]);
+                write_frame(&mut connection, &delete_records_response()).await;
+            }
+        });
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .max_idle_broker_connections(1),
+        );
+        let topics = vec![
+            DeleteRecordsTopic::new("orders")
+                .partition(0, 100)
+                .partition(1, -1),
+            DeleteRecordsTopic::new("payments").partition(2, 40),
+        ];
+
+        let first = admin
+            .delete_records(&topics, DeleteRecordsOptions::new())
+            .await
+            .unwrap();
+        let second = admin
+            .delete_records(&topics, DeleteRecordsOptions::new())
+            .await
+            .unwrap();
+
+        assert_eq!(first, second);
+        assert_eq!(admin.broker_clients.len().await, 1);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn retries_delete_records_after_dropped_leader_request() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -19837,23 +20332,22 @@ mod tests {
             )
             .await;
 
-            let (mut dropped_leader, _) = listener.accept().await.unwrap();
-            let request = read_frame(&mut dropped_leader).await;
+            let request = read_frame(&mut bootstrap).await;
             assert_eq!(&request[0..4], &[0, 21, 0, 1]);
-            drop(dropped_leader);
+            drop(bootstrap);
 
-            let metadata_request = read_frame(&mut bootstrap).await;
+            let (mut replacement, _) = listener.accept().await.unwrap();
+            let metadata_request = read_frame(&mut replacement).await;
             assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
             write_frame(
-                &mut bootstrap,
+                &mut replacement,
                 &delete_records_metadata_response(addr.port()),
             )
             .await;
 
-            let (mut retry_leader, _) = listener.accept().await.unwrap();
-            let request = read_frame(&mut retry_leader).await;
+            let request = read_frame(&mut replacement).await;
             assert_eq!(&request[0..4], &[0, 21, 0, 1]);
-            write_frame(&mut retry_leader, &delete_records_response()).await;
+            write_frame(&mut replacement, &delete_records_response()).await;
         });
         let metrics = ClientMetrics::new();
         let admin = AdminClient::new(
@@ -19899,10 +20393,9 @@ mod tests {
             read_frame(&mut second).await;
             write_frame(&mut second, &delete_records_metadata_response(addr.port())).await;
 
-            let (mut leader, _) = listener.accept().await.unwrap();
-            let request = read_frame(&mut leader).await;
+            let request = read_frame(&mut second).await;
             assert_eq!(&request[0..4], &[0, 21, 0, 1]);
-            write_frame(&mut leader, &delete_records_response()).await;
+            write_frame(&mut second, &delete_records_response()).await;
         });
         let metrics = ClientMetrics::new();
         let admin = AdminClient::new(
@@ -19945,11 +20438,10 @@ mod tests {
             )
             .await;
 
-            let (mut leader, _) = listener.accept().await.unwrap();
-            let request = read_frame(&mut leader).await;
+            let request = read_frame(&mut bootstrap).await;
             assert_eq!(&request[0..4], &[0, 61, 0, 0]);
             assert_eq!(request.last(), Some(&0));
-            write_frame(&mut leader, &describe_producers_response()).await;
+            write_frame(&mut bootstrap, &describe_producers_response()).await;
         });
         let metrics = ClientMetrics::new();
         let admin = AdminClient::new(
@@ -19986,6 +20478,45 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn reuses_admin_leader_connection_for_sequential_producer_reads() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut connection, _) = listener.accept().await.unwrap();
+
+            for _ in 0..2 {
+                let metadata_request = read_frame(&mut connection).await;
+                assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+                write_frame(
+                    &mut connection,
+                    &describe_producers_metadata_response(addr.port()),
+                )
+                .await;
+
+                let request = read_frame(&mut connection).await;
+                assert_eq!(&request[0..4], &[0, 61, 0, 0]);
+                write_frame(&mut connection, &describe_producers_response()).await;
+            }
+        });
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .max_idle_broker_connections(1),
+        );
+        let topics = [DescribeProducersTopic::new("orders")
+            .partition(0)
+            .partition(1)];
+
+        let first = admin.describe_producers(&topics).await.unwrap();
+        let second = admin.describe_producers(&topics).await.unwrap();
+
+        assert_eq!(first.throttle_time(), Duration::from_millis(6));
+        assert_eq!(second.throttle_time(), Duration::from_millis(6));
+        assert_eq!(admin.broker_clients.len().await, 1);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn retries_describe_producers_after_leader_disconnect() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -19998,20 +20529,19 @@ mod tests {
             )
             .await;
 
-            let (mut leader, _) = listener.accept().await.unwrap();
-            read_frame(&mut leader).await;
-            drop(leader);
-
             read_frame(&mut bootstrap).await;
+            drop(bootstrap);
+
+            let (mut replacement, _) = listener.accept().await.unwrap();
+            read_frame(&mut replacement).await;
             write_frame(
-                &mut bootstrap,
+                &mut replacement,
                 &describe_producers_metadata_response(addr.port()),
             )
             .await;
 
-            let (mut leader, _) = listener.accept().await.unwrap();
-            read_frame(&mut leader).await;
-            write_frame(&mut leader, &describe_producers_response()).await;
+            read_frame(&mut replacement).await;
+            write_frame(&mut replacement, &describe_producers_response()).await;
         });
         let metrics = ClientMetrics::new();
         let admin = AdminClient::new(
@@ -20046,20 +20576,19 @@ mod tests {
             )
             .await;
 
-            let (mut leader, _) = listener.accept().await.unwrap();
-            read_frame(&mut leader).await;
-            write_frame(&mut leader, &describe_producers_error_response(6)).await;
-
             read_frame(&mut bootstrap).await;
+            write_frame(&mut bootstrap, &describe_producers_error_response(6)).await;
+
+            let (mut replacement, _) = listener.accept().await.unwrap();
+            read_frame(&mut replacement).await;
             write_frame(
-                &mut bootstrap,
+                &mut replacement,
                 &describe_producers_metadata_response(addr.port()),
             )
             .await;
 
-            let (mut leader, _) = listener.accept().await.unwrap();
-            read_frame(&mut leader).await;
-            write_frame(&mut leader, &describe_producers_response()).await;
+            read_frame(&mut replacement).await;
+            write_frame(&mut replacement, &describe_producers_response()).await;
         });
         let metrics = ClientMetrics::new();
         let admin = AdminClient::new(
@@ -20102,10 +20631,9 @@ mod tests {
             )
             .await;
 
-            let (mut leader, _) = listener.accept().await.unwrap();
-            let request = read_frame(&mut leader).await;
+            let request = read_frame(&mut second).await;
             assert_eq!(&request[0..4], &[0, 61, 0, 0]);
-            write_frame(&mut leader, &describe_producers_response()).await;
+            write_frame(&mut second, &describe_producers_response()).await;
         });
         let metrics = ClientMetrics::new();
         let admin = AdminClient::new(
@@ -20169,6 +20697,53 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn reuses_admin_coordinator_connection_for_sequential_transaction_reads() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut first_bootstrap, _) = listener.accept().await.unwrap();
+            read_frame(&mut first_bootstrap).await;
+            write_frame(
+                &mut first_bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let (mut coordinator, _) = listener.accept().await.unwrap();
+            let first_request = read_frame(&mut coordinator).await;
+            assert_eq!(&first_request[0..4], &[0, 65, 0, 0]);
+            write_frame(&mut coordinator, &describe_transactions_response()).await;
+
+            let (mut second_bootstrap, _) = listener.accept().await.unwrap();
+            read_frame(&mut second_bootstrap).await;
+            write_frame(
+                &mut second_bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let second_request = read_frame(&mut coordinator).await;
+            assert_eq!(&second_request[0..4], &[0, 65, 0, 0]);
+            write_frame(&mut coordinator, &describe_transactions_response()).await;
+        });
+        let admin =
+            AdminClient::new(ClientConfig::new([addr.to_string()]).request_timeout_ms(1_000));
+
+        let first = admin
+            .describe_transactions(&["payments-tx".to_owned()])
+            .await
+            .unwrap();
+        let second = admin
+            .describe_transactions(&["payments-tx".to_owned()])
+            .await
+            .unwrap();
+
+        assert_eq!(first.transactions(), second.transactions());
+        assert_eq!(admin.broker_clients.len().await, 1);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn lists_transactions_from_all_broker_shards_with_v1() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -20176,15 +20751,12 @@ mod tests {
             let (mut bootstrap, _) = listener.accept().await.unwrap();
             read_frame(&mut bootstrap).await;
             write_frame(&mut bootstrap, &metadata_response(addr.port())).await;
-            drop(bootstrap);
-
-            let (mut broker, _) = listener.accept().await.unwrap();
-            let api_versions_request = read_frame(&mut broker).await;
+            let api_versions_request = read_frame(&mut bootstrap).await;
             assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
-            write_frame(&mut broker, &api_versions_with_list_transactions()).await;
-            let list_request = read_frame(&mut broker).await;
+            write_frame(&mut bootstrap, &api_versions_with_list_transactions()).await;
+            let list_request = read_frame(&mut bootstrap).await;
             assert_eq!(&list_request[0..4], &[0, 66, 0, 1]);
-            write_frame(&mut broker, &list_transactions_response()).await;
+            write_frame(&mut bootstrap, &list_transactions_response()).await;
         });
         let admin = AdminClient::new(
             ClientConfig::new([addr.to_string()])
@@ -20206,6 +20778,47 @@ mod tests {
         assert_eq!(result.transactions()[0].transactional_id(), "payments-tx");
         assert_eq!(result.transactions()[0].state(), "Ongoing");
         assert_eq!(result.transactions()[0].producer_id(), 99);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn reuses_admin_broker_connection_for_sequential_transaction_reads() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut connection, _) = listener.accept().await.unwrap();
+
+            for iteration in 0..2 {
+                let metadata_request = read_frame(&mut connection).await;
+                assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+                write_frame(&mut connection, &metadata_response(addr.port())).await;
+
+                if iteration == 0 {
+                    let api_versions_request = read_frame(&mut connection).await;
+                    assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+                    write_frame(&mut connection, &api_versions_with_list_transactions()).await;
+                }
+
+                let list_request = read_frame(&mut connection).await;
+                assert_eq!(&list_request[0..4], &[0, 66, 0, 1]);
+                write_frame(&mut connection, &list_transactions_response()).await;
+            }
+        });
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .client_id("kafrust-admin-test")
+                .request_timeout_ms(1_000),
+        );
+        let options = ListTransactionsOptions::new()
+            .state("Ongoing")
+            .producer_id(99);
+
+        let first = admin.list_transactions(options.clone()).await.unwrap();
+        let second = admin.list_transactions(options).await.unwrap();
+
+        assert!(first.is_success());
+        assert!(second.is_success());
+        assert_eq!(admin.broker_clients.len().await, 1);
         server.await.unwrap();
     }
 

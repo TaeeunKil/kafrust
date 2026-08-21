@@ -159,3 +159,16 @@ fn high_level_builders_offer_connection_free_build_config_preflight() {
         .expect("admin configuration should validate without connecting");
     assert_eq!(admin.metrics(), admin_metrics);
 }
+
+#[cfg(feature = "blocking")]
+#[test]
+fn exposes_blocking_adapters_from_the_crate_root() {
+    let _ = std::any::type_name::<kafrust::BlockingAdminClient>();
+    let _ = std::any::type_name::<kafrust::BlockingBufferedProducer>();
+    let _ = std::any::type_name::<kafrust::BlockingBufferedProducerHandle>();
+    let _ = std::any::type_name::<kafrust::BlockingConsumer>();
+    let _ = std::any::type_name::<kafrust::BlockingConsumerGroup>();
+    let _ = std::any::type_name::<kafrust::BlockingProducer>();
+    let _ = std::any::type_name::<kafrust::BlockingShareConsumer>();
+    let _ = std::any::type_name::<kafrust::BlockingStreamsGroupSession>();
+}

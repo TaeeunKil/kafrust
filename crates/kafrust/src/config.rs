@@ -148,6 +148,10 @@ pub struct CachedOAuthBearerTokenProvider<S> {
     source: Arc<S>,
     refresh_before: Duration,
     cached: Arc<tokio::sync::Mutex<Option<OAuthBearerToken>>>,
+    /// Serializes refreshes without holding the cache lock across the source
+    /// future. The second cache check after acquiring this lock makes token
+    /// refresh single-flight across all broker connections sharing a client.
+    refresh: Arc<tokio::sync::Mutex<()>>,
 }
 
 impl<S> CachedOAuthBearerTokenProvider<S> {
@@ -157,6 +161,7 @@ impl<S> CachedOAuthBearerTokenProvider<S> {
             source: Arc::new(source),
             refresh_before,
             cached: Arc::new(tokio::sync::Mutex::new(None)),
+            refresh: Arc::new(tokio::sync::Mutex::new(())),
         }
     }
 }
@@ -177,8 +182,23 @@ where
     fn fetch_token(&self) -> OAuthBearerTokenFuture {
         let source = Arc::clone(&self.source);
         let cached = Arc::clone(&self.cached);
+        let refresh = Arc::clone(&self.refresh);
         let refresh_before = self.refresh_before;
         Box::pin(async move {
+            let now = std::time::SystemTime::now();
+            if let Some(token) = cached
+                .lock()
+                .await
+                .as_ref()
+                .filter(|token| token.is_fresh(now, refresh_before))
+            {
+                return Ok(token.token.clone());
+            }
+
+            // Only one broker connection refreshes an expiring token at a
+            // time. Re-check after waiting because another connection may
+            // have completed the refresh while this future was queued.
+            let _refresh_guard = refresh.lock().await;
             let now = std::time::SystemTime::now();
             let cached_token = { cached.lock().await.clone() };
             if let Some(token) = cached_token
@@ -190,6 +210,9 @@ where
 
             match source.fetch_token().await {
                 Ok(token) => {
+                    if !token.is_valid(std::time::SystemTime::now()) {
+                        return Err(Error::OAuthBearerTokenExpired);
+                    }
                     let value = token.token.clone();
                     *cached.lock().await = Some(token);
                     Ok(value)
@@ -1728,6 +1751,59 @@ mod tests {
         assert_eq!(provider.fetch_token().await.unwrap(), "cached-token-0");
         assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 1);
         assert!(!format!("{provider:?}").contains("cached-token-0"));
+    }
+
+    #[tokio::test]
+    async fn cached_oauth_provider_rejects_expired_source_tokens() {
+        let provider = CachedOAuthBearerTokenProvider::new(
+            || async {
+                Ok(OAuthBearerToken::new(
+                    "expired-token",
+                    SystemTime::now() - Duration::from_secs(1),
+                ))
+            },
+            Duration::from_secs(60),
+        );
+
+        let error = provider.fetch_token().await.unwrap_err();
+
+        assert!(matches!(error, Error::OAuthBearerTokenExpired));
+        assert!(!format!("{error}").contains("expired-token"));
+    }
+
+    #[tokio::test]
+    async fn cached_oauth_provider_single_flights_concurrent_refreshes() {
+        let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let source_started = std::sync::Arc::new(tokio::sync::Notify::new());
+        let source_calls = calls.clone();
+        let source_started_clone = source_started.clone();
+        let provider = std::sync::Arc::new(CachedOAuthBearerTokenProvider::new(
+            move || {
+                let source_calls = source_calls.clone();
+                let source_started = source_started_clone.clone();
+                async move {
+                    let call = source_calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    source_started.notify_one();
+                    tokio::time::sleep(Duration::from_millis(20)).await;
+                    Ok(OAuthBearerToken::new(
+                        format!("single-flight-token-{call}"),
+                        SystemTime::now() + Duration::from_secs(3_600),
+                    ))
+                }
+            },
+            Duration::from_secs(60),
+        ));
+
+        let first_provider = provider.clone();
+        let first = tokio::spawn(async move { first_provider.fetch_token().await });
+        source_started.notified().await;
+
+        let second_provider = provider.clone();
+        let second = tokio::spawn(async move { second_provider.fetch_token().await });
+
+        assert_eq!(first.await.unwrap().unwrap(), "single-flight-token-0");
+        assert_eq!(second.await.unwrap().unwrap(), "single-flight-token-0");
+        assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 1);
     }
 
     #[tokio::test]

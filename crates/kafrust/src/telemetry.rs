@@ -315,6 +315,15 @@ impl TelemetryMetricsProvider for ClientMetricsTelemetryProvider {
             &mut metrics,
             &self.metric_prefix,
             requested_metrics,
+            "max_in_flight_requests",
+            "Highest observed Kafka request roundtrip concurrency",
+            current.max_in_flight_requests,
+            now,
+        );
+        append_gauge(
+            &mut metrics,
+            &self.metric_prefix,
+            requested_metrics,
             "total_latency_ns",
             "Sum of completed and cancelled request latency",
             duration_nanos(current.total_latency),
@@ -1026,6 +1035,38 @@ mod tests {
             return;
         };
         assert_eq!(*value, 2);
+    }
+
+    #[cfg(feature = "otlp")]
+    #[test]
+    fn built_in_provider_serializes_peak_in_flight_requests() {
+        use super::ClientMetricsTelemetryProvider;
+        use crate::metrics::ClientMetrics;
+        use opentelemetry_proto::tonic::metrics::v1::{metric, MetricsData};
+        use prost::Message;
+
+        let metrics = ClientMetrics::new();
+        let first = metrics.start_request(0);
+        let second = metrics.start_request(0);
+        let mut provider = ClientMetricsTelemetryProvider::new(metrics).metric_prefix("test.");
+
+        let payload = provider
+            .collect(&["test.max_in_flight_requests".to_owned()], false)
+            .unwrap();
+        let data = MetricsData::decode(payload.as_slice()).unwrap();
+        let Some(metric::Data::Gauge(gauge)) = data.resource_metrics[0].scope_metrics[0].metrics[0]
+            .data
+            .as_ref()
+        else {
+            return;
+        };
+        assert_eq!(
+            gauge.data_points[0].value,
+            Some(opentelemetry_proto::tonic::metrics::v1::number_data_point::Value::AsInt(2))
+        );
+
+        drop(first);
+        drop(second);
     }
 
     #[tokio::test]

@@ -2009,6 +2009,7 @@ fn can_retry_fetch(error: &Error) -> bool {
         | Error::MissingSaslCredentials
         | Error::InvalidSaslResponse { .. }
         | Error::OAuthBearerTokenTimeout { .. }
+        | Error::OAuthBearerTokenExpired
         | Error::TransactionOutcomeUnknown { .. }
         | Error::TransactionProducerDefunct
         | Error::ResponseTooLarge { .. }
@@ -2907,6 +2908,7 @@ mod tests {
             context: "fetch orders-0@0".to_owned(),
         }));
         assert!(!can_retry_fetch(&Error::Unsupported("fetch v99")));
+        assert!(!can_retry_fetch(&Error::OAuthBearerTokenExpired));
     }
 
     #[test]

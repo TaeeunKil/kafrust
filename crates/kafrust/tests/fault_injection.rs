@@ -381,7 +381,8 @@ async fn admin_member_aware_offsets_fall_back_to_v9_without_metadata_v12() {
 #[tokio::test]
 async fn idempotent_producer_retries_dropped_response_with_same_batch_sequence() {
     let broker = ScriptedBroker::start(vec![
-        ScriptedResponse::Respond(init_producer_id_response_body()),
+        ScriptedResponse::Respond(api_versions_producer_response_body()),
+        ScriptedResponse::Respond(init_producer_id_v2_response_body()),
         ScriptedResponse::RespondWithAddressAndClose(metadata_response_for_address),
         ScriptedResponse::Respond(api_versions_response_body(3)),
         ScriptedResponse::Drop,
@@ -416,22 +417,24 @@ async fn idempotent_producer_retries_dropped_response_with_same_batch_sequence()
         .finish()
         .await
         .expect("scripted broker should complete all producer steps");
-    assert_eq!(observations.len(), 7);
-    assert_eq!(observations[0].api_key, 22);
-    assert_eq!(observations[1].api_key, 3);
-    assert_eq!(observations[2].api_key, 18);
-    assert_eq!(observations[3].api_key, 0);
-    assert_eq!(observations[4].api_key, 3);
-    assert_eq!(observations[5].api_key, 18);
-    assert_eq!(observations[6].api_key, 0);
-    assert_eq!(observations[3].frame, observations[6].frame);
+    assert_eq!(observations.len(), 8);
+    assert_eq!(observations[0].api_key, 18);
+    assert_eq!(observations[1].api_key, 22);
+    assert_eq!(observations[2].api_key, 3);
+    assert_eq!(observations[3].api_key, 18);
+    assert_eq!(observations[4].api_key, 0);
+    assert_eq!(observations[5].api_key, 3);
+    assert_eq!(observations[6].api_key, 18);
+    assert_eq!(observations[7].api_key, 0);
+    assert_eq!(observations[4].frame, observations[7].frame);
 }
 
 #[tokio::test]
 async fn idempotent_producer_fatal_sequence_errors_are_terminal() {
     for error_code in [45, 47, 90] {
         let broker = ScriptedBroker::start(vec![
-            ScriptedResponse::Respond(init_producer_id_response_body()),
+            ScriptedResponse::Respond(api_versions_producer_response_body()),
+            ScriptedResponse::Respond(init_producer_id_v2_response_body()),
             ScriptedResponse::RespondWithAddressAndClose(metadata_response_for_address),
             ScriptedResponse::Respond(api_versions_response_body(3)),
             ScriptedResponse::Respond(produce_v3_response_body(error_code, -1)),
@@ -473,13 +476,13 @@ async fn idempotent_producer_fatal_sequence_errors_are_terminal() {
             .finish()
             .await
             .expect("scripted broker should complete the fatal sequence path");
-        assert_eq!(observations.len(), 4);
+        assert_eq!(observations.len(), 5);
         assert_eq!(
             observations
                 .iter()
                 .map(|request| request.api_key)
                 .collect::<Vec<_>>(),
-            [22, 3, 18, 0]
+            [18, 22, 3, 18, 0]
         );
     }
 }
@@ -487,7 +490,9 @@ async fn idempotent_producer_fatal_sequence_errors_are_terminal() {
 #[tokio::test]
 async fn transactional_commit_response_loss_marks_outcome_unknown_and_defunct() {
     let coordinator = ScriptedBroker::start(vec![
-        ScriptedResponse::RespondAndClose(init_producer_id_response_body()),
+        ScriptedResponse::Respond(api_versions_producer_response_body()),
+        ScriptedResponse::RespondAndClose(init_producer_id_v2_response_body()),
+        ScriptedResponse::Respond(api_versions_producer_response_body()),
         ScriptedResponse::Drop,
     ])
     .await
@@ -547,9 +552,11 @@ async fn transactional_commit_response_loss_marks_outcome_unknown_and_defunct() 
     assert_eq!(bootstrap_observations.len(), 2);
     assert_eq!(bootstrap_observations[0].api_key, 10);
     assert_eq!(bootstrap_observations[1].api_key, 10);
-    assert_eq!(coordinator_observations.len(), 2);
-    assert_eq!(coordinator_observations[0].api_key, 22);
-    assert_eq!(coordinator_observations[1].api_key, 26);
+    assert_eq!(coordinator_observations.len(), 4);
+    assert_eq!(coordinator_observations[0].api_key, 18);
+    assert_eq!(coordinator_observations[1].api_key, 22);
+    assert_eq!(coordinator_observations[2].api_key, 18);
+    assert_eq!(coordinator_observations[3].api_key, 26);
     assert!(coordinator_observations[1]
         .frame
         .windows(b"orders-tx".len())
@@ -1391,13 +1398,15 @@ fn metadata_response_for_address(address: std::net::SocketAddr) -> Vec<u8> {
     metadata_response_body("orders", address.port())
 }
 
-fn init_producer_id_response_body() -> Vec<u8> {
-    vec![
-        0, 0, 0, 0, // throttle time
-        0, 0, // success
-        0, 0, 0, 0, 0, 0, 0, 42, // producer ID
-        0, 3, // producer epoch
-    ]
+fn init_producer_id_v2_response_body() -> Vec<u8> {
+    let mut encoder = Encoder::new();
+    encoder.write_empty_tagged_fields();
+    encoder.write_i32(0);
+    encoder.write_i16(0);
+    encoder.write_i64(42);
+    encoder.write_i16(3);
+    encoder.write_empty_tagged_fields();
+    encoder.into_bytes()
 }
 
 fn find_coordinator_response_for_address(address: std::net::SocketAddr) -> Vec<u8> {
@@ -1677,6 +1686,21 @@ fn api_versions_response_body(max_produce_version: i16) -> Vec<u8> {
     body.extend_from_slice(&[0, 0, 0, 0]); // throttle time
     body.push(0); // response tagged fields
     body
+}
+
+fn api_versions_producer_response_body() -> Vec<u8> {
+    let mut encoder = Encoder::new();
+    encoder.write_i16(0);
+    encoder.write_unsigned_varint(4); // compact API key count: three entries
+    for (api_key, max_version) in [(0, 3), (22, 2), (26, 3)] {
+        encoder.write_i16(api_key);
+        encoder.write_i16(0);
+        encoder.write_i16(max_version);
+        encoder.write_empty_tagged_fields();
+    }
+    encoder.write_i32(0);
+    encoder.write_empty_tagged_fields();
+    encoder.into_bytes()
 }
 
 fn api_versions_member_offset_v10_response_body() -> Vec<u8> {

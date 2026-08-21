@@ -37,6 +37,7 @@ use tokio::time::{self, Instant};
 use tracing::debug;
 
 const BUFFERED_PRODUCER_CHANNEL_CAPACITY: usize = 1024;
+const DEFAULT_DELIVERY_TIMEOUT_MS: u64 = 120_000;
 const IDEMPOTENT_INIT_RETRY_BACKOFF: Duration = Duration::from_millis(100);
 const IDEMPOTENT_INIT_RETRY_BACKOFF_MAX: Duration = Duration::from_secs(1);
 
@@ -1065,6 +1066,7 @@ enum BufferedProducerCommand {
 enum BufferedProducerEvent {
     Command(BufferedProducerCommand),
     LingerElapsed,
+    DeliveryTimeoutElapsed,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1080,6 +1082,7 @@ enum BufferedFlushReason {
 struct BufferedProduceRequest {
     record: ProducerRecord,
     delivery_sender: oneshot::Sender<Result<RecordMetadata>>,
+    enqueued_at: Instant,
     _queue_guard: BufferedQueueGuard,
 }
 
@@ -1092,6 +1095,7 @@ impl BufferedProduceRequest {
         Self {
             record,
             delivery_sender,
+            enqueued_at: Instant::now(),
             _queue_guard: BufferedQueueGuard::new(metrics),
         }
     }
@@ -1156,6 +1160,7 @@ async fn run_buffered_producer(
     while let Some(event) = receive_buffered_event(
         &mut commands,
         buffered_linger_deadline(first_enqueued_at, producer.config.linger()),
+        buffered_delivery_deadline(&pending, producer.config.delivery_timeout),
     )
     .await
     {
@@ -1224,6 +1229,11 @@ async fn run_buffered_producer(
                 }
             },
             BufferedProducerEvent::LingerElapsed => {
+                expire_buffered_deliveries(
+                    &mut pending,
+                    &mut first_enqueued_at,
+                    producer.config.delivery_timeout,
+                );
                 let _ = flush_buffered_deliveries_for_reason(
                     &mut producer,
                     &mut pending,
@@ -1231,6 +1241,13 @@ async fn run_buffered_producer(
                     BufferedFlushReason::Linger,
                 )
                 .await;
+            }
+            BufferedProducerEvent::DeliveryTimeoutElapsed => {
+                expire_buffered_deliveries(
+                    &mut pending,
+                    &mut first_enqueued_at,
+                    producer.config.delivery_timeout,
+                );
             }
         }
     }
@@ -1243,8 +1260,14 @@ async fn handle_buffered_send(
     first_enqueued_at: &mut Option<Instant>,
     request: BufferedProduceRequest,
 ) {
+    if request.enqueued_at.elapsed() >= producer.config.delivery_timeout {
+        let _ = request.delivery_sender.send(Err(delivery_timeout_error(
+            producer.config.delivery_timeout,
+        )));
+        return;
+    }
     if pending.is_empty() {
-        *first_enqueued_at = Some(Instant::now());
+        *first_enqueued_at = Some(request.enqueued_at);
     }
     pending.push(request);
 
@@ -1270,16 +1293,28 @@ async fn handle_buffered_send(
 async fn receive_buffered_event(
     commands: &mut mpsc::Receiver<BufferedProducerCommand>,
     linger_deadline: Option<Instant>,
+    delivery_deadline: Option<Instant>,
 ) -> Option<BufferedProducerEvent> {
-    match linger_deadline {
-        Some(deadline) => {
+    match (linger_deadline, delivery_deadline) {
+        (Some(linger_deadline), Some(delivery_deadline)) => {
             tokio::select! {
                 biased;
                 command = commands.recv() => command.map(BufferedProducerEvent::Command),
-                _ = time::sleep_until(deadline) => Some(BufferedProducerEvent::LingerElapsed),
+                _ = time::sleep_until(linger_deadline) => Some(BufferedProducerEvent::LingerElapsed),
+                _ = time::sleep_until(delivery_deadline) => Some(BufferedProducerEvent::DeliveryTimeoutElapsed),
             }
         }
-        None => commands.recv().await.map(BufferedProducerEvent::Command),
+        (Some(deadline), None) => tokio::select! {
+            biased;
+            command = commands.recv() => command.map(BufferedProducerEvent::Command),
+            _ = time::sleep_until(deadline) => Some(BufferedProducerEvent::LingerElapsed),
+        },
+        (None, Some(deadline)) => tokio::select! {
+            biased;
+            command = commands.recv() => command.map(BufferedProducerEvent::Command),
+            _ = time::sleep_until(deadline) => Some(BufferedProducerEvent::DeliveryTimeoutElapsed),
+        },
+        (None, None) => commands.recv().await.map(BufferedProducerEvent::Command),
     }
 }
 
@@ -1288,6 +1323,36 @@ fn buffered_linger_deadline(
     linger: Duration,
 ) -> Option<Instant> {
     first_enqueued_at.map(|instant| instant + linger)
+}
+
+fn buffered_delivery_deadline(
+    pending: &[BufferedProduceRequest],
+    delivery_timeout: Duration,
+) -> Option<Instant> {
+    pending
+        .iter()
+        .map(|request| request.enqueued_at + delivery_timeout)
+        .min()
+}
+
+fn expire_buffered_deliveries(
+    pending: &mut Vec<BufferedProduceRequest>,
+    first_enqueued_at: &mut Option<Instant>,
+    delivery_timeout: Duration,
+) {
+    let now = Instant::now();
+    let mut remaining = Vec::with_capacity(pending.len());
+    for request in pending.drain(..) {
+        if now.duration_since(request.enqueued_at) >= delivery_timeout {
+            let _ = request
+                .delivery_sender
+                .send(Err(delivery_timeout_error(delivery_timeout)));
+        } else {
+            remaining.push(request);
+        }
+    }
+    *pending = remaining;
+    *first_enqueued_at = pending.iter().map(|request| request.enqueued_at).min();
 }
 
 fn buffered_enqueue_flush_reason(
@@ -1403,8 +1468,13 @@ async fn flush_buffered_delivery_report(
         .iter()
         .map(|request| request.record.clone())
         .collect::<Vec<_>>();
+    let delivery_timeout =
+        buffered_remaining_delivery_timeout(&requests, producer.config.delivery_timeout);
 
-    match producer.send_batch_report(records).await {
+    match producer
+        .send_batch_report_with_timeout(records, delivery_timeout)
+        .await
+    {
         Ok(report) => {
             let has_failures = report.has_failures();
             complete_buffered_deliveries(requests, report.into_records());
@@ -1415,6 +1485,18 @@ async fn flush_buffered_delivery_report(
             Err(error)
         }
     }
+}
+
+fn buffered_remaining_delivery_timeout(
+    requests: &[BufferedProduceRequest],
+    delivery_timeout: Duration,
+) -> Duration {
+    let now = Instant::now();
+    requests
+        .iter()
+        .map(|request| (request.enqueued_at + delivery_timeout).saturating_duration_since(now))
+        .min()
+        .unwrap_or(delivery_timeout)
 }
 
 async fn commit_buffered_transaction(
@@ -1557,6 +1639,7 @@ fn delivery_error_from_request_error(error: &Error) -> Error {
         Error::OAuthBearerTokenTimeout { timeout_ms } => Error::OAuthBearerTokenTimeout {
             timeout_ms: *timeout_ms,
         },
+        Error::OAuthBearerTokenExpired => Error::OAuthBearerTokenExpired,
         Error::TransactionOutcomeUnknown { operation } => {
             Error::TransactionOutcomeUnknown { operation }
         }
@@ -1844,6 +1927,17 @@ impl Producer {
     pub async fn send(&mut self, record: ProducerRecord) -> Result<RecordMetadata> {
         self.ensure_idempotent_producer_usable()?;
         self.ensure_transaction_active()?;
+        let delivery_timeout = self.config.delivery_timeout;
+        match time::timeout(delivery_timeout, self.send_inner(record)).await {
+            Ok(result) => result,
+            Err(_) => {
+                self.poison_after_delivery_timeout();
+                Err(delivery_timeout_error(delivery_timeout))
+            }
+        }
+    }
+
+    async fn send_inner(&mut self, record: ProducerRecord) -> Result<RecordMetadata> {
         debug!(
             topic = record.topic(),
             partition = ?record.partition_ref(),
@@ -1899,6 +1993,13 @@ impl Producer {
             .await
     }
 
+    fn poison_after_delivery_timeout(&mut self) {
+        self.client.poison_connection();
+        self.metadata_cache.clear();
+        self.leader_hints.clear();
+        self.topic_id_cache.clear();
+    }
+
     /// Sends multiple records and returns one metadata entry per input record.
     ///
     /// With [`Acks::None`], each returned offset is `-1` because Kafka does not
@@ -1939,6 +2040,16 @@ impl Producer {
         self.ensure_idempotent_producer_usable()?;
         self.ensure_transaction_active()?;
 
+        let records = records.into_iter().collect::<Vec<_>>();
+        self.send_batch_report_with_timeout(records, self.config.delivery_timeout)
+            .await
+    }
+
+    async fn send_batch_report_with_timeout(
+        &mut self,
+        records: Vec<ProducerRecord>,
+        delivery_timeout: Duration,
+    ) -> Result<ProducerBatchReport> {
         let records = records
             .into_iter()
             .map(BatchRecord::new)
@@ -1948,6 +2059,19 @@ impl Producer {
             return Ok(ProducerBatchReport::new(Vec::new()));
         }
 
+        match time::timeout(delivery_timeout, self.send_batch_report_inner(records)).await {
+            Ok(result) => result,
+            Err(_) => {
+                self.poison_after_delivery_timeout();
+                Err(delivery_timeout_error(delivery_timeout))
+            }
+        }
+    }
+
+    async fn send_batch_report_inner(
+        &mut self,
+        records: Vec<BatchRecord>,
+    ) -> Result<ProducerBatchReport> {
         debug!(record_count = records.len(), "sending kafka record batch");
 
         let mut outcomes = std::iter::repeat_with(|| None)
@@ -3065,35 +3189,71 @@ impl Producer {
                     .client
                     .connect_broker(format!("{}:{}", coordinator.host, coordinator.port))
             );
-            let response = transaction_transport_or_retry!(
+            let use_flexible_version = transaction_transport_or_retry!(
                 self.client,
                 &self.config.client,
                 &mut attempt,
                 self.config.max_retries,
-                client.add_partitions_to_txn_v0(
-                    transactional_id.clone(),
-                    identity.producer_id,
-                    identity.producer_epoch,
-                    vec![AddPartitionsToTxnTopic {
-                        name: topic.to_owned(),
-                        partitions: vec![partition],
-                    }],
-                )
+                client.supports_add_partitions_to_txn_v3()
             );
-            let error_code = response
-                .errors
-                .iter()
-                .find(|result| result.name == topic)
-                .and_then(|result| {
-                    result
-                        .partitions
-                        .iter()
-                        .find(|result| result.partition_index == partition)
-                })
-                .map(|result| result.error_code)
-                .ok_or(Error::Unsupported(
-                    "missing AddPartitionsToTxn partition response",
-                ))?;
+            let error_code = if use_flexible_version {
+                let response = transaction_transport_or_retry!(
+                    self.client,
+                    &self.config.client,
+                    &mut attempt,
+                    self.config.max_retries,
+                    client.add_partitions_to_txn_v3(
+                        transactional_id.clone(),
+                        identity.producer_id,
+                        identity.producer_epoch,
+                        vec![AddPartitionsToTxnTopic {
+                            name: topic.to_owned(),
+                            partitions: vec![partition],
+                        }],
+                    )
+                );
+                response
+                    .errors
+                    .iter()
+                    .find(|result| result.name == topic)
+                    .and_then(|result| {
+                        result
+                            .partitions
+                            .iter()
+                            .find(|result| result.partition_index == partition)
+                    })
+                    .map(|result| result.error_code)
+            } else {
+                let response = transaction_transport_or_retry!(
+                    self.client,
+                    &self.config.client,
+                    &mut attempt,
+                    self.config.max_retries,
+                    client.add_partitions_to_txn_v0(
+                        transactional_id.clone(),
+                        identity.producer_id,
+                        identity.producer_epoch,
+                        vec![AddPartitionsToTxnTopic {
+                            name: topic.to_owned(),
+                            partitions: vec![partition],
+                        }],
+                    )
+                );
+                response
+                    .errors
+                    .iter()
+                    .find(|result| result.name == topic)
+                    .and_then(|result| {
+                        result
+                            .partitions
+                            .iter()
+                            .find(|result| result.partition_index == partition)
+                    })
+                    .map(|result| result.error_code)
+            }
+            .ok_or(Error::Unsupported(
+                "missing AddPartitionsToTxn partition response",
+            ))?;
             if error_code == 0 {
                 break;
             }
@@ -3165,37 +3325,61 @@ impl Producer {
                     .client
                     .connect_broker(format!("{}:{}", coordinator.host, coordinator.port))
             );
-            let response = transaction_transport_or_retry!(
+            let use_flexible_version = transaction_transport_or_retry!(
                 self.client,
                 &self.config.client,
                 &mut attempt,
                 self.config.max_retries,
-                client.add_offsets_to_txn_v0(
-                    transactional_id.to_owned(),
-                    producer_id,
-                    producer_epoch,
-                    group_id.to_owned(),
-                )
+                client.supports_add_offsets_to_txn_v3()
             );
-            if response.error_code == 0 {
+            let error_code = if use_flexible_version {
+                let response = transaction_transport_or_retry!(
+                    self.client,
+                    &self.config.client,
+                    &mut attempt,
+                    self.config.max_retries,
+                    client.add_offsets_to_txn_v3(
+                        transactional_id.to_owned(),
+                        producer_id,
+                        producer_epoch,
+                        group_id.to_owned(),
+                    )
+                );
+                response.error_code
+            } else {
+                let response = transaction_transport_or_retry!(
+                    self.client,
+                    &self.config.client,
+                    &mut attempt,
+                    self.config.max_retries,
+                    client.add_offsets_to_txn_v0(
+                        transactional_id.to_owned(),
+                        producer_id,
+                        producer_epoch,
+                        group_id.to_owned(),
+                    )
+                );
+                response.error_code
+            };
+            if error_code == 0 {
                 return Ok(());
             }
             self.config.client.record_broker_error();
             if attempt < self.config.max_retries
-                && is_retryable_transaction_coordinator_error(response.error_code)
+                && is_retryable_transaction_coordinator_error(error_code)
             {
                 attempt += 1;
                 time::sleep(IDEMPOTENT_INIT_RETRY_BACKOFF).await;
                 self.config.client.record_retry();
                 continue;
             }
-            if idempotent_produce_error_disposition(response.error_code)
+            if idempotent_produce_error_disposition(error_code)
                 == IdempotentProduceErrorDisposition::Fatal
             {
-                self.record_idempotent_fatal_error(response.error_code);
+                self.record_idempotent_fatal_error(error_code);
             }
             return Err(Error::Broker {
-                code: response.error_code,
+                code: error_code,
                 context: format!("add offsets for group {group_id} to transaction"),
             });
         }
@@ -3436,16 +3620,36 @@ impl Producer {
                     .client
                     .connect_broker(format!("{}:{}", coordinator.host, coordinator.port))
             );
-            let response = match client
-                .end_txn_v0(
-                    transactional_id.clone(),
-                    identity.producer_id,
-                    identity.producer_epoch,
-                    committed,
-                )
-                .await
-            {
-                Ok(response) => response,
+            let use_flexible_version = transaction_transport_or_retry!(
+                self.client,
+                &self.config.client,
+                &mut attempt,
+                self.config.max_retries,
+                client.supports_end_txn_v3()
+            );
+            let response = if use_flexible_version {
+                client
+                    .end_txn_v3(
+                        transactional_id.clone(),
+                        identity.producer_id,
+                        identity.producer_epoch,
+                        committed,
+                    )
+                    .await
+                    .map(|response| response.error_code)
+            } else {
+                client
+                    .end_txn_v0(
+                        transactional_id.clone(),
+                        identity.producer_id,
+                        identity.producer_epoch,
+                        committed,
+                    )
+                    .await
+                    .map(|response| response.error_code)
+            };
+            let error_code = match response {
+                Ok(error_code) => error_code,
                 Err(error) => {
                     if is_transaction_outcome_unknown_error(&error) {
                         self.mark_transaction_defunct();
@@ -3456,25 +3660,25 @@ impl Producer {
                     return Err(error);
                 }
             };
-            if response.error_code == 0 {
+            if error_code == 0 {
                 break;
             }
             self.config.client.record_broker_error();
             if attempt < self.config.max_retries
-                && is_retryable_transaction_coordinator_error(response.error_code)
+                && is_retryable_transaction_coordinator_error(error_code)
             {
                 attempt += 1;
                 time::sleep(IDEMPOTENT_INIT_RETRY_BACKOFF).await;
                 self.config.client.record_retry();
                 continue;
             }
-            if idempotent_produce_error_disposition(response.error_code)
+            if idempotent_produce_error_disposition(error_code)
                 == IdempotentProduceErrorDisposition::Fatal
             {
-                self.record_idempotent_fatal_error(response.error_code);
+                self.record_idempotent_fatal_error(error_code);
             }
             return Err(Error::Broker {
-                code: response.error_code,
+                code: error_code,
                 context: if committed {
                     "commit transaction".to_owned()
                 } else {
@@ -3529,6 +3733,7 @@ pub struct ProducerConfig {
     client: ClientConfig,
     acks: Acks,
     max_retries: u32,
+    delivery_timeout: Duration,
     max_records_per_batch: usize,
     max_batch_bytes: usize,
     linger: Duration,
@@ -3547,6 +3752,7 @@ impl ProducerConfig {
             client: ClientConfig::new(bootstrap_servers),
             acks: Acks::Leader,
             max_retries: 1,
+            delivery_timeout: Duration::from_millis(DEFAULT_DELIVERY_TIMEOUT_MS),
             max_records_per_batch: usize::MAX,
             max_batch_bytes: usize::MAX,
             linger: Duration::from_millis(0),
@@ -3720,6 +3926,18 @@ impl ProducerConfig {
         self
     }
 
+    /// Sets the total time allowed for one immediate or batch delivery.
+    ///
+    /// The deadline includes metadata lookup, broker capability negotiation,
+    /// Produce requests, retry backoff, and retry attempts. Buffered producer
+    /// records use the same deadline from enqueue through their Produce
+    /// operation; records that expire in the bounded queue complete with a
+    /// timeout without being sent.
+    pub fn delivery_timeout_ms(mut self, delivery_timeout_ms: u64) -> Self {
+        self.delivery_timeout = Duration::from_millis(delivery_timeout_ms);
+        self
+    }
+
     /// Sets the maximum records sent in one Produce request per topic partition.
     ///
     /// Values below 1 are treated as 1 so batch sends always make progress.
@@ -3826,6 +4044,11 @@ impl ProducerConfig {
         self.max_retries
     }
 
+    /// Returns the total immediate or batch delivery deadline.
+    pub fn delivery_timeout(&self) -> Duration {
+        self.delivery_timeout
+    }
+
     /// Returns the configured maximum records per Produce request.
     pub fn max_records_per_batch_ref(&self) -> usize {
         self.max_records_per_batch
@@ -3889,6 +4112,12 @@ impl ProducerConfig {
             return Err(Error::InvalidConfiguration {
                 field: "max_retries",
                 reason: "idempotence requires at least one retry",
+            });
+        }
+        if self.delivery_timeout.is_zero() {
+            return Err(Error::InvalidConfiguration {
+                field: "delivery_timeout_ms",
+                reason: "must be greater than zero",
             });
         }
         if self.transactional_id.as_deref() == Some("") {
@@ -3972,6 +4201,7 @@ impl fmt::Debug for ProducerConfig {
             .field("client", &self.client)
             .field("acks", &self.acks)
             .field("max_retries", &self.max_retries)
+            .field("delivery_timeout", &self.delivery_timeout)
             .field("max_records_per_batch", &self.max_records_per_batch)
             .field("max_batch_bytes", &self.max_batch_bytes)
             .field("linger", &self.linger)
@@ -3990,6 +4220,7 @@ impl PartialEq for ProducerConfig {
         self.client == other.client
             && self.acks == other.acks
             && self.max_retries == other.max_retries
+            && self.delivery_timeout == other.delivery_timeout
             && self.max_records_per_batch == other.max_records_per_batch
             && self.max_batch_bytes == other.max_batch_bytes
             && self.linger == other.linger
@@ -4047,35 +4278,80 @@ async fn initialize_idempotent_producer(
                 max_retries,
                 client_config.connect_broker(format!("{}:{}", coordinator.host, coordinator.port))
             );
-            transaction_transport_or_retry!(
+            let use_flexible_version = transaction_transport_or_retry!(
                 *client,
                 client_config,
                 &mut attempt,
                 max_retries,
-                coordinator_client
-                    .init_producer_id_v0(Some(transactional_id.clone()), transaction_timeout_ms)
-            )
+                coordinator_client.supports_init_producer_id_v2()
+            );
+            if use_flexible_version {
+                let response = transaction_transport_or_retry!(
+                    *client,
+                    client_config,
+                    &mut attempt,
+                    max_retries,
+                    coordinator_client.init_producer_id_v2(
+                        Some(transactional_id.clone()),
+                        transaction_timeout_ms,
+                    )
+                );
+                (
+                    response.error_code,
+                    response.producer_id,
+                    response.producer_epoch,
+                )
+            } else {
+                let response = transaction_transport_or_retry!(
+                    *client,
+                    client_config,
+                    &mut attempt,
+                    max_retries,
+                    coordinator_client.init_producer_id_v0(
+                        Some(transactional_id.clone()),
+                        transaction_timeout_ms,
+                    )
+                );
+                (
+                    response.error_code,
+                    response.producer_id,
+                    response.producer_epoch,
+                )
+            }
         } else {
-            client
-                .init_producer_id_v0(None, transaction_timeout_ms)
-                .await?
+            let use_flexible_version = client.supports_init_producer_id_v2().await?;
+            if use_flexible_version {
+                let response = client
+                    .init_producer_id_v2(None, transaction_timeout_ms)
+                    .await?;
+                (
+                    response.error_code,
+                    response.producer_id,
+                    response.producer_epoch,
+                )
+            } else {
+                let response = client
+                    .init_producer_id_v0(None, transaction_timeout_ms)
+                    .await?;
+                (
+                    response.error_code,
+                    response.producer_id,
+                    response.producer_epoch,
+                )
+            }
         };
-        if response.error_code == 0 {
-            return Ok(IdempotentProducerState::new(
-                response.producer_id,
-                response.producer_epoch,
-            ));
+        if response.0 == 0 {
+            return Ok(IdempotentProducerState::new(response.1, response.2));
         }
         client_config.record_broker_error();
-        if attempt < max_retries && is_retryable_transaction_coordinator_error(response.error_code)
-        {
+        if attempt < max_retries && is_retryable_transaction_coordinator_error(response.0) {
             attempt += 1;
             time::sleep(idempotent_init_retry_backoff(attempt)).await;
             client_config.record_retry();
             continue;
         }
         return Err(Error::Broker {
-            code: response.error_code,
+            code: response.0,
             context: "initialize idempotent producer".to_owned(),
         });
     }
@@ -4875,6 +5151,7 @@ fn can_retry_send(error: &Error) -> bool {
         | Error::MissingSaslCredentials
         | Error::InvalidSaslResponse { .. }
         | Error::OAuthBearerTokenTimeout { .. }
+        | Error::OAuthBearerTokenExpired
         | Error::TransactionOutcomeUnknown { .. }
         | Error::TransactionProducerDefunct
         | Error::ResponseTooLarge { .. }
@@ -4899,6 +5176,12 @@ fn can_retry_send(error: &Error) -> bool {
         | Error::StreamsTaskAssignmentConflict { .. }
         | Error::TaskJoin(_)
         | Error::Protocol(_) => false,
+    }
+}
+
+fn delivery_timeout_error(timeout: Duration) -> Error {
+    Error::RequestTimedOut {
+        timeout_ms: u64::try_from(timeout.as_millis()).unwrap_or(u64::MAX),
     }
 }
 
@@ -4927,26 +5210,26 @@ mod tests {
     use super::{
         advance_producer_sequence, batch_duplicate_outcomes, batch_failure_outcomes,
         batch_record_chunks, batch_records_encoded_len, batch_report_from_outcomes,
-        batch_success_outcomes, buffered_delivery_canceled_error, buffered_enqueue_flush_reason,
-        buffered_linger_deadline, can_retry_send, choose_partition,
+        batch_success_outcomes, buffered_delivery_canceled_error, buffered_delivery_deadline,
+        buffered_enqueue_flush_reason, buffered_linger_deadline, can_retry_send, choose_partition,
         choose_partition_with_partitioner, complete_buffered_deliveries,
         delivery_error_from_request_error, enqueue_buffered_record,
-        ensure_buffered_transaction_deliveries_succeeded, fail_buffered_deliveries,
-        idempotent_init_retry_backoff, idempotent_produce_error_disposition,
-        invalidate_metadata_cache, invalidate_metadata_cache_for_record_indexes,
-        is_retryable_transaction_coordinator_error, is_retryable_transaction_transport_error,
-        kafka_murmur2, largest_fitting_prefix, leader_for, message_set_message,
-        produce_leader_hint, produce_partition_response, record_batch_attempt_outcomes,
-        record_batch_message, resolve_produce_route, select_produce_batch_version,
-        select_produce_batch_version_with_topic_id, select_produce_version,
-        select_produce_version_with_topic_id, transaction_offset_topics, Acks, BatchRecord,
-        BufferedFlushReason, BufferedProduceRequest, BufferedProducer, BufferedProducerCommand,
-        BufferedProducerHandle, BufferedProducerState, Compression, IdempotentBatchSequenceTracker,
-        IdempotentProduceErrorDisposition, IdempotentProducerState, PreparedBatchRecord,
-        ProduceBatchKey, ProduceLeaderHint, ProduceResponse, ProduceVersion, Producer,
-        ProducerBatchFailure, ProducerBatchRecordOutcome, ProducerBatchReport, ProducerConfig,
-        ProducerDelivery, ProducerRecord, RecordMetadata, SecurityProtocol, TransactionState,
-        TransactionStatus,
+        ensure_buffered_transaction_deliveries_succeeded, expire_buffered_deliveries,
+        fail_buffered_deliveries, idempotent_init_retry_backoff,
+        idempotent_produce_error_disposition, invalidate_metadata_cache,
+        invalidate_metadata_cache_for_record_indexes, is_retryable_transaction_coordinator_error,
+        is_retryable_transaction_transport_error, kafka_murmur2, largest_fitting_prefix,
+        leader_for, message_set_message, produce_leader_hint, produce_partition_response,
+        record_batch_attempt_outcomes, record_batch_message, resolve_produce_route,
+        select_produce_batch_version, select_produce_batch_version_with_topic_id,
+        select_produce_version, select_produce_version_with_topic_id, transaction_offset_topics,
+        Acks, BatchRecord, BufferedFlushReason, BufferedProduceRequest, BufferedProducer,
+        BufferedProducerCommand, BufferedProducerHandle, BufferedProducerState, Compression,
+        IdempotentBatchSequenceTracker, IdempotentProduceErrorDisposition, IdempotentProducerState,
+        PreparedBatchRecord, ProduceBatchKey, ProduceLeaderHint, ProduceResponse, ProduceVersion,
+        Producer, ProducerBatchFailure, ProducerBatchRecordOutcome, ProducerBatchReport,
+        ProducerConfig, ProducerDelivery, ProducerRecord, RecordMetadata, SecurityProtocol,
+        TransactionState, TransactionStatus,
     };
     use crate::broker_client_cache::SharedBrokerClientCache;
     use crate::consumer::ConsumerAssignment;
@@ -4959,12 +5242,14 @@ mod tests {
         ProduceLeaderIdAndEpochV10, ProduceNodeEndpointV10, ProducePartitionResponseV9,
         ProduceResponseV9, ProduceTopicResponseV9, API_KEY as PRODUCE_API_KEY,
     };
+    use kafrust_protocol::codec::Encoder;
     use std::cell::Cell;
     use std::collections::BTreeMap;
+    use std::time::Duration;
     use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
     use tokio::net::TcpListener;
     use tokio::sync::{mpsc, oneshot};
-    use tokio::time::Instant;
+    use tokio::time::{self, Instant};
 
     #[test]
     fn maps_acks_to_kafka_values() {
@@ -5114,6 +5399,19 @@ mod tests {
             invalid_client,
             Error::InvalidConfiguration {
                 field: "request_timeout_ms",
+                ..
+            }
+        ));
+
+        let invalid_delivery_timeout = ProducerConfig::new(["127.0.0.1:1"])
+            .delivery_timeout_ms(0)
+            .build()
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            invalid_delivery_timeout,
+            Error::InvalidConfiguration {
+                field: "delivery_timeout_ms",
                 ..
             }
         ));
@@ -5787,6 +6085,7 @@ mod tests {
         let config = ProducerConfig::new(["localhost:9092"])
             .client_id("orders-api")
             .request_timeout_ms(5_000)
+            .delivery_timeout_ms(12_000)
             .max_idle_broker_connections(3)
             .security_protocol(SecurityProtocol::SaslTls)
             .tls_server_name("broker.example.com")
@@ -5802,6 +6101,7 @@ mod tests {
 
         assert_eq!(config.acks_ref(), Acks::All);
         assert_eq!(config.max_retries_ref(), 3);
+        assert_eq!(config.delivery_timeout(), Duration::from_millis(12_000));
         assert_eq!(config.client_config().max_idle_broker_connections_ref(), 3);
         assert_eq!(config.max_records_per_batch_ref(), 128);
         assert_eq!(config.max_batch_bytes_ref(), 64 * 1024);
@@ -5882,17 +6182,18 @@ mod tests {
         let addr = listener.local_addr().unwrap();
         let server = tokio::spawn(async move {
             let (mut socket, _) = listener.accept().await.unwrap();
-            let request = read_frame(&mut socket).await;
-            assert_eq!(&request[0..4], &[0, 22, 0, 0]);
+            let api_versions = read_frame(&mut socket).await;
+            assert_eq!(&api_versions[0..4], &[0, 18, 0, 3]);
             write_frame(
                 &mut socket,
-                &[
-                    0, 0, 0, 1, // correlation id
-                    0, 0, 0, 0, // throttle time
-                    0, 0, // error code
-                    0, 0, 0, 0, 0, 0, 0, 42, // producer id
-                    0, 3, // producer epoch
-                ],
+                &api_versions_transaction_response_frame(&api_versions, 22, 2),
+            )
+            .await;
+            let request = read_frame(&mut socket).await;
+            assert_eq!(&request[0..4], &[0, 22, 0, 2]);
+            write_frame(
+                &mut socket,
+                &init_producer_id_v2_response_frame(&request, 0, 42, 3),
             )
             .await;
         });
@@ -5944,21 +6245,24 @@ mod tests {
             write_frame(&mut bootstrap_socket, &coordinator_response).await;
 
             let (mut coordinator_socket, _) = listener.accept().await.unwrap();
+            let api_versions = read_frame(&mut coordinator_socket).await;
+            assert_eq!(&api_versions[0..4], &[0, 18, 0, 3]);
+            write_frame(
+                &mut coordinator_socket,
+                &api_versions_transaction_response_frame(&api_versions, 22, 2),
+            )
+            .await;
             let init_producer_id = read_frame(&mut coordinator_socket).await;
-            assert_eq!(&init_producer_id[0..4], &[0, 22, 0, 0]);
+            assert_eq!(&init_producer_id[0..4], &[0, 22, 0, 2]);
             assert!(init_producer_id
                 .windows(b"orders-tx".len())
                 .any(|window| window == b"orders-tx"));
-            assert!(init_producer_id.ends_with(&30_000_i32.to_be_bytes()));
+            assert!(init_producer_id
+                .windows(30_000_i32.to_be_bytes().len())
+                .any(|window| window == 30_000_i32.to_be_bytes()));
             write_frame(
                 &mut coordinator_socket,
-                &[
-                    0, 0, 0, 1, // correlation id
-                    0, 0, 0, 0, // throttle time
-                    0, 0, // error code
-                    0, 0, 0, 0, 0, 0, 0, 42, // producer id
-                    0, 3, // producer epoch
-                ],
+                &init_producer_id_v2_response_frame(&init_producer_id, 0, 42, 3),
             )
             .await;
         });
@@ -5989,6 +6293,207 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn registers_transaction_partition_with_flexible_v3_when_advertised() {
+        let bootstrap_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let bootstrap_addr = bootstrap_listener.local_addr().unwrap();
+        let coordinator_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let coordinator_addr = coordinator_listener.local_addr().unwrap();
+
+        let server = tokio::spawn(async move {
+            let (mut bootstrap_socket, _) = bootstrap_listener.accept().await.unwrap();
+            let find_coordinator = read_frame(&mut bootstrap_socket).await;
+            assert_eq!(&find_coordinator[0..4], &[0, 10, 0, 1]);
+            write_frame(
+                &mut bootstrap_socket,
+                &find_coordinator_response_frame(&find_coordinator, 2, coordinator_addr),
+            )
+            .await;
+
+            let (mut coordinator_socket, _) = coordinator_listener.accept().await.unwrap();
+            let api_versions = read_frame(&mut coordinator_socket).await;
+            assert_eq!(&api_versions[0..4], &[0, 18, 0, 3]);
+            write_frame(
+                &mut coordinator_socket,
+                &api_versions_transaction_response_frame(&api_versions, 24, 3),
+            )
+            .await;
+
+            let add_partitions = read_frame(&mut coordinator_socket).await;
+            assert_eq!(&add_partitions[0..4], &[0, 24, 0, 3]);
+            assert!(add_partitions
+                .windows(b"orders-tx".len())
+                .any(|window| window == b"orders-tx"));
+            write_frame(
+                &mut coordinator_socket,
+                &add_partitions_to_txn_v3_response_frame(&add_partitions),
+            )
+            .await;
+        });
+
+        let config = ProducerConfig::new([bootstrap_addr.to_string()])
+            .transactional_id("orders-tx")
+            .max_retries(0);
+        let client = config.client.clone().connect().await.unwrap();
+        let mut transaction_state = TransactionState::new("orders-tx".to_owned());
+        transaction_state.status = TransactionStatus::InTransaction;
+        let mut producer = Producer {
+            client,
+            config,
+            metadata_cache: BTreeMap::new(),
+            leader_hints: BTreeMap::new(),
+            topic_id_cache: BTreeMap::new(),
+            keyless_partition_indexes: BTreeMap::new(),
+            broker_clients: std::sync::Arc::new(SharedBrokerClientCache::default()),
+            idempotent_state: Some(IdempotentProducerState::new(42, 3)),
+            transaction_state: Some(transaction_state),
+        };
+
+        producer
+            .register_transaction_partition("orders", 0)
+            .await
+            .unwrap();
+
+        assert!(producer
+            .transaction_state
+            .as_ref()
+            .unwrap()
+            .registered_partitions
+            .contains(&("orders".to_owned(), 0)));
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn registers_transaction_partition_with_v0_when_flexible_version_is_unavailable() {
+        let bootstrap_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let bootstrap_addr = bootstrap_listener.local_addr().unwrap();
+        let coordinator_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let coordinator_addr = coordinator_listener.local_addr().unwrap();
+
+        let server = tokio::spawn(async move {
+            let (mut bootstrap_socket, _) = bootstrap_listener.accept().await.unwrap();
+            let find_coordinator = read_frame(&mut bootstrap_socket).await;
+            assert_eq!(&find_coordinator[0..4], &[0, 10, 0, 1]);
+            write_frame(
+                &mut bootstrap_socket,
+                &find_coordinator_response_frame(&find_coordinator, 2, coordinator_addr),
+            )
+            .await;
+
+            let (mut coordinator_socket, _) = coordinator_listener.accept().await.unwrap();
+            let api_versions = read_frame(&mut coordinator_socket).await;
+            assert_eq!(&api_versions[0..4], &[0, 18, 0, 3]);
+            write_frame(
+                &mut coordinator_socket,
+                &api_versions_transaction_response_frame(&api_versions, 24, 2),
+            )
+            .await;
+
+            let add_partitions = read_frame(&mut coordinator_socket).await;
+            assert_eq!(&add_partitions[0..4], &[0, 24, 0, 0]);
+            assert!(add_partitions
+                .windows(b"orders-tx".len())
+                .any(|window| window == b"orders-tx"));
+            write_frame(
+                &mut coordinator_socket,
+                &add_partitions_to_txn_v0_response_frame(&add_partitions),
+            )
+            .await;
+        });
+
+        let config = ProducerConfig::new([bootstrap_addr.to_string()])
+            .transactional_id("orders-tx")
+            .max_retries(0);
+        let client = config.client.clone().connect().await.unwrap();
+        let mut transaction_state = TransactionState::new("orders-tx".to_owned());
+        transaction_state.status = TransactionStatus::InTransaction;
+        let mut producer = Producer {
+            client,
+            config,
+            metadata_cache: BTreeMap::new(),
+            leader_hints: BTreeMap::new(),
+            topic_id_cache: BTreeMap::new(),
+            keyless_partition_indexes: BTreeMap::new(),
+            broker_clients: std::sync::Arc::new(SharedBrokerClientCache::default()),
+            idempotent_state: Some(IdempotentProducerState::new(42, 3)),
+            transaction_state: Some(transaction_state),
+        };
+
+        producer
+            .register_transaction_partition("orders", 0)
+            .await
+            .unwrap();
+
+        assert!(producer
+            .transaction_state
+            .as_ref()
+            .unwrap()
+            .registered_partitions
+            .contains(&("orders".to_owned(), 0)));
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn adds_group_offsets_to_transaction_with_flexible_v3_when_advertised() {
+        let bootstrap_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let bootstrap_addr = bootstrap_listener.local_addr().unwrap();
+        let coordinator_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let coordinator_addr = coordinator_listener.local_addr().unwrap();
+
+        let server = tokio::spawn(async move {
+            let (mut bootstrap_socket, _) = bootstrap_listener.accept().await.unwrap();
+            let find_coordinator = read_frame(&mut bootstrap_socket).await;
+            assert_eq!(&find_coordinator[0..4], &[0, 10, 0, 1]);
+            write_frame(
+                &mut bootstrap_socket,
+                &find_coordinator_response_frame(&find_coordinator, 2, coordinator_addr),
+            )
+            .await;
+
+            let (mut coordinator_socket, _) = coordinator_listener.accept().await.unwrap();
+            let api_versions = read_frame(&mut coordinator_socket).await;
+            assert_eq!(&api_versions[0..4], &[0, 18, 0, 3]);
+            write_frame(
+                &mut coordinator_socket,
+                &api_versions_transaction_response_frame(&api_versions, 25, 3),
+            )
+            .await;
+
+            let add_offsets = read_frame(&mut coordinator_socket).await;
+            assert_eq!(&add_offsets[0..4], &[0, 25, 0, 3]);
+            assert!(add_offsets
+                .windows(b"orders-tx".len())
+                .any(|window| window == b"orders-tx"));
+            write_frame(
+                &mut coordinator_socket,
+                &add_offsets_to_txn_v3_response_frame(&add_offsets),
+            )
+            .await;
+        });
+
+        let config = ProducerConfig::new([bootstrap_addr.to_string()])
+            .transactional_id("orders-tx")
+            .max_retries(0);
+        let client = config.client.clone().connect().await.unwrap();
+        let mut producer = Producer {
+            client,
+            config,
+            metadata_cache: BTreeMap::new(),
+            leader_hints: BTreeMap::new(),
+            topic_id_cache: BTreeMap::new(),
+            keyless_partition_indexes: BTreeMap::new(),
+            broker_clients: std::sync::Arc::new(SharedBrokerClientCache::default()),
+            idempotent_state: Some(IdempotentProducerState::new(42, 3)),
+            transaction_state: None,
+        };
+
+        producer
+            .add_group_offsets_to_transaction("orders-tx", "orders", 42, 3)
+            .await
+            .unwrap();
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn rediscovers_transaction_coordinator_after_connect_failure() {
         let bootstrap_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let bootstrap_addr = bootstrap_listener.local_addr().unwrap();
@@ -6012,19 +6517,22 @@ mod tests {
             }
 
             let (mut coordinator_socket, _) = coordinator_listener.accept().await.unwrap();
+            let api_versions = read_frame(&mut coordinator_socket).await;
+            assert_eq!(&api_versions[0..4], &[0, 18, 0, 3]);
+            write_frame(
+                &mut coordinator_socket,
+                &api_versions_transaction_response_frame(&api_versions, 26, 3),
+            )
+            .await;
             let end_txn = read_frame(&mut coordinator_socket).await;
-            assert_eq!(&end_txn[0..4], &[0, 26, 0, 0]);
+            assert_eq!(&end_txn[0..4], &[0, 26, 0, 3]);
             assert!(end_txn
                 .windows(b"orders-tx".len())
                 .any(|window| window == b"orders-tx"));
-            assert_eq!(end_txn.last(), Some(&1));
+            assert_eq!(end_txn[end_txn.len() - 2], 1);
             write_frame(
                 &mut coordinator_socket,
-                &[
-                    0, 0, 0, 1, // correlation id
-                    0, 0, 0, 0, // throttle time
-                    0, 0, // error code
-                ],
+                &end_txn_v3_response_frame(&end_txn, 0),
             )
             .await;
         });
@@ -6074,15 +6582,18 @@ mod tests {
             .await;
 
             let (mut coordinator_socket, _) = coordinator_listener.accept().await.unwrap();
-            let end_txn = read_frame(&mut coordinator_socket).await;
-            assert_eq!(&end_txn[0..4], &[0, 26, 0, 0]);
+            let api_versions = read_frame(&mut coordinator_socket).await;
+            assert_eq!(&api_versions[0..4], &[0, 18, 0, 3]);
             write_frame(
                 &mut coordinator_socket,
-                &[
-                    0, 0, 0, 1, // correlation id
-                    0, 0, 0, 0, // throttle time
-                    0, 47, // invalid producer epoch
-                ],
+                &api_versions_transaction_response_frame(&api_versions, 26, 3),
+            )
+            .await;
+            let end_txn = read_frame(&mut coordinator_socket).await;
+            assert_eq!(&end_txn[0..4], &[0, 26, 0, 3]);
+            write_frame(
+                &mut coordinator_socket,
+                &end_txn_v3_response_frame(&end_txn, 47),
             )
             .await;
         });
@@ -6140,8 +6651,15 @@ mod tests {
             .await;
 
             let (mut coordinator_socket, _) = coordinator_listener.accept().await.unwrap();
+            let api_versions = read_frame(&mut coordinator_socket).await;
+            assert_eq!(&api_versions[0..4], &[0, 18, 0, 3]);
+            write_frame(
+                &mut coordinator_socket,
+                &api_versions_transaction_response_frame(&api_versions, 26, 3),
+            )
+            .await;
             let end_txn = read_frame(&mut coordinator_socket).await;
-            assert_eq!(&end_txn[0..4], &[0, 26, 0, 0]);
+            assert_eq!(&end_txn[0..4], &[0, 26, 0, 3]);
             drop(coordinator_socket);
         });
 
@@ -6190,31 +6708,26 @@ mod tests {
         let addr = listener.local_addr().unwrap();
         let server = tokio::spawn(async move {
             let (mut socket, _) = listener.accept().await.unwrap();
-            let first = read_frame(&mut socket).await;
-            assert_eq!(&first[0..4], &[0, 22, 0, 0]);
+            let api_versions = read_frame(&mut socket).await;
+            assert_eq!(&api_versions[0..4], &[0, 18, 0, 3]);
             write_frame(
                 &mut socket,
-                &[
-                    0, 0, 0, 1, // correlation id
-                    0, 0, 0, 0, // throttle time
-                    0, 14, // coordinator load in progress
-                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, // producer id
-                    0xff, 0xff, // producer epoch
-                ],
+                &api_versions_transaction_response_frame(&api_versions, 22, 2),
+            )
+            .await;
+            let first = read_frame(&mut socket).await;
+            assert_eq!(&first[0..4], &[0, 22, 0, 2]);
+            write_frame(
+                &mut socket,
+                &init_producer_id_v2_response_frame(&first, 14, -1, -1),
             )
             .await;
 
             let second = read_frame(&mut socket).await;
-            assert_eq!(&second[0..4], &[0, 22, 0, 0]);
+            assert_eq!(&second[0..4], &[0, 22, 0, 2]);
             write_frame(
                 &mut socket,
-                &[
-                    0, 0, 0, 2, // correlation id
-                    0, 0, 0, 0, // throttle time
-                    0, 0, // error code
-                    0, 0, 0, 0, 0, 0, 0, 42, // producer id
-                    0, 3, // producer epoch
-                ],
+                &init_producer_id_v2_response_frame(&second, 0, 42, 3),
             )
             .await;
         });
@@ -6323,6 +6836,47 @@ mod tests {
             buffered_linger_deadline(None, std::time::Duration::from_millis(5)),
             None
         );
+    }
+
+    #[test]
+    fn computes_buffered_delivery_deadline_from_oldest_record() {
+        let first = buffered_request(ProducerRecord::to("orders"));
+        let first_deadline = first.enqueued_at + Duration::from_millis(20);
+        let second = buffered_request(ProducerRecord::to("orders"));
+        let second_deadline = second.enqueued_at + Duration::from_millis(20);
+        let pending = vec![first, second];
+
+        assert_eq!(
+            buffered_delivery_deadline(&pending, Duration::from_millis(20)),
+            Some(first_deadline.min(second_deadline))
+        );
+    }
+
+    #[tokio::test]
+    async fn expires_buffered_records_before_produce_when_deadline_elapsed() {
+        let (delivery_sender, delivery_receiver) = oneshot::channel();
+        let mut request = BufferedProduceRequest::new(
+            ProducerRecord::to("orders"),
+            delivery_sender,
+            ClientMetrics::new(),
+        );
+        request.enqueued_at = Instant::now() - Duration::from_millis(50);
+        let enqueued_at = request.enqueued_at;
+        let mut pending = vec![request];
+        let mut first_enqueued_at = Some(enqueued_at);
+
+        expire_buffered_deliveries(
+            &mut pending,
+            &mut first_enqueued_at,
+            Duration::from_millis(20),
+        );
+
+        assert!(pending.is_empty());
+        assert!(first_enqueued_at.is_none());
+        assert!(matches!(
+            delivery_receiver.await.unwrap(),
+            Err(Error::RequestTimedOut { timeout_ms: 20 })
+        ));
     }
 
     #[test]
@@ -7075,6 +7629,7 @@ mod tests {
         }));
         assert!(can_retry_send(&Error::MissingBroker { node_id: 2 }));
         assert!(!can_retry_send(&Error::Unsupported("record headers")));
+        assert!(!can_retry_send(&Error::OAuthBearerTokenExpired));
         assert_eq!(
             Error::Broker {
                 code: 5,
@@ -7214,6 +7769,58 @@ mod tests {
         assert_eq!(first.offset(), 0);
         assert_eq!(second.offset(), 1);
         assert_eq!(producer.broker_clients.len().await, 1);
+        leader_server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn bounds_send_by_total_delivery_timeout_and_poisoning_connection() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let leader_server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+
+            let versions = read_frame(&mut socket).await;
+            assert_eq!(&versions[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut socket, &api_versions_response_frame(3)).await;
+
+            let produce = read_frame(&mut socket).await;
+            assert_eq!(&produce[0..4], &[0, 0, 0, 3]);
+            time::sleep(Duration::from_millis(200)).await;
+        });
+
+        let (client_stream, broker_stream) = tokio::io::duplex(64);
+        drop(broker_stream);
+        let config = ProducerConfig::new([addr.to_string()])
+            .request_timeout_ms(1_000)
+            .delivery_timeout_ms(20)
+            .max_retries(0);
+        let mut metadata_cache = BTreeMap::new();
+        metadata_cache.insert("orders".to_owned(), metadata_fixture_for(addr));
+        let mut producer = Producer {
+            client: Client::from_stream(
+                Box::new(client_stream),
+                Some("kafrust-delivery-timeout-test".to_owned()),
+                Some(Duration::from_millis(1_000)),
+            ),
+            config,
+            metadata_cache,
+            leader_hints: BTreeMap::new(),
+            topic_id_cache: BTreeMap::new(),
+            keyless_partition_indexes: BTreeMap::new(),
+            broker_clients: std::sync::Arc::new(SharedBrokerClientCache::default()),
+            idempotent_state: None,
+            transaction_state: None,
+        };
+
+        let started = Instant::now();
+        let error = producer
+            .send(ProducerRecord::to("orders").partition(0).value("created"))
+            .await
+            .unwrap_err();
+
+        assert!(started.elapsed() < Duration::from_millis(150));
+        assert!(matches!(error, Error::RequestTimedOut { timeout_ms: 20 }));
+        assert!(producer.client.is_connection_poisoned());
         leader_server.await.unwrap();
     }
 
@@ -7448,6 +8055,93 @@ mod tests {
         frame.push(0); // ApiVersions entry tagged fields
         frame.extend_from_slice(&[0, 0, 0, 0]); // throttle time
         frame.push(0); // response tagged fields
+        frame
+    }
+
+    fn api_versions_transaction_response_frame(
+        request: &[u8],
+        api_key: i16,
+        max_version: i16,
+    ) -> Vec<u8> {
+        let mut frame = request[4..8].to_vec();
+        frame.extend_from_slice(&[
+            0, 0, // error code
+            2, // compact API key count: one entry
+        ]);
+        frame.extend_from_slice(&api_key.to_be_bytes());
+        frame.extend_from_slice(&[0, 0]); // minimum version
+        frame.extend_from_slice(&max_version.to_be_bytes());
+        frame.push(0); // API key tagged fields
+        frame.extend_from_slice(&[0, 0, 0, 0]); // throttle time
+        frame.push(0); // response tagged fields
+        frame
+    }
+
+    fn init_producer_id_v2_response_frame(
+        request: &[u8],
+        error_code: i16,
+        producer_id: i64,
+        producer_epoch: i16,
+    ) -> Vec<u8> {
+        let mut frame = request[4..8].to_vec();
+        frame.push(0); // flexible response header tagged fields
+        frame.extend_from_slice(&0_i32.to_be_bytes());
+        frame.extend_from_slice(&error_code.to_be_bytes());
+        frame.extend_from_slice(&producer_id.to_be_bytes());
+        frame.extend_from_slice(&producer_epoch.to_be_bytes());
+        frame.push(0); // response tagged fields
+        frame
+    }
+
+    fn end_txn_v3_response_frame(request: &[u8], error_code: i16) -> Vec<u8> {
+        let mut frame = request[4..8].to_vec();
+        frame.push(0); // flexible response header tagged fields
+        frame.extend_from_slice(&0_i32.to_be_bytes());
+        frame.extend_from_slice(&error_code.to_be_bytes());
+        frame.push(0); // response tagged fields
+        frame
+    }
+
+    fn add_offsets_to_txn_v3_response_frame(request: &[u8]) -> Vec<u8> {
+        let mut frame = request[4..8].to_vec();
+        frame.push(0); // flexible response header tagged fields
+        frame.extend_from_slice(&[0, 0, 0, 0, 0, 0]); // throttle time and success
+        frame.push(0); // response tagged fields
+        frame
+    }
+
+    fn add_partitions_to_txn_v3_response_frame(request: &[u8]) -> Vec<u8> {
+        let mut frame = request[4..8].to_vec();
+        frame.push(0); // flexible response header tagged fields
+        let mut body = Encoder::new();
+        body.write_i32(0);
+        body.write_compact_array(Some(&[()]), |encoder, ()| {
+            encoder.write_compact_string("orders")?;
+            encoder.write_compact_array(Some(&[()]), |encoder, ()| {
+                encoder.write_i32(0);
+                encoder.write_i16(0);
+                encoder.write_empty_tagged_fields();
+                Ok(())
+            })?;
+            encoder.write_empty_tagged_fields();
+            Ok(())
+        })
+        .unwrap();
+        body.write_empty_tagged_fields();
+        frame.extend(body.into_bytes());
+        frame
+    }
+
+    fn add_partitions_to_txn_v0_response_frame(request: &[u8]) -> Vec<u8> {
+        let mut frame = request[4..8].to_vec();
+        frame.extend_from_slice(&[
+            0, 0, 0, 0, // throttle time
+            0, 0, 0, 1, // topic count
+            0, 6, b'o', b'r', b'd', b'e', b'r', b's', // topic
+            0, 0, 0, 1, // partition count
+            0, 0, 0, 0, // partition index
+            0, 0, // success
+        ]);
         frame
     }
 

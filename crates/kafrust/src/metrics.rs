@@ -45,6 +45,7 @@ struct ClientMetricsInner {
     request_bytes: AtomicU64,
     response_bytes: AtomicU64,
     in_flight_requests: AtomicU64,
+    max_in_flight_requests: AtomicU64,
     total_latency_ns: AtomicU64,
     max_latency_ns: AtomicU64,
     latency_buckets: [AtomicU64; LATENCY_BUCKET_UPPER_BOUNDS_NS.len()],
@@ -83,6 +84,8 @@ pub struct ClientMetricsSnapshot {
     pub response_bytes: u64,
     /// Request roundtrips currently awaiting completion.
     pub in_flight_requests: u64,
+    /// Highest observed number of request roundtrips awaiting completion.
+    pub max_in_flight_requests: u64,
     /// Sum of completed and cancelled request latency.
     pub total_latency: Duration,
     /// Highest observed completed or cancelled request latency.
@@ -148,6 +151,7 @@ impl ClientMetrics {
             request_bytes: self.inner.request_bytes.load(Ordering::Relaxed),
             response_bytes: self.inner.response_bytes.load(Ordering::Relaxed),
             in_flight_requests: self.inner.in_flight_requests.load(Ordering::Relaxed),
+            max_in_flight_requests: self.inner.max_in_flight_requests.load(Ordering::Relaxed),
             total_latency: Duration::from_nanos(
                 self.inner.total_latency_ns.load(Ordering::Relaxed),
             ),
@@ -163,9 +167,14 @@ impl ClientMetrics {
         self.inner
             .request_bytes
             .fetch_add(usize_to_u64(request_bytes), Ordering::Relaxed);
-        self.inner
+        let depth = self
+            .inner
             .in_flight_requests
-            .fetch_add(1, Ordering::Relaxed);
+            .fetch_add(1, Ordering::Relaxed)
+            .saturating_add(1);
+        self.inner
+            .max_in_flight_requests
+            .fetch_max(depth, Ordering::Relaxed);
         RequestMetricsGuard {
             metrics: self.clone(),
             started_at: Instant::now(),
@@ -352,6 +361,7 @@ mod tests {
         let metrics = ClientMetrics::new();
         let guard = metrics.start_request(4);
         assert_eq!(metrics.snapshot().in_flight_requests, 1);
+        assert_eq!(metrics.snapshot().max_in_flight_requests, 1);
 
         drop(guard);
 
@@ -359,6 +369,23 @@ mod tests {
         assert_eq!(snapshot.requests_cancelled, 1);
         assert_eq!(snapshot.in_flight_requests, 0);
         assert_eq!(snapshot.request_latency_buckets.iter().sum::<u64>(), 1);
+    }
+
+    #[test]
+    fn records_peak_in_flight_requests() {
+        let metrics = ClientMetrics::new();
+        let first = metrics.start_request(0);
+        let second = metrics.start_request(0);
+
+        let snapshot = metrics.snapshot();
+        assert_eq!(snapshot.in_flight_requests, 2);
+        assert_eq!(snapshot.max_in_flight_requests, 2);
+
+        drop(first);
+        drop(second);
+        let snapshot = metrics.snapshot();
+        assert_eq!(snapshot.in_flight_requests, 0);
+        assert_eq!(snapshot.max_in_flight_requests, 2);
     }
 
     #[test]

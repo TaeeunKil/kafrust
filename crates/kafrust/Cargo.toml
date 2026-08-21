@@ -16,6 +16,7 @@ workspace = true
 
 [features]
 default = []
+blocking = ["tokio/rt-multi-thread"]
 tls = [
     "dep:rustls",
     "dep:rustls-platform-verifier",
