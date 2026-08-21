@@ -61,11 +61,12 @@ oldest idle entry is evicted in FIFO order. Producer instances built from
 cloned `ClientConfig` values share the producer cache. Direct consumers retain
 an instance-local cache because Kafka Fetch session state belongs to one
 consumer instance. `AdminClient` clones share a separate Admin-only idle cache;
-the metadata and `describe_features` read paths return a connection to that
-cache only after a complete response. `ApiVersions` capability data is still
-cached on the connection, so repeated feature reads do not issue duplicate
-handshakes, while controller and coordinator operations remain explicitly
-owned by their operation until their retry/lifecycle contracts are lease-aware.
+the metadata, `describe_features`, and broker-endpoint `describe_cluster`
+read paths return a connection to that cache only after a complete response.
+`ApiVersions` capability data is still cached on the connection, so repeated
+feature or dedicated cluster reads do not issue duplicate handshakes, while
+controller and coordinator operations remain explicitly owned by their
+operation until their retry/lifecycle contracts are lease-aware.
 Group and Share clients likewise retain separate connection-lifecycle paths so
 heartbeat, membership, and ShareFetch session state cannot cross client
 instances. `ConsumerGroup`, `ShareConsumer`, and `StreamsGroupSession` are

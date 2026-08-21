@@ -682,12 +682,17 @@ impl AdminClient {
                 options.endpoint_type,
                 Some(DescribeClusterEndpointType::Controllers)
             ) {
-                self.config.connect_controller().await
+                self.config
+                    .connect_controller()
+                    .await
+                    .map(|client| (None, client))
             } else {
-                self.config.clone().connect().await
+                self.connect_admin_bootstrap()
+                    .await
+                    .map(|(address, client)| (Some(address), client))
             };
-            let mut client = match connection {
-                Ok(client) => client,
+            let (broker_addr, mut client) = match connection {
+                Ok(connection) => connection,
                 Err(error) if retry < self.max_retries && is_retryable_admin_read_error(&error) => {
                     retry += 1;
                     self.config.record_retry();
@@ -764,7 +769,12 @@ impl AdminClient {
                         client.broker_error(response.error_code, "describe cluster".to_owned())
                     );
                 }
-                Ok(response) => return Ok(ClusterDescription::from_describe_cluster(response)),
+                Ok(response) => {
+                    if let Some(broker_addr) = broker_addr {
+                        self.cache_admin_broker(broker_addr, client).await;
+                    }
+                    return Ok(ClusterDescription::from_describe_cluster(response));
+                }
                 Err(error) if retry < self.max_retries && is_retryable_admin_read_error(&error) => {
                     retry += 1;
                     self.config.record_retry();
@@ -16496,6 +16506,45 @@ mod tests {
         assert_eq!(cluster.cluster_authorized_operations(), Some(7));
         assert_eq!(cluster.controller_id(), 1);
         assert_eq!(cluster.brokers()[0].rack(), Some("rack-a"));
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn reuses_admin_bootstrap_connection_for_sequential_dedicated_cluster_reads() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut connection, _) = listener.accept().await.unwrap();
+
+            let api_versions_request = read_frame(&mut connection).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut connection, &api_versions_with_describe_cluster()).await;
+
+            for _ in 0..2 {
+                let describe_request = read_frame(&mut connection).await;
+                assert_eq!(&describe_request[0..4], &[0, 60, 0, 1]);
+                write_frame(&mut connection, &describe_cluster_response()).await;
+            }
+        });
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .client_id("kafrust-admin-test")
+                .request_timeout_ms(1_000),
+        );
+
+        let first = admin
+            .describe_cluster_with_options(DescribeClusterOptions::new())
+            .await
+            .unwrap();
+        let second = admin
+            .clone()
+            .describe_cluster_with_options(DescribeClusterOptions::new())
+            .await
+            .unwrap();
+
+        assert_eq!(first.cluster_id(), second.cluster_id());
+        assert_eq!(first.brokers().len(), second.brokers().len());
+        assert_eq!(admin.broker_clients.len().await, 1);
         server.await.unwrap();
     }
 

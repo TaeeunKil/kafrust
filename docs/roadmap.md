@@ -160,10 +160,12 @@ open.
 
 The runtime connection-lifecycle slice now gives `AdminClient` its own idle
 connection cache, shared only by clones of that AdminClient. Sequential Admin
-metadata and `describe_features` reads reuse a healthy broker connection, and
-the latter also reuses the connection-local ApiVersions capability result
-without sending a duplicate handshake. Transport failures are not returned to
-the cache. Producer cache sharing remains separate; direct consumer Fetch
+metadata, `describe_features`, and broker-endpoint `describe_cluster` reads
+reuse a healthy broker connection, and the capability-backed paths also reuse
+the connection-local ApiVersions result without sending a duplicate handshake.
+Controller-endpoint DescribeCluster and other coordinator/controller
+operations remain operation-owned. Transport failures are not returned to the
+cache. Producer cache sharing remains separate; direct consumer Fetch
 sessions, ShareFetch sessions, and group heartbeat/membership connections
 remain instance- or operation-owned until their session-aware lease contracts
 are implemented. The focused Admin reuse regressions pass; broader Admin
