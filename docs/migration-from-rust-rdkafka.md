@@ -1,10 +1,16 @@
 # Migrating from rust-rdkafka
 
 This guide maps common `rust-rdkafka` 0.39 application patterns to kafrust
-0.3.x. It is a staged migration guide, not a drop-in compatibility claim.
+0.3.5. It is a staged migration guide, not a drop-in compatibility claim.
 `rust-rdkafka` wraps librdkafka and has substantially broader production
 coverage. kafrust is a Tokio-based pure Rust client with a smaller, typed
 configuration surface.
+
+> Version note: the capability gate below retains historical published-crate
+> evidence from earlier `0.2.x` and `0.3.x` runs so results remain auditable.
+> Those entries are evidence for the named artifact and workload, not the
+> current release version. Re-run the target workflow against `0.3.5` before
+> treating it as a production qualification.
 
 Reference APIs:
 
@@ -20,7 +26,7 @@ Replace the dependency:
 
 ```toml
 [dependencies]
-kafrust = "0.3.0"
+kafrust = "0.3.5"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
 
@@ -45,7 +51,7 @@ the currently supported settings through typed builders.
 | `acks=0` | `.acks(Acks::None)` | Writes and flushes without waiting for a response; returned offsets are `-1` and broker acceptance is not confirmed. |
 | `compression.type` | `.compression(Compression::{Gzip, Snappy, Lz4, Zstd})` | Codec support is feature-complete for the verified producer path. |
 | `enable.idempotence` | `.enable_idempotence(true)` | Initializes producer identity and partition sequences. |
-| `transactional.id` | `.transactional_id(...)` | Enables the alpha transactional path. |
+| `transactional.id` | `.transactional_id(...)` | Enables the pre-1.0 transactional path; discard the producer after `TransactionOutcomeUnknown` and reconcile before replaying. |
 | `group.id` | `ConsumerGroupConfig::new(brokers, group_id)` | Group ID is a required typed argument. |
 | `enable.auto.commit=true` | `.enable_auto_commit(true).auto_commit_interval_ms(...)` | Queues current assignment positions after successful polls and flushes them through a bounded background worker; defaults to `false` for explicit-commit compatibility. Classic and Kafka 4.3.1 KIP-848 paths are live-verified in [`31593984640`](https://github.com/TaeeunKil/kafrust/actions/runs/31593984640). |
 | `enable.auto.commit=false` | omit `.enable_auto_commit(true)` | Use `commit_offsets` or `commit_record` plus `commit_queued_offsets` explicitly. |
@@ -315,6 +321,12 @@ kafrust currently provides:
 - topic partition expansion with automatic or explicit replica assignment
 - controller-routed partition reassignment and bounded in-progress status polling
 - flexible topic partition metadata with topic UUIDs, partition state, and paging
+- broker-supported and finalized feature metadata plus controller-routed feature updates
+- KRaft controller quorum inspection and dynamic voter add/remove operations
+- broker registration and unregistration through the KRaft controller
+- ACL, client-quota, SCRAM-credential, delegation-token, and log-directory administration
+- Share group state, offsets, membership inspection, and Share group deletion
+- Kafka 4.x Streams group inspection
 
 The published `kafrust 0.2.28` artifact passed a fresh external Admin lifecycle
 in [`Published Crate Smoke` run `31731934027`](https://github.com/TaeeunKil/kafrust/actions/runs/31731934027):
