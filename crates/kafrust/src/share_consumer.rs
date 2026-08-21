@@ -596,6 +596,11 @@ impl ShareConsumerConfig {
 }
 
 /// A Kafka KIP-932 share-group consumer.
+///
+/// This value owns the bootstrap, coordinator, per-broker ShareFetch clients,
+/// and their ShareFetch session epochs. It intentionally does not implement
+/// `Clone`, because those connections and epochs are part of one share-group
+/// membership session.
 pub struct ShareConsumer {
     config: ShareConsumerConfig,
     bootstrap: Option<Client>,

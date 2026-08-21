@@ -1360,6 +1360,11 @@ impl Eq for ConsumerGroupConfig {}
 
 #[derive(Debug)]
 /// Joined Kafka consumer group member.
+///
+/// The coordinator, consumer Fetch state, and optional background heartbeat
+/// connection belong to this membership session. This type intentionally does
+/// not implement `Clone`; creating another member must perform a new group
+/// join instead of sharing generation or member state.
 pub struct ConsumerGroup {
     config: ConsumerGroupConfig,
     group_id: String,

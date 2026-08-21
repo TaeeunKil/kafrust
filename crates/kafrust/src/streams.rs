@@ -218,6 +218,10 @@ impl StreamsGroupConfig {
 /// epoch zero, and the configured topology. Subsequent calls send the current
 /// member epoch and only transmit changed membership data according to Kafka's
 /// nullable protocol fields. Call [`Self::close`] to leave gracefully.
+///
+/// The coordinator connection and member epoch are owned by this session. This
+/// type intentionally does not implement `Clone`; use a new join for a second
+/// Streams member rather than sharing a membership connection.
 pub struct StreamsGroupSession {
     config: StreamsGroupConfig,
     coordinator: Option<Client>,

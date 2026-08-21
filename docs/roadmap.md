@@ -169,6 +169,15 @@ remain instance- or operation-owned until their session-aware lease contracts
 are implemented. The focused Admin reuse regressions pass; broader Admin
 broker-operation reuse and live connection-churn evidence remain open.
 
+The session-boundary review confirms that group coordinator/heartbeat clients,
+ShareFetch clients plus per-broker Share epochs, and Streams coordinator
+clients plus member epochs remain owned by their membership objects. The three
+public session types are intentionally non-`Clone`; focused heartbeat, Share
+acknowledgement/reconciliation, and Streams lifecycle tests plus the recorded
+multi-broker failover gates cover the current boundary. A generic shared cache
+must not be extended to these paths without carrying the corresponding
+membership lease and epoch state.
+
 The verification-hardening slice now includes a standalone pure-Rust fuzz
 workspace with ten libFuzzer targets covering primitive/flexible decoding,
 framing, classic and modern group descriptions, share-group offsets, and all

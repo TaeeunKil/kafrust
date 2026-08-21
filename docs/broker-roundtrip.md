@@ -68,7 +68,10 @@ handshakes, while controller and coordinator operations remain explicitly
 owned by their operation until their retry/lifecycle contracts are lease-aware.
 Group and Share clients likewise retain separate connection-lifecycle paths so
 heartbeat, membership, and ShareFetch session state cannot cross client
-instances.
+instances. `ConsumerGroup`, `ShareConsumer`, and `StreamsGroupSession` are
+intentionally non-`Clone`; each owns its coordinator, heartbeat, assignment,
+and epoch state. A new member must join separately rather than borrowing a
+generic idle connection from another session.
 
 `ClientConfig::security_protocol` and the matching producer, consumer, and group builders default to `SecurityProtocol::Plaintext`. `SecurityProtocol::Tls` uses the non-default `tls` crate feature and is covered by the recorded broker roundtrip, producer, direct consumer, and consumer group smoke profile. TLS server name validation defaults to the bootstrap host and can be overridden with `tls_server_name(name)` or `KAFRUST_TLS_SERVER_NAME` for examples and broker checks. Extra DER root certificates can be added with `tls_root_certificate_der(bytes)` or `KAFRUST_TLS_ROOT_CERT_DER_PATH` for examples and broker checks. SASL/PLAIN and SASL/SCRAM-SHA-256/512 authentication are implemented for configured `SaslPlaintext` and `SaslTls` connections; SASL/PLAIN over `SaslPlaintext` and SASL/SCRAM-SHA-256 over `SaslTls` are covered by recorded broker roundtrip, producer, direct consumer, and consumer group smoke profiles.
 

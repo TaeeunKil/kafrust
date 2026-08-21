@@ -125,6 +125,10 @@ why. CI must remain green on the repository MSRV and stable Rust.
 - Preserve producer ID, epoch, and sequence identity across idempotent retries.
 - Make retries idempotent and account for duplicate, delayed, out-of-order, and
   ambiguous responses.
+- Keep consumer-group coordinator/heartbeat, ShareFetch, and Streams heartbeat
+  connections owned by their membership session. Do not put these connections
+  in the generic shared idle cache unless the cache also carries the matching
+  member ID, generation/epoch, assignment, and shutdown lease.
 - Do not claim broker or security compatibility without recorded live evidence.
 - Never log credentials, tokens, SCRAM material, or unredacted secrets.
 
