@@ -583,6 +583,15 @@ coverage toward a release candidate that can be qualified in staging.
   161,271.11 producer and 795,363.67 consumer records/s. This closes the
   current published-artifact comparison run, not replacement, feature parity,
   failure compatibility, or production SLO qualification.
+- The current published `0.3.5` comparison passed in
+  [`32432679837`](https://github.com/TaeeunKil/kafrust/actions/runs/32432679837).
+  Across three repetitions of the same Kafka 4.3.1, 20,000-record, 1-KiB,
+  batch-200 profile, kafrust measured median 65,451.79 producer and
+  351,376.54 consumer records/s; `rust-rdkafka 0.39.0` measured median
+  162,827.84 producer and 615,755.30 consumer records/s. This is the current
+  published workload baseline, not replacement, feature parity, failure
+  compatibility, or production SLO qualification. Historical red runs using
+  `0.3.0` remain visible and are not evidence against `0.3.5`.
 - Published `0.2.30` then passed a 300-second single-node broker-restart soak
   in [`31768319413`](https://github.com/TaeeunKil/kafrust/actions/runs/31768319413),
   processing 21,597,600 records with 180 operation errors, 954 failed

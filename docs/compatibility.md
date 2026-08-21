@@ -608,6 +608,26 @@ measured 61,769.53 to 75,025.68 producer records/s (median 62,392.59) and
 580,226.56). This is the current published performance baseline: feature
 parity, failure compatibility, and production SLOs remain separate gates.
 
+The current published `kafrust 0.3.5` comparison passed in
+[`32432679837`](https://github.com/TaeeunKil/kafrust/actions/runs/32432679837).
+Across the same three-repetition Kafka 4.3.1 produce/fetch profile, kafrust
+ranged from 54,556.11 to 66,631.10 producer records/s (median 65,451.79) and
+272,020.73 to 359,731.73 consumer records/s (median 351,376.54).
+`rust-rdkafka 0.39.0` ranged from 89,056.54 to 164,571.09 producer records/s
+(median 162,827.84) and 273,994.67 to 733,472.79 consumer records/s (median
+615,755.30). This is the current published workload baseline; it does not
+claim API/feature parity, failure compatibility, or production SLOs.
+
+The two red comparison runs shown in the workflow history,
+[`32335003103`](https://github.com/TaeeunKil/kafrust/actions/runs/32335003103)
+and [`32335827325`](https://github.com/TaeeunKil/kafrust/actions/runs/32335827325),
+were manually run with the historical published `kafrust 0.3.0` input. They
+failed before producing a result because that artifact sent malformed Fetch
+v13 field ordering and surfaced `UnexpectedEof`; they are not failures of the
+current `0.3.5` comparison. The workflow now preserves per-implementation
+stderr logs as artifacts so future failures identify the exact repetition and
+implementation.
+
 The published `0.2.30` single-node broker-restart soak passed for 300 seconds
 in [`31768319413`](https://github.com/TaeeunKil/kafrust/actions/runs/31768319413).
 The fresh external project processed 21,597,600 1-KiB records through a
