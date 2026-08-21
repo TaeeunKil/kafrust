@@ -10,8 +10,11 @@ A pure Rust Kafka client with no librdkafka or C client binding dependency.
 Tokio-based admin, producer, direct consumer, and alpha classic/KIP-848
 consumer group APIs on top of the companion
 [`kafrust-protocol`](https://docs.rs/kafrust-protocol) wire-format crate.
+The optional `blocking` feature provides synchronous adapters for direct and
+bounded-buffered producers, direct consumer, consumer group, Share, Streams,
+and expanded Admin operations.
 
-Current release: `0.3.1`.
+Current release: `0.3.5`.
 
 This crate is alpha. Use it for experiments, local broker checks, simple
 internal tools, and API evaluation. For broad production Kafka workloads that
@@ -114,6 +117,31 @@ tokio = { version = "1", features = ["macros", "rt"] }
 
 For a multi-threaded application runtime, enable Tokio's `rt-multi-thread`
 feature in the application.
+
+### Blocking clients
+
+Enable the optional feature when an integration boundary cannot expose async
+methods:
+
+```toml
+[dependencies]
+kafrust = { version = "0.3", features = ["blocking"] }
+```
+
+`BlockingProducer`, `BlockingBufferedProducer`,
+`BlockingBufferedProducerHandle`, `BlockingConsumer`, `BlockingConsumerGroup`,
+`BlockingShareConsumer`, `BlockingStreamsGroupSession`, and
+`BlockingAdminClient` own a dedicated multi-thread Tokio runtime and preserve
+the async clients' retry, compression, idempotence, transaction, direct-fetch,
+  group poll/heartbeat/commit, Share poll/acknowledge/commit, Streams
+  heartbeat/task-state/close, topic lifecycle, ACL/security, quota, storage,
+  reassignment, transaction-diagnostic, group-listing, group-offset, feature,
+  and topic-configuration behavior. Construct and use them from a thread that
+  is not inside another Tokio runtime. The blocking group adapter performs
+foreground heartbeats during `poll`; configure automatic commits on
+`ConsumerGroupConfig` when a background commit worker is required. Detached
+group, Share, or Streams heartbeat task handles remain asynchronous for
+explicit lifecycle management.
 
 ## Producer
 
@@ -497,6 +525,12 @@ The buffered producer command queue defaults to 1024 records. Configure it with
 is full, `BufferedProducer::send` waits for capacity instead of allocating an
 unbounded queue or dropping an accepted record.
 
+`ProducerConfig::delivery_timeout_ms` sets the total deadline for immediate and
+batch deliveries, including metadata lookup, retries, and retry backoff. It
+defaults to 120 seconds and returns `Error::RequestTimedOut` after retiring a
+possibly interrupted connection. Buffered records use the same deadline from
+enqueue through Produce; `linger_ms` independently controls batching latency.
+
 ## Decode Memory Limits
 
 Broker response frame allocation is limited to `100 MiB` by default. Set
@@ -555,6 +589,11 @@ Verified high-level paths include:
 ## Current Limits
 
 - APIs are pre-`1.0` and can change between minor versions.
+- The optional `blocking` feature supplies synchronous direct and
+  bounded-buffered producer, direct consumer, consumer-group, Share, Streams,
+  and broad broker/controller Admin adapters. A general alternate-runtime
+  abstraction remains open, and blocking adapters cannot be called from inside
+  a Tokio runtime.
 - TLS is feature-gated, currently uses the `rustls` ring crypto provider, and
   is verified for the broker roundtrip, producer, direct consumer, and consumer
   group smoke paths against Kafka `3.7.2`;
@@ -583,6 +622,9 @@ Verified high-level paths include:
 - Idempotent single-record, batch, and buffered sends are available through
   `ProducerConfig::enable_idempotence(true)`. Transactional immediate and batch
   sends support explicit begin, commit, and abort.
+  Transaction coordinator partition/group registration prefers flexible
+  `AddPartitionsToTxn` and `AddOffsetsToTxn` v3 on brokers that advertise it,
+  with v0 fallback for Kafka 3.7-era compatibility.
   `IsolationLevel::ReadCommitted` hides aborted transaction records for direct
   and group consumers, and current group assignments can be committed through
   generation-fenced `Producer::send_group_offsets_to_transaction`.

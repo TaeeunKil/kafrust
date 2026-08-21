@@ -217,8 +217,9 @@ Current implementation status:
   partitions bypass it, and immediate, batch, and buffered sends share the same
   callback behavior.
 - `ProducerConfig::enable_idempotence(true)` selects `acks=all`, requires at
-  least one retry, initializes a producer ID through `InitProducerId v0`, and
-  tracks the next sequence independently per topic partition. The current
+  least one retry, negotiates `InitProducerId v2` when the broker advertises
+  it and falls back to v0 otherwise, and tracks the next sequence independently
+  per topic partition. The current
   alpha applies this behavior to single-record, batch, and buffered sends.
   Batch sequence reservations remain stable across request and partial-record
   retries, and advance the acknowledged partition sequence only after a
@@ -266,8 +267,10 @@ Current implementation status:
 - Transaction coordinator discovery, connection, and request transport
   failures reconnect through the configured bootstrap set before retrying
   `InitProducerId`, `AddPartitionsToTxn`, `AddOffsetsToTxn`,
-  `TxnOffsetCommit`, or `EndTxn`. Retry exhaustion preserves the final
-  transport error. Manual `Live Kafka Smoke` run `30335739033` stopped the
+  `TxnOffsetCommit`, or `EndTxn`. `AddPartitionsToTxn` and `AddOffsetsToTxn`
+  prefer flexible v3 after coordinator ApiVersions negotiation and fall back
+  to v0 for older brokers. Retry exhaustion preserves the final transport
+  error. Manual `Live Kafka Smoke` run `30335739033` stopped the
   active coordinator after Produce and passed commit plus read-committed
   fetch-back on a three-broker Kafka 3.7.2 cluster.
 - `Producer::send` performs metadata lookup, connects to the partition leader,
@@ -278,6 +281,16 @@ Current implementation status:
   when the broker advertises only an older path. The topic UUID is cached per
   topic and invalidated with producer metadata after a retryable send failure.
 - `ProducerConfig::request_timeout_ms` controls the request timeout used for metadata and produce roundtrips.
+- `ProducerConfig::delivery_timeout_ms` controls the total deadline for one
+  immediate or batch delivery, including metadata lookup, capability
+  negotiation, Produce requests, retry attempts, and retry backoff. It defaults
+  to 120 seconds, matching Kafka's usual `delivery.timeout.ms` default. A
+  deadline expiry returns `Error::RequestTimedOut` and retires the producer's
+  current metadata connection; a leader connection that was in flight is
+  dropped rather than returned to the idle cache. Buffered records use the
+  same deadline from enqueue through Produce; records that expire in the
+  bounded queue complete with a timeout without being sent. `linger_ms` still
+  controls batching latency independently.
 - `ProducerConfig::max_idle_broker_connections` bounds the idle leader/coordinator connections retained by this producer. It defaults to 64 and evicts the oldest idle entry in FIFO order; a value of zero is rejected during validation.
 - `ProducerConfig::security_protocol` stores the Kafka security protocol for producer broker connections. `Plaintext` is the default transport; TLS requires the non-default `tls` crate feature; `tls_server_name(name)` overrides the certificate validation name when the bootstrap host differs from the broker certificate; `tls_root_certificate_der(bytes)` adds DER-encoded root certificates while keeping platform roots enabled; `sasl_plain(username, password)`, `sasl_scram_sha_256(username, password)`, and `sasl_scram_sha_512(username, password)` provide SASL credentials for `SaslPlaintext` or `SaslTls`.
 - `ProducerConfig::max_retries` controls retry attempts for stale metadata, unknown topic-partition entries in cached metadata, missing leader or broker metadata, transient leader errors classified by `BrokerErrorKind`, request timeouts, and connection I/O failures.

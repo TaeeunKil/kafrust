@@ -24,6 +24,10 @@ same connection after the broker session lifetime threshold. The prior
 against this fix. Both docs.rs pages now return HTTP 200:
 [`kafrust 0.3.5`](https://docs.rs/kafrust/0.3.5/kafrust/) and
 [`kafrust-protocol 0.3.5`](https://docs.rs/kafrust-protocol/0.3.5/kafrust_protocol/).
+The main CI gate now also runs `cargo package -p kafrust --all-features
+--locked --no-verify` after tests, Clippy, and documentation builds so release
+artifacts fail before publication when package contents or lockfile resolution
+drift.
 
 The fresh external seven-profile `Published Crate Smoke` also passed with
 `kafrust 0.3.5` in
@@ -32,6 +36,20 @@ covering Kafka 3.7.2 classic, Kafka 4.3.1 KIP-848, Kafka 3.7.2
 SASL_SSL/SCRAM, and Gzip, Snappy, LZ4, and Zstd. This refreshes the published
 artifact baseline; it remains representative evidence rather than a complete
 replacement, multi-broker, authorization, or workload claim.
+
+The published secure multi-broker soak then passed in
+[`32440677496`](https://github.com/TaeeunKil/kafrust/actions/runs/32440677496)
+on Kafka 4.3.1 with SASL_SSL/SCRAM-SHA-256. The default 600-second fresh
+external run stopped brokers 1 and 2 simultaneously for ten seconds, recovered,
+and verified zero final in-flight and buffered records. This closes one
+published secured simultaneous-loss soak slice; it does not close production
+SLO, unclean-election, or the complete 1.0 fault matrix.
+
+The current-source Share acknowledgement response-loss gate also passed in
+[`32449038941`](https://github.com/TaeeunKil/kafrust/actions/runs/32449038941),
+using an injected proxy to drop a ShareAcknowledge response and verify the
+reconciliation path. This is a focused ambiguous-response qualification, not a
+claim of complete Share failure or long-running production-SLO coverage.
 
 `0.3.4` is now published on crates.io in protocol-first order. Fresh external
 projects resolved both packages and passed the published `DescribeCluster` API
@@ -113,7 +131,7 @@ and buffered records. Longer current-version and secured production SLO gates
 remain separate.
 
 The published secure multi-broker soak workflow now defaults to the current
-`0.3.3` artifact, Kafka 4.3.1, simultaneous broker loss, and a 600-second
+`0.3.5` artifact, Kafka 4.3.1, simultaneous broker loss, and a 600-second
 campaign, and it runs on a weekly schedule as well as manually. The workflow
 configuration is in place; recurring scheduled evidence remains required for
 the longer secured-soak campaign.
@@ -160,9 +178,14 @@ open.
 
 The runtime connection-lifecycle slice now gives `AdminClient` its own idle
 connection cache, shared only by clones of that AdminClient. Sequential Admin
-metadata, `describe_features`, and broker-endpoint `describe_cluster` reads
-reuse a healthy broker connection, and the capability-backed paths also reuse
-the connection-local ApiVersions result without sending a duplicate handshake.
+metadata, `describe_features`, broker-endpoint `describe_cluster`,
+broker-scoped `list_groups`, `list_transactions`, broker-local
+`describe_log_dirs`, coordinator-routed `describe_transactions`, and
+coordinator-routed `describe_consumer_groups`,
+`describe_consumer_groups_modern`, `describe_share_groups`,
+`describe_streams_groups`, and leader-routed `describe_producers` reads reuse
+a healthy broker connection, and the capability-backed paths also reuse the
+connection-local ApiVersions result without sending a duplicate handshake.
 Controller-endpoint DescribeCluster and other coordinator/controller
 operations remain operation-owned. Transport failures are not returned to the
 cache. Producer cache sharing remains separate; direct consumer Fetch
@@ -373,8 +396,9 @@ coverage toward a release candidate that can be qualified in staging.
   configuration, member endpoint and tag data, task offsets, assignments, and
   authorization bits. Focused wire and injected-broker routing tests pass.
   Live qualification against a real Kafka Streams application remains open,
-  and `StreamsGroupHeartbeat` v0 (API key 88) is the next required lifecycle
-  slice; this does not expand the published compatibility claim yet.
+  while the separate `StreamsGroupHeartbeat` v0 (API key 88) membership
+  lifecycle is now live-qualified below. This does not claim Kafka Streams DSL
+  or state-store compatibility.
 - The Kafka 4.x `StreamsGroupHeartbeat` v0 wire shape (API key 88) is now
   implemented in the protocol crate and exposed through the low-level
   `Client` and the alpha `StreamsGroupSession`. The session covers initial
@@ -391,9 +415,8 @@ coverage toward a release candidate that can be qualified in staging.
   heartbeat scheduling through a Tokio task, exposes a backpressured task-state
   command path, publishes latest assignments through a watch snapshot, and
   waits for graceful close. Focused wire coverage verifies the automatic
-  heartbeat and member-epoch `-1` leave; published-handle qualification,
-  transition application inside a complete Kafka Streams application, and
-  multi-member failure evidence remain open. The published `0.3.3` surface now also compiles the
+  heartbeat and member-epoch `-1` leave; transition application inside a
+  complete Kafka Streams application remains open. The published `0.3.3` surface now also compiles the
   handle, assignment-watch, and task-runtime APIs from a fresh external
   project on stable and Rust 1.81 in
   [`32380345199`](https://github.com/TaeeunKil/kafrust/actions/runs/32380345199).
@@ -419,9 +442,10 @@ coverage toward a release candidate that can be qualified in staging.
   passed on commit `21ec3fd` in
   [`32374858753`](https://github.com/TaeeunKil/kafrust/actions/runs/32374858753),
   proving post-stop heartbeat recovery and clean leave through the replacement
-  coordinator. Published API-surface and single-broker runtime qualification
-  are now complete; a complete Kafka Streams application and transition
-  application to real consumer/state-store processing remain open.
+  coordinator. Published API-surface, single-broker runtime, and
+  coordinator-failover qualification are now complete; a complete Kafka
+  Streams application and transition application to real consumer/state-store
+  processing remain open.
 - A standalone `fuzz/` workspace now provides ten libFuzzer targets, tracked
   seed corpora, and a manual/weekly corpus-backed campaign workflow. Each
   target has bounded RSS and input-time budgets, and the workflow uploads
@@ -2074,8 +2098,9 @@ Strategic role:
 
 Evidence:
 
-- `InitProducerId v0` request/response protocol types and the low-level client
-  roundtrip are implemented with byte-level and injected-broker tests.
+- `InitProducerId v2` request/response protocol types and the low-level client
+  roundtrip are implemented with byte-level and injected-broker tests. The
+  producer negotiates v2 when advertised and falls back to v0 for older brokers.
 - RecordBatch v2 encoding accepts producer ID, producer epoch, and base
   sequence metadata while preserving the non-idempotent sentinel values.
 - `ProducerConfig::enable_idempotence(true)` initializes a non-transactional
@@ -2143,18 +2168,23 @@ Strategic role:
 
 Evidence:
 
-- `EndTxn v0` request and response protocol types encode commit and abort
+- `EndTxn v3` request and response protocol types encode commit and abort
   results using Kafka API key 26 and decode coordinator throttle/error fields.
-- `Client::end_txn_v0` provides the low-level framed roundtrip, covered by
-  byte-level commit/abort tests and an injected-broker response test.
+  The producer negotiates v3 when advertised and falls back to v0 for older
+  brokers.
+- `Client::end_txn_v3` and `Client::end_txn_v0` provide the low-level framed
+  roundtrips, covered by byte-level commit/abort tests and an injected-broker
+  response test.
 - `FindCoordinator v1` now exposes transaction coordinator discovery using
   coordinator type 1, with protocol and injected-broker client coverage.
-- `AddPartitionsToTxn v0` request/response types preserve topic-partition
-  registration and partition-scoped broker errors. The low-level client
-  roundtrip is covered by byte-level and injected-broker tests.
-- `AddOffsetsToTxn v0` encodes the transactional producer identity and target
-  consumer group, with low-level client and injected-broker coverage for
-  coordinator errors.
+- `AddPartitionsToTxn v3` now carries the flexible compact/tagged request and
+  response shape, with a negotiated `v0` fallback for older brokers. The
+  low-level roundtrips and high-level producer selection are covered by
+  byte-level and injected-broker tests.
+- `AddOffsetsToTxn v3` now carries the flexible compact/tagged request and
+  response shape, with a negotiated `v0` fallback for older brokers. The
+  low-level roundtrips and high-level producer selection are covered by
+  byte-level and injected-broker tests.
 - `TxnOffsetCommit v0` encodes transactional topic-partition offsets and
   metadata, and preserves partition-scoped group errors through the low-level
   client roundtrip.
@@ -2166,9 +2196,11 @@ Evidence:
   the producer to terminal `TransactionStatus::Defunct`, and rejects further
   transaction commands so callers cannot assume an abort or retry on the old
   producer.
-- Transactional sends register each topic partition through
-  `AddPartitionsToTxn v0`, pass the transactional ID to Produce v3/v7, and
-  complete through `EndTxn v0`. Transactional Produce requests set the
+- Transactional sends register each topic partition through negotiated
+  `AddPartitionsToTxn v3` when the coordinator advertises it, fall back to
+  `v0` for older brokers, pass the transactional ID to Produce v3/v7, and
+  complete through negotiated `EndTxn v3`, falling back to v0. Transactional
+  Produce requests set the
   RecordBatch transactional attribute as well as the request transactional ID.
 - Transactional initialization discovers the transaction coordinator before
   `InitProducerId`. Partition registration rediscovers and retries transient
@@ -2179,9 +2211,9 @@ Evidence:
   metadata, hides control records, and filters aborted producer ranges while
   advancing poll offsets past hidden records.
 - `Producer::send_group_offsets_to_transaction` binds current
-  `ConsumerGroup::metadata` and assignments through `AddOffsetsToTxn v0` and
-  commits offsets through generation-fenced `TxnOffsetCommit v3` before
-  EndTxn. Transaction
+  `ConsumerGroup::metadata` and assignments through negotiated
+  `AddOffsetsToTxn v3` with a `v0` fallback and commits offsets through
+  generation-fenced `TxnOffsetCommit v3` before EndTxn. Transaction
   initialization, partition registration, offset integration, and completion
   rediscover coordinators and retry transient coordinator errors within the
   configured retry limit.
@@ -2263,7 +2295,8 @@ Strategic role:
 Implemented evidence:
 
 - `ClientMetrics` provides shared lock-free counters for started, successful,
-  failed, timed-out, cancelled, and in-flight request roundtrips, request and
+  failed, timed-out, cancelled, current and peak in-flight request
+  roundtrips, current and peak buffered producer records, request and
   response payload bytes, and total and maximum latency. Snapshots also expose
   a fixed upper-bound request latency histogram and approximate percentile
   queries for p50, p95, and p99 operational checks.
@@ -2306,10 +2339,18 @@ Implemented evidence:
   all fields exclude record and protocol payload contents.
 - The `throughput_benchmark` live example measures end-to-end batch Produce and
   offset-based Fetch throughput, Produce batch p50/p95/p99 latency, fixed-
-  bucket Kafka request p50/p95/p99 upper-bound estimates, request counts, and
-  retries. The manual `Kafka Benchmark` workflow runs selected payload and
-  compression profiles against Kafka 4.3.1 and uploads JSONL results for
-  comparison.
+  bucket Kafka request p50/p95/p99 upper-bound estimates, request counts,
+  retries, and peak in-flight/buffered gauges. The manual `Kafka Benchmark`
+  workflow runs selected payload and compression profiles against Kafka 4.3.1
+  and uploads JSONL results for comparison. These peaks make queue growth
+  visible even when the final gauges return to zero; threshold qualification
+  remains a separate M21 workload/SLO gate.
+- The published secure multi-broker soak now emits records/s, operation-error
+  rate, retry ratio, and failed-request counters. Its workflow defaults to a
+  10,000 records/s floor, 1,000 operation errors, 100 failed requests, and a
+  1.0% retry-ratio ceiling while retaining recovery and final resource-drain
+  checks. These are configurable qualification thresholds, not universal SLOs;
+  target-service evidence remains required for the 1.0 replacement claim.
 - Manual benchmark run `30057817575` published the first selected-profile
   baseline on 2026-07-24. The 1-KiB profiles reached 47,883 records/s
   uncompressed and 50,555 records/s with Zstd on a GitHub-hosted runner.
@@ -2569,6 +2610,21 @@ Implemented evidence:
   `AdminClient` exposes the same preflight after construction. The
   public-surface integration test locks these common client contracts.
 
+- The optional `blocking` feature now provides synchronous
+  `BlockingProducer`, `BlockingBufferedProducer`,
+  `BlockingBufferedProducerHandle`, `BlockingConsumer`, `BlockingConsumerGroup`,
+  `BlockingShareConsumer`, `BlockingStreamsGroupSession`, and
+  `BlockingAdminClient` adapters for direct and bounded-buffered producer,
+  manually assigned direct-consumer, joined group poll/heartbeat/commit, Share
+  poll/acknowledge/commit, Streams heartbeat/task-state/close, cluster/topic,
+  ACL/security, quotas, storage, reassignments, transaction diagnostics,
+  group listing, group-offset, feature, topic-configuration, and topic
+  lifecycle operations. Each owns a dedicated multi-thread Tokio runtime,
+  preserves the async client's retry/compression/idempotence/transaction
+  behavior where applicable, and rejects construction or use from inside
+  another Tokio runtime instead of panicking. A general runtime-abstraction
+  trait remains open.
+
 - TLS mutual authentication is now available through DER-encoded client
   certificate-chain and private-key settings on the shared `ClientConfig`,
   with matching producer, direct consumer, classic group, ShareConsumer, and
@@ -2606,6 +2662,25 @@ Implemented evidence:
   closes the absence of any reusable fault-injection baseline, but not the
   broader producer, consumer, group, transaction, security, and long-soak
   fault matrices required by M21.
+
+- The local Admin mutation harness now also covers RenewDelegationToken and
+  ExpireDelegationToken v2: it verifies the compact HMAC request reaches the
+  controller, drops the response, returns the matching
+  `AdminMutationOutcomeUnknown` without replaying either mutation. This is
+  deterministic regression evidence only; authenticated Kafka 3.7.2
+  and 4.3.1 live authorization, renewal, expiry, and reconciliation gates
+  remain open.
+
+- `ProducerConfig::delivery_timeout_ms` now provides a Kafka-style total
+  deadline for immediate and batch delivery, covering metadata lookup,
+  capability negotiation, Produce requests, retry attempts, and backoff. The
+  default is 120 seconds. A deadline expiry returns the typed request-timeout
+  error, poisons the producer's current metadata connection, clears stale
+  routing hints, and never returns a possibly interrupted leader connection to
+  the idle cache. Buffered records now carry their enqueue timestamp, expire
+  before Produce when the deadline is reached, and use the remaining deadline
+  during flush. The local delayed-response and queue-expiry regressions pass;
+  `linger_ms` remains the independent batching-latency control.
 
 - Flexible capability discovery now includes explicit `ApiVersions` v4 and v5
   request types. The opt-in `Client::api_versions_cached` helper prefers v4 and
@@ -2848,6 +2923,19 @@ Implemented evidence:
   final survivor owned all six partitions with `accepted=6`, `consumed=6`,
   `in_flight=0`, and zero failed requests. Higher-cycle churn,
   resource/backpressure SLO, and production readiness remain open.
+  The workflow is now configured for eight alternating member-loss/rejoin
+  cycles and 48 unique partition/offset observations on the next run; this is
+  configuration for future evidence, not a claim that the new run has passed.
+  A separate published secure multi-member workflow is also configured for
+  Kafka 4.3.1 SASL_SSL/SCRAM-SHA-256 with 64 records per partition by default,
+  exact per-partition and duplicate checks, and the same resource-gauge
+  checks; its first live run remains required before counting secure Share
+  evidence.
+  The published Share member example now also reports `buffered=0` plus peak
+  in-flight and buffered gauges, and both the multi-member and repeated-loss
+  workflows fail if those final resource gauges are non-zero. This makes the
+  next resource/backpressure SLO gate observable without treating a single
+  workflow's peak as a universal production limit.
 - ShareFetch success responses preserve the broker that served the request,
   while `CurrentLeader` is used only for the leader-error responses where Kafka
   populates it. Retryable ShareFetch leader errors return the connection to the

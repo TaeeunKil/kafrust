@@ -84,7 +84,10 @@ cargo add kafrust@0.3
 ### Requirements
 
 - Rust `1.81` or newer.
-- A Tokio runtime in the application.
+- A Tokio runtime in the application for async APIs. The optional
+  `blocking` feature owns a dedicated multi-thread runtime for synchronous
+  producer, buffered producer, direct-consumer, consumer-group, Share, Streams,
+  and an expanded Admin surface instead.
 - A Kafka broker for runtime client calls.
 - No `librdkafka` or C client bindings; the default build requires no C
   toolchain. The optional `tls` feature may require native build tooling for
@@ -293,7 +296,9 @@ producer.commit_transaction().await?;
 ```
 
 Commit, abort, read-committed isolation, and transactional consumer group
-offset commits are verified against Kafka `3.7.2` and `4.3.1`.
+offset commits are verified against Kafka `3.7.2` and `4.3.1`. Transaction
+coordinator registration prefers flexible v3 APIs when advertised and falls
+back to v0 for older brokers.
 
 ### Buffered Producer
 
@@ -655,6 +660,11 @@ See [Compatibility](docs/compatibility.md) and
 ## Current Limits
 
 - Public APIs are pre-`1.0` and can change between minor releases.
+- The optional `blocking` feature provides synchronous adapters for the core
+  producer, manually assigned direct-consumer APIs, joined consumer groups,
+  and the broad broker/controller Admin surface. They must be used outside an
+  existing Tokio runtime. A general alternate-runtime abstraction remains
+  async/open.
 - Plaintext TCP remains the default networking path.
 - TLS transport is available behind the non-default `tls` crate feature and is
   verified against Kafka `3.7.2` for broker roundtrip, producer, direct
@@ -688,7 +698,9 @@ See [Compatibility](docs/compatibility.md) and
   JWT/JWKS OIDC fixture also passes Kafka's validator, the Java Kafka client,
   and kafrust static and provider-backed paths in the
   [`Live Kafka Smoke` OIDC job](https://github.com/TaeeunKil/kafrust/actions/runs/31584760474/job/94075906934).
-  External provider-specific behavior remains separately qualified.
+  `CachedOAuthBearerTokenProvider` single-flights concurrent refreshes shared by
+  cloned client configurations and rejects source results that are already
+  expired; external provider-specific behavior remains separately qualified.
 - Single-node plaintext compatibility is verified against Kafka `3.7.2`,
   `3.8.1`, `3.9.1`, and `4.3.1`. Secured and multi-broker profiles remain
   verified against `3.7.2`.
@@ -703,6 +715,10 @@ See [Compatibility](docs/compatibility.md) and
   this covers replica selection, not every possible rack or security topology.
 - `ProducerConfig::partitioner` supports thread-safe custom routing for records
   without explicit partitions across immediate, batch, and buffered sends.
+- `ProducerConfig::delivery_timeout_ms` bounds the total immediate or batch
+  delivery time across metadata, Produce requests, retries, and backoff; the
+  default is 120 seconds. Buffered records use the same deadline from enqueue
+  through Produce, while `linger_ms` independently controls batching latency.
 - Gzip, Snappy, LZ4, and Zstd compression prefer topic-ID Produce v13 when the
   broker advertises it and Metadata v12 returns a topic UUID; otherwise they
   use flexible Produce v12, then v11, then v9, RecordBatch encoding when the

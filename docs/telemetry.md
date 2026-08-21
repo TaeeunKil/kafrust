@@ -53,7 +53,8 @@ let client = TelemetryClient::connect(client_config, provider, TelemetryConfig::
 ```
 
 The provider exports request, retry, broker-error, produce, consume, byte, and
-latency counters plus current buffering and in-flight gauges. Metric names use
+latency counters plus current buffering/in-flight gauges and their observed
+peaks (`max_buffered_records` and `max_in_flight_requests`). Metric names use
 the `kafrust.client.` prefix by default and can be changed with
 `metric_prefix`. Broker-requested prefixes are applied before serialization.
 Counters honor the broker's cumulative or delta temporality request; a provider

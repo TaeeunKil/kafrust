@@ -77,6 +77,8 @@ Each accepted record should complete exactly one delivery handle:
 
 - success returns `RecordMetadata`
 - broker Produce response failures return the same `Error` shape currently used by `send_batch`
+- a record that reaches its `delivery_timeout_ms` deadline in the queue returns
+  `Error::RequestTimedOut` without being sent
 - request-level failures follow the existing retry policy
 - retryable per-partition Produce response failures retry only failed input records
 - successful records from an earlier attempt are not sent again by the same buffered batch

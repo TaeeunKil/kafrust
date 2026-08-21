@@ -61,11 +61,19 @@ oldest idle entry is evicted in FIFO order. Producer instances built from
 cloned `ClientConfig` values share the producer cache. Direct consumers retain
 an instance-local cache because Kafka Fetch session state belongs to one
 consumer instance. `AdminClient` clones share a separate Admin-only idle cache;
-the metadata, `describe_features`, and broker-endpoint `describe_cluster`
-read paths return a connection to that cache only after a complete response.
+the metadata, `describe_features`, broker-endpoint `describe_cluster`,
+broker-scoped `list_groups`, `list_transactions`, broker-local
+`describe_log_dirs`, coordinator-routed `describe_transactions`, and
+coordinator-routed `describe_consumer_groups`,
+`describe_consumer_groups_modern`, `describe_share_groups`,
+`describe_streams_groups`, and leader-routed `describe_producers` read paths
+return a connection to that cache only after a complete response. These
+stateless reads
+can reuse the metadata or leader connection when the endpoint is the same.
 `ApiVersions` capability data is still cached on the connection, so repeated
-feature or dedicated cluster reads do not issue duplicate handshakes, while
-controller and coordinator operations remain explicitly owned by their
+feature, group, transaction, producer, or dedicated cluster reads do not issue
+duplicate handshakes,
+while controller and coordinator operations remain explicitly owned by their
 operation until their retry/lifecycle contracts are lease-aware.
 Group and Share clients likewise retain separate connection-lifecycle paths so
 heartbeat, membership, and ShareFetch session state cannot cross client
@@ -99,4 +107,4 @@ When multiple bootstrap servers are configured, `ClientConfig::connect` tries th
 
 kafrust emits `tracing` events for Kafka request start, response receipt, request failure, and high-level producer, direct consumer, and consumer group operations. Each request roundtrip runs inside a `kafka.request` span with API key, API version, correlation ID, and request byte count. Events include operational metadata such as topic, partition, offset, group ID, member ID, generation ID, and byte or record counts, but not request, response, key, or value payload contents.
 
-`ClientMetrics` can be supplied through the `metrics` builder on `ClientConfig`, `ProducerConfig`, `ConsumerConfig`, or `ConsumerGroupConfig`. Clones share lock-free counters across bootstrap, leader, coordinator, authentication, and retry connections. `snapshot()` reports started, successful, failed, timed-out, cancelled, and in-flight requests, high-level operation retry and recovery attempts, acknowledged produced records and topic-partition Produce chunks, records returned by consumer APIs, request and response payload bytes, and total and maximum latency. It also exposes an approximate fixed-bucket request latency histogram and `ClientMetricsSnapshot::latency_percentile(50)`, `(95)`, or `(99)` for upper-bound tail estimates. The buckets are 1ms, 5ms, 10ms, 25ms, 50ms, 100ms, 250ms, 500ms, 1s, 2.5s, 5s, 10s, and above 10s. Retry attempts include producer sends, consumer fetches, metadata reconnects, transactional coordinator operations, and automatic consumer-group rejoins. Snapshot fields are sampled independently and can change while they are read.
+`ClientMetrics` can be supplied through the `metrics` builder on `ClientConfig`, `ProducerConfig`, `ConsumerConfig`, or `ConsumerGroupConfig`. Clones share lock-free counters across bootstrap, leader, coordinator, authentication, and retry connections. `snapshot()` reports started, successful, failed, timed-out, cancelled, current and peak in-flight requests, current and peak buffered producer records, high-level operation retry and recovery attempts, acknowledged produced records and topic-partition Produce chunks, records returned by consumer APIs, request and response payload bytes, and total and maximum latency. It also exposes an approximate fixed-bucket request latency histogram and `ClientMetricsSnapshot::latency_percentile(50)`, `(95)`, or `(99)` for upper-bound tail estimates. The buckets are 1ms, 5ms, 10ms, 25ms, 50ms, 100ms, 250ms, 500ms, 1s, 2.5s, 5s, 10s, and above 10s. Retry attempts include producer sends, consumer fetches, metadata reconnects, transactional coordinator operations, and automatic consumer-group rejoins. Snapshot fields are sampled independently and can change while they are read.

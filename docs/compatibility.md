@@ -166,6 +166,15 @@ client marks that connection unusable so a higher-level pool can replace it;
 this deterministic callback-failure behavior does not qualify external
 provider outage semantics.
 
+`CachedOAuthBearerTokenProvider` now single-flights refreshes shared by cloned
+client configurations: concurrent broker connections re-check the cache after
+the first refresh completes instead of invoking the token source independently.
+The behavior is covered by a deterministic concurrent-refresh regression test;
+the provider also rejects and does not cache a source result that is already
+expired. These safeguards reduce refresh pressure and prevent stale source
+results from reaching SASL, but they do not qualify external provider
+discovery, key rotation, or provider-specific outage policy.
+
 The current-source `UpdateFeatures` gate now sends a non-empty v1
 `validate_only` request for the broker's finalized `metadata.version` level
 and checks the returned top-level and feature-level success. Kafka 3.7.2
@@ -330,8 +339,10 @@ assignment state before this API is added to the published compatibility claim.
 low-level client and the alpha `StreamsGroupSession`, which manages member
 epochs, nullable topology/task payloads, bounded reconnect/rejoin, and graceful
 leave. The session is a manual heartbeat API, not a Kafka Streams DSL or task
-processor. Background lifecycle management, assignment reconciliation, and a
-live Kafka Streams qualification remain open.
+processor. Background lifecycle management, assignment reconciliation, and
+single/multi-broker membership qualification are covered by the live gates
+below; complete topology processing, state stores, and Kafka Streams DSL
+compatibility remain open.
 
 The low-level `Client::streams_group_heartbeat_v0` path now covers the Kafka
 4.x API 88 request and response schemas, including nullable topology metadata,
@@ -350,8 +361,8 @@ post-stop heartbeat and clean leave. The published `kafrust 0.3.3` public
 surface also compiles from a fresh external Cargo project with no workspace
 path dependency on stable Rust and Rust 1.81, including
 `StreamsGroupSessionHandle`, assignment-watch, and `StreamsTaskRuntime` APIs.
-This is package/API evidence only; the separate published broker-runtime gate
-is recorded below, while topology integration and a live Kafka Streams
+The separate published broker-runtime gate is recorded below and passes the
+joined-session lifecycle; topology integration and a live Kafka Streams
 application remain open.
 
 Topic configuration inspection remains DescribeConfigs v1 by default. An
@@ -1246,6 +1257,8 @@ other coordinator-routed writes remain separate qualification items.
 | Published `kafrust 0.2.27` Admin lifecycle | fresh external Cargo projects with no workspace path dependency; Kafka 3.7.2 classic, Kafka 4.3.1 KIP-848, Kafka 3.7.2 `SASL_SSL`/SCRAM, and four compression profiles | public `AdminClient` topic create, metadata list, topic config describe, and topic delete | [`Published Crate Smoke`, run `31731934027`](https://github.com/TaeeunKil/kafrust/actions/runs/31731934027) on 2026-08-13 | Passing; representative Admin runtime only, not every Admin API or authorization policy |
 | Published `kafrust 0.2.28` and `kafrust-protocol 0.2.28` | fresh external Cargo projects with no workspace path dependency; Kafka 3.7.2 classic, Kafka 4.3.1 KIP-848, Kafka 3.7.2 `SASL_SSL`/SCRAM, and Gzip/Snappy/LZ4/Zstd profiles | published Admin lifecycle, active-group list/describe, classic or KIP-848 group offset reads, idempotent producer, transactions and `ReadCommitted`, direct consumer, group read, per-record offset commit, same-group leave/rejoin, and post-commit resume without replay | [`Published Crate Smoke`, run `31737581786`](https://github.com/TaeeunKil/kafrust/actions/runs/31737581786) on 2026-08-14 | Passing; representative published runtime and Admin/offset evidence, not the full replacement, multi-broker, authorization, or workload claim |
 | Published `kafrust 0.3.5` | fresh external projects with no workspace path dependency; Kafka 3.7.2 classic, Kafka 4.3.1 KIP-848, Kafka 3.7.2 `SASL_SSL`/SCRAM, and Gzip/Snappy/LZ4/Zstd profiles | published producer, direct consumer, group, transaction/read-committed, TLS/SCRAM, and compression roundtrips | [`Published Crate Smoke`, run `32420987547`](https://github.com/TaeeunKil/kafrust/actions/runs/32420987547) on 2026-08-21 | Passing; all seven profiles resolved `0.3.5` from crates.io and verified generated lockfiles; representative published-artifact evidence, not the full replacement, multi-broker, authorization, or workload claim |
+| Published `kafrust 0.3.5` | fresh external Cargo project with no workspace path dependency; Kafka 4.3.1 three-broker KRaft with `SASL_SSL`/SCRAM-SHA-256; Rust 1.81 | default 600-second published soak with a simultaneous ten-second stop of brokers 1 and 2, restart, recovery verification, and final `in_flight_requests=0` / `buffered_records=0` resource checks | [`Published Secure Multi-Broker Soak Smoke`, run `32440677496`](https://github.com/TaeeunKil/kafrust/actions/runs/32440677496) on 2026-08-21 | Passing; the published artifact and result artifact were verified; this closes one secured simultaneous-loss soak slice, not production SLO, unclean election, or the complete 1.0 fault matrix |
+| Apache Kafka 4.3.1 | current-source single-node KRaft with Share groups enabled and an injected response-loss proxy | deliberately dropped `ShareAcknowledge` response followed by acknowledgement reconciliation, duplicate-safe delivery accounting, and clean shutdown verification | [`Live Kafka Share Acknowledgement Ambiguity`, run `32449038941`](https://github.com/TaeeunKil/kafrust/actions/runs/32449038941) on 2026-08-21 | Passing; response-loss semantics are qualified for this injected path, not every Share failure mode or long-running production SLO |
 | Published `kafrust 0.2.28` multi-broker failover | fresh external Cargo project with no workspace path dependency; Kafka 3.7.2 three-broker KRaft, replication factor 3, classic group | observed three brokers, committed a replicated-topic record, stopped its partition leader, verified replica leader movement, then produced and consumed a post-failover record after same-group rejoin | [`Published Multi-Broker Smoke`, run `31735177161`](https://github.com/TaeeunKil/kafrust/actions/runs/31735177161) on 2026-08-13 | Passing; one published classic leader-failover workload only, not every multi-broker topology, security profile, or failure mode |
 | Published `kafrust 0.2.28` KIP-848 multi-broker failover | fresh external Cargo project with no workspace path dependency; Kafka 4.3.1 three-broker KRaft, replication factor 3, KIP-848 `consumer` group | observed three brokers, committed a replicated-topic record, stopped its partition leader, verified replica leader movement, then produced and consumed a post-failover record after KIP-848 same-group rejoin | [`Published Multi-Broker Smoke`, run `31735762087`](https://github.com/TaeeunKil/kafrust/actions/runs/31735762087) on 2026-08-14 | Passing; one published KIP-848 leader-failover workload only, not every multi-member topology, security profile, or failure mode |
 | Published `kafrust 0.2.28` classic multi-member rebalance | fresh external Cargo project with no workspace path dependency; Kafka 3.7.2 three-broker KRaft, replication factor 3, classic range group | started two members in one group, verified disjoint ownership of all six partitions, and consumed one published record from each partition | [`Published Group Rebalance Smoke`, run `31736939236`](https://github.com/TaeeunKil/kafrust/actions/runs/31736939236) on 2026-08-14 | Passing; representative two-member classic workload only, not every assignor, security profile, or failure mode |
@@ -1568,22 +1581,24 @@ with zero in-flight requests and buffered records.
 - Per-topic batch-sticky round-robin routing for keyless records. Manual run
   `30066831820` verified the exact `0,1,2,3,4,5,0` sequence through one
   producer against the six-partition, three-broker Kafka 3.7.2 profile.
-- Opt-in idempotent single-record, batch, and buffered produce using
-  `InitProducerId v0`, `acks=all`, and partition-scoped RecordBatch producer
-  identity and sequence metadata. Manual run `29991254722` passed these paths
-  against Kafka 3.7.2 and Kafka 4.3.1.
+- Opt-in idempotent single-record, batch, and buffered produce using negotiated
+  `InitProducerId v2` with a v0 fallback, `acks=all`, and partition-scoped
+  RecordBatch producer identity and sequence metadata. Manual run `29991254722`
+  passed these paths against Kafka 3.7.2 and Kafka 4.3.1.
 - Opt-in alpha transactional produce using transaction coordinator discovery,
-  transactional `InitProducerId v0`, `AddPartitionsToTxn v0`, Produce v12/v11/v9/v7/v3,
-  and `EndTxn v0`. Manual run `29994041530` passed a committed transaction
-  followed by an aborted transaction against Kafka 3.7.2 and Kafka 4.3.1.
+  negotiated transactional `InitProducerId v2`, `AddPartitionsToTxn v3`,
+  Produce v12/v11/v9/v7/v3, and `EndTxn v3`, with v0 fallbacks for older
+  brokers. Manual run `29994041530` passed a committed transaction followed by
+  an aborted transaction against Kafka 3.7.2 and Kafka 4.3.1.
 - Direct and group consumer `ReadCommitted` isolation through Fetch v4.
   Transactional/control RecordBatch metadata is preserved for filtering,
   control records are hidden, and aborted transaction records are excluded.
   Manual run `29995122439` compared `ReadUncommitted` and `ReadCommitted`
   results after real commit and abort flows on Kafka 3.7.2 and Kafka 4.3.1.
 - Transactional consumer group offset integration through
-  `Producer::send_group_offsets_to_transaction`, `AddOffsetsToTxn v0`, and
-  generation-fenced `TxnOffsetCommit v3`. Manual run `30063099869` passed a
+  `Producer::send_group_offsets_to_transaction`, negotiated `AddOffsetsToTxn v3`
+  with a v0 fallback, and generation-fenced `TxnOffsetCommit v3`. Manual run
+  `30063099869` passed a
   read-committed group poll followed by atomic output production and the
   generation-fenced group offset commit on Kafka 3.7.2, 3.8.1, 3.9.1, and
   4.3.1 plaintext brokers plus the Kafka 3.7.2 TLS, SASL_PLAINTEXT, SASL_SSL,

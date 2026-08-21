@@ -19,7 +19,7 @@ The audit used shallow source snapshots for the following revisions:
 | [rust-rdkafka](https://github.com/fede1024/rust-rdkafka) | [`3f54ff1`](https://github.com/fede1024/rust-rdkafka/tree/3f54ff1dabe7eece876b9635e22462b04478a445) | published `0.39.0` / `librdkafka 2.12.1` |
 | [kafka-rust](https://github.com/kafka-rust/kafka-rust) | [`6681c81`](https://github.com/kafka-rust/kafka-rust/tree/6681c81e0f7a84547e972ec545f3ed278d2ecfec) | published `0.11.0` |
 | [kafkit-client](https://docs.rs/kafkit-client/0.1.9/kafkit_client/) | crates.io `0.1.9` source archive | published `0.1.9` |
-| kafrust | [`81471fe`](https://github.com/TaeeunKil/kafrust/tree/81471fe12c5352746e84586377f57dac47b34ee7) | published `0.3.3` |
+| kafrust | `083b531` local publish candidate | published `0.3.5` |
 
 The `kafkit-client` Cargo metadata points at a GitHub repository that currently
 returns 404, so the published crates.io archive was used instead of inventing
@@ -67,13 +67,17 @@ surfaces separate.
   assertions are not implemented. Default compression is pure Rust; its
   optional `compression-all` Zstd path uses `zstd-sys`, so the strict
   no-required-C posture still differentiates kafrust.
-- `kafrust` `0.3.3` has broader explicitly named protocol coverage in the
+- `kafrust` `0.3.5` has broader explicitly named protocol coverage in the
   checked tree, including the alpha Streams group APIs and a large typed Admin
   surface. The source also contains all four record-batch codecs using
-  Rust-native codec dependencies. A fresh external published `0.3.3` Share
+  Rust-native codec dependencies. The blocking feature now exposes synchronous
+  producer, buffered producer, direct consumer, consumer-group, Share, Streams,
+  and broad Admin adapters, with a crate-root public-surface regression test.
+  Share Group State APIs 83-87 are also exposed through typed Admin methods.
+  A fresh external published `0.3.5` Share
   runtime and 64-record acknowledgement soak now pass on Kafka 4.3.1 in
-  [`32384767744`](https://github.com/TaeeunKil/kafrust/actions/runs/32384767744)
-  and [`32385522647`](https://github.com/TaeeunKil/kafrust/actions/runs/32385522647).
+  [`32423091397`](https://github.com/TaeeunKil/kafrust/actions/runs/32423091397)
+  and [`32423629077`](https://github.com/TaeeunKil/kafrust/actions/runs/32423629077).
   A fresh external three-broker leader-failover path also passes in
   [`32386637555`](https://github.com/TaeeunKil/kafrust/actions/runs/32386637555).
   The published active-heartbeat path also passes three consecutive dynamic
@@ -189,7 +193,7 @@ its scope; no roadmap time should be spent copying its narrower design.
 
 The current worktree has the following locally verified evidence:
 
-- 738 workspace test and doctest cases pass with all features;
+- 788 workspace test and doctest cases pass with all features;
 - 10 libFuzzer targets compile with tracked seed corpora;
 - the protocol audit reports 63 source modules and 76 unique Kafka API keys;
 - the Apache Kafka 4.3.1 schema audit and its regression tests pass;
@@ -197,6 +201,9 @@ The current worktree has the following locally verified evidence:
   injection for focused retry and ambiguity tests;
 - the Admin member-aware OffsetFetch/OffsetCommit path resolves topic IDs via
   Metadata v12 and falls back safely to v9 when the capability is unavailable;
+- the typed async Admin surface has matching blocking adapters for all 58
+  public operations, including Share Group State, and the blocking buffered
+  producer preserves delivery handles and transaction operations;
 - the repository contains live and published workflows, but a workflow file is
   not itself live evidence. Each remaining workflow gate needs a passing run
   against the intended published artifact or source revision.
@@ -211,26 +218,28 @@ competitors use to support their claims.
 | Area | Source audit result | Required kafrust gate |
 | --- | --- | --- |
 | Protocol currency | krafka tracks Kafka 4.3 in CI; kacrab generates from schemas and runs Java oracle tests | make the Apache schema snapshot and API-version table a complete build/review gate, then qualify every advertised 4.x path on a broker |
-| Admin breadth | kacrab claims 62 operations; kafkit covers common operations; kafrust has a substantial but incomplete typed surface | close the remaining public Admin operations, especially modern group/share/KRaft paths, with typed errors and live tests |
+| Admin breadth | kacrab claims 62 operations; kafkit covers common operations; kafrust now has a broad typed async and blocking surface | qualify every Admin mutation and modern group/share/KRaft path against the declared broker/security matrix, including authorization and ambiguous-failure behavior |
 | Producer correctness | krafka and kacrab isolate idempotence, ordering, retry, and transaction state machines | finish multi-broker retry/reordering/epoch/fencing tests and prove ambiguous outcomes without unsafe replay |
 | Consumer operations | krafka/kacrab cover classic plus KIP-848; kafkit focuses on modern groups | qualify classic and KIP-848 rejoin, static membership, cooperative assignment, read-committed, and coordinator recovery across the matrix |
 | Share groups | all broad competitors expose Share functionality in some form | complete Share acknowledgement, renewal, recovery, and long-running poison/duplicate delivery evidence |
 | Security | krafka/kacrab advertise broader TLS/SASL/OIDC/GSSAPI/IAM combinations than kafrust currently proves | add only the mechanisms in scope, then run a real secured matrix; do not count configuration-only tests as compatibility evidence |
 | Fault and soak evidence | krafka has a fake broker; kacrab has real-broker and coverage gates | expand the scripted broker and run repeated multi-broker, secured, transaction, Share, and long-duration campaigns |
-| Release credibility | competitor claims are backed by published artifacts and CI workflows | publish each milestone, build docs.rs, run fresh external examples, and record rollback/migration results |
+| Release credibility | competitor claims are backed by published artifacts and CI workflows | publish each milestone, build docs.rs, run fresh external examples, and record rollback/migration results; the local publish candidate is blocked only on restoring GitHub push authentication |
 
 ## How Much Remains
 
 These are engineering-effort estimates, not promises about elapsed calendar
-time:
+time. Percentages describe exit-criteria coverage, not source lines or token
+usage:
 
 - `rskafka` scope: already exceeded.
 - `kafkit-client` feature breadth: close in intended scope because kafrust
   preserves older/classic brokers, but not yet operationally surpassed until
   the modern published-artifact and failure gates pass.
-- `krafka`/`kacrab` feature checklist: about 60-70% complete; roughly 12-18
-  focused engineering months remain for modern protocol, Admin, security,
-  Share, and configuration gaps plus evidence.
+- `krafka`/`kacrab` feature checklist: about 65-75% complete; the public Admin
+  and blocking adapter slices are now implemented, but roughly 12-18 focused
+  engineering months remain for modern protocol edge cases, security breadth,
+  Share/Streams runtime qualification, and evidence.
 - Operationally surpassing the broad pure-Rust competitors: about 40-50%
   complete; roughly 18-30 focused engineering months remain. The exit bar is
   a repeatable Kafka 3.7-through-current matrix, secured and multi-broker fault
@@ -242,8 +251,8 @@ time:
   configuration/callback migration surface, production SLOs, and ecosystem
   adoption; protocol feature count alone cannot establish replacement.
 
-The next implementation priority is therefore: complete the public modern
-Admin and Share surface, strengthen producer/consumer state-machine evidence,
-run the secured and multi-broker matrix, then publish and test the migration
-path. This sequence is more valuable than adding another advanced protocol
-whose live behavior and public API are not yet qualified.
+The next implementation priority is therefore: qualify the newly completed
+Admin and Share surface on real brokers, strengthen producer/consumer state-
+machine evidence, run the secured and multi-broker matrix, then publish and
+test the migration path. This sequence is more valuable than adding another
+advanced protocol whose live behavior and public API are not yet qualified.

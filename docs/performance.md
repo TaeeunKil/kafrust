@@ -20,10 +20,16 @@ The example prints one JSON object containing:
 - Kafka request roundtrip p50, p95, and p99 upper-bound estimates from
   `ClientMetricsSnapshot`
 - broker request and high-level retry counts
+- peak in-flight request and buffered-record gauges for resource observations
 - record count, batch size, payload size, and compression
 
 The consumer starts from the first measured Produce offset, so an existing
 topic can be reused without counting older records.
+
+`max_in_flight_requests` and `max_buffered_records` are observed peaks over
+the run. They make queue growth visible even when the final gauges return to
+zero; they are measurements, not universal limits. A production SLO claim
+still requires matching workload, broker, runner, and configured limit data.
 
 ## Configuration
 
@@ -77,6 +83,17 @@ completed with zero retries.
 The request percentile columns are approximate fixed-bucket upper bounds over
 all Produce, Metadata, and Fetch roundtrips in each run. They are not directly
 comparable to the high-level batch latency columns.
+
+## Published Secure Soak Gate
+
+`Published Secure Multi-Broker Soak Smoke` emits `records_per_second`,
+`operation_error_rate_percent`, and `retry_ratio_percent` in addition to the
+raw record, error, retry, and peak-resource counters. Its default workflow
+thresholds are 10,000 records/s, at most 1,000 high-level operation errors,
+100 failed Kafka requests, and a retry ratio of 1.0 percent. The thresholds are
+workflow inputs so a service-specific qualification can replace them; they are
+not universal Kafka client SLOs. The gate still requires recovery and final
+`in_flight_requests=0` and `buffered_records=0`.
 
 The previous merged-main benchmark run
 [`31574062876`](https://github.com/TaeeunKil/kafrust/actions/runs/31574062876)

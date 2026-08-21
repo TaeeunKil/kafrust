@@ -100,10 +100,10 @@ membership and heartbeat layer. It is a useful protocol lead, not a claim that
 kafrust can run a Kafka Streams topology.
 
 Mutual TLS is now represented consistently in the shared configuration,
-high-level builders, broker-roundtrip test, and repository examples. The
-dedicated workflow still needs a passing Kafka run before this becomes a live
-compatibility claim; configuration coverage alone does not close the security
-evidence gap.
+high-level builders, broker-roundtrip test, and repository examples. Current
+source and published-artifact workflows have passed the documented Kafka
+3.7.2 and 4.3.1 handshake and workload slices; certificate rotation,
+provider breadth, and broader secured failure matrices remain separate gates.
 
 These projects are references and competitors, not sources to copy blindly.
 Feature claims must be validated in kafrust's own protocol tests, failure
@@ -133,7 +133,7 @@ the published competitor claims above:
   The weighted replacement-readiness estimate is therefore about 50-60%, not
   75-85%. The higher protocol number must not be presented as drop-in client
   readiness.
-- The current workspace executes 738 local test and doctest cases and
+- The current workspace executes 788 local test and doctest cases and
   has ten fuzz targets. It now also has a reusable in-process scripted broker
   harness with Admin metadata-reconnect, idempotent-producer response-loss,
   transactional EndTxn response-loss, and direct-consumer Fetch response-loss
@@ -186,6 +186,13 @@ the published competitor claims above:
   gate with automatic Metadata v12 topic-ID resolution; complete UUIDs remain
   an opt-in way to skip that lookup. It is source-level evidence only until a
   live Kafka 4.x Admin run and published-artifact smoke qualify the path.
+- The optional `blocking` feature now exposes synchronous direct and
+  bounded-buffered producers, manually assigned consumers, joined consumer
+  groups, Share and Streams sessions, and the broad typed Admin surface,
+  including Share Group State operations. These adapters own a dedicated Tokio
+  runtime and reject nested-runtime construction; their API parity is covered
+  by the crate-root public-surface test, while live synchronous qualification
+  remains open.
 - Pure-Rust feature-breadth match: roughly 60-70% complete; about 12-18
   focused months remain for the highest-impact protocol/API gaps and their
   compatibility evidence. The range is lower than a raw protocol count
@@ -201,8 +208,9 @@ the published competitor claims above:
   and production evidence that feature checklists do not measure.
 
 These are effort ranges, not calendar promises. The immediate core exit
-criteria are: finish the public ShareConsumer and consumer-group workflows,
-close the remaining modern public Admin/protocol gaps, establish a reproducible
+criteria are: promote the public ShareConsumer and consumer-group workflows
+from alpha candidates to stable documented contracts, qualify the completed
+modern Admin/Share surface and close remaining protocol gaps, establish a reproducible
 3.3/3.6/3.7/3.9/4.0/4.3 matrix, extend the new deterministic transport harness
 into a broader fault-injection matrix, and publish a fresh crate/docs.rs smoke
 before calling kafrust ahead. Share Group State APIs 83-87 and dynamic KRaft
@@ -222,7 +230,7 @@ These tiers define what "usable" and "complete" mean for this project. Dates are
 
 ### Alpha Client
 
-Current state after the published v0.3.2 alpha release.
+Current state after the published v0.3.5 alpha release.
 
 Expected use:
 
@@ -400,8 +408,9 @@ v4/v5 per broker and exposes `list_groups_with_options` for state/type filters;
 the low-level v1 method remains available for exact legacy compatibility. This
 closes a concrete modern Admin API gap at the wire and injected-broker levels;
 the live smoke gate now exercises v4 on Kafka 3.7.2 and v5 filters on Kafka
-4.3.1, but the workflow still needs a successful run. Authorization coverage
-and long coordinator-churn validation remain open.
+4.3.1 and passed in the complete [`Live Kafka Smoke` run
+`32382586220`](https://github.com/TaeeunKil/kafrust/actions/runs/32382586220).
+Authorization coverage and long coordinator-churn validation remain open.
 
 ### Estimate To Surpass
 
@@ -418,8 +427,8 @@ semantics that are expensive to reproduce and maintain.
 - **Match one broad pure-Rust feature checklist:** roughly 12-18 focused
   full-time engineering months, or about 18-30 calendar months at the current
   solo-project pace. The remaining work is not one missing API: it includes
-  modern protocol parity, Share and telemetry completion, remaining Admin
-  coverage, security breadth, bounded resources, configuration-surface
+  modern protocol parity, Share and telemetry completion, remaining Share-state
+  Admin qualification, security breadth, bounded resources, configuration-surface
   consistency, and live evidence.
 - **Surpass `krafka` and `kacrab` operationally:** roughly 18-30 focused
   engineering months, or about 24-42 calendar months solo. The exit bar is
