@@ -13,6 +13,7 @@ MANIFEST = ROOT / "docs" / "evidence" / "data-plane-version-manifest.json"
 METADATA = ROOT / "docs" / "apache-kafka-4.3.1-schema-metadata.json"
 API_DIR = ROOT / "crates" / "kafrust-protocol" / "src" / "api"
 CLIENT = ROOT / "crates" / "kafrust" / "src" / "client.rs"
+MALFORMED_TEST = ROOT / "crates" / "kafrust-protocol" / "tests" / "data_plane_malformed.rs"
 
 PINNED_APACHE_FALLBACK = {
     "ListOffsets": {"valid_versions": "1-11", "flexible_versions": "6+"},
@@ -38,6 +39,16 @@ def main() -> int:
         return fail("manifest schema is invalid")
     official = {entry.get("name"): entry for entry in metadata.get("schemas", [])}
     client_text = CLIENT.read_text(encoding="utf-8")
+    try:
+        malformed_test_text = MALFORMED_TEST.read_text(encoding="utf-8")
+    except OSError as error:
+        return fail(f"missing malformed data-plane test: {error}")
+    for test_name in (
+        "rejects_truncated_data_plane_response_families",
+        "rejects_negative_or_truncated_collection_lengths",
+    ):
+        if f"fn {test_name}" not in malformed_test_text:
+            return fail(f"missing malformed boundary test {test_name}")
     checked = 0
     for entry in manifest["apis"]:
         required = {"name", "api_key", "module", "selected_high_level", "legacy_or_low_level", "source_types"}

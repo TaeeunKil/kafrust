@@ -111,6 +111,11 @@ v11 and ignores topic-ID v13 while TV2 is unqualified. A focused regression
 test covers both immediate and batch selection with a broker advertising v13;
 non-transactional selection retains the v13/v12/v11 ladder.
 
+`crates/kafrust-protocol/tests/data_plane_malformed.rs` now rejects truncated
+responses and invalid negative collection lengths across all six data-plane
+families. The manifest checker requires both named regression tests to remain
+present in CI.
+
 This is the deterministic inventory gate only. Official byte fixtures,
 malformed-boundary expansion, floor/pinned live version logs, and the final
 transaction-selection regression remain open and keep the milestone `In
