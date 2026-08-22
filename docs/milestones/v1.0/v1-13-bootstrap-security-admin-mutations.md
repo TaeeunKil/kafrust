@@ -1,6 +1,6 @@
 # V1-13 Bootstrap And Security Admin Mutations
 
-- Status: Planned
+- Status: In progress
 - Target evidence: Published artifact
 - Dependencies: V1-02, V1-11
 
@@ -44,6 +44,22 @@ results, secret redaction, and explicit post-send reconciliation.
 5. Qualify delegation token renewal/expiry authorization and reconciliation on
    broker versions that enable the required secret configuration.
 6. Run published restricted-principal and administrator profiles.
+
+## Current Execution Record (2026-08-22)
+
+V1-13 is now `In progress`. The security Admin surface keeps route ownership
+explicit for configs, ACLs, quotas, SCRAM credentials, and delegation tokens.
+Pre-send connection/authentication/controller discovery may retry; possible
+post-send mutation response loss returns `AdminMutationOutcomeUnknown` without
+replay. Mixed allow/deny and per-entry results remain typed and ordered.
+
+Local tests cover SCRAM exchange/error redaction, TLS/mTLS configuration
+validation, ACL and quota partial results, controller-routed SCRAM credential
+operations, delegation-token version negotiation, and response-loss
+classification. Debug/error/tracing paths do not print credential material.
+Restricted-principal live profiles, delegation-token authorization, and the
+zero-secret-marker artifact scan remain open; no security compatibility claim
+is made beyond the existing published baseline.
 
 ## Failure And Lifecycle Contract
 

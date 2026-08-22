@@ -1,6 +1,6 @@
 # V1-14 Advanced Protocol Surfaces
 
-- Status: Planned
+- Status: In progress
 - Target evidence: CI
 - Dependencies: V1-02, V1-11
 - Conditional evidence: every retained surface requires Live current-source;
@@ -47,6 +47,23 @@ contract if retained.
 4. Feature-gate, hide, or clearly namespace experimental surfaces so ordinary
    `1.x` users cannot mistake them for the core support claim.
 5. Update README, API audit, compatibility, and rustdoc with explicit non-goals.
+
+## Current Execution Record (2026-08-22)
+
+V1-14 is now `In progress`. The current surface classification treats Streams
+membership, Share Group State, dynamic quorum mutations, low-level protocol
+methods, and blocking adapters as expert or experimental rather than silently
+expanding the core Kafka replacement claim. The generated all-features API
+snapshot assigns each retained symbol to an owner/classification, while the
+protocol/data-plane manifest and milestone docs preserve explicit version and
+stability boundaries.
+
+Deterministic coverage includes Streams heartbeat/task assignment validation,
+Share Group State request/response routing, add/remove voter controller paths,
+blocking nested-runtime rejection, and low-level protocol bytes. Live dynamic
+quorum convergence, unstable Share state replication, retained Streams churn,
+and the final API-key 0-92 decision table remain open. Experimental and
+broker-internal paths are not counted as stable core compatibility.
 
 ## Failure And Lifecycle Contract
 

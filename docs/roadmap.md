@@ -171,6 +171,31 @@ result coverage spans topic, partition, election, reassignment, feature, voter,
 and broker-unregister operations. The complete authorization/reconciliation
 ledger and published controller failover profiles remain open.
 
+## V1-12 Execution Update (2026-08-22)
+
+V1-12 is `In progress`. Coordinator/leader/broker Admin paths retain route
+ownership, active-member identity, partial results, and typed ambiguity through
+owner movement. Read-only operations may retry; unsafe writes do not replay,
+while fixed-target DeleteRecords remains separately state-idempotent. The owner
+ledger, UUID race, three-broker leader failover, and published profiles remain
+open.
+
+## V1-13 Execution Update (2026-08-22)
+
+V1-13 is `In progress`. Security Admin routes preserve typed mixed
+allow/deny results, pre-send retry, post-send unknown mutation outcomes, and
+secret redaction across configs, ACLs, quotas, SCRAM, and delegation tokens.
+Restricted-principal live qualification and the zero-secret artifact scan
+remain open.
+
+## V1-14 Execution Update (2026-08-22)
+
+V1-14 is `In progress`. Streams, Share Group State, dynamic quorum, low-level
+protocol, and blocking surfaces are explicitly classified as expert,
+experimental, or excluded from the stable core claim. Deterministic routing,
+task/runtime, controller, and nested-runtime tests exist; final API-key
+classification and required live retained-surface gates remain open.
+
 ## Current Release Qualification
 
 `0.3.5` is now published on crates.io in protocol-first order. The fresh

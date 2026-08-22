@@ -417,3 +417,102 @@ unqualified relative artifact label.
 - result: passed
 - artifact: workspace source commit 413f0ffa568349fd468ed088fcddac0c2a80a139
 - non_claims: not CI, not live authorization/failover, not published artifact, not complete operation ledger
+
+## Q-LOCAL-V112-001
+
+- date_utc: 2026-08-22
+- source_commit: 413f0ffa568349fd468ed088fcddac0c2a80a139
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: injected broker streams
+- kafka_image: not-applicable
+- mode: not-applicable
+- topology: coordinator, leader, and broker-routed fixtures
+- security: not-applicable
+- group_protocol: classic, KIP-848, and Share member-aware paths
+- workload: owner routing, v10/v9 identity fallback, partial results, and response-loss classes
+- workflow: scripts/check_qualification_ledger.py
+- fault: owner disconnect, coordinator movement, and resource-level broker errors
+- duration: not-recorded
+- record_count: not-applicable
+- member_count: not-recorded
+- repetition_count: 1
+- expected_errors: typed owner/resource errors; unsafe writes not replayed
+- observed_errors: route-specific responses and partial errors retained by existing Admin tests
+- retry_count: bounded read/pre-send only
+- duplicate_count: 0
+- loss_count: not-applicable
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: no shared session-bound member connection introduced
+- result: passed
+- artifact: workspace source commit 413f0ffa568349fd468ed088fcddac0c2a80a139
+- non_claims: not CI, not live failover, not published artifact, not data-recovery qualification
+
+## Q-LOCAL-V113-001
+
+- date_utc: 2026-08-22
+- source_commit: 413f0ffa568349fd468ed088fcddac0c2a80a139
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: injected broker streams
+- kafka_image: not-applicable
+- mode: not-applicable
+- topology: controller/bootstrap security fixtures
+- security: TLS, mTLS, SASL/PLAIN, SCRAM, and OAUTHBEARER validation paths
+- group_protocol: not-applicable
+- workload: security Admin routing, mixed results, redaction, and ambiguity classification
+- workflow: scripts/check_qualification_ledger.py
+- fault: authentication/configuration failure and possible post-send mutation loss
+- duration: not-recorded
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: 1
+- expected_errors: typed auth/authorization/unknown outcomes; no secret leakage
+- observed_errors: redaction and partial-result tests passed; no credentials in diagnostics
+- retry_count: bounded pre-send only
+- duplicate_count: 0
+- loss_count: not-applicable
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: no secret material emitted by tested paths
+- result: passed
+- artifact: workspace source commit 413f0ffa568349fd468ed088fcddac0c2a80a139
+- non_claims: not CI, not restricted-principal live qualification, not published artifact
+
+## Q-LOCAL-V114-001
+
+- date_utc: 2026-08-22
+- source_commit: 413f0ffa568349fd468ed088fcddac0c2a80a139
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: protocol fixtures and injected broker streams
+- kafka_image: not-applicable
+- mode: not-applicable
+- topology: controller/coordinator/worker-local fixtures
+- security: not-applicable
+- group_protocol: Streams, Share, and blocking adapter surfaces
+- workload: advanced API classification, protocol bytes, task lifecycle, quorum routing, and runtime cleanup
+- workflow: scripts/check_qualification_ledger.py
+- fault: invalid assignment, nested runtime, state-session, and response-loss boundaries
+- duration: not-recorded
+- record_count: not-applicable
+- member_count: not-recorded
+- repetition_count: 1
+- expected_errors: explicit experimental/unsupported/typed outcomes
+- observed_errors: deterministic advanced-surface tests passed
+- retry_count: not-applicable
+- duplicate_count: not-applicable
+- loss_count: not-applicable
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: blocking tasks joined; no detached runtime claim
+- result: passed
+- artifact: workspace source commit 413f0ffa568349fd468ed088fcddac0c2a80a139
+- non_claims: not CI, not live retained-surface qualification, not stable core compatibility

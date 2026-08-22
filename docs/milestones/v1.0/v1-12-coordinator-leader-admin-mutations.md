@@ -1,6 +1,6 @@
 # V1-12 Coordinator And Leader Admin Mutations
 
-- Status: Planned
+- Status: In progress
 - Target evidence: Published artifact
 - Dependencies: V1-02
 
@@ -51,6 +51,24 @@ write outcomes through movement and response loss.
    or non-idempotent writes switch to a typed unknown after possible
    transmission unless their own ledger proves a safe serialized retry.
 6. Run common published floor/current failover and active-member profiles.
+
+## Current Execution Record (2026-08-22)
+
+V1-12 is now `In progress`. Coordinator-, leader-, and broker-owned Admin
+paths preserve their route owner and partial resource results through
+coordinator discovery, leader movement, and per-request connection invalidation.
+Read-only owner changes may retry within the bounded budget. Offset and
+Share-offset operations retain member/epoch/topic-identity semantics, while
+ambiguous non-idempotent writes use the typed unknown boundary; fixed-target
+DeleteRecords remains a separately classified state-idempotent operation.
+
+Existing deterministic coverage includes coordinator OffsetFetch/OffsetCommit,
+DeleteGroups and OffsetDelete, member-aware v10/v9 fallback, DeleteRecords,
+DescribeProducers, log-dir routing, ShareGroupDescribe/offset mutations, and
+transaction diagnostics. Partial top-level and per-partition error fixtures
+remain intact. The complete owner ledger, delete/recreate UUID race, three-broker
+leader failover, and published active-member profiles remain open; no data
+recovery or complete Admin compatibility claim is made.
 
 ## Failure And Lifecycle Contract
 
