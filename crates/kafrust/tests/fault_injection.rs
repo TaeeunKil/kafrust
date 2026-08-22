@@ -603,9 +603,7 @@ async fn transactional_abort_response_loss_marks_outcome_unknown_and_defunct() {
 
     assert!(matches!(
         error,
-        kafrust::Error::TransactionOutcomeUnknown {
-            operation: "abort"
-        }
+        kafrust::Error::TransactionOutcomeUnknown { operation: "abort" }
     ));
     assert_eq!(
         producer.transaction_status(),
