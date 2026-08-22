@@ -1092,6 +1092,7 @@ async fn consumer_protocol_rejoins_and_fetches_after_rebalance_error() {
     .join()
     .await
     .expect("KIP-848 consumer group should join with an assignment");
+    let member_id = group.member_id().to_owned();
 
     let records = group
         .poll()
@@ -1100,6 +1101,7 @@ async fn consumer_protocol_rejoins_and_fetches_after_rebalance_error() {
 
     assert_eq!(records.len(), 1);
     assert_eq!(records[0].offset(), 42);
+    assert_eq!(group.member_id(), member_id);
     assert_eq!(group.generation_id(), 2);
     assert_eq!(group.position("orders", 0), Some(43));
     assert!(metrics.snapshot().retries >= 1);
