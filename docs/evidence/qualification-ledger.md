@@ -1407,3 +1407,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-19-license-metadata-audit.md
 - non_claims: not license compatibility approval, not advisory/yank review, not transitive unsafe/native review, not SBOM completeness, not optional-TLS native-tool qualification, not published artifact evidence
+
+## Q-CI-V119-003
+
+- date_utc: 2026-08-22
+- source_commit: f499ee62b5f8a066d8a1d764ad8ce7b8006094cd
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: CI
+- kafka_version: not-applicable
+- kafka_image: not-applicable
+- mode: not-applicable
+- topology: GitHub Actions Rust 1.81.0 and stable matrix
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: full repository manifest, dependency posture, API snapshot, package, test, clippy, and documentation checks
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32561532044
+- fault: none
+- duration: 8m29s workflow window
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: 2 toolchains
+- expected_errors: no checker, build, test, clippy, documentation, or package-boundary failure
+- observed_errors: all Rust 1.81.0 and stable jobs passed
+- retry_count: not-applicable
+- duplicate_count: not-applicable
+- loss_count: not-applicable
+- latency: not-applicable
+- memory: not-applicable
+- final_resource_gauges: not-applicable
+- result: passed
+- artifact: GitHub Actions run 32561532044; dependency graph output included 71 resolved packages with license metadata
+- non_claims: not published-artifact evidence, not license compatibility/advisory/yank completion, not SBOM completion, not V1-20 published matrix, not fuzz/fault/SLO/service-canary completion

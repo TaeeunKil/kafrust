@@ -97,6 +97,12 @@ resolved packages and zero missing license metadata; the details are in
 This closes metadata completeness only, not license compatibility or the
 remaining advisory, yank, native, unsafe, SBOM, and drift reviews.
 
+The checker hardening for ignored-lockfile handling and Cargo diagnostic
+separation passed the complete Rust 1.81.0/stable CI matrix in
+[run 32561532044](https://github.com/TaeeunKil/kafrust/actions/runs/32561532044)
+from source `f499ee62b5f8a066d8a1d764ad8ce7b8006094cd`; this is CI evidence for
+the metadata-completeness slice, not publication or full V1-19 completion.
+
 ## Failure And Lifecycle Contract
 
 - A required default-build C compiler/link to librdkafka or a C Kafka client is

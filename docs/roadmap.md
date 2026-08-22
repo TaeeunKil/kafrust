@@ -276,6 +276,11 @@ and ledger row `Q-LOCAL-V119-002`. This is metadata completeness evidence
 only; compatibility, advisory/yank, native/unsafe ownership, SBOM, and drift
 reviews remain open.
 
+The fresh-checkout dependency checker fixes passed on both Rust 1.81.0 and
+stable in [CI run 32561532044](https://github.com/TaeeunKil/kafrust/actions/runs/32561532044)
+from `f499ee6`; this confirms the metadata-completeness slice while the
+remaining V1-19 audit gates stay open.
+
 ## V1-20 Execution Update (2026-08-22)
 
 V1-20 is `In progress`. The draft machine-readable matrix at
