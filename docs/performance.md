@@ -64,6 +64,15 @@ roundtrips recorded by the shared metrics handle, including Produce, Metadata,
 and Fetch requests. The request values are approximate and should be compared
 with matching operation profiles.
 
+The short diagnostic run
+[32554051332](https://github.com/TaeeunKil/kafrust/actions/runs/32554051332)
+on source `3fdfc778` used 2,000 records and batches of 100. It completed the
+100-byte, 1-KiB, 10-KiB, and 1-KiB Zstd profiles with zero retries and zero
+final in-flight/buffered gauges. The per-profile results were 52,318/110,844,
+48,825/162,383, 3,238/57,247, and 40,094/191,686 Produce/Fetch records per
+second respectively. This is a one-repetition hosted-runner diagnostic, not a
+five-repetition eight-hour SLO result or a cross-client parity claim.
+
 ## Published Baseline
 
 The latest merged-main benchmark run

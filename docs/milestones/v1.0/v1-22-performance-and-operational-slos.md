@@ -62,6 +62,24 @@ profile, regression, retry, RSS, loss, duplicate, and final-gauge fields that
 the later campaign must emit. No regression threshold or production claim is
 being inferred from the short samples.
 
+### Bounded current-source diagnostic benchmark (2026-08-22)
+
+Run [32554051332](https://github.com/TaeeunKil/kafrust/actions/runs/32554051332)
+used source `3fdfc778`, Kafka 4.3.1 KRaft, one partition, 2,000 records per
+profile, batches of 100, and a single hosted-runner repetition. All four
+profiles completed with zero retries, zero final in-flight/buffered records,
+and no acknowledged loss or duplicates:
+
+| Payload | Compression | Produce records/s | Fetch records/s | Request p50/p95/p99 |
+| ---: | --- | ---: | ---: | --- |
+| 100 B | none | 52,318.33 | 110,844.48 | 5/25/25 ms |
+| 1 KiB | none | 48,824.97 | 162,383.04 | 5/5/5 ms |
+| 10 KiB | none | 3,238.35 | 57,247.24 | 5/5/25 ms |
+| 1 KiB | Zstd | 40,093.80 | 191,685.69 | 5/5/25 ms |
+
+These values are retained as a reproducible short diagnostic artifact, not as
+the five-repetition, eight-hour SLO campaign or a cross-client parity claim.
+
 ## Failure And Lifecycle Contract
 
 - Benchmark backpressure uses the same bounded production queues and reports

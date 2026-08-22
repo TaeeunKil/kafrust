@@ -288,6 +288,22 @@ version identities, dependency/publication order, metadata-only RC-to-stable
 diff, and post-publish canary/tag evidence requirements without performing any
 registry or GitHub release action.
 
+The bounded current-source diagnostics are now recorded without inflating those
+claims. The first 60-second soak run
+[32554050050](https://github.com/TaeeunKil/kafrust/actions/runs/32554050050)
+failed only because the soak JSON formatter swapped two gauge arguments; the
+client assertions had already reached zero final gauges. Commit `f7a5fcf`
+corrected the formatter, and rerun
+[32554367028](https://github.com/TaeeunKil/kafrust/actions/runs/32554367028)
+passed with 3,481,600 records, 156 operation errors, 219 failed requests,
+1,091 retries, recovery, and zero final in-flight/buffered records. The short
+benchmark diagnostic
+[32554051332](https://github.com/TaeeunKil/kafrust/actions/runs/32554051332)
+also passed four 2,000-record profiles with zero retries and zero final gauges.
+Both remain diagnostic evidence only; the six-hour/24-hour fault campaigns,
+five-repetition eight-hour SLO campaign, and published-artifact gates remain
+open.
+
 ## Current Release Qualification
 
 `0.3.5` is now published on crates.io in protocol-first order. The fresh

@@ -1044,3 +1044,102 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-26-release-manifest.json
 - non_claims: not stable publication, not docs.rs or crates.io verification, not tagged release, not post-publish canary evidence
+
+## Q-LIVE-V121-DIAG-001
+
+- date_utc: 2026-08-22
+- source_commit: 3fdfc77842c8c2a2a3be2c2f9d8f1f3844df65cc
+- client_version: 0.3.6 source checkout
+- protocol_version: 0.3.6 source checkout
+- work_status: In progress
+- evidence_level: Live current-source
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka:4.3.1
+- mode: KRaft
+- topology: isolated single-node broker-restart smoke
+- security: PLAINTEXT
+- group_protocol: not-applicable
+- workload: 60-second bounded producer/fetch soak with a ten-second broker stop
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32554050050
+- fault: broker stopped one third into the run and restarted after ten seconds
+- duration: 60.000s workload; 10s outage
+- record_count: 2886500
+- member_count: not-applicable
+- repetition_count: 1
+- expected_errors: transient broker-stop failures followed by recovery and zero final gauges
+- observed_errors: client assertions reached recovery and zero final gauges; workflow jq assertion failed because two JSON gauge fields were mislabeled
+- retry_count: 1027
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: client assertion zero; emitted JSON field labels invalid
+- result: failed
+- artifact: GitHub Actions run 32554050050; retained soak-result.json
+- non_claims: not a passing V1-21 campaign, not six-hour evidence, not secured three-broker evidence, not unclean-election evidence, not published artifact evidence
+
+## Q-LIVE-V121-001
+
+- date_utc: 2026-08-22
+- source_commit: f7a5fcff1d15b48959762723371699e0194d7501
+- client_version: 0.3.6 source checkout
+- protocol_version: 0.3.6 source checkout
+- work_status: In progress
+- evidence_level: Live current-source
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka:4.3.1
+- mode: KRaft
+- topology: isolated single-node broker-restart smoke
+- security: PLAINTEXT
+- group_protocol: not-applicable
+- workload: 60-second bounded producer/fetch soak with a ten-second broker stop
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32554367028
+- fault: broker stopped one third into the run and restarted after ten seconds
+- duration: 60.000s workload; 10s outage
+- record_count: 3481600
+- member_count: not-applicable
+- repetition_count: 1
+- expected_errors: transient broker-stop failures followed by recovery and zero final gauges
+- observed_errors: 156 high-level operation errors; 219 failed requests; recovery completed
+- retry_count: 1091
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: in_flight_requests=0; buffered_records=0; max_in_flight_requests=1; max_buffered_records=0
+- result: passed
+- artifact: GitHub Actions run 32554367028; retained soak-result.json
+- non_claims: not six-hour evidence, not secured three-broker evidence, not unclean-election evidence, not published artifact evidence, not production SLO evidence
+
+## Q-LIVE-V122-DIAG-001
+
+- date_utc: 2026-08-22
+- source_commit: 3fdfc77842c8c2a2a3be2c2f9d8f1f3844df65cc
+- client_version: 0.3.6 source checkout
+- protocol_version: 0.3.6 source checkout
+- work_status: In progress
+- evidence_level: Live current-source
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka:4.3.1
+- mode: KRaft
+- topology: isolated single-node benchmark broker
+- security: PLAINTEXT
+- group_protocol: not-applicable
+- workload: four Produce/Fetch benchmark profiles with 2,000 records and batches of 100
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32554051332
+- fault: none injected
+- duration: 93s workflow
+- record_count: 2000 per profile; 8000 total records
+- member_count: not-applicable
+- repetition_count: 1
+- expected_errors: none
+- observed_errors: none; all four profiles completed with zero retries and no acknowledged loss or duplicates
+- retry_count: 0
+- duplicate_count: 0
+- loss_count: 0
+- latency: request p50/p95/p99 5/25/25ms, 5/5/5ms, 5/5/25ms, and 5/5/25ms by profile
+- memory: not measured
+- final_resource_gauges: all profiles in_flight_requests=0; buffered_records=0
+- result: passed
+- artifact: GitHub Actions run 32554051332; benchmark-results.jsonl
+- non_claims: not five repetitions, not eight-hour SLO evidence, not published artifact evidence, not cross-client parity, not production claim

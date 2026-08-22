@@ -59,6 +59,26 @@ and `scripts/check_v1_fault_campaign_manifest.py` now make those thresholds
 machine-checkable. No historical run is being promoted into the new milestone
 exit gate.
 
+### Bounded current-source diagnostic runs (2026-08-22)
+
+The first 60-second manual run on source `3fdfc778` (run
+[32554050050](https://github.com/TaeeunKil/kafrust/actions/runs/32554050050))
+exercised Kafka 4.3.1 KRaft with a ten-second broker stop and processed
+2,886,500 records. The client-side assertions reached `recovered=true` with
+zero final in-flight and buffered gauges, but the workflow failed its `jq`
+check because the example passed `buffered_records` and
+`max_in_flight_requests` to the JSON formatter in the wrong order. The failure
+is retained as harness evidence, not promoted as a client fault.
+
+Commit `f7a5fcff` corrected that field order. The rerun
+[32554367028](https://github.com/TaeeunKil/kafrust/actions/runs/32554367028)
+passed the same gate: 60.000 seconds, 3,481,600 records, 156 high-level
+operation errors, 219 failed requests, 1,091 retries, `recovered=true`,
+`in_flight_requests=0`, `buffered_records=0`, and observed peaks of one
+in-flight request and zero buffered records. This is a bounded single-node
+diagnostic smoke only; it does not satisfy the six-hour, multi-broker,
+secured, unclean-election, or published-artifact exit criteria above.
+
 ## Failure And Lifecycle Contract
 
 - Retryable pre-send/read faults stay within finite budgets and preserve owner
