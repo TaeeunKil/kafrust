@@ -285,3 +285,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: pushed workspace commit 5571ca36558c4757b811171d7a5d0d0a487333ae
 - non_claims: not published crates, not live broker qualification, not service canary, not completion of V1-03 through V1-05
+
+## Q-LOCAL-V108-001
+
+- date_utc: 2026-08-22
+- source_commit: 8a29d1eff1bd6d9fa80526be79f7e1ec99430075
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: scripted broker fixtures
+- kafka_image: not-applicable
+- mode: not-applicable
+- topology: single scripted coordinator
+- security: not-applicable
+- group_protocol: classic
+- workload: direct OffsetCommit response-loss classification with exact offset identity
+- workflow: scripts/check_qualification_ledger.py
+- fault: coordinator drops the transmitted OffsetCommit v2 response
+- duration: 0.01s
+- record_count: not-applicable
+- member_count: 1
+- repetition_count: 1
+- expected_errors: ConsumerGroupCommitOutcomeUnknown; zero retries
+- observed_errors: typed group/member/generation plus exact orders-0 next offset; zero retries
+- retry_count: 0
+- duplicate_count: 0
+- loss_count: not-applicable
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: scripted broker completed; no replay frame observed
+- result: passed
+- artifact: workspace source commit 8a29d1eff1bd6d9fa80526be79f7e1ec99430075
+- non_claims: not CI, not live broker compatibility, not published artifact, not churn or data-loss qualification

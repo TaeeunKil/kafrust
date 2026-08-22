@@ -452,6 +452,13 @@ The worker coalesces offsets per partition and synchronizes its generation and
 assignment state across `group.rejoin()`. Check `try_wait()` in long-running
 applications so terminal commit or generation errors are not hidden.
 
+If an OffsetCommit may have reached Kafka but its response is lost, the group
+returns `Error::ConsumerGroupCommitOutcomeUnknown` with the group ID, member
+ID, generation/member epoch, and exact topic-partition next offsets. The
+ambiguous request is not replayed automatically; reconcile those offsets before
+issuing a newer commit. This rule applies to direct commits and the bounded
+background worker.
+
 ## Share Group
 
 The current development branch also contains an alpha `ShareConsumer` for the

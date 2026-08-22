@@ -129,6 +129,19 @@ Smoke run is refreshing the broker/version slice; golden record-shape fixtures,
 retention/preferred-replica faults, and the published 100,000-record
 reconciliation gate remain open.
 
+## V1-08 Execution Update (2026-08-22)
+
+V1-08 is `In progress`. Classic and KIP-848 OffsetCommit now expose a typed
+`ConsumerGroupCommitOutcomeUnknown` carrying group/member/generation identity
+and exact topic-partition next offsets when a transmitted request loses its
+response. Direct and bounded background worker paths share the same
+post-transmission classifier; ambiguous outcomes are not retried, and
+pre-transmission failures remain ordinary errors. The scripted classic group
+response-drop regression passed on source commit `8a29d1e`, together with the
+full local Rust validation and the regenerated public API snapshot. Published
+floor/current group profiles, churn, callback, heartbeat, and offset
+restoration gates remain open.
+
 ## Current Release Qualification
 
 `0.3.5` is now published on crates.io in protocol-first order. The fresh

@@ -196,6 +196,13 @@ async fn main() -> kafrust::Result<()> {
 알파 classic consumer group 경로입니다. range, round-robin, eager sticky,
 cooperative-sticky assignor와 KIP-848 consumer protocol을 제공합니다.
 
+OffsetCommit이 Kafka에 도달했을 수 있지만 응답을 잃으면 group API는 group
+ID, member ID, generation/member epoch, 정확한 topic-partition next offset을
+담은 `Error::ConsumerGroupCommitOutcomeUnknown`을 반환합니다. 모호한
+요청은 자동 재전송하지 않으므로 새 commit 전에 해당 offset을 조정해야
+합니다. 이 규칙은 직접 commit과 bounded background worker에 동일하게
+적용됩니다.
+
 ```rust
 use kafrust::ConsumerGroupConfig;
 

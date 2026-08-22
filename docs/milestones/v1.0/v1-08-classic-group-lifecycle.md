@@ -1,6 +1,6 @@
 # V1-08 Classic Consumer Group Lifecycle
 
-- Status: Planned
+- Status: In progress
 - Target evidence: Published artifact
 - Dependencies: V1-07
 
@@ -47,6 +47,36 @@ static members under documented faults.
    exact offsets after possible transmission. An exact-offset retry is allowed
    only when serialized under the same identity before any newer commit; direct
    and background paths use the same rule.
+
+## Current Execution Record (2026-08-22)
+
+V1-08 is now `In progress`. The public error surface includes the typed
+`ConsumerGroupCommitOutcomeUnknown` variant and the
+`ConsumerGroupCommitOffset` identity type (topic, partition, and next offset).
+Direct classic and KIP-848 OffsetCommit paths, plus the bounded background
+commit worker, classify an I/O failure, request timeout, oversized response, or
+protocol decode failure as ambiguous only after the client marks the request as
+possibly transmitted. They preserve group ID, member ID, generation/member
+epoch, and the exact requested offsets. Pre-transmission failures remain their
+original error, and the typed outcome is never retried or converted into a
+successful commit. A foreground worker flush preserves the same typed error
+through its acknowledgement channel.
+
+The scripted-broker regression
+`consumer_group_offset_commit_response_loss_returns_exact_unknown` proves the
+classic direct path with a dropped OffsetCommit v2 response: it reports
+`orders-group`/`member-1`/generation `1`, the exact `orders-0@0` next offset,
+and zero retries. Unit coverage also asserts the typed outcome is not in the
+background retry class, and the API snapshot records the new public identity
+type. Source commit `8a29d1e` passed the required local validation: 466
+`kafrust` unit tests, 284 protocol tests, 19 fault-injection tests, 5 public
+surface tests, 10 doctests, Clippy with `-D warnings`, documentation, the
+data-plane manifest checker, and the public API snapshot checker.
+
+Published floor/current classic lifecycle profiles, dynamic/static churn,
+callback ordering, heartbeat ownership, coordinator movement, and exact
+offset-restoration gates remain open. This record makes no published-artifact,
+40-cycle churn, or data-loss claim.
 
 ## Failure And Lifecycle Contract
 
