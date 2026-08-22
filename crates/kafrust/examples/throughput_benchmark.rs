@@ -1,8 +1,15 @@
 mod common;
 
-use std::time::{Duration, Instant};
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
-use kafrust::{Acks, ClientMetrics, Compression, ConsumerConfig, ProducerConfig, ProducerRecord};
+use kafrust::{
+    consumer::Consumer, producer::Producer, Acks, ClientMetrics, Compression, ConsumerConfig,
+    ProducerConfig, ProducerRecord,
+};
+use tokio::sync::Barrier;
 
 const DEFAULT_RECORDS: usize = 20_000;
 const DEFAULT_BATCH_SIZE: usize = 200;
@@ -29,6 +36,20 @@ async fn main() -> kafrust::Result<()> {
     }
 
     let compression = common::compression_from_env()?;
+    if let Some((warmup_seconds, measured_seconds, sample_seconds)) = campaign_config()? {
+        let settings = CampaignSettings {
+            batch_size,
+            payload_bytes,
+            max_batch_bytes,
+            compression,
+            warmup_seconds,
+            measured_seconds,
+            sample_seconds,
+            workers: campaign_workers()?,
+        };
+        return run_campaign(bootstrap_servers, topic, settings).await;
+    }
+
     let metrics = ClientMetrics::new();
     let mut producer = common::apply_security(
         ProducerConfig::new(bootstrap_servers.clone())
@@ -156,11 +177,323 @@ async fn main() -> kafrust::Result<()> {
     Ok(())
 }
 
+#[derive(Clone, Copy)]
+struct CampaignSettings {
+    batch_size: usize,
+    payload_bytes: usize,
+    max_batch_bytes: usize,
+    compression: Compression,
+    warmup_seconds: u64,
+    measured_seconds: u64,
+    sample_seconds: u64,
+    workers: usize,
+}
+
+#[derive(Clone)]
+struct CampaignBarriers {
+    start: Arc<Barrier>,
+    measurement: Arc<Barrier>,
+}
+
+struct BatchWork<'a> {
+    topic: &'a str,
+    partition: i32,
+    payload: &'a [u8],
+    batch_size: usize,
+}
+
+async fn run_campaign(
+    bootstrap_servers: Vec<String>,
+    topic: String,
+    settings: CampaignSettings,
+) -> kafrust::Result<()> {
+    let max_partition_bytes = settings
+        .payload_bytes
+        .saturating_add(256)
+        .saturating_mul(settings.batch_size)
+        .max(1_048_576)
+        .min(i32::MAX as usize) as i32;
+    let metrics = ClientMetrics::new();
+    let mut workers = Vec::with_capacity(settings.workers);
+    for partition in 0..settings.workers {
+        let partition = partition as i32;
+        let producer = common::apply_security(
+            ProducerConfig::new(bootstrap_servers.clone())
+                .client_id(format!("kafrust-throughput-campaign-producer-{partition}"))
+                .metrics(metrics.clone()),
+        )?
+        .acks(Acks::Leader)
+        .compression(settings.compression)
+        .max_records_per_batch(settings.batch_size)
+        .max_batch_bytes(settings.max_batch_bytes)
+        .build()
+        .await?;
+        let mut consumer = common::apply_security(
+            ConsumerConfig::new(bootstrap_servers.clone())
+                .client_id(format!("kafrust-throughput-campaign-consumer-{partition}"))
+                .metrics(metrics.clone()),
+        )?
+        .max_wait_ms(100)
+        .max_partition_bytes(max_partition_bytes)
+        .build()
+        .await?;
+        let next_offset = consumer.fetch_watermarks(&topic, partition).await?.high();
+        if next_offset < 0 {
+            return Err(kafrust::Error::Unsupported(
+                "benchmark campaign requires concrete broker offsets",
+            ));
+        }
+        workers.push((producer, consumer, partition, next_offset));
+    }
+
+    let barriers = CampaignBarriers {
+        start: Arc::new(Barrier::new(settings.workers + 1)),
+        measurement: Arc::new(Barrier::new(settings.workers + 1)),
+    };
+    let mut handles = Vec::with_capacity(settings.workers);
+    for (producer, consumer, partition, next_offset) in workers {
+        handles.push(tokio::spawn(run_campaign_worker(
+            producer,
+            consumer,
+            topic.clone(),
+            partition,
+            next_offset,
+            settings,
+            barriers.clone(),
+        )));
+    }
+    wait_for_barrier(barriers.start.clone(), CONSUME_TIMEOUT).await?;
+    let measurement_wait =
+        Duration::from_secs(settings.warmup_seconds).saturating_add(CONSUME_TIMEOUT);
+    wait_for_barrier(barriers.measurement.clone(), measurement_wait).await?;
+    let baseline = metrics.snapshot();
+    let profile =
+        std::env::var("KAFRUST_BENCH_PROFILE").unwrap_or_else(|_| "throughput-campaign".to_owned());
+    let measured_started = Instant::now();
+    let measured_deadline = measured_started + Duration::from_secs(settings.measured_seconds);
+    let mut window_start = measured_started;
+    let mut sample_index = 0_u64;
+    while window_start < measured_deadline {
+        let window_end =
+            (window_start + Duration::from_secs(settings.sample_seconds)).min(measured_deadline);
+        let before = metrics.snapshot();
+        let sleep_for = window_end.saturating_duration_since(Instant::now());
+        if !sleep_for.is_zero() {
+            tokio::time::sleep(sleep_for).await;
+        }
+        let after = metrics.snapshot();
+        print_campaign_sample(
+            &profile,
+            sample_index,
+            measured_started.elapsed().as_secs_f64(),
+            (window_start - measured_started).as_secs_f64(),
+            (window_end - measured_started).as_secs_f64(),
+            &before,
+            &after,
+        );
+        sample_index = sample_index.saturating_add(1);
+        window_start = window_end;
+    }
+
+    for handle in handles {
+        handle
+            .await
+            .map_err(|_| kafrust::Error::Unsupported("benchmark campaign worker panicked"))??;
+    }
+    let final_snapshot = metrics.snapshot();
+    if final_snapshot.produced_records != final_snapshot.consumed_records {
+        return Err(kafrust::Error::Unsupported(
+            "benchmark campaign finished with unmatched produced and consumed records",
+        ));
+    }
+    if final_snapshot.in_flight_requests != 0 || final_snapshot.buffered_records != 0 {
+        return Err(kafrust::Error::Unsupported(
+            "benchmark campaign detected a non-zero final client gauge",
+        ));
+    }
+    println!(
+        concat!(
+            "{{\"mode\":\"campaign-final\",\"profile\":\"{}\",",
+            "\"warmup_seconds\":{},\"measured_seconds\":{},\"sample_seconds\":{},\"workers\":{},",
+            "\"batch_size\":{},\"payload_bytes\":{},\"compression\":\"{}\",",
+            "\"produced_records\":{},\"consumed_records\":{},\"requests_started\":{},",
+            "\"requests_failed\":{},\"retries\":{},\"retry_ratio\":{:.6},",
+            "\"rss_bytes\":{},\"in_flight_requests\":{},\"buffered_records\":{}}}"
+        ),
+        profile,
+        settings.warmup_seconds,
+        settings.measured_seconds,
+        settings.sample_seconds,
+        settings.workers,
+        settings.batch_size,
+        settings.payload_bytes,
+        compression_name(settings.compression),
+        delta_u64(final_snapshot.produced_records, baseline.produced_records),
+        delta_u64(final_snapshot.consumed_records, baseline.consumed_records),
+        delta_u64(final_snapshot.requests_started, baseline.requests_started),
+        delta_u64(final_snapshot.requests_failed, baseline.requests_failed),
+        delta_u64(final_snapshot.retries, baseline.retries),
+        retry_ratio(&baseline, &final_snapshot),
+        optional_u64_json(resident_bytes()),
+        final_snapshot.in_flight_requests,
+        final_snapshot.buffered_records,
+    );
+    Ok(())
+}
+
+async fn run_campaign_worker(
+    mut producer: Producer,
+    mut consumer: Consumer,
+    topic: String,
+    partition: i32,
+    mut next_offset: i64,
+    settings: CampaignSettings,
+    barriers: CampaignBarriers,
+) -> kafrust::Result<()> {
+    let payload = vec![b'x'; settings.payload_bytes];
+    wait_for_barrier(barriers.start.clone(), CONSUME_TIMEOUT).await?;
+    let warmup_deadline = Instant::now() + Duration::from_secs(settings.warmup_seconds);
+    while Instant::now() < warmup_deadline {
+        next_offset = send_and_consume_batch(
+            &mut producer,
+            &mut consumer,
+            BatchWork {
+                topic: &topic,
+                partition,
+                payload: &payload,
+                batch_size: settings.batch_size,
+            },
+            next_offset,
+            warmup_deadline + CONSUME_TIMEOUT,
+        )
+        .await?;
+    }
+    let measurement_wait =
+        Duration::from_secs(settings.warmup_seconds).saturating_add(CONSUME_TIMEOUT);
+    wait_for_barrier(barriers.measurement.clone(), measurement_wait).await?;
+    let measured_deadline = Instant::now() + Duration::from_secs(settings.measured_seconds);
+    while Instant::now() < measured_deadline {
+        next_offset = send_and_consume_batch(
+            &mut producer,
+            &mut consumer,
+            BatchWork {
+                topic: &topic,
+                partition,
+                payload: &payload,
+                batch_size: settings.batch_size,
+            },
+            next_offset,
+            measured_deadline + CONSUME_TIMEOUT,
+        )
+        .await?;
+    }
+    Ok(())
+}
+
+async fn send_and_consume_batch(
+    producer: &mut Producer,
+    consumer: &mut Consumer,
+    work: BatchWork<'_>,
+    next_offset: i64,
+    deadline: Instant,
+) -> kafrust::Result<i64> {
+    let metadata = producer
+        .send_batch(records_on_partition(
+            work.topic,
+            work.partition,
+            work.payload,
+            work.batch_size,
+        ))
+        .await?;
+    let Some(first) = metadata.first() else {
+        return Err(kafrust::Error::Unsupported(
+            "benchmark campaign producer returned no record metadata",
+        ));
+    };
+    if first.offset() < 0 {
+        return Err(kafrust::Error::Unsupported(
+            "benchmark campaign requires concrete broker offsets",
+        ));
+    }
+    if first.offset() != next_offset {
+        return Err(kafrust::Error::Unsupported(
+            "benchmark campaign observed a non-contiguous broker offset",
+        ));
+    }
+    let mut next_offset = next_offset;
+    let mut remaining = metadata.len();
+    while remaining > 0 {
+        if Instant::now() >= deadline {
+            return Err(kafrust::Error::Unsupported(
+                "benchmark campaign consumer did not drain the current batch",
+            ));
+        }
+        let fetched = consumer
+            .fetch(work.topic.to_owned(), work.partition, next_offset)
+            .await?;
+        if fetched.is_empty() {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+            continue;
+        }
+        if fetched.len() > remaining {
+            return Err(kafrust::Error::Unsupported(
+                "benchmark campaign fetched records beyond the current batch",
+            ));
+        }
+        for record in fetched {
+            if record.offset() != next_offset {
+                return Err(kafrust::Error::Unsupported(
+                    "benchmark campaign observed a non-contiguous fetched offset",
+                ));
+            }
+            next_offset = record.offset().saturating_add(1);
+            remaining -= 1;
+        }
+    }
+    Ok(next_offset)
+}
+
+async fn wait_for_barrier(barrier: Arc<Barrier>, timeout: Duration) -> kafrust::Result<()> {
+    tokio::time::timeout(timeout, barrier.wait())
+        .await
+        .map(|_| ())
+        .map_err(|_| kafrust::Error::Unsupported("benchmark campaign barrier timed out"))
+}
+
+fn campaign_config() -> kafrust::Result<Option<(u64, u64, u64)>> {
+    let warmup = optional_u64_from_env("KAFRUST_BENCH_WARMUP_SECONDS")?;
+    let measured = optional_u64_from_env("KAFRUST_BENCH_MEASURED_SECONDS")?;
+    let sample = optional_u64_from_env("KAFRUST_BENCH_SAMPLE_SECONDS")?;
+    if warmup.is_none() && measured.is_none() && sample.is_none() {
+        return Ok(None);
+    }
+    let (Some(warmup), Some(measured), Some(sample)) = (warmup, measured, sample) else {
+        return Err(kafrust::Error::Unsupported(
+            "campaign mode requires warmup, measured, and sample seconds",
+        ));
+    };
+    if measured == 0 || sample == 0 {
+        return Err(kafrust::Error::Unsupported(
+            "campaign measured and sample seconds must be greater than zero",
+        ));
+    }
+    Ok(Some((warmup, measured, sample)))
+}
+
 fn records(topic: &str, payload: &[u8], count: usize) -> Vec<ProducerRecord> {
+    records_on_partition(topic, 0, payload, count)
+}
+
+fn records_on_partition(
+    topic: &str,
+    partition: i32,
+    payload: &[u8],
+    count: usize,
+) -> Vec<ProducerRecord> {
     (0..count)
         .map(|_| {
             ProducerRecord::to(topic.to_owned())
-                .partition(0)
+                .partition(partition)
                 .value(payload.to_vec())
         })
         .collect()
@@ -173,6 +506,26 @@ fn usize_from_env(name: &'static str, default: usize) -> kafrust::Result<usize> 
     value
         .parse()
         .map_err(|_| kafrust::Error::Unsupported("benchmark size variables must be integers"))
+}
+
+fn optional_u64_from_env(name: &'static str) -> kafrust::Result<Option<u64>> {
+    let Some(value) = std::env::var(name).ok() else {
+        return Ok(None);
+    };
+    value
+        .parse()
+        .map(Some)
+        .map_err(|_| kafrust::Error::Unsupported("benchmark duration variables must be integers"))
+}
+
+fn campaign_workers() -> kafrust::Result<usize> {
+    let workers = usize_from_env("KAFRUST_BENCH_WORKERS", 1)?;
+    if workers == 0 {
+        return Err(kafrust::Error::Unsupported(
+            "KAFRUST_BENCH_WORKERS must be greater than zero",
+        ));
+    }
+    Ok(workers)
 }
 
 fn compression_name(compression: Compression) -> &'static str {
@@ -210,9 +563,114 @@ fn request_percentile_ms(snapshot: &kafrust::ClientMetricsSnapshot, percentile: 
         .map_or(0.0, |latency| latency.as_secs_f64() * 1_000.0)
 }
 
+fn print_campaign_sample(
+    profile: &str,
+    sample_index: u64,
+    elapsed_seconds: f64,
+    window_start_seconds: f64,
+    window_end_seconds: f64,
+    before: &kafrust::ClientMetricsSnapshot,
+    after: &kafrust::ClientMetricsSnapshot,
+) {
+    let delta = delta_snapshot(before, after);
+    let produced = delta.produced_records;
+    let consumed = delta.consumed_records;
+    let window_seconds = (window_end_seconds - window_start_seconds).max(f64::EPSILON);
+    println!(
+        concat!(
+            "{{\"mode\":\"campaign-sample\",\"profile\":\"{}\",",
+            "\"sample_index\":{},\"elapsed_seconds\":{:.3},",
+            "\"sample_start_seconds\":{:.3},\"sample_end_seconds\":{:.3},",
+            "\"produced_records\":{},\"consumed_records\":{},",
+            "\"produce_records_per_second\":{:.3},\"consume_records_per_second\":{:.3},",
+            "\"requests_started\":{},\"requests_failed\":{},\"retries\":{},",
+            "\"retry_ratio\":{:.6},\"request_p50_ms\":{:.3},",
+            "\"request_p95_ms\":{:.3},\"request_p99_ms\":{:.3},",
+            "\"rss_bytes\":{},\"in_flight_requests\":{},\"buffered_records\":{}}}"
+        ),
+        profile,
+        sample_index,
+        elapsed_seconds,
+        window_start_seconds,
+        window_end_seconds,
+        produced,
+        consumed,
+        produced as f64 / window_seconds,
+        consumed as f64 / window_seconds,
+        delta.requests_started,
+        delta.requests_failed,
+        delta.retries,
+        retry_ratio(before, after),
+        request_percentile_ms(&delta, 50),
+        request_percentile_ms(&delta, 95),
+        request_percentile_ms(&delta, 99),
+        optional_u64_json(resident_bytes()),
+        after.in_flight_requests,
+        after.buffered_records,
+    );
+}
+
+fn delta_snapshot(
+    before: &kafrust::ClientMetricsSnapshot,
+    after: &kafrust::ClientMetricsSnapshot,
+) -> kafrust::ClientMetricsSnapshot {
+    kafrust::ClientMetricsSnapshot {
+        requests_started: delta_u64(after.requests_started, before.requests_started),
+        requests_succeeded: delta_u64(after.requests_succeeded, before.requests_succeeded),
+        requests_failed: delta_u64(after.requests_failed, before.requests_failed),
+        requests_timed_out: delta_u64(after.requests_timed_out, before.requests_timed_out),
+        requests_cancelled: delta_u64(after.requests_cancelled, before.requests_cancelled),
+        broker_errors: delta_u64(after.broker_errors, before.broker_errors),
+        retries: delta_u64(after.retries, before.retries),
+        buffered_records: after.buffered_records,
+        max_buffered_records: after.max_buffered_records,
+        produced_records: delta_u64(after.produced_records, before.produced_records),
+        produce_batches: delta_u64(after.produce_batches, before.produce_batches),
+        consumed_records: delta_u64(after.consumed_records, before.consumed_records),
+        request_bytes: delta_u64(after.request_bytes, before.request_bytes),
+        response_bytes: delta_u64(after.response_bytes, before.response_bytes),
+        in_flight_requests: after.in_flight_requests,
+        max_in_flight_requests: after.max_in_flight_requests,
+        total_latency: after.total_latency.saturating_sub(before.total_latency),
+        max_latency: after.max_latency,
+        request_latency_buckets: std::array::from_fn(|index| {
+            delta_u64(
+                after.request_latency_buckets[index],
+                before.request_latency_buckets[index],
+            )
+        }),
+    }
+}
+
+fn retry_ratio(
+    before: &kafrust::ClientMetricsSnapshot,
+    after: &kafrust::ClientMetricsSnapshot,
+) -> f64 {
+    let attempts = delta_u64(after.requests_started, before.requests_started);
+    if attempts == 0 {
+        return 0.0;
+    }
+    delta_u64(after.retries, before.retries) as f64 / attempts as f64
+}
+
+fn delta_u64(after: u64, before: u64) -> u64 {
+    after.saturating_sub(before)
+}
+
+fn resident_bytes() -> Option<u64> {
+    let status = std::fs::read_to_string("/proc/self/status").ok()?;
+    let line = status.lines().find(|line| line.starts_with("VmRSS:"))?;
+    let kilobytes = line.split_whitespace().nth(1)?.parse::<u64>().ok()?;
+    Some(kilobytes.saturating_mul(1024))
+}
+
+fn optional_u64_json(value: Option<u64>) -> String {
+    value.map_or_else(|| "null".to_owned(), |value| value.to_string())
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{percentile_ms, rate, request_percentile_ms};
+    use super::{delta_snapshot, percentile_ms, rate, request_percentile_ms, retry_ratio};
     use kafrust::ClientMetricsSnapshot;
     use std::time::Duration;
 
@@ -243,5 +701,27 @@ mod tests {
 
         assert_eq!(request_percentile_ms(&snapshot, 50), 5_000.0);
         assert_eq!(request_percentile_ms(&snapshot, 99), 5_000.0);
+    }
+
+    #[test]
+    fn campaign_delta_keeps_window_histogram_and_retry_ratio() {
+        let before = ClientMetricsSnapshot {
+            requests_started: 10,
+            retries: 2,
+            request_latency_buckets: [1; 13],
+            ..ClientMetricsSnapshot::default()
+        };
+        let after = ClientMetricsSnapshot {
+            requests_started: 30,
+            retries: 5,
+            request_latency_buckets: [3; 13],
+            ..ClientMetricsSnapshot::default()
+        };
+
+        let delta = delta_snapshot(&before, &after);
+        assert_eq!(delta.requests_started, 20);
+        assert_eq!(delta.retries, 3);
+        assert_eq!(delta.request_latency_buckets, [2; 13]);
+        assert_eq!(retry_ratio(&before, &after), 0.15);
     }
 }
