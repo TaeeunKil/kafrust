@@ -780,3 +780,69 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-18-fuzz-campaign-manifest.json
 - non_claims: not actual 60-minute campaign, not four weekly passes, not crash/OOM absence proof
+
+## Q-LOCAL-V121-001
+
+- date_utc: 2026-08-22
+- source_commit: 83a5c0d848dc52ba5d465011cbb5ea70557064f3
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: Planned
+- evidence_level: Local deterministic
+- kafka_version: 3.7.2 and 4.3.1 campaign requirements
+- kafka_image: image digests required at campaign execution
+- mode: KRaft
+- topology: three-broker
+- security: PLAINTEXT and SASL_SSL/SCRAM-SHA-256
+- group_protocol: classic, KIP-848, and Share
+- workload: versioned fault/soak campaign manifest validation
+- workflow: scripts/check_v1_fault_campaign_manifest.py
+- fault: campaign identity, duration, cycle, ambiguity-family, and result-field drift
+- duration: not-applicable
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: 1
+- expected_errors: invalid campaign thresholds rejected before execution
+- observed_errors: seven campaigns, four six-hour gates, 100-cycle, and 100-outcome requirements accepted
+- retry_count: not-applicable
+- duplicate_count: 0
+- loss_count: not-applicable
+- latency: not-applicable
+- memory: not-applicable
+- final_resource_gauges: manifest requires final gauges in retained results
+- result: passed
+- artifact: docs/evidence/v1-21-fault-campaign-manifest.json
+- non_claims: not an executed soak, not published artifact evidence, not data-loss or SLO completion
+
+## Q-LOCAL-V122-001
+
+- date_utc: 2026-08-22
+- source_commit: 83a5c0d848dc52ba5d465011cbb5ea70557064f3
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: Planned
+- evidence_level: Local deterministic
+- kafka_version: 4.3.1 campaign requirement
+- kafka_image: runner and broker identity required at campaign execution
+- mode: KRaft
+- topology: single-node and three-broker
+- security: PLAINTEXT and SASL_SSL/SCRAM-SHA-256
+- group_protocol: not-applicable
+- workload: versioned performance/SLO campaign manifest validation
+- workflow: scripts/check_v1_performance_campaign_manifest.py
+- fault: profile, timing, repetition, threshold, and measurement-field drift
+- duration: not-applicable
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: 1
+- expected_errors: invalid eight-hour campaign requirements rejected before execution
+- observed_errors: six profiles, five repetitions, ten-second samples, and regression/RSS/retry limits accepted
+- retry_count: not-applicable
+- duplicate_count: 0
+- loss_count: not-applicable
+- latency: manifest requires p50/p95/p99 fields
+- memory: manifest requires RSS baseline/terminal/slope fields
+- final_resource_gauges: manifest requires zero final gauges
+- result: passed
+- artifact: docs/evidence/v1-22-performance-campaign-manifest.json
+- non_claims: not an executed benchmark, not production SLO evidence, not universal performance or parity claim
