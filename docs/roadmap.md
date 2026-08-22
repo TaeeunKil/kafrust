@@ -251,7 +251,12 @@ profiles, feature/toolchain package rows, and the protocol-first exact-registry
 policy. `scripts/check_v1_compatibility_matrix.py` validates ten draft profiles
 and is wired into CI. No row is marked passed yet: fresh published `0.3.6`
 lockfiles and the inherited V1-15~V1-19 artifact gates are required before the
-matrix can be frozen.
+matrix can be frozen. The source-only 17-job Live Kafka Smoke matrix passed on
+commit `e6de5c5` in
+[run 32551145773](https://github.com/TaeeunKil/kafrust/actions/runs/32551145773),
+including secured SCRAM transaction failover after the fencing-code assertion
+was corrected to accept Kafka code 47 or 90. This does not qualify a published
+artifact or close the long-duration and downstream milestone gates.
 
 ## Current Release Qualification
 

@@ -714,3 +714,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-20-compatibility-matrix.json
 - non_claims: not published artifact, not fresh registry lockfile evidence, not matrix completion or publication authorization
+
+## Q-LIVE-V120-001
+
+- date_utc: 2026-08-22
+- source_commit: e6de5c5201f8c688bf5e3ca148d3c997cd8918f6
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Live current-source
+- kafka_version: 3.7.2, 3.8.1, 3.9.1, and 4.3.1
+- kafka_image: apache/kafka:3.7.2, apache/kafka:3.8.1, apache/kafka:3.9.1, and apache/kafka:4.3.1
+- mode: KRaft
+- topology: single-node and three-broker
+- security: PLAINTEXT, TLS, SASL/PLAIN, SASL_SSL/SCRAM, OAUTHBEARER, and ACL authorization
+- group_protocol: classic and KIP-848
+- workload: Live Kafka Smoke source matrix with data-plane, groups, transactions, Admin, security, and failover jobs
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32551145773
+- fault: selected leader, coordinator, and transaction-coordinator movement with reconnection
+- duration: workflow-specific bounded smoke profiles
+- record_count: workflow-specific
+- member_count: workflow-specific
+- repetition_count: 17 jobs
+- expected_errors: fixture-specific transient broker and fencing outcomes
+- observed_errors: all 17 jobs passed, including SCRAM transaction failover with code 47 or 90
+- retry_count: workflow-specific
+- duplicate_count: not-recorded
+- loss_count: no unaccounted loss in the named smoke profiles
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: workflow-specific
+- result: passed
+- artifact: workspace source commit e6de5c5201f8c688bf5e3ca148d3c997cd8918f6
+- non_claims: not published artifact, not full V1-20 matrix, not 100-cycle/long-soak/SLO evidence, not service canary
