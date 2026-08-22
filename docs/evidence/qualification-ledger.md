@@ -351,3 +351,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: workspace source commit b54969655af6f309a457e3dc547bd47c6a0c4cdd
 - non_claims: not CI, not live broker compatibility, not published artifact, not 40-cycle churn or data-loss qualification
+
+## Q-LOCAL-V110-001
+
+- date_utc: 2026-08-22
+- source_commit: 55369e4abbda4ee5dfe3aed9774434b3799c8065
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: scripted broker fixtures
+- kafka_image: not-applicable
+- mode: not-applicable
+- topology: scripted Share coordinator and leader
+- security: not-applicable
+- group_protocol: Share v1
+- workload: lost Release acknowledgement, session reconciliation, redelivery, and member identity stability
+- workflow: scripts/check_qualification_ledger.py
+- fault: ShareAcknowledge response is dropped after transmission
+- duration: 0.01s
+- record_count: 1
+- member_count: 1
+- repetition_count: 1
+- expected_errors: ShareAcknowledgementOutcomeUnknown before reconciliation; redelivery after session reset
+- observed_errors: typed unknown state retained, one redelivered record, stable member ID, no replayed acknowledgement
+- retry_count: 0
+- duplicate_count: 0
+- loss_count: 0
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: affected Share session discarded; pending unknown count cleared after redelivery
+- result: passed
+- artifact: workspace source commit 55369e4abbda4ee5dfe3aed9774434b3799c8065
+- non_claims: not CI, not live broker compatibility, not published artifact, not exactly-once or 10,000-record qualification
