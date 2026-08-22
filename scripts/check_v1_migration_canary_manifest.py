@@ -36,7 +36,7 @@ def main() -> int:
         workflow = WORKFLOW.read_text(encoding="utf-8")
     except OSError as error:
         return fail(f"missing migration workflow: {error}")
-    for marker in ("KAFRUST_COMPARISON_IMPLEMENTATION: kafrust", "KAFRUST_COMPARISON_IMPLEMENTATION: rdkafka", "cargo +stable run", "Compare normalized smoke results", "Upload canary evidence"):
+    for marker in ("KAFRUST_COMPARISON_IMPLEMENTATION: kafrust", "KAFRUST_COMPARISON_IMPLEMENTATION: rdkafka", "libcurl4-openssl-dev", "cargo +stable run", "Compare normalized smoke results", "Upload canary evidence"):
         if marker not in workflow:
             return fail(f"migration workflow is missing {marker}")
     if manifest.get("client_implementations") != ["kafrust", "rust-rdkafka"]:

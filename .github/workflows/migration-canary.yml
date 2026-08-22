@@ -30,6 +30,9 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install rust-rdkafka comparison dependencies
+        run: sudo apt-get update && sudo apt-get install --yes libcurl4-openssl-dev
+
       - name: Start Kafka
         run: |
           docker run -d --name kafrust-migration-kafka \
