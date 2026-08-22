@@ -75,6 +75,19 @@ The staged archives were `kafrust-protocol-0.3.6.crate`
 workspace path resolution. This refreshes packaged-candidate evidence only;
 the dependency/SBOM/advisory audit and published matrix remain open.
 
+### Direct dependency graph slice (2026-08-22)
+
+The reproducible local graph record is
+[`v1-19-dependency-audit.md`](../../evidence/v1-19-dependency-audit.md).
+Normal-edge trees for default, `tls`, `blocking`, `otlp`, and all-feature
+profiles contained 56, 65, 56, 72, and 81 unique packages respectively, with
+no `librdkafka`, `rdkafka-sys`, `kafka-sys`, or `rdkafka` package. The metadata
+surface reports 18 direct client dependencies and four protocol dependencies.
+The same check is wired into the main CI workflow. This is a deterministic
+dependency-name check; it does not close native
+TLS tooling, license/advisory/yank, transitive unsafe review, SBOM, or drift
+gates.
+
 ## Failure And Lifecycle Contract
 
 - A required default-build C compiler/link to librdkafka or a C Kafka client is

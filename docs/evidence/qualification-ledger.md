@@ -1341,3 +1341,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: kafrust-protocol-0.3.6.crate sha256 ee191756dddae5b5d591c935416a0d06720f5ea90a7bdab8233734b0bb893768; kafrust-0.3.6.crate sha256 00f656d820b11df0d06d56c9bd6869810f28f7c14242d838a4b1bfed6c675325
 - non_claims: not crates.io publication, not license/advisory/yank/SBOM completion, not optional-TLS native-tool qualification, not full V1-20 matrix, not service canary
+
+## Q-LOCAL-V119-001
+
+- date_utc: 2026-08-22
+- source_commit: 1f6c60d200c58301964c858053a4dd296c48746a
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: not-applicable
+- kafka_image: not-applicable
+- mode: not-applicable
+- topology: local workspace dependency graph
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: Cargo normal-edge dependency trees for default, tls, blocking, otlp, and all features plus no-deps metadata
+- workflow: scripts/check_v1_dependency_graph.py
+- fault: none
+- duration: not-recorded
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: 5 profiles
+- expected_errors: no forbidden librdkafka/C-client package names
+- observed_errors: none; 56/65/56/72/81 unique packages and no forbidden names
+- retry_count: not-applicable
+- duplicate_count: not-applicable
+- loss_count: not-applicable
+- latency: not-applicable
+- memory: not-applicable
+- final_resource_gauges: not-applicable
+- result: passed
+- artifact: docs/evidence/v1-19-dependency-audit.md
+- non_claims: not transitive unsafe/native review, not optional-TLS native-tool qualification, not license/advisory/yank review, not SBOM completeness, not dependency-drift gate, not published artifact evidence

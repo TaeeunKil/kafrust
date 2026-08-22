@@ -258,6 +258,14 @@ all five external feature profiles passed on both toolchains. This is still
 packaged-candidate evidence, not published-artifact or full dependency-audit
 completion.
 
+A local deterministic dependency-graph slice on exact HEAD `1f6c60d` recorded
+56/65/56/72/81 unique normal-edge packages for default/tls/blocking/otlp/all
+profiles and found no librdkafka, rdkafka-sys, kafka-sys, or rdkafka package.
+The record is in
+[`docs/evidence/v1-19-dependency-audit.md`](evidence/v1-19-dependency-audit.md);
+optional TLS native-tooling, advisory/license/yank, transitive-native review,
+SBOM, and drift gates remain explicitly open.
+
 ## V1-20 Execution Update (2026-08-22)
 
 V1-20 is `In progress`. The draft machine-readable matrix at
