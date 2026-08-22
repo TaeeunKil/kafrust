@@ -912,3 +912,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-24-api-freeze-manifest.json; docs/evidence/public-api-snapshot.json
 - non_claims: not a semver freeze, not RC or stable publication evidence, not proof that V1-20 through V1-23 exit gates passed
+
+## Q-LIVE-V123-001
+
+- date_utc: 2026-08-22
+- source_commit: 7a686b087a619928f7ab5d47b185b19074dc6195
+- client_version: 0.3.6 source checkout
+- protocol_version: 0.3.6 source checkout
+- work_status: Planned
+- evidence_level: Live current-source
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka:4.3.1
+- mode: KRaft
+- topology: isolated single-node reference smoke
+- security: PLAINTEXT
+- group_protocol: not-applicable
+- workload: dual-client baseline comparison through the migration reference fixture
+- workflow: Migration Reference Canary run 32552631034
+- fault: none injected in baseline smoke; forward/fault-observe/rollback stages remain open
+- duration: workflow 85 seconds; kafrust produce 0.044929s consume 0.020054s; rust-rdkafka produce 0.032994s consume 0.010600s
+- record_count: 1000 unique records per implementation
+- member_count: not-applicable
+- repetition_count: 1
+- expected_errors: zero comparison divergence and positive produce/consume durations
+- observed_errors: none; normalized comparison passed for both implementations
+- retry_count: not-applicable
+- duplicate_count: 0
+- loss_count: 0
+- latency: not an SLO measurement; stage durations retained in artifact
+- memory: not measured
+- final_resource_gauges: not measured
+- result: passed
+- artifact: GitHub Actions run 32552631034; kafrust-migration-canary-32552631034 artifact; migration manifest
+- non_claims: not a named service canary, not a forward/rollback run, not a million-record comparison, not published-artifact evidence, not production migration approval

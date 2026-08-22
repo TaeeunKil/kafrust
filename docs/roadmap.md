@@ -274,8 +274,12 @@ V1-22 performance manifest/checker names six representative profiles, five
 eight-hour repetitions, ten-second samples, and regression/RSS/retry limits.
 The V1-23 migration manifest/checker and manual reference-canary workflow now
 define isolated kafrust/rust-rdkafka smoke topics, a 1,000-record smoke gate,
-and the later million-record forward/rollback exit gate. Historical smoke runs
-are not promoted into those gates. V1-24
+and the later million-record forward/rollback exit gate. The current-source
+baseline smoke passed in [run 32552631034](https://github.com/TaeeunKil/kafrust/actions/runs/32552631034)
+after the comparison-only stable toolchain and libcurl runner fixes; the
+artifact records 1,000 records per implementation and zero normalized
+divergence. Historical smoke runs are not promoted into the long-duration or
+service-canary gates. V1-24
 through V1-26 also remain `Planned`: the API snapshot is only a freeze input,
 and no RC or `1.0.0` publication/tag exists. Protocol-first `cargo publish`
 remains disabled until the named release milestone and separate user approval.

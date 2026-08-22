@@ -64,6 +64,17 @@ reproducible 1,000-record smoke path with isolated topics plus a declared
 named service or approved reference environment is still absent when its
 dependency window opens.
 
+The baseline smoke path passed on current source commit `7a686b0` in
+[Migration Reference Canary run 32552631034](https://github.com/TaeeunKil/kafrust/actions/runs/32552631034):
+Kafka 4.3.1 KRaft, isolated topics, 1,000 records per implementation, and
+normalized kafrust/rust-rdkafka results with zero observed loss or divergence.
+Two earlier attempts are retained as diagnostic history: one exposed the
+Rust 1.81/edition2024 toolchain mismatch and the next exposed the runner's
+missing `libcurl` headers; the workflow now pins the external fixture to stable
+and installs that comparison-only build dependency. This is still only the
+baseline smoke rung; no named service, fault/cutover/rollback, or million-record
+exit criterion is closed.
+
 ## Failure And Lifecycle Contract
 
 - Adapter errors preserve typed Kafka/broker/unknown-outcome information.
