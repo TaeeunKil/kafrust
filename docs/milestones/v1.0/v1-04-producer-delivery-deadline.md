@@ -1,6 +1,6 @@
 # V1-04 Producer Delivery Deadline
 
-- Status: Planned
+- Status: In progress
 - Target evidence: Published artifact
 - Dependencies: V1-03
 
@@ -71,6 +71,21 @@ must either stabilize that value or change it with an explicit migration note.
   three-broker SASL_SSL/SCRAM-SHA-256 profiles with 1,000 intentionally mixed
   success/expiry records and exact per-record reconciliation.
 - Final `in_flight_requests` and `buffered_records` are zero.
+
+## Current Execution Record (2026-08-22)
+
+The public error contract now separates a total delivery deadline from a
+per-request transport timeout. `DeliveryDeadlineExceeded` carries the finite
+`DeliveryPhase` and a `possibly_transmitted` boolean; queue expiry is classified
+as pre-send while an immediate/batch outer deadline conservatively retires the
+producer and reports the Produce phase. Buffered expiry and producer retry
+classification have focused regressions, and the full public API snapshot was
+regenerated for the new root export. Local producer tests pass (including the
+deadline, poisoning, and no-retry cases).
+
+The published artifact profiles, clock-controlled coverage for every producer
+entry point, and exact CI/live evidence remain open. V1-03's live/golden gates
+also remain a prerequisite for closing this milestone.
 
 ## Exit Criteria
 

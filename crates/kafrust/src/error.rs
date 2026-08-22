@@ -3,6 +3,36 @@ use core::fmt;
 /// Result type returned by kafrust APIs.
 pub type Result<T> = core::result::Result<T, Error>;
 
+/// The phase in which a producer's total delivery deadline expired.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeliveryPhase {
+    /// The record was waiting in the bounded buffered-producer queue.
+    Queue,
+    /// Metadata was being resolved before a leader request.
+    Metadata,
+    /// Broker capabilities were being negotiated.
+    Capability,
+    /// A Produce request was being written or awaited.
+    Produce,
+    /// A retry or backoff was consuming the remaining delivery budget.
+    Retry,
+    /// The producer was flushing or closing accepted buffered records.
+    Shutdown,
+}
+
+impl fmt::Display for DeliveryPhase {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::Queue => "queue",
+            Self::Metadata => "metadata",
+            Self::Capability => "capability negotiation",
+            Self::Produce => "Produce",
+            Self::Retry => "retry/backoff",
+            Self::Shutdown => "shutdown",
+        })
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Kafka broker error categories used by kafrust retry and diagnostics code.
 pub enum BrokerErrorKind {
@@ -270,6 +300,15 @@ pub enum Error {
         /// Timeout in milliseconds.
         timeout_ms: u64,
     },
+    /// A producer's total delivery deadline expired.
+    DeliveryDeadlineExceeded {
+        /// Producer phase in which the total deadline was exhausted.
+        phase: DeliveryPhase,
+        /// Whether a request may already have reached the broker.
+        possibly_transmitted: bool,
+        /// Configured total delivery timeout in milliseconds.
+        timeout_ms: u64,
+    },
     /// A broker response frame exceeded the configured allocation limit.
     ResponseTooLarge {
         /// Response payload bytes declared by the broker.
@@ -471,6 +510,14 @@ impl fmt::Display for Error {
             Self::RequestTimedOut { timeout_ms } => {
                 write!(f, "Kafka request timed out after {timeout_ms}ms")
             }
+            Self::DeliveryDeadlineExceeded {
+                phase,
+                possibly_transmitted,
+                timeout_ms,
+            } => write!(
+                f,
+                "Kafka delivery deadline exceeded during {phase} after {timeout_ms}ms (possibly_transmitted={possibly_transmitted})"
+            ),
             Self::ResponseTooLarge { size, max } => {
                 write!(
                     f,
@@ -596,6 +643,7 @@ impl std::error::Error for Error {
             | Self::TransactionProducerDefunct
             | Self::Broker { .. }
             | Self::RequestTimedOut { .. }
+            | Self::DeliveryDeadlineExceeded { .. }
             | Self::ResponseTooLarge { .. }
             | Self::TlsConfig { .. }
             | Self::InvalidTlsServerName { .. }
@@ -640,7 +688,7 @@ impl From<kafrust_protocol::Error> for Error {
 
 #[cfg(test)]
 mod tests {
-    use super::{BrokerErrorKind, Error};
+    use super::{BrokerErrorKind, DeliveryPhase, Error};
 
     #[test]
     fn classifies_known_broker_error_codes() {
@@ -751,6 +799,21 @@ mod tests {
         assert_eq!(
             error.to_string(),
             "consumer group assignment was not delivered before the rebalance timeout of 5000ms"
+        );
+        assert!(std::error::Error::source(&error).is_none());
+    }
+
+    #[test]
+    fn displays_delivery_deadline_with_phase_and_transmission_risk() {
+        let error = Error::DeliveryDeadlineExceeded {
+            phase: DeliveryPhase::Produce,
+            possibly_transmitted: true,
+            timeout_ms: 20,
+        };
+
+        assert_eq!(
+            error.to_string(),
+            "Kafka delivery deadline exceeded during Produce after 20ms (possibly_transmitted=true)"
         );
         assert!(std::error::Error::source(&error).is_none());
     }

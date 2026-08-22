@@ -2012,6 +2012,7 @@ fn can_retry_fetch(error: &Error) -> bool {
         | Error::OAuthBearerTokenExpired
         | Error::TransactionOutcomeUnknown { .. }
         | Error::TransactionProducerDefunct
+        | Error::DeliveryDeadlineExceeded { .. }
         | Error::ResponseTooLarge { .. }
         | Error::TlsConfig { .. }
         | Error::InvalidTlsServerName { .. }
@@ -2878,6 +2879,11 @@ mod tests {
             context: "fetch orders-0@0".to_owned(),
         }));
         assert!(can_retry_fetch(&Error::RequestTimedOut { timeout_ms: 5 }));
+        assert!(!can_retry_fetch(&Error::DeliveryDeadlineExceeded {
+            phase: crate::DeliveryPhase::Produce,
+            possibly_transmitted: true,
+            timeout_ms: 5,
+        }));
         assert!(can_retry_fetch(&Error::Io(std::io::Error::new(
             std::io::ErrorKind::ConnectionReset,
             "reset",

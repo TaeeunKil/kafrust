@@ -285,12 +285,14 @@ Current implementation status:
   immediate or batch delivery, including metadata lookup, capability
   negotiation, Produce requests, retry attempts, and retry backoff. It defaults
   to 120 seconds, matching Kafka's usual `delivery.timeout.ms` default. A
-  deadline expiry returns `Error::RequestTimedOut` and retires the producer's
-  current metadata connection; a leader connection that was in flight is
-  dropped rather than returned to the idle cache. Buffered records use the
-  same deadline from enqueue through Produce; records that expire in the
-  bounded queue complete with a timeout without being sent. `linger_ms` still
-  controls batching latency independently.
+  deadline expiry returns `Error::DeliveryDeadlineExceeded`, whose finite
+  `DeliveryPhase` and `possibly_transmitted` flag distinguish replay-safe
+  pre-send queue expiry from an in-flight or ambiguous Produce attempt. The
+  producer retires its current metadata connection; a leader connection that
+  was in flight is dropped rather than returned to the idle cache. Buffered
+  records use the same deadline from enqueue through Produce; records that
+  expire in the bounded queue complete with a queue-phase deadline error
+  without being sent. `linger_ms` still controls batching latency independently.
 - `ProducerConfig::max_idle_broker_connections` bounds the idle leader/coordinator connections retained by this producer. It defaults to 64 and evicts the oldest idle entry in FIFO order; a value of zero is rejected during validation.
 - `ProducerConfig::security_protocol` stores the Kafka security protocol for producer broker connections. `Plaintext` is the default transport; TLS requires the non-default `tls` crate feature; `tls_server_name(name)` overrides the certificate validation name when the bootstrap host differs from the broker certificate; `tls_root_certificate_der(bytes)` adds DER-encoded root certificates while keeping platform roots enabled; `sasl_plain(username, password)`, `sasl_scram_sha_256(username, password)`, and `sasl_scram_sha_512(username, password)` provide SASL credentials for `SaslPlaintext` or `SaslTls`.
 - `ProducerConfig::max_retries` controls retry attempts for stale metadata, unknown topic-partition entries in cached metadata, missing leader or broker metadata, transient leader errors classified by `BrokerErrorKind`, request timeouts, and connection I/O failures.

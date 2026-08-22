@@ -28,7 +28,7 @@ use crate::broker_client_cache::SharedBrokerClientCacheHandle;
 use crate::client::Client;
 use crate::config::{ClientConfig, OAuthBearerTokenProvider, SecurityProtocol};
 use crate::consumer::ConsumerAssignment;
-use crate::error::{BrokerErrorKind, Error, Result};
+use crate::error::{BrokerErrorKind, DeliveryPhase, Error, Result};
 use crate::group::ConsumerGroupMetadata;
 use crate::metrics::ClientMetrics;
 use tokio::sync::{mpsc, oneshot};
@@ -1261,8 +1261,10 @@ async fn handle_buffered_send(
     request: BufferedProduceRequest,
 ) {
     if request.enqueued_at.elapsed() >= producer.config.delivery_timeout {
-        let _ = request.delivery_sender.send(Err(delivery_timeout_error(
+        let _ = request.delivery_sender.send(Err(delivery_deadline_error(
             producer.config.delivery_timeout,
+            DeliveryPhase::Queue,
+            false,
         )));
         return;
     }
@@ -1344,9 +1346,11 @@ fn expire_buffered_deliveries(
     let mut remaining = Vec::with_capacity(pending.len());
     for request in pending.drain(..) {
         if now.duration_since(request.enqueued_at) >= delivery_timeout {
-            let _ = request
-                .delivery_sender
-                .send(Err(delivery_timeout_error(delivery_timeout)));
+            let _ = request.delivery_sender.send(Err(delivery_deadline_error(
+                delivery_timeout,
+                DeliveryPhase::Queue,
+                false,
+            )));
         } else {
             remaining.push(request);
         }
@@ -1651,6 +1655,15 @@ fn delivery_error_from_request_error(error: &Error) -> Error {
         Error::RequestTimedOut { timeout_ms } => Error::RequestTimedOut {
             timeout_ms: *timeout_ms,
         },
+        Error::DeliveryDeadlineExceeded {
+            phase,
+            possibly_transmitted,
+            timeout_ms,
+        } => Error::DeliveryDeadlineExceeded {
+            phase: *phase,
+            possibly_transmitted: *possibly_transmitted,
+            timeout_ms: *timeout_ms,
+        },
         Error::ResponseTooLarge { size, max } => Error::ResponseTooLarge {
             size: *size,
             max: *max,
@@ -1931,8 +1944,13 @@ impl Producer {
         match time::timeout(delivery_timeout, self.send_inner(record)).await {
             Ok(result) => result,
             Err(_) => {
+                let possibly_transmitted = self.client.last_request_may_have_been_transmitted();
                 self.poison_after_delivery_timeout();
-                Err(delivery_timeout_error(delivery_timeout))
+                Err(delivery_deadline_error(
+                    delivery_timeout,
+                    DeliveryPhase::Produce,
+                    possibly_transmitted,
+                ))
             }
         }
     }
@@ -2062,8 +2080,13 @@ impl Producer {
         match time::timeout(delivery_timeout, self.send_batch_report_inner(records)).await {
             Ok(result) => result,
             Err(_) => {
+                let possibly_transmitted = self.client.last_request_may_have_been_transmitted();
                 self.poison_after_delivery_timeout();
-                Err(delivery_timeout_error(delivery_timeout))
+                Err(delivery_deadline_error(
+                    delivery_timeout,
+                    DeliveryPhase::Produce,
+                    possibly_transmitted,
+                ))
             }
         }
     }
@@ -5197,6 +5220,7 @@ fn can_retry_send(error: &Error) -> bool {
         | Error::OAuthBearerTokenExpired
         | Error::TransactionOutcomeUnknown { .. }
         | Error::TransactionProducerDefunct
+        | Error::DeliveryDeadlineExceeded { .. }
         | Error::ResponseTooLarge { .. }
         | Error::TlsConfig { .. }
         | Error::InvalidTlsServerName { .. }
@@ -5222,8 +5246,14 @@ fn can_retry_send(error: &Error) -> bool {
     }
 }
 
-fn delivery_timeout_error(timeout: Duration) -> Error {
-    Error::RequestTimedOut {
+fn delivery_deadline_error(
+    timeout: Duration,
+    phase: DeliveryPhase,
+    possibly_transmitted: bool,
+) -> Error {
+    Error::DeliveryDeadlineExceeded {
+        phase,
+        possibly_transmitted,
         timeout_ms: u64::try_from(timeout.as_millis()).unwrap_or(u64::MAX),
     }
 }
@@ -5277,7 +5307,7 @@ mod tests {
     };
     use crate::broker_client_cache::SharedBrokerClientCache;
     use crate::consumer::ConsumerAssignment;
-    use crate::{BrokerErrorKind, Client, ClientMetrics, Error};
+    use crate::{BrokerErrorKind, Client, ClientMetrics, DeliveryPhase, Error};
     use kafrust_protocol::api::api_versions::{ApiKeyVersion, ApiVersionsResponseV0};
     use kafrust_protocol::api::metadata::{
         BrokerMetadata, MetadataResponseV1, PartitionMetadata, TopicMetadata,
@@ -6951,7 +6981,11 @@ mod tests {
         assert!(first_enqueued_at.is_none());
         assert!(matches!(
             delivery_receiver.await.unwrap(),
-            Err(Error::RequestTimedOut { timeout_ms: 20 })
+            Err(Error::DeliveryDeadlineExceeded {
+                phase: DeliveryPhase::Queue,
+                possibly_transmitted: false,
+                timeout_ms: 20,
+            })
         ));
     }
 
@@ -7691,6 +7725,11 @@ mod tests {
             context: "produce orders-0".to_owned(),
         }));
         assert!(can_retry_send(&Error::RequestTimedOut { timeout_ms: 5 }));
+        assert!(!can_retry_send(&Error::DeliveryDeadlineExceeded {
+            phase: DeliveryPhase::Produce,
+            possibly_transmitted: true,
+            timeout_ms: 5,
+        }));
         assert!(can_retry_send(&Error::Io(std::io::Error::new(
             std::io::ErrorKind::ConnectionReset,
             "reset",
@@ -7895,7 +7934,14 @@ mod tests {
             .unwrap_err();
 
         assert!(started.elapsed() < Duration::from_millis(150));
-        assert!(matches!(error, Error::RequestTimedOut { timeout_ms: 20 }));
+        assert!(matches!(
+            error,
+            Error::DeliveryDeadlineExceeded {
+                phase: DeliveryPhase::Produce,
+                timeout_ms: 20,
+                ..
+            }
+        ));
         assert!(producer.client.is_connection_poisoned());
         leader_server.await.unwrap();
     }

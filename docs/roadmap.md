@@ -75,7 +75,21 @@ Metadata, ApiVersions, and OffsetForLeaderEpoch. Its checker cross-validates
 the local API types and keys against Kafka 4.3.1 metadata and keeps transactional
 Produce selection owned by V1-06; the producer now enforces the V1-06 TV1 cap
 at Produce v11 for transactional sends. Golden/malformed fixture expansion and
-floor / pinned-current live version logs remain open.
+floor / pinned-current live version logs remain open. The cap commit passed
+CI run [32547821393](https://github.com/TaeeunKil/kafrust/actions/runs/32547821393),
+and the malformed-boundary increment passed CI run
+[32548081944](https://github.com/TaeeunKil/kafrust/actions/runs/32548081944).
+
+## V1-04 Execution Update (2026-08-22)
+
+V1-04 is `In progress`. Producer delivery expiry now has a typed
+`DeliveryDeadlineExceeded` error with a finite phase and explicit
+`possibly_transmitted` flag, while request timeouts remain a separate transport
+error. Queue expiry is replay-safe and sends zero Produce frames; immediate and
+batch deadline expiry poisons the producer path. Focused local deadline,
+poisoning, and retry-classification tests pass, and the public API snapshot was
+regenerated for the new export. Published mixed-outcome profiles and the full
+clock-controlled matrix remain open.
 
 ## Current Release Qualification
 

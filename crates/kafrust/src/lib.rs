@@ -113,7 +113,7 @@ pub use consumer::{
     ConsumerRecordHeader, IsolationLevel, LeaderEpochOffset, OffsetResetPolicy,
     PartitionWatermarks,
 };
-pub use error::{BrokerErrorKind, Error, Result};
+pub use error::{BrokerErrorKind, DeliveryPhase, Error, Result};
 pub use group::{
     ConsumerGroup, ConsumerGroupAssignmentStrategy, ConsumerGroupCommitWorker, ConsumerGroupConfig,
     ConsumerGroupHeartbeat, ConsumerGroupMetadata, ConsumerGroupProtocol, RebalanceEvent,

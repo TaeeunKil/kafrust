@@ -114,7 +114,11 @@ non-transactional selection retains the v13/v12/v11 ladder.
 `crates/kafrust-protocol/tests/data_plane_malformed.rs` now rejects truncated
 responses and invalid negative collection lengths across all six data-plane
 families. The manifest checker requires both named regression tests to remain
-present in CI.
+present in CI. The malformed-fixture commit `c6fb619` passed the stable and
+Rust 1.81.0 matrix in [CI run 32548081944](https://github.com/TaeeunKil/kafrust/actions/runs/32548081944).
+
+The transactional Produce cap implementation in `405bbac` also passed the
+same matrix in [CI run 32547821393](https://github.com/TaeeunKil/kafrust/actions/runs/32547821393).
 
 This is the deterministic inventory gate only. Official byte fixtures,
 malformed-boundary expansion, floor/pinned live version logs, and the final
