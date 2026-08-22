@@ -57,13 +57,24 @@ combination.
 
 ## V1-02 Execution Update (2026-08-22)
 
-V1-02 is `In progress`. The all-features rustdoc inventory now records 2,366
+V1-02 is `Done`. The all-features rustdoc inventory now records 2,366
 public symbols across twelve modules and 286 root exports in
 [`docs/evidence/public-api-snapshot.json`](evidence/public-api-snapshot.json).
 Each symbol is classified as `stable`, `expert`, `experimental`, or
 `excluded`, assigned an owning milestone, and protected by a CI root-surface
-and public-declaration digest check. This is a classification baseline only;
-V1-24 still owns the final semver freeze.
+and public-declaration digest check. Commit `1ea206d` passed both toolchains in
+[CI run 32546683281](https://github.com/TaeeunKil/kafrust/actions/runs/32546683281).
+This is a classification baseline only; V1-24 still owns the final semver
+freeze.
+
+## V1-03 Execution Update (2026-08-22)
+
+V1-03 is `In progress`. The reviewed data-plane manifest now names selected,
+fallback, low-level, and header versions for Produce, Fetch, ListOffsets,
+Metadata, ApiVersions, and OffsetForLeaderEpoch. Its checker cross-validates
+the local API types and keys against Kafka 4.3.1 metadata and keeps transactional
+Produce selection owned by V1-06. Golden/malformed fixture expansion and floor /
+pinned-current live version logs remain open.
 
 ## Current Release Qualification
 

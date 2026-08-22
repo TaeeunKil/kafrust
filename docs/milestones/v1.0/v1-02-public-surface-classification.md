@@ -1,6 +1,6 @@
 # V1-02 Public Surface Classification
 
-- Status: In progress
+- Status: Done
 - Target evidence: CI
 - Dependencies: V1-01
 
@@ -50,6 +50,14 @@ profiles.
 This record is a classification baseline only. It does not freeze the API,
 claim the experimental surfaces, or authorize removal of any public path;
 V1-24 owns the final semver review.
+
+## Completion Record (2026-08-22)
+
+Commit `1ea206d` passed the exact Rust 1.81.0 and stable CI matrix in
+[run 32546683281](https://github.com/TaeeunKil/kafrust/actions/runs/32546683281).
+The snapshot checker and all five public-surface feature profiles passed on
+both toolchains. V1-02 is complete as a classification gate; behavioral
+qualification and the final semver freeze remain owned by later milestones.
 
 ## Work Packages
 

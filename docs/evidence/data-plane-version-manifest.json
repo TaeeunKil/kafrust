@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "broker_floor": "3.7.2",
+  "pinned_current": "4.3.1",
+  "official_metadata": "docs/apache-kafka-4.3.1-schema-metadata.json",
+  "official_source_url_template": "https://raw.githubusercontent.com/apache/kafka/4.3.1/clients/src/main/resources/common/message/{name}.json",
+  "apis": [
+    {
+      "name": "Produce",
+      "api_key": 0,
+      "module": "produce",
+      "selected_high_level": [3, 7, 9, 11, 12, 13],
+      "legacy_or_low_level": [2],
+      "request_header": {"non_flexible": 1, "flexible": 2},
+      "response_header": {"non_flexible": 0, "flexible": 1},
+      "source_types": ["ProduceRequestV2", "ProduceRequestV3", "ProduceRequestV7", "ProduceRequestV9", "ProduceRequestV11", "ProduceRequestV12", "ProduceRequestV13"],
+      "transaction_version_owner": "V1-06",
+      "non_claims": ["Produce v2 is not a pinned-current Kafka 4.3.1 selection", "transactional selection is owned by V1-06"]
+    },
+    {
+      "name": "Fetch",
+      "api_key": 1,
+      "module": "fetch",
+      "selected_high_level": [4, 11, 12, 13],
+      "legacy_or_low_level": [2, 14, 15, 16, 17, 18],
+      "request_header": {"non_flexible": 1, "flexible": 2},
+      "response_header": {"non_flexible": 0, "flexible": 1},
+      "source_types": ["FetchRequestV2", "FetchRequestV4", "FetchRequestV11", "FetchRequestV12", "FetchRequestV13", "FetchRequestV14", "FetchRequestV15", "FetchRequestV16", "FetchRequestV17", "FetchRequestV18"],
+      "non_claims": ["Fetch v14-v18 are low-level expert paths unless a later milestone promotes them"]
+    },
+    {
+      "name": "ListOffsets",
+      "api_key": 2,
+      "module": "list_offsets",
+      "selected_high_level": [1],
+      "legacy_or_low_level": [],
+      "request_header": {"non_flexible": 1},
+      "response_header": {"non_flexible": 0},
+      "source_types": ["ListOffsetsRequestV1"]
+    },
+    {
+      "name": "Metadata",
+      "api_key": 3,
+      "module": "metadata",
+      "selected_high_level": [1, 12],
+      "legacy_or_low_level": [],
+      "request_header": {"non_flexible": 1, "flexible": 2},
+      "response_header": {"non_flexible": 0, "flexible": 1},
+      "source_types": ["MetadataRequestV1", "MetadataRequestV12"]
+    },
+    {
+      "name": "ApiVersions",
+      "api_key": 18,
+      "module": "api_versions",
+      "selected_high_level": [0, 3, 4],
+      "legacy_or_low_level": [5],
+      "request_header": {"non_flexible": 1, "flexible": 2},
+      "response_header": {"non_flexible": 0, "flexible": 1},
+      "source_types": ["ApiVersionsRequestV0", "ApiVersionsRequestV3", "ApiVersionsRequestV4", "ApiVersionsRequestV5"],
+      "non_claims": ["ApiVersions v5 is an opt-in expert path and is not a Kafka 4.3.1 live selection"]
+    },
+    {
+      "name": "OffsetForLeaderEpoch",
+      "api_key": 23,
+      "module": "offset_for_leader_epoch",
+      "selected_high_level": [3],
+      "legacy_or_low_level": [],
+      "request_header": {"non_flexible": 1},
+      "response_header": {"non_flexible": 0},
+      "source_types": ["OffsetForLeaderEpochRequestV3"]
+    }
+  ]
+}

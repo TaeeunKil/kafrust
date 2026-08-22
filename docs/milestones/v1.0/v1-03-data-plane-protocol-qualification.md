@@ -1,6 +1,6 @@
 # V1-03 Data-Plane Protocol Qualification
 
-- Status: Planned
+- Status: In progress
 - Target evidence: Live current-source
 - Dependencies: V1-02
 
@@ -92,6 +92,24 @@ Live:
 
 Run both protocol audit scripts, their checker tests, and all required local
 Rust validation.
+
+## Current Execution Record (2026-08-22)
+
+The reviewed selection boundary is recorded in
+[`docs/evidence/data-plane-version-manifest.json`](../../evidence/data-plane-version-manifest.json).
+It names six data-plane API families, selected and low-level versions, request
+and response header versions, local protocol types, and the V1-06 transaction
+ownership boundary. `scripts/check_data_plane_manifest.py` checks those entries
+against the Kafka 4.3.1 schema metadata snapshot, local API keys/types, and
+client response-header paths; for the four data-plane schemas not yet in the
+offline twelve-schema audit, it records the pinned Apache 4.3.1 raw-schema
+values and URL template explicitly. CI runs it alongside the existing protocol
+and Apache schema gates.
+
+This is the deterministic inventory gate only. Official byte fixtures,
+malformed-boundary expansion, floor/pinned live version logs, and the final
+transaction-selection regression remain open and keep the milestone `In
+progress`.
 
 ## Exit Criteria
 
