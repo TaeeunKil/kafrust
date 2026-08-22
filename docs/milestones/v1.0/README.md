@@ -68,6 +68,10 @@ V1-21 through V1-26 have preparation records that preserve the long-soak,
 SLO, migration, freeze, RC, and stable-publication prerequisites without
 starting or authorizing a registry upload. These are implementation and
 qualification increments, not published-artifact completion claims.
+The V1-25 and V1-26 release manifests and checkers now lock the coordinated
+version identities, protocol-first publication order, exact RC dependency,
+metadata-only stable diff, and explicit authorization boundary; both remain
+preparation inputs until their external evidence exists.
 
 ## Status And Evidence
 

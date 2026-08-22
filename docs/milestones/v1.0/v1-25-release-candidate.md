@@ -61,6 +61,14 @@ boundary are recorded in [`docs/release.md`](../../release.md); an RC cannot
 start until V1-24 freezes the API and the complete V1-20 through V1-23 evidence
 manifest is accepted.
 
+The execution input is now machine-checked by
+[`v1-25-release-candidate-manifest.json`](../../evidence/v1-25-release-candidate-manifest.json)
+and `scripts/check_v1_rc_manifest.py`. It locks the coordinated RC identity,
+exact protocol prerelease pin, protocol-first sequence, 24-hour/60-minute
+campaign requirements, and explicit publication-authorization boundary. A
+passing checker is preparation evidence only; it does not create or publish an
+RC.
+
 ## Failure And Lifecycle Contract
 
 - A failed package, matrix, fuzz, soak, SLO, security, or canary gate blocks RC

@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "status": "preparation",
+  "date_utc": "2026-08-22",
+  "candidate": {
+    "client_version": "1.0.0-rc.1",
+    "protocol_version": "1.0.0-rc.1"
+  },
+  "freeze_input": "docs/evidence/v1-24-api-freeze-manifest.json",
+  "dependencies": ["V1-20", "V1-21", "V1-22", "V1-23", "V1-24"],
+  "publication_sequence": [
+    "protocol-package-dry-run",
+    "protocol-publish-after-explicit-authorization",
+    "wait-for-fresh-registry-resolution",
+    "external-rust-1-81-and-stable-protocol-build",
+    "client-package-dry-run-against-exact-protocol-rc",
+    "client-publish-after-explicit-authorization",
+    "docs-rs-and-external-feature-verification",
+    "github-prerelease-after-artifact-verification"
+  ],
+  "registry_policy": {
+    "protocol_first": true,
+    "client_exact_protocol_dependency": "=1.0.0-rc.1",
+    "path_or_patch_dependencies": false,
+    "publication_requires_explicit_authorization": true,
+    "partial_protocol_publication_is_not_reused": true
+  },
+  "campaign_requirements": {
+    "fault_soak_hours": 24,
+    "fuzz_minutes_per_target": 60,
+    "performance_repetitions": 5,
+    "migration_canary": "forward-fault-observe-rollback-forward"
+  },
+  "required_evidence": [
+    "exact-package-hashes",
+    "rust-1-81-and-stable-external-lockfiles",
+    "v1-20-matrix-rerun",
+    "v1-21-fault-and-resource-gates",
+    "v1-22-slo-gates",
+    "v1-23-service-canary-and-rollback",
+    "docs-rs-pages",
+    "github-prerelease"
+  ],
+  "non_claims": [
+    "preparation is not RC publication",
+    "no registry upload, tag, or GitHub prerelease is authorized by this manifest",
+    "historical pre-RC artifacts cannot satisfy RC evidence"
+  ]
+}

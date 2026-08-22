@@ -84,6 +84,12 @@ jobs:
       - name: Check V1 API freeze manifest
         run: python scripts/check_v1_api_freeze_manifest.py
 
+      - name: Check V1 release-candidate manifest
+        run: python scripts/check_v1_rc_manifest.py
+
+      - name: Check V1 stable-release manifest
+        run: python scripts/check_v1_release_manifest.py
+
       - name: Compile public surface feature profiles
         run: |
           cargo test -p kafrust --test public_surface --no-default-features

@@ -59,6 +59,13 @@ Rust 1.81/stable external resolution, docs.rs and critical smoke verification,
 then the named post-publish canary and rollback. Earlier `0.3.5` evidence is
 retained as historical context and cannot close this release gate.
 
+The stable execution input is now machine-checked by
+[`v1-26-release-manifest.json`](../../evidence/v1-26-release-manifest.json)
+and `scripts/check_v1_release_manifest.py`. It limits the RC-to-stable diff to
+release metadata, requires protocol-first publication and artifact verification
+before tag/release, and keeps the post-publish canary/rollback gate explicit.
+The preparation checker does not publish, tag, or mark the release complete.
+
 ## Failure And Lifecycle Contract
 
 - Publication is irreversible; an invalid artifact is yanked/advised and

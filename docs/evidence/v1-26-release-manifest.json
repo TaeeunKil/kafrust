@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "status": "preparation",
+  "date_utc": "2026-08-22",
+  "release": {
+    "client_version": "1.0.0",
+    "protocol_version": "1.0.0"
+  },
+  "rc_input": "docs/evidence/v1-25-release-candidate-manifest.json",
+  "dependencies": ["V1-25"],
+  "allowed_diff_from_rc": [
+    "package-version-identity",
+    "release-notes",
+    "support-and-migration-documentation",
+    "generated-checksums-and-sbom"
+  ],
+  "publication_sequence": [
+    "protocol-package-dry-run",
+    "protocol-publish-after-explicit-authorization",
+    "wait-for-fresh-registry-resolution",
+    "external-rust-1-81-and-stable-protocol-build",
+    "client-package-dry-run-against-accepted-protocol",
+    "client-publish-after-explicit-authorization",
+    "docs-rs-and-critical-smoke-verification",
+    "annotated-tag-after-artifact-verification",
+    "github-release-after-tag-verification",
+    "post-publish-service-canary-and-rollback"
+  ],
+  "registry_policy": {
+    "protocol_first": true,
+    "stable_dependency_policy": "the-v1-24-accepted-policy",
+    "path_or_patch_dependencies": false,
+    "publication_requires_explicit_authorization": true,
+    "source_behavior_change_requires_new_rc": true
+  },
+  "required_evidence": [
+    "stable-package-hashes-and-contents",
+    "v1-19-tarball-matrix-and-sbom",
+    "v1-20-full-matrix",
+    "critical-published-smoke",
+    "docs-rs-pages",
+    "annotated-tag-and-github-release",
+    "post-publish-service-canary-and-rollback",
+    "support-policy-and-known-limits"
+  ],
+  "non_claims": [
+    "preparation is not stable publication",
+    "no registry upload, tag, or GitHub release is authorized by this manifest",
+    "a successful RC does not waive the stable artifact and canary gates"
+  ]
+}

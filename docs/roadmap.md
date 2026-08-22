@@ -283,6 +283,10 @@ service-canary gates. V1-24
 through V1-26 also remain `Planned`: the API snapshot is only a freeze input,
 and no RC or `1.0.0` publication/tag exists. Protocol-first `cargo publish`
 remains disabled until the named release milestone and separate user approval.
+The V1-25 RC and V1-26 stable-release manifests/checkers now enforce the exact
+version identities, dependency/publication order, metadata-only RC-to-stable
+diff, and post-publish canary/tag evidence requirements without performing any
+registry or GitHub release action.
 
 ## Current Release Qualification
 

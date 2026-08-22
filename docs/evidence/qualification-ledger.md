@@ -978,3 +978,69 @@ unqualified relative artifact label.
 - result: passed
 - artifact: CI run 32552742656 at source commit fba572767e1d55668f711d53dd7665a4ca1bb63e
 - non_claims: not V1-24 semver freeze, not RC or stable publication, not long-duration/live broker/SLO evidence
+
+## Q-LOCAL-V125-001
+
+- date_utc: 2026-08-22
+- source_commit: 5f165f49c6ef949c115b044bec927b5ab5290d6c
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: Planned
+- evidence_level: Local deterministic
+- kafka_version: not-applicable
+- kafka_image: not-applicable
+- mode: not-applicable
+- topology: release-candidate preparation boundary
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: coordinated RC identity, exact protocol pin, publication sequence, and campaign requirements
+- workflow: scripts/check_v1_rc_manifest.py
+- fault: changed RC identity, non-exact protocol dependency, reordered publication, or missing campaign gate
+- duration: not-applicable
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: 1
+- expected_errors: invalid RC preparation rejected before registry interaction
+- observed_errors: 1.0.0-rc.1 pair, protocol-first sequence, 24-hour fault, 60-minute fuzz, and explicit authorization accepted
+- retry_count: not-applicable
+- duplicate_count: not-applicable
+- loss_count: not-applicable
+- latency: not-applicable
+- memory: not-applicable
+- final_resource_gauges: not-applicable
+- result: passed
+- artifact: docs/evidence/v1-25-release-candidate-manifest.json
+- non_claims: not RC publication, not registry resolution, not RC service-canary evidence
+
+## Q-LOCAL-V126-001
+
+- date_utc: 2026-08-22
+- source_commit: 5f165f49c6ef949c115b044bec927b5ab5290d6c
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: Planned
+- evidence_level: Local deterministic
+- kafka_version: not-applicable
+- kafka_image: not-applicable
+- mode: not-applicable
+- topology: stable-release preparation boundary
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: RC-to-stable diff policy, protocol-first stable sequence, artifact verification, tag/release, and post-publish canary requirements
+- workflow: scripts/check_v1_release_manifest.py
+- fault: behavior change after RC, non-protocol-first publication, premature tag/release, or missing rollback evidence
+- duration: not-applicable
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: 1
+- expected_errors: invalid stable preparation rejected before registry or tag interaction
+- observed_errors: metadata-only diff, explicit authorization, artifact-before-tag, and post-publish canary gates accepted
+- retry_count: not-applicable
+- duplicate_count: not-applicable
+- loss_count: not-applicable
+- latency: not-applicable
+- memory: not-applicable
+- final_resource_gauges: not-applicable
+- result: passed
+- artifact: docs/evidence/v1-26-release-manifest.json
+- non_claims: not stable publication, not docs.rs or crates.io verification, not tagged release, not post-publish canary evidence
