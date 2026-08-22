@@ -1,0 +1,123 @@
+{
+  "schema_version": 1,
+  "status": "draft",
+  "date_utc": "2026-08-22",
+  "contract": "docs/milestones/v1.0/v1-01-support-contract-and-evidence-ledger.md",
+  "candidate_line": "0.3.6",
+  "artifact_policy": {
+    "source_and_published_runs_are_separate": true,
+    "protocol_first_publication": true,
+    "exact_external_lockfiles": true,
+    "path_or_patch_dependencies": false,
+    "publication_requires_explicit_authorization": true
+  },
+  "broker_lines": ["3.7.2", "3.8.1", "3.9.1", "4.0.0", "4.3.1"],
+  "profiles": [
+    {
+      "id": "floor-plaintext-core-single",
+      "broker": "3.7.2",
+      "topology": "single-node",
+      "security": "PLAINTEXT",
+      "group_protocol": "classic",
+      "feature": "default",
+      "workloads": ["produce", "fetch", "direct-consumer", "classic-group", "admin"],
+      "evidence_required": ["Live current-source", "Published artifact"]
+    },
+    {
+      "id": "continuity-plaintext-core-3-8-1",
+      "broker": "3.8.1",
+      "topology": "single-node",
+      "security": "PLAINTEXT",
+      "group_protocol": "classic",
+      "feature": "default",
+      "workloads": ["produce", "fetch", "direct-consumer", "admin"],
+      "evidence_required": ["Live current-source", "Published artifact"]
+    },
+    {
+      "id": "continuity-plaintext-core-3-9-1",
+      "broker": "3.9.1",
+      "topology": "single-node",
+      "security": "PLAINTEXT",
+      "group_protocol": "classic",
+      "feature": "default",
+      "workloads": ["produce", "fetch", "direct-consumer", "admin"],
+      "evidence_required": ["Live current-source", "Published artifact"]
+    },
+    {
+      "id": "pinned-plaintext-modern-4-3-1",
+      "broker": "4.3.1",
+      "topology": "three-broker",
+      "security": "PLAINTEXT",
+      "group_protocol": "KIP-848",
+      "feature": "default",
+      "workloads": ["produce", "fetch", "KIP-848", "Share", "Streams", "admin"],
+      "evidence_required": ["Live current-source", "Published artifact"]
+    },
+    {
+      "id": "floor-secure-scram-single",
+      "broker": "3.7.2",
+      "topology": "single-node",
+      "security": "SASL_SSL/SCRAM-SHA-256",
+      "group_protocol": "classic",
+      "feature": "tls",
+      "workloads": ["produce", "fetch", "classic-group", "transaction"],
+      "evidence_required": ["Live current-source", "Published artifact"]
+    },
+    {
+      "id": "pinned-secure-scram-failover",
+      "broker": "4.3.1",
+      "topology": "three-broker",
+      "security": "SASL_SSL/SCRAM-SHA-256",
+      "group_protocol": "KIP-848",
+      "feature": "tls",
+      "workloads": ["produce", "idempotent", "transaction", "group", "leader-failover"],
+      "evidence_required": ["Live current-source", "Published artifact"]
+    },
+    {
+      "id": "floor-mtls-single",
+      "broker": "3.7.2",
+      "topology": "single-node",
+      "security": "mTLS",
+      "group_protocol": "not-applicable",
+      "feature": "tls",
+      "workloads": ["authentication", "produce", "fetch"],
+      "evidence_required": ["Live current-source", "Published artifact"]
+    },
+    {
+      "id": "pinned-oauth-single",
+      "broker": "4.3.1",
+      "topology": "single-node",
+      "security": "OAUTHBEARER",
+      "group_protocol": "not-applicable",
+      "feature": "tls",
+      "workloads": ["authentication", "reauthentication", "produce", "fetch"],
+      "evidence_required": ["Live current-source", "Published artifact"]
+    },
+    {
+      "id": "pinned-admin-controller",
+      "broker": "4.3.1",
+      "topology": "three-broker-controller-listener",
+      "security": "SASL_SSL/SCRAM-SHA-256",
+      "group_protocol": "not-applicable",
+      "feature": "tls",
+      "workloads": ["controller-admin", "authorization", "mutation-ambiguity"],
+      "evidence_required": ["Live current-source", "Published artifact"]
+    },
+    {
+      "id": "package-codec-feature-matrix",
+      "broker": "not-applicable",
+      "topology": "external-project",
+      "security": "not-applicable",
+      "group_protocol": "not-applicable",
+      "feature": "all",
+      "workloads": ["gzip", "snappy", "lz4", "zstd", "rust-1-81", "stable"],
+      "evidence_required": ["Packaged candidate", "Published artifact"]
+    }
+  ],
+  "open_gates": [
+    "V1-15 through V1-19 target evidence",
+    "fresh registry lockfiles for the exact coordinated pair",
+    "published matrix rerun after explicit publication authorization",
+    "Share, Streams, telemetry, fault, and SLO profiles owned by later milestones"
+  ]
+}

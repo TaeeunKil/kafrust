@@ -1,6 +1,6 @@
 # V1-20 Published Compatibility Matrix
 
-- Status: Planned
+- Status: In progress
 - Target evidence: Published artifact
 - Dependencies: V1-03-V1-19
 
@@ -59,6 +59,23 @@ Minimum matrix unless V1-01 changes it:
 6. Run current-source and published matrices separately on the same source
    commit; retain results and reconcile differences.
 7. Update compatibility claims only after all required rows pass.
+
+## Current Execution Record (2026-08-22)
+
+V1-20 is now `In progress`. The first machine-readable matrix draft is
+[`v1-20-compatibility-matrix.json`](../../evidence/v1-20-compatibility-matrix.json)
+and is checked by `scripts/check_v1_compatibility_matrix.py` in CI. It preserves
+the V1-01 broker order (`3.7.2`, `3.8.1`, `3.9.1`, `4.0.0`, `4.3.1`), names
+single-node and three-broker/controller-listener profiles, separates security
+and feature profiles, and requires protocol-first exact registry resolution
+without path or patch dependencies.
+
+The checker currently validates ten non-Cartesian draft profiles and the
+mandatory floor, pinned secured-failover, and package-codec rows. It does not
+claim that any draft row has passed: fresh external lockfiles, exact published
+`0.3.6` artifacts, complete V1-15~V1-19 evidence, and the later fault/SLO
+profiles must be attached before the matrix can be frozen or used as release
+evidence. Publication remains separately authorization-gated.
 
 ## Failure And Lifecycle Contract
 

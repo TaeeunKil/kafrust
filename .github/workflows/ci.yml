@@ -54,6 +54,9 @@ jobs:
       - name: Check data-plane version manifest
         run: python scripts/check_data_plane_manifest.py
 
+      - name: Check v1 compatibility matrix manifest
+        run: python scripts/check_v1_compatibility_matrix.py
+
       - name: Test protocol audit scripts
         run: python -m unittest scripts/test_check_apache_schema_versions.py
 

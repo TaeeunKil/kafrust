@@ -242,6 +242,17 @@ forbid unsafe code. Feature-specific dependency reports, optional-TLS native
 tool detection, license/advisory/yank review, reviewed transitive-native
 ownership, reproducible package-pair SBOMs, and drift gates remain open.
 
+## V1-20 Execution Update (2026-08-22)
+
+V1-20 is `In progress`. The draft machine-readable matrix at
+[`docs/evidence/v1-20-compatibility-matrix.json`](evidence/v1-20-compatibility-matrix.json)
+now preserves the accepted V1-01 broker order, pairwise topology/security
+profiles, feature/toolchain package rows, and the protocol-first exact-registry
+policy. `scripts/check_v1_compatibility_matrix.py` validates ten draft profiles
+and is wired into CI. No row is marked passed yet: fresh published `0.3.6`
+lockfiles and the inherited V1-15~V1-19 artifact gates are required before the
+matrix can be frozen.
+
 ## Current Release Qualification
 
 `0.3.5` is now published on crates.io in protocol-first order. The fresh

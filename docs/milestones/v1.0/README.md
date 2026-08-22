@@ -34,7 +34,7 @@ be published from the current same-version package state.
 
 ## Current Execution
 
-As of 2026-08-22, V1-00, V1-01, and V1-02 are `Done`; V1-03 through V1-19
+As of 2026-08-22, V1-00, V1-01, and V1-02 are `Done`; V1-03 through V1-20
 are `In progress`. The coordinated `0.3.6` candidate
 has passed the local package-only boundary verifier across five feature
 profiles on Rust 1.81.0. The regression against published protocol `0.3.5`
@@ -62,9 +62,10 @@ and ambiguity increments. V1-12 records coordinator/leader routing, V1-13
 records security Admin handling, and V1-14 records advanced-surface
 classification. V1-15 records the current owner/task/session audit, V1-16 the
 credential and redaction slice, V1-17 the bounded metrics/telemetry contract,
-V1-18 the decoder/resource-limit and fuzz baseline, and V1-19 the staged
-pure-Rust package boundary. These are implementation and qualification
-increments, not published-artifact completion claims.
+V1-18 the decoder/resource-limit and fuzz baseline, V1-19 the staged
+pure-Rust package boundary, and V1-20 the checked draft compatibility matrix.
+These are implementation and qualification increments, not published-artifact
+completion claims.
 
 ## Status And Evidence
 
