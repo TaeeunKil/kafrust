@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "status": "preparation",
+  "date_utc": "2026-08-22",
+  "artifact_policy": {
+    "source_and_published_runs_are_separate": true,
+    "exact_published_pair_required": true,
+    "segment_identity_must_be_continuous": true
+  },
+  "campaigns": [
+    {
+      "id": "pinned-secured-six-hour-1",
+      "broker": "4.3.1",
+      "topology": "three-broker",
+      "security": "SASL_SSL/SCRAM-SHA-256",
+      "duration_seconds": 21600,
+      "faults": ["leader-loss", "coordinator-loss", "combined-loss", "simultaneous-two-broker-loss"],
+      "artifact_level": "Published artifact"
+    },
+    {
+      "id": "pinned-secured-six-hour-2",
+      "broker": "4.3.1",
+      "topology": "three-broker",
+      "security": "SASL_SSL/SCRAM-SHA-256",
+      "duration_seconds": 21600,
+      "faults": ["leader-loss", "coordinator-loss", "combined-loss", "simultaneous-two-broker-loss"],
+      "artifact_level": "Published artifact"
+    },
+    {
+      "id": "pinned-secured-six-hour-3",
+      "broker": "4.3.1",
+      "topology": "three-broker",
+      "security": "SASL_SSL/SCRAM-SHA-256",
+      "duration_seconds": 21600,
+      "faults": ["leader-loss", "coordinator-loss", "combined-loss", "simultaneous-two-broker-loss"],
+      "artifact_level": "Published artifact"
+    },
+    {
+      "id": "floor-classic-six-hour",
+      "broker": "3.7.2",
+      "topology": "three-broker",
+      "security": "PLAINTEXT",
+      "duration_seconds": 21600,
+      "faults": ["leader-loss", "coordinator-loss", "combined-loss"],
+      "artifact_level": "Published artifact"
+    },
+    {
+      "id": "member-loss-rejoin-cycles",
+      "broker": "4.3.1",
+      "topology": "three-broker",
+      "security": "SASL_SSL/SCRAM-SHA-256",
+      "duration_seconds": 0,
+      "minimum_cycles": 100,
+      "faults": ["classic-member-loss", "KIP-848-member-loss", "Share-member-loss"],
+      "artifact_level": "Published artifact"
+    },
+    {
+      "id": "ambiguity-response-loss-families",
+      "broker": "4.3.1",
+      "topology": "three-broker",
+      "security": "SASL_SSL/SCRAM-SHA-256",
+      "duration_seconds": 0,
+      "minimum_outcomes_per_family": 100,
+      "faults": ["Produce", "EndTxn", "OffsetCommit", "ShareAcknowledge", "AdminMutation"],
+      "artifact_level": "Published artifact"
+    },
+    {
+      "id": "controlled-data-loss-fixtures",
+      "broker": "4.3.1",
+      "topology": "three-broker",
+      "security": "PLAINTEXT",
+      "duration_seconds": 0,
+      "faults": ["retention-truncation", "unclean-election"],
+      "artifact_level": "Published artifact"
+    }
+  ],
+  "result_fields": [
+    "artifact_digest",
+    "workflow_sha",
+    "broker_image_digest",
+    "segment_index",
+    "fault_schedule",
+    "record_id_reconciliation",
+    "unknown_outcomes",
+    "duplicate_count",
+    "loss_count",
+    "final_resource_gauges",
+    "secret_scan_count"
+  ],
+  "non_claims": [
+    "one short soak is not a six-hour campaign",
+    "client retry cannot restore broker-lost data",
+    "campaign success is not a universal availability or durability SLA"
+  ]
+}

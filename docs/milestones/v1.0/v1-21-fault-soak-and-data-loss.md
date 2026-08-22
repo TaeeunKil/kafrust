@@ -53,8 +53,11 @@ rows remain immutable evidence for their named profiles only. The checked-in
 soak workflow currently proves a bounded broker-restart smoke with final queue
 gauges, but its five-minute/default single-node capacity cannot satisfy the
 required six-hour campaigns, 100-cycle family gates, or controlled
-unclean-election fixtures. No historical run is being promoted into the new
-milestone exit gate.
+unclean-election fixtures. The preparation manifest at
+[`v1-21-fault-campaign-manifest.json`](../../evidence/v1-21-fault-campaign-manifest.json)
+and `scripts/check_v1_fault_campaign_manifest.py` now make those thresholds
+machine-checkable. No historical run is being promoted into the new milestone
+exit gate.
 
 ## Failure And Lifecycle Contract
 

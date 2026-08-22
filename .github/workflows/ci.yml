@@ -60,6 +60,9 @@ jobs:
       - name: Check v1 fuzz campaign manifest
         run: python scripts/check_v1_fuzz_campaign_manifest.py
 
+      - name: Check v1 fault campaign manifest
+        run: python scripts/check_v1_fault_campaign_manifest.py
+
       - name: Test protocol audit scripts
         run: python -m unittest scripts/test_check_apache_schema_versions.py
 

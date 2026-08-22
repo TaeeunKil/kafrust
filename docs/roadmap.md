@@ -267,7 +267,9 @@ V1-21 through V1-23 remain `Planned` while the exact published matrix,
 long-duration fault/SLO campaigns, and a named migration service are pending.
 Their preparation records explicitly preserve the six-hour/24-hour campaign
 capacity, five-repetition performance requirements, and canary rollback
-prerequisites; historical smoke runs are not promoted into those gates. V1-24
+prerequisites. The V1-21 fault manifest/checker now names the four six-hour
+campaigns, 100 member-loss cycles, and 100 outcomes per ambiguity family;
+historical smoke runs are not promoted into those gates. V1-24
 through V1-26 also remain `Planned`: the API snapshot is only a freeze input,
 and no RC or `1.0.0` publication/tag exists. Protocol-first `cargo publish`
 remains disabled until the named release milestone and separate user approval.
