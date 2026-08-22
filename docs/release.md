@@ -7,6 +7,22 @@ kafrust publishes two crates:
 
 Publish `kafrust-protocol` before `kafrust` because the client crate depends on the protocol crate by version.
 
+## v1.0 Publication Gate (2026-08-22)
+
+The coordinated `0.3.6` candidate is still unpublished. V1-20 currently has a
+checked draft matrix and source-only live evidence; V1-21 through V1-24 still
+own the fault, SLO, migration, dependency, and API-freeze gates. No
+`cargo publish`, registry upload, tag, or GitHub release is performed as part
+of ordinary milestone execution.
+
+When V1-25 is explicitly authorized, publish the exact frozen protocol RC
+first, wait for fresh Rust 1.81/stable registry resolution, then run the client
+package dry-run against that registry artifact before publishing the client RC.
+V1-26 repeats the same protocol-first sequence for `1.0.0` only after the RC
+canary, rollback, complete matrix, and post-publish approval gates pass. A
+partial protocol publication is recorded and never reused for changed bytes;
+the next attempt uses a new coordinated version pair.
+
 ## 0.3.5 Release Notes
 
 This patch release carries the OAUTHBEARER connection re-authentication fix.
