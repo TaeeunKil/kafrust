@@ -84,7 +84,7 @@ jobs:
           KAFRUST_COMPARISON_PAYLOAD_BYTES: ${{ inputs.payload_bytes }}
           KAFRUST_COMPARISON_BATCH_SIZE: "100"
         run: |
-          cargo run --manifest-path "$KAFRUST_MIGRATION_PROJECT/Cargo.toml" --quiet \
+          cargo +stable run --manifest-path "$KAFRUST_MIGRATION_PROJECT/Cargo.toml" --quiet \
             | tee migration-kafrust.json
 
       - name: Run rust-rdkafka reference stage
@@ -96,7 +96,7 @@ jobs:
           KAFRUST_COMPARISON_PAYLOAD_BYTES: ${{ inputs.payload_bytes }}
           KAFRUST_COMPARISON_BATCH_SIZE: "100"
         run: |
-          cargo run --manifest-path "$KAFRUST_MIGRATION_PROJECT/Cargo.toml" --quiet \
+          cargo +stable run --manifest-path "$KAFRUST_MIGRATION_PROJECT/Cargo.toml" --quiet \
             | tee migration-rdkafka.json
 
       - name: Compare normalized smoke results
