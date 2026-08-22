@@ -262,6 +262,13 @@ including secured SCRAM transaction failover after the fencing-code assertion
 was corrected to accept Kafka code 47 or 90. This does not qualify a published
 artifact or close the long-duration and downstream milestone gates.
 
+The 17-job source-only matrix was rerun from `4f6918b` in
+[run 32555053351](https://github.com/TaeeunKil/kafrust/actions/runs/32555053351)
+and all jobs passed across the four broker lines, security profiles, KIP-848,
+Admin, response-loss, and multi-broker failover slices. It remains source-only:
+the exact published `0.3.6` pair, fresh lockfiles, and V1-20 published exit
+criteria are still pending.
+
 ## V1-21~V1-26 Release-Path Preparation (2026-08-22)
 
 V1-21 through V1-23 remain `Planned` while the exact published matrix,

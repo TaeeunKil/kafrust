@@ -81,6 +81,15 @@ including the SCRAM transaction failover assertion for either Kafka fencing code
 47 or 90. This is current-source evidence only; publication remains separately
 authorization-gated.
 
+The same 17-job source-only matrix was rerun from source commit `4f6918b` in
+[run 32555053351](https://github.com/TaeeunKil/kafrust/actions/runs/32555053351)
+after the bounded soak/diagnostic corrections. All 17 jobs passed across Kafka
+3.7.2, 3.8.1, 3.9.1, and 4.3.1, including plaintext/TLS/SASL profiles,
+signed OAUTHBEARER, SCRAM failover, KIP-848 failover, ACL authorization,
+transaction response-loss reconciliation, and three-broker leader/coordinator
+failover. This refreshes current-source evidence only; it does not satisfy the
+exact published `0.3.6` lockfile pair or V1-20 exit criteria.
+
 ## Failure And Lifecycle Contract
 
 - One required row failure blocks the matrix; it is not averaged away.
