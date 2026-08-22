@@ -268,8 +268,10 @@ long-duration fault/SLO campaigns, and a named migration service are pending.
 Their preparation records explicitly preserve the six-hour/24-hour campaign
 capacity, five-repetition performance requirements, and canary rollback
 prerequisites. The V1-21 fault manifest/checker now names the four six-hour
-campaigns, 100 member-loss cycles, and 100 outcomes per ambiguity family;
-historical smoke runs are not promoted into those gates. V1-24
+campaigns, 100 member-loss cycles, and 100 outcomes per ambiguity family; the
+V1-22 performance manifest/checker names six representative profiles, five
+eight-hour repetitions, ten-second samples, and regression/RSS/retry limits.
+Historical smoke runs are not promoted into those gates. V1-24
 through V1-26 also remain `Planned`: the API snapshot is only a freeze input,
 and no RC or `1.0.0` publication/tag exists. Protocol-first `cargo publish`
 remains disabled until the named release milestone and separate user approval.

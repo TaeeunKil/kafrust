@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "status": "preparation",
+  "date_utc": "2026-08-22",
+  "runner": "ubuntu-latest",
+  "broker": "4.3.1",
+  "topologies": ["single-node", "three-broker"],
+  "security": ["PLAINTEXT", "SASL_SSL/SCRAM-SHA-256"],
+  "timing": {
+    "total_seconds": 28800,
+    "warmup_seconds": 7200,
+    "measured_seconds": 21600,
+    "sample_period_seconds": 10
+  },
+  "repetitions": 5,
+  "profiles": [
+    {"id": "immediate-100b-batch-1-concurrency-1", "payload_bytes": 100, "batch_size": 1, "concurrency": 1, "compression": "none"},
+    {"id": "immediate-1kib-batch-100-concurrency-1", "payload_bytes": 1024, "batch_size": 100, "concurrency": 1, "compression": "none"},
+    {"id": "immediate-1kib-batch-200-concurrency-4", "payload_bytes": 1024, "batch_size": 200, "concurrency": 4, "compression": "none"},
+    {"id": "immediate-1kib-zstd-batch-200-concurrency-4", "payload_bytes": 1024, "batch_size": 200, "concurrency": 4, "compression": "zstd"},
+    {"id": "buffered-1kib-batch-200-concurrency-4", "payload_bytes": 1024, "batch_size": 200, "concurrency": 4, "compression": "none"},
+    {"id": "direct-consumer-1kib-concurrency-1", "payload_bytes": 1024, "batch_size": 1, "concurrency": 1, "compression": "none"}
+  ],
+  "thresholds": {
+    "median_throughput_regression_fraction": 0.20,
+    "p99_latency_regression_fraction": 0.25,
+    "retry_ratio_max_fraction": 0.01,
+    "rss_growth_max_bytes": 67108864,
+    "final_resource_gauges_must_be_zero": true,
+    "acknowledged_loss_must_be_zero": true,
+    "idempotent_duplicate_must_be_zero": true
+  },
+  "result_fields": [
+    "artifact_digest",
+    "runner_image",
+    "profile_id",
+    "repetition",
+    "sample_window",
+    "throughput",
+    "latency_p50_p95_p99",
+    "rss_baseline_terminal_slope",
+    "retry_ratio",
+    "loss_count",
+    "duplicate_count",
+    "final_resource_gauges"
+  ],
+  "non_claims": [
+    "hosted-runner diagnostics are not universal Kafka performance",
+    "rust-rdkafka comparison remains informational",
+    "a short benchmark is not an eight-hour SLO campaign"
+  ]
+}

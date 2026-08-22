@@ -54,8 +54,13 @@ V1-22 remains `Planned` pending V1-20 and V1-21. `docs/performance.md` and the
 manual benchmark workflow already record end-to-end Produce/Fetch throughput,
 batch/request percentiles, retry counts, and peak/final resource gauges for
 four diagnostic profiles. Those hosted-runner samples are not yet the required
-five-repetition, eight-hour, ten-second-sampled SLO campaign; no regression
-threshold or production claim is being inferred from them.
+five-repetition, eight-hour, ten-second-sampled SLO campaign. The preparation
+manifest at
+[`v1-22-performance-campaign-manifest.json`](../../evidence/v1-22-performance-campaign-manifest.json)
+and `scripts/check_v1_performance_campaign_manifest.py` now enforce the timing,
+profile, regression, retry, RSS, loss, duplicate, and final-gauge fields that
+the later campaign must emit. No regression threshold or production claim is
+being inferred from the short samples.
 
 ## Failure And Lifecycle Contract
 
