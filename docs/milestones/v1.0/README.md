@@ -34,7 +34,7 @@ be published from the current same-version package state.
 
 ## Current Execution
 
-As of 2026-08-22, V1-00, V1-01, and V1-02 are `Done`; V1-03 through V1-09
+As of 2026-08-22, V1-00, V1-01, and V1-02 are `Done`; V1-03 through V1-10
 are `In progress`. The coordinated `0.3.6` candidate
 has passed the local package-only boundary verifier across five feature
 profiles on Rust 1.81.0. The regression against published protocol `0.3.5`
@@ -56,7 +56,8 @@ slice are recorded in their milestone documents. V1-06 records the coherent
 TV1 transaction decision and commit/abort ambiguity tests. V1-07 records direct
 consumer integrity increments, and V1-08 records the exact-identity typed
 OffsetCommit ambiguity contract. V1-09 records KIP-848 epoch/member-ID and
-UUID/regex recovery increments. These are implementation and qualification
+UUID/regex recovery increments. V1-10 records Share acknowledgement/session
+and redelivery increments. These are implementation and qualification
 increments, not published-artifact completion claims.
 
 ## Status And Evidence

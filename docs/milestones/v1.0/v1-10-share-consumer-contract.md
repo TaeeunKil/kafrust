@@ -1,6 +1,6 @@
 # V1-10 ShareConsumer Contract
 
-- Status: Planned
+- Status: In progress
 - Target evidence: Published artifact
 - Dependencies: V1-07, V1-09
 
@@ -53,6 +53,27 @@ make it eligible for another attempt.
 5. Exercise multi-member assignment, member/coordinator/leader loss,
    backpressure, cancellation, heartbeat shutdown, leave, and final cleanup.
 6. Run bounded secure published profiles; V1-21 extends duration.
+
+## Current Execution Record (2026-08-22)
+
+V1-10 is now `In progress`. The ShareConsumer implementation has a typed
+record/acknowledgement state machine, v1/v2 acquisition negotiation,
+per-broker ShareFetch session ownership, lock renewal, bounded acquisition,
+coordinator heartbeat, explicit close, and reconciliation for an ambiguous
+ShareAcknowledge. A lost response marks the exact pending record unknown,
+discards the affected broker session, blocks acknowledgement replay, and
+allows the next poll to observe either eligible redelivery or no redelivery;
+the client does not infer which broker-side state was applied.
+
+The deterministic slice covers v2 record-limit negotiation, lost Accept and
+Release responses, session reset, Release redelivery, unknown-outcome close,
+record acquisition filtering, and the `ShareAcknowledgementRequired` boundary.
+The scripted regression `share_consumer_reconciles_lost_acknowledgement_with_redelivery`
+now also asserts the broker member ID remains stable across reconciliation and
+redelivery. Published pinned-current two-member secure profiles, all
+acknowledgement types under delayed/lost responses, multi-member churn, and the
+10,000-record gate remain open; no exactly-once or published-artifact claim is
+made.
 
 ## Failure And Lifecycle Contract
 

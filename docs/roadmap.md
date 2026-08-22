@@ -152,6 +152,15 @@ stable while assignment offsets are restored. Published pinned-current
 plaintext/SASL churn, stale-task cancellation, delete/recreate fallback races,
 and exact 40-cycle ownership/offset gates remain open.
 
+## V1-10 Execution Update (2026-08-22)
+
+V1-10 is `In progress`. ShareConsumer deterministic coverage now records v1/v2
+negotiation, bounded record-limit behavior, lost Accept/Release acknowledgement
+classification, session reset, conditional Release redelivery, unknown-outcome
+close, acquisition filtering, and stable member identity across reconciliation.
+Published secure two-member churn, delayed/applied acknowledgement branches,
+and the 10,000-record gate remain open; no exactly-once claim is made.
+
 ## Current Release Qualification
 
 `0.3.5` is now published on crates.io in protocol-first order. The fresh
