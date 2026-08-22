@@ -12,6 +12,34 @@ This audit tracks the current `kafrust` public surface for M12 API
 stabilization. The goal is not to freeze the API yet. The goal is to make each
 public type intentional before the project grows more protocol coverage.
 
+## Generated V1 Classification
+
+V1-02 generated an all-features rustdoc inventory on 2026-08-22. The reviewed
+snapshot contains 2,366 public symbols across all twelve public modules and 286
+root exports. Every symbol has one of four classifications and an owning
+milestone:
+
+| Class | Meaning | V1 contract treatment |
+| --- | --- | --- |
+| `stable` | Common Kafka client surface intended for the v1 candidate API | Eligible for the final V1-24 freeze after behavior gates pass |
+| `expert` | Supported low-level or adapter surface requiring deliberate Kafka/runtime knowledge | Documented and tested, but not part of the common API promise by default |
+| `experimental` | Modern, unstable, or broker-internal capability still under qualification | Remains outside the stable promise until its owning milestone passes |
+| `excluded` | Public escape hatch kept for compatibility but explicitly outside the v1 contract | No v1 semver guarantee; migration or removal requires an explicit decision |
+
+The machine-readable inventory is [`public-api-snapshot.json`](evidence/public-api-snapshot.json).
+It is generated from rustdoc JSON and verified in CI with:
+
+```text
+cargo +nightly rustdoc -p kafrust --all-features -- -Z unstable-options --output-format json
+python scripts/public_api_snapshot.py --generate
+python scripts/public_api_snapshot.py
+```
+
+Generation is intentionally a maintainer action because rustdoc JSON is an
+unstable format. CI does not require nightly: it checks the committed snapshot
+against every root module/export and the digest of all public declaration lines.
+The snapshot is a classification baseline, not the final V1-24 API freeze.
+
 ## Root Re-Exports
 
 The `kafrust` crate currently re-exports the high-level client surface from

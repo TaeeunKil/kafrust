@@ -1,6 +1,6 @@
 # V1-02 Public Surface Classification
 
-- Status: Planned
+- Status: In progress
 - Target evidence: CI
 - Dependencies: V1-01
 
@@ -33,6 +33,23 @@ Audit the actual exports in `crates/kafrust/src/lib.rs`:
 
 Update `docs/public-api-audit.md`, `docs/api-stability.md`, public-surface compile
 tests, crate documentation, and migration notes.
+
+## Current Execution Record (2026-08-22)
+
+The all-features rustdoc inventory is stored in
+[`docs/evidence/public-api-snapshot.json`](../../evidence/public-api-snapshot.json).
+It records 2,366 public symbols, twelve public modules, and 286 root exports;
+each symbol has a `stable`, `expert`, `experimental`, or `excluded` class and
+an owning milestone. `scripts/public_api_snapshot.py` verifies the committed
+snapshot without requiring nightly in CI by checking the root surface and the
+public-declaration digest. The existing
+[`public_surface.rs`](../../../crates/kafrust/tests/public_surface.rs) test is
+compiled in CI under default, `tls`, `blocking`, `otlp`, and all-feature
+profiles.
+
+This record is a classification baseline only. It does not freeze the API,
+claim the experimental surfaces, or authorize removal of any public path;
+V1-24 owns the final semver review.
 
 ## Work Packages
 

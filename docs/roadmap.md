@@ -46,12 +46,24 @@ matching `0.3.6` tarballs outside the workspace and compiled five feature
 profiles on Rust 1.81.0. Implementation commit `3e12192` passed the exact
 Rust 1.81.0/stable matrix in
 [CI run 32545563612](https://github.com/TaeeunKil/kafrust/actions/runs/32545563612).
-This is packaged-candidate evidence only; V1-01 may now begin and no crate has
-been published.
+This is packaged-candidate evidence only; V1-01 has now completed its contract
+gate and no crate has been published.
 
-V1-01 owns the accepted support boundary and ledger. Until that decision is
-complete, the compatibility table remains a qualification target rather than
-a blanket claim for every broker/security/workload combination.
+V1-01 owns the accepted support boundary and ledger. Its exact CI result is
+recorded in [run 32546206600](https://github.com/TaeeunKil/kafrust/actions/runs/32546206600).
+The compatibility table remains a qualification target for each later
+milestone rather than a blanket claim for every broker/security/workload
+combination.
+
+## V1-02 Execution Update (2026-08-22)
+
+V1-02 is `In progress`. The all-features rustdoc inventory now records 2,366
+public symbols across twelve modules and 286 root exports in
+[`docs/evidence/public-api-snapshot.json`](evidence/public-api-snapshot.json).
+Each symbol is classified as `stable`, `expert`, `experimental`, or
+`excluded`, assigned an owning milestone, and protected by a CI root-surface
+and public-declaration digest check. This is a classification baseline only;
+V1-24 still owns the final semver freeze.
 
 ## Current Release Qualification
 

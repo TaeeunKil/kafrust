@@ -36,6 +36,12 @@ moved, or revised as API coverage grows.
 The current root re-export audit is tracked in
 [Public API Audit](public-api-audit.md).
 
+V1-02 now provides the generated all-features inventory in
+[public-api-snapshot.json](evidence/public-api-snapshot.json). The snapshot
+assigns every public symbol a `stable`, `expert`, `experimental`, or `excluded`
+class and an owning milestone. It is a classification baseline, not a final
+semver freeze; V1-24 owns the last review.
+
 The complete v1 classification, behavior qualification, freeze, release
 candidate, and stable-release sequence is tracked in the
 [v1.0 Milestone Program](milestones/v1.0/README.md). Until V1-02 and V1-24 are

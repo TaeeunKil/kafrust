@@ -90,7 +90,13 @@ The v1 support boundary and immutable evidence rows are maintained in the
 [V1-01 support contract](milestones/v1.0/v1-01-support-contract-and-evidence-ledger.md)
 and [qualification ledger](evidence/qualification-ledger.md). These records
 classify accepted profiles separately from published-artifact results and do
-not authorize a release.
+not authorize a release. V1-01's implementation commit `0536c4f` passed both
+required toolchains in [CI run 32546206600](https://github.com/TaeeunKil/kafrust/actions/runs/32546206600).
+
+The V1-02 public API classification is maintained in
+[public-api-snapshot.json](evidence/public-api-snapshot.json). It is a generated
+inventory and CI guard, not the final semver freeze; V1-24 must complete the
+last API review before a `1.0.0` release.
 
 ## Versioning
 

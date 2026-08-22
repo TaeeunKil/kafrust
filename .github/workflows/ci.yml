@@ -60,6 +60,17 @@ jobs:
       - name: Test qualification ledger checker
         run: python -m unittest scripts/test_check_qualification_ledger.py
 
+      - name: Check public API snapshot
+        run: python scripts/public_api_snapshot.py
+
+      - name: Compile public surface feature profiles
+        run: |
+          cargo test -p kafrust --test public_surface --no-default-features
+          cargo test -p kafrust --test public_surface --no-default-features --features tls
+          cargo test -p kafrust --test public_surface --no-default-features --features blocking
+          cargo test -p kafrust --test public_surface --no-default-features --features otlp
+          cargo test -p kafrust --test public_surface --all-features
+
       - name: Check build
         run: cargo check --workspace --all-targets --all-features
 

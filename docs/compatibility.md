@@ -11,7 +11,7 @@ source commits and workflow runs below.
 
 ## v1.0 Support Contract
 
-V1-01 sets the proposed support boundary below. “Required” means the named
+V1-01 sets the accepted support boundary below. “Required” means the named
 profile must be qualified by the later milestone that owns it; it does not
 mean every API or every pairwise combination is already verified. The
 immutable result rows are in the [qualification ledger](evidence/qualification-ledger.md).

@@ -34,13 +34,19 @@ be published from the current same-version package state.
 
 ## Current Execution
 
-As of 2026-08-22, V1-00 is `Done`. The coordinated `0.3.6` candidate
+As of 2026-08-22, V1-00 and V1-01 are `Done`, and V1-02 is `In progress`. The coordinated `0.3.6` candidate
 has passed the local package-only boundary verifier across five feature
 profiles on Rust 1.81.0. The regression against published protocol `0.3.5`
 also passes by reproducing the four missing transaction type families. Exact
 commit `3e12192` passed both Rust 1.81.0 and stable in
 [CI run 32545563612](https://github.com/TaeeunKil/kafrust/actions/runs/32545563612).
 The candidate remains unpublished.
+
+V1-02 has since generated the all-features public API snapshot at
+[`docs/evidence/public-api-snapshot.json`](../../evidence/public-api-snapshot.json):
+2,366 symbols, twelve public modules, and 286 root exports. CI checks its root
+surface and public-declaration digest while the final freeze remains owned by
+V1-24.
 
 ## Status And Evidence
 

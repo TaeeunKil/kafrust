@@ -1,6 +1,6 @@
 # V1-01 Support Contract And Evidence Ledger
 
-- Status: In progress
+- Status: Done
 - Target evidence: CI
 - Dependencies: V1-00
 
@@ -36,6 +36,15 @@ The human-readable contract is summarized in
 [Compatibility](../compatibility.md), with English/Korean README pointers;
 the immutable evidence rows are in the
 [qualification ledger](../evidence/qualification-ledger.md).
+
+## Completion Record (2026-08-22)
+
+Implementation commit `0536c4f` passed the exact Rust 1.81.0 and stable CI
+matrix in [run 32546206600](https://github.com/TaeeunKil/kafrust/actions/runs/32546206600).
+The ledger checker reported seven immutable rows, and its focused unit tests
+passed. The accepted contract is now the source of truth for later milestone
+qualification; it does not claim a full Cartesian matrix, published `0.3.6`,
+or completion of any downstream runtime gate.
 
 ## Non-Goals
 
