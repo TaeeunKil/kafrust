@@ -846,3 +846,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-22-performance-campaign-manifest.json
 - non_claims: not an executed benchmark, not production SLO evidence, not universal performance or parity claim
+
+## Q-LOCAL-V123-001
+
+- date_utc: 2026-08-22
+- source_commit: 8fb451d07c1d4e87b8138b781fd52eb11cd68520
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: Planned
+- evidence_level: Local deterministic
+- kafka_version: 4.3.1 reference-canary requirement
+- kafka_image: apache/kafka:4.3.1 in manual workflow
+- mode: KRaft
+- topology: isolated single-node smoke; later named service topology required
+- security: PLAINTEXT smoke; target security profile remains open
+- group_protocol: not-applicable in smoke comparator
+- workload: migration manifest, fixture-boundary checker, and forward/rollback workflow validation
+- workflow: scripts/check_v1_migration_canary_manifest.py
+- fault: fixture drift, missing stage, non-isolated topic/group, or missing rollback evidence field
+- duration: not-applicable
+- record_count: smoke minimum 1000; exit minimum 1000000
+- member_count: not-applicable
+- repetition_count: 1
+- expected_errors: invalid migration gate rejected before canary execution
+- observed_errors: reference fixture, five lifecycle stages, isolation, and reconciliation fields accepted
+- retry_count: not-applicable
+- duplicate_count: 0
+- loss_count: not-applicable
+- latency: not-applicable
+- memory: not-applicable
+- final_resource_gauges: required in exit result fields
+- result: passed
+- artifact: docs/evidence/v1-23-migration-canary-manifest.json
+- non_claims: not executed service canary, not million-record comparison, not source-compatible facade, not production migration approval
