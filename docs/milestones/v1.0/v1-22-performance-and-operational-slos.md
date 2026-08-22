@@ -48,6 +48,15 @@ material regressions on the same controlled runners.
    evidence for every performance change.
 6. Publish operational tuning and backpressure guidance.
 
+## Preparation Record (2026-08-22)
+
+V1-22 remains `Planned` pending V1-20 and V1-21. `docs/performance.md` and the
+manual benchmark workflow already record end-to-end Produce/Fetch throughput,
+batch/request percentiles, retry counts, and peak/final resource gauges for
+four diagnostic profiles. Those hosted-runner samples are not yet the required
+five-repetition, eight-hour, ten-second-sampled SLO campaign; no regression
+threshold or production claim is being inferred from them.
+
 ## Failure And Lifecycle Contract
 
 - Benchmark backpressure uses the same bounded production queues and reports

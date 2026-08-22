@@ -47,6 +47,15 @@ and migration have been proven by the same candidate line.
    resolved pair. Decide and test the separate stable `1.x` dependency policy.
 7. Build final package candidates and review generated docs.
 
+## Preparation Record (2026-08-22)
+
+V1-24 remains `Planned`. The generated all-features snapshot currently records
+2,374 symbols, twelve public modules, and 288 root exports after the typed
+group-commit ambiguity addition; CI protects that snapshot and its digest.
+This is a review baseline, not a semver freeze: V1-20 through V1-23 must first
+close their behavior, artifact, SLO, and migration gates, after which the
+snapshot will be regenerated and locked as `1.0.0-rc.1` input.
+
 ## Failure And Lifecycle Contract
 
 - Adding a new variant/method after freeze follows the documented exhaustive or

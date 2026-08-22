@@ -45,6 +45,17 @@ retention, and unclean-election data loss.
    versioned fault/campaign manifest, sufficient job timeout or resumable
    sharding, immutable artifact identity, and retained segment reconciliation.
 
+## Preparation Record (2026-08-22)
+
+V1-21 remains `Planned` because the exact V1-20 published pair and the V1-15,
+V1-16, and V1-18 artifact gates are not complete. Historical published soak
+rows remain immutable evidence for their named profiles only. The checked-in
+soak workflow currently proves a bounded broker-restart smoke with final queue
+gauges, but its five-minute/default single-node capacity cannot satisfy the
+required six-hour campaigns, 100-cycle family gates, or controlled
+unclean-election fixtures. No historical run is being promoted into the new
+milestone exit gate.
+
 ## Failure And Lifecycle Contract
 
 - Retryable pre-send/read faults stay within finite budgets and preserve owner

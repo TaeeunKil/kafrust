@@ -49,6 +49,17 @@ track of ambiguous operations.
    is available, mark the external-canary gate blocked rather than substituting
    an example.
 
+## Preparation Record (2026-08-22)
+
+V1-23 remains `Planned`. The repository contains the row-by-row
+[`rust-rdkafka` migration guide](../../migration-from-rust-rdkafka.md) and
+typed operation/error mappings, but no named representative service, owner, or
+canary environment has been registered in this v1 program. The existing
+examples are not a substitute for the required million-record dual-client
+comparison and forward/rollback canary; V1-23 will be explicitly marked
+`Blocked` if that external prerequisite is still absent when its dependency
+window opens.
+
 ## Failure And Lifecycle Contract
 
 - Adapter errors preserve typed Kafka/broker/unknown-outcome information.

@@ -53,6 +53,14 @@ a successful representative service cutover and rollback.
 8. Observe at least two consecutive scheduled campaign sets with no open P0/P1
    issue. Any source fix produces `rc.2` or later and restarts required gates.
 
+## Preparation Record (2026-08-22)
+
+V1-25 remains `Planned`. No `1.0.0-rc.1` manifests, tag, registry upload, or
+GitHub prerelease exists. The publication sequence and explicit-authorization
+boundary are recorded in [`docs/release.md`](../../release.md); an RC cannot
+start until V1-24 freezes the API and the complete V1-20 through V1-23 evidence
+manifest is accepted.
+
 ## Failure And Lifecycle Contract
 
 - A failed package, matrix, fuzz, soak, SLO, security, or canary gate blocks RC

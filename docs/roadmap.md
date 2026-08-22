@@ -261,6 +261,17 @@ including secured SCRAM transaction failover after the fencing-code assertion
 was corrected to accept Kafka code 47 or 90. This does not qualify a published
 artifact or close the long-duration and downstream milestone gates.
 
+## V1-21~V1-26 Release-Path Preparation (2026-08-22)
+
+V1-21 through V1-23 remain `Planned` while the exact published matrix,
+long-duration fault/SLO campaigns, and a named migration service are pending.
+Their preparation records explicitly preserve the six-hour/24-hour campaign
+capacity, five-repetition performance requirements, and canary rollback
+prerequisites; historical smoke runs are not promoted into those gates. V1-24
+through V1-26 also remain `Planned`: the API snapshot is only a freeze input,
+and no RC or `1.0.0` publication/tag exists. Protocol-first `cargo publish`
+remains disabled until the named release milestone and separate user approval.
+
 ## Current Release Qualification
 
 `0.3.5` is now published on crates.io in protocol-first order. The fresh

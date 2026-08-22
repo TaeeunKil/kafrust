@@ -50,6 +50,15 @@ matrix checks, and state the stable support contract without overstating it.
    runbook available until acceptance.
 7. Activate patch/security/advisory and broker-matrix refresh policy.
 
+## Preparation Record (2026-08-22)
+
+V1-26 remains `Planned`. The repository still has no `1.0.0` tag, GitHub
+release, or stable registry publication. The only authorized future path is a
+metadata-only change from an accepted RC, protocol-first publication, fresh
+Rust 1.81/stable external resolution, docs.rs and critical smoke verification,
+then the named post-publish canary and rollback. Earlier `0.3.5` evidence is
+retained as historical context and cannot close this release gate.
+
 ## Failure And Lifecycle Contract
 
 - Publication is irreversible; an invalid artifact is yanked/advised and

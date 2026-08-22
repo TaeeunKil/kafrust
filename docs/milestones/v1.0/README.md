@@ -64,8 +64,10 @@ classification. V1-15 records the current owner/task/session audit, V1-16 the
 credential and redaction slice, V1-17 the bounded metrics/telemetry contract,
 V1-18 the decoder/resource-limit and fuzz baseline, V1-19 the staged
 pure-Rust package boundary, and V1-20 the checked draft compatibility matrix.
-These are implementation and qualification increments, not published-artifact
-completion claims.
+V1-21 through V1-26 have preparation records that preserve the long-soak,
+SLO, migration, freeze, RC, and stable-publication prerequisites without
+starting or authorizing a registry upload. These are implementation and
+qualification increments, not published-artifact completion claims.
 
 ## Status And Evidence
 
