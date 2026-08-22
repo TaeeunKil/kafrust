@@ -119,6 +119,16 @@ fallbacks, fatal EndTxn handling, and the transactional Produce cap are also
 covered. Published floor/current reconciliation and the full mutation fault
 matrix remain open.
 
+## V1-07 Execution Update (2026-08-22)
+
+V1-07 is `In progress`. Direct-consumer deterministic coverage now records
+Fetch-response reconnect, bounded partition-queue backpressure without skipped
+records, out-of-range reset, leader-epoch lookup, preferred-replica handling,
+and read-committed record filtering. The dispatched current-source Live Kafka
+Smoke run is refreshing the broker/version slice; golden record-shape fixtures,
+retention/preferred-replica faults, and the published 100,000-record
+reconciliation gate remain open.
+
 ## Current Release Qualification
 
 `0.3.5` is now published on crates.io in protocol-first order. The fresh

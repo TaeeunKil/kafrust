@@ -34,7 +34,7 @@ be published from the current same-version package state.
 
 ## Current Execution
 
-As of 2026-08-22, V1-00, V1-01, and V1-02 are `Done`; V1-03 through V1-06
+As of 2026-08-22, V1-00, V1-01, and V1-02 are `Done`; V1-03 through V1-07
 are `In progress`. The coordinated `0.3.6` candidate
 has passed the local package-only boundary verifier across five feature
 profiles on Rust 1.81.0. The regression against published protocol `0.3.5`

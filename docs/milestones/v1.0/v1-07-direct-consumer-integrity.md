@@ -1,6 +1,6 @@
 # V1-07 Direct Consumer Integrity
 
-- Status: Planned
+- Status: In progress
 - Target evidence: Published artifact
 - Dependencies: V1-03
 
@@ -42,6 +42,24 @@ leader movement, pause/resume, and bounded delivery.
 5. Define partition-queue saturation, fairness, cancellation, assignment
    mutation, and shutdown behavior.
 6. Qualify the exact published artifact on floor/current multi-broker profiles.
+
+## Current Execution Record (2026-08-22)
+
+V1-07 is now `In progress`. The direct consumer already has a bounded
+partition-queue contract, explicit pause/resume/seek operations, leader-epoch
+tracking, preferred-replica handling, read-committed filtering, out-of-range
+reset policy, and Fetch-response reconnect behavior. The deterministic slice is
+covered by `direct_consumer_reconnects_after_fetch_response_loss`,
+`split_partition_queue_reports_backpressure_without_skipping_records`,
+`resets_out_of_range_assignment_to_earliest_offset`,
+`fetches_offset_for_leader_epoch_from_partition_leader`, and the record-batch
+codec/decompression limit tests in `kafrust-protocol`.
+
+The current-source Live Kafka Smoke run is being used to refresh the accepted
+broker/version evidence. Golden record-shape fixtures, preferred-replica and
+retention fault matrices, 100,000-record published reconciliation, and final
+queue/resource gates remain open; no broker data-loss recovery or published
+artifact claim is made.
 
 ## Failure And Lifecycle Contract
 
