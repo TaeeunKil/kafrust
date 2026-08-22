@@ -94,6 +94,18 @@ measured) and archives the raw JSONL output. This is preparation evidence only;
 the six-hour measured window, five repetitions, published artifact identity,
 and regression/RSS adjudication remain open.
 
+### Bounded timed-campaign diagnostic (2026-08-22)
+
+Run [32558818231](https://github.com/TaeeunKil/kafrust/actions/runs/32558818231)
+used source `69e4997`, Kafka 4.3.1 KRaft, two workers/two partitions, a
+5-second warmup, a 20-second measured window, 5-second samples, 50-record
+batches, and 1-KiB values. It roundtripped 1,546,200 records with zero failed
+requests, zero retries, and zero final in-flight/buffered records. Sampled RSS
+was 8,396,800–8,568,832 bytes, and the raw `benchmark-campaign.jsonl` artifact
+was uploaded with 90-day retention. This confirms the current-source harness
+and reconciliation path only; it is not a five-repetition, eight-hour SLO
+campaign or a published-artifact result.
+
 ## Failure And Lifecycle Contract
 
 - Benchmark backpressure uses the same bounded production queues and reports

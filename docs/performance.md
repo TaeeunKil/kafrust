@@ -103,6 +103,17 @@ final in-flight/buffered gauges. The per-profile results were 52,318/110,844,
 second respectively. This is a one-repetition hosted-runner diagnostic, not a
 five-repetition eight-hour SLO result or a cross-client parity claim.
 
+The timed campaign diagnostic
+[`32558818231`](https://github.com/TaeeunKil/kafrust/actions/runs/32558818231)
+ran source `69e4997` against two partitions with two workers, a 5-second
+warmup, a 20-second measured window, 5-second samples, 50-record batches, and
+1-KiB values. It roundtripped 1,546,200 records with zero failed requests and
+zero retries; final in-flight and buffered gauges were both zero. Sampled RSS
+ranged from 8,396,800 to 8,568,832 bytes. The raw
+`benchmark-campaign.jsonl` artifact is retained for 90 days. This validates the
+timed harness and reconciliation path only; it is not an eight-hour,
+five-repetition SLO result.
+
 ## Published Baseline
 
 The latest merged-main benchmark run

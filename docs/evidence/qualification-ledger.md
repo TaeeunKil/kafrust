@@ -1275,3 +1275,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: GitHub Actions run 32557407734; kafrust-migration-canary-32557407734 artifact; migration manifest
 - non_claims: not a named service canary, not a forward/rollback run, not a million-record comparison, not published-artifact evidence, not production migration approval
+
+## Q-LIVE-V122-CAMPAIGN-001
+
+- date_utc: 2026-08-22
+- source_commit: 69e499768f4a4f14482b1c3b707a87b2e38620e8
+- client_version: 0.3.6 source checkout
+- protocol_version: 0.3.6 source checkout
+- work_status: In progress
+- evidence_level: Live current-source
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka:4.3.1
+- mode: KRaft
+- topology: isolated single-node benchmark broker; two partitions
+- security: PLAINTEXT
+- group_protocol: not-applicable
+- workload: timed Produce/Fetch campaign with two workers, 5s warmup, 20s measured window, 5s samples, 50-record batches, and 1-KiB values
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32558818231
+- fault: none injected
+- duration: 25s workload; 121s workflow
+- record_count: 1,546,200 produced and consumed
+- member_count: not-applicable
+- repetition_count: 1
+- expected_errors: zero failed requests, zero retries, zero acknowledged loss/duplicates, and zero final resource gauges
+- observed_errors: none; produced_records=consumed_records=1,546,200; requests_failed=0; retries=0
+- retry_count: 0
+- duplicate_count: 0
+- loss_count: 0
+- latency: request p50/p95/p99 mostly 1/1/1ms with 5ms upper buckets in early samples
+- memory: RSS 8,396,800–8,568,832 bytes across measured samples
+- final_resource_gauges: in_flight_requests=0; buffered_records=0
+- result: passed
+- artifact: GitHub Actions run 32558818231; kafrust-benchmark-campaign-32558818231/benchmark-campaign.jsonl; 90-day retention
+- non_claims: not five repetitions, not eight-hour V1-22 SLO evidence, not published-artifact evidence, not cross-client parity, not production claim

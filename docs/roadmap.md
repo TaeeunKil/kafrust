@@ -308,10 +308,17 @@ million-record exit gate.
 
 The V1-22 `throughput_benchmark` example now has a timed campaign mode with
 barrier-synchronized warmup/measurement windows, worker-per-partition
-concurrency, ten-second JSONL samples, RSS/retry/latency fields, and final
+concurrency, configurable JSONL samples (ten-second campaign target), RSS/retry/latency fields, and final
 record/gauge reconciliation. The bounded manual diagnostic workflow archives
 short current-source runs only; it does not promote them to the required
 five-repetition, eight-hour published SLO campaign.
+
+Exact-HEAD diagnostic run
+[32558818231](https://github.com/TaeeunKil/kafrust/actions/runs/32558818231)
+used source `69e4997`, two workers/two partitions, 5s warmup, 20s measured,
+5s samples, and 50-record 1-KiB batches. It roundtripped 1,546,200 records
+with zero failed requests/retries and zero final gauges; the raw JSONL artifact
+is retained. This is harness evidence only, not V1-22 completion.
 
 V1-24 through V1-26 also remain `Planned`: the API snapshot is only a freeze input,
 and no RC or `1.0.0` publication/tag exists. Protocol-first `cargo publish`
