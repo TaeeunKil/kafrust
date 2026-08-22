@@ -44,6 +44,38 @@ def run_cargo(args: tuple[str, ...]) -> str:
     return result.stdout
 
 
+def run_cargo_json(args: tuple[str, ...]) -> dict:
+    """Run Cargo and recover JSON even when diagnostics share the stream."""
+    result = subprocess.run(
+        ["cargo", *args],
+        cwd=ROOT,
+        check=False,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if result.returncode:
+        raise RuntimeError(
+            f"cargo {' '.join(args)} exited {result.returncode}:\n"
+            f"{result.stdout}{result.stderr}"
+        )
+    combined = f"{result.stdout}\n{result.stderr}"
+    start = combined.find("{")
+    end = combined.rfind("}")
+    if start < 0 or end < start:
+        raise RuntimeError(
+            f"cargo {' '.join(args)} produced no JSON; output was:\n{combined[:500]}"
+        )
+    try:
+        return json.loads(combined[start : end + 1])
+    except json.JSONDecodeError as error:
+        raise RuntimeError(
+            f"cargo {' '.join(args)} produced invalid JSON: {error}"
+        ) from error
+
+
 def tree_packages(features: tuple[str, ...]) -> set[str]:
     output = run_cargo(
         (
@@ -82,7 +114,7 @@ def main() -> int:
         metadata_args = ("metadata", "--format-version", "1")
         if (ROOT / "Cargo.lock").exists():
             metadata_args += ("--locked",)
-        metadata = json.loads(run_cargo(metadata_args))
+        metadata = run_cargo_json(metadata_args)
         packages = metadata.get("packages", [])
         missing_license = sorted(
             package.get("name", "<unknown>")
