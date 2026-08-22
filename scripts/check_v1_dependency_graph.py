@@ -36,10 +36,11 @@ def run_cargo(args: tuple[str, ...]) -> str:
         encoding="utf-8",
         errors="replace",
         stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
+        stderr=subprocess.PIPE,
     )
     if result.returncode:
-        raise RuntimeError(f"cargo {' '.join(args)} exited {result.returncode}:\n{result.stdout}")
+        details = result.stdout + result.stderr
+        raise RuntimeError(f"cargo {' '.join(args)} exited {result.returncode}:\n{details}")
     return result.stdout
 
 
