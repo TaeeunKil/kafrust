@@ -681,3 +681,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: kafrust-protocol-0.3.6.crate sha256 f12e95a30ce46fd7ffc097a97a31b0a918bcee9f83cefb72fe2484cfe9c255cc; kafrust-0.3.6.crate sha256 2ae1a135d3de7f00fb25455809ab9fc201ea41c398aa62ac14f34c2a2758fca9
 - non_claims: not crates.io publication, not complete advisory/license/SBOM audit, not optional-TLS native-tool clearance
+
+## Q-LOCAL-V120-001
+
+- date_utc: 2026-08-22
+- source_commit: e1f28c5dbb08e5d7ae499371b520873f56f31b8c
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: V1-01 accepted lines 3.7.2, 3.8.1, 3.9.1, 4.0.0, and 4.3.1
+- kafka_image: manifest rows require pinned image evidence before freeze
+- mode: KRaft
+- topology: pairwise single-node, three-broker, and controller-listener profiles
+- security: PLAINTEXT, TLS, mTLS, SASL/PLAIN, SCRAM, and OAUTHBEARER dimensions
+- group_protocol: classic, KIP-848, Share, and not-applicable Admin/package rows
+- workload: machine-readable compatibility matrix schema and profile checker
+- workflow: scripts/check_v1_compatibility_matrix.py
+- fault: malformed profile, duplicate ID, unsupported broker/topology, and policy drift
+- duration: not-applicable
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: 1
+- expected_errors: invalid matrix rows rejected before broker execution
+- observed_errors: ten draft profiles and required floor/pinned/package IDs accepted
+- retry_count: not-applicable
+- duplicate_count: 0
+- loss_count: not-applicable
+- latency: not-applicable
+- memory: not-applicable
+- final_resource_gauges: not-applicable
+- result: passed
+- artifact: docs/evidence/v1-20-compatibility-matrix.json
+- non_claims: not published artifact, not fresh registry lockfile evidence, not matrix completion or publication authorization
