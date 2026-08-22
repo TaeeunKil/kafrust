@@ -1,0 +1,142 @@
+name: Kafka Benchmark Campaign Diagnostic
+
+on:
+  workflow_dispatch:
+    inputs:
+      warmup_seconds:
+        description: Unmeasured warmup duration (maximum 300 seconds)
+        required: true
+        default: "10"
+      measured_seconds:
+        description: Measured duration (maximum 600 seconds)
+        required: true
+        default: "30"
+      sample_seconds:
+        description: Resource and throughput sample period
+        required: true
+        default: "10"
+      workers:
+        description: Producer/consumer workers and topic partitions (maximum 4)
+        required: true
+        default: "2"
+      batch_size:
+        description: Records per Produce batch
+        required: true
+        default: "100"
+      payload_bytes:
+        description: Value bytes per record
+        required: true
+        default: "1024"
+
+env:
+  CARGO_TERM_COLOR: always
+  KAFRUST_BOOTSTRAP_SERVERS: localhost:9092
+  KAFRUST_TOPIC: kafrust-benchmark-campaign-${{ github.run_id }}
+  KAFRUST_BENCH_RECORDS: "1"
+  KAFRUST_BENCH_WARMUP_SECONDS: ${{ inputs.warmup_seconds }}
+  KAFRUST_BENCH_MEASURED_SECONDS: ${{ inputs.measured_seconds }}
+  KAFRUST_BENCH_SAMPLE_SECONDS: ${{ inputs.sample_seconds }}
+  KAFRUST_BENCH_WORKERS: ${{ inputs.workers }}
+  KAFRUST_BENCH_BATCH_SIZE: ${{ inputs.batch_size }}
+  KAFRUST_BENCH_PAYLOAD_BYTES: ${{ inputs.payload_bytes }}
+  KAFRUST_BENCH_PROFILE: diagnostic-campaign
+
+jobs:
+  single-broker:
+    name: Kafka 4.3.1 bounded campaign diagnostic
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Validate campaign inputs
+        run: |
+          set -euo pipefail
+          for value in \
+            "$KAFRUST_BENCH_WARMUP_SECONDS" \
+            "$KAFRUST_BENCH_MEASURED_SECONDS" \
+            "$KAFRUST_BENCH_SAMPLE_SECONDS" \
+            "$KAFRUST_BENCH_WORKERS" \
+            "$KAFRUST_BENCH_BATCH_SIZE" \
+            "$KAFRUST_BENCH_PAYLOAD_BYTES"; do
+            [[ "$value" =~ ^[0-9]+$ ]] || { echo "campaign inputs must be non-negative integers"; exit 1; }
+          done
+          test "$KAFRUST_BENCH_MEASURED_SECONDS" -gt 0
+          test "$KAFRUST_BENCH_SAMPLE_SECONDS" -gt 0
+          test "$KAFRUST_BENCH_WORKERS" -ge 1
+          test "$KAFRUST_BENCH_WORKERS" -le 4
+          test "$KAFRUST_BENCH_WARMUP_SECONDS" -le 300
+          test "$KAFRUST_BENCH_MEASURED_SECONDS" -le 600
+          test "$KAFRUST_BENCH_SAMPLE_SECONDS" -le "$KAFRUST_BENCH_MEASURED_SECONDS"
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+
+      - name: Start Kafka
+        run: |
+          docker run -d --name kafrust-kafka \
+            -p 9092:9092 \
+            -e KAFKA_NODE_ID=1 \
+            -e KAFKA_PROCESS_ROLES=broker,controller \
+            -e KAFKA_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 \
+            -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092 \
+            -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+            -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
+            -e KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT \
+            -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@localhost:9093 \
+            -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
+            apache/kafka:4.3.1
+
+      - name: Wait for Kafka
+        run: |
+          for attempt in {1..90}; do
+            if docker exec kafrust-kafka /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server localhost:9092 >/tmp/kafrust-campaign-probe.log 2>&1; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/kafrust-campaign-probe.log || true
+          docker logs kafrust-kafka
+          exit 1
+
+      - name: Create campaign topic
+        run: |
+          docker exec kafrust-kafka /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server localhost:9092 \
+            --create \
+            --topic "$KAFRUST_TOPIC" \
+            --partitions "$KAFRUST_BENCH_WORKERS" \
+            --replication-factor 1
+
+      - name: Build release campaign
+        run: cargo build --release -p kafrust --example throughput_benchmark
+
+      - name: Run bounded campaign diagnostic
+        run: |
+          set -euo pipefail
+          cargo run --quiet --release -p kafrust --example throughput_benchmark \
+            | tee benchmark-campaign.jsonl
+          jq -e 'select(.mode == "campaign-sample")' benchmark-campaign.jsonl >/dev/null
+          jq -e --argjson workers "$KAFRUST_BENCH_WORKERS" '
+            select(.mode == "campaign-final") |
+            (.workers == $workers) and
+            (.produced_records == .consumed_records) and
+            (.in_flight_requests == 0) and
+            (.buffered_records == 0)
+          ' benchmark-campaign.jsonl >/dev/null
+
+      - name: Upload campaign result
+        uses: actions/upload-artifact@v6
+        with:
+          name: kafrust-benchmark-campaign-${{ github.run_id }}
+          path: benchmark-campaign.jsonl
+          retention-days: 90
+
+      - name: Dump Kafka logs
+        if: failure()
+        run: docker logs kafrust-kafka

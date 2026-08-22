@@ -47,6 +47,36 @@ examples are also supported. The default encoded batch limit stays below
 Kafka's default broker message-size limit; larger logical batches are split
 into multiple Produce requests.
 
+## Timed Campaign Mode
+
+Set all three duration variables to switch the example to a steady-state
+campaign. The campaign creates one producer/consumer pair per worker and
+expects the topic to have at least that many partitions. Each worker performs
+an unmeasured warmup, synchronizes at the measurement boundary, and then
+roundtrips batches on its assigned partition until the measured window ends.
+
+| Variable | Example | Meaning |
+| --- | ---: | --- |
+| `KAFRUST_BENCH_WARMUP_SECONDS` | `10` | unmeasured warmup duration |
+| `KAFRUST_BENCH_MEASURED_SECONDS` | `30` | measured duration |
+| `KAFRUST_BENCH_SAMPLE_SECONDS` | `10` | sample window period |
+| `KAFRUST_BENCH_WORKERS` | `2` | producer/consumer pairs and partitions |
+| `KAFRUST_BENCH_PROFILE` | `diagnostic-campaign` | result profile label |
+
+Campaign output is JSON Lines: one `campaign-sample` object per window and one
+`campaign-final` object after all workers drain. Samples include Produce/Fetch
+records per second, request p50/p95/p99 estimates, retries, retry ratio, RSS
+when `/proc/self/status` is available, and current in-flight/buffered gauges.
+The final object includes the measured counters and requires produced records
+to equal consumed records with both final gauges at zero. The bounded manual
+[`Kafka Benchmark Campaign Diagnostic`](../.github/workflows/benchmark-campaign-diagnostic.yml)
+workflow exercises this mode on Kafka 4.3.1 and uploads the JSONL artifact.
+
+This mode supplies reproducible harness and short-run evidence only. It does
+not by itself satisfy the V1-22 requirement for six measured hours, ten-second
+sampling, five repetitions per profile, published artifacts, or regression and
+RSS adjudication.
+
 ## GitHub Baseline
 
 The manual `Kafka Benchmark` workflow runs against a single Apache Kafka 4.3.1

@@ -80,6 +80,20 @@ and no acknowledged loss or duplicates:
 These values are retained as a reproducible short diagnostic artifact, not as
 the five-repetition, eight-hour SLO campaign or a cross-client parity claim.
 
+### Timed campaign harness (2026-08-22)
+
+The `throughput_benchmark` example now supports timed campaigns through
+`KAFRUST_BENCH_WARMUP_SECONDS`, `KAFRUST_BENCH_MEASURED_SECONDS`,
+`KAFRUST_BENCH_SAMPLE_SECONDS`, and `KAFRUST_BENCH_WORKERS`. It synchronizes
+workers at the measured-window boundary, emits JSONL samples with throughput,
+request latency buckets, RSS, retries, and resource gauges, and requires the
+final produced/consumed counts and gauges to reconcile. The manual
+[`Kafka Benchmark Campaign Diagnostic`](../../.github/workflows/benchmark-campaign-diagnostic.yml)
+workflow bounds this harness to a short Kafka 4.3.1 run (maximum ten minutes
+measured) and archives the raw JSONL output. This is preparation evidence only;
+the six-hour measured window, five repetitions, published artifact identity,
+and regression/RSS adjudication remain open.
+
 ## Failure And Lifecycle Contract
 
 - Benchmark backpressure uses the same bounded production queues and reports

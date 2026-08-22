@@ -291,7 +291,7 @@ baseline smoke passed in [run 32552631034](https://github.com/TaeeunKil/kafrust/
 after the comparison-only stable toolchain and libcurl runner fixes; the
 artifact records 1,000 records per implementation and zero normalized
 divergence. Historical smoke runs are not promoted into the long-duration or
-service-canary gates. V1-24
+service-canary gates.
 
 The isolated migration smoke was rerun from `6bcf1ef` in
 [run 32555867981](https://github.com/TaeeunKil/kafrust/actions/runs/32555867981).
@@ -305,6 +305,13 @@ passed the strengthened reconciliation with 1,000 unique records per
 implementation, zero loss/duplicates, and matching digest; the stronger smoke
 still does not close the named-service, fault, forward-cutover, rollback, or
 million-record exit gate.
+
+The V1-22 `throughput_benchmark` example now has a timed campaign mode with
+barrier-synchronized warmup/measurement windows, worker-per-partition
+concurrency, ten-second JSONL samples, RSS/retry/latency fields, and final
+record/gauge reconciliation. The bounded manual diagnostic workflow archives
+short current-source runs only; it does not promote them to the required
+five-repetition, eight-hour published SLO campaign.
 
 V1-24 through V1-26 also remain `Planned`: the API snapshot is only a freeze input,
 and no RC or `1.0.0` publication/tag exists. Protocol-first `cargo publish`
