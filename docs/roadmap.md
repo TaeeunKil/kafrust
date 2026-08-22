@@ -266,8 +266,8 @@ The record is in
 optional TLS native-tooling, advisory/license/yank, transitive-native review,
 SBOM, and drift gates remain explicitly open.
 
-The dependency checker now also scans locked full-graph Cargo metadata. On
-commit `ab87cd7` it found license metadata for all 71 resolved packages with
+The dependency checker now also scans full-graph Cargo metadata (using the
+ignored lockfile when present). On commit `ab87cd7` it found license metadata for all 71 resolved packages with
 zero missing `license`/`license_file` fields; the slice is recorded in
 [`docs/evidence/v1-19-license-metadata-audit.md`](evidence/v1-19-license-metadata-audit.md)
 and ledger row `Q-LOCAL-V119-002`. This is metadata completeness evidence

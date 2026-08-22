@@ -88,9 +88,10 @@ dependency-name check; it does not close native
 TLS tooling, license/advisory/yank, transitive unsafe review, SBOM, or drift
 gates.
 
-The exact-head checker now also runs locked full-graph Cargo metadata and
-rejects any resolved package without `license` or `license_file` metadata. The
-local audit on commit `ab87cd7ee2356195aa494ddfc9c114662611c3e2` found 71
+The exact-head checker now also runs full-graph Cargo metadata (locked when
+the ignored root lockfile is present) and rejects any resolved package without
+`license` or `license_file` metadata. The local audit on commit
+`ab87cd7ee2356195aa494ddfc9c114662611c3e2` found 71
 resolved packages and zero missing license metadata; the details are in
 [`v1-19-license-metadata-audit.md`](../../evidence/v1-19-license-metadata-audit.md).
 This closes metadata completeness only, not license compatibility or the

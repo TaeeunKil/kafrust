@@ -78,7 +78,10 @@ def main() -> int:
                 return fail(f"{profile} profile contains forbidden packages: {', '.join(forbidden)}")
             summaries.append((profile, len(packages)))
 
-        metadata = json.loads(run_cargo(("metadata", "--format-version", "1", "--locked")))
+        metadata_args = ("metadata", "--format-version", "1")
+        if (ROOT / "Cargo.lock").exists():
+            metadata_args += ("--locked",)
+        metadata = json.loads(run_cargo(metadata_args))
         packages = metadata.get("packages", [])
         missing_license = sorted(
             package.get("name", "<unknown>")
