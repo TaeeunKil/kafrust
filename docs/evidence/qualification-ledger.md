@@ -879,3 +879,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-23-migration-canary-manifest.json
 - non_claims: not executed service canary, not million-record comparison, not source-compatible facade, not production migration approval
+
+## Q-LOCAL-V124-001
+
+- date_utc: 2026-08-22
+- source_commit: 4a06eefbe0faacd57ec4ac33b5630b4293cbeae6
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: Planned
+- evidence_level: Local deterministic
+- kafka_version: not-applicable
+- kafka_image: not-applicable
+- mode: not-applicable
+- topology: external API snapshot and feature-profile preparation
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: public API snapshot, feature/toolchain policy, protocol RC pin policy, and freeze-gate manifest
+- workflow: scripts/check_v1_api_freeze_manifest.py
+- fault: snapshot drift, missing feature profile, changed MSRV, or relaxed publication/dependency boundary
+- duration: not-applicable
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: 1
+- expected_errors: changed public declarations rejected until snapshot and migration review are regenerated
+- observed_errors: snapshot digest, counts, five feature profiles, Rust 1.81/stable policy, and exact RC protocol pin accepted
+- retry_count: not-applicable
+- duplicate_count: not-applicable
+- loss_count: not-applicable
+- latency: not-applicable
+- memory: not-applicable
+- final_resource_gauges: not-applicable
+- result: passed
+- artifact: docs/evidence/v1-24-api-freeze-manifest.json; docs/evidence/public-api-snapshot.json
+- non_claims: not a semver freeze, not RC or stable publication evidence, not proof that V1-20 through V1-23 exit gates passed

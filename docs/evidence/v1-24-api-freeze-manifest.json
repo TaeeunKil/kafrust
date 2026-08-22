@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "status": "preparation",
+  "date_utc": "2026-08-22",
+  "crate": "kafrust",
+  "candidate_line": "1.0.0-rc.1",
+  "snapshot": {
+    "path": "docs/evidence/public-api-snapshot.json",
+    "crate_version": "0.3.6",
+    "feature_set": ["all-features"],
+    "public_symbol_count": 2374,
+    "root_module_count": 12,
+    "root_export_count": 288,
+    "public_declaration_sha256": "23d07042844b341fe6581e3d7378e928b896a1cc59b7254d87f8f76c5a4dbed4",
+    "classification_counts": {
+      "excluded": 13,
+      "experimental": 1358,
+      "expert": 311,
+      "stable": 692
+    }
+  },
+  "feature_profiles": [
+    {"id": "default", "features": []},
+    {"id": "tls", "features": ["tls"]},
+    {"id": "blocking", "features": ["blocking"]},
+    {"id": "otlp", "features": ["otlp"]},
+    {"id": "all-features", "features": ["all-features"]}
+  ],
+  "toolchains": ["1.81.0", "stable"],
+  "protocol_policy": {
+    "protocol_first": true,
+    "rc_client_exact_protocol_prerelease": true,
+    "stable_dependency_policy": "separate-v1-24-decision-required",
+    "path_or_patch_dependencies": false,
+    "publication_requires_explicit_authorization": true
+  },
+  "freeze_inputs": ["V1-20", "V1-21", "V1-22", "V1-23"],
+  "required_gates": [
+    "public-api-snapshot",
+    "public-surface-feature-profiles",
+    "migration-notes-from-0.3.5",
+    "exact-protocol-rc-lockfile",
+    "rust-1.81-and-stable-package-build",
+    "rustdoc-warning-free"
+  ],
+  "non_claims": [
+    "preparation is not a semver freeze",
+    "snapshot review is not published-artifact evidence",
+    "no RC or stable registry upload is authorized by this manifest"
+  ]
+}

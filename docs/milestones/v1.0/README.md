@@ -45,10 +45,10 @@ The candidate remains unpublished.
 
 V1-02 has since generated the all-features public API snapshot at
 [`docs/evidence/public-api-snapshot.json`](../../evidence/public-api-snapshot.json):
-2,366 symbols, twelve public modules, and 286 root exports. CI checks its root
-surface and public-declaration digest; commit `1ea206d` passed both toolchains
-in [CI run 32546683281](https://github.com/TaeeunKil/kafrust/actions/runs/32546683281).
-The final freeze remains owned by V1-24.
+2,374 symbols, twelve public modules, and 288 root exports. CI checks its root
+surface and public-declaration digest, while the V1-24 preparation manifest
+locks the current counts and feature/toolchain policy. The final freeze remains
+owned by V1-24.
 
 V1-03's data-plane manifest and malformed-response boundary tests, V1-04's
 typed delivery-deadline contract, and V1-05's deterministic idempotent retry

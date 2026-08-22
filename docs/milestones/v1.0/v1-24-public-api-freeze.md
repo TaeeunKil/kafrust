@@ -52,9 +52,12 @@ and migration have been proven by the same candidate line.
 V1-24 remains `Planned`. The generated all-features snapshot currently records
 2,374 symbols, twelve public modules, and 288 root exports after the typed
 group-commit ambiguity addition; CI protects that snapshot and its digest.
-This is a review baseline, not a semver freeze: V1-20 through V1-23 must first
-close their behavior, artifact, SLO, and migration gates, after which the
-snapshot will be regenerated and locked as `1.0.0-rc.1` input.
+The preparation lock is machine-checked by
+[`v1-24-api-freeze-manifest.json`](../../evidence/v1-24-api-freeze-manifest.json)
+and `scripts/check_v1_api_freeze_manifest.py`. This is a review baseline, not
+a semver freeze: V1-20 through V1-23 must first close their behavior, artifact,
+SLO, and migration gates, after which the snapshot will be regenerated and
+locked as `1.0.0-rc.1` input.
 
 ## Failure And Lifecycle Contract
 

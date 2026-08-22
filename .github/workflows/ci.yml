@@ -81,6 +81,9 @@ jobs:
       - name: Check public API snapshot
         run: python scripts/public_api_snapshot.py
 
+      - name: Check V1 API freeze manifest
+        run: python scripts/check_v1_api_freeze_manifest.py
+
       - name: Compile public surface feature profiles
         run: |
           cargo test -p kafrust --test public_surface --no-default-features

@@ -64,8 +64,9 @@ Each symbol is classified as `stable`, `expert`, `experimental`, or
 `excluded`, assigned an owning milestone, and protected by a CI root-surface
 and public-declaration digest check. Commit `1ea206d` passed both toolchains in
 [CI run 32546683281](https://github.com/TaeeunKil/kafrust/actions/runs/32546683281).
-This is a classification baseline only; V1-24 still owns the final semver
-freeze.
+The current snapshot is locked by the V1-24 preparation manifest at 2,374
+symbols, twelve modules, and 288 root exports. This remains a classification
+baseline only; V1-24 still owns the final semver freeze.
 
 ## V1-03 Execution Update (2026-08-22)
 
