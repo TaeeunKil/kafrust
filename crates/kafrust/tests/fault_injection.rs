@@ -564,6 +564,73 @@ async fn transactional_commit_response_loss_marks_outcome_unknown_and_defunct() 
 }
 
 #[tokio::test]
+async fn transactional_abort_response_loss_marks_outcome_unknown_and_defunct() {
+    let coordinator = ScriptedBroker::start(vec![
+        ScriptedResponse::Respond(api_versions_producer_response_body()),
+        ScriptedResponse::RespondAndClose(init_producer_id_v2_response_body()),
+        ScriptedResponse::Respond(api_versions_producer_response_body()),
+        ScriptedResponse::Drop,
+    ])
+    .await
+    .expect("coordinator broker should bind");
+    let coordinator_address = coordinator.address();
+    let bootstrap = ScriptedBroker::start(vec![
+        ScriptedResponse::Respond(find_coordinator_response_for_address(coordinator_address)),
+        ScriptedResponse::RespondAndClose(find_coordinator_response_for_address(
+            coordinator_address,
+        )),
+    ])
+    .await
+    .expect("bootstrap broker should bind");
+    let address = bootstrap.address();
+    let metrics = ClientMetrics::new();
+    let mut producer = ProducerConfig::new([address.to_string()])
+        .metrics(metrics.clone())
+        .request_timeout_ms(1_000)
+        .transactional_id("orders-tx")
+        .max_retries(2)
+        .build()
+        .await
+        .expect("transactional producer should initialize");
+
+    producer
+        .begin_transaction()
+        .expect("transaction should begin");
+    let error = producer
+        .abort_transaction()
+        .await
+        .expect_err("lost EndTxn response must not be reported as aborted");
+
+    assert!(matches!(
+        error,
+        kafrust::Error::TransactionOutcomeUnknown {
+            operation: "abort"
+        }
+    ));
+    assert_eq!(
+        producer.transaction_status(),
+        Some(kafrust::TransactionStatus::Defunct)
+    );
+    assert!(matches!(
+        producer.begin_transaction(),
+        Err(kafrust::Error::TransactionProducerDefunct)
+    ));
+    assert_eq!(metrics.snapshot().retries, 0);
+
+    let bootstrap_observations = bootstrap
+        .finish()
+        .await
+        .expect("bootstrap broker should complete coordinator discovery");
+    let coordinator_observations = coordinator
+        .finish()
+        .await
+        .expect("coordinator broker should complete init and EndTxn");
+    assert_eq!(bootstrap_observations.len(), 2);
+    assert_eq!(coordinator_observations.len(), 4);
+    assert_eq!(coordinator_observations[3].api_key, 26);
+}
+
+#[tokio::test]
 async fn direct_consumer_reconnects_after_fetch_response_loss() {
     let broker = ScriptedBroker::start(vec![
         ScriptedResponse::RespondWithAddressAndClose(metadata_response_for_address),
