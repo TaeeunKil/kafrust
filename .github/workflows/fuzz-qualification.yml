@@ -53,14 +53,17 @@ jobs:
           artifact_dir="$RUNNER_TEMP/kafrust-fuzz-artifacts/$TARGET/shard-$SHARD"
           mkdir -p "$artifact_dir"
           corpus_dir="corpus/$TARGET"
+          result=passed
+          if ! cargo +nightly fuzz run "$TARGET" "$corpus_dir" -- \
+              -max_total_time=3600 \
+              -rss_limit_mb=2048 \
+              -timeout=10 \
+              -seed="$((1000 + SHARD))" \
+              -artifact_prefix="$artifact_dir/" \
+              -print_final_stats=1; then
+            result=failed
+          fi
           corpus_sha256="$({ find "$corpus_dir" -type f -print0 | sort -z | xargs -0 sha256sum; } | sha256sum | cut -d' ' -f1)"
-          cargo +nightly fuzz run "$TARGET" "$corpus_dir" -- \
-            -max_total_time=3600 \
-            -rss_limit_mb=2048 \
-            -timeout=10 \
-            -seed="$((1000 + SHARD))" \
-            -artifact_prefix="$artifact_dir/" \
-            -print_final_stats=1
           cat > "$artifact_dir/qualification.json" <<EOF
           {
             "target": "$TARGET",
@@ -70,10 +73,11 @@ jobs:
             "workflow_sha": "$GITHUB_SHA",
             "toolchain": "nightly",
             "rss_limit_mb": 2048,
-            "result": "passed",
+            "result": "$result",
             "artifact_uri": "https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
           }
           EOF
+          test "$result" = passed
 
       - name: Upload qualification artifacts
         if: always()
