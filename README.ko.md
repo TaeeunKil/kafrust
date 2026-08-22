@@ -348,6 +348,7 @@ kafrust의 호환성 주장은 실제 broker로 검증된 동작으로 제한합
 - [Agentic development workflow](docs/agentic-development.md)
 - [Project strategy](docs/project-strategy.md)
 - [Roadmap](docs/roadmap.md)
+- [v1.0 milestone program](docs/milestones/v1.0/README.md)
 - [Broker roundtrip](docs/broker-roundtrip.md)
 - [Compatibility](docs/compatibility.md)
 - [API stability](docs/api-stability.md)

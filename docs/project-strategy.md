@@ -133,8 +133,9 @@ the published competitor claims above:
   The weighted replacement-readiness estimate is therefore about 50-60%, not
   75-85%. The higher protocol number must not be presented as drop-in client
   readiness.
-- The current workspace executes 788 local test and doctest cases and
-  has ten fuzz targets. It now also has a reusable in-process scripted broker
+- The current workspace has a broad local unit/integration/doctest suite and
+  ten fuzz targets. Test totals must be generated and dated rather than copied
+  into readiness claims. The workspace also has a reusable in-process scripted broker
   harness with Admin metadata-reconnect, idempotent-producer response-loss,
   transactional EndTxn response-loss, and direct-consumer Fetch response-loss
   regression gates, plus classic consumer-group coordinator-lookup retry and
@@ -210,8 +211,9 @@ the published competitor claims above:
 These are effort ranges, not calendar promises. The immediate core exit
 criteria are: promote the public ShareConsumer and consumer-group workflows
 from alpha candidates to stable documented contracts, qualify the completed
-modern Admin/Share surface and close remaining protocol gaps, establish a reproducible
-3.3/3.6/3.7/3.9/4.0/4.3 matrix, extend the new deterministic transport harness
+modern Admin/Share surface and close remaining protocol gaps, resolve the
+candidate 3.3/3.6/3.7/3.9/4.0/4.3 matrix against the practical
+3.7-through-current support target, extend the deterministic transport harness
 into a broader fault-injection matrix, and publish a fresh crate/docs.rs smoke
 before calling kafrust ahead. Share Group State APIs 83-87 and dynamic KRaft
 quorum mutation remain valuable advanced qualifications, but they are
@@ -328,11 +330,15 @@ Required work:
 - load, soak, and failure-injection testing
 - migration notes and semver discipline
 
-This tier is where comparisons with `rust-rdkafka` and pure Rust alternatives become meaningful. It should not be promised from the current alpha line. The execution path for this target is tracked in roadmap milestones M13 through M21.
+This tier is where comparisons with `rust-rdkafka` and pure Rust alternatives
+become meaningful. It should not be promised from the current alpha line. M13
+through M20 record historical capability baselines; M21 is the v1.0 umbrella
+and is decomposed into the
+[V1-00 through V1-26 program](milestones/v1.0/README.md).
 
 ### Current Competitive Gap (2026-08-20)
 
-The published `0.3.0` line has already closed the basic connectivity,
+The published `0.3.x` line through `0.3.5` has already closed the basic connectivity,
 compression, security, multi-broker recovery, idempotence, transactions,
 Admin MVP, observability, and migration-documentation gates recorded in the
 roadmap. The published group smoke now also qualifies bounded normal and

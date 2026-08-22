@@ -1,5 +1,17 @@
 # kafrust Milestone Planning Handoff
 
+> Planning status update (2026-08-21): this file remains a historical handoff,
+> but its dirty-tree, HEAD, authentication, and “first commands” state has been
+> superseded. At source `9eba7e5`, `main` was clean and synchronized with
+> `origin/main`, GitHub authentication was valid, and exact-HEAD CI run
+> `32468949663` passed. The v1 execution plan is now the
+> [v1.0 Milestone Program](milestones/v1.0/README.md), and the dated correction
+> is in its [Planning Baseline](milestones/v1.0/baseline.md). The current first
+> blocker is package identity/verification: changed source still uses the
+> already-published `0.3.5` versions, and a verified packaged client cannot
+> compile against registry `kafrust-protocol 0.3.5`. Preserve the historical
+> evidence below, but do not use Sections 3 or 10 as current repository state.
+
 Date: 2026-08-21
 Audience: the next coding session / GPT-5.6 planning pass
 Repository: kafrust

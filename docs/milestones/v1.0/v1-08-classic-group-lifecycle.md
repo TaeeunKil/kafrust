@@ -1,0 +1,111 @@
+# V1-08 Classic Consumer Group Lifecycle
+
+- Status: Planned
+- Target evidence: Published artifact
+- Dependencies: V1-07
+
+## User-Visible Objective
+
+Stabilize classic consumer-group membership, assignment, heartbeat, commit,
+rejoin, offset restoration, callback, and shutdown behavior for dynamic and
+static members under documented faults.
+
+## Non-Goals
+
+- No KIP-848 behavior; V1-09 owns it.
+- No generic shared cache for membership connections.
+- No promise for assignors not explicitly supported.
+- No automatic recovery of broker-lost or retention-deleted records.
+
+## Scope
+
+- `crates/kafrust/src/{group,consumer,client,config,error,metrics}.rs`
+- classic APIs OffsetCommit 8, OffsetFetch 9, FindCoordinator 10, JoinGroup 11,
+  Heartbeat 12, LeaveGroup 13, and SyncGroup 14
+- `crates/kafrust-protocol/src/consumer_group.rs` subscription/assignment bytes
+- range, round-robin, sticky/eager if retained, and cooperative-sticky assignors
+- dynamic/static membership, foreground/background heartbeat, commit queue and
+  worker, rebalance listener, explicit leave, and offset reset/restoration
+- classic group examples and live/published group workflows
+
+## Work Packages
+
+1. Freeze the public lifecycle state machine and assignment ownership rules.
+2. Verify exact assignor bytes and deterministic partition ownership for mixed
+   subscriptions, expansion, and member churn.
+3. Cover coordinator discovery/movement, unknown member, illegal generation,
+   rebalance in progress, static-member fencing, and leader/coordinator
+   colocation faults.
+4. Define callback ordering, callback error/panic policy without production
+   panics, cancellation, heartbeat ownership, and stale-task prevention.
+5. Decide and document `max.poll.interval`/long-processing behavior: implement
+   an enforceable contract or mark it unsupported with operational guidance.
+6. Verify commit queue/worker synchronization and committed-offset restoration
+   across rejoin, retention, normal leave, and abrupt member loss.
+7. Make commit ambiguity executable at the public boundary. Use a dedicated
+   `ConsumerGroupCommitOutcomeUnknown` carrying group/member/generation and
+   exact offsets after possible transmission. An exact-offset retry is allowed
+   only when serialized under the same identity before any newer commit; direct
+   and background paths use the same rule.
+
+## Failure And Lifecycle Contract
+
+- The group session exclusively owns member ID, generation, assignment, and
+  coordinator heartbeat connection.
+- Rejoinable broker errors trigger bounded rediscovery/rejoin; fencing and
+  authorization remain terminal.
+- A transmitted OffsetCommit with a lost response returns
+  `ConsumerGroupCommitOutcomeUnknown` with group/member/generation and offsets,
+  unless the same-identity/no-newer-commit serialized retry rule is proved. It
+  is never converted to a generic transport error or allowed to overwrite a
+  later commit.
+- Before/after rebalance callbacks observe deterministic snapshots and no stale
+  background task applies an old generation.
+- Graceful shutdown stops workers, commits only when explicitly configured,
+  leaves, joins tasks, and reports cleanup failures.
+
+## Verification
+
+- Deterministic tests cover all retained assignors, 0/1/many partitions,
+  dynamic/static IDs, callback ordering, coordinator response loss, heartbeat
+  loss, stale generations, commit ambiguity, retention reset, saturation,
+  cancellation, and close.
+- Direct and worker commit tests drop the response before and after a newer
+  queued offset, proving exact safe-retry ordering or the typed unknown result.
+- Published accepted-floor three-broker profiles run plaintext and
+  SASL_SSL/SCRAM-SHA-256 with two members, six partitions, at least 20 normal
+  and 20 abrupt churn cycles, partition expansion, and coordinator-plus-leader
+  failure.
+- Ownership is complete and disjoint each cycle; restored offsets match the
+  last known committed positions; final workers/connections/queues are zero.
+
+## Exit Criteria
+
+1. Every classic lifecycle transition and assignor has deterministic coverage.
+2. The long-processing/max-poll contract is implemented or explicitly excluded.
+3. Both published security profiles pass 40 churn cycles with no simultaneous
+   duplicate ownership and exact offset restoration.
+4. Commit ambiguity carries executable group/member/generation/offset identity,
+   and direct/background paths never report it as confirmed success or reorder
+   it over a newer commit.
+5. API, callback, shutdown, migration, and evidence records are consistent.
+
+## Migration And Rollback
+
+Map group ID, instance ID, assignor, session/heartbeat/max-poll settings,
+rebalance callbacks, manual/queued commits, and offset resets. Rollback must
+preserve committed offsets and the previous assignor protocol name; staged
+cooperative changes cannot be reverted by assigning a partition to two members.
+
+## Conventional Commit Plan
+
+1. `test(group): complete classic lifecycle fault matrix`
+2. `fix(group): preserve membership and offset state on rejoin`
+3. `ci(group): qualify published classic churn`
+4. `docs(group): stabilize classic lifecycle contract`
+
+## Evidence Record On Completion
+
+Record assignor/protocol versions, member and partition counts, churn/fault
+cycles, generations, callback sequence, commit/replay counts, restored offsets,
+final resources, artifact/security profile, and data-loss non-claim.

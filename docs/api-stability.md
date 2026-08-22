@@ -36,6 +36,12 @@ moved, or revised as API coverage grows.
 The current root re-export audit is tracked in
 [Public API Audit](public-api-audit.md).
 
+The complete v1 classification, behavior qualification, freeze, release
+candidate, and stable-release sequence is tracked in the
+[v1.0 Milestone Program](milestones/v1.0/README.md). Until V1-02 and V1-24 are
+complete, the omissions or stability labels in this pre-1.0 summary must not be
+read as a final inventory of the actual public surface.
+
 ## Change Rules
 
 - Keep public API additions minimal until the related broker behavior is tested.

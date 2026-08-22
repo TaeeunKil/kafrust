@@ -792,6 +792,7 @@ Generated API documentation:
 - [Competitor source audit](docs/competitor-source-audit-2026-08-20.md)
 - [Performance benchmarks](docs/performance.md)
 - [Roadmap](docs/roadmap.md)
+- [v1.0 milestone program](docs/milestones/v1.0/README.md)
 - [Broker roundtrip](docs/broker-roundtrip.md)
 - [Compatibility](docs/compatibility.md)
 - [Migrating from rust-rdkafka](docs/migration-from-rust-rdkafka.md)

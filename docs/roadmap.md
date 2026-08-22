@@ -4,13 +4,38 @@ kafrust milestones are ordered by implementation risk and user-visible value. Th
 
 See [Project Strategy](project-strategy.md) for the replacement target, non-goals, existing alternatives, completion tiers, and the rationale for building a pure Rust client instead of wrapping librdkafka.
 
-Status legend:
+For the M21/v1.0 program, work status and evidence level are separate:
 
-- Done: implemented and covered by CI.
-- Implemented: code and examples exist, with live-broker verification outside default PR CI.
-- Published: released on crates.io with release artifacts and post-release checks.
-- In progress: useful slices exist, but exit criteria are not fully met.
-- Planned: not started.
+- Work status: Planned, In progress, Blocked, Done, or Superseded.
+- Evidence level: Design, Local deterministic, CI, Live current-source,
+  Packaged candidate, Published artifact, or Service canary.
+
+Historical M0-M20 sections retain older `Complete`, `Implemented`, and
+`Published` wording. Those labels describe the narrower milestone scope at the
+time and do not imply that the v1.0 program is complete. The detailed status,
+dependency, evidence, and exit rules for M21 are in the
+[v1.0 Milestone Program](milestones/v1.0/README.md).
+
+## v1.0 Planning Baseline
+
+The 2026-08-21 planning inspection uses source commit `9eba7e5`. At inspection,
+`main` was clean and synchronized with `origin/main`, GitHub authentication was
+valid, and exact-HEAD CI passed in
+[`32468949663`](https://github.com/TaeeunKil/kafrust/actions/runs/32468949663).
+This supersedes the transient dirty-tree/authentication facts in the earlier
+planning handoff; it does not turn post-`0.3.5` source changes into published
+`0.3.5` evidence.
+
+The first v1 prerequisite is package integrity. Both workspace manifests still
+identify changed source as `0.3.5`, which is already published. A real
+`cargo package -p kafrust --all-features --locked` verification fails because
+the packaged client resolves registry `kafrust-protocol 0.3.5`, which lacks the
+new AddOffsetsToTxn v3, AddPartitionsToTxn v3, EndTxn v3, and InitProducerId v2
+types used by current source. The existing CI `--no-verify` package-assembly
+check cannot detect that registry compilation boundary. This is the blocking
+gate in [V1-00](milestones/v1.0/v1-00-repository-and-package-baseline.md).
+The complete dated evidence and contradiction audit is in the
+[v1.0 planning baseline](milestones/v1.0/baseline.md).
 
 ## Current Release Qualification
 
@@ -24,10 +49,11 @@ same connection after the broker session lifetime threshold. The prior
 against this fix. Both docs.rs pages now return HTTP 200:
 [`kafrust 0.3.5`](https://docs.rs/kafrust/0.3.5/kafrust/) and
 [`kafrust-protocol 0.3.5`](https://docs.rs/kafrust-protocol/0.3.5/kafrust_protocol/).
-The main CI gate now also runs `cargo package -p kafrust --all-features
---locked --no-verify` after tests, Clippy, and documentation builds so release
-artifacts fail before publication when package contents or lockfile resolution
-drift.
+The main CI gate runs `cargo package -p kafrust --all-features --locked
+--no-verify` after tests, Clippy, and documentation builds. This checks package
+assembly only. As recorded in the v1.0 planning baseline above, it does not
+compile the staged client against the matching registry protocol artifact and
+must not be treated as the final package qualification gate.
 
 The fresh external seven-profile `Published Crate Smoke` also passed with
 `kafrust 0.3.5` in
@@ -310,15 +336,13 @@ Both published docs.rs pages returned HTTP 200 for
 [`kafrust 0.2.30`](https://docs.rs/kafrust/0.2.30/kafrust/) and
 [`kafrust-protocol 0.2.30`](https://docs.rs/kafrust-protocol/0.2.30/kafrust_protocol/).
 
-## 0.3 Release Target
+## 0.3 Release Record
 
-Status: Published as `0.3.3` in protocol-first order. The `0.3.3` package/API
-surface resolves from crates.io and the published Streams surface compiles in
-a fresh external project on stable Rust and Rust 1.81. The `0.3.2` published
-member-aware Admin v10 and broader fresh-project evidence remain recorded
-below. Both exact docs.rs pages for `0.3.3` returned HTTP 200 on 2026-08-21:
-[`kafrust`](https://docs.rs/kafrust/0.3.3/kafrust/) and
-[`kafrust-protocol`](https://docs.rs/kafrust-protocol/0.3.3/kafrust_protocol/).
+Status: Historical release line, published through `0.3.5` in protocol-first
+order. The entries below retain their exact artifact and run history; relative
+phrases such as “current” in an older entry refer to that entry's date, not the
+v1.0 planning baseline. The authoritative latest-published summary is
+[Current Release Qualification](#current-release-qualification).
 
 `0.3.x` is a meaningful client milestone, not the complete Kafka replacement
 claim. It is intended to move the current alpha from broad feature
@@ -2583,12 +2607,18 @@ Scope:
 
 Exit criteria:
 
-- kafrust can replace an existing Kafka client dependency for representative producer-only, consumer-only, consumer group, admin, secured, compressed, idempotent, and transactional workloads
-- default docs direct production users to supported broker profiles instead of broad unsupported claims
-- `docs.rs` builds are green for every release candidate
-- fresh external projects compile and run documented examples from published crates
-- live compatibility workflows pass for every supported broker/security profile before release
-- public APIs have clear stability guarantees and migration notes
+- every V1-00 through V1-26 milestone is `Done`, or is `Superseded` by a linked
+  completed replacement that maps and satisfies every inherited exit criterion
+  and evidence gate
+- one accepted support contract classifies every public capability and names
+  exact broker, topology, security, runtime, and workload profiles
+- every stable operation has tested retry, ambiguity, timeout, cancellation,
+  shutdown, and reconciliation behavior
+- the same release candidate passes package, live, published, fault, resource,
+  performance, migration-canary, rollback, API, MSRV, and security gates
+- protocol-first `1.0.0` publication, docs.rs, fresh external projects, the
+  complete supported matrix, and the post-publish service canary all pass on
+  the exact tagged source
 
 Non-goal:
 
@@ -2596,9 +2626,45 @@ Non-goal:
 
 Strategic role:
 
-- This is the "complete replacement" target for Kafka client dependencies in Rust applications.
+- This is the documented-profile replacement target for selected Kafka client
+  dependencies in Rust applications, not a universal drop-in replacement.
 
-Implemented evidence:
+Detailed execution:
+
+| Phase | Milestones | Outcome |
+| --- | --- | --- |
+| Package and scope | V1-00-V1-02 | repair package identity, freeze the support contract, and classify every public surface |
+| Core data plane and groups | V1-03-V1-10 | qualify protocol, delivery, idempotence, transactions, direct consumption, classic/KIP-848 groups, and Share |
+| Admin and advanced surfaces | V1-11-V1-14 | qualify routed mutation safety and isolate or qualify expert protocols |
+| Cross-cutting hardening | V1-15-V1-19 | complete ownership/shutdown, credentials, observability, resource/fuzz, and pure-Rust dependency gates |
+| Operations and adoption | V1-20-V1-23 | run one published matrix, long faults, SLOs, migration canary, and rollback |
+| Freeze and release | V1-24-V1-26 | freeze API, qualify a published RC, and publish/post-verify `1.0.0` |
+
+The individual plans, dependencies, quantitative gates, and program exit
+definition are in the
+[v1.0 Milestone Program](milestones/v1.0/README.md). Milestone IDs are not crate
+versions, and no percentage estimate can substitute for these binary gates.
+
+Current planning blockers:
+
+- repair the same-version packaged-client/protocol mismatch in V1-00
+- reconcile crates.io `0.3.5` with GitHub releases ending at `v0.3.3`, and
+  decide the unprotected-`main` release policy without inventing retroactive tags
+- reconcile the proposed 3.7-through-current support target with the separate
+  3.3/3.6/3.7/3.9/4.0/4.3 matrix in V1-01
+- reconcile the actual twelve public modules and protocol re-export with the
+  incomplete public API audit in V1-02
+- extend the 76-key identity/version audit beyond the current 12-entry
+  identity/version/flexible-version metadata snapshot to field-level and
+  byte-level evidence for every high-level negotiated/fallback version
+- choose and prove one coherent transaction protocol in V1-06: cap
+  transactional Produce at v11 for legacy TV0/TV1, or implement the complete
+  KIP-890 TV2 feature/epoch/implicit-add/TxnOffsetCommit v5/EndTxn v5 flow
+- split Share acknowledgement response-loss evidence into broker-unapplied
+  redelivery, broker-applied no-redelivery, and persistently unknown outcomes
+- obtain one named service-canary owner/environment before V1-25
+
+Evidence history (mixed current-source and published tiers):
 
 - Producer, direct consumer, classic/KIP-848 consumer-group, share-group,
   and Streams-group builders now accept a shared `ClientConfig` through

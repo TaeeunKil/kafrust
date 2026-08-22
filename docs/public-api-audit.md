@@ -1,5 +1,13 @@
 # Public API Audit
 
+> v1 planning note (2026-08-21): this pre-1.0 audit is not a complete current
+> inventory. `crates/kafrust/src/lib.rs` exposes twelve public modules; the
+> Module Visibility section below lists only seven and the table does not give
+> separate stability rows to the blocking, ShareConsumer, metrics, or telemetry
+> root surfaces. Do not infer stability from an omission. V1-02 in the
+> [v1.0 Milestone Program](milestones/v1.0/v1-02-public-surface-classification.md)
+> owns the generated, complete classification, and V1-24 owns the final freeze.
+
 This audit tracks the current `kafrust` public surface for M12 API
 stabilization. The goal is not to freeze the API yet. The goal is to make each
 public type intentional before the project grows more protocol coverage.

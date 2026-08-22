@@ -1,0 +1,101 @@
+# V1-19 Pure-Rust Dependency Audit
+
+- Status: Planned
+- Target evidence: Packaged candidate
+- Dependencies: V1-02
+
+## User-Visible Objective
+
+Make the no-librdkafka/no-required-C-toolchain promise reproducible per feature,
+platform, and packaged artifact, with documented licenses, advisories, unsafe
+boundaries, and MSRV behavior.
+
+## Non-Goals
+
+- No claim that every transitive dependency contains no unsafe code.
+- No claim that optional TLS currently needs no native build tooling.
+- No dependency rewrite when the existing dependency is justified and supported.
+- No security guarantee based only on a package-name scan.
+
+## Scope
+
+- workspace manifests, generated external-fixture lockfiles, features, build
+  scripts, and packaged contents; the ignored root `Cargo.lock` is not a
+  release input unless policy changes
+- default, `tls`, `blocking`, `otlp`, and all-feature dependency graphs
+- Rust 1.81 MSRV and stable on supported operating systems/targets
+- `#![forbid(unsafe_code)]` in kafrust crates and transitive unsafe inventory
+- librdkafka/C binding/native build-tool detection, codec backend confirmation,
+  licenses, duplicate versions, advisories, abandoned/yanked dependencies, and
+  secret-bearing dependency behavior
+- CI, release docs, README requirements, compatibility/support contract
+
+## Work Packages
+
+1. Generate feature-specific `cargo tree`/metadata and license/advisory reports
+   from both workspace and staged packages.
+2. Add a denylist for librdkafka, rdkafka-sys, Kafka C bindings, and unintended
+   native codec backends.
+3. Build the default package in an environment with no usable C/C++ compiler;
+   record feature-specific native tooling for TLS/ring rather than hiding it.
+4. Build every supported feature/platform/toolchain combination and inspect
+   build scripts/link artifacts.
+5. Review transitive unsafe/native/crypto code and record owner, purpose,
+   version, update policy, and risk acceptance.
+6. Generate a reproducible SPDX or CycloneDX SBOM from each final package pair,
+   verify it against packaged dependency metadata, and add release gates for
+   SBOM completeness, licenses, advisories, MSRV, package content, and
+   dependency drift.
+
+## Failure And Lifecycle Contract
+
+- A required default-build C compiler/link to librdkafka or a C Kafka client is
+  a release blocker.
+- Optional-feature native requirements must be explicit before feature
+  activation and cannot weaken the default promise.
+- Critical/high applicable advisories block release unless a dated, reviewed
+  exception names impact and mitigation.
+- Dependency audit failure is not suppressed to make CI green.
+- Package verification uses actual tarballs, not only workspace metadata.
+
+## Verification
+
+- Default staged packages build/test/docs on Rust 1.81 and stable in the
+  no-C-toolchain environment.
+- All accepted feature/platform combinations build with their documented tools.
+- Dependency denylist finds zero librdkafka/C-client/native codec violations.
+- License/advisory/yanked reports are archived; applicable unmitigated
+  critical/high count is zero.
+- Source crates retain `forbid(unsafe_code)` and transitive unsafe/native review
+  has 100% owner/rationale coverage.
+- Package-pair SBOM generation is reproducible, covers every packaged runtime
+  dependency, and records the generator/version and artifact digest.
+
+## Exit Criteria
+
+1. Default packaged build demonstrably needs no C toolchain or librdkafka.
+2. Every feature has an exact dependency/native-tool/platform support entry.
+3. All accepted toolchain/platform builds pass from staged packages.
+4. Applicable unmitigated critical/high advisories and forbidden dependencies
+   are zero.
+5. CI enforces dependency and SBOM drift, and README/release/support docs state
+   the precise promise.
+
+## Migration And Rollback
+
+Dependency/provider changes preserve wire and public behavior or carry explicit
+migration notes. Roll back to a previous dependency only if advisories and
+compatibility permit it; never restore a forbidden C client binding.
+
+## Conventional Commit Plan
+
+1. `ci(deps): audit feature-specific package dependencies`
+2. `build(deps): remove forbidden native requirements`
+3. `docs(deps): define pure-Rust and tooling posture`
+4. `ci(msrv): verify staged package feature matrix`
+
+## Evidence Record On Completion
+
+Record package hashes, feature/platform/toolchain matrix, no-C environment,
+dependency graph/report/SBOM hashes and generator, forbidden/advisory/license
+totals, reviewed unsafe/native entries, and optional-TLS non-claim.

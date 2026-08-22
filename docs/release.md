@@ -55,6 +55,26 @@ above.
 This release does not close the broader provider discovery, key rotation,
 outage behavior, or Kafka 1.0 replacement gates.
 
+## Current Source Package Blocker
+
+The 2026-08-21 source baseline `9eba7e5` must not be published under `0.3.5`.
+Both manifests still use the already-published version while current client
+source depends on transaction protocol types added after the published
+`kafrust-protocol 0.3.5` artifact. Workspace builds use the path dependency and
+hide the mismatch. The following real package verification fails when the
+client resolves the registry protocol package:
+
+```text
+cargo package -p kafrust --all-features --locked
+```
+
+The CI `--no-verify` command checks package assembly only and is not sufficient.
+Before any further publication, complete
+[V1-00 Repository And Package Baseline](milestones/v1.0/v1-00-repository-and-package-baseline.md):
+select an unused coordinated version, package the protocol first, and compile
+the staged client against that matching package without a workspace path
+override. This note does not authorize publication.
+
 ## Versioning
 
 The public alpha line starts at `0.1.0`. Until the protocol and runtime behavior stabilize, keep public API additions small and document alpha limits in the affected API direction document.
@@ -1066,27 +1086,39 @@ KAFRUST_BOOTSTRAP_SERVERS=localhost:9092 KAFRUST_GROUP_ID=kafrust-smoke KAFRUST_
 
 ## Publish Order
 
-Dry-run first:
+The client dry-run cannot be a precondition for protocol publication because
+it must resolve the new protocol version from crates.io. Use this exact staged
+order:
 
-```sh
-cargo publish -p kafrust-protocol --dry-run
-cargo publish -p kafrust --dry-run # only after protocol is visible on crates.io
-```
+1. Dry-run and publish the protocol crate:
 
-Publish after dry-runs pass:
+   ```sh
+   cargo publish -p kafrust-protocol --dry-run
+   cargo publish -p kafrust-protocol
+   ```
 
-```sh
-cargo publish -p kafrust-protocol
-cargo publish -p kafrust
-```
+2. Wait for the index, then prove the exact protocol version resolves from a
+   fresh external project with no path/patch override. Use both supported
+   toolchains; `cargo info` is unavailable on pinned Cargo 1.81 and is not
+   release evidence:
 
-After publishing `kafrust-protocol`, wait for the crates.io index to expose the
-new version and confirm it resolves before publishing `kafrust`:
+   ```sh
+   rustup run 1.81.0 cargo fetch --manifest-path <external-project>/Cargo.toml
+   rustup run 1.81.0 cargo check --manifest-path <external-project>/Cargo.toml --locked
+   cargo +stable check --manifest-path <external-project>/Cargo.toml --locked
+   ```
 
-```sh
-cargo info kafrust-protocol@<version>
-cargo publish -p kafrust --dry-run
-```
+3. Only then dry-run and publish the client:
+
+   ```sh
+   cargo publish -p kafrust --dry-run
+   cargo publish -p kafrust
+   ```
+
+If protocol publication succeeds but either registry verification or client
+dry-run fails, stop and record the partial release. Never reuse the published
+protocol version for changed bytes. Prepare a new coordinated version pair and
+yank or annotate the abandoned protocol-only version according to policy.
 
 After publishing, tag the release with a Conventional Commit history summary and include known alpha limits from the roadmap.
 
