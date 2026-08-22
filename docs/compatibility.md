@@ -28,6 +28,13 @@ The accepted floor is deliberately `3.7.2`; older candidate floor probes are
 not silently counted as support. The matrix is pairwise, and each accepted row
 still requires the artifact level and non-claims recorded by its milestone.
 
+For the current v1 candidate, transactional Produce is mechanically capped at
+v11 even when a broker advertises v12/v13. The v13 topic-ID and v12 flexible
+paths remain available to non-transactional and idempotent traffic; V1-06 must
+qualify the complete TV2 state machine before that cap can change. Historical
+alpha runs that exercised transactional v12 are retained as evidence, not as
+the current v1 selection contract.
+
 ## Protocol Surface Gate
 
 The repository runs `scripts/check_protocol_api_surface.py` in CI before the

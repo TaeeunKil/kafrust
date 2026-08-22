@@ -66,6 +66,8 @@ def main() -> int:
                 return fail(f"{name}: selected v{version} is outside Apache {valid}")
         if entry.get("transaction_version_owner") and entry["transaction_version_owner"] != "V1-06":
             return fail(f"{name}: transaction selection must remain owned by V1-06")
+        if name == "Produce" and entry.get("transactional_high_level_cap") != 11:
+            return fail("Produce: transactional high-level cap must remain v11 until V1-06 qualifies TV2")
         if entry.get("request_header", {}).get("non_flexible") == 1 and ".encode_v1" not in source:
             return fail(f"{name}: non-flexible request header v1 is not encoded in source")
         if entry.get("request_header", {}).get("flexible") == 2 and ".encode_v2" not in source:

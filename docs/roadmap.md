@@ -73,8 +73,9 @@ V1-03 is `In progress`. The reviewed data-plane manifest now names selected,
 fallback, low-level, and header versions for Produce, Fetch, ListOffsets,
 Metadata, ApiVersions, and OffsetForLeaderEpoch. Its checker cross-validates
 the local API types and keys against Kafka 4.3.1 metadata and keeps transactional
-Produce selection owned by V1-06. Golden/malformed fixture expansion and floor /
-pinned-current live version logs remain open.
+Produce selection owned by V1-06; the producer now enforces the V1-06 TV1 cap
+at Produce v11 for transactional sends. Golden/malformed fixture expansion and
+floor / pinned-current live version logs remain open.
 
 ## Current Release Qualification
 

@@ -15,7 +15,8 @@
       "response_header": {"non_flexible": 0, "flexible": 1},
       "source_types": ["ProduceRequestV2", "ProduceRequestV3", "ProduceRequestV7", "ProduceRequestV9", "ProduceRequestV11", "ProduceRequestV12", "ProduceRequestV13"],
       "transaction_version_owner": "V1-06",
-      "non_claims": ["Produce v2 is not a pinned-current Kafka 4.3.1 selection", "transactional selection is owned by V1-06"]
+      "transactional_high_level_cap": 11,
+      "non_claims": ["Produce v2 is not a pinned-current Kafka 4.3.1 selection", "transactional selection is owned by V1-06", "TV2 Produce v12/v13 is not enabled until the complete TV2 state machine is qualified"]
     },
     {
       "name": "Fetch",

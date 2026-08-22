@@ -2335,11 +2335,12 @@ impl Producer {
                 None
             };
 
-            let produce_version = select_produce_batch_version_with_topic_id(
+            let produce_version = select_produce_batch_version_with_topic_id_for_mode(
                 &api_versions,
                 records,
                 self.config.compression,
                 topic_id,
+                self.transaction_state.is_some(),
             )?;
             if self.idempotent_state.is_some() && produce_version == ProduceVersion::V2 {
                 return Err(Error::Unsupported(
@@ -2777,11 +2778,12 @@ impl Producer {
             } else {
                 None
             };
-            let produce_version = select_produce_version_with_topic_id(
+            let produce_version = select_produce_version_with_topic_id_for_mode(
                 &api_versions,
                 record,
                 self.config.compression,
                 topic_id,
+                self.transaction_state.is_some(),
             )?;
             if self.idempotent_state.is_some() && produce_version == ProduceVersion::V2 {
                 return Err(Error::Unsupported(
@@ -4674,20 +4676,40 @@ fn select_produce_version(
     select_produce_version_with_topic_id(api_versions, record, compression, None)
 }
 
+#[cfg(test)]
 fn select_produce_version_with_topic_id(
     api_versions: &impl ApiVersionsLookup,
     record: &ProducerRecord,
     compression: Compression,
     topic_id: Option<[u8; 16]>,
 ) -> Result<ProduceVersion> {
-    if topic_id.is_some()
+    select_produce_version_with_topic_id_for_mode(
+        api_versions,
+        record,
+        compression,
+        topic_id,
+        false,
+    )
+}
+
+fn select_produce_version_with_topic_id_for_mode(
+    api_versions: &impl ApiVersionsLookup,
+    record: &ProducerRecord,
+    compression: Compression,
+    topic_id: Option<[u8; 16]>,
+    transactional: bool,
+) -> Result<ProduceVersion> {
+    if !transactional
+        && topic_id.is_some()
         && api_versions
             .highest_supported_version(PRODUCE_API_KEY, 13)
             .is_some_and(|version| version >= 13)
     {
         return Ok(ProduceVersion::V13);
     }
-    if let Some(version) = select_flexible_produce_version(api_versions) {
+    let flexible_max_version = if transactional { 11 } else { 12 };
+    if let Some(version) = select_flexible_produce_version_up_to(api_versions, flexible_max_version)
+    {
         return Ok(version);
     }
 
@@ -4735,20 +4757,40 @@ fn select_produce_batch_version(
     select_produce_batch_version_with_topic_id(api_versions, records, compression, None)
 }
 
+#[cfg(test)]
 fn select_produce_batch_version_with_topic_id(
     api_versions: &impl ApiVersionsLookup,
     records: &[PreparedBatchRecord<'_>],
     compression: Compression,
     topic_id: Option<[u8; 16]>,
 ) -> Result<ProduceVersion> {
-    if topic_id.is_some()
+    select_produce_batch_version_with_topic_id_for_mode(
+        api_versions,
+        records,
+        compression,
+        topic_id,
+        false,
+    )
+}
+
+fn select_produce_batch_version_with_topic_id_for_mode(
+    api_versions: &impl ApiVersionsLookup,
+    records: &[PreparedBatchRecord<'_>],
+    compression: Compression,
+    topic_id: Option<[u8; 16]>,
+    transactional: bool,
+) -> Result<ProduceVersion> {
+    if !transactional
+        && topic_id.is_some()
         && api_versions
             .highest_supported_version(PRODUCE_API_KEY, 13)
             .is_some_and(|version| version >= 13)
     {
         return Ok(ProduceVersion::V13);
     }
-    if let Some(version) = select_flexible_produce_version(api_versions) {
+    let flexible_max_version = if transactional { 11 } else { 12 };
+    if let Some(version) = select_flexible_produce_version_up_to(api_versions, flexible_max_version)
+    {
         return Ok(version);
     }
 
@@ -4790,10 +4832,11 @@ fn select_produce_batch_version_with_topic_id(
     Err(Error::Unsupported("Produce API v2 or newer"))
 }
 
-fn select_flexible_produce_version(
+fn select_flexible_produce_version_up_to(
     api_versions: &impl ApiVersionsLookup,
+    max_version: i16,
 ) -> Option<ProduceVersion> {
-    match api_versions.highest_supported_version(PRODUCE_API_KEY, 12) {
+    match api_versions.highest_supported_version(PRODUCE_API_KEY, max_version) {
         Some(version) if version >= 12 => Some(ProduceVersion::V12),
         Some(version) if version >= 11 => Some(ProduceVersion::V11),
         Some(version) if version >= 9 => Some(ProduceVersion::V9),
@@ -5222,14 +5265,15 @@ mod tests {
         leader_for, message_set_message, produce_leader_hint, produce_partition_response,
         record_batch_attempt_outcomes, record_batch_message, resolve_produce_route,
         select_produce_batch_version, select_produce_batch_version_with_topic_id,
-        select_produce_version, select_produce_version_with_topic_id, transaction_offset_topics,
-        Acks, BatchRecord, BufferedFlushReason, BufferedProduceRequest, BufferedProducer,
-        BufferedProducerCommand, BufferedProducerHandle, BufferedProducerState, Compression,
-        IdempotentBatchSequenceTracker, IdempotentProduceErrorDisposition, IdempotentProducerState,
-        PreparedBatchRecord, ProduceBatchKey, ProduceLeaderHint, ProduceResponse, ProduceVersion,
-        Producer, ProducerBatchFailure, ProducerBatchRecordOutcome, ProducerBatchReport,
-        ProducerConfig, ProducerDelivery, ProducerRecord, RecordMetadata, SecurityProtocol,
-        TransactionState, TransactionStatus,
+        select_produce_batch_version_with_topic_id_for_mode, select_produce_version,
+        select_produce_version_with_topic_id, select_produce_version_with_topic_id_for_mode,
+        transaction_offset_topics, Acks, BatchRecord, BufferedFlushReason, BufferedProduceRequest,
+        BufferedProducer, BufferedProducerCommand, BufferedProducerHandle, BufferedProducerState,
+        Compression, IdempotentBatchSequenceTracker, IdempotentProduceErrorDisposition,
+        IdempotentProducerState, PreparedBatchRecord, ProduceBatchKey, ProduceLeaderHint,
+        ProduceResponse, ProduceVersion, Producer, ProducerBatchFailure,
+        ProducerBatchRecordOutcome, ProducerBatchReport, ProducerConfig, ProducerDelivery,
+        ProducerRecord, RecordMetadata, SecurityProtocol, TransactionState, TransactionStatus,
     };
     use crate::broker_client_cache::SharedBrokerClientCache;
     use crate::consumer::ConsumerAssignment;
@@ -5794,6 +5838,38 @@ mod tests {
             )
             .unwrap(),
             ProduceVersion::V13
+        );
+    }
+
+    #[test]
+    fn caps_transactional_produce_at_v11_before_tv2_is_qualified() {
+        let versions = api_versions(13);
+        let record = ProducerRecord::to("orders").header("source", "checkout");
+
+        assert_eq!(
+            select_produce_version_with_topic_id_for_mode(
+                &versions,
+                &record,
+                Compression::None,
+                Some([7; 16]),
+                true,
+            )
+            .unwrap(),
+            ProduceVersion::V11
+        );
+
+        let records = [BatchRecord::new(record)];
+        let prepared = prepared_records(&records);
+        assert_eq!(
+            select_produce_batch_version_with_topic_id_for_mode(
+                &versions,
+                &prepared,
+                Compression::None,
+                Some([7; 16]),
+                true,
+            )
+            .unwrap(),
+            ProduceVersion::V11
         );
     }
 
