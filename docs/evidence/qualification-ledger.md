@@ -1176,3 +1176,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: GitHub Actions run 32555053351; source-only job logs
 - non_claims: not exact published 0.3.6 lockfile evidence, not complete V1-20 exit evidence, not long-duration SLO evidence, not service canary, not universal Kafka compatibility
+
+## Q-LIVE-V123-002
+
+- date_utc: 2026-08-22
+- source_commit: 6bcf1efd852977be20f761e5dbddc5ca4bea4fab
+- client_version: 0.3.6 source checkout
+- protocol_version: 0.3.6 source checkout
+- work_status: Planned
+- evidence_level: Live current-source
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka:4.3.1
+- mode: KRaft
+- topology: isolated single-node reference smoke
+- security: PLAINTEXT
+- group_protocol: not-applicable
+- workload: dual-client migration baseline with isolated kafrust and rust-rdkafka topics
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32555867981
+- fault: none injected in baseline smoke; forward/fault-observe/rollback stages remain open
+- duration: 99s workflow
+- record_count: 1000 unique records per implementation
+- member_count: not-applicable
+- repetition_count: 1
+- expected_errors: zero normalized comparison divergence and positive stage durations
+- observed_errors: none; kafrust produce 0.034558s consume 0.018552s; rust-rdkafka produce 0.020658s consume 0.006937s
+- retry_count: not-applicable
+- duplicate_count: 0
+- loss_count: 0
+- latency: not an SLO measurement; stage durations retained in artifact
+- memory: not measured
+- final_resource_gauges: not measured
+- result: passed
+- artifact: GitHub Actions run 32555867981; kafrust-migration-canary-32555867981 artifact; migration manifest
+- non_claims: not a named service canary, not a forward/rollback run, not a million-record comparison, not published-artifact evidence, not production migration approval

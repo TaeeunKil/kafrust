@@ -287,6 +287,14 @@ after the comparison-only stable toolchain and libcurl runner fixes; the
 artifact records 1,000 records per implementation and zero normalized
 divergence. Historical smoke runs are not promoted into the long-duration or
 service-canary gates. V1-24
+
+The isolated migration smoke was rerun from `6bcf1ef` in
+[run 32555867981](https://github.com/TaeeunKil/kafrust/actions/runs/32555867981).
+Both implementations processed 1,000 unique 1-KiB records with batch size 100
+and zero normalized divergence; this refreshes source evidence only and does
+not close the named-service, fault, forward-cutover, rollback, or million-record
+exit gate.
+
 through V1-26 also remain `Planned`: the API snapshot is only a freeze input,
 and no RC or `1.0.0` publication/tag exists. Protocol-first `cargo publish`
 remains disabled until the named release milestone and separate user approval.

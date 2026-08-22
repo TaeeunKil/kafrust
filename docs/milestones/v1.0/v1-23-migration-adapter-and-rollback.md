@@ -75,6 +75,14 @@ and installs that comparison-only build dependency. This is still only the
 baseline smoke rung; no named service, fault/cutover/rollback, or million-record
 exit criterion is closed.
 
+The same isolated smoke was rerun from source commit `6bcf1ef` in
+[Migration Reference Canary run 32555867981](https://github.com/TaeeunKil/kafrust/actions/runs/32555867981).
+Both implementations processed 1,000 unique 1-KiB records with batch size 100
+and zero normalized divergence: kafrust produced in 0.034558s and consumed in
+0.018552s; rust-rdkafka produced in 0.020658s and consumed in 0.006937s. The
+run refreshes source evidence only; it is not the named-service, fault,
+forward-cutover, rollback, or million-record exit gate.
+
 ## Failure And Lifecycle Contract
 
 - Adapter errors preserve typed Kafka/broker/unknown-outcome information.
