@@ -4662,8 +4662,9 @@ jobs:
           wait "$transaction_pid" || transaction_status=$?
           cat /tmp/kafrust-scram-transaction-failover.log
 
-          if [ "$transaction_status" -eq 0 ] || ! grep -q 'code: 47' /tmp/kafrust-scram-transaction-failover.log; then
-            echo "SCRAM transaction failover did not terminate the old producer with INVALID_PRODUCER_EPOCH"
+          if [ "$transaction_status" -eq 0 ] || \
+             ! grep -Eq 'code: (47|90)' /tmp/kafrust-scram-transaction-failover.log; then
+            echo "SCRAM transaction failover did not terminate the old producer with INVALID_PRODUCER_EPOCH or PRODUCER_FENCED"
             exit 1
           fi
 
