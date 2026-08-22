@@ -1308,3 +1308,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: GitHub Actions run 32558818231; kafrust-benchmark-campaign-32558818231/benchmark-campaign.jsonl; 90-day retention
 - non_claims: not five repetitions, not eight-hour V1-22 SLO evidence, not published-artifact evidence, not cross-client parity, not production claim
+
+## Q-PACKAGE-V119-002
+
+- date_utc: 2026-08-22
+- source_commit: e772451c875a795877407fd38ec1aec26b9be30e
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Packaged candidate
+- kafka_version: not-applicable
+- kafka_image: not-applicable
+- mode: not-applicable
+- topology: external-project fixture
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: staged protocol/client archives with default, tls, blocking, otlp, and all-feature external projects on Rust 1.81.0 and stable
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32559004319
+- fault: package-only fixtures reject workspace path resolution
+- duration: 7m53s stable; 7m37s Rust 1.81.0 workflow jobs
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: 2 toolchains x 5 profiles
+- expected_errors: none
+- observed_errors: all ten external profile/toolchain checks passed
+- retry_count: not-applicable
+- duplicate_count: not-applicable
+- loss_count: not-applicable
+- latency: not-applicable
+- memory: not-applicable
+- final_resource_gauges: not-applicable
+- result: passed
+- artifact: kafrust-protocol-0.3.6.crate sha256 ee191756dddae5b5d591c935416a0d06720f5ea90a7bdab8233734b0bb893768; kafrust-0.3.6.crate sha256 00f656d820b11df0d06d56c9bd6869810f28f7c14242d838a4b1bfed6c675325
+- non_claims: not crates.io publication, not license/advisory/yank/SBOM completion, not optional-TLS native-tool qualification, not full V1-20 matrix, not service canary

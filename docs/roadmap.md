@@ -249,7 +249,14 @@ feature profiles on Rust 1.81.0 and stable in
 The manifests contain no librdkafka/C client binding and the source crates
 forbid unsafe code. Feature-specific dependency reports, optional-TLS native
 tool detection, license/advisory/yank review, reviewed transitive-native
-ownership, reproducible package-pair SBOMs, and drift gates remain open.
+ownership, reproducible package-pair SBOMs, and drift gates remain open. The
+exact-HEAD refresh in [CI run 32559004319](https://github.com/TaeeunKil/kafrust/actions/runs/32559004319)
+regenerated archives with protocol SHA-256
+`ee191756dddae5b5d591c935416a0d06720f5ea90a7bdab8233734b0bb893768` and client
+SHA-256 `00f656d820b11df0d06d56c9bd6869810f28f7c14242d838a4b1bfed6c675325`;
+all five external feature profiles passed on both toolchains. This is still
+packaged-candidate evidence, not published-artifact or full dependency-audit
+completion.
 
 ## V1-20 Execution Update (2026-08-22)
 

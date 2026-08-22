@@ -65,6 +65,16 @@ SBOM generation, and drift gates. Optional TLS/ring tooling remains an explicit
 non-claim until that matrix is archived. No crates.io publication is implied by
 the current packaged-candidate evidence.
 
+The exact-HEAD package refresh on source `e772451` passed both Rust 1.81.0 and
+stable in [CI run 32559004319](https://github.com/TaeeunKil/kafrust/actions/runs/32559004319).
+The staged archives were `kafrust-protocol-0.3.6.crate`
+(`ee191756dddae5b5d591c935416a0d06720f5ea90a7bdab8233734b0bb893768`) and
+`kafrust-0.3.6.crate`
+(`00f656d820b11df0d06d56c9bd6869810f28f7c14242d838a4b1bfed6c675325`); default,
+`tls`, `blocking`, `otlp`, and all-feature external projects passed with no
+workspace path resolution. This refreshes packaged-candidate evidence only;
+the dependency/SBOM/advisory audit and published matrix remain open.
+
 ## Failure And Lifecycle Contract
 
 - A required default-build C compiler/link to librdkafka or a C Kafka client is
