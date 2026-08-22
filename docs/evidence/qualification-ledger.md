@@ -252,3 +252,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: workspace source at the recorded commit
 - non_claims: not published artifact evidence, not universal Kafka compatibility, not service canary
+
+## Q-CI-1249-001
+
+- date_utc: 2026-08-22
+- source_commit: 5571ca36558c4757b811171d7a5d0d0a487333ae
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: CI
+- kafka_version: not-applicable
+- kafka_image: not-applicable
+- mode: not-applicable
+- topology: not-applicable
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: Rust formatting, package boundary, protocol audits, full tests, documentation, and clippy on stable and Rust 1.81.0
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32548809314
+- fault: none
+- duration: not-recorded
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: 2
+- expected_errors: none
+- observed_errors: none
+- retry_count: not-applicable
+- duplicate_count: not-applicable
+- loss_count: not-applicable
+- latency: not-applicable
+- memory: not-applicable
+- final_resource_gauges: package boundary and documentation checks passed
+- result: passed
+- artifact: pushed workspace commit 5571ca36558c4757b811171d7a5d0d0a487333ae
+- non_claims: not published crates, not live broker qualification, not service canary, not completion of V1-03 through V1-05

@@ -89,7 +89,23 @@ error. Queue expiry is replay-safe and sends zero Produce frames; immediate and
 batch deadline expiry poisons the producer path. Focused local deadline,
 poisoning, and retry-classification tests pass, and the public API snapshot was
 regenerated for the new export. Published mixed-outcome profiles and the full
-clock-controlled matrix remain open.
+clock-controlled matrix remain open. The pushed candidate's stable and Rust
+1.81.0 jobs are green in [CI run 32548809314](https://github.com/TaeeunKil/kafrust/actions/runs/32548809314).
+
+## V1-05 Execution Update (2026-08-22)
+
+V1-05 is `In progress`. The deterministic idempotent slice now records exact
+frame replay after a dropped Produce response, duplicate-sequence resolution,
+terminal handling for out-of-order/invalid-epoch/fenced responses, partition-
+scoped batch sequencing, and sequence-modulus rollover. The focused tests are
+`idempotent_producer_retries_dropped_response_with_same_batch_sequence`,
+`retries_ambiguous_idempotent_batch_with_the_same_sequence`,
+`idempotent_producer_fatal_sequence_errors_are_terminal`,
+`preserves_reserved_batch_sequences_across_retries_and_chunks`, and
+`wraps_idempotent_sequence_after_i32_max`; they pass on candidate commit
+`5571ca3` with the required local validation. Buffered-mode coverage, the full
+fault-phase table, and the exact published ten-cycle/100,000-record
+reconciliation gate remain open, so no published-artifact claim is made.
 
 ## Current Release Qualification
 

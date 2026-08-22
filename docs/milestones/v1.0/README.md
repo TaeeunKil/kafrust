@@ -34,7 +34,8 @@ be published from the current same-version package state.
 
 ## Current Execution
 
-As of 2026-08-22, V1-00, V1-01, and V1-02 are `Done`. The coordinated `0.3.6` candidate
+As of 2026-08-22, V1-00, V1-01, and V1-02 are `Done`; V1-03, V1-04, and V1-05
+are `In progress`. The coordinated `0.3.6` candidate
 has passed the local package-only boundary verifier across five feature
 profiles on Rust 1.81.0. The regression against published protocol `0.3.5`
 also passes by reproducing the four missing transaction type families. Exact
@@ -48,6 +49,11 @@ V1-02 has since generated the all-features public API snapshot at
 surface and public-declaration digest; commit `1ea206d` passed both toolchains
 in [CI run 32546683281](https://github.com/TaeeunKil/kafrust/actions/runs/32546683281).
 The final freeze remains owned by V1-24.
+
+V1-03's data-plane manifest and malformed-response boundary tests, V1-04's
+typed delivery-deadline contract, and V1-05's deterministic idempotent retry
+slice are recorded in their milestone documents. These are implementation and
+qualification increments, not published-artifact completion claims.
 
 ## Status And Evidence
 

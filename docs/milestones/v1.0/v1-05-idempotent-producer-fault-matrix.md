@@ -1,6 +1,6 @@
 # V1-05 Idempotent Producer Fault Matrix
 
-- Status: Planned
+- Status: In progress
 - Target evidence: Published artifact
 - Dependencies: V1-04
 
@@ -40,6 +40,26 @@ duplicated under the documented leader and response-loss faults.
 5. Verify per-partition concurrency and batch splitting cannot reorder
    sequences.
 6. Run bounded repeated live faults from the exact published artifact.
+
+## Current Execution Record (2026-08-22)
+
+V1-05 is now `In progress`. The existing producer state machine and scripted
+broker tests provide the deterministic first slice of the fault matrix:
+
+| Fault or invariant | Deterministic evidence | Result |
+| --- | --- | --- |
+| Lost Produce response and reconnect | `idempotent_producer_retries_dropped_response_with_same_batch_sequence`; `retries_ambiguous_idempotent_batch_with_the_same_sequence` | exact Produce frame is replayed with the same producer identity and base sequence |
+| Duplicate sequence acknowledgement | `batch_duplicate_outcomes`; the dropped-response integration test | resolves once with an unknown offset and does not allocate a new sequence |
+| Out-of-order, invalid epoch, and fencing | `idempotent_producer_fatal_sequence_errors_are_terminal`; `classifies_idempotent_produce_error_dispositions` | producer becomes terminal and the next send emits no frame |
+| Batch splitting and partition ordering | `preserves_reserved_batch_sequences_across_retries_and_chunks`; `reserves_batch_sequences_independently_per_partition` | reserved sequences remain partition-scoped and ordered across retries |
+| Sequence boundary | `wraps_idempotent_sequence_after_i32_max` | wraps at the Kafka sequence modulus without integer overflow |
+
+The deterministic suite and the full workspace validation pass on the pushed
+candidate commit `5571ca3`; the stable and Rust 1.81.0 matrix is green in
+[CI run 32548809314](https://github.com/TaeeunKil/kafrust/actions/runs/32548809314).
+This does not close the milestone: buffered-mode
+fault coverage, the complete before/partial/after-write table, ten-cycle
+published profiles, and the 100,000-record reconciliation gate remain open.
 
 ## Failure And Lifecycle Contract
 

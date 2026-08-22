@@ -81,7 +81,9 @@ as pre-send while an immediate/batch outer deadline conservatively retires the
 producer and reports the Produce phase. Buffered expiry and producer retry
 classification have focused regressions, and the full public API snapshot was
 regenerated for the new root export. Local producer tests pass (including the
-deadline, poisoning, and no-retry cases).
+deadline, poisoning, and no-retry cases). The pushed candidate's stable and
+Rust 1.81.0 jobs are green in
+[CI run 32548809314](https://github.com/TaeeunKil/kafrust/actions/runs/32548809314).
 
 The published artifact profiles, clock-controlled coverage for every producer
 entry point, and exact CI/live evidence remain open. V1-03's live/golden gates
