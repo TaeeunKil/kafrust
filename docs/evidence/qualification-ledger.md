@@ -1374,3 +1374,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-19-dependency-audit.md
 - non_claims: not transitive unsafe/native review, not optional-TLS native-tool qualification, not license/advisory/yank review, not SBOM completeness, not dependency-drift gate, not published artifact evidence
+
+## Q-LOCAL-V119-002
+
+- date_utc: 2026-08-22
+- source_commit: ab87cd7ee2356195aa494ddfc9c114662611c3e2
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: not-applicable
+- kafka_image: not-applicable
+- mode: not-applicable
+- topology: local locked Cargo metadata graph
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: complete resolved package license-metadata scan
+- workflow: scripts/check_v1_dependency_graph.py
+- fault: none
+- duration: not-recorded
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: 1
+- expected_errors: every resolved package has Cargo license or license_file metadata
+- observed_errors: none; 71 resolved packages, zero missing license metadata
+- retry_count: not-applicable
+- duplicate_count: not-applicable
+- loss_count: not-applicable
+- latency: not-applicable
+- memory: not-applicable
+- final_resource_gauges: not-applicable
+- result: passed
+- artifact: docs/evidence/v1-19-license-metadata-audit.md
+- non_claims: not license compatibility approval, not advisory/yank review, not transitive unsafe/native review, not SBOM completeness, not optional-TLS native-tool qualification, not published artifact evidence
