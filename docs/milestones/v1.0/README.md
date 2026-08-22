@@ -41,7 +41,11 @@ profiles on Rust 1.81.0. The regression against published protocol `0.3.5`
 also passes by reproducing the four missing transaction type families. Exact
 commit `3e12192` passed both Rust 1.81.0 and stable in
 [CI run 32545563612](https://github.com/TaeeunKil/kafrust/actions/runs/32545563612).
-The candidate remains unpublished.
+The latest exact-head CI run on `0a08e29` is
+[32559629510](https://github.com/TaeeunKil/kafrust/actions/runs/32559629510);
+stable and Rust 1.81.0 both pass the repository gates, including the staged
+package boundary and V1 dependency-graph posture. The candidate remains
+unpublished.
 
 V1-02 has since generated the all-features public API snapshot at
 [`docs/evidence/public-api-snapshot.json`](../../evidence/public-api-snapshot.json):
