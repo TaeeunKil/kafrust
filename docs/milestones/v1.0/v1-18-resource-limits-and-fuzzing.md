@@ -76,7 +76,9 @@ campaigns. The dedicated
 [`fuzz-qualification.yml`](../../../.github/workflows/fuzz-qualification.yml)
 workflow now runs that matrix on manual dispatch and weekly schedule, records
 per-target/per-shard hashes and final statistics, and uploads crash/OOM
-artifacts. No qualifying campaign has completed yet; retained crash/OOM
+artifacts. Each shard runs 900 seconds, giving each target 3,600 cumulative
+seconds across four shards while avoiding an accidental four-hour-per-target
+overrun. No qualifying campaign has completed yet; retained crash/OOM
 disposition and four consecutive weekly passes remain open. Existing fuzz
 success is therefore not treated as absence-of-bug evidence or as completion
 of the CI exit gate.

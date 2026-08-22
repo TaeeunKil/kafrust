@@ -234,12 +234,14 @@ run. Discovery run
 passed all ten targets; it remains a 30-second-per-target smoke. The
 versioned manifest at
 [`docs/evidence/v1-18-fuzz-campaign-manifest.json`](evidence/v1-18-fuzz-campaign-manifest.json)
-and its checker now declare the required 3,600 seconds per target, four shards,
-70-minute job timeout, and four weekly passes. The dedicated
+and its checker now declare the required 3,600 cumulative seconds per target,
+four 900-second shards, 70-minute job timeout, and four weekly passes. The dedicated
 [`fuzz-qualification.yml`](../.github/workflows/fuzz-qualification.yml) workflow
 implements that matrix with retained per-shard statistics and artifacts, but
 no qualifying campaign has completed; retained crash/OOM dispositions and four
-weekly passes remain required.
+weekly passes remain required. The superseded 3,600-second-per-shard run was
+cancelled before evidence collection to avoid overstating or wasting the
+campaign budget.
 
 ## V1-19 Execution Update (2026-08-22)
 

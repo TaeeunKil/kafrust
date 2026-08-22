@@ -55,7 +55,7 @@ jobs:
           corpus_dir="corpus/$TARGET"
           result=passed
           if ! cargo +nightly fuzz run "$TARGET" "$corpus_dir" -- \
-              -max_total_time=3600 \
+              -max_total_time=900 \
               -rss_limit_mb=2048 \
               -timeout=10 \
               -seed="$((1000 + SHARD))" \
@@ -69,7 +69,8 @@ jobs:
             "target": "$TARGET",
             "corpus_sha256": "$corpus_sha256",
             "shard": $SHARD,
-            "duration_seconds": 3600,
+            "duration_seconds": 900,
+            "campaign_seconds_per_target": 3600,
             "workflow_sha": "$GITHUB_SHA",
             "toolchain": "nightly",
             "rss_limit_mb": 2048,

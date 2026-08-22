@@ -48,8 +48,14 @@ def main() -> int:
         return fail("discovery duration must remain the 30-second smoke")
     if qualification.get("seconds_per_target", 0) < 3600:
         return fail("qualification duration must provide at least 60 minutes per target")
-    if qualification.get("shards_per_target", 0) < 1:
+    shards_per_target = qualification.get("shards_per_target", 0)
+    if shards_per_target < 1:
         return fail("qualification must declare at least one shard")
+    seconds_per_shard = qualification.get("seconds_per_shard", 0)
+    if seconds_per_shard < 900:
+        return fail("each qualification shard must provide at least 15 minutes")
+    if seconds_per_shard * shards_per_target < qualification["seconds_per_target"]:
+        return fail("shard durations must provide the declared cumulative target budget")
     if qualification.get("job_timeout_minutes", 0) * 60 <= qualification["seconds_per_target"]:
         return fail("job timeout must exceed one target campaign duration")
     if "-max_total_time=30" not in workflow:
@@ -65,8 +71,8 @@ def main() -> int:
             return fail(f"qualification workflow target list does not contain {target}")
     if "shard: [0, 1, 2, 3]" not in qualification_workflow:
         return fail("qualification workflow must declare four shards")
-    if "-max_total_time=3600" not in qualification_workflow:
-        return fail("qualification workflow must run 3600 seconds per target")
+    if f"-max_total_time={seconds_per_shard}" not in qualification_workflow:
+        return fail("qualification workflow must run the declared per-shard duration")
     if "-rss_limit_mb=2048" not in qualification_workflow:
         return fail("qualification workflow must enforce the 2048 MB RSS limit")
     if "-timeout=10" not in qualification_workflow:
