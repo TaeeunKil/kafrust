@@ -11,6 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "docs" / "evidence" / "v1-18-fuzz-campaign-manifest.json"
 WORKFLOW = ROOT / ".github" / "workflows" / "fuzz.yml"
+QUALIFICATION_WORKFLOW = ROOT / ".github" / "workflows" / "fuzz-qualification.yml"
 TARGETS = (
     "codec",
     "frame",
@@ -34,6 +35,7 @@ def main() -> int:
     try:
         manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
         workflow = WORKFLOW.read_text(encoding="utf-8")
+        qualification_workflow = QUALIFICATION_WORKFLOW.read_text(encoding="utf-8")
     except (OSError, json.JSONDecodeError) as error:
         return fail(str(error))
     if manifest.get("schema_version") != 1:
@@ -59,6 +61,22 @@ def main() -> int:
     for target in TARGETS:
         if target not in workflow:
             return fail(f"workflow target list does not contain {target}")
+        if target not in qualification_workflow:
+            return fail(f"qualification workflow target list does not contain {target}")
+    if "shard: [0, 1, 2, 3]" not in qualification_workflow:
+        return fail("qualification workflow must declare four shards")
+    if "-max_total_time=3600" not in qualification_workflow:
+        return fail("qualification workflow must run 3600 seconds per target")
+    if "-rss_limit_mb=2048" not in qualification_workflow:
+        return fail("qualification workflow must enforce the 2048 MB RSS limit")
+    if "-timeout=10" not in qualification_workflow:
+        return fail("qualification workflow must enforce the 10 second input timeout")
+    if "timeout-minutes: 70" not in qualification_workflow:
+        return fail("qualification workflow timeout must be 70 minutes")
+    if "-print_final_stats=1" not in qualification_workflow:
+        return fail("qualification workflow must retain libFuzzer final statistics")
+    if "schedule:" not in qualification_workflow or 'cron: "47 3 * * 1"' not in qualification_workflow:
+        return fail("qualification workflow must retain a weekly scheduled campaign")
     print(f"v1 fuzz campaign manifest ok: {len(TARGETS)} targets; qualification is 3600s/target")
     return 0
 

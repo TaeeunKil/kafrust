@@ -62,15 +62,24 @@ resource limits before network access; and scripted fault tests cover malformed
 data-plane responses and bounded queue saturation.
 
 All ten fuzz targets compile and run from the standalone nightly workflow, but
-the current workflow grants only a 30-second discovery smoke per target. The
-versioned campaign manifest at
+the discovery workflow grants only a 30-second smoke per target. The
+2026-08-22 discovery run [32555867720](https://github.com/TaeeunKil/kafrust/actions/runs/32555867720)
+passed all ten targets and retained corpus/crash artifacts; it is recorded as
+an in-progress discovery row in the
+[qualification ledger](../../evidence/qualification-ledger.md). The versioned
+campaign manifest at
 [`v1-18-fuzz-campaign-manifest.json`](../../evidence/v1-18-fuzz-campaign-manifest.json)
 and `scripts/check_v1_fuzz_campaign_manifest.py` now make the distinction
 executable: discovery remains 30 seconds, while qualification requires 3,600
 seconds per target, four shards, a 70-minute job timeout, and four weekly
-campaigns. The actual sharded qualification workflow and retained crash/OOM
-disposition remain open. Existing fuzz success is therefore not treated as
-absence-of-bug evidence or as completion of the CI exit gate.
+campaigns. The dedicated
+[`fuzz-qualification.yml`](../../../.github/workflows/fuzz-qualification.yml)
+workflow now runs that matrix on manual dispatch and weekly schedule, records
+per-target/per-shard hashes and final statistics, and uploads crash/OOM
+artifacts. No qualifying campaign has completed yet; retained crash/OOM
+disposition and four consecutive weekly passes remain open. Existing fuzz
+success is therefore not treated as absence-of-bug evidence or as completion
+of the CI exit gate.
 
 ## Failure And Lifecycle Contract
 

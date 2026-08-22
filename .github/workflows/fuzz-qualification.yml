@@ -1,0 +1,86 @@
+name: Fuzz Qualification
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "47 3 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  qualification:
+    name: ${{ matrix.target }} / shard ${{ matrix.shard }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - codec
+          - frame
+          - api_versions_response
+          - group_describe_response
+          - share_group_offsets_response
+          - streams_groups_response
+          - offset_commit_response
+          - offset_fetch_response
+          - compression
+          - list_groups_response
+        shard: [0, 1, 2, 3]
+    defaults:
+      run:
+        working-directory: fuzz
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install nightly Rust
+        run: rustup toolchain install nightly --profile minimal
+
+      - name: Install cargo-fuzz
+        run: cargo +stable install cargo-fuzz --locked
+
+      - name: Compile target
+        run: cargo +nightly fuzz check "${{ matrix.target }}"
+
+      - name: Run 60-minute shard
+        env:
+          TARGET: ${{ matrix.target }}
+          SHARD: ${{ matrix.shard }}
+        run: |
+          set -o pipefail
+          artifact_dir="$RUNNER_TEMP/kafrust-fuzz-artifacts/$TARGET/shard-$SHARD"
+          mkdir -p "$artifact_dir"
+          corpus_dir="corpus/$TARGET"
+          corpus_sha256="$({ find "$corpus_dir" -type f -print0 | sort -z | xargs -0 sha256sum; } | sha256sum | cut -d' ' -f1)"
+          cargo +nightly fuzz run "$TARGET" "$corpus_dir" -- \
+            -max_total_time=3600 \
+            -rss_limit_mb=2048 \
+            -timeout=10 \
+            -seed="$((1000 + SHARD))" \
+            -artifact_prefix="$artifact_dir/" \
+            -print_final_stats=1
+          cat > "$artifact_dir/qualification.json" <<EOF
+          {
+            "target": "$TARGET",
+            "corpus_sha256": "$corpus_sha256",
+            "shard": $SHARD,
+            "duration_seconds": 3600,
+            "workflow_sha": "$GITHUB_SHA",
+            "toolchain": "nightly",
+            "rss_limit_mb": 2048,
+            "result": "passed",
+            "artifact_uri": "https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          }
+          EOF
+
+      - name: Upload qualification artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kafrust-fuzz-qualification-${{ github.run_id }}-${{ matrix.target }}-shard-${{ matrix.shard }}
+          if-no-files-found: ignore
+          path: |
+            ${{ runner.temp }}/kafrust-fuzz-artifacts
+            fuzz/corpus/${{ matrix.target }}

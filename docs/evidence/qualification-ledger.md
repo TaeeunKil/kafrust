@@ -22,6 +22,39 @@ and are checked in CI. Values such as `not-applicable` and `not-recorded` are
 deliberate classifications, not missing data. A row must never use an
 unqualified relative artifact label.
 
+## Q-CI-V118-001
+
+- date_utc: 2026-08-22
+- source_commit: 6bcf1efd852977be20f761e5dbddc5ca4bea4fab
+- client_version: 0.3.6 source checkout
+- protocol_version: 0.3.6 source checkout
+- work_status: In progress
+- evidence_level: CI
+- kafka_version: not-applicable
+- kafka_image: not-applicable
+- mode: not-applicable
+- topology: not-applicable
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: ten-target nightly libFuzzer discovery smoke
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32555867720
+- fault: malformed and bounded corpus inputs; no broker fault injection
+- duration: 30s per target; workflow duration not-recorded
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: 1
+- expected_errors: no crash, timeout, OOM, or sanitizer failure
+- observed_errors: none
+- retry_count: not-applicable
+- duplicate_count: not-applicable
+- loss_count: not-applicable
+- latency: not-applicable
+- memory: RSS cap 2048 MB per target
+- final_resource_gauges: libFuzzer final statistics retained in artifact
+- result: passed
+- artifact: GitHub Actions run 32555867720; kafrust-fuzz-32555867720 artifact
+- non_claims: not 3600-second qualification per target, not four-shard qualification, not four weekly campaigns, not absence-of-bugs evidence
+
 ## Q-V100-001
 
 - date_utc: 2026-08-22

@@ -229,12 +229,17 @@ throttle/mutation/termination checks, and secret scan remain open.
 V1-18 is `In progress`. Frame, collection, compact/tagged-field, decompression,
 response-buffer, queue, and configuration boundaries reject malformed or
 oversized input before the relevant allocation. Ten fuzz targets compile and
-run, but the current workflow is only a 30-second discovery smoke. The
+run. Discovery run
+[32555867720](https://github.com/TaeeunKil/kafrust/actions/runs/32555867720)
+passed all ten targets; it remains a 30-second-per-target smoke. The
 versioned manifest at
 [`docs/evidence/v1-18-fuzz-campaign-manifest.json`](evidence/v1-18-fuzz-campaign-manifest.json)
 and its checker now declare the required 3,600 seconds per target, four shards,
-70-minute job timeout, and four weekly passes. The actual sharded qualification
-workflow and retained crash/OOM dispositions remain required.
+70-minute job timeout, and four weekly passes. The dedicated
+[`fuzz-qualification.yml`](.github/workflows/fuzz-qualification.yml) workflow
+implements that matrix with retained per-shard statistics and artifacts, but
+no qualifying campaign has completed; retained crash/OOM dispositions and four
+weekly passes remain required.
 
 ## V1-19 Execution Update (2026-08-22)
 
