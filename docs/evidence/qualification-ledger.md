@@ -747,3 +747,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: workspace source commit e6de5c5201f8c688bf5e3ca148d3c997cd8918f6
 - non_claims: not published artifact, not full V1-20 matrix, not 100-cycle/long-soak/SLO evidence, not service canary
+
+## Q-LOCAL-V118-002
+
+- date_utc: 2026-08-22
+- source_commit: d013d92107ce5b6c340ef0a1049a24f439fb0218
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: not-applicable
+- kafka_image: not-applicable
+- mode: not-applicable
+- topology: standalone nightly fuzz workspace
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: versioned discovery and qualification campaign manifest validation
+- workflow: scripts/check_v1_fuzz_campaign_manifest.py
+- fault: target-list drift, insufficient duration, insufficient timeout, or missing loop
+- duration: not-applicable
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: 1
+- expected_errors: manifest rejects a campaign incapable of delivering 60 minutes per target
+- observed_errors: ten targets, 3,600-second qualification duration, four shards, and 70-minute timeout accepted
+- retry_count: not-applicable
+- duplicate_count: 0
+- loss_count: not-applicable
+- latency: not-applicable
+- memory: RSS cap declared at 2048 MiB
+- final_resource_gauges: not-applicable
+- result: passed
+- artifact: docs/evidence/v1-18-fuzz-campaign-manifest.json
+- non_claims: not actual 60-minute campaign, not four weekly passes, not crash/OOM absence proof
