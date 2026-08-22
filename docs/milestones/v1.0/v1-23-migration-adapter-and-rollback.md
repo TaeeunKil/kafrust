@@ -83,6 +83,17 @@ and zero normalized divergence: kafrust produced in 0.034558s and consumed in
 run refreshes source evidence only; it is not the named-service, fault,
 forward-cutover, rollback, or million-record exit gate.
 
+The reconciliation harness was then strengthened on source commit `ec0f86b`
+to embed an 8-byte business ID in every measured value and compare a SHA-256
+digest plus unique/loss/duplicate counts across both implementations. The
+exact-HEAD rerun [Migration Reference Canary run 32557407734](https://github.com/TaeeunKil/kafrust/actions/runs/32557407734)
+passed with 1,000 unique records per implementation, zero loss, zero
+duplicates, and matching digest
+`98fb6a3dfe9a9ac1765160a42e05b2c63e0ed231af678f370de194c0f5044e26`.
+This is stronger baseline reconciliation evidence, but it still does not
+close the named-service, fault, forward-cutover, rollback, or million-record
+exit gate.
+
 ## Failure And Lifecycle Contract
 
 - Adapter errors preserve typed Kafka/broker/unknown-outcome information.

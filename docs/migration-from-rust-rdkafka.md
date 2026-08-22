@@ -546,6 +546,18 @@ checks for the production migration.
 replace workload-specific qualification against the target brokers, security
 settings, message sizes, failure modes, and throughput.
 
+## Reference Comparator Reconciliation
+
+The repository's reference fixture at
+`.github/published-rust-rdkafka-comparison` uses isolated topics for each
+implementation. Every measured value carries an eight-byte business ID; the
+fixture consumes the records back, counts unique IDs, loss, and duplicates,
+and emits a SHA-256 digest of the consumed values. The migration workflow fails
+when either implementation loses or duplicates an ID, or when the normalized
+digests differ. This makes the 1,000-record smoke a content-reconciliation
+check rather than a count-only timing comparison. It remains a source smoke,
+not the required million-record named-service forward/cutover/rollback gate.
+
 ## Rollout Procedure
 
 1. Inventory all rust-rdkafka client types, config keys, callbacks, and admin

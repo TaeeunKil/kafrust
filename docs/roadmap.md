@@ -298,9 +298,15 @@ The isolated migration smoke was rerun from `6bcf1ef` in
 Both implementations processed 1,000 unique 1-KiB records with batch size 100
 and zero normalized divergence; this refreshes source evidence only and does
 not close the named-service, fault, forward-cutover, rollback, or million-record
-exit gate.
+exit gate. The comparison fixture now embeds business IDs and compares
+unique/loss/duplicate counts plus a SHA-256 payload digest. Exact-HEAD run
+[32557407734](https://github.com/TaeeunKil/kafrust/actions/runs/32557407734)
+passed the strengthened reconciliation with 1,000 unique records per
+implementation, zero loss/duplicates, and matching digest; the stronger smoke
+still does not close the named-service, fault, forward-cutover, rollback, or
+million-record exit gate.
 
-through V1-26 also remain `Planned`: the API snapshot is only a freeze input,
+V1-24 through V1-26 also remain `Planned`: the API snapshot is only a freeze input,
 and no RC or `1.0.0` publication/tag exists. Protocol-first `cargo publish`
 remains disabled until the named release milestone and separate user approval.
 The V1-25 RC and V1-26 stable-release manifests/checkers now enforce the exact
