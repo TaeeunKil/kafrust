@@ -59,6 +59,12 @@ a semver freeze: V1-20 through V1-23 must first close their behavior, artifact,
 SLO, and migration gates, after which the snapshot will be regenerated and
 locked as `1.0.0-rc.1` input.
 
+The exact current-source preparation checks passed on both Rust 1.81 and stable
+in [CI run 32552742656](https://github.com/TaeeunKil/kafrust/actions/runs/32552742656),
+including the snapshot lock, all five feature profiles, package boundary, and
+required repository validation. This qualifies the preparation input only; it
+does not close V1-24's semver, migration, or release exit criteria.
+
 ## Failure And Lifecycle Contract
 
 - Adding a new variant/method after freeze follows the documented exhaustive or

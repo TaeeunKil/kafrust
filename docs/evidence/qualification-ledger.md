@@ -945,3 +945,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: GitHub Actions run 32552631034; kafrust-migration-canary-32552631034 artifact; migration manifest
 - non_claims: not a named service canary, not a forward/rollback run, not a million-record comparison, not published-artifact evidence, not production migration approval
+
+## Q-CI-V124-001
+
+- date_utc: 2026-08-22
+- source_commit: fba572767e1d55668f711d53dd7665a4ca1bb63e
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: Planned
+- evidence_level: CI
+- kafka_version: not-applicable
+- kafka_image: not-applicable
+- mode: not-applicable
+- topology: stable and Rust 1.81 dual-toolchain CI
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: format, protocol/schema audits, v1 manifests, ledger/API checks, feature profiles, build, clippy, tests, docs, and package boundary
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32552742656
+- fault: none
+- duration: 8 minutes
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: 2 toolchains
+- expected_errors: none
+- observed_errors: none; stable and Rust 1.81 jobs passed
+- retry_count: 0
+- duplicate_count: not-applicable
+- loss_count: not-applicable
+- latency: not-applicable
+- memory: not-applicable
+- final_resource_gauges: not-applicable
+- result: passed
+- artifact: CI run 32552742656 at source commit fba572767e1d55668f711d53dd7665a4ca1bb63e
+- non_claims: not V1-24 semver freeze, not RC or stable publication, not long-duration/live broker/SLO evidence
