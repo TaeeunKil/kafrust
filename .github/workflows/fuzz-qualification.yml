@@ -44,7 +44,7 @@ jobs:
       - name: Compile target
         run: cargo +nightly fuzz check "${{ matrix.target }}"
 
-      - name: Run 60-minute shard
+      - name: Run qualification shard (15 minutes)
         env:
           TARGET: ${{ matrix.target }}
           SHARD: ${{ matrix.shard }}
