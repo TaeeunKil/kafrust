@@ -161,6 +161,16 @@ close, acquisition filtering, and stable member identity across reconciliation.
 Published secure two-member churn, delayed/applied acknowledgement branches,
 and the 10,000-record gate remain open; no exactly-once claim is made.
 
+## V1-11 Execution Update (2026-08-22)
+
+V1-11 is `In progress`. Controller-routed Admin operations now share explicit
+pre/post-transmission handling: discovery and capability failures may retry,
+while possible mutation response loss returns typed
+`AdminMutationOutcomeUnknown` with no replay. Deterministic routing and partial
+result coverage spans topic, partition, election, reassignment, feature, voter,
+and broker-unregister operations. The complete authorization/reconciliation
+ledger and published controller failover profiles remain open.
+
 ## Current Release Qualification
 
 `0.3.5` is now published on crates.io in protocol-first order. The fresh

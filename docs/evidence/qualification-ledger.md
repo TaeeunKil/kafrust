@@ -384,3 +384,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: workspace source commit 55369e4abbda4ee5dfe3aed9774434b3799c8065
 - non_claims: not CI, not live broker compatibility, not published artifact, not exactly-once or 10,000-record qualification
+
+## Q-LOCAL-V111-001
+
+- date_utc: 2026-08-22
+- source_commit: 413f0ffa568349fd468ed088fcddac0c2a80a139
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: injected broker streams
+- kafka_image: not-applicable
+- mode: not-applicable
+- topology: controller-routed single listener
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: controller routing, partial results, pre-transmission retry, and mutation ambiguity classification
+- workflow: scripts/check_qualification_ledger.py
+- fault: controller discovery disconnect and post-transmission response loss
+- duration: not-recorded
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: 1
+- expected_errors: AdminMutationOutcomeUnknown only after possible transmission; no mutation replay
+- observed_errors: typed unknown classification and retained per-resource errors in existing Admin fixtures
+- retry_count: bounded pre-transmission only
+- duplicate_count: 0
+- loss_count: not-applicable
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: controller request ownership and poisoned-connection disposal covered by tests
+- result: passed
+- artifact: workspace source commit 413f0ffa568349fd468ed088fcddac0c2a80a139
+- non_claims: not CI, not live authorization/failover, not published artifact, not complete operation ledger

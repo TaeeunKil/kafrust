@@ -1,6 +1,6 @@
 # V1-11 Controller-Routed Admin Mutations
 
-- Status: Planned
+- Status: In progress
 - Target evidence: Published artifact
 - Dependencies: V1-02
 
@@ -53,6 +53,26 @@ differently in source, move it to V1-12 or V1-13 rather than forcing this list.
    unsafe downgrade, or committed acknowledgement.
 6. Qualify only the common controller operations allocated to this milestone;
    V1-13 and V1-14 qualify their security and dynamic-quorum operations.
+
+## Current Execution Record (2026-08-22)
+
+V1-11 is now `In progress`. Common controller routing is operation-owned and
+supports explicit controller bootstrap or Metadata-discovered controller
+endpoints. The shared mutation classifier retries discovery/connect and
+ApiVersions only before a controller request is transmitted; a possible
+post-transmission I/O, timeout, oversized-response, or protocol failure returns
+`AdminMutationOutcomeUnknown` without replay. Confirmed Kafka and per-resource
+errors remain typed, and partial results are preserved.
+
+The deterministic Admin suite already covers controller routing and result
+retention for CreateTopics, CreatePartitions, DeleteTopics, ElectLeaders,
+AlterPartitionReassignments, UpdateFeatures, Add/RemoveRaftVoter, and
+UnregisterBroker, plus response-loss classification and pre-transmission
+discovery retry. Existing CreateTopics/DeleteTopics response-drop fixtures
+assert one mutation request and a follow-up reconciliation read. The complete
+operation-by-operation authorization/failover table, active-controller
+replacement, and published floor/current profiles remain open; no complete
+Admin compatibility claim is made.
 
 ## Failure And Lifecycle Contract
 
