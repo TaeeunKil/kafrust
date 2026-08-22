@@ -1,6 +1,6 @@
 # V1-19 Pure-Rust Dependency Audit
 
-- Status: Planned
+- Status: In progress
 - Target evidence: Packaged candidate
 - Dependencies: V1-02
 
@@ -46,6 +46,24 @@ boundaries, and MSRV behavior.
    verify it against packaged dependency metadata, and add release gates for
    SBOM completeness, licenses, advisories, MSRV, package content, and
    dependency drift.
+
+## Current Execution Record (2026-08-22)
+
+V1-19 is now `In progress`. The coordinated `0.3.6` package candidate already
+passes the staged package-boundary verifier for default, `tls`, `blocking`,
+`otlp`, and all-feature external projects on Rust 1.81.0/stable in
+[CI run 32545563612](https://github.com/TaeeunKil/kafrust/actions/runs/32545563612).
+The workspace manifests contain no `librdkafka`, `rdkafka-sys`, or Kafka C
+binding, both source crates inherit `unsafe_code = "forbid"`, and the default
+codec dependency posture is Rust-native. These facts support the package
+candidate boundary only; they are not a blanket transitive-unsafe claim.
+
+The remaining audit work is feature-specific `cargo tree`/metadata capture from
+staged tarballs, native-tool detection for optional TLS, license/advisory/yank
+review, reviewed transitive unsafe/native ownership, reproducible package-pair
+SBOM generation, and drift gates. Optional TLS/ring tooling remains an explicit
+non-claim until that matrix is archived. No crates.io publication is implied by
+the current packaged-candidate evidence.
 
 ## Failure And Lifecycle Contract
 

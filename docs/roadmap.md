@@ -196,6 +196,52 @@ experimental, or excluded from the stable core claim. Deterministic routing,
 task/runtime, controller, and nested-runtime tests exist; final API-key
 classification and required live retained-surface gates remain open.
 
+## V1-15 Execution Update (2026-08-22)
+
+V1-15 is `In progress`. The current owner audit keeps stateless producer/Admin
+cache reuse separate from direct Fetch, group, Share, Streams, and telemetry
+sessions that carry identity leases. Deterministic cache eviction, poisoned-
+connection non-reuse, heartbeat cancellation, graceful close, bounded enqueue,
+and nested-runtime rejection tests pass on source `e6de5c5`. The ownership table,
+100 construct/use/fault/close cycles, final gauges, and published secured churn
+profile remain open.
+
+## V1-16 Execution Update (2026-08-22)
+
+V1-16 is `In progress`. SCRAM, TLS/mTLS, OAUTHBEARER provider single-flight,
+rotation-window, outage, timeout, handshake, and credential-redaction tests are
+present. Authentication/provider failures keep the configured security protocol
+and poison the affected connection. Current-source rotation, restricted-principal
+profiles, zero-secret artifact scan, and exact-candidate floor/current security
+gates remain open.
+
+## V1-17 Execution Update (2026-08-22)
+
+V1-17 is `In progress`. The bounded `ClientMetricsSnapshot` and KIP-714 provider
+cover filtered cumulative/delta metrics, subscription negotiation, codec and
+payload-limit handling, and a single-connection push path. The 60-minute
+published collection profiles, broker replacement with stable ClientInstanceId,
+throttle/mutation/termination checks, and secret scan remain open.
+
+## V1-18 Execution Update (2026-08-22)
+
+V1-18 is `In progress`. Frame, collection, compact/tagged-field, decompression,
+response-buffer, queue, and configuration boundaries reject malformed or
+oversized input before the relevant allocation. Ten fuzz targets compile and
+run, but the current workflow is only a 30-second discovery smoke. The
+allocation ledger, sharded 60-minute campaigns, four weekly passes, versioned
+manifest, and retained crash/OOM dispositions remain required.
+
+## V1-19 Execution Update (2026-08-22)
+
+V1-19 is `In progress`. The staged `0.3.6` package candidate passes five
+feature profiles on Rust 1.81.0 and stable in
+[CI run 32545563612](https://github.com/TaeeunKil/kafrust/actions/runs/32545563612).
+The manifests contain no librdkafka/C client binding and the source crates
+forbid unsafe code. Feature-specific dependency reports, optional-TLS native
+tool detection, license/advisory/yank review, reviewed transitive-native
+ownership, reproducible package-pair SBOMs, and drift gates remain open.
+
 ## Current Release Qualification
 
 `0.3.5` is now published on crates.io in protocol-first order. The fresh

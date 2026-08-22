@@ -1,6 +1,6 @@
 # V1-18 Resource Limits And Fuzzing
 
-- Status: Planned
+- Status: In progress
 - Target evidence: CI
 - Dependencies: V1-03, V1-15
 
@@ -49,6 +49,24 @@ under deterministic faults and recurring fuzz campaigns.
    sharding, job timeouts, and a versioned campaign manifest that can actually
    deliver the required 60 cumulative minutes per target before accepting its
    evidence.
+
+## Current Execution Record (2026-08-22)
+
+V1-18 is now `In progress`. The current decoder path rejects negative, overflow,
+truncated, and over-limit frame/string/bytes/array/tagged-field lengths before
+allocation. `DecodeLimits` bounds decoded arrays and decompressed record-batch
+bytes, while the client checks the response-frame ceiling before allocating the
+response buffer. Deterministic compression tests cover declared and observed
+output limits for Snappy, Gzip, LZ4, and Zstd; configuration tests reject zero
+resource limits before network access; and scripted fault tests cover malformed
+data-plane responses and bounded queue saturation.
+
+All ten fuzz targets compile and run from the standalone nightly workflow, but
+the current workflow grants only a 30-second discovery smoke per target. The
+allocation-boundary inventory, sharded 60-minute campaigns, four consecutive
+weekly runs, versioned campaign manifest, and retained crash/OOM disposition
+remain open. Existing fuzz success is therefore not treated as absence-of-bug
+evidence or as completion of the CI exit gate.
 
 ## Failure And Lifecycle Contract
 

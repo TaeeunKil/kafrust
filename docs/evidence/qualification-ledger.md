@@ -516,3 +516,168 @@ unqualified relative artifact label.
 - result: passed
 - artifact: workspace source commit 413f0ffa568349fd468ed088fcddac0c2a80a139
 - non_claims: not CI, not live retained-surface qualification, not stable core compatibility
+
+## Q-LOCAL-V115-001
+
+- date_utc: 2026-08-22
+- source_commit: e6de5c5201f8c688bf5e3ca148d3c997cd8918f6
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: scripted broker fixtures
+- kafka_image: not-applicable
+- mode: not-applicable
+- topology: cache, direct-fetch, membership, telemetry, and adapter owners
+- security: not-applicable
+- group_protocol: classic, KIP-848, Share, and Streams lifecycle paths
+- workload: session ownership, cache boundaries, task cancellation, and shutdown
+- workflow: scripts/check_qualification_ledger.py
+- fault: request timeout, heartbeat cancellation, unknown acknowledgement close, and nested runtime
+- duration: not-recorded
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: 1
+- expected_errors: poisoned connections and cancelled tasks do not resume under a stale owner
+- observed_errors: deterministic owner-boundary tests passed; no replay frame observed
+- retry_count: bounded by each fixture
+- duplicate_count: 0
+- loss_count: not-applicable
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: not-recorded
+- result: passed
+- artifact: workspace source commit e6de5c5201f8c688bf5e3ca148d3c997cd8918f6
+- non_claims: not 100-cycle gauge qualification, not published artifact, not secured churn
+
+## Q-LOCAL-V116-001
+
+- date_utc: 2026-08-22
+- source_commit: e6de5c5201f8c688bf5e3ca148d3c997cd8918f6
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: scripted broker and signed OIDC fixtures
+- kafka_image: not-applicable
+- mode: not-applicable
+- topology: single authenticated connection
+- security: TLS, mTLS, SASL/PLAIN, SCRAM-256/512, and OAUTHBEARER paths
+- group_protocol: not-applicable
+- workload: handshake, provider refresh, rotation window, outage, timeout, and redaction
+- workflow: scripts/check_qualification_ledger.py
+- fault: provider failure, expired token, invalid server-final, and incomplete TLS material
+- duration: not-recorded
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: 1
+- expected_errors: typed authentication/provider errors without credential material
+- observed_errors: redaction, single-flight refresh, and connection-discard tests passed
+- retry_count: bounded provider refresh only
+- duplicate_count: 0
+- loss_count: not-applicable
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: not-recorded
+- result: passed
+- artifact: workspace source commit e6de5c5201f8c688bf5e3ca148d3c997cd8918f6
+- non_claims: not seeded artifact scan, not rotation live gate, not published security matrix
+
+## Q-LOCAL-V117-001
+
+- date_utc: 2026-08-22
+- source_commit: e6de5c5201f8c688bf5e3ca148d3c997cd8918f6
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: injected telemetry broker
+- kafka_image: not-applicable
+- mode: not-applicable
+- topology: one telemetry connection
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: bounded metric snapshot, OTLP delta/cumulative serialization, subscription, codec, and payload limits
+- workflow: scripts/check_qualification_ledger.py
+- fault: oversized payload, unsupported codec, subscription refresh, and provider boundary
+- duration: not-recorded
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: 1
+- expected_errors: TelemetryPayloadTooLarge before transmission
+- observed_errors: filtered metrics and single-connection push tests passed
+- retry_count: bounded subscription retry
+- duplicate_count: 0
+- loss_count: not-applicable
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: not-recorded
+- result: passed
+- artifact: workspace source commit e6de5c5201f8c688bf5e3ca148d3c997cd8918f6
+- non_claims: not 60-minute collection, not broker-replacement identity gate, not published telemetry support
+
+## Q-LOCAL-V118-001
+
+- date_utc: 2026-08-22
+- source_commit: e6de5c5201f8c688bf5e3ca148d3c997cd8918f6
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: protocol fixtures
+- kafka_image: not-applicable
+- mode: not-applicable
+- topology: decoder and scripted broker boundaries
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: frame, collection, tagged-field, decompression, response-buffer, and queue limits
+- workflow: scripts/check_qualification_ledger.py
+- fault: malformed length, truncation, decompression expansion, and queue saturation
+- duration: not-recorded
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: 1
+- expected_errors: typed protocol limit/length errors before unbounded allocation
+- observed_errors: boundary and compression-limit tests passed; ten fuzz targets compile
+- retry_count: not-applicable
+- duplicate_count: 0
+- loss_count: not-applicable
+- latency: not-recorded
+- memory: bounded by configured decoder/response limits in deterministic tests
+- final_resource_gauges: not-recorded
+- result: passed
+- artifact: workspace source commit e6de5c5201f8c688bf5e3ca148d3c997cd8918f6
+- non_claims: not 60-minute fuzz campaigns, not four weekly passes, not absence-of-bugs proof
+
+## Q-PACKAGE-V119-001
+
+- date_utc: 2026-08-22
+- source_commit: 3e12192bbef3a01b2a1310979131115c9c7ecd69
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Packaged candidate
+- kafka_version: not-applicable
+- kafka_image: not-applicable
+- mode: not-applicable
+- topology: staged package and five external feature profiles
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: package boundary, MSRV/stable build, pure-Rust manifest, and feature isolation
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32545563612
+- fault: workspace path dependency intentionally removed from external package checks
+- duration: 2 matrix jobs completed
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: 2
+- expected_errors: no librdkafka/C client requirement in the default package
+- observed_errors: package boundary passed on Rust 1.81.0 and stable
+- retry_count: not-applicable
+- duplicate_count: not-applicable
+- loss_count: not-applicable
+- latency: not-applicable
+- memory: package profiles passed
+- final_resource_gauges: package hashes retained in Q-V100-001
+- result: passed
+- artifact: kafrust-protocol-0.3.6.crate sha256 f12e95a30ce46fd7ffc097a97a31b0a918bcee9f83cefb72fe2484cfe9c255cc; kafrust-0.3.6.crate sha256 2ae1a135d3de7f00fb25455809ab9fc201ea41c398aa62ac14f34c2a2758fca9
+- non_claims: not crates.io publication, not complete advisory/license/SBOM audit, not optional-TLS native-tool clearance

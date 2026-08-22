@@ -1,6 +1,6 @@
 # V1-16 Security And Credential Lifecycle
 
-- Status: Planned
+- Status: In progress
 - Target evidence: Published artifact
 - Dependencies: V1-15
 
@@ -44,6 +44,25 @@ connection replacement without weakening the configured security protocol.
    artifact.
 6. Scan all logs, traces, errors, Debug output, and uploaded artifacts for seeded
    secrets.
+
+## Current Execution Record (2026-08-22)
+
+V1-16 is now `In progress`. The current source has deterministic coverage for
+SCRAM-256/512 message construction, TLS/mTLS material pairing and validation,
+SASL/PLAIN and OAUTHBEARER handshake boundaries, provider single-flight and
+refresh-window rotation, valid-token use during a source outage, provider
+timeouts, invalid server-final handling, and password/token redaction in
+Debug/error paths. The local signed OIDC/JWKS fixture and the mTLS workflow
+provide reusable live-gate inputs, while the published signed-OAuth and mTLS
+profiles remain artifact-specific evidence rather than current-source proof.
+
+The security contract is deliberately conservative: an authentication or
+provider failure poisons the affected connection, never downgrades the
+configured protocol, and does not expose credential material. Rotation,
+server/key replacement, restricted-principal authorization, and the seeded
+zero-match scan across logs and uploaded artifacts remain open. The required
+floor/current published profiles and final provider/connection gauges have not
+yet been run for the coordinated `0.3.6` candidate.
 
 ## Failure And Lifecycle Contract
 

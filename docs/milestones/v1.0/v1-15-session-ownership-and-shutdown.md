@@ -1,6 +1,6 @@
 # V1-15 Session Ownership And Shutdown
 
-- Status: Planned
+- Status: In progress
 - Target evidence: Published artifact
 - Dependencies: V1-04-V1-14
 
@@ -44,6 +44,30 @@ state on success, cancellation, timeout, fault, and shutdown.
    group, Share, Streams, and telemetry session identities never leak across
    owners.
 6. Qualify repeated construct/use/fault/close cycles from a published artifact.
+
+## Current Execution Record (2026-08-22)
+
+V1-15 is now `In progress`. The ownership audit on source commit `e6de5c5`
+keeps the stateless producer/Admin idle-cache paths separate from direct Fetch,
+classic/KIP-848, Share, Streams, and telemetry sessions that carry membership,
+epoch, or subscription identity. Buffered producers, group heartbeats, Share
+heartbeats, Streams heartbeats, and the blocking adapter retain explicit task or
+runtime handles rather than detached lifecycle claims.
+
+The deterministic slice currently covers FIFO/zero-limit cache behavior
+(`evicts_idle_connections_in_fifo_order`,
+`zero_limit_keeps_one_connection_instead_of_growing_unbounded`, and
+`connection_identity_changes_reset_the_shared_cache`), poisoned-connection
+non-reuse after timeout, classic and KIP-848 heartbeat cancellation, Share
+heartbeat cancellation/unknown-ack close, Streams graceful close, bounded
+producer enqueue/shutdown behavior, and blocking nested-runtime rejection.
+These tests establish the owner boundaries but do not close the required
+100-cycle gauge audit or published secured churn profile.
+
+The remaining work is to turn the static owner inventory into a checked table,
+record task/queue/connection peaks and final gauges for every stable surface,
+and run the 100-cycle and exact-artifact churn gates. No stale-session or
+detached-task completion claim is made by this record.
 
 ## Failure And Lifecycle Contract
 

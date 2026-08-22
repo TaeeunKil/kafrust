@@ -1,6 +1,6 @@
 # V1-17 Telemetry And Metrics Contract
 
-- Status: Planned
+- Status: In progress
 - Target evidence: Published artifact
 - Dependencies: V1-02, V1-15
 - Conditional evidence: retained telemetry joins the published-artifact gate;
@@ -48,6 +48,23 @@ leaking secrets.
    observable metrics without payload/credential labels.
 5. Qualify secured multi-broker and long collection from a published artifact;
    otherwise isolate telemetry as experimental and state the exclusion.
+
+## Current Execution Record (2026-08-22)
+
+V1-17 is now `In progress`. `ClientMetricsSnapshot` and the telemetry provider
+already expose a bounded, low-cardinality set of request, retry, error, queue,
+in-flight, buffered-record, and latency observations. Deterministic tests cover
+filtered cumulative/delta OTLP serialization, metric selection, payload
+configuration validation, codec selection, subscription negotiation, and the
+single-connection push path. The typed `TelemetryPayloadTooLarge` boundary is
+checked before transmission and again after compression.
+
+The live workflows for telemetry negotiation and payload limits are available,
+but the exact coordinated candidate still needs the 60-minute floor/current
+published profiles, broker replacement with stable ClientInstanceId, mutation
+and throttle coverage, terminating-push count, and seeded secret scan. Until
+those gates pass, telemetry remains an explicitly bounded qualification slice,
+not a general OpenTelemetry backend or a completed stable-support claim.
 
 ## Failure And Lifecycle Contract
 
