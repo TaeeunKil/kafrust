@@ -1,6 +1,6 @@
 # V1-00 Repository And Package Baseline
 
-- Status: In progress
+- Status: Done
 - Target evidence: Packaged candidate
 - Dependencies: none
 
@@ -144,5 +144,5 @@ packages at `0.3.6`; no workspace source path was present. The client package
 was assembled with a temporary Cargo patch only to make the unpublished
 candidate version selectable; its packaged manifest retains the version-only
 protocol dependency. This is package-candidate evidence, not crates.io or
-published-artifact evidence. The exact pushed-commit CI result on Rust 1.81
-and stable remains an exit criterion.
+published-artifact evidence. The exact implementation commit `3e12192` passed
+the Rust 1.81.0 and stable matrix in [CI run 32545563612](https://github.com/TaeeunKil/kafrust/actions/runs/32545563612), including the regression and staged package checks. This closes V1-00 without claiming crates.io publication.

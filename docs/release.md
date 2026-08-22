@@ -82,8 +82,9 @@ and then compiles the unpacked tarballs in fresh external projects for five
 feature profiles without a workspace path dependency. The resulting candidate
 hashes and the Rust 1.81.0 local evidence are recorded in
 [V1-00](milestones/v1.0/v1-00-repository-and-package-baseline.md). This does
-not publish either crate or qualify a published artifact; the exact pushed
-commit must still pass the CI matrix.
+not publish either crate or qualify a published artifact. Implementation
+commit `3e12192` passed the exact Rust 1.81.0/stable package matrix in
+[CI run 32545563612](https://github.com/TaeeunKil/kafrust/actions/runs/32545563612).
 
 ## Versioning
 

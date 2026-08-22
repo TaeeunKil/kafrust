@@ -34,12 +34,13 @@ be published from the current same-version package state.
 
 ## Current Execution
 
-As of 2026-08-22, V1-00 is `In progress`. The coordinated `0.3.6` candidate
+As of 2026-08-22, V1-00 is `Done`. The coordinated `0.3.6` candidate
 has passed the local package-only boundary verifier across five feature
 profiles on Rust 1.81.0. The regression against published protocol `0.3.5`
 also passes by reproducing the four missing transaction type families. Exact
-pushed-commit CI on Rust 1.81 and stable is still required before V1-00 can be
-marked `Done`.
+commit `3e12192` passed both Rust 1.81.0 and stable in
+[CI run 32545563612](https://github.com/TaeeunKil/kafrust/actions/runs/32545563612).
+The candidate remains unpublished.
 
 ## Status And Evidence
 

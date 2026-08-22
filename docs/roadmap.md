@@ -39,13 +39,15 @@ The complete dated evidence and contradiction audit is in the
 
 ## V1-00 Execution Update (2026-08-22)
 
-V1-00 is `In progress`. The working candidate has moved both crates and the
+V1-00 is `Done`. The working candidate has moved both crates and the
 client protocol dependency to coordinated `0.3.6`. The package verifier
 reproduced the immutable `0.3.5` protocol mismatch, then built and unpacked
 matching `0.3.6` tarballs outside the workspace and compiled five feature
-profiles on Rust 1.81.0. This is packaged-candidate evidence only; exact
-pushed-commit CI on Rust 1.81 and stable remains the gate before the roadmap
-can advance to V1-01.
+profiles on Rust 1.81.0. Implementation commit `3e12192` passed the exact
+Rust 1.81.0/stable matrix in
+[CI run 32545563612](https://github.com/TaeeunKil/kafrust/actions/runs/32545563612).
+This is packaged-candidate evidence only; V1-01 may now begin and no crate has
+been published.
 
 ## Current Release Qualification
 
