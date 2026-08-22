@@ -8,4 +8,5 @@ publish = false
 futures-util = "0.3"
 kafrust = "__KAFRUST_VERSION__"
 rdkafka = { version = "0.39", default-features = false, features = ["cmake-build", "tokio"] }
+sha2 = "0.10"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }

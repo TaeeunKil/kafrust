@@ -112,9 +112,14 @@ jobs:
           expected = int("${{ inputs.records }}")
           if any(row["records"] != expected for row in rows):
               raise SystemExit("record count diverged from the requested smoke workload")
+          if any(row["unique_records"] != expected or row["loss_count"] != 0 or row["duplicate_count"] != 0 for row in rows):
+              raise SystemExit("business-record reconciliation detected loss or duplicates")
+          digests = {row["payload_sha256"] for row in rows}
+          if len(digests) != 1 or not next(iter(digests)):
+              raise SystemExit("normalized payload digests diverged between implementations")
           if any(row["produce_seconds"] <= 0 or row["consume_seconds"] <= 0 for row in rows):
               raise SystemExit("reference stage reported a non-positive duration")
-          print(json.dumps({"stage": "baseline", "records": expected, "implementations": [row["implementation"] for row in rows]}))
+          print(json.dumps({"stage": "baseline", "records": expected, "unique_records": expected, "payload_sha256": next(iter(digests)), "implementations": [row["implementation"] for row in rows]}))
           PY
 
       - name: Upload canary evidence
