@@ -1,6 +1,6 @@
 # V1-00 Repository And Package Baseline
 
-- Status: Planned
+- Status: In progress
 - Target evidence: Packaged candidate
 - Dependencies: none
 
@@ -123,3 +123,26 @@ release yanking/advisory policy if necessary.
 Record source SHA, selected versions, package SHA-256 hashes, file lists,
 toolchains, feature profiles, isolated-registry method, and explicit statement
 that this is not published-artifact evidence.
+
+## Current Execution Record (2026-08-22)
+
+The coordinated candidate is now `0.3.6` in both manifests and in the client
+protocol dependency. The local package-boundary verifier reproduced the
+published `0.3.5` mismatch for all eight missing transaction type names, then
+created `kafrust-protocol-0.3.6.crate` (77 files) and `kafrust-0.3.6.crate`
+(95 files). Their SHA-256 hashes were:
+
+```text
+kafrust-protocol-0.3.6.crate  f12e95a30ce46fd7ffc097a97a31b0a918bcee9f83cefb72fe2484cfe9c255cc
+kafrust-0.3.6.crate           2ae1a135d3de7f00fb25455809ab9fc201ea41c398aa62ac14f34c2a2758fca9
+```
+
+On Rust `1.81.0`, fresh external projects unpacked those tarballs outside the
+workspace and passed `default`, `tls`, `blocking`, `otlp`, and `all` feature
+profiles. Each profile generated a lockfile and `cargo tree` resolved both
+packages at `0.3.6`; no workspace source path was present. The client package
+was assembled with a temporary Cargo patch only to make the unpublished
+candidate version selectable; its packaged manifest retains the version-only
+protocol dependency. This is package-candidate evidence, not crates.io or
+published-artifact evidence. The exact pushed-commit CI result on Rust 1.81
+and stable remains an exit criterion.

@@ -37,6 +37,16 @@ gate in [V1-00](milestones/v1.0/v1-00-repository-and-package-baseline.md).
 The complete dated evidence and contradiction audit is in the
 [v1.0 planning baseline](milestones/v1.0/baseline.md).
 
+## V1-00 Execution Update (2026-08-22)
+
+V1-00 is `In progress`. The working candidate has moved both crates and the
+client protocol dependency to coordinated `0.3.6`. The package verifier
+reproduced the immutable `0.3.5` protocol mismatch, then built and unpacked
+matching `0.3.6` tarballs outside the workspace and compiled five feature
+profiles on Rust 1.81.0. This is packaged-candidate evidence only; exact
+pushed-commit CI on Rust 1.81 and stable remains the gate before the roadmap
+can advance to V1-01.
+
 ## Current Release Qualification
 
 `0.3.5` is now published on crates.io in protocol-first order. The fresh

@@ -75,6 +75,16 @@ select an unused coordinated version, package the protocol first, and compile
 the staged client against that matching package without a workspace path
 override. This note does not authorize publication.
 
+The V1-00 implementation now uses coordinated candidate version `0.3.6` in
+both manifests. `scripts/verify_package_boundary.py --staged` packages the
+protocol first, assembles the client with a temporary local resolver override,
+and then compiles the unpacked tarballs in fresh external projects for five
+feature profiles without a workspace path dependency. The resulting candidate
+hashes and the Rust 1.81.0 local evidence are recorded in
+[V1-00](milestones/v1.0/v1-00-repository-and-package-baseline.md). This does
+not publish either crate or qualify a published artifact; the exact pushed
+commit must still pass the CI matrix.
+
 ## Versioning
 
 The public alpha line starts at `0.1.0`. Until the protocol and runtime behavior stabilize, keep public API additions small and document alpha limits in the affected API direction document.

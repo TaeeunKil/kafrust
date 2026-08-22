@@ -1,5 +1,14 @@
 # Compatibility
 
+## Artifact Qualification Boundary
+
+The published compatibility record currently ends at the crates.io `0.3.5`
+artifacts. The coordinated `0.3.6` package candidate is being qualified by
+V1-00, but it is not published and must not be treated as published-artifact
+or broker-compatibility evidence. Package-only checks use unpacked tarballs
+outside the workspace; live and published claims remain tied to their named
+source commits and workflow runs below.
+
 ## Protocol Surface Gate
 
 The repository runs `scripts/check_protocol_api_surface.py` in CI before the

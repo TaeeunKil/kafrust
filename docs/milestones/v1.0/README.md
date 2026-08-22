@@ -32,6 +32,15 @@ The package blocker makes [V1-00](v1-00-repository-and-package-baseline.md) the
 only valid first implementation milestone. No later source capability should
 be published from the current same-version package state.
 
+## Current Execution
+
+As of 2026-08-22, V1-00 is `In progress`. The coordinated `0.3.6` candidate
+has passed the local package-only boundary verifier across five feature
+profiles on Rust 1.81.0. The regression against published protocol `0.3.5`
+also passes by reproducing the four missing transaction type families. Exact
+pushed-commit CI on Rust 1.81 and stable is still required before V1-00 can be
+marked `Done`.
+
 ## Status And Evidence
 
 Work status and evidence level are separate axes.
