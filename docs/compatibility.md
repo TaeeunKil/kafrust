@@ -9,6 +9,25 @@ or broker-compatibility evidence. Package-only checks use unpacked tarballs
 outside the workspace; live and published claims remain tied to their named
 source commits and workflow runs below.
 
+## v1.0 Support Contract
+
+V1-01 sets the proposed support boundary below. “Required” means the named
+profile must be qualified by the later milestone that owns it; it does not
+mean every API or every pairwise combination is already verified. The
+immutable result rows are in the [qualification ledger](evidence/qualification-ledger.md).
+
+| Dimension | Required for v1 | Experimental or unclaimed | Excluded from the v1 claim |
+| --- | --- | --- | --- |
+| Broker | Kafka `3.7.2` floor; continuity `3.8.1`, `3.9.1`, `4.0.0`; pinned `4.3.1` | `3.3.2` and `3.6.2` rejected for v1 until a separately accepted decision | No universal broker-version claim |
+| Deployment | KRaft single-node baseline, three-broker failover, explicit controller listener for routed Admin | Managed-service equivalence after named evidence | ZooKeeper deployment |
+| Security | PLAINTEXT, TLS, SASL/PLAIN, SCRAM-SHA-256, SCRAM-SHA-512, mTLS, and OAUTHBEARER dimensions | External OAUTHBEARER provider discovery, rotation, and outage behavior | Unnamed provider or credential-policy guarantees |
+| Runtime | Tokio async APIs; optional `blocking` adapters with owned runtime | Alternate async runtimes | General synchronous API or runtime-agnostic config passthrough |
+| Workloads | Produce, fetch, direct consumer, classic/KIP-848 groups, transactions, and typed Admin paths | ShareConsumer, Streams membership, broad API parity, and performance/SLO claims | Kafka broker, proxy, controller, or Streams processing engine |
+
+The accepted floor is deliberately `3.7.2`; older candidate floor probes are
+not silently counted as support. The matrix is pairwise, and each accepted row
+still requires the artifact level and non-claims recorded by its milestone.
+
 ## Protocol Surface Gate
 
 The repository runs `scripts/check_protocol_api_surface.py` in CI before the

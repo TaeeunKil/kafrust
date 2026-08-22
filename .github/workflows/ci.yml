@@ -54,6 +54,12 @@ jobs:
       - name: Test protocol audit scripts
         run: python -m unittest scripts/test_check_apache_schema_versions.py
 
+      - name: Check qualification ledger
+        run: python scripts/check_qualification_ledger.py
+
+      - name: Test qualification ledger checker
+        run: python -m unittest scripts/test_check_qualification_ledger.py
+
       - name: Check build
         run: cargo check --workspace --all-targets --all-features
 

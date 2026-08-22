@@ -1,6 +1,6 @@
 # V1-01 Support Contract And Evidence Ledger
 
-- Status: Planned
+- Status: In progress
 - Target evidence: CI
 - Dependencies: V1-00
 
@@ -9,6 +9,33 @@
 Publish one unambiguous v1 support contract and one immutable qualification
 ledger so users can tell exactly which broker, topology, security, workload,
 and artifact combinations are supported or still unclaimed.
+
+## Decision Record (2026-08-22)
+
+The v1 contract accepts Kafka `3.7.2` as the broker floor. Kafka `3.3.2` and
+`3.6.2` remain rejected for the v1 claim because this repository has no
+recorded qualification for the required data-plane, group, security, and
+failure gates on those lines. The continuity/pinned set is `3.8.1`, `3.9.1`,
+`4.0.0`, and `4.3.1`; `4.3.1` is the pinned line for KIP-848, stable Share,
+Streams membership, and modern Admin qualification. The v1 deployment claim is
+KRaft-only: single-node profiles cover baseline behavior, three-broker profiles
+cover failover, and explicit controller listeners cover controller-routed
+Admin. ZooKeeper and managed-service behavior remain unclaimed.
+
+Tokio async is the required runtime. The `blocking` feature is a supported
+adapter with its owned runtime and lifecycle rules; alternate async runtimes
+and a general synchronous API are excluded. Plaintext, TLS, SASL/PLAIN,
+SCRAM-SHA-256, SCRAM-SHA-512, mTLS, and OAUTHBEARER are contract dimensions;
+external-provider discovery/rotation/outage behavior is experimental even
+where a local signed OIDC/JWKS fixture passes. Core produce, fetch, consumer
+group, transaction, and typed Admin workflows are required. ShareConsumer,
+Streams membership, broad API parity, and production SLO claims remain
+experimental until their named later milestones pass.
+
+The human-readable contract is summarized in
+[Compatibility](../compatibility.md), with English/Korean README pointers;
+the immutable evidence rows are in the
+[qualification ledger](../evidence/qualification-ledger.md).
 
 ## Non-Goals
 

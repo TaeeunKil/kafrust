@@ -49,6 +49,10 @@ Rust 1.81.0/stable matrix in
 This is packaged-candidate evidence only; V1-01 may now begin and no crate has
 been published.
 
+V1-01 owns the accepted support boundary and ledger. Until that decision is
+complete, the compatibility table remains a qualification target rather than
+a blanket claim for every broker/security/workload combination.
+
 ## Current Release Qualification
 
 `0.3.5` is now published on crates.io in protocol-first order. The fresh

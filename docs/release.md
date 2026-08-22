@@ -86,6 +86,12 @@ not publish either crate or qualify a published artifact. Implementation
 commit `3e12192` passed the exact Rust 1.81.0/stable package matrix in
 [CI run 32545563612](https://github.com/TaeeunKil/kafrust/actions/runs/32545563612).
 
+The v1 support boundary and immutable evidence rows are maintained in the
+[V1-01 support contract](milestones/v1.0/v1-01-support-contract-and-evidence-ledger.md)
+and [qualification ledger](evidence/qualification-ledger.md). These records
+classify accepted profiles separately from published-artifact results and do
+not authorize a release.
+
 ## Versioning
 
 The public alpha line starts at `0.1.0`. Until the protocol and runtime behavior stabilize, keep public API additions small and document alpha limits in the affected API direction document.

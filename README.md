@@ -599,6 +599,16 @@ See [Client Telemetry](docs/telemetry.md).
 kafrust compatibility claims are limited to behavior verified against real
 brokers.
 
+The v1 qualification target uses Kafka `3.7.2` as its floor, with `3.8.1`,
+`3.9.1`, `4.0.0`, and `4.3.1` as continuity/pinned profiles. It is KRaft-only:
+single-node baseline, three-broker failover, and explicit controller listeners
+for routed Admin are in scope; ZooKeeper and managed-service equivalence are
+unclaimed. Tokio async is required, `blocking` is an owned-runtime adapter,
+and alternate runtimes/general synchronous APIs are excluded. The exact
+security/workload boundary and immutable results are maintained in the
+[v1.0 support contract](docs/compatibility.md#v10-support-contract) and
+[qualification ledger](docs/evidence/qualification-ledger.md).
+
 | kafrust | Broker | Mode | Security | Status |
 | --- | --- | --- | --- | --- |
 | `0.3.x` | Apache Kafka `3.7.2` | single-node KRaft | `PLAINTEXT` | Passing live smoke |

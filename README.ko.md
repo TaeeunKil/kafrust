@@ -285,6 +285,16 @@ plugin live 검증은 아직 진행 중입니다. 자세한 내용은
 
 kafrust의 호환성 주장은 실제 broker로 검증된 동작으로 제한합니다.
 
+v1 qualification 목표의 broker floor는 Kafka `3.7.2`이며 `3.8.1`, `3.9.1`,
+`4.0.0`, `4.3.1`을 continuity/pinned profile로 사용합니다. 배포는 KRaft만
+대상으로 하며 single-node baseline, three-broker failover, controller
+listener를 통한 Admin routing을 포함하고 ZooKeeper와 managed-service 동등성은
+미청구 상태로 둡니다. Tokio async가 필수이고 `blocking`은 자체 runtime을
+소유하는 adapter이며, alternate runtime과 일반 synchronous API는 범위에서
+제외합니다. 정확한 보안/워크로드 경계와 immutable 결과는
+[v1.0 support contract](docs/compatibility.md#v10-support-contract)와
+[qualification ledger](docs/evidence/qualification-ledger.md)에 기록합니다.
+
 | kafrust | Broker | Mode | Security | Status |
 | --- | --- | --- | --- | --- |
 | `0.3.x` | Apache Kafka `3.7.2` | single-node KRaft | `PLAINTEXT` | Passing live smoke |

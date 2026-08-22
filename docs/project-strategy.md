@@ -18,6 +18,18 @@ In scope:
 - compatibility claims backed by live broker smoke tests
 - small, auditable feature slices with focused protocol and runtime tests
 
+## v1 Support Boundary
+
+The v1 qualification contract chooses Kafka `3.7.2` as the floor and
+`3.8.1`, `3.9.1`, `4.0.0`, and `4.3.1` as continuity/pinned profiles. The
+deployment claim is KRaft-only, with single-node baseline, three-broker
+failover, and explicit controller-listener Admin routing. Tokio async is the
+required runtime; `blocking` is an owned-runtime adapter, while alternate
+runtimes and a general synchronous API are excluded. The accepted security
+and workload dimensions, experimental surfaces, and immutable evidence rows
+are maintained in the [v1.0 support contract](compatibility.md#v10-support-contract)
+and [qualification ledger](evidence/qualification-ledger.md).
+
 Out of scope:
 
 - replacing Apache Kafka brokers
