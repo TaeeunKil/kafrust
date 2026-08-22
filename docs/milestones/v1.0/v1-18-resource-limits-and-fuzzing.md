@@ -63,10 +63,14 @@ data-plane responses and bounded queue saturation.
 
 All ten fuzz targets compile and run from the standalone nightly workflow, but
 the current workflow grants only a 30-second discovery smoke per target. The
-allocation-boundary inventory, sharded 60-minute campaigns, four consecutive
-weekly runs, versioned campaign manifest, and retained crash/OOM disposition
-remain open. Existing fuzz success is therefore not treated as absence-of-bug
-evidence or as completion of the CI exit gate.
+versioned campaign manifest at
+[`v1-18-fuzz-campaign-manifest.json`](../../evidence/v1-18-fuzz-campaign-manifest.json)
+and `scripts/check_v1_fuzz_campaign_manifest.py` now make the distinction
+executable: discovery remains 30 seconds, while qualification requires 3,600
+seconds per target, four shards, a 70-minute job timeout, and four weekly
+campaigns. The actual sharded qualification workflow and retained crash/OOM
+disposition remain open. Existing fuzz success is therefore not treated as
+absence-of-bug evidence or as completion of the CI exit gate.
 
 ## Failure And Lifecycle Contract
 

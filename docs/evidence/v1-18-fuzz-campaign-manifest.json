@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "status": "discovery-only",
+  "date_utc": "2026-08-22",
+  "targets": [
+    "codec",
+    "frame",
+    "api_versions_response",
+    "group_describe_response",
+    "share_group_offsets_response",
+    "streams_groups_response",
+    "offset_commit_response",
+    "offset_fetch_response",
+    "compression",
+    "list_groups_response"
+  ],
+  "discovery": {
+    "seconds_per_target": 30,
+    "rss_limit_mb": 2048,
+    "input_timeout_seconds": 10
+  },
+  "qualification": {
+    "seconds_per_target": 3600,
+    "minimum_weekly_campaigns": 4,
+    "shards_per_target": 4,
+    "job_timeout_minutes": 70,
+    "rss_limit_mb": 2048,
+    "input_timeout_seconds": 10
+  },
+  "evidence_fields": [
+    "target",
+    "corpus_sha256",
+    "shard",
+    "duration_seconds",
+    "workflow_sha",
+    "toolchain",
+    "rss_limit_mb",
+    "result",
+    "artifact_uri"
+  ],
+  "non_claims": [
+    "fuzzing does not prove absence of bugs",
+    "discovery smoke is not the V1-18 exit gate",
+    "a crash or OOM requires a minimized deterministic regression"
+  ]
+}

@@ -229,8 +229,11 @@ V1-18 is `In progress`. Frame, collection, compact/tagged-field, decompression,
 response-buffer, queue, and configuration boundaries reject malformed or
 oversized input before the relevant allocation. Ten fuzz targets compile and
 run, but the current workflow is only a 30-second discovery smoke. The
-allocation ledger, sharded 60-minute campaigns, four weekly passes, versioned
-manifest, and retained crash/OOM dispositions remain required.
+versioned manifest at
+[`docs/evidence/v1-18-fuzz-campaign-manifest.json`](evidence/v1-18-fuzz-campaign-manifest.json)
+and its checker now declare the required 3,600 seconds per target, four shards,
+70-minute job timeout, and four weekly passes. The actual sharded qualification
+workflow and retained crash/OOM dispositions remain required.
 
 ## V1-19 Execution Update (2026-08-22)
 
