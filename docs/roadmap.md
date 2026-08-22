@@ -107,6 +107,18 @@ scoped batch sequencing, and sequence-modulus rollover. The focused tests are
 fault-phase table, and the exact published ten-cycle/100,000-record
 reconciliation gate remain open, so no published-artifact claim is made.
 
+## V1-06 Execution Update (2026-08-22)
+
+V1-06 is `In progress`. The transaction path keeps one coherent legacy TV0/TV1
+protocol decision and mechanically caps transactional Produce at v11 until a
+complete TV2 implementation is qualified. Deterministic scripted-broker tests
+now cover both lost commit and lost abort EndTxn responses: each returns
+`TransactionOutcomeUnknown`, marks the producer Defunct, performs no retry, and
+rejects a later transaction start. Coordinator rediscovery, flexible-v3
+fallbacks, fatal EndTxn handling, and the transactional Produce cap are also
+covered. Published floor/current reconciliation and the full mutation fault
+matrix remain open.
+
 ## Current Release Qualification
 
 `0.3.5` is now published on crates.io in protocol-first order. The fresh

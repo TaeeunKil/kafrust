@@ -1,6 +1,6 @@
 # V1-06 Transaction Outcome Safety
 
-- Status: Planned
+- Status: In progress
 - Target evidence: Published artifact
 - Dependencies: V1-05
 
@@ -71,6 +71,26 @@ schemas.
    at transaction boundaries, including TV1-to-TV2 upgrade, broker feature
    epoch changes, downgrade/restart behavior, and every abortable error.
 8. Qualify published floor/current broker profiles.
+
+## Current Execution Record (2026-08-22)
+
+V1-06 is now `In progress` with the conservative legacy TV0/TV1 decision
+implemented and enforced: transactional Produce is capped at v11 until a
+complete TV2 implementation is qualified, while AddPartitionsToTxn,
+AddOffsetsToTxn, TxnOffsetCommit, and EndTxn negotiate their coherent legacy or
+flexible v3 paths as one transaction. The deterministic fault slice now covers
+both lost commit and lost abort responses. The tests
+`transactional_commit_response_loss_marks_outcome_unknown_and_defunct` and
+`transactional_abort_response_loss_marks_outcome_unknown_and_defunct` assert
+`TransactionOutcomeUnknown`, Defunct producer state, zero retries, and no
+subsequent transaction start after the transmitted EndTxn becomes ambiguous.
+Existing scripted tests also cover coordinator rediscovery, fatal EndTxn
+errors, flexible-v3 fallback, and the transactional Produce-v11 cap.
+
+The source change has passed the required local Rust validation. Published
+floor/current profiles, read-committed reconciliation, the complete
+pre/post-transmission matrix for every mutation, and TV2 exclusion fixtures
+remain open; this record makes no published-artifact or exactly-once claim.
 
 ## Failure And Lifecycle Contract
 
