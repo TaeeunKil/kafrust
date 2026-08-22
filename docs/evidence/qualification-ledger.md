@@ -1440,3 +1440,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: GitHub Actions run 32561532044; dependency graph output included 71 resolved packages with license metadata
 - non_claims: not published-artifact evidence, not license compatibility/advisory/yank completion, not SBOM completion, not V1-20 published matrix, not fuzz/fault/SLO/service-canary completion
+
+## Q-CI-V118-002
+
+- date_utc: 2026-08-22
+- source_commit: c2c75aa23dc962faad7f33f22cd15a96303d4b56
+- client_version: 0.3.6 source checkout
+- protocol_version: 0.3.6 source checkout
+- work_status: In progress
+- evidence_level: CI
+- kafka_version: not-applicable
+- kafka_image: not-applicable
+- mode: not-applicable
+- topology: GitHub Actions nightly libFuzzer matrix
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: ten fuzz targets x four shards; 900 seconds per shard and 3,600 cumulative seconds per target
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32561454977
+- fault: malformed, truncated, oversized, compressed, and protocol-structure corpus inputs
+- duration: 43m25s workflow window; 900s per shard
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: 40 shards; 4 shards per target
+- expected_errors: zero crash, timeout, OOM, sanitizer failure, or non-passing shard result
+- observed_errors: all 40 qualification JSON files passed; 40 corpus SHA-256 values and target/shard pairs verified; no crash/OOM artifact files retained
+- retry_count: not-applicable
+- duplicate_count: not-applicable
+- loss_count: not-applicable
+- latency: not-applicable
+- memory: 2048 MB RSS cap per shard; 10 second input timeout
+- final_resource_gauges: libFuzzer final statistics retained per shard
+- result: passed
+- artifact: GitHub Actions run 32561454977; 40 qualification JSON/corpus artifacts; local hash verification completed
+- non_claims: not four consecutive weekly campaigns, not absence-of-bugs evidence, not published-artifact or RC evidence, not fault-soak/SLO/service-canary evidence, not complete V1-18 exit criteria

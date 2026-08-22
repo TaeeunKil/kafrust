@@ -237,11 +237,15 @@ versioned manifest at
 and its checker now declare the required 3,600 cumulative seconds per target,
 four 900-second shards, 70-minute job timeout, and four weekly passes. The dedicated
 [`fuzz-qualification.yml`](../.github/workflows/fuzz-qualification.yml) workflow
-implements that matrix with retained per-shard statistics and artifacts, but
-no qualifying campaign has completed; retained crash/OOM dispositions and four
-weekly passes remain required. The superseded 3,600-second-per-shard run was
-cancelled before evidence collection to avoid overstating or wasting the
-campaign budget.
+implements that matrix with retained per-shard statistics and artifacts. The
+first cumulative qualification run
+[32561454977](https://github.com/TaeeunKil/kafrust/actions/runs/32561454977)
+passed all 40 target/shard jobs. Each artifact reports 900 seconds per shard
+and 3,600 cumulative seconds per target; all 40 corpus hashes were verified
+with no crash/OOM artifact files. Three additional weekly campaign passes and
+retained crash/OOM dispositions remain required. The superseded
+3,600-second-per-shard run was cancelled before evidence collection to avoid
+overstating or wasting the campaign budget.
 
 ## V1-19 Execution Update (2026-08-22)
 

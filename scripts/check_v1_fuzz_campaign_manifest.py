@@ -40,6 +40,12 @@ def main() -> int:
         return fail(str(error))
     if manifest.get("schema_version") != 1:
         return fail("schema_version must be 1")
+    if manifest.get("status") not in {"discovery-only", "qualification-in-progress", "qualified"}:
+        return fail("status must describe discovery or qualification progress")
+    if manifest.get("status") == "qualification-in-progress":
+        progress = manifest.get("progress", {})
+        if progress.get("completed_campaign_sets", 0) < 1 or progress.get("remaining_weekly_campaigns", 0) < 1:
+            return fail("in-progress qualification must record completed and remaining campaign sets")
     if tuple(manifest.get("targets", ())) != TARGETS:
         return fail("manifest targets must match the ten checked-in fuzz targets")
     discovery = manifest.get("discovery", {})

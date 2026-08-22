@@ -78,10 +78,16 @@ workflow now runs that matrix on manual dispatch and weekly schedule, records
 per-target/per-shard hashes and final statistics, and uploads crash/OOM
 artifacts. Each shard runs 900 seconds, giving each target 3,600 cumulative
 seconds across four shards while avoiding an accidental four-hour-per-target
-overrun. No qualifying campaign has completed yet; retained crash/OOM
-disposition and four consecutive weekly passes remain open. Existing fuzz
-success is therefore not treated as absence-of-bug evidence or as completion
-of the CI exit gate.
+overrun. The first full qualification campaign
+[32561454977](https://github.com/TaeeunKil/kafrust/actions/runs/32561454977)
+from source `c2c75aa23dc962faad7f33f22cd15a96303d4b56` passed all ten targets
+and four shards. All 40 qualification records declared 900 seconds, the
+3,600-second cumulative target budget, nightly toolchain, 2,048 MB RSS cap,
+and a passing result; their 40 corpus hashes and target/shard pairs were
+verified, with no crash/OOM artifact files. This closes one qualifying
+campaign set only. Three additional weekly campaign passes and retained
+crash/OOM disposition remain open, so V1-18 stays `In progress`. Existing fuzz
+success is still not treated as absence-of-bug evidence.
 
 ## Failure And Lifecycle Contract
 
