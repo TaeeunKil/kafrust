@@ -1648,6 +1648,17 @@ fn delivery_error_from_request_error(error: &Error) -> Error {
             Error::TransactionOutcomeUnknown { operation }
         }
         Error::TransactionProducerDefunct => Error::TransactionProducerDefunct,
+        Error::ConsumerGroupCommitOutcomeUnknown {
+            group_id,
+            member_id,
+            generation_id,
+            offsets,
+        } => Error::ConsumerGroupCommitOutcomeUnknown {
+            group_id: group_id.clone(),
+            member_id: member_id.clone(),
+            generation_id: *generation_id,
+            offsets: offsets.clone(),
+        },
         Error::Broker { code, context } => Error::Broker {
             code: *code,
             context: context.clone(),
@@ -5220,6 +5231,7 @@ fn can_retry_send(error: &Error) -> bool {
         | Error::OAuthBearerTokenExpired
         | Error::TransactionOutcomeUnknown { .. }
         | Error::TransactionProducerDefunct
+        | Error::ConsumerGroupCommitOutcomeUnknown { .. }
         | Error::DeliveryDeadlineExceeded { .. }
         | Error::ResponseTooLarge { .. }
         | Error::TlsConfig { .. }

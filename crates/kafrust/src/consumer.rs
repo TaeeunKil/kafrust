@@ -2012,6 +2012,7 @@ fn can_retry_fetch(error: &Error) -> bool {
         | Error::OAuthBearerTokenExpired
         | Error::TransactionOutcomeUnknown { .. }
         | Error::TransactionProducerDefunct
+        | Error::ConsumerGroupCommitOutcomeUnknown { .. }
         | Error::DeliveryDeadlineExceeded { .. }
         | Error::ResponseTooLarge { .. }
         | Error::TlsConfig { .. }

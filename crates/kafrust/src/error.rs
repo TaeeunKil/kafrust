@@ -20,6 +20,40 @@ pub enum DeliveryPhase {
     Shutdown,
 }
 
+/// One topic-partition offset carried by an ambiguous consumer-group commit.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConsumerGroupCommitOffset {
+    topic: String,
+    partition: i32,
+    next_offset: i64,
+}
+
+impl ConsumerGroupCommitOffset {
+    /// Creates an offset identity for a consumer-group commit.
+    pub fn new(topic: impl Into<String>, partition: i32, next_offset: i64) -> Self {
+        Self {
+            topic: topic.into(),
+            partition,
+            next_offset,
+        }
+    }
+
+    /// Returns the Kafka topic name.
+    pub fn topic(&self) -> &str {
+        &self.topic
+    }
+
+    /// Returns the Kafka partition index.
+    pub fn partition(&self) -> i32 {
+        self.partition
+    }
+
+    /// Returns the next offset requested by the commit.
+    pub fn next_offset(&self) -> i64 {
+        self.next_offset
+    }
+}
+
 impl fmt::Display for DeliveryPhase {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
@@ -288,6 +322,19 @@ pub enum Error {
     },
     /// A transactional producer can no longer safely issue transaction commands.
     TransactionProducerDefunct,
+    /// A consumer-group offset commit may have reached Kafka but its response
+    /// was not observed. The caller must reconcile these exact offsets before
+    /// issuing a newer commit.
+    ConsumerGroupCommitOutcomeUnknown {
+        /// Consumer group whose offsets were sent.
+        group_id: String,
+        /// Member identity used for the commit.
+        member_id: String,
+        /// Classic generation or KIP-848 member epoch used for the commit.
+        generation_id: i32,
+        /// Exact topic-partition offsets that may have been committed.
+        offsets: Vec<ConsumerGroupCommitOffset>,
+    },
     /// Kafka returned a non-zero broker error code.
     Broker {
         /// Raw Kafka broker error code.
@@ -506,6 +553,16 @@ impl fmt::Display for Error {
             Self::TransactionProducerDefunct => {
                 f.write_str("transactional producer is defunct; discard the producer")
             }
+            Self::ConsumerGroupCommitOutcomeUnknown {
+                group_id,
+                member_id,
+                generation_id,
+                offsets,
+            } => write!(
+                f,
+                "consumer group {group_id} commit outcome is unknown for member {member_id} generation {generation_id}; reconcile {} offset(s) before another commit",
+                offsets.len()
+            ),
             Self::Broker { code, context } => write!(f, "Kafka broker error {code}: {context}"),
             Self::RequestTimedOut { timeout_ms } => {
                 write!(f, "Kafka request timed out after {timeout_ms}ms")
@@ -641,6 +698,7 @@ impl std::error::Error for Error {
             | Self::OAuthBearerTokenExpired
             | Self::TransactionOutcomeUnknown { .. }
             | Self::TransactionProducerDefunct
+            | Self::ConsumerGroupCommitOutcomeUnknown { .. }
             | Self::Broker { .. }
             | Self::RequestTimedOut { .. }
             | Self::DeliveryDeadlineExceeded { .. }
@@ -688,7 +746,7 @@ impl From<kafrust_protocol::Error> for Error {
 
 #[cfg(test)]
 mod tests {
-    use super::{BrokerErrorKind, DeliveryPhase, Error};
+    use super::{BrokerErrorKind, ConsumerGroupCommitOffset, DeliveryPhase, Error};
 
     #[test]
     fn classifies_known_broker_error_codes() {
@@ -814,6 +872,22 @@ mod tests {
         assert_eq!(
             error.to_string(),
             "Kafka delivery deadline exceeded during Produce after 20ms (possibly_transmitted=true)"
+        );
+        assert!(std::error::Error::source(&error).is_none());
+    }
+
+    #[test]
+    fn displays_consumer_group_commit_unknown_identity() {
+        let error = Error::ConsumerGroupCommitOutcomeUnknown {
+            group_id: "orders-group".to_owned(),
+            member_id: "member-a".to_owned(),
+            generation_id: 7,
+            offsets: vec![ConsumerGroupCommitOffset::new("orders", 0, 42)],
+        };
+
+        assert_eq!(
+            error.to_string(),
+            "consumer group orders-group commit outcome is unknown for member member-a generation 7; reconcile 1 offset(s) before another commit"
         );
         assert!(std::error::Error::source(&error).is_none());
     }

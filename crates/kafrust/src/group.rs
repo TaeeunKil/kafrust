@@ -39,7 +39,7 @@ use crate::consumer::{
     Consumer, ConsumerAssignment, ConsumerConfig, ConsumerPartitionQueue, ConsumerRecord,
     IsolationLevel, LeaderEpochOffset, PartitionWatermarks,
 };
-use crate::error::{BrokerErrorKind, Error, Result};
+use crate::error::{BrokerErrorKind, ConsumerGroupCommitOffset, Error, Result};
 use crate::metrics::ClientMetrics;
 use regex::Regex;
 use tokio::sync::{mpsc, oneshot, Mutex, Notify};
@@ -2813,6 +2813,16 @@ impl ConsumerGroup {
                             topics,
                         )
                         .await
+                        .map_err(|error| {
+                            classify_group_commit_error(
+                                &self.coordinator,
+                                error,
+                                &self.group_id,
+                                &self.member_id,
+                                self.generation_id,
+                                assignments,
+                            )
+                        })
                         .map(|response| {
                             offset_commit_response_error_v10(
                                 &self.group_id,
@@ -2830,6 +2840,16 @@ impl ConsumerGroup {
                             offset_commit_topics_v9(assignments),
                         )
                         .await
+                        .map_err(|error| {
+                            classify_group_commit_error(
+                                &self.coordinator,
+                                error,
+                                &self.group_id,
+                                &self.member_id,
+                                self.generation_id,
+                                assignments,
+                            )
+                        })
                         .map(|response| {
                             offset_commit_response_error(&self.group_id, &response.topics)
                         })
@@ -2844,6 +2864,16 @@ impl ConsumerGroup {
                         offset_commit_topics_v9(assignments),
                     )
                     .await
+                    .map_err(|error| {
+                        classify_group_commit_error(
+                            &self.coordinator,
+                            error,
+                            &self.group_id,
+                            &self.member_id,
+                            self.generation_id,
+                            assignments,
+                        )
+                    })
                     .map(|response| offset_commit_response_error(&self.group_id, &response.topics))
             }
         } else if let Some(group_instance_id) = &self.config.group_instance_id {
@@ -2856,6 +2886,16 @@ impl ConsumerGroup {
                     offset_commit_topics_v7(assignments),
                 )
                 .await
+                .map_err(|error| {
+                    classify_group_commit_error(
+                        &self.coordinator,
+                        error,
+                        &self.group_id,
+                        &self.member_id,
+                        self.generation_id,
+                        assignments,
+                    )
+                })
                 .map(|response| offset_commit_response_error(&self.group_id, &response.topics))
         } else {
             self.coordinator
@@ -2867,6 +2907,16 @@ impl ConsumerGroup {
                     offset_commit_topics(assignments),
                 )
                 .await
+                .map_err(|error| {
+                    classify_group_commit_error(
+                        &self.coordinator,
+                        error,
+                        &self.group_id,
+                        &self.member_id,
+                        self.generation_id,
+                        assignments,
+                    )
+                })
                 .map(|response| offset_commit_response_error(&self.group_id, &response.topics))
         } {
             Ok(error) => error,
@@ -4316,6 +4366,42 @@ fn offset_commit_topics_v10(
     )
 }
 
+fn classify_group_commit_error(
+    coordinator: &Client,
+    error: Error,
+    group_id: &str,
+    member_id: &str,
+    generation_id: i32,
+    assignments: &[ConsumerAssignment],
+) -> Error {
+    if coordinator.last_request_may_have_been_transmitted()
+        && matches!(
+            error,
+            Error::Io(_)
+                | Error::RequestTimedOut { .. }
+                | Error::ResponseTooLarge { .. }
+                | Error::Protocol(_)
+        )
+    {
+        return Error::ConsumerGroupCommitOutcomeUnknown {
+            group_id: group_id.to_owned(),
+            member_id: member_id.to_owned(),
+            generation_id,
+            offsets: assignments
+                .iter()
+                .map(|assignment| {
+                    ConsumerGroupCommitOffset::new(
+                        assignment.topic(),
+                        assignment.partition(),
+                        assignment.next_offset(),
+                    )
+                })
+                .collect(),
+        };
+    }
+    error
+}
+
 fn offset_commit_response_error(
     group_id: &str,
     topics: &[OffsetCommitTopicResponse],
@@ -4491,9 +4577,23 @@ async fn run_background_commit_worker(
                         let _ = ack.send(Ok(()));
                     }
                     Err(error) => {
-                        let _ = ack.send(Err(Error::Unsupported(
-                            "background commit worker stopped after a commit failure",
-                        )));
+                        let ack_error = match &error {
+                            Error::ConsumerGroupCommitOutcomeUnknown {
+                                group_id,
+                                member_id,
+                                generation_id,
+                                offsets,
+                            } => Error::ConsumerGroupCommitOutcomeUnknown {
+                                group_id: group_id.clone(),
+                                member_id: member_id.clone(),
+                                generation_id: *generation_id,
+                                offsets: offsets.clone(),
+                            },
+                            _ => Error::Unsupported(
+                                "background commit worker stopped after a commit failure",
+                            ),
+                        };
+                        let _ = ack.send(Err(ack_error));
                         link.signal_shutdown();
                         return Err(error);
                     }
@@ -4576,6 +4676,16 @@ async fn commit_worker_request(
                             topics,
                         )
                         .await
+                        .map_err(|error| {
+                            classify_group_commit_error(
+                                coordinator,
+                                error,
+                                &state.group_id,
+                                &state.member_id,
+                                state.generation_id,
+                                assignments,
+                            )
+                        })
                         .map(|response| {
                             offset_commit_response_error_v10(
                                 &state.group_id,
@@ -4593,6 +4703,16 @@ async fn commit_worker_request(
                             offset_commit_topics_v9(assignments),
                         )
                         .await
+                        .map_err(|error| {
+                            classify_group_commit_error(
+                                coordinator,
+                                error,
+                                &state.group_id,
+                                &state.member_id,
+                                state.generation_id,
+                                assignments,
+                            )
+                        })
                         .map(|response| {
                             offset_commit_response_error(&state.group_id, &response.topics)
                         })
@@ -4607,6 +4727,16 @@ async fn commit_worker_request(
                         offset_commit_topics_v9(assignments),
                     )
                     .await
+                    .map_err(|error| {
+                        classify_group_commit_error(
+                            coordinator,
+                            error,
+                            &state.group_id,
+                            &state.member_id,
+                            state.generation_id,
+                            assignments,
+                        )
+                    })
                     .map(|response| offset_commit_response_error(&state.group_id, &response.topics))
             }
         }
@@ -4619,6 +4749,16 @@ async fn commit_worker_request(
                 offset_commit_topics_v7(assignments),
             )
             .await
+            .map_err(|error| {
+                classify_group_commit_error(
+                    coordinator,
+                    error,
+                    &state.group_id,
+                    &state.member_id,
+                    state.generation_id,
+                    assignments,
+                )
+            })
             .map(|response| offset_commit_response_error(&state.group_id, &response.topics)),
         ConsumerGroupProtocol::Classic => coordinator
             .offset_commit_v2(
@@ -4629,6 +4769,16 @@ async fn commit_worker_request(
                 offset_commit_topics(assignments),
             )
             .await
+            .map_err(|error| {
+                classify_group_commit_error(
+                    coordinator,
+                    error,
+                    &state.group_id,
+                    &state.member_id,
+                    state.generation_id,
+                    assignments,
+                )
+            })
             .map(|response| offset_commit_response_error(&state.group_id, &response.topics)),
     }?;
 
@@ -5096,6 +5246,7 @@ mod tests {
         DEFAULT_GROUP_MAX_RETRIES, GROUP_JOIN_MAX_RETRY_BACKOFF,
     };
     use crate::consumer::ConsumerAssignment;
+    use crate::error::ConsumerGroupCommitOffset;
     use crate::Error;
     use kafrust_protocol::api::consumer_group_heartbeat::ConsumerGroupHeartbeatResponseV0;
     use kafrust_protocol::api::join_group::JoinGroupMember;
@@ -5459,6 +5610,14 @@ mod tests {
             code: 22,
             context: "illegal generation".to_owned(),
         }));
+        assert!(!should_retry_commit_worker(
+            &Error::ConsumerGroupCommitOutcomeUnknown {
+                group_id: "orders-group".to_owned(),
+                member_id: "member-a".to_owned(),
+                generation_id: 5,
+                offsets: vec![ConsumerGroupCommitOffset::new("orders", 0, 3)],
+            }
+        ));
     }
 
     #[test]

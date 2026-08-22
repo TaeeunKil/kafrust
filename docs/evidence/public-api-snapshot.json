@@ -466,6 +466,12 @@
       "source": "group::ConsumerGroupAssignmentStrategy"
     },
     {
+      "name": "ConsumerGroupCommitOffset",
+      "kind": "use",
+      "feature": null,
+      "source": "error::ConsumerGroupCommitOffset"
+    },
+    {
       "name": "ConsumerGroupCommitWorker",
       "kind": "use",
       "feature": null,
@@ -1784,10 +1790,10 @@
     "excluded": 13,
     "experimental": 1358,
     "expert": 311,
-    "stable": 686
+    "stable": 692
   },
-  "public_symbol_count": 2368,
-  "public_declaration_sha256": "c0262b90315af0991ecc909d27ee3ef3a3318c8dcf41a299eec6eb5db9109931",
+  "public_symbol_count": 2374,
+  "public_declaration_sha256": "23d07042844b341fe6581e3d7378e928b896a1cc59b7254d87f8f76c5a4dbed4",
   "symbols": [
     {
       "path": "kafrust::Acks",
@@ -2466,6 +2472,16 @@
       "feature": null,
       "source": "group::ConsumerGroupAssignmentStrategy",
       "line": 118,
+      "classification": "stable",
+      "owner": "V1-02"
+    },
+    {
+      "path": "kafrust::ConsumerGroupCommitOffset",
+      "kind": "use",
+      "surface": "root",
+      "feature": null,
+      "source": "error::ConsumerGroupCommitOffset",
+      "line": 116,
       "classification": "stable",
       "owner": "V1-02"
     },
@@ -21225,7 +21241,7 @@
       "surface": "module",
       "feature": null,
       "source": "crates/kafrust/src/error.rs",
-      "line": 38,
+      "line": 72,
       "classification": "stable",
       "owner": "V1-02"
     },
@@ -21235,7 +21251,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/error.rs",
-      "line": 137,
+      "line": 171,
       "classification": "stable",
       "owner": "V1-02"
     },
@@ -21245,7 +21261,57 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/error.rs",
-      "line": 190,
+      "line": 224,
+      "classification": "stable",
+      "owner": "V1-02"
+    },
+    {
+      "path": "kafrust::error::ConsumerGroupCommitOffset",
+      "kind": "struct",
+      "surface": "module",
+      "feature": null,
+      "source": "crates/kafrust/src/error.rs",
+      "line": 25,
+      "classification": "stable",
+      "owner": "V1-02"
+    },
+    {
+      "path": "kafrust::error::ConsumerGroupCommitOffset::new",
+      "kind": "function",
+      "surface": "associated",
+      "feature": null,
+      "source": "crates/kafrust/src/error.rs",
+      "line": 33,
+      "classification": "stable",
+      "owner": "V1-02"
+    },
+    {
+      "path": "kafrust::error::ConsumerGroupCommitOffset::next_offset",
+      "kind": "function",
+      "surface": "associated",
+      "feature": null,
+      "source": "crates/kafrust/src/error.rs",
+      "line": 52,
+      "classification": "stable",
+      "owner": "V1-02"
+    },
+    {
+      "path": "kafrust::error::ConsumerGroupCommitOffset::partition",
+      "kind": "function",
+      "surface": "associated",
+      "feature": null,
+      "source": "crates/kafrust/src/error.rs",
+      "line": 47,
+      "classification": "stable",
+      "owner": "V1-02"
+    },
+    {
+      "path": "kafrust::error::ConsumerGroupCommitOffset::topic",
+      "kind": "function",
+      "surface": "associated",
+      "feature": null,
+      "source": "crates/kafrust/src/error.rs",
+      "line": 42,
       "classification": "stable",
       "owner": "V1-02"
     },
@@ -21265,7 +21331,7 @@
       "surface": "module",
       "feature": null,
       "source": "crates/kafrust/src/error.rs",
-      "line": 204,
+      "line": 238,
       "classification": "stable",
       "owner": "V1-02"
     },
@@ -21275,7 +21341,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/error.rs",
-      "line": 439,
+      "line": 486,
       "classification": "stable",
       "owner": "V1-02"
     },
@@ -22245,7 +22311,7 @@
       "surface": "module",
       "feature": null,
       "source": "crates/kafrust/src/group.rs",
-      "line": 2930,
+      "line": 2980,
       "classification": "stable",
       "owner": "V1-08"
     },
@@ -22255,7 +22321,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/group.rs",
-      "line": 2948,
+      "line": 2998,
       "classification": "stable",
       "owner": "V1-08"
     },
@@ -22265,7 +22331,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/group.rs",
-      "line": 2943,
+      "line": 2993,
       "classification": "stable",
       "owner": "V1-08"
     },
@@ -22275,7 +22341,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/group.rs",
-      "line": 2958,
+      "line": 3008,
       "classification": "stable",
       "owner": "V1-08"
     },
@@ -22285,7 +22351,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/group.rs",
-      "line": 2963,
+      "line": 3013,
       "classification": "stable",
       "owner": "V1-08"
     },
@@ -22295,7 +22361,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/group.rs",
-      "line": 2953,
+      "line": 3003,
       "classification": "stable",
       "owner": "V1-08"
     },
@@ -22305,7 +22371,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/group.rs",
-      "line": 2989,
+      "line": 3039,
       "classification": "stable",
       "owner": "V1-08"
     },
@@ -22315,7 +22381,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/group.rs",
-      "line": 2974,
+      "line": 3024,
       "classification": "stable",
       "owner": "V1-08"
     },
@@ -22785,7 +22851,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 1907,
+      "line": 1918,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -22795,7 +22861,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 1764,
+      "line": 1775,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -22805,7 +22871,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 1896,
+      "line": 1907,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -22815,7 +22881,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 1912,
+      "line": 1923,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -22825,7 +22891,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 1940,
+      "line": 1951,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -22835,7 +22901,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 2029,
+      "line": 2040,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -22845,7 +22911,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 2054,
+      "line": 2065,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -22855,7 +22921,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 1847,
+      "line": 1858,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -22865,7 +22931,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 1797,
+      "line": 1808,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -22875,7 +22941,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 1924,
+      "line": 1935,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23025,7 +23091,7 @@
       "surface": "module",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 3757,
+      "line": 3768,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23035,7 +23101,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 3943,
+      "line": 3954,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23045,7 +23111,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 4063,
+      "line": 4074,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23055,7 +23121,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 3996,
+      "line": 4007,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23065,7 +23131,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 4093,
+      "line": 4104,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23075,7 +23141,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 4171,
+      "line": 4182,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23085,7 +23151,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 4204,
+      "line": 4215,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23095,7 +23161,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 4165,
+      "line": 4176,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23105,7 +23171,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 4123,
+      "line": 4134,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23115,7 +23181,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 3803,
+      "line": 3814,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23125,7 +23191,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 4005,
+      "line": 4016,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23135,7 +23201,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 4098,
+      "line": 4109,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23145,7 +23211,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 4073,
+      "line": 4084,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23155,7 +23221,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 3961,
+      "line": 3972,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23165,7 +23231,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 4015,
+      "line": 4026,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23175,7 +23241,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 4118,
+      "line": 4129,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23185,7 +23251,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 4103,
+      "line": 4114,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23195,7 +23261,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 4088,
+      "line": 4099,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23205,7 +23271,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 3987,
+      "line": 3998,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23215,7 +23281,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 3978,
+      "line": 3989,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23225,7 +23291,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 4083,
+      "line": 4094,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23235,7 +23301,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 3828,
+      "line": 3839,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23245,7 +23311,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 3834,
+      "line": 3845,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23255,7 +23321,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 3822,
+      "line": 3833,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23265,7 +23331,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 3969,
+      "line": 3980,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23275,7 +23341,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 4078,
+      "line": 4089,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23285,7 +23351,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 3815,
+      "line": 3826,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23295,7 +23361,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 3949,
+      "line": 3960,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23305,7 +23371,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 4068,
+      "line": 4079,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23315,7 +23381,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 3840,
+      "line": 3851,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23325,7 +23391,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 3775,
+      "line": 3786,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23335,7 +23401,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 4044,
+      "line": 4055,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23345,7 +23411,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 4054,
+      "line": 4065,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23355,7 +23421,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 3809,
+      "line": 3820,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23365,7 +23431,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 3902,
+      "line": 3913,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23375,7 +23441,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 3918,
+      "line": 3929,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23385,7 +23451,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 3908,
+      "line": 3919,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23395,7 +23461,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 3928,
+      "line": 3939,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23405,7 +23471,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 3876,
+      "line": 3887,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23415,7 +23481,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 3882,
+      "line": 3893,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23425,7 +23491,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 3892,
+      "line": 3903,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23435,7 +23501,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 3846,
+      "line": 3857,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23445,7 +23511,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 3864,
+      "line": 3875,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23455,7 +23521,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 3870,
+      "line": 3881,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23465,7 +23531,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 3858,
+      "line": 3869,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23475,7 +23541,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 3852,
+      "line": 3863,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23485,7 +23551,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 4033,
+      "line": 4044,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23495,7 +23561,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 4113,
+      "line": 4124,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23505,7 +23571,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 4025,
+      "line": 4036,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23515,7 +23581,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 4108,
+      "line": 4119,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23525,7 +23591,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 4128,
+      "line": 4139,
       "classification": "stable",
       "owner": "V1-04"
     },
@@ -23535,7 +23601,7 @@
       "surface": "associated",
       "feature": null,
       "source": "crates/kafrust/src/producer.rs",
-      "line": 3797,
+      "line": 3808,
       "classification": "stable",
       "owner": "V1-04"
     },

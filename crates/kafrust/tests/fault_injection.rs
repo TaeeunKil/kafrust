@@ -732,6 +732,86 @@ async fn consumer_group_retries_transient_coordinator_lookup_failure() {
 }
 
 #[tokio::test]
+async fn consumer_group_offset_commit_response_loss_returns_exact_unknown() {
+    let coordinator = ScriptedBroker::start(vec![
+        ScriptedResponse::Respond(join_group_response_body(1)),
+        ScriptedResponse::Respond(sync_group_response_body()),
+        ScriptedResponse::Respond(offset_fetch_response_body()),
+        ScriptedResponse::Drop,
+    ])
+    .await
+    .expect("coordinator broker should bind");
+    let bootstrap = ScriptedBroker::start(vec![
+        ScriptedResponse::Respond(find_coordinator_response_for_address(coordinator.address())),
+        ScriptedResponse::Respond(metadata_response_body("orders", 0)),
+        ScriptedResponse::RespondAndKeepAlive(api_versions_response_body(0)),
+    ])
+    .await
+    .expect("bootstrap broker should bind");
+
+    let metrics = ClientMetrics::new();
+    let mut group = ConsumerGroupConfig::new([bootstrap.address().to_string()], "orders-group")
+        .with_client_config(
+            ClientConfig::new([bootstrap.address().to_string()])
+                .metrics(metrics.clone())
+                .request_timeout_ms(1_000),
+        )
+        .subscribe("orders")
+        .max_retries(1)
+        .join()
+        .await
+        .expect("consumer group should join before the commit response is dropped");
+
+    let error = group
+        .commit_offsets()
+        .await
+        .expect_err("a transmitted commit with no response must remain ambiguous");
+    match error {
+        kafrust::Error::ConsumerGroupCommitOutcomeUnknown {
+            group_id,
+            member_id,
+            generation_id,
+            offsets,
+        } => {
+            assert_eq!(group_id, "orders-group");
+            assert_eq!(member_id, "member-1");
+            assert_eq!(generation_id, 1);
+            assert_eq!(offsets.len(), 1);
+            assert_eq!(offsets[0].topic(), "orders");
+            assert_eq!(offsets[0].partition(), 0);
+            assert_eq!(offsets[0].next_offset(), 0);
+        }
+        other => {
+            assert!(
+                matches!(
+                    other,
+                    kafrust::Error::ConsumerGroupCommitOutcomeUnknown { .. }
+                ),
+                "expected typed commit ambiguity"
+            );
+        }
+    }
+    assert_eq!(metrics.snapshot().retries, 0);
+
+    let bootstrap_observations = bootstrap
+        .finish()
+        .await
+        .expect("bootstrap broker should complete group setup");
+    let coordinator_observations = coordinator
+        .finish()
+        .await
+        .expect("coordinator broker should observe the ambiguous commit");
+    assert_eq!(
+        coordinator_observations
+            .iter()
+            .map(|request| request.api_key)
+            .collect::<Vec<_>>(),
+        [11, 14, 9, 8]
+    );
+    assert_eq!(bootstrap_observations.len(), 3);
+}
+
+#[tokio::test]
 async fn consumer_group_rejoins_after_coordinator_connection_loss() {
     let coordinator_a = ScriptedBroker::start(vec![
         ScriptedResponse::Respond(join_group_response_body(1)),
