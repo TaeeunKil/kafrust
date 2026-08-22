@@ -89,6 +89,12 @@ campaign set only. Three additional weekly campaign passes and retained
 crash/OOM disposition remain open, so V1-18 stays `In progress`. Existing fuzz
 success is still not treated as absence-of-bug evidence.
 
+The checked-in
+[`check_v1_fuzz_qualification_artifacts.py`](../../scripts/check_v1_fuzz_qualification_artifacts.py)
+reproduces the artifact audit, including all 40 target/shard records, the
+900-second shard and 3,600-second cumulative budgets, workflow SHA, RSS cap,
+corpus hashes, and crash/OOM-file absence.
+
 ## Failure And Lifecycle Contract
 
 - Limits are checked before unbounded allocation and return typed errors.

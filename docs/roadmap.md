@@ -246,6 +246,9 @@ with no crash/OOM artifact files. Three additional weekly campaign passes and
 retained crash/OOM dispositions remain required. The superseded
 3,600-second-per-shard run was cancelled before evidence collection to avoid
 overstating or wasting the campaign budget.
+The checked-in
+[`check_v1_fuzz_qualification_artifacts.py`](scripts/check_v1_fuzz_qualification_artifacts.py)
+now reproduces the 40-record, corpus-hash, resource-cap, and crash/OOM audit.
 
 ## V1-19 Execution Update (2026-08-22)
 
