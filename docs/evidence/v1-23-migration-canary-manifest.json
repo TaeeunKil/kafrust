@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "status": "preparation",
+  "date_utc": "2026-08-22",
+  "service_id": "kafrust-reference-migration-canary",
+  "fixture": ".github/published-rust-rdkafka-comparison",
+  "client_implementations": ["kafrust", "rust-rdkafka"],
+  "stages": ["baseline", "forward-cutover", "fault-observe", "rollback", "post-rollback"],
+  "smoke_gate": {
+    "minimum_unique_records": 1000,
+    "isolated_topics": true,
+    "isolated_groups": true,
+    "compare_fields": ["records", "payload_bytes", "batch_size", "produce_seconds", "consume_seconds"]
+  },
+  "exit_gate": {
+    "minimum_unique_records": 1000000,
+    "required_events": ["credential-rotation", "leader-loss", "coordinator-loss", "rebalance", "backpressure", "restart", "forward-cutover", "rollback"],
+    "zero_unexplained_divergence": true,
+    "unknown_outcomes_reconciled_before_retry": true
+  },
+  "result_fields": [
+    "service_id",
+    "fixture_commit",
+    "artifact_digest",
+    "stage",
+    "implementation",
+    "topic",
+    "group_id",
+    "unique_records",
+    "offset_divergence",
+    "error_divergence",
+    "unknown_outcomes",
+    "rollback_objective_seconds",
+    "rollback_result"
+  ],
+  "non_claims": [
+    "the reference fixture is not a source-compatible rust-rdkafka facade",
+    "the smoke gate is not the million-record service-canary exit gate",
+    "the comparison dependency remains isolated from kafrust release dependencies"
+  ]
+}

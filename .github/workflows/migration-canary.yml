@@ -1,0 +1,128 @@
+name: Migration Reference Canary
+
+on:
+  workflow_dispatch:
+    inputs:
+      records:
+        description: Unique records per implementation for the smoke canary
+        required: true
+        default: "1000"
+      payload_bytes:
+        description: Payload bytes per record
+        required: true
+        default: "1024"
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  reference-canary:
+    name: Reference migration fixture
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Start Kafka
+        run: |
+          docker run -d --name kafrust-migration-kafka \
+            -p 9092:9092 \
+            -e KAFKA_NODE_ID=1 \
+            -e KAFKA_PROCESS_ROLES=broker,controller \
+            -e KAFKA_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 \
+            -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092 \
+            -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+            -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
+            -e KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT \
+            -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@localhost:9093 \
+            -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
+            apache/kafka:4.3.1
+
+      - name: Wait for Kafka
+        run: |
+          for attempt in {1..90}; do
+            if docker exec kafrust-migration-kafka /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server localhost:9092 >/tmp/kafrust-migration-probe.log 2>&1; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/kafrust-migration-probe.log || true
+          docker logs kafrust-migration-kafka
+          exit 1
+
+      - name: Create isolated topics
+        run: |
+          for topic in kafrust-migration-kafrust-${GITHUB_RUN_ID} kafrust-migration-rdkafka-${GITHUB_RUN_ID}; do
+            docker exec kafrust-migration-kafka /opt/kafka/bin/kafka-topics.sh \
+              --bootstrap-server localhost:9092 \
+              --create --topic "$topic" --partitions 1 --replication-factor 1
+          done
+
+      - name: Prepare external comparison project
+        run: |
+          project_dir="$RUNNER_TEMP/kafrust-migration-reference"
+          cargo new --bin "$project_dir"
+          cp .github/published-rust-rdkafka-comparison/src/main.rs "$project_dir/src/main.rs"
+          sed "s|kafrust = \"__KAFRUST_VERSION__\"|kafrust = { path = \"$GITHUB_WORKSPACE/crates/kafrust\" }|" \
+            .github/published-rust-rdkafka-comparison/Cargo.toml > "$project_dir/Cargo.toml"
+          echo "KAFRUST_MIGRATION_PROJECT=$project_dir" >> "$GITHUB_ENV"
+
+      - name: Run kafrust reference stage
+        env:
+          KAFRUST_BOOTSTRAP_SERVERS: localhost:9092
+          KAFRUST_TOPIC: kafrust-migration-kafrust-${{ github.run_id }}
+          KAFRUST_COMPARISON_IMPLEMENTATION: kafrust
+          KAFRUST_COMPARISON_RECORDS: ${{ inputs.records }}
+          KAFRUST_COMPARISON_PAYLOAD_BYTES: ${{ inputs.payload_bytes }}
+          KAFRUST_COMPARISON_BATCH_SIZE: "100"
+        run: |
+          cargo run --manifest-path "$KAFRUST_MIGRATION_PROJECT/Cargo.toml" --quiet \
+            | tee migration-kafrust.json
+
+      - name: Run rust-rdkafka reference stage
+        env:
+          KAFRUST_BOOTSTRAP_SERVERS: localhost:9092
+          KAFRUST_TOPIC: kafrust-migration-rdkafka-${{ github.run_id }}
+          KAFRUST_COMPARISON_IMPLEMENTATION: rdkafka
+          KAFRUST_COMPARISON_RECORDS: ${{ inputs.records }}
+          KAFRUST_COMPARISON_PAYLOAD_BYTES: ${{ inputs.payload_bytes }}
+          KAFRUST_COMPARISON_BATCH_SIZE: "100"
+        run: |
+          cargo run --manifest-path "$KAFRUST_MIGRATION_PROJECT/Cargo.toml" --quiet \
+            | tee migration-rdkafka.json
+
+      - name: Compare normalized smoke results
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          rows = [json.loads(Path(name).read_text()) for name in ("migration-kafrust.json", "migration-rdkafka.json")]
+          expected = int("${{ inputs.records }}")
+          if any(row["records"] != expected for row in rows):
+              raise SystemExit("record count diverged from the requested smoke workload")
+          if any(row["produce_seconds"] <= 0 or row["consume_seconds"] <= 0 for row in rows):
+              raise SystemExit("reference stage reported a non-positive duration")
+          print(json.dumps({"stage": "baseline", "records": expected, "implementations": [row["implementation"] for row in rows]}))
+          PY
+
+      - name: Upload canary evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kafrust-migration-canary-${{ github.run_id }}
+          path: |
+            migration-kafrust.json
+            migration-rdkafka.json
+
+      - name: Dump Kafka logs
+        if: failure()
+        run: docker logs kafrust-migration-kafka

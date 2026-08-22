@@ -56,9 +56,13 @@ V1-23 remains `Planned`. The repository contains the row-by-row
 typed operation/error mappings, but no named representative service, owner, or
 canary environment has been registered in this v1 program. The existing
 examples are not a substitute for the required million-record dual-client
-comparison and forward/rollback canary; V1-23 will be explicitly marked
-`Blocked` if that external prerequisite is still absent when its dependency
-window opens.
+comparison and forward/rollback canary. The preparation manifest at
+[`v1-23-migration-canary-manifest.json`](../../evidence/v1-23-migration-canary-manifest.json),
+its checker, and the manual `Migration Reference Canary` workflow now provide a
+reproducible 1,000-record smoke path with isolated topics plus a declared
+1,000,000-record exit path. V1-23 will be explicitly marked `Blocked` if a
+named service or approved reference environment is still absent when its
+dependency window opens.
 
 ## Failure And Lifecycle Contract
 
