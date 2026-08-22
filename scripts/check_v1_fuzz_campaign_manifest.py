@@ -46,6 +46,10 @@ def main() -> int:
         progress = manifest.get("progress", {})
         if progress.get("completed_campaign_sets", 0) < 1 or progress.get("remaining_weekly_campaigns", 0) < 1:
             return fail("in-progress qualification must record completed and remaining campaign sets")
+    if manifest.get("status") == "qualified":
+        progress = manifest.get("progress", {})
+        if progress.get("completed_campaign_sets", 0) < 4 or progress.get("remaining_weekly_campaigns") != 0:
+            return fail("qualified status requires four completed campaign sets and no remaining weekly campaigns")
     if tuple(manifest.get("targets", ())) != TARGETS:
         return fail("manifest targets must match the ten checked-in fuzz targets")
     discovery = manifest.get("discovery", {})
