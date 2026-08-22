@@ -152,8 +152,8 @@ async fn main() -> kafrust::Result<()> {
         snapshot.requests_failed,
         snapshot.retries,
         snapshot.in_flight_requests,
-        snapshot.buffered_records,
         snapshot.max_in_flight_requests,
+        snapshot.buffered_records,
         snapshot.max_buffered_records,
     );
     Ok(())
