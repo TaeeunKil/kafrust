@@ -1434,6 +1434,7 @@ async fn share_consumer_reconciles_lost_acknowledgement_with_redelivery() {
             .build()
             .await
             .expect("share consumer should build");
+    let member_id = consumer.member_id().to_owned();
 
     let first_delivery = consumer.poll().await.expect("initial fetch should succeed");
     consumer
@@ -1457,6 +1458,7 @@ async fn share_consumer_reconciles_lost_acknowledgement_with_redelivery() {
         .poll()
         .await
         .expect("reconciliation should allow broker redelivery");
+    assert_eq!(consumer.member_id(), member_id);
     assert_eq!(redelivered.len(), 1);
     assert_eq!(redelivered[0].offset(), 10);
     assert_eq!(consumer.pending_acknowledgement_reconciliation_count(), 0);
