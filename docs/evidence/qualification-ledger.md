@@ -928,7 +928,7 @@ unqualified relative artifact label.
 - security: PLAINTEXT
 - group_protocol: not-applicable
 - workload: dual-client baseline comparison through the migration reference fixture
-- workflow: Migration Reference Canary run 32552631034
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32552631034
 - fault: none injected in baseline smoke; forward/fault-observe/rollback stages remain open
 - duration: workflow 85 seconds; kafrust produce 0.044929s consume 0.020054s; rust-rdkafka produce 0.032994s consume 0.010600s
 - record_count: 1000 unique records per implementation
