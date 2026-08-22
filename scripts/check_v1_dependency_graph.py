@@ -78,7 +78,18 @@ def main() -> int:
                 return fail(f"{profile} profile contains forbidden packages: {', '.join(forbidden)}")
             summaries.append((profile, len(packages)))
 
-        metadata = json.loads(run_cargo(("metadata", "--format-version", "1", "--no-deps")))
+        metadata = json.loads(run_cargo(("metadata", "--format-version", "1", "--locked")))
+        packages = metadata.get("packages", [])
+        missing_license = sorted(
+            package.get("name", "<unknown>")
+            for package in packages
+            if not package.get("license") and not package.get("license_file")
+        )
+        if missing_license:
+            return fail(
+                "resolved packages missing license metadata: "
+                + ", ".join(missing_license)
+            )
         selected = {package["name"]: package for package in metadata["packages"] if package["name"] in {"kafrust", "kafrust-protocol"}}
         if set(selected) != {"kafrust", "kafrust-protocol"}:
             return fail("metadata omitted kafrust or kafrust-protocol")
@@ -91,6 +102,7 @@ def main() -> int:
         for name in ("kafrust", "kafrust-protocol"):
             package = selected[name]
             print(f"  {name}: {len(package['dependencies'])} direct dependencies")
+        print(f"  resolved packages with license metadata: {len(packages)}")
     except (OSError, RuntimeError, json.JSONDecodeError, KeyError, subprocess.SubprocessError) as error:
         return fail(str(error))
     return 0
@@ -98,4 +110,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
