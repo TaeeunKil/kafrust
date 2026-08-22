@@ -1,0 +1,101 @@
+#!/usr/bin/env python3
+"""Check the V1-19 direct dependency graph and forbidden client posture."""
+
+from __future__ import annotations
+
+import json
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+PROFILES = (
+    ("default", ()),
+    ("tls", ("--features", "tls")),
+    ("blocking", ("--features", "blocking")),
+    ("otlp", ("--features", "otlp")),
+    ("all", ("--all-features",)),
+)
+FORBIDDEN = re.compile(r"^(?:librdkafka|rdkafka-sys|kafka-sys|rdkafka)(?:-|$)")
+PACKAGE_LINE = re.compile(r"^([A-Za-z0-9_-]+) v")
+
+
+def fail(message: str) -> int:
+    print(f"v1 dependency graph check failed: {message}", file=sys.stderr)
+    return 1
+
+
+def run_cargo(args: tuple[str, ...]) -> str:
+    result = subprocess.run(
+        ["cargo", *args],
+        cwd=ROOT,
+        check=False,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    if result.returncode:
+        raise RuntimeError(f"cargo {' '.join(args)} exited {result.returncode}:\n{result.stdout}")
+    return result.stdout
+
+
+def tree_packages(features: tuple[str, ...]) -> set[str]:
+    output = run_cargo(
+        (
+            "tree",
+            "-p",
+            "kafrust",
+            "--edges",
+            "normal",
+            "--format",
+            "{p}",
+            *features,
+        )
+    )
+    packages: set[str] = set()
+    for line in output.splitlines():
+        normalized = re.sub(r"^[^A-Za-z0-9]*", "", line)
+        match = PACKAGE_LINE.match(normalized)
+        if match:
+            packages.add(match.group(1))
+    return packages
+
+
+def main() -> int:
+    try:
+        root_manifest = (ROOT / "Cargo.toml").read_text(encoding="utf-8")
+        if 'unsafe_code = "forbid"' not in root_manifest:
+            return fail('workspace lint must keep unsafe_code = "forbid"')
+        summaries = []
+        for profile, features in PROFILES:
+            packages = tree_packages(features)
+            forbidden = sorted(package for package in packages if FORBIDDEN.match(package))
+            if forbidden:
+                return fail(f"{profile} profile contains forbidden packages: {', '.join(forbidden)}")
+            summaries.append((profile, len(packages)))
+
+        metadata = json.loads(run_cargo(("metadata", "--format-version", "1", "--no-deps")))
+        selected = {package["name"]: package for package in metadata["packages"] if package["name"] in {"kafrust", "kafrust-protocol"}}
+        if set(selected) != {"kafrust", "kafrust-protocol"}:
+            return fail("metadata omitted kafrust or kafrust-protocol")
+        versions = {package["version"] for package in selected.values()}
+        if versions != {"0.3.6"}:
+            return fail(f"unexpected coordinated versions: {sorted(versions)}")
+        print("v1 dependency graph ok")
+        for profile, count in summaries:
+            print(f"  {profile}: {count} unique normal-edge packages; forbidden=none")
+        for name in ("kafrust", "kafrust-protocol"):
+            package = selected[name]
+            print(f"  {name}: {len(package['dependencies'])} direct dependencies")
+    except (OSError, RuntimeError, json.JSONDecodeError, KeyError, subprocess.SubprocessError) as error:
+        return fail(str(error))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+

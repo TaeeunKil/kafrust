@@ -66,6 +66,9 @@ jobs:
       - name: Check v1 performance campaign manifest
         run: python scripts/check_v1_performance_campaign_manifest.py
 
+      - name: Check V1 dependency graph posture
+        run: python scripts/check_v1_dependency_graph.py
+
       - name: Check v1 migration canary manifest
         run: python scripts/check_v1_migration_canary_manifest.py
 
