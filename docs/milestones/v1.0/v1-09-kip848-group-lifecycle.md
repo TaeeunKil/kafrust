@@ -1,6 +1,6 @@
 # V1-09 KIP-848 Consumer Group Lifecycle
 
-- Status: Planned
+- Status: In progress
 - Target evidence: Published artifact
 - Dependencies: V1-07
 
@@ -47,6 +47,32 @@ coordinator recovery, and deterministic shutdown.
    an exact retry is serialized before any newer commit under the same epoch.
 6. Cover empty assignment, concurrent members, member loss, replacement member,
    cancellation, and shutdown.
+
+## Current Execution Record (2026-08-22)
+
+V1-09 is now `In progress`. The current KIP-848 path owns a dedicated
+member/epoch session, sends ConsumerGroupHeartbeat v0/v1 with nullable
+assignments, resolves Metadata v12 topic UUIDs, selects OffsetFetch/OffsetCommit
+v10 when advertised, and falls back to v9 only when the name-based identity is
+available. Explicit and regex subscriptions are supported; regex assignments
+refresh topic metadata when a new UUID is not yet known. Rejoin carries the
+same member ID and owned partitions, synchronizes the commit worker, and
+restores offsets before replacing the assignment.
+
+The deterministic fault slice covers repeated rebalance responses, coordinator
+reconnect, v9 offset-fetch fallback, v10 UUID offset commit, empty assignments,
+and regex-created topic/UUID refresh. The regression
+`consumer_protocol_rejoins_and_fetches_after_rebalance_error` now also asserts
+the member ID remains stable across the rejoin while generation 2 restores the
+record position; `consumer_protocol_regex_refreshes_unknown_topic_uuid_assignment`
+covers dynamic regex topic discovery. V1-08's typed
+`ConsumerGroupCommitOutcomeUnknown` classifier is shared by the KIP-848 v9/v10
+direct and background commit paths.
+
+Published pinned-current plaintext and SASL_SSL/SCRAM churn, full member-loss
+cycles, stale-task cancellation, delete/recreate name-fallback races, and
+exact offset-restoration evidence remain open. No modern-group published
+artifact or 40-cycle claim is made.
 
 ## Failure And Lifecycle Contract
 

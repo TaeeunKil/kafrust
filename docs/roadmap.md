@@ -142,6 +142,16 @@ full local Rust validation and the regenerated public API snapshot. Published
 floor/current group profiles, churn, callback, heartbeat, and offset
 restoration gates remain open.
 
+## V1-09 Execution Update (2026-08-22)
+
+V1-09 is `In progress`. The KIP-848 path now has deterministic evidence for
+member/epoch rejoin, nullable and empty assignments, Metadata v12 UUID
+resolution, v9 fallback, v10 UUID commit, repeated rebalance recovery, and
+regex topic/UUID refresh. The rejoin fixture asserts the member ID remains
+stable while assignment offsets are restored. Published pinned-current
+plaintext/SASL churn, stale-task cancellation, delete/recreate fallback races,
+and exact 40-cycle ownership/offset gates remain open.
+
 ## Current Release Qualification
 
 `0.3.5` is now published on crates.io in protocol-first order. The fresh
