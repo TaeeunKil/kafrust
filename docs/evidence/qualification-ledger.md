@@ -318,3 +318,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: workspace source commit 8a29d1eff1bd6d9fa80526be79f7e1ec99430075
 - non_claims: not CI, not live broker compatibility, not published artifact, not churn or data-loss qualification
+
+## Q-LOCAL-V109-001
+
+- date_utc: 2026-08-22
+- source_commit: b54969655af6f309a457e3dc547bd47c6a0c4cdd
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: scripted broker fixtures
+- kafka_image: not-applicable
+- mode: not-applicable
+- topology: single scripted coordinator plus partition leader
+- security: not-applicable
+- group_protocol: KIP-848 consumer
+- workload: epoch rejoin, UUID offset restoration, and member identity stability
+- workflow: scripts/check_qualification_ledger.py
+- fault: coordinator heartbeat returns rebalance errors and reconnects before assignment restoration
+- duration: 0.14s
+- record_count: 1
+- member_count: 1
+- repetition_count: 1
+- expected_errors: transient rebalance response; no terminal error
+- observed_errors: member ID stable across rejoin; generation 2 and record position restored
+- retry_count: 1
+- duplicate_count: 0
+- loss_count: 0
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: scripted broker completed; no stale assignment observed
+- result: passed
+- artifact: workspace source commit b54969655af6f309a457e3dc547bd47c6a0c4cdd
+- non_claims: not CI, not live broker compatibility, not published artifact, not 40-cycle churn or data-loss qualification
