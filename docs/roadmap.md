@@ -250,9 +250,9 @@ The checked-in
 [`check_v1_fuzz_qualification_artifacts.py`](scripts/check_v1_fuzz_qualification_artifacts.py)
 now reproduces the 40-record, corpus-hash, resource-cap, and crash/OOM audit.
 
-## V1-19 Execution Update (2026-08-22)
+## V1-19 Execution Update (2026-08-22; completed 2026-08-23)
 
-V1-19 is `In progress`. The staged `0.3.6` package candidate passes five
+V1-19 is `Done` at packaged-candidate evidence level. The staged `0.3.6` package candidate passes five
 feature profiles on Rust 1.81.0 and stable in
 [CI run 32545563612](https://github.com/TaeeunKil/kafrust/actions/runs/32545563612).
 The manifests contain no librdkafka/C client binding and the source crates
@@ -354,6 +354,12 @@ exact source `68f7775` in [CI run 32611666435](https://github.com/TaeeunKil/kafr
 This confirms the new advisory snapshot wiring only; manual unsafe/native
 ownership, multi-platform/package evidence, and published-artifact gates still
 block V1-19 completion.
+
+The final owner-review matrix and exact-head package validation then passed both
+toolchains from `a3df635` in [CI run 32612304536](https://github.com/TaeeunKil/kafrust/actions/runs/32612304536).
+This closes V1-19's packaged-candidate exit criteria. The next gate is V1-20's
+fresh published `0.3.6` matrix; no registry upload, tag, or `1.0.0` claim is
+implied by marking V1-19 done.
 
 The dated version-readiness decision is archived in
 [`docs/evidence/v1-release-competitive-readiness-2026-08-23.md`](evidence/v1-release-competitive-readiness-2026-08-23.md):

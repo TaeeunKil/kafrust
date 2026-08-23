@@ -1,6 +1,6 @@
 # V1-19 Pure-Rust Dependency Audit
 
-- Status: In progress
+- Status: Done
 - Target evidence: Packaged candidate
 - Dependencies: V1-02
 
@@ -210,6 +210,18 @@ The owner-review matrix is now enforced by CI with
 [`check_v1_unsafe_native_review.py`](../../scripts/check_v1_unsafe_native_review.py)
 and its focused tests. This validates coverage and drift against the inventory;
 it does not weaken the documented candidate-only disposition.
+
+### Completion record (2026-08-23)
+
+The exact pushed source `a3df6359061749899667e3e0c07d59a0f0cb1c36` passed both
+Rust 1.81.0 and stable in
+[CI run 32612304536](https://github.com/TaeeunKil/kafrust/actions/runs/32612304536).
+The run covered the dependency graph, no-C default and optional-TLS tooling
+posture, license policy, registry/yank snapshot, OSV/RustSec advisory snapshot,
+unsafe/native inventory and owner matrix, staged package boundary, tests,
+Clippy, and docs. V1-19 is complete at the packaged-candidate evidence level.
+This does not publish `0.3.6`, freeze the public API, qualify the published
+compatibility matrix, or authorize `1.0.0`.
 
 ## Failure And Lifecycle Contract
 

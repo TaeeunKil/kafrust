@@ -22,6 +22,39 @@ and are checked in CI. Values such as `not-applicable` and `not-recorded` are
 deliberate classifications, not missing data. A row must never use an
 unqualified relative artifact label.
 
+## Q-CI-V119-010
+
+- date_utc: 2026-08-23
+- source_commit: a3df6359061749899667e3e0c07d59a0f0cb1c36
+- client_version: 0.3.6 candidate
+- protocol_version: 0.3.6 candidate
+- work_status: Done
+- evidence_level: Packaged candidate
+- kafka_version: not-applicable
+- kafka_image: not-applicable
+- mode: V1-19 packaged-candidate dependency audit completion
+- topology: GitHub Actions Rust 1.81.0 and stable matrix
+- security: OSV/RustSec zero-match snapshot plus native/unsafe review
+- group_protocol: not-applicable
+- workload: dependency graph, no-C/default and TLS tooling, license/yank, SBOM, package boundary, owner matrix, tests, Clippy, docs
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32612304536
+- fault: dependency drift, advisory match, native boundary mismatch, package isolation, or required validation failure
+- duration: recorded in workflow job summaries
+- record_count: 89 SBOM/advisory packages; 62 owner-review entries; 87 registry packages
+- member_count: 2 workspace package roots
+- repetition_count: 2 toolchains
+- expected_errors: all V1-19 packaged-candidate exit criteria pass
+- observed_errors: none; both toolchains passed
+- retry_count: not-applicable
+- duplicate_count: not-applicable
+- loss_count: not-applicable
+- latency: not-applicable
+- memory: not-applicable
+- final_resource_gauges: not-applicable
+- result: passed
+- artifact: GitHub Actions run 32612304536; exact pushed source a3df635
+- non_claims: not published 0.3.6 evidence, not V1-20 matrix completion, not API freeze, not RC/stable release, not 1.0.0 readiness
+
 ## Q-LOCAL-V119-009
 
 - date_utc: 2026-08-23

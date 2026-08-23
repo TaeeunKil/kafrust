@@ -39,3 +39,14 @@ the milestone graph and roadmap before the next version is chosen.
 
 This record is a planning decision, not publication authorization or evidence
 that the candidate is ready for crates.io.
+
+## Post-V1-19 decision update (2026-08-23)
+
+The V1-19 packaged-candidate gate is now complete: CI passed the exact source
+with the SBOM, native-tooling, license, registry/yank, OSV/RustSec advisory,
+unsafe/native owner-review, staged package, Rust 1.81, and stable checks. The
+publication decision remains unchanged. `0.3.6` is a coherent pre-1.0 identity,
+but its fresh published compatibility matrix is still unrun and V1-21 through
+V1-24 still own fault/soak, SLO, migration/rollback, and API-freeze evidence.
+Those are material release gates, so no registry upload is authorized by this
+completion record; the roadmap now moves to V1-20 planning.
