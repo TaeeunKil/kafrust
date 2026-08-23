@@ -22,6 +22,39 @@ and are checked in CI. Values such as `not-applicable` and `not-recorded` are
 deliberate classifications, not missing data. A row must never use an
 unqualified relative artifact label.
 
+## Q-PUBLISHED-V120-032
+
+- date_utc: 2026-08-23
+- source_commit: 6d14b4850f58c3199c938fa693520a9f980e7070
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 3.7.2, 3.8.1, 3.9.1, 4.0.0, 4.3.1
+- kafka_image: apache/kafka:<matrix version>
+- mode: published twelve-profile crate smoke matrix
+- topology: single-node KRaft
+- security: PLAINTEXT, SASL_PLAINTEXT/PLAIN, and SASL_SSL/SCRAM-SHA-256/512
+- group_protocol: classic plus KIP-848 consumer
+- workload: produce/fetch/group plus gzip, snappy, lz4, and zstd codecs
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32616834901
+- fault: broker/profile startup, coordinator readiness, or roundtrip failure
+- duration: recorded per matrix job
+- record_count: workflow roundtrip per profile
+- member_count: not-recorded
+- repetition_count: 12 matrix profiles; one targeted 3.8.1 rerun
+- expected_errors: every profile resolves the exact published pair and completes roundtrip
+- observed_errors: none in the final run; PLAIN authenticated through the external SASL listener and all twelve jobs passed
+- retry_count: 2 diagnostic reruns; readiness-probe correction and one transient 3.8.1 coordinator retry
+- duplicate_count: not-recorded
+- loss_count: 0
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: not-recorded
+- result: passed
+- artifact: docs/evidence/v1-20-published-smoke-2026-08-23.md; run 32616834901
+- non_claims: not mechanism-specific source coverage for every accepted security row, not full Cartesian security/workload matrix, not long fault/SLO, not migration canary, not 1.0.0 readiness
+
 ## Q-CI-V120-002
 
 - date_utc: 2026-08-23

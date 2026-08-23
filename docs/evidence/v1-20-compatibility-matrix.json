@@ -64,6 +64,26 @@
       "evidence_required": ["Live current-source", "Published artifact"]
     },
     {
+      "id": "floor-plain-single",
+      "broker": "3.7.2",
+      "topology": "single-node",
+      "security": "SASL_PLAINTEXT/PLAIN",
+      "group_protocol": "classic",
+      "feature": "default",
+      "workloads": ["produce", "fetch", "classic-group", "admin"],
+      "evidence_required": ["Live current-source", "Published artifact"]
+    },
+    {
+      "id": "floor-secure-scram512-single",
+      "broker": "3.7.2",
+      "topology": "single-node",
+      "security": "SASL_SSL/SCRAM-SHA-512",
+      "group_protocol": "classic",
+      "feature": "tls",
+      "workloads": ["produce", "fetch", "classic-group"],
+      "evidence_required": ["Live current-source", "Published artifact"]
+    },
+    {
       "id": "pinned-secure-scram-failover",
       "broker": "4.3.1",
       "topology": "three-broker",
@@ -118,6 +138,7 @@
     "V1-15 through V1-19 target evidence",
     "fresh registry lockfiles for the exact coordinated pair",
     "published matrix rerun after explicit publication authorization",
+    "mechanism-specific source rows for PLAIN and SCRAM-SHA-512",
     "Share, Streams, telemetry, fault, and SLO profiles owned by later milestones"
   ]
 }

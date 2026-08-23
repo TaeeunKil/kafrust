@@ -70,13 +70,14 @@ single-node and three-broker/controller-listener profiles, separates security
 and feature profiles, and requires protocol-first exact registry resolution
 without path or patch dependencies.
 
-The checker validates ten non-Cartesian draft profiles and the mandatory floor,
+The checker validates twelve non-Cartesian draft profiles and the mandatory floor,
 pinned secured-failover, and package-codec rows. At draft creation it did not
 claim any published row. The exact `0.3.6` registry pair is now attached to
 the named published rows in the qualification ledger: fresh external
-lockfiles, the 10-profile continuity/codec smoke, Share/Streams/group/Admin/
-transaction/security/failover slices, and the exact toolchain checks all have
-retained results. The matrix remains draft because the later fault/SLO,
+lockfiles, the 10-profile continuity/codec smoke, the explicit PLAIN and
+SCRAM-SHA-512 profiles, Share/Streams/group/Admin/transaction/security/failover
+slices, and the exact toolchain checks all have retained results. The matrix
+remains draft because mechanism-specific source coverage and the later fault/SLO,
 migration, API-freeze, and stable-release gates are separate dependencies.
 The source-only 17-job Live Kafka Smoke matrix passed on commit
 `e6de5c5` in [run 32551145773](https://github.com/TaeeunKil/kafrust/actions/runs/32551145773),
@@ -114,8 +115,10 @@ matrix or downstream fault/SLO/API-freeze gates.
 
 The expanded published evidence is retained in
 [`v1-20-published-smoke-2026-08-23.md`](../../evidence/v1-20-published-smoke-2026-08-23.md),
-including the 10-profile broker/codec matrix and the repeated Share/failover
-rows. Passing named rows do not authorize a stable release by themselves.
+including the 10-profile broker/codec matrix, the repeated Share/failover
+rows, and the twelve-profile security/continuity rerun in
+[32616834901](https://github.com/TaeeunKil/kafrust/actions/runs/32616834901).
+Passing named rows do not authorize a stable release by themselves.
 
 ## Failure And Lifecycle Contract
 

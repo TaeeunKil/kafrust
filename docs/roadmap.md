@@ -416,15 +416,20 @@ passed ([32614875041](https://github.com/TaeeunKil/kafrust/actions/runs/32614875
 [32615024395](https://github.com/TaeeunKil/kafrust/actions/runs/32615024395)),
 and the pinned-current secure Kafka 4.3.1 KIP-848 leader-failover row passed in
 [32615403411](https://github.com/TaeeunKil/kafrust/actions/runs/32615403411).
-The published crate smoke workflow now covers all ten draft continuity,
-security, and codec profiles; Kafka 3.8.1, 3.9.1, and 4.0.0 classic rows passed
-alongside the existing floor/pinned/codecs in
-[32615530030](https://github.com/TaeeunKil/kafrust/actions/runs/32615530030).
-The full accepted published matrix, long-duration campaigns, and downstream
+The published crate smoke workflow now covers twelve draft continuity,
+security, and codec profiles, including explicit PLAIN and SCRAM-SHA-512
+authentication; Kafka 3.8.1, 3.9.1, and 4.0.0 classic rows passed alongside
+the existing floor/pinned/codecs in
+[32616834901](https://github.com/TaeeunKil/kafrust/actions/runs/32616834901).
+The final run also records and resolves one PLAIN readiness-probe correction
+and one transient 3.8.1 coordinator retry. The full accepted published matrix,
+mechanism-specific source rows, long-duration campaigns, and downstream
 release gates remain open.
 
 The exact published-matrix documentation and continuity-workflow changes pass
-both Rust 1.81.0 and stable in [CI run 32615676173](https://github.com/TaeeunKil/kafrust/actions/runs/32615676173).
+both Rust 1.81.0 and stable in [CI run 32615676173](https://github.com/TaeeunKil/kafrust/actions/runs/32615676173). The subsequent workflow-only
+security-profile corrections are recorded in the published evidence and are
+awaiting the next exact-head CI documentation row.
 
 ## V1-21~V1-26 Release-Path Preparation (2026-08-22)
 
@@ -505,7 +510,7 @@ crates.io and resolves from fresh external projects on stable and Rust 1.81;
 the ordered publication boundary, checksums, and docs.rs checks are recorded in
 [`v1-20-published-0.3.6-boundary-2026-08-23.md`](evidence/v1-20-published-0.3.6-boundary-2026-08-23.md).
 The published smoke evidence has expanded through the named API, group,
-Share/Streams, security, and failover rows above. This is the active pre-1.0
+Share/Streams, security, failover, PLAIN, and SCRAM-SHA-512 rows above. This is the active pre-1.0
 baseline for the remaining V1-20 matrix and V1-21~V1-26 gates. No tag, GitHub
 release, or `1.0.0` publication exists.
 

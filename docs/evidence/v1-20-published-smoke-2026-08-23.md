@@ -92,3 +92,26 @@ codec profiles. Each job built a fresh external project and checked the exact
 `0.3.6` client/protocol lockfile pair. This closes the draft matrix's
 continuity/package-codec smoke slice, but not every security/workload
 combination or the downstream fault/SLO/release gates.
+
+## Twelve-profile security and continuity rerun
+
+The published workflow then added explicit PLAIN and SCRAM-SHA-512 profiles
+and corrected the PLAIN readiness probe on commit
+`6d14b4850f58c3199c938fa693520a9f980e7070`. The final rerun,
+[32616834901](https://github.com/TaeeunKil/kafrust/actions/runs/32616834901),
+passed all twelve profiles: Kafka 3.7.2, 3.8.1, 3.9.1, 4.0.0, and 4.3.1
+classic/KIP-848 continuity, SASL_PLAINTEXT/PLAIN, SASL_SSL/SCRAM-SHA-256,
+SASL_SSL/SCRAM-SHA-512, and gzip, snappy, lz4, and zstd. Every job built a
+fresh external project and asserted the exact `0.3.6` client/protocol
+lockfile pair.
+
+The preceding run [32616641753](https://github.com/TaeeunKil/kafrust/actions/runs/32616641753)
+was cancelled after its unauthenticated external-listener readiness probe
+could not complete; the probe was changed to the internal PLAINTEXT listener.
+That run also exposed a Kafka 3.8.1 `GROUP_COORDINATOR_NOT_AVAILABLE` startup
+race in the producer/consumer step. Only that failed job was rerun in the
+final workflow run and passed. These are retained workflow/startup diagnostics,
+not product-failure waivers. The named published rows still do not close
+mechanism-specific source coverage for every accepted security row, the full
+Cartesian matrix, long fault/SLO campaigns, migration canary, or stable-release
+gates.
