@@ -56,8 +56,24 @@ required six-hour campaigns, 100-cycle family gates, or controlled
 unclean-election fixtures. The preparation manifest at
 [`v1-21-fault-campaign-manifest.json`](../../evidence/v1-21-fault-campaign-manifest.json)
 and `scripts/check_v1_fault_campaign_manifest.py` now make those thresholds
-machine-checkable. No historical run is being promoted into the new milestone
-exit gate.
+machine-checkable. The published multi-broker fixture now has a segmented
+campaign descriptor with exact artifact/workflow/broker identities and a
+six-hour-compatible job timeout, but its runner-local segments explicitly mark
+record-ID reconciliation and cross-segment continuity as unqualified. No
+historical or bounded run is being promoted into the new milestone exit gate.
+
+### Published bounded diagnostic (2026-08-23)
+
+The exact published `0.3.6` pair passed one 60-second Kafka 4.3.1 three-broker
+restart segment in [run 32618344222](https://github.com/TaeeunKil/kafrust/actions/runs/32618344222).
+The segment used `Acks::All`, recorded the broker image RepoDigest and final
+gauges, and uploaded descriptor artifact 9487644196. Two preceding failures
+remain retained: `Acks::Leader` left 100 records unreconciled after restart in
+[32617622923](https://github.com/TaeeunKil/kafrust/actions/runs/32617622923),
+and a fixture gauge-field ordering error failed [32618011465](https://github.com/TaeeunKil/kafrust/actions/runs/32618011465).
+The formatter and acknowledgement policy were corrected before the passing
+diagnostic. This is evidence for the execution harness only, not a six-hour,
+100-cycle, ambiguity-family, controlled-data-loss, or V1-21 completion claim.
 
 ### Bounded current-source diagnostic runs (2026-08-22)
 

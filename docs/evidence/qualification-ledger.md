@@ -55,6 +55,105 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-20-published-smoke-2026-08-23.md; run 32616834901
 - non_claims: not mechanism-specific source coverage for every accepted security row, not full Cartesian security/workload matrix, not long fault/SLO, not migration canary, not 1.0.0 readiness
 
+## Q-PUBLISHED-V121-003
+
+- date_utc: 2026-08-23
+- source_commit: f3a76745a4ff7ad891ab7e8d479b3da823451ab7
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
+- mode: bounded segmented fault diagnostic
+- topology: three-broker KRaft
+- security: PLAINTEXT
+- group_protocol: not-applicable
+- workload: 60-second produce/fetch with one broker restart
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32618344222
+- fault: broker 1 stopped after one-third of the segment and restarted after 10 seconds
+- duration: 60.083s workload; 10s outage; one segment
+- record_count: 2468400
+- member_count: not-applicable
+- repetition_count: 1 segment
+- expected_errors: transient restart errors followed by recovery, zero final gauges, and exact published dependency resolution
+- observed_errors: none; operation_errors=0, recovered=true, retries=2, and descriptor validation passed
+- retry_count: 2
+- duplicate_count: 0
+- loss_count: 0
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: in_flight_requests=0; buffered_records=0
+- result: passed
+- artifact: docs/evidence/v1-21-fault-diagnostic-2026-08-23.md; descriptor artifact 9487644196; run 32618344222
+- non_claims: not six-hour campaign, not 100 member-loss/rejoin cycles, not ambiguity-family outcomes, not unique record-ID reconciliation, not segment continuity, not SLO, not 1.0.0 readiness
+
+## Q-PUBLISHED-V121-002
+
+- date_utc: 2026-08-23
+- source_commit: e365ca67c20ed3ea9118fa6cfbf1b2d9b2ed0fff
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka:4.3.1
+- mode: bounded segmented fault diagnostic
+- topology: three-broker KRaft
+- security: PLAINTEXT
+- group_protocol: not-applicable
+- workload: 60-second produce/fetch with one broker restart
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32618011465
+- fault: broker 1 stopped after one-third of the segment and restarted after 10 seconds
+- duration: 60.002s workload; 10s outage; one segment
+- record_count: 2030700 produced and consumed
+- member_count: not-applicable
+- repetition_count: 1 segment
+- expected_errors: zero data loss and zero final resource gauges
+- observed_errors: data roundtrip completed, but the fixture serialized max_in_flight_requests as buffered_records and failed its gauge assertion
+- retry_count: 2
+- duplicate_count: 0
+- loss_count: 0
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: source snapshot in_flight_requests=0 and buffered_records=0; emitted JSON labels invalid
+- result: failed
+- artifact: docs/evidence/v1-21-fault-diagnostic-2026-08-23.md; run 32618011465
+- non_claims: not a passing V1-21 campaign, not six-hour, not segment continuity, not unique record-ID reconciliation, not SLO, not 1.0.0 readiness
+
+## Q-PUBLISHED-V121-001
+
+- date_utc: 2026-08-23
+- source_commit: f71e165c1380188027a8d324c4ed85acb7ec8975
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka:4.3.1
+- mode: bounded segmented fault diagnostic
+- topology: three-broker KRaft
+- security: PLAINTEXT
+- group_protocol: not-applicable
+- workload: 60-second produce/fetch with one broker restart
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32617622923
+- fault: broker 1 stopped after one-third of the segment and restarted after 10 seconds
+- duration: 60s workload; 10s outage; 300s drain deadline
+- record_count: 616300 produced; 616200 consumed
+- member_count: not-applicable
+- repetition_count: 1 segment
+- expected_errors: all acknowledged records reconciled after restart
+- observed_errors: final 100 records remained unreconciled until the drain deadline with Acks::Leader
+- retry_count: not-recorded
+- duplicate_count: not-recorded
+- loss_count: 100 unaccounted at timeout
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: drain timeout; not qualified
+- result: failed
+- artifact: docs/evidence/v1-21-fault-diagnostic-2026-08-23.md; run 32617622923
+- non_claims: not broker data-loss proof, not a passing V1-21 campaign, not six-hour, not segment continuity, not unique record-ID reconciliation, not SLO, not 1.0.0 readiness
+
 ## Q-CI-V120-002
 
 - date_utc: 2026-08-23

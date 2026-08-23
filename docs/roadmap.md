@@ -463,6 +463,20 @@ implementation, zero loss/duplicates, and matching digest; the stronger smoke
 still does not close the named-service, fault, forward-cutover, rollback, or
 million-record exit gate.
 
+## V1-21 Execution Update (2026-08-23)
+
+V1-21 remains `Planned`. The published multi-broker soak now accepts campaign
+and segment identity, emits immutable artifact/workflow/broker descriptors, and
+supports a six-hour-compatible job timeout. The exact published `0.3.6` pair
+passed one bounded Kafka 4.3.1 three-broker restart segment in
+[32618344222](https://github.com/TaeeunKil/kafrust/actions/runs/32618344222)
+after two retained fixture diagnostics: `Acks::Leader` left 100 records
+unreconciled, and a gauge formatter mislabeled the in-flight peak. The final
+segment uses `Acks::All`, has zero final gauges, and records
+`record_id_reconciliation.qualified=false` because each runner starts a fresh
+broker. The six-hour campaigns, 100 churn cycles, ambiguity families,
+controlled data-loss fixtures, and cross-segment continuity remain open.
+
 The V1-22 `throughput_benchmark` example now has a timed campaign mode with
 barrier-synchronized warmup/measurement windows, worker-per-partition
 concurrency, configurable JSONL samples (ten-second campaign target), RSS/retry/latency fields, and final
