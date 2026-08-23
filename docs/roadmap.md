@@ -556,6 +556,14 @@ performance review remain required before a 1.0.0 decision. The comparison
 and its non-claims are recorded in
 [`v1-23-published-competitor-comparison-2026-08-23.md`](evidence/v1-23-published-competitor-comparison-2026-08-23.md).
 
+The same comparison was repeated five times per implementation in
+[32626740940](https://github.com/TaeeunKil/kafrust/actions/runs/32626740940).
+The exact published `0.3.6` client reached median 77,157 Produce and 286,135
+Consume records/s versus rust-rdkafka 0.39.0 at 171,065 and 501,450. All ten
+rows reconciled the same digest with zero loss/duplicates. This confirms the
+material workload-specific gap and keeps V1-22 profiling and optimization
+requirements open; it does not change V1-23's separate service-canary block.
+
 The external service-canary gate is now explicitly `Blocked`: no named
 representative service, owner, deployment environment, or approved
 production-like canary target is registered. The in-repository dual-client
@@ -644,6 +652,13 @@ The 0.3.6 competitor review on 2026-08-23 found a material workload-specific
 throughput gap versus rust-rdkafka, so V1-22 has been re-planned for profiling,
 optimization evidence, and the full SLO campaign before any 0.3.7 or 1.0.0
 decision. No version bump is being made solely to reflect the comparison.
+The five-repetition follow-up in
+[32626740940](https://github.com/TaeeunKil/kafrust/actions/runs/32626740940)
+confirmed the gap: median kafrust reached 45.1% of rust-rdkafka Produce and
+57.1% of Consume throughput, with exact zero-loss/zero-duplicate reconciliation
+across all ten rows. The raw result and non-claims are recorded in
+[`v1-22-published-competitor-comparison-2026-08-23.md`](evidence/v1-22-published-competitor-comparison-2026-08-23.md).
+This is a stronger re-plan input, not a release authorization.
 
 ## Historical Release Qualification
 

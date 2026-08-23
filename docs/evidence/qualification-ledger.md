@@ -3157,6 +3157,39 @@ unqualified relative artifact label.
 - artifact: GitHub Actions run 32561454977; 40 qualification JSON/corpus artifacts; local hash verification completed
 - non_claims: not four consecutive weekly campaigns, not absence-of-bugs evidence, not published-artifact or RC evidence, not fault-soak/SLO/service-canary evidence, not complete V1-18 exit criteria
 
+## Q-PUBLISHED-V122-COMP-001
+
+- date_utc: 2026-08-23
+- source_commit: 956e83995853316d50a071b463744493a005f829
+- client_version: 0.3.6 published crates.io artifact
+- protocol_version: 0.3.6 resolved published dependency
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka:4.3.1
+- mode: five-repetition published competitor comparison
+- topology: isolated single-node KRaft broker; separate topic per implementation and repetition
+- security: PLAINTEXT
+- group_protocol: not-applicable
+- workload: five repetitions of 20,000 unique 1-KiB records per implementation, batch size 200, published kafrust versus rust-rdkafka 0.39.0
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32626740940
+- fault: none injected
+- duration: recorded in workflow; comparison artifact retained for 90 days
+- record_count: 20,000 per implementation/repetition; 200,000 total records
+- member_count: not-applicable
+- repetition_count: 5 per implementation
+- expected_errors: zero normalized loss, duplicates, or payload-digest divergence
+- observed_errors: none; all rows unique_records=20,000, duplicate_count=0, loss_count=0, and one shared SHA-256 digest
+- retry_count: not-recorded by comparator
+- duplicate_count: 0
+- loss_count: 0
+- latency: not an operation-latency SLO; median Produce/Consume throughput retained
+- memory: not measured
+- final_resource_gauges: not measured by comparator
+- result: passed
+- artifact: docs/evidence/v1-22-published-competitor-comparison-2026-08-23.md; comparison-results.jsonl and ten logs in run 32626740940
+- non_claims: not universal performance ranking, not API/feature parity, not failure/security/transaction/group parity, not V1-22 SLO completion, not named-service canary or production approval
+
 ## Q-PUBLISHED-V123-COMP-001
 
 - date_utc: 2026-08-23

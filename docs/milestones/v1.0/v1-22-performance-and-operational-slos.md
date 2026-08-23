@@ -169,6 +169,17 @@ optimization, and rerun the six-profile/five-repetition SLO campaign before
 V1-25 RC review. No `0.3.7` or `1.0.0` publication is justified by the
 comparison alone.
 
+The five-repetition follow-up
+[32626740940](https://github.com/TaeeunKil/kafrust/actions/runs/32626740940)
+confirmed the signal from the exact published pair: median kafrust throughput
+was 77,157 Produce and 286,135 Consume records/s versus 171,065 and 501,450
+for rust-rdkafka 0.39.0, or 45.1% and 57.1%. All ten rows reconciled 20,000
+unique records with zero loss/duplicates and one shared payload digest. The
+raw result and non-claims are in
+[`v1-22-published-competitor-comparison-2026-08-23.md`](../../evidence/v1-22-published-competitor-comparison-2026-08-23.md).
+This strengthens the comparison evidence but does not close V1-22's SLO,
+baseline, or optimization gates.
+
 ## Failure And Lifecycle Contract
 
 - Benchmark backpressure uses the same bounded production queues and reports
