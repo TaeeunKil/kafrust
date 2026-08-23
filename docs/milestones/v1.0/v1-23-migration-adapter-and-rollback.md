@@ -94,6 +94,21 @@ This is stronger baseline reconciliation evidence, but it still does not
 close the named-service, fault, forward-cutover, rollback, or million-record
 exit gate.
 
+### Published 0.3.6 competitor comparison (2026-08-23)
+
+The published comparator was rerun before advancing the release path in
+[32619987006](https://github.com/TaeeunKil/kafrust/actions/runs/32619987006)
+with crates.io `kafrust 0.3.6` and `rust-rdkafka 0.39.0`, Kafka 4.3.1, 20,000
+unique 1-KiB records, batch size 200, and three repetitions per implementation.
+All six rows reconciled the same business-ID digest with zero loss and
+duplicates. Median kafrust throughput was 76,625 Produce and 272,659 Consume
+records/s versus 153,297 and 590,467 for rust-rdkafka (approximately 50.0% and
+46.2% respectively). This is a workload-specific informational comparison,
+not an API or universal performance claim, but the gap is material and keeps
+V1-22 profiling/SLO review open before a 1.0.0 decision. Full values and
+non-claims are recorded in
+[`v1-23-published-competitor-comparison-2026-08-23.md`](../../evidence/v1-23-published-competitor-comparison-2026-08-23.md).
+
 ## Failure And Lifecycle Contract
 
 - Adapter errors preserve typed Kafka/broker/unknown-outcome information.

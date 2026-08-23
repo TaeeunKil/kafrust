@@ -3090,3 +3090,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: GitHub Actions run 32561454977; 40 qualification JSON/corpus artifacts; local hash verification completed
 - non_claims: not four consecutive weekly campaigns, not absence-of-bugs evidence, not published-artifact or RC evidence, not fault-soak/SLO/service-canary evidence, not complete V1-18 exit criteria
+
+## Q-PUBLISHED-V123-COMP-001
+
+- date_utc: 2026-08-23
+- source_commit: a7b0dd89ce774a9c12e281d24de176c07407b9de
+- client_version: 0.3.6 published crates.io artifact
+- protocol_version: 0.3.6 resolved published dependency
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka:4.3.1
+- mode: KRaft
+- topology: isolated single-node broker; separate topic per implementation and repetition
+- security: PLAINTEXT
+- group_protocol: not-applicable
+- workload: three repetitions of 20,000 unique 1-KiB records per implementation, batch size 200, published kafrust versus rust-rdkafka 0.39.0
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32619987006
+- fault: none injected
+- duration: 2m21s workflow window
+- record_count: 20,000 per implementation/repetition; 120,000 total records
+- member_count: not-applicable
+- repetition_count: 3 per implementation
+- expected_errors: zero normalized loss, duplicates, or payload-digest divergence
+- observed_errors: none; all rows unique_records=20,000, duplicate_count=0, loss_count=0, and shared SHA-256 digest
+- retry_count: not-recorded by comparator
+- duplicate_count: 0
+- loss_count: 0
+- latency: not an operation-latency SLO; median Produce/Consume throughput retained
+- memory: not measured
+- final_resource_gauges: not measured by comparator
+- result: passed
+- artifact: GitHub Actions run 32619987006; comparison-results.jsonl; shared digest 7384f0e0012fab42060df529e06bdc32a348caff3dcf143281fed226af91cffa
+- non_claims: not universal performance ranking, not API/feature parity, not failure/security/transaction/group parity, not V1-22 SLO completion, not named-service canary or production approval

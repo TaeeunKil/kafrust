@@ -509,6 +509,21 @@ The descriptors are explicitly `qualified=false`: five repetitions, six
 profiles, secured/three-broker topology, two-hour warmup, six-hour measurement,
 RSS/regression adjudication, and baseline locking remain open.
 
+## V1-23 Execution Update (2026-08-23)
+
+The current published competitor check was run before making any release-path
+decision. In [32619987006](https://github.com/TaeeunKil/kafrust/actions/runs/32619987006),
+crates.io `kafrust 0.3.6` and `rust-rdkafka 0.39.0` processed isolated 20,000-
+record, 1-KiB, batch-200 workloads on Kafka 4.3.1 for three repetitions each.
+All rows reconciled identical business-ID digests with zero loss and
+duplicates. Median kafrust throughput was 76,625 Produce and 272,659 Consume
+records/s versus 153,297 and 590,467 for rust-rdkafka, approximately 50.0%
+and 46.2% respectively. This is not a universal performance ranking, but it
+is a material workload-specific gap; V1-22 profiling/SLO work and target-service
+performance review remain required before a 1.0.0 decision. The comparison
+and its non-claims are recorded in
+[`v1-23-published-competitor-comparison-2026-08-23.md`](evidence/v1-23-published-competitor-comparison-2026-08-23.md).
+
 V1-24 through V1-26 also remain `Planned`: the API snapshot is only a freeze input,
 and no RC or `1.0.0` publication/tag exists. Protocol-first publication is
 allowed only when the named release milestone, exact artifact evidence, and
