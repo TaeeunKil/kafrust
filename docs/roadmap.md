@@ -423,6 +423,9 @@ alongside the existing floor/pinned/codecs in
 The full accepted published matrix, long-duration campaigns, and downstream
 release gates remain open.
 
+The exact published-matrix documentation and continuity-workflow changes pass
+both Rust 1.81.0 and stable in [CI run 32615676173](https://github.com/TaeeunKil/kafrust/actions/runs/32615676173).
+
 ## V1-21~V1-26 Release-Path Preparation (2026-08-22)
 
 V1-21 through V1-23 remain `Planned` while the exact published matrix,

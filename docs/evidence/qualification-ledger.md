@@ -22,6 +22,39 @@ and are checked in CI. Values such as `not-applicable` and `not-recorded` are
 deliberate classifications, not missing data. A row must never use an
 unqualified relative artifact label.
 
+## Q-CI-V120-002
+
+- date_utc: 2026-08-23
+- source_commit: 51b4765783a6cc17c57e85b9d700e345bca74f41
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: CI
+- kafka_version: not-applicable
+- kafka_image: not-applicable
+- mode: exact pushed-commit repository CI
+- topology: GitHub Actions Rust 1.81.0 and stable
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: format, manifests, dependency gates, API snapshots, feature profiles, build, examples, clippy, tests, docs, package boundary, SBOM
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32615676173
+- fault: any checker, build, test, clippy, docs, package, or SBOM failure
+- duration: recorded in workflow
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: 2 toolchains
+- expected_errors: none
+- observed_errors: none; both jobs passed
+- retry_count: 0
+- duplicate_count: not-applicable
+- loss_count: not-applicable
+- latency: not-applicable
+- memory: not-applicable
+- final_resource_gauges: not-applicable
+- result: passed
+- artifact: GitHub Actions run 32615676173
+- non_claims: not published matrix completion, not long fault/SLO, not migration canary, not API freeze, not 1.0.0 readiness
+
 ## Q-PUBLISHED-V120-031
 
 - date_utc: 2026-08-23
