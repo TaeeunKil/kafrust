@@ -5,8 +5,9 @@ commit `4a2b472d2ce1074cc83fe1df2cf672e021dcb2bf`.
 
 ## Observed capacity
 
-The repository runner inventory endpoint returned `total_count: 0`; no
-self-hosted runner is registered for `TaeeunKil/kafrust`. The V1-21 fault
+At the time of the initial audit, the repository runner inventory endpoint
+returned `total_count: 0`; no self-hosted runner was registered for
+`TaeeunKil/kafrust`. The V1-21 fault
 workflows and V1-22 performance workflow intentionally reject hosted labels
 and require the pinned `self-hosted` label. The local Windows workstation also
 does not have a Docker executable, so it cannot substitute for the required
@@ -23,9 +24,9 @@ the guard is active; it does not create runner capacity or qualify a campaign.
 A read-only preflight of the available `Ubuntu-T9` WSL environment found WSL2
 with Ubuntu 24.04.4, Docker Engine client/server 29.5.3, systemd running, 16
 logical CPUs, approximately 15 GiB memory, and 776 GiB free on the Linux
-filesystem. This makes the environment a technical runner candidate, but it
-is not yet qualification capacity: the repository runner inventory remains at
-zero until a GitHub self-hosted runner is explicitly registered and online.
+filesystem. This made the environment a technical runner candidate, but it
+was not qualification capacity until a GitHub self-hosted runner was
+explicitly registered and online.
 The Windows host must also prevent sleep/restart during each uninterrupted
 campaign, and the runner should use a Linux filesystem path rather than a
 `/mnt/c` checkout.
@@ -35,10 +36,31 @@ execute those jobs serially. Additional runner slots must be separately
 isolated and resource-validated if concurrency is needed. Duplicating labels
 does not create capacity and cannot substitute for a valid performance setup.
 
+## Runner registration and preflight result (2026-08-24)
+
+The WSL candidate was registered as `wsl-ubuntu-t9` with the labels
+`self-hosted`, `Linux`, `X64`, `docker`, and `wsl2`. The repository inventory
+then reported one online, idle runner. A first 60-second non-qualification
+diagnostic (`32648644451`) reached the WSL runner and Docker cluster but failed
+because the host did not expose a `python` executable. Installing Ubuntu's
+`python-is-python3` and `jq` packages corrected that host prerequisite; the
+diagnostic was not counted as qualification evidence, and its containers were
+removed.
+
+The repeat 60-second non-qualification diagnostic
+[`32648820867`](https://github.com/TaeeunKil/kafrust/actions/runs/32648820867)
+passed runner selection, checkout, Docker Kafka startup, published `0.3.6`
+build, broker restart, descriptor validation, and artifact upload. The first
+actual V1-21 campaign, `pinned-secured-six-hour-1`, was then dispatched as
+[`32649020906`](https://github.com/TaeeunKil/kafrust/actions/runs/32649020906)
+from source commit `54c8e21`. It is currently in progress and must not be
+marked qualified until the six-hour descriptor and adjudicator checks pass.
+
 ## Consequence
 
-V1-21 remains `In progress` with a capacity blocker for its four six-hour
-campaigns and Share 100-cycle run. V1-22 remains `In progress` with the same
-capacity blocker for its 120-job, eight-hour matrix. No hosted-runner
-diagnostic is promoted into either gate, and no threshold, timeout, or matrix
-size is reduced to work around the missing runner.
+V1-21 is now `In progress` with its first six-hour campaign running; the
+remaining campaigns still require their own exact evidence. V1-22 remains
+`In progress` because one runner serializes its 120-job, eight-hour matrix and
+additional isolated capacity may be needed for a practical campaign schedule.
+No hosted-runner diagnostic is promoted into either gate, and no threshold,
+timeout, or matrix size is reduced to work around capacity.

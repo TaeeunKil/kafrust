@@ -37,6 +37,11 @@ The operator should:
    `self-hosted` label. A small 60-second diagnostic may validate the host,
    but it is not V1-21 evidence.
 
+   The same preflight must expose the workflow utilities `python`, `jq`,
+   `openssl`, `curl`, `tar`, and `git`; on Ubuntu, install missing packages
+   before registering the runner. A diagnostic that reaches Docker but fails a
+   missing utility is a host setup failure, not a qualification result.
+
 Self-hosted runners execute repository workflow code. GitHub recommends
 restricting them to private repositories or tightly controlled runner groups;
 this repository is public, so use an isolated/ephemeral machine and do not
