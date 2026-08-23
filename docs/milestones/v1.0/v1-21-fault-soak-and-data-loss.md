@@ -182,10 +182,12 @@ The rerun workflows now default to a pinned `self-hosted` runner label and
 reject `ubuntu-*`, `windows-*`, and `macos-*` labels before allocating the
 long-running job. [GitHub-hosted jobs](https://docs.github.com/en/actions/reference/limits)
 cannot provide setup plus a six-hour soak within their six-hour execution
-ceiling. No self-hosted runner is currently
+ceiling. At the time of this preparation snapshot, no self-hosted runner was
 registered for this repository, so the pending runs remain infrastructure
-diagnostics and the campaign cannot be promoted until that runner capacity is
-provided.
+diagnostics. A WSL2 runner was later registered; the current execution record
+below covers that capacity transition. Registration clears only the
+infrastructure prerequisite: a campaign still requires its immutable
+descriptor and adjudicator pass before promotion.
 
 The published classic/KIP-848 group-rebalance fixture was likewise raised from
 its previous 64-cycle guard to a maximum of 100 cycles. Its timeout now scales
@@ -358,3 +360,21 @@ operator concern.
 Record artifact, broker/min-ISR/acks/security topology, six-hour run and fault
 schedules, records/transactions/members/ambiguities, expected/observed loss and
 duplicates, retry/error totals, resource series/final gauges, and SLA non-claim.
+
+### WSL2 runner activation and first long campaign (2026-08-24)
+
+The available Ubuntu-T9 WSL2 environment passed a non-qualification 60-second
+diagnostic after installing the missing `python` and `jq` host utilities. The
+repeat diagnostic
+[32648820867](https://github.com/TaeeunKil/kafrust/actions/runs/32648820867)
+passed runner selection, Docker Kafka startup, published `0.3.6` build,
+broker restart, descriptor validation, and artifact upload. It is explicitly
+not a six-hour result.
+
+The first actual manifest campaign, `pinned-secured-six-hour-1`, was dispatched
+from source `54c8e21` as
+[32649020906](https://github.com/TaeeunKil/kafrust/actions/runs/32649020906)
+with Kafka 4.3.1, SASL_SSL/SCRAM-SHA-256, the four-event fault schedule, and
+`duration_seconds=21600`. The run is currently in progress; no V1-21 ledger row
+or milestone completion claim is made until its descriptor, artifact identity,
+record reconciliation, resource gauges, and secret scan pass adjudication.

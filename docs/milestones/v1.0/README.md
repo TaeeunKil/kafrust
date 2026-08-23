@@ -87,10 +87,14 @@ and the two remaining scheduled weekly fuzz campaign sets; none can be
 replaced by a shortened hosted run or a reference-fixture claim.
 
 The pushed documentation refresh `4a2b472` passed both stable and Rust 1.81.0
-CI. A fresh capacity audit recorded in
+CI. The initial capacity audit recorded in
 [`v1-long-campaign-capacity-audit-2026-08-24.md`](../../evidence/v1-long-campaign-capacity-audit-2026-08-24.md)
-found zero registered self-hosted runners and no local Docker substitute, so
-the V1-21 six-hour and V1-22 eight-hour gates remain explicitly unqualified.
+found zero registered self-hosted runners and no Windows Docker substitute.
+The follow-up WSL2 preflight registered `wsl-ubuntu-t9`; the first actual
+V1-21 six-hour campaign is now running as
+[32649020906](https://github.com/TaeeunKil/kafrust/actions/runs/32649020906).
+V1-21 remains explicitly unqualified until its descriptor is adjudicated, and
+V1-22 still needs its complete matrix capacity and locked baseline.
 
 ## Status And Evidence
 

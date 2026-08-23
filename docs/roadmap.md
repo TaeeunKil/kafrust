@@ -924,6 +924,15 @@ The operator procedure for clearing this external gate, supplying the V1-23
 canary authority, and preserving the weekly fuzz requirement is documented in
 [`external-gate-unblock-runbook.md`](milestones/v1.0/external-gate-unblock-runbook.md).
 
+The WSL2 follow-up registered the `wsl-ubuntu-t9` self-hosted runner after a
+60-second non-qualification diagnostic initially exposed missing `python` and
+`jq` host utilities. The corrected diagnostic
+[32648820867](https://github.com/TaeeunKil/kafrust/actions/runs/32648820867)
+passed the published `0.3.6` path and artifact checks. The first exact V1-21
+campaign, `pinned-secured-six-hour-1`, is running from `54c8e21` in
+[32649020906](https://github.com/TaeeunKil/kafrust/actions/runs/32649020906);
+this is active execution evidence only, not a qualification or release claim.
+
 ## Historical Release Qualification
 
 `0.3.5` is now published on crates.io in protocol-first order. The fresh
