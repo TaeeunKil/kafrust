@@ -109,6 +109,15 @@ def source_kind(package: dict[str, Any]) -> str:
     return "other"
 
 
+def stable_package_id(package: dict[str, Any]) -> str:
+    """Return a platform-neutral package identity for SBOM properties."""
+
+    if package.get("source") is None:
+        kind = "workspace" if package["name"] in ROOT_NAMES else "path"
+        return f"{kind}:{package['name']}@{package['version']}"
+    return package["id"]
+
+
 def component(package: dict[str, Any]) -> dict[str, Any]:
     reference = purl(package)
     return {
@@ -121,7 +130,7 @@ def component(package: dict[str, Any]) -> dict[str, Any]:
         "licenses": licenses_for(package),
         "properties": [
             {"name": "kafrust:source-kind", "value": source_kind(package)},
-            {"name": "kafrust:package-id", "value": package["id"]},
+            {"name": "kafrust:package-id", "value": stable_package_id(package)},
         ],
     }
 

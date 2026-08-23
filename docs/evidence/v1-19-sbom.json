@@ -706,7 +706,7 @@
         },
         {
           "name": "kafrust:package-id",
-          "value": "path+file:///C:/Users/user/Documents/New%20project%204/crates/kafrust-protocol#0.3.6"
+          "value": "workspace:kafrust-protocol@0.3.6"
         }
       ],
       "purl": "pkg:cargo/kafrust-protocol@0.3.6",
@@ -729,7 +729,7 @@
         },
         {
           "name": "kafrust:package-id",
-          "value": "path+file:///C:/Users/user/Documents/New%20project%204/crates/kafrust#0.3.6"
+          "value": "workspace:kafrust@0.3.6"
         }
       ],
       "purl": "pkg:cargo/kafrust@0.3.6",
@@ -2632,7 +2632,7 @@
         },
         {
           "name": "kafrust:package-id",
-          "value": "path+file:///C:/Users/user/Documents/New%20project%204/crates/kafrust#0.3.6"
+          "value": "workspace:kafrust@0.3.6"
         }
       ],
       "purl": "pkg:cargo/kafrust@0.3.6",
