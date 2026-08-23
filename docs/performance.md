@@ -79,6 +79,17 @@ not by itself satisfy the V1-22 requirement for six measured hours, ten-second
 sampling, five repetitions per profile, published artifacts, or regression and
 RSS adjudication.
 
+For a qualification attempt, retain one descriptor beside each JSONL result
+and run [`check_v1_performance_results.py`](../scripts/check_v1_performance_results.py)
+against the complete bundle. The checker requires the manifest's full
+`profile × topology × security × repetition` matrix, exact timing and
+contiguous sample windows, one published artifact digest, zero acknowledged
+loss/duplicates, drained gauges, and the RSS/retry budgets. Passing a locked
+baseline also requires median throughput and p99 latency regression checks.
+Descriptors from this diagnostic workflow are deliberately marked
+`qualified: false` and must fail that adjudicator; this prevents a short
+smoke from being presented as an operational SLO.
+
 ## GitHub Baseline
 
 The manual `Kafka Benchmark` workflow runs against a single Apache Kafka 4.3.1
