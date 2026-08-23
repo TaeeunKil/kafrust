@@ -62,6 +62,17 @@ six-hour-compatible job timeout, but its runner-local segments explicitly mark
 record-ID reconciliation and cross-segment continuity as unqualified. No
 historical or bounded run is being promoted into the new milestone exit gate.
 
+The result-bundle adjudicator
+[`check_v1_fault_results.py`](../../../scripts/check_v1_fault_results.py) now
+defines the promotion boundary for future artifacts. It requires every named
+campaign, contiguous segment indexes, one exact published artifact digest,
+qualified record-ID reconciliation with zero unaccounted loss/duplicates,
+drained gauges, and zero secret-scan findings. It also sums six-hour duration,
+100 member-loss cycles, and 100 outcomes per ambiguity family, and requires the
+controlled data-loss fixtures to match their predeclared outcomes. Existing
+diagnostic descriptors intentionally fail this adjudicator because they are
+count-only and continuity-unqualified.
+
 ### Published bounded diagnostic (2026-08-23)
 
 The exact published `0.3.6` pair passed one 60-second Kafka 4.3.1 three-broker

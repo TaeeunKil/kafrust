@@ -518,6 +518,14 @@ locked baseline before it can return a passing result. This makes the eventual
 campaign decision reproducible; no qualified bundle or locked baseline exists
 yet, so V1-22 remains `Planned`.
 
+V1-21 now has the corresponding cross-segment adjudicator in
+[`scripts/check_v1_fault_results.py`](../scripts/check_v1_fault_results.py).
+It rejects count-only diagnostics and requires contiguous segment identity,
+qualified unique-record reconciliation, one published artifact digest,
+drained gauges, the six-hour totals, the 100-cycle/100-outcome family gates,
+and declared data-loss fixture matches. Its focused malformed-segment tests
+run in CI; no artifact currently satisfies the qualified contract.
+
 ## V1-23 Execution Update (2026-08-23)
 
 The current published competitor check was run before making any release-path

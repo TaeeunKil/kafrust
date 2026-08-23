@@ -30,6 +30,13 @@ def main() -> int:
     for key in ("source_and_published_runs_are_separate", "exact_published_pair_required", "segment_identity_must_be_continuous"):
         if policy.get(key) is not True:
             return fail(f"artifact policy {key} must be true")
+    bundle = manifest.get("result_bundle", {})
+    if bundle.get("descriptor_glob") != "*fault-segment.json":
+        return fail("result bundle must discover immutable fault segment descriptors")
+    if bundle.get("adjudicator") != "scripts/check_v1_fault_results.py":
+        return fail("fault result adjudicator path is not pinned")
+    if bundle.get("requires_qualified_record_id_reconciliation") is not True or bundle.get("requires_contiguous_segment_indexes") is not True or bundle.get("requires_one_artifact_digest") is not True:
+        return fail("fault result bundle qualification guards are incomplete")
     campaigns = manifest.get("campaigns")
     if not isinstance(campaigns, list) or len(campaigns) < 7:
         return fail("at least seven required campaigns must be named")

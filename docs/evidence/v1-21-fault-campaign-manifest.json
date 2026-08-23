@@ -7,6 +7,13 @@
     "exact_published_pair_required": true,
     "segment_identity_must_be_continuous": true
   },
+  "result_bundle": {
+    "descriptor_glob": "*fault-segment.json",
+    "adjudicator": "scripts/check_v1_fault_results.py",
+    "requires_qualified_record_id_reconciliation": true,
+    "requires_contiguous_segment_indexes": true,
+    "requires_one_artifact_digest": true
+  },
   "campaigns": [
     {
       "id": "pinned-secured-six-hour-1",

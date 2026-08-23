@@ -63,6 +63,9 @@ jobs:
       - name: Check v1 fault campaign manifest
         run: python scripts/check_v1_fault_campaign_manifest.py
 
+      - name: Test V1-21 fault result adjudicator
+        run: python -m unittest scripts/test_check_v1_fault_results.py
+
       - name: Check v1 performance campaign manifest
         run: python scripts/check_v1_performance_campaign_manifest.py
 
