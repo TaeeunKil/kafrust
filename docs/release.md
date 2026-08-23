@@ -48,6 +48,48 @@ canary, rollback, complete matrix, and post-publish approval gates pass. A
 partial protocol publication is recorded and never reused for changed bytes;
 the next attempt uses a new coordinated version pair.
 
+## 0.3.6 Release Notes
+
+This patch release repairs the coordinated package boundary: `kafrust-protocol`
+and `kafrust` publish and resolve as the same `0.3.6` pair from crates.io.
+
+### Breaking changes
+
+None intended. This remains a pre-1.0 release and does not freeze the public API.
+
+### Migration notes
+
+Existing callers can keep the same dependency and API shape. The staged
+[`rust-rdkafka` migration guide](migration-from-rust-rdkafka.md) now uses the
+published `0.3.6` dependency and explicitly separates this package repair from
+production migration qualification.
+
+### Compatibility evidence
+
+- `kafrust-protocol 0.3.6` checksum:
+  `731e80f6e2588f6c3c460896d0521c6582bae51c42a386ac05f26ec37e1279bd`.
+- `kafrust 0.3.6` checksum:
+  `4fe2758d0093ef4b2a236090cca4dc7511b9e865f5e18ce42823e428a6be71d2`.
+- Both exact docs.rs pages returned HTTP 200, and fresh external projects
+  resolved the exact pair on stable and Rust 1.81.
+- The expanded published smoke matrix passed in
+  [run 32616834901](https://github.com/TaeeunKil/kafrust/actions/runs/32616834901).
+
+The complete registry boundary record is
+[`v1-20-published-0.3.6-boundary-2026-08-23.md`](evidence/v1-20-published-0.3.6-boundary-2026-08-23.md).
+
+### Verification
+
+The exact source-head CI, package checks, published lockfile checks, and
+external compile evidence are recorded in the boundary record above.
+
+### Known limits
+
+This release does not close the full V1-20 matrix, V1-21 fault campaigns,
+V1-22 SLO campaign, V1-23 service canary, V1-24 API freeze, or any `1.0.0`
+claim. The dated competitor comparison found a material workload-specific
+throughput gap, so no `0.3.7` or `1.0.0` decision follows from this publication.
+
 ## 0.3.5 Release Notes
 
 This patch release carries the OAUTHBEARER connection re-authentication fix.
