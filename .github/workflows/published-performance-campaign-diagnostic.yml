@@ -148,7 +148,7 @@ jobs:
           cp crates/kafrust/examples/throughput_benchmark.rs "$project_dir/src/main.rs"
           cp -R crates/kafrust/examples/common "$project_dir/src/common"
           sed "s/__KAFRUST_VERSION__/$KAFRUST_PUBLISHED_VERSION/; s/__KAFRUST_FEATURES__/[]/" \
-            .github/published-performance-smoke/Cargo.toml > "$project_dir/Cargo.toml"
+            .github/published-performance-campaign/Cargo.toml > "$project_dir/Cargo.toml"
 
       - name: Run published timed campaign diagnostic
         run: |
