@@ -85,7 +85,9 @@ outside the 60-second to six-hour campaign bounds; focused tests cover those
 boundaries. A one-segment campaign can now truthfully mark continuity as
 qualified because production and reconciliation occur in one retained broker
 run, while multi-segment runner-local descriptors remain explicitly
-unqualified. No long campaign is promoted by this workflow change alone.
+unqualified. The published SASL_SSL/SCRAM multi-broker workflow uses the same
+schedule and six-hour timeout contract. No long campaign is promoted by this
+workflow change alone.
 
 ### Published bounded diagnostic (2026-08-23)
 

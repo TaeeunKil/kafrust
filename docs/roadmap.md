@@ -525,7 +525,8 @@ fault schedule (`leader`, `coordinator`, `combined`, and `simultaneous` events
 at increasing percentages of the segment). The parser has focused boundary
 tests, and a one-segment descriptor can mark continuity qualified while
 multi-segment runner-local descriptors remain unqualified. This hardens the
-campaign harness but does not itself provide the required six-hour campaign
+campaign harness, including the published SASL_SSL/SCRAM workflow's six-hour
+timeout contract, but does not itself provide the required six-hour campaign
 results or completion evidence.
 
 The V1-22 `throughput_benchmark` example now has a timed campaign mode with

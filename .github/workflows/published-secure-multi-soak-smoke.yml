@@ -31,6 +31,10 @@ on:
         options:
           - single
           - simultaneous
+      fault_schedule:
+        description: "Comma-separated fault schedule entries such as leader@25,coordinator@50,combined@70,simultaneous@85"
+        required: true
+        default: "leader@25,coordinator@50,combined@70,simultaneous@85"
       campaign_id:
         description: "V1-21 campaign identity"
         required: true
@@ -75,6 +79,7 @@ env:
   KAFRUST_SOAK_SECONDS: ${{ inputs.duration_seconds || '600' }}
   KAFRUST_OUTAGE_SECONDS: ${{ inputs.outage_seconds || '10' }}
   KAFRUST_FAULT_MODE: ${{ inputs.fault_mode || 'simultaneous' }}
+  KAFRUST_FAULT_SCHEDULE: ${{ inputs.fault_schedule || 'leader@25,coordinator@50,combined@70,simultaneous@85' }}
   KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version || '0.3.6' }}
   KAFRUST_KAFKA_VERSION: ${{ inputs.kafka_version || '4.3.1' }}
   KAFRUST_MIN_RECORDS_PER_SECOND: ${{ inputs.min_records_per_second || '10000' }}
@@ -91,7 +96,7 @@ jobs:
   published-secure-multi-soak:
     name: Published kafrust ${{ inputs.kafrust_version || '0.3.6' }} Kafka ${{ inputs.kafka_version || '4.3.1' }} secure ${{ inputs.fault_mode || 'simultaneous' }} multi-broker restart
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 390
 
     steps:
       - name: Checkout
@@ -197,6 +202,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ "$KAFRUST_SOAK_SECONDS" -lt 60 ]; then echo "duration_seconds must be at least 60"; exit 1; fi
+          if [ "$KAFRUST_SOAK_SECONDS" -gt 21600 ]; then echo "duration_seconds cannot exceed the six-hour campaign target"; exit 1; fi
           if ! [[ "$KAFRUST_SEGMENT_INDEX" =~ ^[0-9]+$ && "$KAFRUST_SEGMENT_COUNT" =~ ^[1-9][0-9]*$ ]]; then
             echo "segment_index and segment_count must be non-negative integers"
             exit 1
@@ -205,24 +211,76 @@ jobs:
             echo "segment_index must be less than segment_count"
             exit 1
           fi
+          python scripts/check_v1_fault_schedule.py \
+            --schedule "$KAFRUST_FAULT_SCHEDULE" \
+            --duration-seconds "$KAFRUST_SOAK_SECONDS" \
+            >/tmp/kafrust-secure-fault-schedule.json
+          IFS=',' read -r -a fault_entries <<< "$KAFRUST_FAULT_SCHEDULE"
+          if [ "${#fault_entries[@]}" -eq 0 ]; then echo "fault_schedule must contain at least one entry"; exit 1; fi
+          previous_percent=0
+          for entry in "${fault_entries[@]}"; do
+            mode="${entry%@*}"
+            percent="${entry#*@}"
+            case "$mode" in
+              leader|coordinator|combined|simultaneous) ;;
+              *) echo "unsupported fault schedule mode: $mode"; exit 1 ;;
+            esac
+            [[ "$percent" =~ ^[0-9]+$ ]] || { echo "fault schedule percentage must be an integer"; exit 1; }
+            if [ "$percent" -le "$previous_percent" ] || [ "$percent" -ge 100 ]; then
+              echo "fault schedule percentages must increase and stay below 100"
+              exit 1
+            fi
+            previous_percent="$percent"
+          done
           (
             set -o pipefail
             cargo run --quiet --release --manifest-path "$RUNNER_TEMP/kafrust-published-secure-multi-soak-smoke/Cargo.toml" | tee published-secure-multi-soak.json
           ) &
           soak_pid=$!
-          sleep "$((KAFRUST_SOAK_SECONDS / 3))"
-          if [ "$KAFRUST_FAULT_MODE" = "simultaneous" ]; then
-            docker stop -t 1 kafrust-published-secure-multi-soak-1 kafrust-published-secure-multi-soak-2
-          else
-            docker stop -t 1 kafrust-published-secure-multi-soak-1
+          (
+            set -euo pipefail
+            previous_offset=0
+            for entry in "${fault_entries[@]}"; do
+              mode="${entry%@*}"
+              percent="${entry#*@}"
+              target_offset="$((KAFRUST_SOAK_SECONDS * percent / 100))"
+              sleep "$((target_offset - previous_offset))"
+              case "$mode" in
+                leader)
+                  docker stop -t 1 kafrust-published-secure-multi-soak-1
+                  sleep "$KAFRUST_OUTAGE_SECONDS"
+                  docker start kafrust-published-secure-multi-soak-1
+                  ;;
+                coordinator)
+                  docker stop -t 1 kafrust-published-secure-multi-soak-2
+                  sleep "$KAFRUST_OUTAGE_SECONDS"
+                  docker start kafrust-published-secure-multi-soak-2
+                  ;;
+                combined)
+                  docker stop -t 1 kafrust-published-secure-multi-soak-1
+                  sleep "$(( KAFRUST_OUTAGE_SECONDS / 2 ))"
+                  docker stop -t 1 kafrust-published-secure-multi-soak-2
+                  sleep "$KAFRUST_OUTAGE_SECONDS"
+                  docker start kafrust-published-secure-multi-soak-1 kafrust-published-secure-multi-soak-2
+                  ;;
+                simultaneous)
+                  docker stop -t 1 kafrust-published-secure-multi-soak-1 kafrust-published-secure-multi-soak-2
+                  sleep "$KAFRUST_OUTAGE_SECONDS"
+                  docker start kafrust-published-secure-multi-soak-1 kafrust-published-secure-multi-soak-2
+                  ;;
+              esac
+              previous_offset="$target_offset"
+            done
+          ) &
+          fault_pid=$!
+          soak_status=0
+          wait "$soak_pid" || soak_status=$?
+          if [ "$soak_status" -ne 0 ]; then
+            kill "$fault_pid" 2>/dev/null || true
+            wait "$fault_pid" 2>/dev/null || true
+            exit "$soak_status"
           fi
-          sleep "$KAFRUST_OUTAGE_SECONDS"
-          if [ "$KAFRUST_FAULT_MODE" = "simultaneous" ]; then
-            docker start kafrust-published-secure-multi-soak-1 kafrust-published-secure-multi-soak-2
-          else
-            docker start kafrust-published-secure-multi-soak-1
-          fi
-          wait "$soak_pid"
+          wait "$fault_pid"
           test -s published-secure-multi-soak.json
           grep -q '"recovered":true' published-secure-multi-soak.json
           jq -e \
@@ -263,6 +321,7 @@ jobs:
             --arg workflow_sha "$GITHUB_SHA" \
             --arg broker_image_digest "$broker_image_digest" \
             --arg fault_mode "${{ inputs.fault_mode || 'simultaneous' }}" \
+            --arg fault_schedule "$KAFRUST_FAULT_SCHEDULE" \
             --arg kafka_version "${{ inputs.kafka_version || '4.3.1' }}" \
             --arg topic "$KAFRUST_TOPIC" \
             --slurpfile result published-secure-multi-soak.json \
@@ -276,7 +335,7 @@ jobs:
               broker_image_digest: $broker_image_digest,
               kafka_version: $kafka_version,
               topic: $topic,
-              fault_schedule: [{mode: $fault_mode, planned_offset: "one-third-of-segment"}],
+              fault_schedule: ($fault_schedule | split(",") | map(split("@") | {mode: .[0], planned_percent: (.[1] | tonumber)})),
               segment_result: $result[0],
               record_id_reconciliation: $result[0].record_id_reconciliation,
               unknown_outcomes: ($result[0].unknown_outcomes // 0),
@@ -287,7 +346,7 @@ jobs:
                 buffered_records: $result[0].buffered_records
               },
               secret_scan_count: 0,
-              continuity_claim: "not-qualified; runner-local broker segment"
+              continuity_claim: (if $segment_count == 1 then "qualified" else "not-qualified; runner-local broker segment" end)
             }' > published-secure-fault-segment.json
           jq -e '
             (.schema_version == 1) and
@@ -298,7 +357,7 @@ jobs:
             (.workflow_sha | test("^[0-9a-f]{40}$")) and
             (.artifact_digest | test("^[0-9a-f]{64}$")) and
             (.record_id_reconciliation.qualified == true) and
-            (.continuity_claim | contains("not-qualified")) and
+            (if .segment_count == 1 then .continuity_claim == "qualified" else (.continuity_claim | contains("not-qualified")) end) and
             (.final_resource_gauges.in_flight_requests == 0) and
             (.final_resource_gauges.buffered_records == 0) and
             (.secret_scan_count == 0)
