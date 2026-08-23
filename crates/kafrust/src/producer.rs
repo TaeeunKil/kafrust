@@ -1363,71 +1363,47 @@ fn buffered_enqueue_flush_reason(
     pending: &[BufferedProduceRequest],
     config: &ProducerConfig,
 ) -> Result<Option<BufferedFlushReason>> {
-    if pending.is_empty() {
+    let Some(latest) = pending.last() else {
         return Ok(None);
-    }
+    };
 
-    let groups = buffered_pending_groups(pending);
+    // This is called immediately after appending one request. Every earlier
+    // group has already been checked, and expiry only removes requests, so
+    // only the latest request's group can cross a threshold on this call.
+    // Avoid rebuilding and re-encoding every pending group on each enqueue.
+    let topic = latest.record.topic();
+    let partition = latest.record.partition_ref();
+    let same_group = |request: &&BufferedProduceRequest| {
+        request.record.topic() == topic && request.record.partition_ref() == partition
+    };
+    let group_count = pending.iter().filter(same_group).count();
 
-    if groups
-        .values()
-        .any(|record_indexes| record_indexes.len() >= config.max_records_per_batch)
-    {
+    if group_count >= config.max_records_per_batch {
         return Ok(Some(BufferedFlushReason::RecordCount));
     }
 
     if config.max_batch_bytes != usize::MAX {
-        for record_indexes in groups.values() {
-            if buffered_pending_encoded_len(pending, record_indexes, config.compression)?
-                >= config.max_batch_bytes
-            {
-                return Ok(Some(BufferedFlushReason::ByteCount));
-            }
+        let records = pending
+            .iter()
+            .filter(same_group)
+            .map(|request| {
+                let timestamp = request
+                    .record
+                    .timestamp_ref()
+                    .unwrap_or_else(SystemTime::now);
+                record_batch_message(&request.record, timestamp_millis(timestamp))
+            })
+            .collect::<Vec<_>>();
+        if encoded_record_batch_set_len_with_compression(
+            &records,
+            config.compression.as_record_batch_compression(),
+        )? >= config.max_batch_bytes
+        {
+            return Ok(Some(BufferedFlushReason::ByteCount));
         }
     }
 
     Ok(None)
-}
-
-fn buffered_pending_groups(
-    pending: &[BufferedProduceRequest],
-) -> BTreeMap<(&str, Option<i32>), Vec<usize>> {
-    let mut groups = BTreeMap::new();
-    for (index, request) in pending.iter().enumerate() {
-        groups
-            .entry((request.record.topic(), request.record.partition_ref()))
-            .or_insert_with(Vec::new)
-            .push(index);
-    }
-    groups
-}
-
-fn buffered_pending_encoded_len(
-    pending: &[BufferedProduceRequest],
-    record_indexes: &[usize],
-    compression: Compression,
-) -> Result<usize> {
-    let records = record_indexes
-        .iter()
-        .map(|&index| {
-            pending
-                .get(index)
-                .map(|request| {
-                    let timestamp = request
-                        .record
-                        .timestamp_ref()
-                        .unwrap_or_else(SystemTime::now);
-                    record_batch_message(&request.record, timestamp_millis(timestamp))
-                })
-                .ok_or(Error::Unsupported("buffered record index out of bounds"))
-        })
-        .collect::<Result<Vec<_>>>()?;
-
-    encoded_record_batch_set_len_with_compression(
-        &records,
-        compression.as_record_batch_compression(),
-    )
-    .map_err(Error::from)
 }
 
 async fn flush_buffered_deliveries_for_reason(
