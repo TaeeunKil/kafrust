@@ -129,6 +129,9 @@ The detailed row list and qualification boundary are in
 [`v1-20-published-smoke-rerun-2026-08-23.md`](../../evidence/v1-20-published-smoke-rerun-2026-08-23.md).
 This refresh strengthens the named published rows only; it does not close the
 full V1-20 matrix or downstream fault, SLO, migration, and release gates.
+The workflow now uploads each profile's external `Cargo.lock` and captured
+fixture output for 90 days, so future reruns retain machine-auditable package
+and result inputs instead of relying on console logs alone.
 
 ## Failure And Lifecycle Contract
 

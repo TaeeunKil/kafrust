@@ -318,6 +318,7 @@ jobs:
           KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version }}
           KAFRUST_FEATURES: ${{ matrix.kafrust_features }}
         run: |
+          set -o pipefail
           project_dir="$RUNNER_TEMP/kafrust-published-smoke"
           cargo new --bin "$project_dir"
           cp .github/published-crate-smoke/src/main.rs "$project_dir/src/main.rs"
@@ -350,10 +351,22 @@ jobs:
           KAFRUST_FEATURES: ${{ matrix.kafrust_features }}
           KAFRUST_VALUE: published-crate-${{ github.run_id }}
         run: |
+          set -o pipefail
           project_dir="$RUNNER_TEMP/kafrust-published-smoke"
-          cargo run --manifest-path "$project_dir/Cargo.toml"
+          cargo run --manifest-path "$project_dir/Cargo.toml" 2>&1 | tee published-smoke-output.txt
           grep -A1 -q 'name = "kafrust"' "$project_dir/Cargo.lock"
           grep -A1 -q "version = \"${{ inputs.kafrust_version }}\"" "$project_dir/Cargo.lock"
+
+      - name: Upload published smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: published-crate-smoke-${{ matrix.profile }}-${{ github.run_id }}
+          if-no-files-found: warn
+          retention-days: 90
+          path: |
+            published-smoke-output.txt
+            ${{ runner.temp }}/kafrust-published-smoke/Cargo.lock
 
       - name: Dump Kafka logs
         if: failure()
