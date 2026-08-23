@@ -25,7 +25,7 @@ unqualified relative artifact label.
 ## Q-LOCAL-V119-003
 
 - date_utc: 2026-08-23
-- source_commit: 368a2080092cd9ba42afeb73ae23047251432803
+- source_commit: b834254ff83d08f12cac023c970afe6eb2945e5e
 - client_version: 0.3.6
 - protocol_version: 0.3.6
 - work_status: Done
@@ -52,7 +52,7 @@ unqualified relative artifact label.
 - memory: not-applicable
 - final_resource_gauges: not-applicable
 - result: passed
-- artifact: docs/evidence/v1-19-sbom.json sha256 01c14214426c4846533dae6d626283c5f4107e25b2d9f07d380042281e7f495a; kafrust-protocol-0.3.6.crate sha256 f12e95a30ce46fd7ffc097a97a31b0a918bcee9f83cefb72fe2484cfe9c255cc; kafrust-0.3.6.crate sha256 2ae1a135d3de7f00fb25455809ab9fc201ea41c398aa62ac14f34c2a2758fca9
+- artifact: docs/evidence/v1-19-sbom.json sha256 61bd0cf881f40058b8c5b0b4a0d5d1d874fe8bc0e59b5023aa24a2738871696c; kafrust-protocol-0.3.6.crate sha256 f12e95a30ce46fd7ffc097a97a31b0a918bcee9f83cefb72fe2484cfe9c255cc; kafrust-0.3.6.crate sha256 2ae1a135d3de7f00fb25455809ab9fc201ea41c398aa62ac14f34c2a2758fca9
 - non_claims: not advisory or yank review, not optional-TLS native-tool verification, not transitive unsafe/native ownership review, not crates.io publication
 
 ## Q-CI-V118-001

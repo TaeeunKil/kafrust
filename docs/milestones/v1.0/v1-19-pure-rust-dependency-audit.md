@@ -105,7 +105,7 @@ the metadata-completeness slice, not publication or full V1-19 completion.
 
 ### Deterministic SBOM slice (2026-08-23)
 
-Commit `368a2080092cd9ba42afeb73ae23047251432803` finalizes the
+Commit `b834254ff83d08f12cac023c970afe6eb2945e5e` refreshes the
 platform-neutral form of the SBOM added in `6e24a247c2aa4aa9c63086e68d753988adbfe3aa`.
 It includes
 [`check_v1_sbom.py`](../../scripts/check_v1_sbom.py), its focused unit tests,
