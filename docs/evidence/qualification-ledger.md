@@ -22,6 +22,270 @@ and are checked in CI. Values such as `not-applicable` and `not-recorded` are
 deliberate classifications, not missing data. A row must never use an
 unqualified relative artifact label.
 
+## Q-PUBLISHED-V120-028
+
+- date_utc: 2026-08-23
+- source_commit: 8daf75d36e27117c9837a1ed51efbc98b4ee18d6
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka:4.3.1
+- mode: published ShareConsumer member-loss rebalance
+- topology: three-broker KRaft
+- security: PLAINTEXT
+- group_protocol: share
+- workload: surviving member ownership after abrupt peer loss
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32614875041
+- fault: kill one active Share member and wait for session reassignment
+- duration: default 180-second member lifetime; recorded in workflow
+- record_count: six seeded records
+- member_count: 2 then 1
+- repetition_count: 1
+- expected_errors: surviving member owns all six partitions with no loss
+- observed_errors: none; job passed
+- retry_count: 1 diagnostic short-timing attempt excluded
+- duplicate_count: 0
+- loss_count: 0
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: in_flight=0 and buffered=0 asserted
+- result: passed
+- artifact: docs/evidence/v1-20-published-smoke-2026-08-23.md; run 32614875041
+- non_claims: not repeated-loss campaign, not long fault/SLO, not full V1-20 matrix, not 1.0.0 readiness
+
+## Q-PUBLISHED-V120-027
+
+- date_utc: 2026-08-23
+- source_commit: 8daf75d36e27117c9837a1ed51efbc98b4ee18d6
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 3.7.2
+- kafka_image: apache/kafka:3.7.2
+- mode: published secure Admin mutation and offset paths
+- topology: single-node KRaft
+- security: SASL_SSL/SCRAM-SHA-256
+- group_protocol: classic
+- workload: authorized/denied Admin mutations and offset operations
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32614764570
+- fault: restricted authorization and mutation response handling
+- duration: recorded in workflow
+- record_count: not-recorded
+- member_count: not-recorded
+- repetition_count: 1
+- expected_errors: allowed mutations succeed and denied paths remain denied
+- observed_errors: none; job passed
+- retry_count: 0
+- duplicate_count: not-recorded
+- loss_count: not-recorded
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: not-recorded
+- result: passed
+- artifact: docs/evidence/v1-20-published-smoke-2026-08-23.md; run 32614764570
+- non_claims: not complete Admin authorization matrix, not long fault/SLO, not full V1-20 matrix, not 1.0.0 readiness
+
+## Q-PUBLISHED-V120-026
+
+- date_utc: 2026-08-23
+- source_commit: 8daf75d36e27117c9837a1ed51efbc98b4ee18d6
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 3.7.2
+- kafka_image: apache/kafka:3.7.2
+- mode: published secure Admin authorization
+- topology: single-node KRaft
+- security: SASL_SSL/SCRAM-SHA-256
+- group_protocol: classic
+- workload: restricted Admin and client authorization paths
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32614763007
+- fault: allowed and denied principal operations
+- duration: recorded in workflow
+- record_count: not-recorded
+- member_count: not-recorded
+- repetition_count: 1
+- expected_errors: allowed operations succeed and denied operations return authorization errors
+- observed_errors: none; job passed
+- retry_count: 0
+- duplicate_count: not-recorded
+- loss_count: not-recorded
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: not-recorded
+- result: passed
+- artifact: docs/evidence/v1-20-published-smoke-2026-08-23.md; run 32614763007
+- non_claims: not complete Admin authorization matrix, not long fault/SLO, not full V1-20 matrix, not 1.0.0 readiness
+
+## Q-PUBLISHED-V120-025
+
+- date_utc: 2026-08-23
+- source_commit: 8daf75d36e27117c9837a1ed51efbc98b4ee18d6
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 3.7.2
+- kafka_image: apache/kafka:3.7.2
+- mode: published secure classic group rebalance
+- topology: three-broker KRaft
+- security: SASL_SSL/SCRAM-SHA-256
+- group_protocol: classic
+- workload: secure multi-member rebalance
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32614761625
+- fault: member churn under secure transport
+- duration: recorded in workflow
+- record_count: not-recorded
+- member_count: 2
+- repetition_count: 1
+- expected_errors: secure group membership and ownership recover
+- observed_errors: none; job passed
+- retry_count: 0
+- duplicate_count: not-recorded
+- loss_count: 0
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: not-recorded
+- result: passed
+- artifact: docs/evidence/v1-20-published-smoke-2026-08-23.md; run 32614761625
+- non_claims: not KIP-848 secure row, not long fault/SLO, not full V1-20 matrix, not 1.0.0 readiness
+
+## Q-PUBLISHED-V120-024
+
+- date_utc: 2026-08-23
+- source_commit: 8daf75d36e27117c9837a1ed51efbc98b4ee18d6
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 3.7.2
+- kafka_image: apache/kafka:3.7.2
+- mode: published transaction coordinator failover
+- topology: three-broker KRaft
+- security: PLAINTEXT
+- group_protocol: not-applicable
+- workload: transactional produce/commit around coordinator stop
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32614759961
+- fault: transaction coordinator broker stop
+- duration: recorded in workflow
+- record_count: not-recorded
+- member_count: not-applicable
+- repetition_count: 1
+- expected_errors: transaction recovery and exact published dependency
+- observed_errors: none; job passed
+- retry_count: 0
+- duplicate_count: not-recorded
+- loss_count: 0
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: not-recorded
+- result: passed
+- artifact: docs/evidence/v1-20-published-smoke-2026-08-23.md; run 32614759961
+- non_claims: not secure transaction row, not long fault/SLO, not full V1-20 matrix, not 1.0.0 readiness
+
+## Q-PUBLISHED-V120-023
+
+- date_utc: 2026-08-23
+- source_commit: 8daf75d36e27117c9837a1ed51efbc98b4ee18d6
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka:4.3.1
+- mode: published secure Share multi-member ownership
+- topology: three-broker KRaft
+- security: SASL_SSL/SCRAM-SHA-256
+- group_protocol: share
+- workload: authenticated two-member disjoint Share ownership
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32614758515
+- fault: secure member startup and ownership assignment
+- duration: bounded smoke; recorded in workflow
+- record_count: six seeded records
+- member_count: 2
+- repetition_count: 1
+- expected_errors: exact published dependency, disjoint ownership, zero gauges
+- observed_errors: none; job passed
+- retry_count: 0
+- duplicate_count: 0
+- loss_count: 0
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: in_flight=0 and buffered=0 asserted
+- result: passed
+- artifact: docs/evidence/v1-20-published-smoke-2026-08-23.md; run 32614758515
+- non_claims: not secure repeated-loss, not long fault/SLO, not full V1-20 matrix, not 1.0.0 readiness
+
+## Q-PUBLISHED-V120-022
+
+- date_utc: 2026-08-23
+- source_commit: 8daf75d36e27117c9837a1ed51efbc98b4ee18d6
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka:4.3.1
+- mode: published ShareConsumer multi-broker failover
+- topology: three-broker KRaft
+- security: PLAINTEXT
+- group_protocol: share
+- workload: pre/post leader failover produce and consume
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32614756542
+- fault: selected Share partition leader stop
+- duration: recorded in workflow
+- record_count: pre/post records; exact count retained by workflow
+- member_count: not-recorded
+- repetition_count: 1
+- expected_errors: post-failover record consumed and exact published dependency
+- observed_errors: none; job passed
+- retry_count: 0
+- duplicate_count: not-recorded
+- loss_count: 0
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: not-recorded
+- result: passed
+- artifact: docs/evidence/v1-20-published-smoke-2026-08-23.md; run 32614756542
+- non_claims: not secure failover, not repeated fault/SLO, not full V1-20 matrix, not 1.0.0 readiness
+
+## Q-PUBLISHED-V120-021
+
+- date_utc: 2026-08-23
+- source_commit: 8daf75d36e27117c9837a1ed51efbc98b4ee18d6
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka:4.3.1
+- mode: published ShareConsumer heartbeat failover
+- topology: three-broker KRaft
+- security: PLAINTEXT
+- group_protocol: share
+- workload: active heartbeat through three coordinator-loss cycles
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32614751284
+- fault: repeated Share coordinator loss and replacement
+- duration: three cycles; recorded in workflow
+- record_count: pre-heartbeat and cycle records
+- member_count: 1
+- repetition_count: 3 cycles
+- expected_errors: heartbeat-owned session survives coordinator movement
+- observed_errors: none; job passed
+- retry_count: 0
+- duplicate_count: not-recorded
+- loss_count: 0
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: not-recorded
+- result: passed
+- artifact: docs/evidence/v1-20-published-smoke-2026-08-23.md; run 32614751284
+- non_claims: not member-loss ownership, not long fault/SLO, not full V1-20 matrix, not 1.0.0 readiness
+
 ## Q-PUBLISHED-V120-020
 
 - date_utc: 2026-08-23

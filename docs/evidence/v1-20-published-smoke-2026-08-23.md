@@ -53,3 +53,28 @@ is workflow evidence, not a product-failure waiver.
 These rows expand the published smoke slice; they still do not close the full
 broker/security/workload matrix, repeated fault campaigns, SLO, migration,
 API-freeze, or release gates.
+
+## Additional Share, transaction, and secure Admin rows
+
+From the roadmap commit `8daf75d36e27117c9837a1ed51efbc98b4ee18d6`, the exact
+published pair also passed:
+
+- Share heartbeat coordinator failover, three cycles: [run 32614751284](https://github.com/TaeeunKil/kafrust/actions/runs/32614751284)
+- Share multi-broker failover: [run 32614756542](https://github.com/TaeeunKil/kafrust/actions/runs/32614756542)
+- secure Share multi-member ownership (SASL_SSL/SCRAM): [run 32614758515](https://github.com/TaeeunKil/kafrust/actions/runs/32614758515)
+- transaction coordinator failover: [run 32614759961](https://github.com/TaeeunKil/kafrust/actions/runs/32614759961)
+- secure classic group rebalance (SASL_SSL/SCRAM): [run 32614761625](https://github.com/TaeeunKil/kafrust/actions/runs/32614761625)
+- secure Admin authorization: [run 32614763007](https://github.com/TaeeunKil/kafrust/actions/runs/32614763007)
+- secure Admin mutation/offset paths: [run 32614764570](https://github.com/TaeeunKil/kafrust/actions/runs/32614764570)
+- Share member-loss rebalancing with the default 180-second member lifetime: [run 32614875041](https://github.com/TaeeunKil/kafrust/actions/runs/32614875041)
+
+The two short-parameter Share member-loss attempts (30 seconds) are retained as
+diagnostics only: both reached the initial member's partial assignment but
+ended before the broker session timeout could complete reassignment. They are
+not counted as product failures or passed rows. The default-timing rerun above
+is the qualification result.
+
+All listed passing jobs assert the exact `0.3.6` client/protocol lockfile pair;
+the secure rows use fresh external projects and Rust 1.81. These are named
+published profiles, not the full accepted matrix, long-duration fault/SLO,
+migration canary, API freeze, or stable-release gates.
