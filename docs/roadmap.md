@@ -527,6 +527,12 @@ requests, 11 retries (0.000374%), zero unknown/loss/duplicate outcomes, and
 drained gauges. This strengthens secured per-segment evidence only; the
 six-hour campaigns and downstream V1-21 gates remain open.
 
+The published Share repeated-member-loss workflow now accepts a bounded
+`cycles` input and dynamically checks per-member ownership records and the
+final cycle, while retaining the historical eight-cycle default. A qualification
+run may request exactly 100 cycles and receives a retained JSON summary marked
+qualified only at that bound; no such run has been promoted yet.
+
 The published multi-broker soak workflow now accepts and validates an ordered
 fault schedule (`leader`, `coordinator`, `combined`, and `simultaneous` events
 at increasing percentages of the segment). The parser has focused boundary

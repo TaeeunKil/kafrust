@@ -149,6 +149,17 @@ same four-event schedule, exact package/broker identities, reconciliation digest
 and qualified one-run continuity. This strengthens secured per-segment evidence
 only; the six-hour campaigns and all downstream V1-21 gates remain open.
 
+### 100-cycle Share member-loss harness (2026-08-23)
+
+The published Share repeated-member-loss workflow now accepts a bounded
+`cycles` input (defaulting to the historical eight-cycle diagnostic) and
+computes expected ownership records, per-member output, and the final-cycle
+diagnostic dynamically. It rejects values above the V1-21 bound of 100 and
+uploads a JSON campaign summary with `qualified: true` only when exactly 100
+cycles are requested. This makes the required 100-cycle published gate
+executable without promoting the existing eight-cycle evidence; no 100-cycle
+run has been executed yet.
+
 ### Bounded current-source diagnostic runs (2026-08-22)
 
 The first 60-second manual run on source `3fdfc778` (run

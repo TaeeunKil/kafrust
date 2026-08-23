@@ -11,6 +11,10 @@ on:
         description: "Seconds each surviving published member remains active"
         required: true
         default: "120"
+      cycles:
+        description: "Independent member-loss/rejoin cycles (qualification requires 100)"
+        required: true
+        default: "8"
   schedule:
     - cron: "47 6 * * 2"
 
@@ -22,13 +26,14 @@ env:
   KAFRUST_SHARE_GROUP_ID: kafrust-published-share-repeated-loss-group-${{ github.run_id }}
   KAFRUST_SHARE_VALUE_PREFIX: published-share-repeated-loss-
   KAFRUST_SHARE_MEMBER_RUN_SECONDS: ${{ inputs.run_seconds || '120' }}
+  KAFRUST_SHARE_MEMBER_LOSS_CYCLES: ${{ inputs.cycles || '8' }}
   KAFRUST_SHARE_RECORDS_PER_PARTITION: "1"
 
 jobs:
   published-share-repeated-member-loss:
     name: Published kafrust ShareConsumer repeated member-loss churn
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 240
 
     steps:
       - name: Checkout
@@ -107,9 +112,17 @@ jobs:
             .github/published-share-multi-member/Cargo.toml > "$project_dir/Cargo.toml"
           cargo build --release --manifest-path "$project_dir/Cargo.toml"
 
-      - name: Run eight repeated member-loss cycles
+      - name: Run repeated member-loss cycles
         run: |
           set -euo pipefail
+          [[ "$KAFRUST_SHARE_MEMBER_LOSS_CYCLES" =~ ^[1-9][0-9]*$ ]] || {
+            echo "cycles must be a positive integer"
+            exit 1
+          }
+          if [ "$KAFRUST_SHARE_MEMBER_LOSS_CYCLES" -gt 100 ]; then
+            echo "cycles cannot exceed the V1-21 qualification bound"
+            exit 1
+          fi
           project_dir="$RUNNER_TEMP/kafrust-published-share-repeated-loss"
           ready_base="$RUNNER_TEMP/kafrust-published-share-repeated-loss-ready"
           heartbeat_ready_base="$RUNNER_TEMP/kafrust-published-share-repeated-loss-heartbeat-ready"
@@ -187,7 +200,7 @@ jobs:
           active_pid=$member_one_pid
           member_one_lines=6
           member_two_lines=0
-          for loss in $(seq 2 8); do
+          for loss in $(seq 2 "$KAFRUST_SHARE_MEMBER_LOSS_CYCLES"); do
             if [ "$active_member" -eq 1 ]; then
               next_member=2
             else
@@ -239,15 +252,47 @@ jobs:
           set -euo pipefail
           output_base="$RUNNER_TEMP/kafrust-published-share-repeated-loss-output"
           cat "$output_base-1" "$output_base-2" | sort -t, -k2,2n -k3,3n > "$RUNNER_TEMP/repeated-share-member-observed"
-          test "$(wc -l < "$output_base-1")" -eq 24
-          test "$(wc -l < "$output_base-2")" -eq 24
-          test "$(wc -l < "$RUNNER_TEMP/repeated-share-member-observed")" -eq 48
+          cycles="$KAFRUST_SHARE_MEMBER_LOSS_CYCLES"
+          expected_total=$((6 * cycles))
+          test "$(wc -l < "$RUNNER_TEMP/repeated-share-member-observed")" -eq "$expected_total"
+          member_one_cycles=$(( (cycles + 1) / 2 ))
+          member_two_cycles=$(( cycles / 2 ))
+          test "$(wc -l < "$output_base-1")" -eq "$((6 * member_one_cycles))"
+          test "$(wc -l < "$output_base-2")" -eq "$((6 * member_two_cycles))"
           test "$(cut -d, -f2 "$RUNNER_TEMP/repeated-share-member-observed" | sort -n | uniq | paste -sd, -)" = "0,1,2,3,4,5"
           for partition in $(seq 0 5); do
-            test "$(cut -d, -f2 "$RUNNER_TEMP/repeated-share-member-observed" | grep -cx "$partition")" -eq 8
+            test "$(cut -d, -f2 "$RUNNER_TEMP/repeated-share-member-observed" | grep -cx "$partition")" -eq "$cycles"
           done
-          test "$(cut -d, -f2,3 "$RUNNER_TEMP/repeated-share-member-observed" | sort | uniq | wc -l)" -eq 48
-          grep -Eq 'member=share-member-2 assignment=6 accepted=6 consumed=6 in_flight=0 buffered=0 failed=[0-9]+ retries=[0-9]+ max_in_flight=[0-9]+ max_buffered=[0-9]+' "$RUNNER_TEMP/kafrust-published-share-repeated-loss-log-2-cycle-8"
+          test "$(cut -d, -f2,3 "$RUNNER_TEMP/repeated-share-member-observed" | sort | uniq | wc -l)" -eq "$expected_total"
+          if [ "$((cycles % 2))" -eq 0 ]; then
+            last_member=2
+          else
+            last_member=1
+          fi
+          grep -Eq "member=share-member-${last_member} assignment=6 accepted=6 consumed=6 in_flight=0 buffered=0 failed=[0-9]+ retries=[0-9]+ max_in_flight=[0-9]+ max_buffered=[0-9]+" \
+            "$RUNNER_TEMP/kafrust-published-share-repeated-loss-log-${last_member}-cycle-${cycles}"
+          jq -n \
+            --arg campaign_id "published-share-member-loss-${GITHUB_RUN_ID}" \
+            --arg artifact_version "${{ inputs.kafrust_version || '0.3.6' }}" \
+            --argjson cycles "$cycles" \
+            --argjson total_records "$expected_total" \
+            '{schema_version: 1, qualified: ($cycles == 100), campaign_id: $campaign_id,
+              artifact_version: $artifact_version, cycles: $cycles, partitions: 6,
+              observed_records: $total_records, loss_count: 0, duplicate_count: 0,
+              final_resource_gauges: {in_flight: 0, buffered: 0},
+              qualification_reason: (if $cycles == 100 then "100-cycle published Share member-loss/rejoin gate" else "bounded diagnostic; 100-cycle gate not reached" end)}' \
+            > published-share-member-loss-campaign.json
+
+      - name: Upload repeated ownership evidence
+        uses: actions/upload-artifact@v6
+        with:
+          name: kafrust-published-share-member-loss-${{ github.run_id }}
+          path: |
+            published-share-member-loss-campaign.json
+            ${{ runner.temp }}/repeated-share-member-observed
+            ${{ runner.temp }}/kafrust-published-share-repeated-loss-log-*
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Verify published dependency versions
         env:
