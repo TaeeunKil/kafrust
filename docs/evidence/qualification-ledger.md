@@ -22,6 +22,39 @@ and are checked in CI. Values such as `not-applicable` and `not-recorded` are
 deliberate classifications, not missing data. A row must never use an
 unqualified relative artifact label.
 
+## Q-PUBLISHED-V122-MODE-001
+
+- date_utc: 2026-08-23
+- source_commit: 18d34e974b6935ed9800c829d55c84c4f0615239
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 3.7.2, 4.3.1
+- kafka_image: apache/kafka:<matrix version>
+- mode: bounded published buffered campaign diagnostic
+- topology: single-node KRaft
+- security: PLAINTEXT
+- group_protocol: not-applicable
+- workload: 1-KiB values, batch size 50, two workers, none and zstd matrix
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32629657794
+- fault: no injected fault; broker startup or roundtrip failure aborts the job
+- duration: 5-second warmup and 20-second measured window per matrix job
+- record_count: recorded in each retained JSONL result
+- member_count: not-applicable
+- repetition_count: one bounded diagnostic repetition per matrix combination
+- expected_errors: all four published combinations complete with reconciled records and drained gauges
+- observed_errors: none; all four jobs passed
+- retry_count: recorded per result; not promoted as an SLO claim
+- duplicate_count: 0 in each passing result
+- loss_count: 0 in each passing result
+- latency: recorded in each retained JSONL result; not adjudicated as a long-run budget
+- memory: RSS samples retained in each JSONL result; not adjudicated as a long-run budget
+- final_resource_gauges: in-flight and buffered gauges drained to zero in each passing result
+- result: passed
+- artifact: docs/evidence/v1-22-performance-mode-diagnostic-2026-08-23.md; run 32629657794
+- non_claims: qualified=false diagnostic, not the six-profile eight-hour five-repetition SLO matrix, not a locked baseline, not a universal performance claim, not 1.0.0 readiness
+
 ## Q-PUBLISHED-V120-033
 
 - date_utc: 2026-08-23

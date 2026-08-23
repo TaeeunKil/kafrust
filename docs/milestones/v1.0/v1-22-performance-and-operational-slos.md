@@ -108,6 +108,15 @@ requires the descriptor workload mode and final `campaign_mode` to match the
 manifest profile. This removes a profile-labeling gap but does not qualify any
 short run or the full matrix.
 
+The published-artifact profile-mode diagnostic [32629657794](https://github.com/TaeeunKil/kafrust/actions/runs/32629657794)
+then ran the exact `kafrust 0.3.6` dependency across Kafka 3.7.2/4.3.1 and
+none/Zstd. All four buffered jobs passed with identity reconciliation and
+drained gauges. Its retained descriptors remain `qualified: false`, so this
+confirms published-mode compatibility only; the full V1-22 matrix and locked
+baseline remain open. The evidence is recorded in
+[`v1-22-performance-mode-diagnostic-2026-08-23.md`](../../evidence/v1-22-performance-mode-diagnostic-2026-08-23.md)
+and ledger row `Q-PUBLISHED-V122-MODE-001`.
+
 ### Bounded timed-campaign diagnostic (2026-08-22)
 
 Run [32558818231](https://github.com/TaeeunKil/kafrust/actions/runs/32558818231)

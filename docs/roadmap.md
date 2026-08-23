@@ -541,6 +541,15 @@ final mode to match the manifest profile. This closes the harness identity gap;
 it is not a qualification result and does not change the current no-publication
 decision.
 
+The exact published `kafrust 0.3.6` artifact also passed the new buffered mode
+diagnostic in [32629657794](https://github.com/TaeeunKil/kafrust/actions/runs/32629657794)
+across Kafka 3.7.2/4.3.1 and none/Zstd. All four jobs reconciled identities and
+drained final gauges; the retained descriptors are explicitly
+`qualified=false`. This is recorded in
+[`v1-22-performance-mode-diagnostic-2026-08-23.md`](evidence/v1-22-performance-mode-diagnostic-2026-08-23.md)
+and `Q-PUBLISHED-V122-MODE-001`, and leaves the full SLO matrix and locked
+baseline open.
+
 V1-21 now has the corresponding cross-segment adjudicator in
 [`scripts/check_v1_fault_results.py`](../scripts/check_v1_fault_results.py).
 It rejects count-only or continuity-unqualified diagnostics and requires
