@@ -174,7 +174,10 @@ its previous 64-cycle guard to a maximum of 100 cycles. Its timeout now scales
 with the requested cycle count, and the workflow timeout was extended so a
 100-cycle run is not silently cut off. These changes make the two remaining
 group-family executions possible; they do not count as evidence until the
-published runs and retained cycle summaries pass.
+published runs and retained cycle summaries pass. The workflow now retains an
+immutable JSON summary with the published lockfile digest and broker image
+identity; the earlier successful 3.7.2 log-only run is therefore not promoted
+and will be repeated with the artifact contract.
 
 ### Bounded current-source diagnostic runs (2026-08-22)
 

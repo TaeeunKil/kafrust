@@ -543,7 +543,9 @@ qualification evidence.
 The published classic/KIP-848 group-rebalance fixture now accepts up to 100
 cycles (previously 64), with a cycle-scaled client timeout and a 35-minute job
 bound. This only enables the required executions; no 100-cycle published result
-is counted before its run output is retained and checked.
+is counted before its run output is retained and checked. The workflow now
+uploads an immutable JSON summary with the published lockfile digest and broker
+image identity; the earlier successful 3.7.2 log-only run remains unpromoted.
 
 The published multi-broker soak workflow now accepts and validates an ordered
 fault schedule (`leader`, `coordinator`, `combined`, and `simultaneous` events

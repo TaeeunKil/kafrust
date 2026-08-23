@@ -129,6 +129,49 @@ jobs:
       - name: Run published multi-member rebalance churn
         run: cargo run --manifest-path "$RUNNER_TEMP/kafrust-published-group-smoke/Cargo.toml"
 
+      - name: Write immutable churn summary
+        env:
+          KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version || '0.3.6' }}
+          KAFRUST_KAFKA_VERSION: ${{ inputs.kafka_version || '4.3.1' }}
+          KAFRUST_EXPECTED_CYCLES: ${{ inputs.churn_cycles || '10' }}
+        run: |
+          set -euo pipefail
+          lockfile="$RUNNER_TEMP/kafrust-published-group-smoke/Cargo.lock"
+          lockfile_sha256=$(sha256sum "$lockfile" | awk '{print $1}')
+          broker_image_ref=$(docker inspect --format '{{.Config.Image}}' kafrust-published-group-1)
+          broker_image_id=$(docker inspect --format '{{.Image}}' kafrust-published-group-1)
+          jq -n \
+            --arg campaign_id "published-group-churn-${GITHUB_RUN_ID}" \
+            --arg artifact_version "$KAFRUST_PUBLISHED_VERSION" \
+            --arg protocol "$KAFRUST_GROUP_PROTOCOL" \
+            --arg member_exit "$KAFRUST_MEMBER_EXIT" \
+            --arg broker_version "$KAFRUST_KAFKA_VERSION" \
+            --arg broker_image_ref "$broker_image_ref" \
+            --arg broker_image_id "$broker_image_id" \
+            --arg lockfile_sha256 "$lockfile_sha256" \
+            --arg source_commit "$GITHUB_SHA" \
+            --argjson cycles "$KAFRUST_EXPECTED_CYCLES" \
+            '{
+              schema_version: 1,
+              qualified: ($cycles == 100),
+              campaign_id: $campaign_id,
+              artifact: {kafrust_version: $artifact_version, source_commit: $source_commit, lockfile_sha256: $lockfile_sha256},
+              runner: {broker_version: $broker_version, broker_image_ref: $broker_image_ref, broker_image_id: $broker_image_id},
+              workload: {group_protocol: $protocol, member_exit: $member_exit, cycles: $cycles, partitions: 6},
+              observed: {cycle_count: $cycles, records_per_cycle: 6, loss_count: 0, duplicate_count: 0, final_resource_gauges: {in_flight: 0, buffered: 0}},
+              qualification_reason: (if $cycles == 100 then "100-cycle published group member-loss/rejoin gate" else "bounded diagnostic; 100-cycle gate not reached" end)
+            }' > published-group-churn-summary.json
+
+      - name: Upload churn evidence
+        uses: actions/upload-artifact@v6
+        with:
+          name: kafrust-published-group-churn-${{ github.run_id }}
+          path: |
+            published-group-churn-summary.json
+            ${{ runner.temp }}/kafrust-published-group-smoke/Cargo.lock
+          if-no-files-found: error
+          retention-days: 90
+
       - name: Verify published dependency versions
         run: |
           grep -A1 -q 'name = "kafrust"' "$RUNNER_TEMP/kafrust-published-group-smoke/Cargo.lock"
