@@ -133,6 +133,14 @@ The workflow now uploads each profile's external `Cargo.lock` and captured
 fixture output for 90 days, so future reruns retain machine-auditable package
 and result inputs instead of relying on console logs alone.
 
+The first clean run after that change is
+[32626589535](https://github.com/TaeeunKil/kafrust/actions/runs/32626589535):
+all twelve profiles passed and the downloaded run contained 12 lockfiles plus
+12 captured outputs. The intermediate run 32626452478 is retained only as a
+fixture-readiness failure diagnostic; its single Kafka 3.9.1 failure is not
+promoted into the passing matrix evidence. The clean artifact details are in
+[`v1-20-published-smoke-artifact-rerun-2026-08-23.md`](../../evidence/v1-20-published-smoke-artifact-rerun-2026-08-23.md).
+
 ## Failure And Lifecycle Contract
 
 - One required row failure blocks the matrix; it is not averaged away.

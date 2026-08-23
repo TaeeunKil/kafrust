@@ -632,6 +632,13 @@ rows listed in
 [`v1-20-published-smoke-rerun-2026-08-23.md`](evidence/v1-20-published-smoke-rerun-2026-08-23.md).
 This is a fresh published-row refresh, not full V1-20 completion or a release
 decision.
+The follow-up clean run
+[32626589535](https://github.com/TaeeunKil/kafrust/actions/runs/32626589535)
+also passed all twelve profiles and retained 12 external lockfiles plus 12
+captured outputs as workflow artifacts. The intermediate 3.9.1 readiness flake
+in run 32626452478 is retained as a failure diagnostic, not as passing product
+evidence; the clean artifact details are recorded in
+[`v1-20-published-smoke-artifact-rerun-2026-08-23.md`](evidence/v1-20-published-smoke-artifact-rerun-2026-08-23.md).
 
 The 0.3.6 competitor review on 2026-08-23 found a material workload-specific
 throughput gap versus rust-rdkafka, so V1-22 has been re-planned for profiling,
