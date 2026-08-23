@@ -22,6 +22,39 @@ and are checked in CI. Values such as `not-applicable` and `not-recorded` are
 deliberate classifications, not missing data. A row must never use an
 unqualified relative artifact label.
 
+## Q-DECISION-V1-002
+
+- date_utc: 2026-08-23
+- source_commit: c0bb72895297ea0e85a8b3e254ca725ed7a7dff9
+- client_version: 0.3.6 candidate
+- protocol_version: 0.3.6 candidate
+- work_status: In progress
+- evidence_level: Packaged candidate
+- kafka_version: not-applicable
+- kafka_image: not-applicable
+- mode: autonomous pre-1.0 publication decision
+- topology: not-applicable
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: protocol-first registry upload, registry visibility, client dry-run, then V1-20 published matrix
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32612740002
+- fault: competitor gap, hardening failure, package mismatch, registry visibility failure, or client dry-run failure
+- duration: not-recorded
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: 1 dated gate decision
+- expected_errors: no 1.0.0 claim; stop on any ordered publication discrepancy
+- observed_errors: 0.3.6 pre-1.0 path authorized; 1.0.0 deferred
+- retry_count: not-applicable
+- duplicate_count: not-applicable
+- loss_count: not-applicable
+- latency: not-applicable
+- memory: not-applicable
+- final_resource_gauges: not-applicable
+- result: passed
+- artifact: docs/evidence/v1-release-competitive-readiness-2026-08-23.md; CI run 32612740002
+- non_claims: not yet published, not V1-20 completion, not V1-21 through V1-24 completion, not RC/stable release, not 1.0.0 readiness
+
 ## Q-CI-V119-010
 
 - date_utc: 2026-08-23

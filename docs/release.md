@@ -9,14 +9,15 @@ Publish `kafrust-protocol` before `kafrust` because the client crate depends on 
 
 ## v1.0 Publication Gate (2026-08-22)
 
-The coordinated `0.3.6` candidate is still unpublished. V1-20 currently has a
-checked draft matrix and source-only live evidence; V1-21 through V1-24 still
-own the fault, SLO, migration, dependency, and API-freeze gates. No
-`cargo publish`, registry upload, tag, or GitHub release is performed as part
-of ordinary milestone execution. The agent may make that decision
-autonomously only after the dated competitor review, exact package evidence,
-and the complete release gate show no material gap; a separate user prompt is
-not required, but milestone progress alone is never sufficient.
+The coordinated `0.3.6` candidate is authorized for one ordered pre-1.0
+publication attempt after exact source `c0bb728` passed CI run `32612740002`.
+V1-20 currently has a checked draft matrix and source-only live evidence;
+V1-21 through V1-24 still own the fault, SLO, migration, dependency, and
+API-freeze gates. No tag, GitHub release, or `1.0.0` publication is authorized.
+The agent may make this pre-1.0 decision autonomously after the dated competitor
+review, exact package evidence, and hardening gates show no material gap; a
+separate user prompt is not required. Any ordered publish discrepancy stops the
+sequence and triggers a new version decision.
 
 When the V1-25 release gate is explicitly recorded, publish the exact frozen protocol RC
 first, wait for fresh Rust 1.81/stable registry resolution, then run the client

@@ -358,8 +358,9 @@ block V1-19 completion.
 The final owner-review matrix and exact-head package validation then passed both
 toolchains from `a3df635` in [CI run 32612304536](https://github.com/TaeeunKil/kafrust/actions/runs/32612304536).
 This closes V1-19's packaged-candidate exit criteria. The next gate is V1-20's
-fresh published `0.3.6` matrix; no registry upload, tag, or `1.0.0` claim is
-implied by marking V1-19 done.
+fresh published `0.3.6` matrix. The dated competitive review and exact c0bb728
+CI gate now authorize one protocol-first `0.3.6` pre-1.0 publication attempt;
+no tag, GitHub release, or `1.0.0` claim is implied.
 
 The dated version-readiness decision is archived in
 [`docs/evidence/v1-release-competitive-readiness-2026-08-23.md`](evidence/v1-release-competitive-readiness-2026-08-23.md):

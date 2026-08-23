@@ -4,7 +4,7 @@
 
 - coordinated candidate: `kafrust 0.3.6` / `kafrust-protocol 0.3.6`
 - current published line: `0.3.5`
-- decision: do not call the candidate `1.0.0`; do not publish yet
+- decision: publish `0.3.6` as a pre-1.0 package-boundary release; do not call it `1.0.0`
 - reference audit: [`docs/competitor-source-audit-2026-08-20.md`](../competitor-source-audit-2026-08-20.md)
 
 ## Where kafrust is stronger
@@ -18,19 +18,19 @@
 
 ## Where kafrust is weaker or not yet proven
 
-- the `0.3.6` pair is still a packaged candidate, not a fresh published
-  artifact verified by the complete V1-20 matrix;
+- the `0.3.6` pair has not yet been verified as a fresh published artifact by
+  the complete V1-20 matrix;
 - krafka/kacrab currently provide stronger competitor-facing evidence in
   generated protocol/oracle tests, fake/real broker fault infrastructure, and
   broader published operational coverage;
-- kafrust still lacks the completed advisory/current-index review, manual
-  transitive unsafe/native acceptance, long fault/soak/SLO campaigns, and
-  service-canary migration/rollback evidence required for the v1 program.
+- kafrust still lacks the long fault/soak/SLO campaigns, service-canary
+  migration/rollback evidence, and API freeze required for the v1 program.
 
 ## Version decision
 
 `0.3.6` is the appropriate next pre-1.0 identity for the package-boundary and
-coordinated-protocol repair, once its remaining package/published gates pass.
+coordinated-protocol repair; its remaining published gates are now the next
+qualification step.
 It is not a reason to skip directly to `1.0.0`. A later `0.3.z` release should
 be cut only for another coherent, verified user-visible slice; a change to the
 support contract or a breaking public API requires a re-planned pre-1.0 minor
@@ -48,5 +48,23 @@ unsafe/native owner-review, staged package, Rust 1.81, and stable checks. The
 publication decision remains unchanged. `0.3.6` is a coherent pre-1.0 identity,
 but its fresh published compatibility matrix is still unrun and V1-21 through
 V1-24 still own fault/soak, SLO, migration/rollback, and API-freeze evidence.
-Those are material release gates, so no registry upload is authorized by this
-completion record; the roadmap now moves to V1-20 planning.
+Those are material `1.0.0` gates, but they do not block this bounded pre-1.0
+package-boundary release. The roadmap now moves to V1-20 with the ordered
+protocol-first publication decision below.
+
+## Pre-1.0 publication decision (2026-08-23)
+
+- decision_source: `c0bb72895297ea0e85a8b3e254ca725ed7a7dff9`
+- qualification: [CI run 32612740002](https://github.com/TaeeunKil/kafrust/actions/runs/32612740002)
+- authorization: protocol-first `0.3.6` upload, then client upload only after
+  registry visibility and a fresh client dry-run pass
+- rationale: V1-19 packaged-candidate criteria, advisory snapshot, native/unsafe
+  owner matrix, competitor comparison, and both-toolchain CI are green; the
+  coordinated package-boundary repair is a coherent pre-1.0 user-visible slice
+- explicit deferrals: V1-20 published matrix, V1-21/V1-22 fault/SLO campaigns,
+  V1-23 canary/rollback, V1-24 API freeze, and all `1.0.0` claims
+
+This is an autonomous release-gate decision, not a request for separate user
+confirmation. It authorizes only the ordered `0.3.6` pre-1.0 path; any package,
+registry, external-project, competitor, or validation discrepancy stops the
+sequence and triggers a new milestone/version decision.

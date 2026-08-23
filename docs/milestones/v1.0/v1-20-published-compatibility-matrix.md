@@ -75,7 +75,9 @@ mandatory floor, pinned secured-failover, and package-codec rows. It does not
 claim that any draft row has passed: fresh external lockfiles, exact published
 `0.3.6` artifacts, complete V1-15~V1-19 evidence, and the later fault/SLO
 profiles must be attached before the matrix can be frozen or used as release
-evidence. The source-only 17-job Live Kafka Smoke matrix passed on commit
+evidence. The dated V1-19/competitor gate authorizes one ordered protocol-first
+`0.3.6` publication attempt; it does not mark any published row passed. The
+source-only 17-job Live Kafka Smoke matrix passed on commit
 `e6de5c5` in [run 32551145773](https://github.com/TaeeunKil/kafrust/actions/runs/32551145773),
 including the SCRAM transaction failover assertion for either Kafka fencing code
 47 or 90. This is current-source evidence only; publication remains separately
