@@ -381,3 +381,11 @@ eventually completed as `failure` at `2026-08-23T18:07:57Z` with no downloadable
 artifact. No V1-21 ledger row or milestone completion claim is made. The
 runner must be restored, the orphaned run's failure retained, and this exact
 manifest campaign rerun before any result adjudication.
+
+The host inspection identified why the WSL recovery is failing: the `T:`
+volume holding `Ubuntu-T9` has only `31,256,576` free bytes (`29.8 MiB`),
+while its `ext4.vhdx` is approximately `773.8 GiB`. The WSL and Hyper-V
+services are running, so this is a host-capacity failure rather than a
+campaign or client result. Freeing safe host storage and confirming the WSL
+instance can start is required before any V1-21 rerun; the VHDX must not be
+deleted or repaired in place without a backup.

@@ -773,7 +773,10 @@ offline, and GitHub closed the run as `failure` without an artifact. This is an
 infrastructure non-result, recorded in the
 [`capacity audit`](evidence/v1-long-campaign-capacity-audit-2026-08-24.md);
 the exact manifest campaign must be rerun after an elevated WSL/Hyper-V
-recovery. No V1-21 ledger row, V1-22 campaign, RC, stable release, or
+recovery. Follow-up inspection found the `T:` host volume has only
+`31,256,576` free bytes (`29.8 MiB`) while the registered `ext4.vhdx` is
+approximately `773.8 GiB`; the near-full host volume is the primary recovery
+hypothesis. No V1-21 ledger row, V1-22 campaign, RC, stable release, or
 publication is authorized by this failed run.
 
 ## V1-23 Execution Update (2026-08-23)

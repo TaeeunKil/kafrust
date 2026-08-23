@@ -82,3 +82,16 @@ restart or host restart may be necessary), confirming Docker and the
 self-hosted listener are online, and then rerunning the declared campaign
 after the orphaned GitHub run reaches a terminal state. The campaign duration,
 fault schedule, thresholds, and manifest identity remain unchanged.
+
+## Host-volume capacity finding (2026-08-24)
+
+Follow-up read-only host inspection found the concrete prerequisite failure:
+the `T:` volume that stores `Ubuntu-T9` has only `31,256,576` free bytes
+(approximately `29.8 MiB`), not 31 GiB as initially read. The registered
+`T:\WSL\Ubuntu\ext4.vhdx` exists and is `830,855,970,816` bytes
+(approximately `773.8 GiB`). `WslService`, `vmcompute`, and `hns` are running,
+but Ubuntu-T9 remains `Stopped` and instance creation returns
+`Wsl/Service/CreateInstance/E_FAIL`/`E_UNEXPECTED`. No recent disk/NTFS error
+event was observed. The near-full host volume is therefore the primary
+recovery hypothesis and must be relieved before filesystem repair is
+considered; the VHDX itself must not be deleted or modified without a backup.
