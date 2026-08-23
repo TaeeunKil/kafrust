@@ -34,7 +34,7 @@ def write_segment(root: Path, *, index: int = 0, count: int = 1, qualified: bool
         "segment_count": count,
         "artifact_digest": "a" * 64,
         "workflow_sha": "b" * 40,
-        "broker_image_digest": "c" * 64,
+        "broker_image_digest": "apache/kafka@sha256:" + "c" * 64,
         "segment_result": {"duration_seconds": 60, "recovered": True, "cycle_count": cycles},
         "record_id_reconciliation": {
             "qualified": qualified,
@@ -45,6 +45,7 @@ def write_segment(root: Path, *, index: int = 0, count: int = 1, qualified: bool
         },
         "final_resource_gauges": {"in_flight_requests": 0, "buffered_records": 0},
         "secret_scan_count": 0,
+        "continuity_claim": "qualified",
     }
     (root / f"segment-{index}-fault-segment.json").write_text(json.dumps(descriptor), encoding="utf-8")
 
@@ -61,6 +62,17 @@ class FaultResultsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             write_segment(root, qualified=False)
+            with self.assertRaises(MODULE.ResultError):
+                MODULE.validate_results(root, manifest())
+
+    def test_unqualified_continuity_fails(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            write_segment(root)
+            descriptor_path = next(root.glob("*fault-segment.json"))
+            descriptor = json.loads(descriptor_path.read_text(encoding="utf-8"))
+            descriptor["continuity_claim"] = "not-qualified; runner-local broker segment"
+            descriptor_path.write_text(json.dumps(descriptor), encoding="utf-8")
             with self.assertRaises(MODULE.ResultError):
                 MODULE.validate_results(root, manifest())
 

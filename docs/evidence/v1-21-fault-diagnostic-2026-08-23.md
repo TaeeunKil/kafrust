@@ -22,7 +22,11 @@ requirements in the V1-21 milestone.
 - retries: 2
 - final gauges: `in_flight_requests=0`, `buffered_records=0`
 - descriptor artifact digest: `37c7c0c76b31e34af838650acfb4fc351f1e63e4ed6f24dcefb56d2a39a745c7`
-- record reconciliation: count-only diagnostic; `qualified=false`
+- record reconciliation: this historical descriptor predates the current
+  per-segment business-ID fields; the current fixture emits qualified
+  per-segment reconciliation, while every runner-local descriptor still uses
+  `continuity_claim="not-qualified; runner-local broker segment"` because it
+  does not prove cross-segment continuity.
 
 The workflow now accepts `campaign_id`, `segment_index`, and `segment_count`,
 raises the job timeout ceiling for future six-hour segments, records exact
@@ -44,5 +48,6 @@ ordered resource gauges.
 
 These failures remain immutable and are not averaged away. The final bounded
 run is not evidence of continuous cross-run record identity because every
-segment starts a fresh runner-local broker and the descriptor explicitly marks
-record-ID reconciliation as unqualified.
+segment starts a fresh runner-local broker. The current descriptor contract
+separates qualified per-segment identity from the still-unqualified
+cross-segment continuity claim.

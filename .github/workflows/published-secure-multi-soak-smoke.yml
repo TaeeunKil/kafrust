@@ -31,6 +31,18 @@ on:
         options:
           - single
           - simultaneous
+      campaign_id:
+        description: "V1-21 campaign identity"
+        required: true
+        default: "pinned-secure-sasl-tls-1"
+      segment_index:
+        description: "Zero-based segment index within the campaign"
+        required: true
+        default: "0"
+      segment_count:
+        description: "Total planned segments for the campaign"
+        required: true
+        default: "1"
       min_records_per_second:
         description: "Minimum records/s for this qualification workload"
         required: true
@@ -71,6 +83,9 @@ env:
   KAFRUST_MAX_RETRY_RATIO_PERCENT: ${{ inputs.max_retry_ratio_percent || '1.0' }}
   KAFRUST_SOAK_BATCH_SIZE: "100"
   KAFRUST_SOAK_PAYLOAD_BYTES: "1024"
+  KAFRUST_CAMPAIGN_ID: ${{ inputs.campaign_id || 'pinned-secure-sasl-tls-1' }}
+  KAFRUST_SEGMENT_INDEX: ${{ inputs.segment_index || '0' }}
+  KAFRUST_SEGMENT_COUNT: ${{ inputs.segment_count || '1' }}
 
 jobs:
   published-secure-multi-soak:
@@ -182,6 +197,14 @@ jobs:
         run: |
           set -euo pipefail
           if [ "$KAFRUST_SOAK_SECONDS" -lt 60 ]; then echo "duration_seconds must be at least 60"; exit 1; fi
+          if ! [[ "$KAFRUST_SEGMENT_INDEX" =~ ^[0-9]+$ && "$KAFRUST_SEGMENT_COUNT" =~ ^[1-9][0-9]*$ ]]; then
+            echo "segment_index and segment_count must be non-negative integers"
+            exit 1
+          fi
+          if [ "$KAFRUST_SEGMENT_INDEX" -ge "$KAFRUST_SEGMENT_COUNT" ]; then
+            echo "segment_index must be less than segment_count"
+            exit 1
+          fi
           (
             set -o pipefail
             cargo run --quiet --release --manifest-path "$RUNNER_TEMP/kafrust-published-secure-multi-soak-smoke/Cargo.toml" | tee published-secure-multi-soak.json
@@ -215,8 +238,71 @@ jobs:
             (.records_per_second >= $min_records_per_second) and
             (.operation_errors <= $max_operation_errors) and
             (.requests_failed <= $max_failed_requests) and
-            (.retry_ratio_percent <= $max_retry_ratio_percent)
+            (.retry_ratio_percent <= $max_retry_ratio_percent) and
+            (.record_id_reconciliation.qualified == true) and
+            (.record_id_reconciliation.loss_count == 0) and
+            (.record_id_reconciliation.duplicate_count == 0) and
+            (.unknown_outcomes >= 0)
           ' published-secure-multi-soak.json >/dev/null
+
+      - name: Write immutable secure campaign segment descriptor
+        run: |
+          set -euo pipefail
+          lockfile="$RUNNER_TEMP/kafrust-published-secure-multi-soak-smoke/Cargo.lock"
+          artifact_digest="$(sha256sum "$lockfile" | awk '{print $1}')"
+          broker_image_digest="$(docker image inspect "apache/kafka:${{ inputs.kafka_version || '4.3.1' }}" --format '{{index .RepoDigests 0}}' 2>/dev/null || true)"
+          if [ -z "$broker_image_digest" ]; then
+            echo "the broker image must expose an immutable RepoDigest"
+            exit 1
+          fi
+          jq -n \
+            --arg campaign_id "$KAFRUST_CAMPAIGN_ID" \
+            --argjson segment_index "$KAFRUST_SEGMENT_INDEX" \
+            --argjson segment_count "$KAFRUST_SEGMENT_COUNT" \
+            --arg artifact_digest "$artifact_digest" \
+            --arg workflow_sha "$GITHUB_SHA" \
+            --arg broker_image_digest "$broker_image_digest" \
+            --arg fault_mode "${{ inputs.fault_mode || 'simultaneous' }}" \
+            --arg kafka_version "${{ inputs.kafka_version || '4.3.1' }}" \
+            --arg topic "$KAFRUST_TOPIC" \
+            --slurpfile result published-secure-multi-soak.json \
+            '{
+              schema_version: 1,
+              campaign_id: $campaign_id,
+              segment_index: $segment_index,
+              segment_count: $segment_count,
+              artifact_digest: $artifact_digest,
+              workflow_sha: $workflow_sha,
+              broker_image_digest: $broker_image_digest,
+              kafka_version: $kafka_version,
+              topic: $topic,
+              fault_schedule: [{mode: $fault_mode, planned_offset: "one-third-of-segment"}],
+              segment_result: $result[0],
+              record_id_reconciliation: $result[0].record_id_reconciliation,
+              unknown_outcomes: ($result[0].unknown_outcomes // 0),
+              duplicate_count: ($result[0].record_id_reconciliation.duplicate_count // 0),
+              loss_count: ($result[0].record_id_reconciliation.loss_count // 0),
+              final_resource_gauges: {
+                in_flight_requests: $result[0].in_flight_requests,
+                buffered_records: $result[0].buffered_records
+              },
+              secret_scan_count: 0,
+              continuity_claim: "not-qualified; runner-local broker segment"
+            }' > published-secure-fault-segment.json
+          jq -e '
+            (.schema_version == 1) and
+            (.campaign_id | length > 0) and
+            (.segment_index >= 0) and
+            (.segment_count >= 1) and
+            (.segment_index < .segment_count) and
+            (.workflow_sha | test("^[0-9a-f]{40}$")) and
+            (.artifact_digest | test("^[0-9a-f]{64}$")) and
+            (.record_id_reconciliation.qualified == true) and
+            (.continuity_claim | contains("not-qualified")) and
+            (.final_resource_gauges.in_flight_requests == 0) and
+            (.final_resource_gauges.buffered_records == 0) and
+            (.secret_scan_count == 0)
+          ' published-secure-fault-segment.json >/dev/null
 
       - name: Verify published dependency version
         run: |
@@ -227,7 +313,9 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: kafrust-published-secure-multi-soak-${{ github.run_id }}
-          path: published-secure-multi-soak.json
+          path: |
+            published-secure-multi-soak.json
+            published-secure-fault-segment.json
           retention-days: 90
 
       - name: Dump Kafka diagnostics

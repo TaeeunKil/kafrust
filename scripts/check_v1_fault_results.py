@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MANIFEST = ROOT / "docs" / "evidence" / "v1-21-fault-campaign-manifest.json"
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
+IMAGE_DIGEST = re.compile(r"^(?:[A-Za-z0-9._:/-]+@)?sha256:[0-9a-f]{64}$|^[0-9a-f]{64}$")
 
 
 class ResultError(ValueError):
@@ -74,11 +75,13 @@ def validate_segment(path: Path, campaign_map: dict[str, dict[str, Any]]) -> tup
     segment_count = integer(descriptor.get("segment_count"), "segment_count", positive=True)
     if segment_index >= segment_count:
         raise ResultError(f"{path}: segment_index must be below segment_count")
-    for field, pattern in (("artifact_digest", HEX64), ("broker_image_digest", HEX64), ("workflow_sha", HEX40)):
+    for field, pattern in (("artifact_digest", HEX64), ("broker_image_digest", IMAGE_DIGEST), ("workflow_sha", HEX40)):
         if not pattern.fullmatch(str(descriptor.get(field, ""))):
             raise ResultError(f"{path}: {field} must be an immutable hex identity")
     if descriptor.get("secret_scan_count") != 0:
         raise ResultError(f"{path}: secret_scan_count must be zero")
+    if descriptor.get("continuity_claim") != "qualified":
+        raise ResultError(f"{path}: cross-segment continuity is not qualified")
     result = descriptor.get("segment_result")
     if not isinstance(result, dict):
         raise ResultError(f"{path}: segment_result must be an object")

@@ -66,12 +66,12 @@ The result-bundle adjudicator
 [`check_v1_fault_results.py`](../../../scripts/check_v1_fault_results.py) now
 defines the promotion boundary for future artifacts. It requires every named
 campaign, contiguous segment indexes, one exact published artifact digest,
-qualified record-ID reconciliation with zero unaccounted loss/duplicates,
-drained gauges, and zero secret-scan findings. It also sums six-hour duration,
+qualified per-segment and cross-segment record-ID reconciliation with zero
+unaccounted loss/duplicates, drained gauges, and zero secret-scan findings. It also sums six-hour duration,
 100 member-loss cycles, and 100 outcomes per ambiguity family, and requires the
 controlled data-loss fixtures to match their predeclared outcomes. Existing
-diagnostic descriptors intentionally fail this adjudicator because they are
-count-only and continuity-unqualified.
+diagnostic descriptors intentionally fail this adjudicator because their
+cross-segment continuity claim is unqualified.
 
 ### Published bounded diagnostic (2026-08-23)
 

@@ -472,10 +472,12 @@ passed one bounded Kafka 4.3.1 three-broker restart segment in
 [32618344222](https://github.com/TaeeunKil/kafrust/actions/runs/32618344222)
 after two retained fixture diagnostics: `Acks::Leader` left 100 records
 unreconciled, and a gauge formatter mislabeled the in-flight peak. The final
-segment uses `Acks::All`, has zero final gauges, and records
-`record_id_reconciliation.qualified=false` because each runner starts a fresh
-broker. The six-hour campaigns, 100 churn cycles, ambiguity families,
-controlled data-loss fixtures, and cross-segment continuity remain open.
+segment uses `Acks::All`, has zero final gauges, and the current fixture emits
+qualified per-segment business-ID reconciliation with a canonical digest. Its
+descriptor still marks cross-segment continuity as unqualified because each
+runner starts a fresh broker. The six-hour campaigns, 100 churn cycles,
+ambiguity families, controlled data-loss fixtures, and cross-segment
+continuity remain open.
 
 The V1-22 `throughput_benchmark` example now has a timed campaign mode with
 barrier-synchronized warmup/measurement windows, worker-per-partition
@@ -520,11 +522,12 @@ yet, so V1-22 remains `Planned`.
 
 V1-21 now has the corresponding cross-segment adjudicator in
 [`scripts/check_v1_fault_results.py`](../scripts/check_v1_fault_results.py).
-It rejects count-only diagnostics and requires contiguous segment identity,
-qualified unique-record reconciliation, one published artifact digest,
-drained gauges, the six-hour totals, the 100-cycle/100-outcome family gates,
-and declared data-loss fixture matches. Its focused malformed-segment tests
-run in CI; no artifact currently satisfies the qualified contract.
+It rejects count-only or continuity-unqualified diagnostics and requires
+contiguous segment identity, qualified unique-record reconciliation, one
+published artifact digest, drained gauges, the six-hour totals, the
+100-cycle/100-outcome family gates, and declared data-loss fixture matches.
+Both plaintext and secure published soak fixtures now emit the per-segment
+fields; no artifact currently satisfies the cross-segment qualified contract.
 
 ## V1-23 Execution Update (2026-08-23)
 
