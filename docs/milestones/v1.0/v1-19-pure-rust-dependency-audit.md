@@ -125,6 +125,21 @@ CI permits only transitive version re-resolution caused by platform or Cargo
 index state; workspace versions, direct dependency versions, package names,
 licenses, source kinds, and graph edges must remain identical.
 
+### Native-tooling slice (2026-08-23)
+
+Commit `83864c1058347dd753608307bdd5ab1d7eb68be3` adds
+[`check_v1_native_tooling.py`](../../scripts/check_v1_native_tooling.py),
+focused unit tests, a CI gate, and the machine-readable
+[`v1-19-native-tooling.json`](../../evidence/v1-19-native-tooling.json).
+The checker resolves the same explicit Linux target for all five accepted
+feature profiles, records custom-build/link indicators, and runs the default
+package with nonexistent C/C++/archiver/pkg-config tools. The default,
+`blocking`, and `otlp` trees report no native candidates; `tls` and `all`
+record `ring` as the optional TLS custom-build candidate. The no-C default
+check passed. This documents the optional-TLS native-tooling non-claim; it
+does not close the advisory, yank, or transitive unsafe/native ownership
+reviews.
+
 ## Failure And Lifecycle Contract
 
 - A required default-build C compiler/link to librdkafka or a C Kafka client is

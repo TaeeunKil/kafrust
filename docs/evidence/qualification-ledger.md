@@ -55,6 +55,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-19-sbom.json sha256 61bd0cf881f40058b8c5b0b4a0d5d1d874fe8bc0e59b5023aa24a2738871696c; kafrust-protocol-0.3.6.crate sha256 f12e95a30ce46fd7ffc097a97a31b0a918bcee9f83cefb72fe2484cfe9c255cc; kafrust-0.3.6.crate sha256 2ae1a135d3de7f00fb25455809ab9fc201ea41c398aa62ac14f34c2a2758fca9
 - non_claims: not advisory or yank review, not optional-TLS native-tool verification, not transitive unsafe/native ownership review, not crates.io publication
 
+## Q-LOCAL-V119-004
+
+- date_utc: 2026-08-23
+- source_commit: 83864c1058347dd753608307bdd5ab1d7eb68be3
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: Done
+- evidence_level: Local deterministic
+- kafka_version: not-applicable
+- kafka_image: not-applicable
+- mode: feature native-tooling audit
+- topology: not-applicable
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: default/tls/blocking/otlp/all normal dependency trees plus no-C default package check
+- workflow: scripts/check_v1_native_tooling.py --check
+- fault: nonexistent C/C++/archiver/pkg-config tools for the default profile
+- duration: not-recorded
+- record_count: 55/66/55/71/82 packages for default/tls/blocking/otlp/all
+- member_count: 2 workspace package roots
+- repetition_count: 1
+- expected_errors: default package compiles without usable native tools; optional TLS native candidate is explicit
+- observed_errors: none; default no-C check passed; tls/all record ring custom build
+- retry_count: not-applicable
+- duplicate_count: not-applicable
+- loss_count: not-applicable
+- latency: not-applicable
+- memory: not-applicable
+- final_resource_gauges: not-applicable
+- result: passed
+- artifact: docs/evidence/v1-19-native-tooling.json sha256 d6b8c46bab42422369fa819be3b8337c87a807d001480db1b9804946a71ea122
+- non_claims: not a blanket no-native claim for optional TLS, not transitive unsafe-code review, not advisory/yank review, not crates.io publication
+
 ## Q-CI-V118-001
 
 - date_utc: 2026-08-22

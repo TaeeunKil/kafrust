@@ -306,6 +306,15 @@ platform or Cargo index state. Workspace versions, direct dependency
 versions, package names, licenses, source kinds, and graph edges remain strict
 drift gates.
 
+The native-tooling slice is recorded at commit
+`83864c1058347dd753608307bdd5ab1d7eb68be3`. Its checker covers the five
+feature profiles on the same explicit Linux target and runs the default
+package with nonexistent C/C++/archiver/pkg-config tools. The default,
+`blocking`, and `otlp` profiles have no native candidates; `tls` and `all`
+explicitly record `ring` as the custom-build candidate. This closes the
+no-C-default and optional-TLS-posture slice, while advisory/yank and reviewed
+transitive unsafe/native ownership remain open.
+
 ## V1-20 Execution Update (2026-08-22)
 
 V1-20 is `In progress`. The draft machine-readable matrix at
