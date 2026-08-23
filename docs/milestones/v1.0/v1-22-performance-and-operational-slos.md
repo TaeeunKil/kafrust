@@ -122,6 +122,17 @@ eight-hour, five-repetition, six-profile, secured/topology matrix and baseline
 comparison remain open. The complete result and failure history are recorded
 in [`v1-22-performance-diagnostic-2026-08-23.md`](../../evidence/v1-22-performance-diagnostic-2026-08-23.md).
 
+### Result-schema hardening (2026-08-23)
+
+The timed harness now emits the manifest's aggregate result fields in its final
+JSONL record: measured request latency p50/p95/p99, RSS baseline/terminal/
+growth/least-squares slope with sample count, and explicit loss/duplicate
+counts. The RSS windows use the first and final thirty minutes of measured
+samples when available and fall back to the available diagnostic window for
+short runs. Focused tests cover the median/window and slope calculations. This
+closes a result-shape preparation gap only; it does not qualify the long
+campaign or infer thresholds from the short diagnostic.
+
 ### Competitor review and re-plan (2026-08-23)
 
 The companion published comparison

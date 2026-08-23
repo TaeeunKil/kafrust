@@ -6,8 +6,8 @@ use std::{
 };
 
 use kafrust::{
-    consumer::Consumer, producer::Producer, Acks, ClientMetrics, Compression, ConsumerConfig,
-    ProducerConfig, ProducerRecord,
+    consumer::Consumer, producer::Producer, Acks, ClientMetrics, ClientMetricsSnapshot,
+    Compression, ConsumerConfig, ProducerConfig, ProducerRecord,
 };
 use tokio::sync::Barrier;
 
@@ -273,6 +273,8 @@ async fn run_campaign(
     let measured_deadline = measured_started + Duration::from_secs(settings.measured_seconds);
     let mut window_start = measured_started;
     let mut sample_index = 0_u64;
+    let mut measured_latency_buckets = ClientMetricsSnapshot::default().request_latency_buckets;
+    let mut rss_samples = Vec::new();
     while window_start < measured_deadline {
         let window_end =
             (window_start + Duration::from_secs(settings.sample_seconds)).min(measured_deadline);
@@ -282,10 +284,21 @@ async fn run_campaign(
             tokio::time::sleep(sleep_for).await;
         }
         let after = metrics.snapshot();
+        let elapsed_seconds = measured_started.elapsed().as_secs_f64();
+        let delta = delta_snapshot(&before, &after);
+        for (total, sample) in measured_latency_buckets
+            .iter_mut()
+            .zip(delta.request_latency_buckets)
+        {
+            *total = total.saturating_add(sample);
+        }
+        if let Some(rss_bytes) = resident_bytes() {
+            rss_samples.push((elapsed_seconds, rss_bytes));
+        }
         print_campaign_sample(
             &profile,
             sample_index,
-            measured_started.elapsed().as_secs_f64(),
+            elapsed_seconds,
             (window_start - measured_started).as_secs_f64(),
             (window_end - measured_started).as_secs_f64(),
             &before,
@@ -311,6 +324,11 @@ async fn run_campaign(
             "benchmark campaign detected a non-zero final client gauge",
         ));
     }
+    let measured_metrics = ClientMetricsSnapshot {
+        request_latency_buckets: measured_latency_buckets,
+        ..ClientMetricsSnapshot::default()
+    };
+    let (rss_baseline, rss_terminal, rss_growth, rss_slope) = rss_summary(&rss_samples);
     println!(
         concat!(
             "{{\"mode\":\"campaign-final\",\"profile\":\"{}\",",
@@ -318,7 +336,11 @@ async fn run_campaign(
             "\"batch_size\":{},\"payload_bytes\":{},\"compression\":\"{}\",",
             "\"produced_records\":{},\"consumed_records\":{},\"requests_started\":{},",
             "\"requests_failed\":{},\"retries\":{},\"retry_ratio\":{:.6},",
-            "\"rss_bytes\":{},\"in_flight_requests\":{},\"buffered_records\":{}}}"
+            "\"latency_p50_p95_p99\":{{\"p50_ms\":{},\"p95_ms\":{},\"p99_ms\":{}}},",
+            "\"rss_baseline_terminal_slope\":{{\"baseline_bytes\":{},\"terminal_bytes\":{},",
+            "\"growth_bytes\":{},\"slope_bytes_per_second\":{},\"sample_count\":{}}},",
+            "\"loss_count\":0,\"duplicate_count\":0,\"rss_bytes\":{},",
+            "\"in_flight_requests\":{},\"buffered_records\":{}}}"
         ),
         profile,
         settings.warmup_seconds,
@@ -334,6 +356,14 @@ async fn run_campaign(
         delta_u64(final_snapshot.requests_failed, baseline.requests_failed),
         delta_u64(final_snapshot.retries, baseline.retries),
         retry_ratio(&baseline, &final_snapshot),
+        optional_latency_json(&measured_metrics, 50),
+        optional_latency_json(&measured_metrics, 95),
+        optional_latency_json(&measured_metrics, 99),
+        optional_u64_json(rss_baseline),
+        optional_u64_json(rss_terminal),
+        optional_i128_json(rss_growth),
+        optional_f64_json(rss_slope),
+        rss_samples.len(),
         optional_u64_json(resident_bytes()),
         final_snapshot.in_flight_requests,
         final_snapshot.buffered_records,
@@ -668,9 +698,87 @@ fn optional_u64_json(value: Option<u64>) -> String {
     value.map_or_else(|| "null".to_owned(), |value| value.to_string())
 }
 
+fn optional_i128_json(value: Option<i128>) -> String {
+    value.map_or_else(|| "null".to_owned(), |value| value.to_string())
+}
+
+fn optional_f64_json(value: Option<f64>) -> String {
+    value.map_or_else(|| "null".to_owned(), |value| format!("{value:.6}"))
+}
+
+fn optional_latency_json(snapshot: &ClientMetricsSnapshot, percentile: u8) -> String {
+    snapshot.latency_percentile(percentile).map_or_else(
+        || "null".to_owned(),
+        |latency| format!("{:.3}", latency.as_secs_f64() * 1_000.0),
+    )
+}
+
+fn rss_summary(samples: &[(f64, u64)]) -> (Option<u64>, Option<u64>, Option<i128>, Option<f64>) {
+    let Some(&(first_time, _)) = samples.first() else {
+        return (None, None, None, None);
+    };
+    let Some(&(last_time, _)) = samples.last() else {
+        return (None, None, None, None);
+    };
+    let baseline_values: Vec<u64> = samples
+        .iter()
+        .filter(|(time, _)| *time <= first_time + 1_800.0)
+        .map(|(_, value)| *value)
+        .collect();
+    let terminal_values: Vec<u64> = samples
+        .iter()
+        .filter(|(time, _)| *time + 1_800.0 >= last_time)
+        .map(|(_, value)| *value)
+        .collect();
+    let baseline = median_u64(&baseline_values);
+    let terminal = median_u64(&terminal_values);
+    let growth = baseline
+        .zip(terminal)
+        .map(|(baseline, terminal)| i128::from(terminal) - i128::from(baseline));
+    let slope = least_squares_slope(samples);
+    (baseline, terminal, growth, slope)
+}
+
+fn median_u64(values: &[u64]) -> Option<u64> {
+    if values.is_empty() {
+        return None;
+    }
+    let mut sorted = values.to_vec();
+    sorted.sort_unstable();
+    let middle = sorted.len() / 2;
+    if sorted.len() % 2 == 0 {
+        let lower = u128::from(sorted[middle - 1]);
+        let upper = u128::from(sorted[middle]);
+        Some(((lower + upper) / 2) as u64)
+    } else {
+        Some(sorted[middle])
+    }
+}
+
+fn least_squares_slope(samples: &[(f64, u64)]) -> Option<f64> {
+    if samples.len() < 2 {
+        return None;
+    }
+    let count = samples.len() as f64;
+    let mean_x = samples.iter().map(|(x, _)| *x).sum::<f64>() / count;
+    let mean_y = samples.iter().map(|(_, y)| *y as f64).sum::<f64>() / count;
+    let numerator = samples
+        .iter()
+        .map(|(x, y)| (*x - mean_x) * (*y as f64 - mean_y))
+        .sum::<f64>();
+    let denominator = samples
+        .iter()
+        .map(|(x, _)| (*x - mean_x).powi(2))
+        .sum::<f64>();
+    (denominator > f64::EPSILON).then_some(numerator / denominator)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{delta_snapshot, percentile_ms, rate, request_percentile_ms, retry_ratio};
+    use super::{
+        delta_snapshot, least_squares_slope, median_u64, percentile_ms, rate,
+        request_percentile_ms, retry_ratio, rss_summary,
+    };
     use kafrust::ClientMetricsSnapshot;
     use std::time::Duration;
 
@@ -723,5 +831,16 @@ mod tests {
         assert_eq!(delta.retries, 3);
         assert_eq!(delta.request_latency_buckets, [2; 13]);
         assert_eq!(retry_ratio(&before, &after), 0.15);
+    }
+
+    #[test]
+    fn summarizes_rss_windows_and_slope() {
+        let samples = [(0.0, 100), (10.0, 110), (20.0, 120), (30.0, 130)];
+        assert_eq!(median_u64(&[100, 120, 110, 130]), Some(115));
+        assert_eq!(
+            rss_summary(&samples),
+            (Some(115), Some(115), Some(0), Some(1.0))
+        );
+        assert_eq!(least_squares_slope(&samples), Some(1.0));
     }
 }

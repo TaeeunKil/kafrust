@@ -67,8 +67,10 @@ Campaign output is JSON Lines: one `campaign-sample` object per window and one
 `campaign-final` object after all workers drain. Samples include Produce/Fetch
 records per second, request p50/p95/p99 estimates, retries, retry ratio, RSS
 when `/proc/self/status` is available, and current in-flight/buffered gauges.
-The final object includes the measured counters and requires produced records
-to equal consumed records with both final gauges at zero. The bounded manual
+The final object also includes aggregate measured latency p50/p95/p99, RSS
+baseline/terminal/growth/slope summary over the sampled windows, sample count,
+and explicit loss/duplicate counts. It requires produced records to equal
+consumed records with both final gauges at zero. The bounded manual
 [`Kafka Benchmark Campaign Diagnostic`](../.github/workflows/benchmark-campaign-diagnostic.yml)
 workflow exercises this mode on Kafka 4.3.1 and uploads the JSONL artifact.
 
