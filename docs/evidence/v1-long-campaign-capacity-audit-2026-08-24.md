@@ -116,3 +116,13 @@ for substantial image/cache storage. The largest `/home` entries include a
 files around `0.6–0.9 GiB` each. This identifies Docker logs/image content and
 duplicated project/cache data as the main internal consumers; no files were
 removed or extracted during the inventory.
+
+The tar inventory must not be mistaken for a live inventory of the larger
+VHDX: the export was last written on `2026-08-12`, while the
+`ext4.vhdx` length is `773.79 GiB` and it was last written on `2026-08-24`.
+The VHDX is not marked as an NTFS sparse file. Its additional space may be
+current Docker/container growth, deleted-but-unreclaimed ext4 blocks, or
+filesystem free space reserved inside the image; only a successful WSL boot
+and live filesystem inspection can distinguish those cases. No claim about
+the current VHDX's internal top consumer is promoted until that inspection is
+possible.
