@@ -113,7 +113,12 @@ check while preserving the encoded-length calculation. The buffered path rose
 from 13,480 to 18,283 records/s in that bounded pair, with p99 moving from
 25 ms to 10 ms; context-switch counts rose in that run, so this remains a
 promising diagnostic direction rather than a qualified baseline or publication
-claim. The next profile slice repeats the result and targets queue batching.
+claim. A replication of the same source code
+([32632004251](https://github.com/TaeeunKil/kafrust/actions/runs/32632004251))
+measured 16,217 buffered records/s with the same 10 ms p99, but 1.83M context
+switches. The two after runs therefore support further investigation, not a
+stable percentage claim; the next profile slice adds controlled repetitions
+and targets queue batching.
 
 For a qualification attempt, retain one descriptor beside each JSONL result
 and run [`check_v1_performance_results.py`](../scripts/check_v1_performance_results.py)

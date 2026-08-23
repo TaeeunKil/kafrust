@@ -233,7 +233,12 @@ from 13,480 to 18,283 records/s and p99 decreased from 25 ms to 10 ms in the
 bounded 60-second pair; context switches increased in the after run. This is
 promising source-profile evidence, not a locked baseline, SLO qualification,
 competitor parity result, or publication authorization. The retained details
-are in the same evidence record.
+are in the same evidence record. A replication of the same source code in
+[32632004251](https://github.com/TaeeunKil/kafrust/actions/runs/32632004251)
+measured 16,217 buffered records/s with p99 10 ms but 1.83M context switches.
+The two after runs remain above the predecessor's 13,480 records/s, while the
+variation demonstrates that a controlled repetition set is required before
+accepting a baseline or claiming a release-relevant percentage improvement.
 
 ## Failure And Lifecycle Contract
 

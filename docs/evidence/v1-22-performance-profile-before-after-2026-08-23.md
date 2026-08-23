@@ -71,8 +71,16 @@ bucket fell from 25 ms to 10 ms. Context switches increased for that path in
 this particular run, so the result is evidence for a promising throughput
 direction rather than a universal regression or SLO result. The immediate and
 direct-consumer paths were effectively unchanged within hosted-runner noise.
-The next slice must repeat this workload and inspect queue batching before any
-baseline or publication claim.
+The immediate and direct-consumer paths were effectively unchanged within
+hosted-runner noise. A replication workflow
+[32632004251](https://github.com/TaeeunKil/kafrust/actions/runs/32632004251)
+on the same source code produced 16,216.67 buffered records/s, p99 10 ms,
+38,988 KiB max RSS, and 1,829,585 context switches, with zero retries,
+losses, duplicates, and drained gauges. Thus both after runs remained above
+the 13,480 records/s predecessor, but the surrounding profiles also varied
+substantially; the pair is not enough to establish a stable percentage gain.
+The next slice must repeat this workload under a controlled repetition set and
+inspect queue batching before any baseline or publication claim.
 
 ## Non-claims
 

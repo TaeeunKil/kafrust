@@ -574,7 +574,12 @@ bounded 1-KiB/60-second profile, buffered throughput increased from 13,480 to
 18,283 records/s and p99 fell from 25 ms to 10 ms; context switches rose in
 the after run. This is a promising diagnostic signal, not a locked baseline,
 SLO qualification, or publication decision. The next slice repeats the result
-and measures queue batching before another release decision.
+and measures queue batching before another release decision. Replication
+[32632004251](https://github.com/TaeeunKil/kafrust/actions/runs/32632004251)
+measured 16,217 buffered records/s with the same 10 ms p99 but 1.83M context
+switches. The two after results stay above the 13,480 records/s predecessor,
+yet the surrounding hosted-runner variation means no stable percentage claim
+or release decision is made; a controlled repetition set remains next.
 
 V1-21 now has the corresponding cross-segment adjudicator in
 [`scripts/check_v1_fault_results.py`](../scripts/check_v1_fault_results.py).
