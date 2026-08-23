@@ -2464,6 +2464,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-22-performance-campaign-manifest.json
 - non_claims: not an executed benchmark, not production SLO evidence, not universal performance or parity claim
 
+## Q-PUBLISHED-V122-001
+
+- date_utc: 2026-08-23
+- source_commit: fea58ebe137bc167209544c5e11ce6fd425da70d
+- client_version: 0.3.6 published crates.io artifact
+- protocol_version: 0.3.6 resolved published dependency
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 3.7.2 and 4.3.1
+- kafka_image: apache/kafka:3.7.2 and apache/kafka:4.3.1; image IDs retained in descriptors
+- mode: KRaft
+- topology: isolated single-node broker; two partitions
+- security: PLAINTEXT
+- group_protocol: not-applicable
+- workload: timed published Produce/Fetch campaign with two workers, 5s warmup, 20s measured window, 5s samples, 50-record batches, 1-KiB values, and none/Zstd compression
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32619372203
+- fault: none injected
+- duration: 20s measured per matrix job; 1m44s–1m58s job windows
+- record_count: 1,860,300; 1,035,600; 1,662,100; and 1,030,950 by Kafka/compression profile
+- member_count: not-applicable
+- repetition_count: 1 bounded diagnostic segment across four matrix profiles
+- expected_errors: zero failed requests, zero retries, zero acknowledged loss/duplicates, and zero final resource gauges
+- observed_errors: none in final run; all four jobs reconciled produced_records=consumed_records and drained final gauges
+- retry_count: 0 in all four jobs
+- duplicate_count: 0
+- loss_count: 0
+- latency: request p50/p95/p99 1/1/1ms for none and 1/5/5ms for Zstd in retained samples
+- memory: final RSS 8,114,176–10,924,032 bytes; no six-hour slope claim
+- final_resource_gauges: all jobs in_flight_requests=0; buffered_records=0
+- result: passed
+- artifact: GitHub Actions run 32619372203; four 90-day JSONL/descriptor artifacts; lockfile SHA-256 3dde24b9cc1a1b0d0c63e3f67b723f5db0fcdb886f4e0c3fe41c93817da0759c
+- non_claims: not five repetitions, not six named profiles, not eight-hour V1-22 SLO evidence, not secured/three-broker evidence, not baseline/regression approval, not universal Kafka performance or production claim
+
 ## Q-LOCAL-V123-001
 
 - date_utc: 2026-08-22

@@ -491,6 +491,24 @@ used source `69e4997`, two workers/two partitions, 5s warmup, 20s measured,
 with zero failed requests/retries and zero final gauges; the raw JSONL artifact
 is retained. This is harness evidence only, not V1-22 completion.
 
+## V1-22 Execution Update (2026-08-23)
+
+The published timed-campaign diagnostic now runs the same harness from a fresh
+external project against exact crates.io `kafrust = "=0.3.6"`, with a retained
+lockfile hash, broker image reference/ID, campaign/repetition identity, and raw
+JSONL descriptor. Final run
+[32619372203](https://github.com/TaeeunKil/kafrust/actions/runs/32619372203)
+covered Kafka 3.7.2 and 4.3.1 with none/Zstd using two workers, a 5s warmup,
+20s measurement, 5s samples, 50-record batches, and 1-KiB values. All four
+jobs reconciled produced and consumed records, had zero retries/failed
+requests, and drained final gauges. The first run exposed missing fixture
+tracing dependencies and the second exposed a Docker image-identity assumption;
+both failures and their fixes are retained in
+[`v1-22-performance-diagnostic-2026-08-23.md`](evidence/v1-22-performance-diagnostic-2026-08-23.md).
+The descriptors are explicitly `qualified=false`: five repetitions, six
+profiles, secured/three-broker topology, two-hour warmup, six-hour measurement,
+RSS/regression adjudication, and baseline locking remain open.
+
 V1-24 through V1-26 also remain `Planned`: the API snapshot is only a freeze input,
 and no RC or `1.0.0` publication/tag exists. Protocol-first publication is
 allowed only when the named release milestone, exact artifact evidence, and

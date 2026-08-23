@@ -106,6 +106,22 @@ was uploaded with 90-day retention. This confirms the current-source harness
 and reconciliation path only; it is not a five-repetition, eight-hour SLO
 campaign or a published-artifact result.
 
+### Published timed-campaign diagnostic (2026-08-23)
+
+The [`Published Performance Campaign Diagnostic`](../../.github/workflows/published-performance-campaign-diagnostic.yml)
+workflow now copies the timed harness and its security helper into a fresh
+external project, resolves the exact published `kafrust` version from
+crates.io, and retains a descriptor with campaign identity, repetition,
+lockfile hash, runner, broker image identity, workload parameters, and raw
+JSONL. Run [32619372203](https://github.com/TaeeunKil/kafrust/actions/runs/32619372203)
+completed a bounded 5-second warmup/20-second measurement across Kafka 3.7.2
+and 4.3.1 with none/Zstd. All four jobs reconciled produced and consumed
+records, had zero retries and failed requests, and drained final gauges. The
+workflow explicitly marks these descriptors `qualified: false`; the full
+eight-hour, five-repetition, six-profile, secured/topology matrix and baseline
+comparison remain open. The complete result and failure history are recorded
+in [`v1-22-performance-diagnostic-2026-08-23.md`](../../evidence/v1-22-performance-diagnostic-2026-08-23.md).
+
 ## Failure And Lifecycle Contract
 
 - Benchmark backpressure uses the same bounded production queues and reports
