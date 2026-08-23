@@ -920,6 +920,9 @@ passed the runner guards and adjudication tooling, so the missing capacity is
 an explicit external gate rather than a reason to weaken V1-21/V1-22 duration,
 matrix, or evidence requirements. The immutable audit is
 [`v1-long-campaign-capacity-audit-2026-08-24.md`](evidence/v1-long-campaign-capacity-audit-2026-08-24.md).
+The operator procedure for clearing this external gate, supplying the V1-23
+canary authority, and preserving the weekly fuzz requirement is documented in
+[`external-gate-unblock-runbook.md`](milestones/v1.0/external-gate-unblock-runbook.md).
 
 ## Historical Release Qualification
 

@@ -80,6 +80,12 @@ version identities, protocol-first publication order, exact RC dependency,
 metadata-only stable diff, and explicit authorization boundary; both remain
 preparation inputs until their external evidence exists.
 
+The concrete operator steps for clearing the external gates are recorded in
+[`external-gate-unblock-runbook.md`](external-gate-unblock-runbook.md). It
+requires a safe Linux/Docker self-hosted runner, a named V1-23 service canary,
+and the two remaining scheduled weekly fuzz campaign sets; none can be
+replaced by a shortened hosted run or a reference-fixture claim.
+
 The pushed documentation refresh `4a2b472` passed both stable and Rust 1.81.0
 CI. A fresh capacity audit recorded in
 [`v1-long-campaign-capacity-audit-2026-08-24.md`](../../evidence/v1-long-campaign-capacity-audit-2026-08-24.md)
