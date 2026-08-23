@@ -3,10 +3,10 @@
   "status": "qualification-in-progress",
   "date_utc": "2026-08-22",
   "progress": {
-    "completed_campaign_sets": 1,
-    "remaining_weekly_campaigns": 3,
-    "last_run": "https://github.com/TaeeunKil/kafrust/actions/runs/32561454977",
-    "last_source_commit": "c2c75aa23dc962faad7f33f22cd15a96303d4b56"
+    "completed_campaign_sets": 2,
+    "remaining_weekly_campaigns": 2,
+    "last_run": "https://github.com/TaeeunKil/kafrust/actions/runs/32635558822",
+    "last_source_commit": "e90fc6c3d02c527bdabc350837ee53a6c95b20fc"
   },
   "targets": [
     "codec",

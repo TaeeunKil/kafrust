@@ -3355,6 +3355,39 @@ unqualified relative artifact label.
 - artifact: GitHub Actions run 32561454977; 40 qualification JSON/corpus artifacts; local hash verification completed
 - non_claims: not four consecutive weekly campaigns, not absence-of-bugs evidence, not published-artifact or RC evidence, not fault-soak/SLO/service-canary evidence, not complete V1-18 exit criteria
 
+## Q-CI-V118-003
+
+- date_utc: 2026-08-23
+- source_commit: e90fc6c3d02c527bdabc350837ee53a6c95b20fc
+- client_version: 0.3.6 source checkout
+- protocol_version: not-applicable
+- work_status: In progress
+- evidence_level: CI
+- kafka_version: not-applicable
+- kafka_image: not-applicable
+- mode: GitHub Actions nightly libFuzzer matrix
+- topology: ten fuzz targets x four shards
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: 900 seconds per shard and 3,600 cumulative seconds per target
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32635558822
+- fault: malformed, truncated, oversized, compressed, and protocol-structure corpus inputs
+- duration: 48m30s workflow window; 900s per shard
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: 40 shards; 4 shards per target
+- expected_errors: zero crash, timeout, OOM, sanitizer failure, or non-passing shard result
+- observed_errors: all 40 qualification JSON files passed; 40 corpus SHA-256 values and target/shard pairs verified; no crash/OOM artifact files retained
+- retry_count: not-applicable
+- duplicate_count: not-applicable
+- loss_count: not-applicable
+- latency: not-applicable
+- memory: 2048 MB RSS cap per shard; 10 second input timeout
+- final_resource_gauges: libFuzzer final statistics retained per shard
+- result: passed
+- artifact: GitHub Actions run 32635558822; 40 qualification JSON/corpus artifacts; local hash verification completed
+- non_claims: not four consecutive weekly campaigns, not absence-of-bugs evidence, not published-artifact or RC evidence, not fault-soak/SLO/service-canary evidence, not complete V1-18 exit criteria
+
 ## Q-PUBLISHED-V122-COMP-001
 
 - date_utc: 2026-08-23

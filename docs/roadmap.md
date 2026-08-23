@@ -246,6 +246,13 @@ with no crash/OOM artifact files. Three additional weekly campaign passes and
 retained crash/OOM dispositions remain required. The superseded
 3,600-second-per-shard run was cancelled before evidence collection to avoid
 overstating or wasting the campaign budget.
+The second cumulative qualification run
+[32635558822](https://github.com/TaeeunKil/kafrust/actions/runs/32635558822)
+passed all 40 target/shard jobs from source `e90fc6c`. Its downloaded records
+and corpus hashes passed the checked-in artifact audit with no crash/OOM files;
+the manifest now records two of four weekly campaign sets. Two more weekly
+passes, retained crash/OOM disposition, and the remaining allocation-boundary
+and resource-limit evidence are still required, so V1-18 remains in progress.
 The checked-in
 [`check_v1_fuzz_qualification_artifacts.py`](scripts/check_v1_fuzz_qualification_artifacts.py)
 now reproduces the 40-record, corpus-hash, resource-cap, and crash/OOM audit.

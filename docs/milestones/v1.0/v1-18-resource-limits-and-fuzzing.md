@@ -89,6 +89,18 @@ campaign set only. Three additional weekly campaign passes and retained
 crash/OOM disposition remain open, so V1-18 stays `In progress`. Existing fuzz
 success is still not treated as absence-of-bug evidence.
 
+The second full qualification campaign
+[32635558822](https://github.com/TaeeunKil/kafrust/actions/runs/32635558822)
+from source `e90fc6c3d02c527bdabc350837ee53a6c95b20fc` also passed all ten
+targets and four shards. The 40 downloaded qualification records again
+declared 900 seconds per shard, 3,600 cumulative seconds per target, nightly
+toolchain, 2,048 MB RSS cap, and a passing result; the checker verified every
+target/shard pair and corpus SHA-256, with no crash/OOM artifact files. The
+manifest now records two of the required four weekly campaign sets, leaving
+two additional passes plus retained crash/OOM disposition and the other
+resource-limit gates open. This is additional qualification evidence, not an
+absence-of-bugs or V1-18 completion claim.
+
 The checked-in
 [`check_v1_fuzz_qualification_artifacts.py`](../../scripts/check_v1_fuzz_qualification_artifacts.py)
 reproduces the artifact audit, including all 40 target/shard records, the
