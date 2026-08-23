@@ -103,6 +103,22 @@ separation passed the complete Rust 1.81.0/stable CI matrix in
 from source `f499ee62b5f8a066d8a1d764ad8ce7b8006094cd`; this is CI evidence for
 the metadata-completeness slice, not publication or full V1-19 completion.
 
+### Deterministic SBOM slice (2026-08-23)
+
+Commit `6e24a247c2aa4aa9c63086e68d753988adbfe3aa` adds
+[`check_v1_sbom.py`](../../scripts/check_v1_sbom.py), its focused unit tests,
+and a CI drift gate. The checker resolves the locked all-feature graph for
+the explicit `x86_64-unknown-linux-gnu` platform, follows normal/build edges
+from both package roots, excludes dev-only edges, and emits a deterministic
+CycloneDX 1.5 document. The checked-in
+[`v1-19-sbom.json`](../../evidence/v1-19-sbom.json) contains 89 licensed
+components and 89 complete dependency entries; its SHA-256 is recorded in
+[`v1-19-sbom.md`](../../evidence/v1-19-sbom.md). The stable CI job verifies the
+SBOM after the staged package boundary and requires both `0.3.6` archives.
+This closes the reproducible SBOM/drift-inventory slice only; advisory,
+yank, optional-TLS native tooling, and reviewed transitive unsafe/native
+ownership remain open.
+
 ## Failure And Lifecycle Contract
 
 - A required default-build C compiler/link to librdkafka or a C Kafka client is

@@ -288,6 +288,18 @@ stable in [CI run 32561532044](https://github.com/TaeeunKil/kafrust/actions/runs
 from `f499ee6`; this confirms the metadata-completeness slice while the
 remaining V1-19 audit gates stay open.
 
+The reproducible SBOM slice is now checked in at commit
+`6e24a247c2aa4aa9c63086e68d753988adbfe3aa`. The new
+[`check_v1_sbom.py`](scripts/check_v1_sbom.py) follows locked normal/build
+edges for the explicit Linux release platform, excludes dev-only edges,
+requires license metadata for every component, and verifies the checked-in
+CycloneDX 1.5 document after staged package creation in CI. The artifact
+contains 89 components and is recorded with its digest in
+[`docs/evidence/v1-19-sbom.md`](evidence/v1-19-sbom.md). This is a completed
+SBOM/drift-inventory slice, not completion of V1-19: advisory/yank review,
+optional-TLS native tooling, transitive unsafe/native ownership, and the full
+feature/platform package audit remain open.
+
 ## V1-20 Execution Update (2026-08-22)
 
 V1-20 is `In progress`. The draft machine-readable matrix at

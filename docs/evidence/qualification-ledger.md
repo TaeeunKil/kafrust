@@ -22,6 +22,39 @@ and are checked in CI. Values such as `not-applicable` and `not-recorded` are
 deliberate classifications, not missing data. A row must never use an
 unqualified relative artifact label.
 
+## Q-LOCAL-V119-003
+
+- date_utc: 2026-08-23
+- source_commit: 6e24a247c2aa4aa9c63086e68d753988adbfe3aa
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: Done
+- evidence_level: Packaged candidate
+- kafka_version: not-applicable
+- kafka_image: not-applicable
+- mode: dependency inventory
+- topology: not-applicable
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: locked all-feature runtime/build dependency graph and deterministic CycloneDX SBOM
+- workflow: scripts/check_v1_sbom.py --check --require-artifacts
+- fault: missing license metadata, duplicate package URL, unresolved edge, or SBOM drift
+- duration: not-recorded
+- record_count: 89 resolved components
+- member_count: 2 workspace package roots
+- repetition_count: 1
+- expected_errors: zero missing license metadata and zero unresolved SBOM references
+- observed_errors: none
+- retry_count: not-applicable
+- duplicate_count: zero package URL collisions
+- loss_count: not-applicable
+- latency: not-applicable
+- memory: not-applicable
+- final_resource_gauges: not-applicable
+- result: passed
+- artifact: docs/evidence/v1-19-sbom.json sha256 b5708a2b911ee0387064a606697e60ad13f7b61bad2a473e7688947d230a7827; kafrust-protocol-0.3.6.crate sha256 f12e95a30ce46fd7ffc097a97a31b0a918bcee9f83cefb72fe2484cfe9c255cc; kafrust-0.3.6.crate sha256 2ae1a135d3de7f00fb25455809ab9fc201ea41c398aa62ac14f34c2a2758fca9
+- non_claims: not advisory or yank review, not optional-TLS native-tool verification, not transitive unsafe/native ownership review, not crates.io publication
+
 ## Q-CI-V118-001
 
 - date_utc: 2026-08-22
