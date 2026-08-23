@@ -396,7 +396,13 @@ The 17-job source-only matrix was rerun from `4f6918b` in
 and all jobs passed across the four broker lines, security profiles, KIP-848,
 Admin, response-loss, and multi-broker failover slices. It remains source-only:
 the exact published `0.3.6` pair, fresh lockfiles, and V1-20 published exit
-criteria are still pending.
+criteria are still pending. The ordered `0.3.6` publication and exact external
+lockfile boundary now pass; the seven-profile published smoke run
+[32613844625](https://github.com/TaeeunKil/kafrust/actions/runs/32613844625),
+Kafka 3.7.2 classic failover [32613851826](https://github.com/TaeeunKil/kafrust/actions/runs/32613851826),
+and Kafka 4.3.1 KIP-848 failover [32613855210](https://github.com/TaeeunKil/kafrust/actions/runs/32613855210)
+also passed. The full accepted published matrix, long-duration campaigns, and
+downstream release gates remain open.
 
 ## V1-21~V1-26 Release-Path Preparation (2026-08-22)
 

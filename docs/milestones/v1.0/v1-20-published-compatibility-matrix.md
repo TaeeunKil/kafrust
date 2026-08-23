@@ -99,6 +99,17 @@ package checks are archived in
 This closes only the published-package boundary prerequisite; every broker,
 security, workload, docs.rs, and later-milestone matrix row remains open.
 
+The first published smoke slice then passed all seven profiles in
+[run 32613844625](https://github.com/TaeeunKil/kafrust/actions/runs/32613844625),
+followed by published three-broker classic failover on Kafka 3.7.2 in
+[run 32613851826](https://github.com/TaeeunKil/kafrust/actions/runs/32613851826)
+and KIP-848 failover on Kafka 4.3.1 in
+[run 32613855210](https://github.com/TaeeunKil/kafrust/actions/runs/32613855210).
+The retained details are in
+[`v1-20-published-smoke-2026-08-23.md`](../../evidence/v1-20-published-smoke-2026-08-23.md).
+These are published-artifact smoke slices, not completion of the accepted
+matrix or downstream fault/SLO/API-freeze gates.
+
 ## Failure And Lifecycle Contract
 
 - One required row failure blocks the matrix; it is not averaged away.

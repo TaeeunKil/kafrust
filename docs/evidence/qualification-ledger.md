@@ -22,6 +22,105 @@ and are checked in CI. Values such as `not-applicable` and `not-recorded` are
 deliberate classifications, not missing data. A row must never use an
 unqualified relative artifact label.
 
+## Q-PUBLISHED-V120-003
+
+- date_utc: 2026-08-23
+- source_commit: 8feeb1a0c8a6f1356ee2ad3bd5e375666cd0e6d0
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka:4.3.1
+- mode: three-broker KRaft published KIP-848 failover
+- topology: three-broker
+- security: PLAINTEXT
+- group_protocol: KIP-848 consumer
+- workload: published multi-broker pre/post-failover
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32613855210
+- fault: selected broker stop and partition leader failover
+- duration: recorded in workflow
+- record_count: not-recorded
+- member_count: not-recorded
+- repetition_count: 1
+- expected_errors: published exact dependency and post-failover success
+- observed_errors: none; job passed
+- retry_count: not-recorded
+- duplicate_count: not-recorded
+- loss_count: not-recorded
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: not-recorded
+- result: passed
+- artifact: docs/evidence/v1-20-published-smoke-2026-08-23.md; run 32613855210
+- non_claims: not full V1-20 matrix, not long fault/SLO, not migration canary, not 1.0.0 readiness
+
+## Q-PUBLISHED-V120-004
+
+- date_utc: 2026-08-23
+- source_commit: 8feeb1a0c8a6f1356ee2ad3bd5e375666cd0e6d0
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 3.7.2
+- kafka_image: apache/kafka:3.7.2
+- mode: three-broker KRaft published classic failover
+- topology: three-broker
+- security: PLAINTEXT
+- group_protocol: classic
+- workload: published multi-broker pre/post-failover
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32613851826
+- fault: selected broker stop and partition leader failover
+- duration: recorded in workflow
+- record_count: not-recorded
+- member_count: not-recorded
+- repetition_count: 1
+- expected_errors: published exact dependency and post-failover success
+- observed_errors: none; job passed
+- retry_count: not-recorded
+- duplicate_count: not-recorded
+- loss_count: not-recorded
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: not-recorded
+- result: passed
+- artifact: docs/evidence/v1-20-published-smoke-2026-08-23.md; run 32613851826
+- non_claims: not full V1-20 matrix, not long fault/SLO, not migration canary, not 1.0.0 readiness
+
+## Q-PUBLISHED-V120-005
+
+- date_utc: 2026-08-23
+- source_commit: 8feeb1a0c8a6f1356ee2ad3bd5e375666cd0e6d0
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 3.7.2 and 4.3.1
+- kafka_image: apache/kafka:3.7.2; apache/kafka:4.3.1
+- mode: published feature/compression smoke
+- topology: single-node KRaft
+- security: PLAINTEXT and SASL_SSL/SCRAM-SHA-256
+- group_protocol: classic and KIP-848
+- workload: produce/fetch, classic/KIP-848, TLS/SCRAM, gzip/snappy/lz4/zstd
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32613844625
+- fault: broker startup and profile workload failure
+- duration: recorded in workflow
+- record_count: not-recorded
+- member_count: not-recorded
+- repetition_count: 7 profiles
+- expected_errors: all seven published profiles pass with exact registry dependency
+- observed_errors: none; all seven jobs passed
+- retry_count: not-recorded
+- duplicate_count: not-recorded
+- loss_count: not-recorded
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: not-recorded
+- result: passed
+- artifact: docs/evidence/v1-20-published-smoke-2026-08-23.md; run 32613844625
+- non_claims: not full V1-20 matrix, not three-broker security matrix beyond listed rows, not long fault/SLO, not 1.0.0 readiness
+
 ## Q-PUBLISHED-V120-002
 
 - date_utc: 2026-08-23
