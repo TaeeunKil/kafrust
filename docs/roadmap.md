@@ -647,6 +647,12 @@ captured outputs as workflow artifacts. The intermediate 3.9.1 readiness flake
 in run 32626452478 is retained as a failure diagnostic, not as passing product
 evidence; the clean artifact details are recorded in
 [`v1-20-published-smoke-artifact-rerun-2026-08-23.md`](evidence/v1-20-published-smoke-artifact-rerun-2026-08-23.md).
+After the bounded metadata retry was added, run
+[32627054021](https://github.com/TaeeunKil/kafrust/actions/runs/32627054021)
+passed all twelve profiles, including Kafka 3.9.1, and retained the same 12
+lockfiles plus 12 captured outputs. The retry remains a ten-second readiness
+bound, not a suppression of real failures; the immutable record is in
+[`v1-20-published-smoke-readiness-rerun-2026-08-23.md`](evidence/v1-20-published-smoke-readiness-rerun-2026-08-23.md).
 
 The 0.3.6 competitor review on 2026-08-23 found a material workload-specific
 throughput gap versus rust-rdkafka, so V1-22 has been re-planned for profiling,

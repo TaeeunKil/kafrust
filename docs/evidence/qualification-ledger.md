@@ -3190,6 +3190,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-22-published-competitor-comparison-2026-08-23.md; comparison-results.jsonl and ten logs in run 32626740940
 - non_claims: not universal performance ranking, not API/feature parity, not failure/security/transaction/group parity, not V1-22 SLO completion, not named-service canary or production approval
 
+## Q-PUBLISHED-V120-035
+
+- date_utc: 2026-08-23
+- source_commit: af3dbfc04deb00873c7cd5b1cdbc16ac4c1444a2
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 3.7.2, 3.8.1, 3.9.1, 4.0.0, 4.3.1
+- kafka_image: apache/kafka:<matrix version>
+- mode: published twelve-profile smoke after bounded metadata-readiness retry
+- topology: single-node KRaft
+- security: PLAINTEXT, SASL_PLAINTEXT/PLAIN, and SASL_SSL/SCRAM-SHA-256/512
+- group_protocol: classic plus KIP-848 consumer
+- workload: produce/fetch/group plus gzip, snappy, lz4, and zstd codecs
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32627054021
+- fault: broker/profile startup, coordinator readiness, dependency, or roundtrip failure
+- duration: recorded per matrix job
+- record_count: workflow roundtrip per profile
+- member_count: not-recorded
+- repetition_count: 12 matrix profiles; one post-fix rerun per profile
+- expected_errors: every profile resolves the exact published pair and completes its roundtrip
+- observed_errors: none; all twelve jobs passed, including Kafka 3.9.1
+- retry_count: bounded topic/group metadata-readiness retry; not promoted as product retries
+- duplicate_count: not-recorded
+- loss_count: 0
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: not-recorded
+- result: passed
+- artifact: docs/evidence/v1-20-published-smoke-readiness-rerun-2026-08-23.md; 12 lockfiles and 12 outputs in run 32627054021
+- non_claims: not full V1-20 matrix, not latency/RSS/retry SLO evidence, not long fault/SLO, not migration canary, not 1.0.0 readiness
+
 ## Q-PUBLISHED-V123-COMP-001
 
 - date_utc: 2026-08-23

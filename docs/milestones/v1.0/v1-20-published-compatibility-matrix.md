@@ -143,6 +143,11 @@ promoted into the passing matrix evidence. The clean artifact details are in
 The external smoke fixture now also waits up to ten seconds for created topic
 and active group metadata to become visible, preserving a real timeout failure
 while avoiding a false negative from normal KRaft metadata propagation.
+The post-fix validation in
+[32627054021](https://github.com/TaeeunKil/kafrust/actions/runs/32627054021)
+passed all twelve profiles, including Kafka 3.9.1, and retained 12 lockfiles
+plus 12 outputs. Its immutable record is
+[`v1-20-published-smoke-readiness-rerun-2026-08-23.md`](../../evidence/v1-20-published-smoke-readiness-rerun-2026-08-23.md).
 
 ## Failure And Lifecycle Contract
 
