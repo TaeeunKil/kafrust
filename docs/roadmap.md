@@ -520,6 +520,13 @@ single-segment continuity claim. This validates the schedule harness only; the
 long campaign, churn, ambiguity-family, and controlled-data-loss gates remain
 open.
 
+The same four-event schedule passed the published SASL_SSL/SCRAM-SHA-256 path
+in [run 32639181770](https://github.com/TaeeunKil/kafrust/actions/runs/32639181770):
+120.002 seconds, 2,943,900 unique records, 24,532 records/s, four failed
+requests, 11 retries (0.000374%), zero unknown/loss/duplicate outcomes, and
+drained gauges. This strengthens secured per-segment evidence only; the
+six-hour campaigns and downstream V1-21 gates remain open.
+
 The published multi-broker soak workflow now accepts and validates an ordered
 fault schedule (`leader`, `coordinator`, `combined`, and `simultaneous` events
 at increasing percentages of the segment). The parser has focused boundary

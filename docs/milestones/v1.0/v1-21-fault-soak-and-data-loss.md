@@ -139,6 +139,16 @@ image digest, lockfile digest, schedule, reconciliation digest, and
 multi-fault harness only; it is not a six-hour campaign, 100-cycle or
 ambiguity-family result, controlled data-loss evidence, or V1-21 completion.
 
+The same schedule then passed over the published `0.3.6`
+SASL_SSL/SCRAM-SHA-256 path in [run 32639181770](https://github.com/TaeeunKil/kafrust/actions/runs/32639181770).
+The 120.002-second Kafka 4.3.1 three-broker segment processed 2,943,900
+attempted, acknowledged, and consumed unique records at 24,532 records/s;
+four failed requests and 11 retries stayed below the 1% retry budget, with zero
+unknown outcomes, loss, duplicates, and final gauges. The descriptor retains the
+same four-event schedule, exact package/broker identities, reconciliation digest,
+and qualified one-run continuity. This strengthens secured per-segment evidence
+only; the six-hour campaigns and all downstream V1-21 gates remain open.
+
 ### Bounded current-source diagnostic runs (2026-08-22)
 
 The first 60-second manual run on source `3fdfc778` (run

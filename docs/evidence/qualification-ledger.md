@@ -319,6 +319,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-21-fault-diagnostic-2026-08-23.md; descriptor artifact from run 32633658046
 - non_claims: not six-hour campaign, not 100 member-loss/rejoin cycles, not ambiguity-family outcomes, not controlled data-loss fixtures, not cross-segment continuity, not SLO, not 1.0.0 readiness
 
+## Q-PUBLISHED-V121-006
+
+- date_utc: 2026-08-23
+- source_commit: 14fe70cb9795457bed50d7528bf2bb347eb11123
+- client_version: 0.3.6 published artifact
+- protocol_version: 0.3.6 published dependency
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
+- mode: scheduled secure multi-fault bounded diagnostic
+- topology: three-broker KRaft
+- security: SASL_SSL/SCRAM-SHA-256
+- group_protocol: not-applicable
+- workload: 120.002-second produce/fetch segment with four scheduled broker-fault events
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32639181770
+- fault: leader@25%, coordinator@50%, combined@70%, simultaneous@85%; ten-second outages
+- duration: 120.002s workload; one segment
+- record_count: 2943900 attempted, acknowledged, and consumed unique records
+- member_count: not-applicable
+- repetition_count: 1 segment
+- expected_errors: transient secured broker-fault requests followed by exact identity recovery and drained gauges
+- observed_errors: records_per_second=24532.063, requests_failed=4, retries=11, retry_ratio_percent=0.000374, unknown_outcomes=0, loss_count=0, duplicate_count=0, continuity_claim=qualified
+- retry_count: 11
+- duplicate_count: 0
+- loss_count: 0
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: in_flight_requests=0; buffered_records=0
+- result: passed
+- artifact: published-secure-fault-segment.json and published-secure-multi-soak.json from run 32639181770; artifact_digest=d0516509b074eb4c750e83da580035792fae91ba6edc2a676d1df4f2561b60f6; broker_image_digest=apache/kafka@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
+- non_claims: not a six-hour campaign, not 100 member-loss/rejoin cycles, not 100 outcomes per ambiguity family, not controlled data-loss evidence, not repeated-campaign qualification, not SLO, not V1-21 completion, not 1.0.0 readiness
+
 ## Q-PUBLISHED-V121-005
 
 - date_utc: 2026-08-23
