@@ -160,6 +160,13 @@ cycles are requested. This makes the required 100-cycle published gate
 executable without promoting the existing eight-cycle evidence; no 100-cycle
 run has been executed yet.
 
+The published classic/KIP-848 group-rebalance fixture was likewise raised from
+its previous 64-cycle guard to a maximum of 100 cycles. Its timeout now scales
+with the requested cycle count, and the workflow timeout was extended so a
+100-cycle run is not silently cut off. These changes make the two remaining
+group-family executions possible; they do not count as evidence until the
+published runs and retained cycle summaries pass.
+
 ### Bounded current-source diagnostic runs (2026-08-22)
 
 The first 60-second manual run on source `3fdfc778` (run

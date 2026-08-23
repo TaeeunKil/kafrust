@@ -37,7 +37,7 @@ jobs:
   published-group-rebalance:
     name: Published kafrust ${{ inputs.kafrust_version || '0.3.6' }} ${{ inputs.kafka_version || '4.3.1' }} ${{ inputs.group_protocol || 'consumer' }} group churn
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     env:
       KAFRUST_BOOTSTRAP_SERVERS: localhost:20092,localhost:20093,localhost:20094
       KAFRUST_TOPIC: kafrust-published-group-${{ github.run_id }}

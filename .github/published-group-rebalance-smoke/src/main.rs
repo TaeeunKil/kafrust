@@ -9,7 +9,7 @@ use kafrust::{
 
 const PARTITION_COUNT: i32 = 6;
 const POLL_ATTEMPTS: usize = 80;
-const MAX_CHURN_CYCLES: usize = 64;
+const MAX_CHURN_CYCLES: usize = 100;
 
 fn required(name: &str) -> Result<String, Error> {
     env::var(name).map_err(|_| Error::Unsupported("published group smoke variable missing"))
@@ -52,7 +52,7 @@ fn churn_cycles() -> Result<usize, Error> {
         .map_err(|_| Error::Unsupported("KAFRUST_GROUP_CHURN_CYCLES must be an integer"))?;
     if !(1..=MAX_CHURN_CYCLES).contains(&cycles) {
         return Err(Error::Unsupported(
-            "KAFRUST_GROUP_CHURN_CYCLES must be between 1 and 64",
+            "KAFRUST_GROUP_CHURN_CYCLES must be between 1 and 100",
         ));
     }
     Ok(cycles)
@@ -362,9 +362,17 @@ fn assignment_keys(group: &ConsumerGroup) -> BTreeSet<(String, i32)> {
         .collect()
 }
 
+fn timeout_seconds() -> u64 {
+    let cycles = env::var("KAFRUST_GROUP_CHURN_CYCLES")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .unwrap_or(1);
+    300_u64.saturating_add(cycles.saturating_mul(10))
+}
+
 #[tokio::main]
 async fn main() -> kafrust::Result<()> {
-    tokio::time::timeout(Duration::from_secs(300), run())
+    tokio::time::timeout(Duration::from_secs(timeout_seconds()), run())
         .await
         .map_err(|_| Error::Unsupported("published group smoke timed out"))?
 }

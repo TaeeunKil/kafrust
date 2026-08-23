@@ -533,6 +533,11 @@ final cycle, while retaining the historical eight-cycle default. A qualification
 run may request exactly 100 cycles and receives a retained JSON summary marked
 qualified only at that bound; no such run has been promoted yet.
 
+The published classic/KIP-848 group-rebalance fixture now accepts up to 100
+cycles (previously 64), with a cycle-scaled client timeout and a 35-minute job
+bound. This only enables the required executions; no 100-cycle published result
+is counted before its run output is retained and checked.
+
 The published multi-broker soak workflow now accepts and validates an ordered
 fault schedule (`leader`, `coordinator`, `combined`, and `simultaneous` events
 at increasing percentages of the segment). The parser has focused boundary
