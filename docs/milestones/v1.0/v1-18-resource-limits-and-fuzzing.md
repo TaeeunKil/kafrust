@@ -107,6 +107,11 @@ reproduces the artifact audit, including all 40 target/shard records, the
 900-second shard and 3,600-second cumulative budgets, workflow SHA, RSS cap,
 corpus hashes, and crash/OOM-file absence.
 
+Two duplicate manual dispatches (`32645221503` and `32645222921`) remained
+queued for more than nine hours and were cancelled without starting artifact
+collection. They are not campaign sets: the remaining requirement is two
+additional weekly scheduled passes with retained crash/OOM disposition.
+
 ## Failure And Lifecycle Contract
 
 - Limits are checked before unbounded allocation and return typed errors.

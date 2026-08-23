@@ -256,6 +256,10 @@ and resource-limit evidence are still required, so V1-18 remains in progress.
 The checked-in
 [`check_v1_fuzz_qualification_artifacts.py`](scripts/check_v1_fuzz_qualification_artifacts.py)
 now reproduces the 40-record, corpus-hash, resource-cap, and crash/OOM audit.
+Two duplicate manual dispatches, [32645221503](https://github.com/TaeeunKil/kafrust/actions/runs/32645221503)
+and [32645222921](https://github.com/TaeeunKil/kafrust/actions/runs/32645222921),
+were cancelled after remaining queued for more than nine hours; they are not
+counted as weekly campaign sets.
 
 ## V1-19 Execution Update (2026-08-22; completed 2026-08-23)
 
