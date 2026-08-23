@@ -69,6 +69,9 @@ jobs:
       - name: Check V1 dependency graph posture
         run: python scripts/check_v1_dependency_graph.py
 
+      - name: Check V1 native-tooling posture
+        run: python scripts/check_v1_native_tooling.py --check
+
       - name: Check v1 migration canary manifest
         run: python scripts/check_v1_migration_canary_manifest.py
 
@@ -77,6 +80,9 @@ jobs:
 
       - name: Test V1-19 SBOM checker
         run: python -m unittest scripts/test_check_v1_sbom.py
+
+      - name: Test V1-19 native-tooling checker
+        run: python -m unittest scripts/test_check_v1_native_tooling.py
 
       - name: Check qualification ledger
         run: python scripts/check_qualification_ledger.py
