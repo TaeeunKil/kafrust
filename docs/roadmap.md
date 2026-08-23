@@ -288,7 +288,7 @@ stable in [CI run 32561532044](https://github.com/TaeeunKil/kafrust/actions/runs
 from `f499ee6`; this confirms the metadata-completeness slice while the
 remaining V1-19 audit gates stay open.
 
-The reproducible SBOM slice is now checked in at commit
+  The reproducible SBOM slice is now checked in at commit
 `1ec37af6ee47ebcf995b9927e008700a8ad584da` (the drift-policy follow-up
 to `6e24a247c2aa4aa9c63086e68d753988adbfe3aa`). The new
 [`check_v1_sbom.py`](scripts/check_v1_sbom.py) follows locked normal/build
@@ -315,13 +315,21 @@ explicitly record `ring` as the custom-build candidate. This closes the
 no-C-default and optional-TLS-posture slice, while advisory/yank and reviewed
 transitive unsafe/native ownership remain open.
 
+The license-expression slice is now recorded in
+[`docs/evidence/v1-19-license-policy.md`](evidence/v1-19-license-policy.md).
+The all-feature runtime/build closure contains 89 packages, all with SPDX
+expressions drawn from the explicit permissive allowlist, and CI rejects
+license-policy or package-identity drift. This closes license-expression
+compatibility metadata only; advisory/yank review, packaged notice inspection,
+and reviewed transitive unsafe/native ownership remain open.
+
 ## V1-20 Execution Update (2026-08-22)
 
 V1-20 is `In progress`. The draft machine-readable matrix at
 [`docs/evidence/v1-20-compatibility-matrix.json`](evidence/v1-20-compatibility-matrix.json)
 now preserves the accepted V1-01 broker order, pairwise topology/security
-profiles, feature/toolchain package rows, and the protocol-first exact-registry
-policy. `scripts/check_v1_compatibility_matrix.py` validates ten draft profiles
+  profiles, feature/toolchain package rows, and the protocol-first exact-registry
+  policy. `scripts/check_v1_compatibility_matrix.py` validates ten draft profiles
 and is wired into CI. No row is marked passed yet: fresh published `0.3.6`
 lockfiles and the inherited V1-15~V1-19 artifact gates are required before the
 matrix can be frozen. The source-only 17-job Live Kafka Smoke matrix passed on

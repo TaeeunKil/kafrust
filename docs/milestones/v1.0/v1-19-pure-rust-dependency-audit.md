@@ -140,6 +140,18 @@ check passed. This documents the optional-TLS native-tooling non-claim; it
 does not close the advisory, yank, or transitive unsafe/native ownership
 reviews.
 
+### License-policy slice (2026-08-23)
+
+The dependency closure now has an explicit compatibility gate in
+[`check_v1_license_policy.py`](../../scripts/check_v1_license_policy.py). It
+follows the same locked all-feature runtime/build closure as the SBOM and
+rejects missing expressions or identifiers outside the reviewed permissive
+allowlist. The 89-package report is archived in
+[`v1-19-license-policy.md`](../../evidence/v1-19-license-policy.md) and the
+checker runs in both CI toolchain jobs. This closes license-expression policy
+and metadata drift only; advisory/yank review, packaged notice inspection, and
+transitive unsafe/native ownership remain open.
+
 ## Failure And Lifecycle Contract
 
 - A required default-build C compiler/link to librdkafka or a C Kafka client is

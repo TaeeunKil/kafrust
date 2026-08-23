@@ -1,0 +1,913 @@
+{
+  "dependency_scope": "runtime-and-build",
+  "features": "all-features",
+  "generator": "scripts/check_v1_license_policy.py",
+  "non_claims": [
+    "not an advisory or yank review",
+    "not a copyright-notice or packaged-license-file audit",
+    "not a transitive unsafe/native-code review",
+    "not proof that every dependency is compatible with every downstream license"
+  ],
+  "packages": [
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "kafrust",
+      "source_kind": "workspace",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "0.3.6"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "kafrust-protocol",
+      "source_kind": "workspace",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "0.3.6"
+    },
+    {
+      "license_expression": "0BSD OR MIT OR Apache-2.0",
+      "name": "adler2",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "0BSD",
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "2.0.1"
+    },
+    {
+      "license_expression": "Unlicense OR MIT",
+      "name": "aho-corasick",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "MIT",
+        "Unlicense"
+      ],
+      "version": "1.1.5"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "anyhow",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "1.0.104"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "base64",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "0.22.1"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "bitflags",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "2.13.1"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "block-buffer",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "0.10.4"
+    },
+    {
+      "license_expression": "Unlicense OR MIT",
+      "name": "byteorder",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "MIT",
+        "Unlicense"
+      ],
+      "version": "1.5.0"
+    },
+    {
+      "license_expression": "MIT",
+      "name": "bytes",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "MIT"
+      ],
+      "version": "1.12.1"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "cc",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "1.4.4"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "cfg-if",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "1.0.4"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "cpufeatures",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "0.2.17"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "crc32fast",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "1.5.0"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "crypto-common",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "0.1.7"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "culpa-macros",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "1.0.2"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "culpa",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "1.0.2"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "digest",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "0.10.7"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "either",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "1.18.0"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "find-msvc-tools",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "0.1.11"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "flate2",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "1.0.35"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "futures-channel",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "0.3.34"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "futures-core",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "0.3.34"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "futures-executor",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "0.3.34"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "futures-macro",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "0.3.34"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "futures-sink",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "0.3.34"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "futures-task",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "0.3.34"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "futures-util",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "0.3.34"
+    },
+    {
+      "license_expression": "MIT",
+      "name": "generic-array",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "MIT"
+      ],
+      "version": "0.14.7"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "getrandom",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "0.2.17"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "hmac",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "0.12.1"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "itertools",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "0.14.0"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "libc",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "0.2.189"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "log",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "0.4.33"
+    },
+    {
+      "license_expression": "MIT",
+      "name": "lz-fear",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "MIT"
+      ],
+      "version": "0.2.0"
+    },
+    {
+      "license_expression": "Unlicense OR MIT",
+      "name": "memchr",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "MIT",
+        "Unlicense"
+      ],
+      "version": "2.8.3"
+    },
+    {
+      "license_expression": "MIT OR Zlib OR Apache-2.0",
+      "name": "miniz_oxide",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT",
+        "Zlib"
+      ],
+      "version": "0.8.9"
+    },
+    {
+      "license_expression": "MIT",
+      "name": "mio",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "MIT"
+      ],
+      "version": "1.2.2"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "once_cell",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "1.21.4"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "openssl-probe",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "0.2.1"
+    },
+    {
+      "license_expression": "Apache-2.0",
+      "name": "opentelemetry-proto",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0"
+      ],
+      "version": "0.32.0"
+    },
+    {
+      "license_expression": "Apache-2.0",
+      "name": "opentelemetry",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0"
+      ],
+      "version": "0.32.0"
+    },
+    {
+      "license_expression": "Apache-2.0",
+      "name": "opentelemetry_sdk",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0"
+      ],
+      "version": "0.32.1"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "pbkdf2",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "0.12.2"
+    },
+    {
+      "license_expression": "Apache-2.0 OR MIT",
+      "name": "pin-project-lite",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "0.2.17"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "ppv-lite86",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "0.2.21"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "proc-macro2",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "1.0.107"
+    },
+    {
+      "license_expression": "Apache-2.0",
+      "name": "prost-derive",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0"
+      ],
+      "version": "0.14.1"
+    },
+    {
+      "license_expression": "Apache-2.0",
+      "name": "prost",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0"
+      ],
+      "version": "0.14.1"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "quote",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "1.0.47"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "rand",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "0.8.7"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "rand_chacha",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "0.3.1"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "rand_core",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "0.6.4"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "regex-automata",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "0.4.18"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "regex-syntax",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "0.8.11"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "regex",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "1.13.1"
+    },
+    {
+      "license_expression": "Apache-2.0 AND ISC",
+      "name": "ring",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "ISC"
+      ],
+      "version": "0.17.14"
+    },
+    {
+      "license_expression": "Apache-2.0 OR ISC OR MIT",
+      "name": "rustls-native-certs",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "ISC",
+        "MIT"
+      ],
+      "version": "0.8.4"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "rustls-pki-types",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "1.15.1"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "rustls-platform-verifier",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "0.6.2"
+    },
+    {
+      "license_expression": "ISC",
+      "name": "rustls-webpki",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "ISC"
+      ],
+      "version": "0.103.15"
+    },
+    {
+      "license_expression": "Apache-2.0 OR ISC OR MIT",
+      "name": "rustls",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "ISC",
+        "MIT"
+      ],
+      "version": "0.23.43"
+    },
+    {
+      "license_expression": "MIT",
+      "name": "ruzstd",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "MIT"
+      ],
+      "version": "0.8.1"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "sha2",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "0.10.9"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "shlex",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "2.0.1"
+    },
+    {
+      "license_expression": "MIT",
+      "name": "slab",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "MIT"
+      ],
+      "version": "0.4.12"
+    },
+    {
+      "license_expression": "BSD-3-Clause",
+      "name": "snap",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "BSD-3-Clause"
+      ],
+      "version": "1.1.2"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "socket2",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "0.6.5"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "static_assertions",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "1.1.0"
+    },
+    {
+      "license_expression": "BSD-3-Clause",
+      "name": "subtle",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "BSD-3-Clause"
+      ],
+      "version": "2.6.1"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "syn",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "2.0.119"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "syn",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "3.0.3"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "thiserror-impl",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "1.0.69"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "thiserror-impl",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "2.0.20"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "thiserror",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "1.0.69"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "thiserror",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "2.0.20"
+    },
+    {
+      "license_expression": "MIT",
+      "name": "tokio-macros",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "MIT"
+      ],
+      "version": "2.7.2"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "tokio-rustls",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "0.26.4"
+    },
+    {
+      "license_expression": "MIT",
+      "name": "tokio",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "MIT"
+      ],
+      "version": "1.53.1"
+    },
+    {
+      "license_expression": "MIT",
+      "name": "tracing-attributes",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "MIT"
+      ],
+      "version": "0.1.31"
+    },
+    {
+      "license_expression": "MIT",
+      "name": "tracing-core",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "MIT"
+      ],
+      "version": "0.1.36"
+    },
+    {
+      "license_expression": "MIT",
+      "name": "tracing",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "MIT"
+      ],
+      "version": "0.1.44"
+    },
+    {
+      "license_expression": "MIT",
+      "name": "twox-hash",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "MIT"
+      ],
+      "version": "1.6.3"
+    },
+    {
+      "license_expression": "MIT OR Apache-2.0",
+      "name": "typenum",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "1.20.1"
+    },
+    {
+      "license_expression": "(MIT OR Apache-2.0) AND Unicode-3.0",
+      "name": "unicode-ident",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT",
+        "Unicode-3.0"
+      ],
+      "version": "1.0.24"
+    },
+    {
+      "license_expression": "ISC",
+      "name": "untrusted",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "ISC"
+      ],
+      "version": "0.9.0"
+    },
+    {
+      "license_expression": "MIT/Apache-2.0",
+      "name": "version_check",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "0.9.5"
+    },
+    {
+      "license_expression": "BSD-2-Clause OR Apache-2.0 OR MIT",
+      "name": "zerocopy",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "BSD-2-Clause",
+        "MIT"
+      ],
+      "version": "0.8.56"
+    },
+    {
+      "license_expression": "Apache-2.0 OR MIT",
+      "name": "zeroize",
+      "source_kind": "registry",
+      "spdx_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "version": "1.8.2"
+    }
+  ],
+  "platform": "x86_64-unknown-linux-gnu",
+  "policy": {
+    "accepted_spdx_ids": [
+      "0BSD",
+      "Apache-2.0",
+      "BSD-2-Clause",
+      "BSD-3-Clause",
+      "ISC",
+      "MIT",
+      "Unicode-3.0",
+      "Unlicense",
+      "Zlib"
+    ],
+    "distribution_license": "MIT OR Apache-2.0"
+  },
+  "schema_version": 1,
+  "summary": {
+    "disallowed_identifiers": 0,
+    "missing_expressions": 0,
+    "packages": 89
+  },
+  "workspace_roots": {
+    "kafrust": "0.3.6",
+    "kafrust-protocol": "0.3.6"
+  }
+}

@@ -22,6 +22,39 @@ and are checked in CI. Values such as `not-applicable` and `not-recorded` are
 deliberate classifications, not missing data. A row must never use an
 unqualified relative artifact label.
 
+## Q-LOCAL-V119-005
+
+- date_utc: 2026-08-23
+- source_commit: 856bc454d5a074c4f89348ecac9d4681c0011467
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: Done
+- evidence_level: Local deterministic
+- kafka_version: not-applicable
+- kafka_image: not-applicable
+- mode: license-expression compatibility audit
+- topology: not-applicable
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: locked all-feature runtime/build dependency closure with explicit SPDX allowlist
+- workflow: scripts/check_v1_license_policy.py --check
+- fault: missing SPDX expression or disallowed license identifier
+- duration: not-recorded
+- record_count: 89 resolved packages
+- member_count: 2 workspace package roots
+- repetition_count: 1
+- expected_errors: zero missing expressions and zero disallowed identifiers
+- observed_errors: none; all 89 packages passed the permissive policy
+- retry_count: not-applicable
+- duplicate_count: not-applicable
+- loss_count: not-applicable
+- latency: not-applicable
+- memory: not-applicable
+- final_resource_gauges: not-applicable
+- result: passed
+- artifact: docs/evidence/v1-19-license-policy.json sha256 b96da01852f88a3fb2510d8f4558900186d3527623aca9cb8d3f3fb491011eb8
+- non_claims: not advisory or yank review, not packaged license-notice audit, not transitive unsafe/native ownership review, not crates.io publication
+
 ## Q-LOCAL-V119-003
 
 - date_utc: 2026-08-23
