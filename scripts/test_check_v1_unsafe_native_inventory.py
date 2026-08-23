@@ -33,6 +33,31 @@ class UnsafeNativeInventoryTests(unittest.TestCase):
         self.assertTrue(owner)
         self.assertTrue(rationale)
 
+    def test_comparable_allows_transitive_source_count_drift(self):
+        base = {
+            "schema_version": 1,
+            "generator": MODULE.GENERATOR,
+            "platform": "x86_64-unknown-linux-gnu",
+            "features": "all-features",
+            "dependency_scope": "runtime-and-build",
+            "scan": {
+                "unsafe_pattern": MODULE.UNSAFE_CONSTRUCT.pattern,
+                "native_boundary_names": sorted(MODULE.NATIVE_BOUNDARY_NAMES),
+            },
+            "entries": [{
+                "name": "ring",
+                "source_kind": "registry",
+                "unsafe_constructs": 1,
+                "custom_build": True,
+                "links": "ring_core",
+                "native_boundary": True,
+                "owner": "upstream TLS/cryptography maintainers",
+                "rationale": "cryptographic or certificate verification boundary; optional TLS ownership is explicit",
+            }],
+        }
+        changed = {**base, "entries": [{**base["entries"][0], "unsafe_constructs": 2}]}
+        self.assertEqual(MODULE.comparable(base), MODULE.comparable(changed))
+
 
 if __name__ == "__main__":
     unittest.main()

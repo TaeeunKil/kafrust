@@ -154,7 +154,6 @@ def comparable(report: dict[str, Any]) -> tuple[Any, ...]:
             (
                 item.get("name"),
                 item.get("source_kind"),
-                item.get("unsafe_constructs"),
                 item.get("custom_build"),
                 item.get("links"),
                 item.get("native_boundary"),

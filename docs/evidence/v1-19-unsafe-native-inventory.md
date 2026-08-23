@@ -12,7 +12,10 @@ The inventory scanned the 89 resolved package sources under `src/` (and
 build targets, Cargo `links` metadata, and explicit platform-boundary names.
 It produced 62 review entries, six named platform/native boundaries, and zero
 unsafe constructs in either workspace crate. Each entry records an owner class,
-purpose/risk rationale, and a deliberately non-terminal review status.
+purpose/risk rationale, and a deliberately non-terminal review status. CI keeps
+package identity, build/link/native classification, and review metadata strict
+while allowing source-count changes caused by a transitive registry
+re-resolution; a changed count still requires manual review before release.
 
 This is a reproducible review queue, not a safety certification. The entries
 still require manual source review, advisory/yank review, and release-policy
