@@ -1412,22 +1412,22 @@ fn buffered_pending_encoded_len(
         .map(|&index| {
             pending
                 .get(index)
-                .map(|request| BatchRecord::new(request.record.clone()))
+                .map(|request| {
+                    let timestamp = request
+                        .record
+                        .timestamp_ref()
+                        .unwrap_or_else(SystemTime::now);
+                    record_batch_message(&request.record, timestamp_millis(timestamp))
+                })
                 .ok_or(Error::Unsupported("buffered record index out of bounds"))
         })
         .collect::<Result<Vec<_>>>()?;
-    let prepared_records = records
-        .iter()
-        .enumerate()
-        .map(|(index, record)| PreparedBatchRecord { index, record })
-        .collect::<Vec<_>>();
 
-    let produce_version = if compression == Compression::Zstd {
-        ProduceVersion::V7
-    } else {
-        ProduceVersion::V3
-    };
-    batch_records_encoded_len(&prepared_records, produce_version, compression)
+    encoded_record_batch_set_len_with_compression(
+        &records,
+        compression.as_record_batch_compression(),
+    )
+    .map_err(Error::from)
 }
 
 async fn flush_buffered_deliveries_for_reason(
