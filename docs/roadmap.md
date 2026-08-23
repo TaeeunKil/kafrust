@@ -524,6 +524,15 @@ performance review remain required before a 1.0.0 decision. The comparison
 and its non-claims are recorded in
 [`v1-23-published-competitor-comparison-2026-08-23.md`](evidence/v1-23-published-competitor-comparison-2026-08-23.md).
 
+The external service-canary gate is now explicitly `Blocked`: no named
+representative service, owner, deployment environment, or approved
+production-like canary target is registered. The in-repository dual-client
+fixture remains a smoke/reference comparator only and is not promoted as a
+substitute. Forward cutover, fault observation, credential rotation, rollback
+objective, and the million-record migration exit remain unexecuted; V1-24 and
+V1-25 preparation may continue, but their completion gates cannot close until
+the canary dependency is supplied.
+
 V1-24 through V1-26 also remain `Planned`: the API snapshot is only a freeze input,
 and no RC or `1.0.0` publication/tag exists. Protocol-first publication is
 allowed only when the named release milestone, exact artifact evidence, and

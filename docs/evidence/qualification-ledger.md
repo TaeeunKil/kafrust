@@ -3123,3 +3123,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: GitHub Actions run 32619987006; comparison-results.jsonl; shared digest 7384f0e0012fab42060df529e06bdc32a348caff3dcf143281fed226af91cffa
 - non_claims: not universal performance ranking, not API/feature parity, not failure/security/transaction/group parity, not V1-22 SLO completion, not named-service canary or production approval
+
+## Q-DESIGN-V123-BLOCKED-001
+
+- date_utc: 2026-08-23
+- source_commit: a198aec502dddd3a3d7ef2900006823ecf8dcee8
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: Blocked
+- evidence_level: Design
+- kafka_version: not-applicable
+- kafka_image: not-applicable
+- mode: not-applicable
+- topology: not-applicable
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: V1-23 external service-canary dependency audit
+- workflow: scripts/check_v1_migration_canary_manifest.py
+- fault: no named representative service, owner, deployment environment, or approved production-like canary target registered
+- duration: not-applicable
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: 1 decision record
+- expected_errors: service-canary gate remains blocked rather than substituting the in-repository reference fixture
+- observed_errors: required external canary authority is absent
+- retry_count: not-applicable
+- duplicate_count: not-applicable
+- loss_count: not-applicable
+- latency: not-applicable
+- memory: not-applicable
+- final_resource_gauges: not-applicable
+- result: blocked
+- artifact: docs/milestones/v1.0/v1-23-migration-adapter-and-rollback.md; docs/evidence/v1-23-migration-canary-manifest.json
+- non_claims: not a code defect diagnosis, not permission to use an example as a production service, not V1-23 completion, not V1-24/V1-25 completion, not release approval

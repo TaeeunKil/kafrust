@@ -1,6 +1,6 @@
 # V1-23 Migration Adapter And Rollback
 
-- Status: Planned
+- Status: Blocked (no named representative service or approved canary environment)
 - Target evidence: Service canary
 - Dependencies: V1-04-V1-17
 
@@ -108,6 +108,18 @@ not an API or universal performance claim, but the gap is material and keeps
 V1-22 profiling/SLO review open before a 1.0.0 decision. Full values and
 non-claims are recorded in
 [`v1-23-published-competitor-comparison-2026-08-23.md`](../../evidence/v1-23-published-competitor-comparison-2026-08-23.md).
+
+### External canary gate decision (2026-08-23)
+
+The repository has a reproducible dual-client reference fixture and a passing
+1,000-record smoke, but no named representative service, owner, deployment
+environment, or approved production-like canary target has been registered in
+the V1 evidence set. Per this milestone's exit contract, the external
+service-canary gate is therefore `Blocked`; the reference fixture is not being
+promoted as a substitute. Forward cutover, fault observation, credential
+rotation, rollback objective, and the million-record exit run remain unexecuted.
+V1-24/V1-25 may continue preparation work, but cannot be declared complete
+until this gate is unblocked.
 
 ## Failure And Lifecycle Contract
 
