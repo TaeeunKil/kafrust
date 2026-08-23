@@ -448,7 +448,7 @@ awaiting the next exact-head CI documentation row.
 
 ## V1-21~V1-26 Release-Path Preparation (2026-08-22)
 
-V1-21 and V1-22 remain `Planned` while the exact published matrix and
+V1-21 and V1-22 are `In progress` while the exact published matrix and
 long-duration fault/SLO campaigns are pending; V1-23 is `Blocked` until a
 named migration service and approved canary environment are supplied.
 Their preparation records explicitly preserve the six-hour/24-hour campaign
