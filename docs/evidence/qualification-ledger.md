@@ -22,6 +22,138 @@ and are checked in CI. Values such as `not-applicable` and `not-recorded` are
 deliberate classifications, not missing data. A row must never use an
 unqualified relative artifact label.
 
+## Q-PUBLISHED-V120-009
+
+- date_utc: 2026-08-23
+- source_commit: 532ac9f61a8af95683b75c7db2b4bc7fa25fe225
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 3.7.2
+- kafka_image: apache/kafka:3.7.2
+- mode: published SASL_SSL transaction failover
+- topology: three-broker KRaft
+- security: SASL_SSL/SCRAM-SHA-256
+- group_protocol: not-applicable
+- workload: transactional produce/commit around broker failover
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32614039766
+- fault: broker failover during secure transaction workload
+- duration: recorded in workflow
+- record_count: not-recorded
+- member_count: not-applicable
+- repetition_count: 1
+- expected_errors: published exact dependency and transactional recovery
+- observed_errors: none; job passed
+- retry_count: not-recorded
+- duplicate_count: not-recorded
+- loss_count: not-recorded
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: not-recorded
+- result: passed
+- artifact: docs/evidence/v1-20-published-smoke-2026-08-23.md; run 32614039766
+- non_claims: not full V1-20 matrix, not long fault/SLO, not migration canary, not 1.0.0 readiness
+
+## Q-PUBLISHED-V120-008
+
+- date_utc: 2026-08-23
+- source_commit: 532ac9f61a8af95683b75c7db2b4bc7fa25fe225
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 3.7.2
+- kafka_image: apache/kafka:3.7.2
+- mode: published secured multi-broker failover
+- topology: three-broker KRaft
+- security: SASL_SSL/SCRAM-SHA-256
+- group_protocol: classic
+- workload: published secure pre/post-failover
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32614033627
+- fault: selected broker leader failover
+- duration: recorded in workflow
+- record_count: not-recorded
+- member_count: not-recorded
+- repetition_count: 1
+- expected_errors: published exact dependency and secure post-failover success
+- observed_errors: none; job passed
+- retry_count: not-recorded
+- duplicate_count: not-recorded
+- loss_count: not-recorded
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: not-recorded
+- result: passed
+- artifact: docs/evidence/v1-20-published-smoke-2026-08-23.md; run 32614033627
+- non_claims: not full V1-20 matrix, not long fault/SLO, not migration canary, not 1.0.0 readiness
+
+## Q-PUBLISHED-V120-007
+
+- date_utc: 2026-08-23
+- source_commit: 532ac9f61a8af95683b75c7db2b4bc7fa25fe225
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 3.7.2
+- kafka_image: apache/kafka:3.7.2
+- mode: published signed OAUTHBEARER
+- topology: single-node KRaft
+- security: TLS/OAUTHBEARER with signed OIDC/JWKS fixture
+- group_protocol: not-applicable
+- workload: authentication, reauthentication, produce/fetch
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32614029249
+- fault: authentication or reauthentication sequence failure
+- duration: recorded in workflow
+- record_count: not-recorded
+- member_count: not-applicable
+- repetition_count: 1
+- expected_errors: published exact dependency and signed reauthentication success
+- observed_errors: none; job passed
+- retry_count: not-recorded
+- duplicate_count: not-recorded
+- loss_count: not-recorded
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: not-recorded
+- result: passed
+- artifact: docs/evidence/v1-20-published-smoke-2026-08-23.md; run 32614029249
+- non_claims: not provider rotation/outage guarantee, not full V1-20 matrix, not 1.0.0 readiness
+
+## Q-PUBLISHED-V120-006
+
+- date_utc: 2026-08-23
+- source_commit: 532ac9f61a8af95683b75c7db2b4bc7fa25fe225
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 3.7.2
+- kafka_image: apache/kafka:3.7.2
+- mode: published mutual TLS
+- topology: single-node KRaft
+- security: mTLS
+- group_protocol: not-applicable
+- workload: client/broker certificate authentication and core roundtrip
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32614025832
+- fault: certificate setup or secure roundtrip failure
+- duration: recorded in workflow
+- record_count: not-recorded
+- member_count: not-applicable
+- repetition_count: 1
+- expected_errors: published exact dependency and mTLS success
+- observed_errors: none; job passed
+- retry_count: not-recorded
+- duplicate_count: not-recorded
+- loss_count: not-recorded
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: not-recorded
+- result: passed
+- artifact: docs/evidence/v1-20-published-smoke-2026-08-23.md; run 32614025832
+- non_claims: not full V1-20 matrix, not long fault/SLO, not migration canary, not 1.0.0 readiness
+
 ## Q-PUBLISHED-V120-003
 
 - date_utc: 2026-08-23
