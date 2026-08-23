@@ -365,8 +365,9 @@ no tag, GitHub release, or `1.0.0` claim is implied.
 The dated version-readiness decision is archived in
 [`docs/evidence/v1-release-competitive-readiness-2026-08-23.md`](evidence/v1-release-competitive-readiness-2026-08-23.md):
 the next identity remains pre-1.0 `0.3.6`, while `1.0.0` is not justified yet.
-The candidate remains unpublished until the remaining package/published gates
-and the next competitor comparison are satisfied.
+The ordered protocol-first publication completed on 2026-08-23 after the
+hardening and competitor gates passed. This is a published pre-1.0 boundary,
+not a completed V1-20 matrix or a `1.0.0` authorization.
 
 Release planning now also requires a dated competitor comparison and a
 version-readiness decision before any RC/stable artifact is published. The
@@ -382,8 +383,9 @@ V1-20 is `In progress`. The draft machine-readable matrix at
 now preserves the accepted V1-01 broker order, pairwise topology/security
   profiles, feature/toolchain package rows, and the protocol-first exact-registry
   policy. `scripts/check_v1_compatibility_matrix.py` validates ten draft profiles
-and is wired into CI. No row is marked passed yet: fresh published `0.3.6`
-lockfiles and the inherited V1-15~V1-19 artifact gates are required before the
+and is wired into CI. The initial draft had no passed published rows; the
+published boundary and named rows are now recorded below, while fresh lockfiles
+and the inherited V1-15~V1-19 artifact gates are still required before the
 matrix can be frozen. The source-only 17-job Live Kafka Smoke matrix passed on
 commit `e6de5c5` in
 [run 32551145773](https://github.com/TaeeunKil/kafrust/actions/runs/32551145773),
@@ -401,8 +403,16 @@ lockfile boundary now pass; the seven-profile published smoke run
 [32613844625](https://github.com/TaeeunKil/kafrust/actions/runs/32613844625),
 Kafka 3.7.2 classic failover [32613851826](https://github.com/TaeeunKil/kafrust/actions/runs/32613851826),
 and Kafka 4.3.1 KIP-848 failover [32613855210](https://github.com/TaeeunKil/kafrust/actions/runs/32613855210)
-also passed. The full accepted published matrix, long-duration campaigns, and
-downstream release gates remain open.
+also passed. Additional exact-published `0.3.6` rows then passed API 74
+configuration, DescribeCluster, ConsumerGroupDescribe, KIP-848 churn and
+regex assignment, member-aware offsets, Share/Streams runtime, Streams API
+surface, Share state failover, and Share multi-member ownership in the retained
+[published evidence](evidence/v1-20-published-smoke-2026-08-23.md) and ledger.
+The first Share multi-member attempt exposed a workflow variable-scope defect,
+which was corrected in `546a3a1` and passed on rerun
+[32614372643](https://github.com/TaeeunKil/kafrust/actions/runs/32614372643).
+The full accepted published matrix, long-duration campaigns, and downstream
+release gates remain open.
 
 ## V1-21~V1-26 Release-Path Preparation (2026-08-22)
 
@@ -451,8 +461,10 @@ with zero failed requests/retries and zero final gauges; the raw JSONL artifact
 is retained. This is harness evidence only, not V1-22 completion.
 
 V1-24 through V1-26 also remain `Planned`: the API snapshot is only a freeze input,
-and no RC or `1.0.0` publication/tag exists. Protocol-first `cargo publish`
-remains disabled until the named release milestone and separate user approval.
+and no RC or `1.0.0` publication/tag exists. Protocol-first publication is
+allowed only when the named release milestone, exact artifact evidence, and
+dated competitor review authorize it; the agent may make that decision
+autonomously, as it did for the pre-1.0 `0.3.6` boundary.
 The V1-25 RC and V1-26 stable-release manifests/checkers now enforce the exact
 version identities, dependency/publication order, metadata-only RC-to-stable
 diff, and post-publish canary/tag evidence requirements without performing any
@@ -474,7 +486,24 @@ Both remain diagnostic evidence only; the six-hour/24-hour fault campaigns,
 five-repetition eight-hour SLO campaign, and published-artifact gates remain
 open.
 
-## Current Release Qualification
+## Current 0.3.6 Pre-1.0 Qualification (2026-08-23)
+
+The exact `kafrust 0.3.6` and `kafrust-protocol 0.3.6` pair is now visible on
+crates.io and resolves from fresh external projects on stable and Rust 1.81;
+the ordered publication boundary, checksums, and docs.rs checks are recorded in
+[`v1-20-published-0.3.6-boundary-2026-08-23.md`](evidence/v1-20-published-0.3.6-boundary-2026-08-23.md).
+The published smoke evidence has expanded through the named API, group,
+Share/Streams, security, and failover rows above. This is the active pre-1.0
+baseline for the remaining V1-20 matrix and V1-21~V1-26 gates. No tag, GitHub
+release, or `1.0.0` publication exists.
+
+Version cadence remains evidence-driven: a `0.0.1`-sized change is published
+only when it forms a useful user-visible or independently consumable boundary
+with fresh registry evidence. Internal or incomplete changes stay grouped in
+the current candidate; the next RC/stable decision requires a refreshed dated
+competitor comparison and a completed release gate.
+
+## Historical Release Qualification
 
 `0.3.5` is now published on crates.io in protocol-first order. The fresh
 external signed OAUTHBEARER gate passed on Kafka 3.7.2 in
