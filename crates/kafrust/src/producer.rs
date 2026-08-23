@@ -1160,7 +1160,7 @@ async fn run_buffered_producer(
     while let Some(event) = receive_buffered_event(
         &mut commands,
         buffered_linger_deadline(first_enqueued_at, producer.config.linger()),
-        buffered_delivery_deadline(&pending, producer.config.delivery_timeout),
+        buffered_delivery_deadline(first_enqueued_at, producer.config.delivery_timeout),
     )
     .await
     {
@@ -1328,13 +1328,12 @@ fn buffered_linger_deadline(
 }
 
 fn buffered_delivery_deadline(
-    pending: &[BufferedProduceRequest],
+    first_enqueued_at: Option<Instant>,
     delivery_timeout: Duration,
 ) -> Option<Instant> {
-    pending
-        .iter()
-        .map(|request| request.enqueued_at + delivery_timeout)
-        .min()
+    // The worker maintains this as the oldest pending request, so deriving
+    // the deadline avoids scanning the entire queue on every select loop.
+    first_enqueued_at.map(|enqueued_at| enqueued_at + delivery_timeout)
 }
 
 fn expire_buffered_deliveries(
@@ -6936,13 +6935,14 @@ mod tests {
     fn computes_buffered_delivery_deadline_from_oldest_record() {
         let first = buffered_request(ProducerRecord::to("orders"));
         let first_deadline = first.enqueued_at + Duration::from_millis(20);
-        let second = buffered_request(ProducerRecord::to("orders"));
-        let second_deadline = second.enqueued_at + Duration::from_millis(20);
-        let pending = vec![first, second];
 
         assert_eq!(
-            buffered_delivery_deadline(&pending, Duration::from_millis(20)),
-            Some(first_deadline.min(second_deadline))
+            buffered_delivery_deadline(Some(first.enqueued_at), Duration::from_millis(20)),
+            Some(first_deadline)
+        );
+        assert_eq!(
+            buffered_delivery_deadline(None, Duration::from_millis(20)),
+            None
         );
     }
 
