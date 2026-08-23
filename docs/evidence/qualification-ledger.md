@@ -286,6 +286,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-21-fault-diagnostic-2026-08-23.md; descriptor artifact 9487644196; run 32618344222
 - non_claims: not six-hour campaign, not 100 member-loss/rejoin cycles, not ambiguity-family outcomes, not unique record-ID reconciliation, not segment continuity, not SLO, not 1.0.0 readiness
 
+## Q-PUBLISHED-V121-004
+
+- date_utc: 2026-08-23
+- source_commit: 15741d857c437498c72e603470bf7c9698d32907
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
+- mode: bounded secure simultaneous-loss fault diagnostic after pending-batch retry fix
+- topology: three-broker KRaft
+- security: SASL_SSL/SCRAM-SHA-256
+- group_protocol: not-applicable
+- workload: 180-second produce/fetch segment, 1-KiB values, batch size 100, Acks::All, idempotent producer
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32633658046
+- fault: brokers 1 and 2 stopped simultaneously after one-third of the segment and restarted after 10 seconds
+- duration: 180.002s workload; 10s outage; one segment
+- record_count: 6089400 attempted, acknowledged, and consumed unique records
+- member_count: not-applicable
+- repetition_count: 1 segment
+- expected_errors: transient NOT_ENOUGH_REPLICAS errors and retries followed by exact identity recovery, zero final gauges, and exact published dependency resolution
+- observed_errors: operation_errors=300, requests_failed=2, retries=5, unknown_outcomes=30000; all retained batches replayed and reconciled
+- retry_count: 5
+- duplicate_count: 0
+- loss_count: 0
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: in_flight_requests=0; buffered_records=0
+- result: passed
+- artifact: docs/evidence/v1-21-fault-diagnostic-2026-08-23.md; descriptor artifact from run 32633658046
+- non_claims: not six-hour campaign, not 100 member-loss/rejoin cycles, not ambiguity-family outcomes, not controlled data-loss fixtures, not cross-segment continuity, not SLO, not 1.0.0 readiness
+
 ## Q-PUBLISHED-V121-002
 
 - date_utc: 2026-08-23

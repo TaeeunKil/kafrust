@@ -86,6 +86,28 @@ The formatter and acknowledgement policy were corrected before the passing
 diagnostic. This is evidence for the execution harness only, not a six-hour,
 100-cycle, ambiguity-family, controlled-data-loss, or V1-21 completion claim.
 
+### Published secure simultaneous-loss diagnostic (2026-08-23)
+
+The secure simultaneous-loss fixture first failed in
+[32632600261](https://github.com/TaeeunKil/kafrust/actions/runs/32632600261)
+and [32633284143](https://github.com/TaeeunKil/kafrust/actions/runs/32633284143)
+because it advanced sequence identity before a failed `NOT_ENOUGH_REPLICAS`
+batch and discarded the unresolved records. Commit `15741d8` enables
+idempotence, retains failed batches for replay, and rejects an unresolved
+pending batch at the hard deadline.
+
+The corrected exact published `0.3.6` run
+[32633658046](https://github.com/TaeeunKil/kafrust/actions/runs/32633658046)
+passed a 180-second Kafka 4.3.1 three-broker SASL_SSL/SCRAM-SHA-256 segment
+with simultaneous broker 1/2 outage. It reconciled 6,089,400 attempted,
+acknowledged, and consumed unique records with zero loss/duplicates, matching
+identity digest, `recovered=true`, and drained final gauges. The segment
+observed 300 operation errors, 2 failed requests, 5 retries, and 30,000
+transient unknown attempts that were recovered by replay. This strengthens
+per-segment fault evidence, but continuity remains runner-local and
+unqualified; the six-hour, 100-cycle, ambiguity-family, controlled-data-loss,
+and repeated-campaign gates remain open.
+
 ### Bounded current-source diagnostic runs (2026-08-22)
 
 The first 60-second manual run on source `3fdfc778` (run

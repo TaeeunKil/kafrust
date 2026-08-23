@@ -480,6 +480,21 @@ runner starts a fresh broker. The six-hour campaigns, 100 churn cycles,
 ambiguity families, controlled data-loss fixtures, and cross-segment
 continuity remain open.
 
+The secure simultaneous-loss fixture then exposed and corrected an
+unknown-outcome handling defect. Runs
+[32632600261](https://github.com/TaeeunKil/kafrust/actions/runs/32632600261)
+and [32633284143](https://github.com/TaeeunKil/kafrust/actions/runs/32633284143)
+discarded failed batches after `NOT_ENOUGH_REPLICAS` and therefore reported
+identity gaps. Commit `15741d8` enables idempotence, retains failed batches for
+replay, and fails explicitly when a pending outcome remains unresolved. The
+corrected published `0.3.6` secure segment
+[32633658046](https://github.com/TaeeunKil/kafrust/actions/runs/32633658046)
+reconciled 6,089,400 unique records through a simultaneous two-broker outage
+with zero loss/duplicates and drained gauges. It observed 300 operation
+errors, 5 retries, and 30,000 transient unknown attempts that were recovered;
+this is stronger per-segment evidence, not six-hour or cross-segment
+qualification.
+
 The V1-22 `throughput_benchmark` example now has a timed campaign mode with
 barrier-synchronized warmup/measurement windows, worker-per-partition
 concurrency, configurable JSONL samples (ten-second campaign target), RSS/retry/latency fields, and final

@@ -51,3 +51,37 @@ run is not evidence of continuous cross-run record identity because every
 segment starts a fresh runner-local broker. The current descriptor contract
 separates qualified per-segment identity from the still-unqualified
 cross-segment continuity claim.
+
+## Secure simultaneous-loss segment after retry fix
+
+The secure fixture initially exposed a harness contract bug rather than a
+client data-loss result. Runs [32632600261](https://github.com/TaeeunKil/kafrust/actions/runs/32632600261)
+and [32633284143](https://github.com/TaeeunKil/kafrust/actions/runs/32633284143)
+stopped two brokers simultaneously and reported identity gaps after repeated
+`NOT_ENOUGH_REPLICAS` responses. The fixture had advanced its next sequence
+before a failed batch and discarded the records, so it converted unresolved
+outcomes into apparent loss. Commit `15741d8` enables idempotence for both
+published multi-soak fixtures, retains failed batches for replay, advances the
+sequence only after a successful metadata result, and fails explicitly if a
+pending unknown outcome remains at the hard deadline.
+
+The corrected secure segment passed in
+[32633658046](https://github.com/TaeeunKil/kafrust/actions/runs/32633658046)
+using the exact published `kafrust 0.3.6` / `kafrust-protocol 0.3.6` pair:
+
+- Kafka 4.3.1, three-broker KRaft, SASL_SSL/SCRAM-SHA-256
+- simultaneous stop of brokers 1 and 2 after one-third of a 180-second segment;
+  10-second outage
+- 6,089,400 attempted, acknowledged, and consumed unique 1-KiB records
+- 300 operation errors, 2 failed requests, 5 client retries, and 30,000
+  transient unknown attempts, all recovered by replaying retained batches
+- zero loss, zero duplicates, matching identity digest, `recovered=true`, and
+  final `in_flight_requests=0` / `buffered_records=0`
+- published artifact digest and broker image digest retained in the uploaded
+  immutable descriptor
+
+This is stronger secure per-segment recovery evidence and validates the
+unknown-outcome handling in the fixture. It is still diagnostic: the runner is
+local to one segment, `continuity_claim` remains unqualified, and the six-hour,
+100-cycle, ambiguity-family, controlled-data-loss, and repeated-campaign gates
+remain open.
