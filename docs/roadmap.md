@@ -897,6 +897,21 @@ across all ten rows. The raw result and non-claims are recorded in
 [`v1-22-published-competitor-comparison-2026-08-23.md`](evidence/v1-22-published-competitor-comparison-2026-08-23.md).
 This is a stronger re-plan input, not a release authorization.
 
+The exact published `0.3.6` pair was refreshed from pushed source
+`cf4429d7c643cbfe0046d5c3571a1a3b10f04573` in
+[32646370582](https://github.com/TaeeunKil/kafrust/actions/runs/32646370582):
+all twelve external smoke profiles passed with retained lockfiles and outputs.
+Published mTLS on Kafka 3.7.2 and 4.3.1, OAUTHBEARER, and API 74 configuration
+also passed in [32646371786](https://github.com/TaeeunKil/kafrust/actions/runs/32646371786),
+[32646373388](https://github.com/TaeeunKil/kafrust/actions/runs/32646373388),
+[32646374747](https://github.com/TaeeunKil/kafrust/actions/runs/32646374747),
+and [32646376335](https://github.com/TaeeunKil/kafrust/actions/runs/32646376335).
+The exact checksum, profile list, and non-claims are retained in
+[`v1-20-published-refresh-2026-08-23.md`](evidence/v1-20-published-refresh-2026-08-23.md).
+This strengthens published compatibility evidence only; V1-20, V1-21, V1-22,
+V1-23, and the release gates remain open, and no `0.3.7` or `1.0.0` decision is
+made from this refresh.
+
 ## Historical Release Qualification
 
 `0.3.5` is now published on crates.io in protocol-first order. The fresh

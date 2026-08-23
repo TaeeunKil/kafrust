@@ -157,6 +157,20 @@ passed all twelve profiles, including Kafka 3.9.1, and retained 12 lockfiles
 plus 12 outputs. Its immutable record is
 [`v1-20-published-smoke-readiness-rerun-2026-08-23.md`](../../evidence/v1-20-published-smoke-readiness-rerun-2026-08-23.md).
 
+The exact published pair was refreshed again from source
+`cf4429d7c643cbfe0046d5c3571a1a3b10f04573` in
+[32646370582](https://github.com/TaeeunKil/kafrust/actions/runs/32646370582).
+All twelve smoke profiles passed and retained external lockfiles plus captured
+outputs; the registry `kafrust 0.3.6` checksum is recorded in
+[`v1-20-published-refresh-2026-08-23.md`](../../evidence/v1-20-published-refresh-2026-08-23.md).
+The companion published mTLS, OAUTHBEARER, and API 74 checks also passed in
+[32646371786](https://github.com/TaeeunKil/kafrust/actions/runs/32646371786),
+[32646373388](https://github.com/TaeeunKil/kafrust/actions/runs/32646373388),
+[32646374747](https://github.com/TaeeunKil/kafrust/actions/runs/32646374747),
+and [32646376335](https://github.com/TaeeunKil/kafrust/actions/runs/32646376335).
+This is a stronger published-row refresh only; it does not close the complete
+matrix or any downstream V1 gate.
+
 ## Failure And Lifecycle Contract
 
 - One required row failure blocks the matrix; it is not averaged away.

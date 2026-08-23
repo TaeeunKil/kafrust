@@ -3981,3 +3981,168 @@ unqualified relative artifact label.
 - result: not-run
 - artifact: workflow run 32644605633; no result artifact retained
 - non_claims: not a client fault result, not a passing six-hour gate, not V1-21 completion, not SLO, not 1.0.0 readiness
+
+## Q-PUBLISHED-V120-REFRESH-001
+
+- date_utc: 2026-08-23
+- source_commit: cf4429d7c643cbfe0046d5c3571a1a3b10f04573
+- client_version: 0.3.6 published artifact
+- protocol_version: 0.3.6 published dependency
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 3.7.2, 3.8.1, 3.9.1, 4.0.0, 4.3.1
+- kafka_image: apache/kafka:3.7.2; apache/kafka:3.8.1; apache/kafka:3.9.1; apache/kafka:4.0.0; apache/kafka:4.3.1
+- mode: KRaft
+- topology: single-broker external smoke per profile
+- security: PLAINTEXT; SASL_PLAINTEXT/PLAIN; SASL_SSL/SCRAM-SHA-256; SASL_SSL/SCRAM-SHA-512
+- group_protocol: classic; KIP-848
+- workload: published admin/topic lifecycle, idempotent produce, transaction commit/abort, read_committed, direct consume, group read, group commit/restore, and codec profiles
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32646370582
+- fault: none injected
+- duration: approximately 90 seconds wall time across twelve matrix jobs
+- record_count: one produced/read record per profile; profile-specific
+- member_count: one broker per profile
+- repetition_count: 1
+- expected_errors: zero loss and zero duplicates; external registry lockfile required
+- observed_errors: all twelve matrix jobs completed successfully; each printed the published smoke verification line
+- retry_count: bounded metadata readiness retry where applicable; no failed-job retry
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: not measured
+- result: passed
+- artifact: 12 external Cargo.lock files and 12 captured outputs from run 32646370582; kafrust registry checksum 4fe2758d0093ef4b2a236090cca4dc7511b9e865f5e18ce42823e428a6be71d2; docs/evidence/v1-20-published-refresh-2026-08-23.md
+- non_claims: not the complete V1-20 matrix, not long fault or SLO evidence, not V1-23 service canary, not API freeze, not RC, not 1.0.0 readiness
+
+## Q-PUBLISHED-V120-REFRESH-002
+
+- date_utc: 2026-08-23
+- source_commit: cf4429d7c643cbfe0046d5c3571a1a3b10f04573
+- client_version: 0.3.6 published artifact
+- protocol_version: 0.3.6 published dependency
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 3.7.2
+- kafka_image: apache/kafka:3.7.2
+- mode: KRaft
+- topology: single-broker external mutual-TLS smoke
+- security: TLS with required client certificate
+- group_protocol: classic
+- workload: published Admin lifecycle, direct produce/consume, transaction commit/abort with read_committed, and group commit/restore
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32646371786
+- fault: none injected
+- duration: approximately 75 seconds wall time
+- record_count: one direct record; one committed transaction record; one group record
+- member_count: one broker
+- repetition_count: 1
+- expected_errors: certificate-authenticated connection and zero loss/duplicates
+- observed_errors: published mTLS passed Admin, producer, direct consumer, transaction/read_committed, and group checks
+- retry_count: listener readiness retries only
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: not measured
+- result: passed
+- artifact: GitHub Actions run 32646371786; published mTLS client output retained in workflow log; docs/evidence/v1-20-published-refresh-2026-08-23.md
+- non_claims: not credential rotation, not provider outage/expiry, not restricted-principal authorization, not long security soak, not 1.0.0 readiness
+
+## Q-PUBLISHED-V120-REFRESH-003
+
+- date_utc: 2026-08-23
+- source_commit: cf4429d7c643cbfe0046d5c3571a1a3b10f04573
+- client_version: 0.3.6 published artifact
+- protocol_version: 0.3.6 published dependency
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka:4.3.1
+- mode: KRaft
+- topology: single-broker external mutual-TLS smoke
+- security: TLS with required client certificate
+- group_protocol: classic
+- workload: published Admin lifecycle, direct produce/consume, transaction commit/abort with read_committed, and group commit/restore
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32646373388
+- fault: none injected
+- duration: approximately 80 seconds wall time
+- record_count: one direct record; one committed transaction record; one group record
+- member_count: one broker
+- repetition_count: 1
+- expected_errors: certificate-authenticated connection and zero loss/duplicates
+- observed_errors: published mTLS passed Admin, producer, direct consumer, transaction/read_committed, and group checks
+- retry_count: listener readiness retries only
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: not measured
+- result: passed
+- artifact: GitHub Actions run 32646373388; published mTLS client output retained in workflow log; docs/evidence/v1-20-published-refresh-2026-08-23.md
+- non_claims: not credential rotation, not provider outage/expiry, not restricted-principal authorization, not long security soak, not 1.0.0 readiness
+
+## Q-PUBLISHED-V120-REFRESH-004
+
+- date_utc: 2026-08-23
+- source_commit: cf4429d7c643cbfe0046d5c3571a1a3b10f04573
+- client_version: 0.3.6 published artifact
+- protocol_version: 0.3.6 published dependency
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 3.7.2
+- kafka_image: apache/kafka:3.7.2
+- mode: KRaft
+- topology: single-broker external OAUTHBEARER smoke
+- security: SASL_SSL/OAUTHBEARER
+- group_protocol: not-applicable
+- workload: published OAUTHBEARER provider authentication, broker discovery, produce, and consume
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32646374747
+- fault: none injected
+- duration: approximately 65 seconds wall time
+- record_count: one produced/read record
+- member_count: one broker
+- repetition_count: 1
+- expected_errors: provider token accepted; zero loss and zero duplicates; published lockfile version checked
+- observed_errors: published oauthbearer ok; brokers=1; consumed=true; token_provider=true; dependency verification passed
+- retry_count: broker readiness retries only
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: not measured
+- result: passed
+- artifact: GitHub Actions run 32646374747; no token material retained; docs/evidence/v1-20-published-refresh-2026-08-23.md
+- non_claims: not signed external OIDC/JWKS, not rotation or outage/expiry, not provider SLO, not complete V1-16 matrix, not 1.0.0 readiness
+
+## Q-PUBLISHED-V120-REFRESH-005
+
+- date_utc: 2026-08-23
+- source_commit: cf4429d7c643cbfe0046d5c3571a1a3b10f04573
+- client_version: 0.3.6 published artifact
+- protocol_version: 0.3.6 published dependency
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka:4.3.1
+- mode: KRaft
+- topology: single-broker external API 74 smoke
+- security: PLAINTEXT
+- group_protocol: not-applicable
+- workload: published ConfigResource listing and configuration documentation request
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32646376335
+- fault: none injected
+- duration: approximately 60 seconds wall time
+- record_count: not-applicable
+- member_count: one broker
+- repetition_count: 1
+- expected_errors: list version 1, resource type 2, one resource, and documentation response
+- observed_errors: api74 list_version=1 resource_type=2 resources=1; describe_documentation=true entries=33
+- retry_count: broker readiness retries only
+- duplicate_count: not-applicable
+- loss_count: not-applicable
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: not measured
+- result: passed
+- artifact: GitHub Actions run 32646376335; published API 74 client log; docs/evidence/v1-20-published-refresh-2026-08-23.md
+- non_claims: not complete API 74 matrix, not authorization coverage, not long fault or SLO evidence, not 1.0.0 readiness

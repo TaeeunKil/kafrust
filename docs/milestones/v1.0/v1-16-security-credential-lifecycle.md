@@ -64,6 +64,21 @@ zero-match scan across logs and uploaded artifacts remain open. The required
 floor/current published profiles and final provider/connection gauges have not
 yet been run for the coordinated `0.3.6` candidate.
 
+### Published 0.3.6 security refresh (2026-08-23)
+
+The exact published `0.3.6` pair passed fresh mutual-TLS smoke on Kafka 3.7.2
+and 4.3.1 in
+[32646371786](https://github.com/TaeeunKil/kafrust/actions/runs/32646371786)
+and [32646373388](https://github.com/TaeeunKil/kafrust/actions/runs/32646373388).
+The external project covered Admin lifecycle, direct produce/consume,
+transaction commit/abort with `read_committed`, and group commit/restore. The
+published OAUTHBEARER smoke also passed in
+[32646374747](https://github.com/TaeeunKil/kafrust/actions/runs/32646374747),
+including the provider and consumed-record assertions with the published
+lockfile version check. These are short published rows only; credential
+rotation, provider outage/expiry, restricted-principal, zero-secret scan, and
+the complete V1-16 floor/current matrix remain open.
+
 ## Failure And Lifecycle Contract
 
 - Authentication and provider calls are bounded by the configured request or
