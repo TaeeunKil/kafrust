@@ -186,8 +186,12 @@ group-family executions possible. The exact published `0.3.6` classic run
 [32642112754](https://github.com/TaeeunKil/kafrust/actions/runs/32642112754)
 completed all 100 cycles and uploaded the immutable summary with the published
 lockfile digest and broker image identity; it closes only the classic 100-cycle
-sub-gate. The KIP-848 consumer run is still pending, and no group-family
-result is promoted beyond the exact row recorded in the ledger.
+sub-gate. The exact published KIP-848 consumer run
+[32642114151](https://github.com/TaeeunKil/kafrust/actions/runs/32642114151)
+also completed all 100 cycles with the same zero-loss/duplicate and drained
+gauge result on Kafka 4.3.1. Both rows are promoted only for their exact group
+protocol and broker profiles; Share, ambiguity-family, long-soak, and
+controlled-data-loss gates remain open.
 
 ### Published classic 100-cycle member-loss result (2026-08-23)
 
@@ -196,8 +200,9 @@ forced member-loss/rejoin cycles across six partitions. The retained summary
 reports `cycle_count=100`, `records_per_cycle=6`, zero loss and duplicates, and
 zero final in-flight/buffered gauges. It records source `7cc0b55`, the exact
 published version, lockfile SHA-256, and broker image identity. This qualifies
-the classic group sub-gate only; KIP-848, Share, ambiguity-family, long-soak,
-and controlled data-loss gates remain open.
+the classic group sub-gate; together with the KIP-848 row above, both group
+100-cycle sub-gates are covered. Share, ambiguity-family, long-soak, and
+controlled data-loss gates remain open.
 
 Two Share qualification attempts with member dwell values of one and ten
 seconds also failed before the first post-loss seed was consumed: the surviving

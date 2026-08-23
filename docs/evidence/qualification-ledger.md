@@ -352,6 +352,39 @@ unqualified relative artifact label.
 - artifact: published-group-churn-summary.json; Cargo.lock; artifact bundle from run 32642112754; lockfile_sha256=61bceb6825617d675c21deecf142d60dce046f31b07ead9e531572693ba38275; source_commit_recorded_in_summary=7cc0b555336b0285fc5f8c5882f03a8b59aabe3d
 - non_claims: not KIP-848 consumer group, not ShareConsumer, not six-hour fault soak, not 100 ambiguity-family outcomes, not controlled data-loss evidence, not SLO, not V1-21 completion, not 1.0.0 readiness
 
+## Q-PUBLISHED-V121-008
+
+- date_utc: 2026-08-23
+- source_commit: 7cc0b555336b0285fc5f8c5882f03a8b59aabe3d
+- client_version: 0.3.6 published artifact
+- protocol_version: 0.3.6 published dependency
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka@sha256:47dccc76b32761bc57462b8753144cdbb73a16b123b1d13d3eedb92bb7952b11
+- mode: published KIP-848 consumer group member-loss/rejoin churn
+- topology: three-broker KRaft
+- security: PLAINTEXT
+- group_protocol: consumer
+- workload: 100 forced member-loss/rejoin cycles across six partitions
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32642114151
+- fault: member 2 exited abruptly and rejoined for each cycle; surviving member reacquired all partitions
+- duration: 1003 seconds workflow; 100-cycle workload
+- record_count: 600 ownership observations (6 per cycle)
+- member_count: 2
+- repetition_count: 100 cycles
+- expected_errors: every cycle reacquires all six partitions, zero loss/duplicates, and drained final gauges
+- observed_errors: cycle_count=100, records_per_cycle=6, loss_count=0, duplicate_count=0
+- retry_count: not-recorded
+- duplicate_count: 0
+- loss_count: 0
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: in_flight=0; buffered=0
+- result: passed
+- artifact: published-group-churn-summary.json; Cargo.lock; artifact bundle from run 32642114151; lockfile_sha256=61bceb6825617d675c21deecf142d60dce046f31b07ead9e531572693ba38275; source_commit_recorded_in_summary=7cc0b555336b0285fc5f8c5882f03a8b59aabe3d
+- non_claims: not classic group, not ShareConsumer, not six-hour fault soak, not 100 ambiguity-family outcomes, not controlled data-loss evidence, not SLO, not V1-21 completion, not 1.0.0 readiness
+
 ## Q-PUBLISHED-V121-006
 
 - date_utc: 2026-08-23

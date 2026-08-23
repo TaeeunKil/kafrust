@@ -557,13 +557,19 @@ is counted before its run output is retained and checked. The exact published
 classic run [32642112754](https://github.com/TaeeunKil/kafrust/actions/runs/32642112754)
 now passes the 100-cycle gate and uploads an immutable JSON summary with the
 published lockfile digest and broker image identity. This closes only the
-classic group sub-gate; the KIP-848 consumer run remains open.
+classic group sub-gate. The KIP-848 consumer run
+[32642114151](https://github.com/TaeeunKil/kafrust/actions/runs/32642114151)
+also completed its 100-cycle gate on Kafka 4.3.1 with the same zero-loss,
+zero-duplicate, drained-gauge result. The group-family 100-cycle sub-gates are
+now both covered; Share, long fault, ambiguity, and controlled-data-loss gates
+remain open.
 
 The promoted classic summary records source `7cc0b55`, `cycle_count=100`, six
 partitions, zero ownership loss/duplicates, and drained final gauges. It is
 published-artifact evidence for that exact group protocol and broker profile,
 not six-hour fault, Share, ambiguity-family, controlled-data-loss, SLO, or V1
-completion evidence.
+completion evidence. The second row has the same exact published artifact,
+lockfile, and result contract for KIP-848 consumer groups.
 
 Share 100-cycle attempts with one- and ten-second member dwell both ended before
 the surviving member reacquired its first post-loss assignment. These are
