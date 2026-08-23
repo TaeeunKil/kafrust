@@ -3453,3 +3453,36 @@ unqualified relative artifact label.
 - result: blocked
 - artifact: docs/milestones/v1.0/v1-23-migration-adapter-and-rollback.md; docs/evidence/v1-23-migration-canary-manifest.json
 - non_claims: not a code defect diagnosis, not permission to use an example as a production service, not V1-23 completion, not V1-24/V1-25 completion, not release approval
+
+## Q-SOURCE-V122-PROFILE-004
+
+- date_utc: 2026-08-23
+- source_commit: 07705c518f2f2c3e9f924c0a0f77ecf1f272742f
+- client_version: 0.3.6 source checkout
+- protocol_version: 0.3.6 source checkout
+- work_status: In progress
+- evidence_level: CI
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
+- mode: same-source buffered enqueue threshold scan diagnostic
+- topology: single-node KRaft
+- security: PLAINTEXT
+- group_protocol: not-applicable
+- workload: two repetitions of four 1-KiB/no-compression profiles; 10-second warmup, 60-second measured window, 10-second samples; immediate 1/4 workers, buffered 4 workers, direct consumer 1 worker
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32634691272
+- fault: none injected
+- duration: two bounded 60-second measured repetitions per profile
+- record_count: profile-dependent; every run reconciled produced = consumed
+- member_count: not-applicable
+- repetition_count: 2 source repetitions across 4 profiles
+- expected_errors: zero retries, unknown outcomes, loss, duplicates, and final in-flight/buffered gauges
+- observed_errors: none; buffered throughput 15,403/16,203 records/s, p99 10 ms, context switches 378,946/1,349,630
+- retry_count: 0 in all eight jobs
+- duplicate_count: 0
+- loss_count: 0
+- latency: buffered p99 10 ms; other profile p99 1/5 ms
+- memory: descriptor RSS retained per job; no SLO adjudication
+- final_resource_gauges: zero in all eight jobs
+- result: passed
+- artifact: docs/evidence/v1-22-performance-profile-before-after-2026-08-23.md; profile descriptors and raw JSONL artifacts in runs 32634691272 and 32634877270
+- non_claims: not eight-hour/five-repetition SLO, not locked baseline, not stable throughput/resource percentage, not published-artifact or secured/three-broker evidence, not competitor parity, not release authorization

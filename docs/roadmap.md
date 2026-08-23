@@ -596,6 +596,18 @@ switches. The two after results stay above the 13,480 records/s predecessor,
 yet the surrounding hosted-runner variation means no stable percentage claim
 or release decision is made; a controlled repetition set remains next.
 
+The next source optimization (`07705c5`) narrows the buffered enqueue
+threshold scan to the newest request's topic/partition group without changing
+record-count, encoded-byte, flush, or delivery semantics. Same-source runs
+[32634691272](https://github.com/TaeeunKil/kafrust/actions/runs/32634691272) and
+[32634877270](https://github.com/TaeeunKil/kafrust/actions/runs/32634877270)
+reconciled all four profiles with zero retries, unknown outcomes, loss,
+duplicates, and drained gauges. Buffered throughput measured 15,403 and
+16,203 records/s with p99 10 ms; context switches measured 378,946 and
+1,349,630. This retains the change as a semantics-preserving diagnostic, but
+the hosted-runner variation does not establish a stable percentage, lock a
+baseline, qualify V1-22, or authorize a publication.
+
 V1-21 now has the corresponding cross-segment adjudicator in
 [`scripts/check_v1_fault_results.py`](../scripts/check_v1_fault_results.py).
 It rejects count-only or continuity-unqualified diagnostics and requires

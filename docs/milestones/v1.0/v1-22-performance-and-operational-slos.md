@@ -240,6 +240,19 @@ The two after runs remain above the predecessor's 13,480 records/s, while the
 variation demonstrates that a controlled repetition set is required before
 accepting a baseline or claiming a release-relevant percentage improvement.
 
+The next source optimization (`07705c5`) narrows the buffered enqueue
+threshold scan to the newest request's topic/partition group, preserving the
+existing flush and encoded-byte semantics while avoiding repeated work for
+unaffected groups. Same-source repetitions
+[32634691272](https://github.com/TaeeunKil/kafrust/actions/runs/32634691272) and
+[32634877270](https://github.com/TaeeunKil/kafrust/actions/runs/32634877270)
+both reconciled all four profiles with zero retries, unknown outcomes,
+loss/duplicates, and drained gauges. Buffered throughput was 15,403 and
+16,203 records/s with p99 10 ms; context switches were 378,946 and 1,349,630.
+The surrounding throughput/resource variation means this is retained as
+semantics-preserving diagnostic evidence only. It does not lock a baseline,
+qualify an SLO, or close the six-profile/five-repetition eight-hour campaign.
+
 ## Failure And Lifecycle Contract
 
 - Benchmark backpressure uses the same bounded production queues and reports

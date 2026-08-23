@@ -71,8 +71,7 @@ bucket fell from 25 ms to 10 ms. Context switches increased for that path in
 this particular run, so the result is evidence for a promising throughput
 direction rather than a universal regression or SLO result. The immediate and
 direct-consumer paths were effectively unchanged within hosted-runner noise.
-The immediate and direct-consumer paths were effectively unchanged within
-hosted-runner noise. A replication workflow
+A replication workflow
 [32632004251](https://github.com/TaeeunKil/kafrust/actions/runs/32632004251)
 on the same source code produced 16,216.67 buffered records/s, p99 10 ms,
 38,988 KiB max RSS, and 1,829,585 context switches, with zero retries,
@@ -81,6 +80,39 @@ the 13,480 records/s predecessor, but the surrounding profiles also varied
 substantially; the pair is not enough to establish a stable percentage gain.
 The next slice must repeat this workload under a controlled repetition set and
 inspect queue batching before any baseline or publication claim.
+
+## Flush-threshold scan diagnostic
+
+Commit `07705c5` narrows the buffered enqueue threshold check. The worker now
+counts and re-encodes only the topic/partition group that received the newest
+request. This is safe because the check runs immediately after append and
+expired requests only remove entries; it preserves the existing record-count,
+encoded-byte, flush, and delivery semantics. The old path rebuilt every group
+and re-encoded every group on every enqueue.
+
+Two same-source profile runs were retained:
+
+- [32634691272](https://github.com/TaeeunKil/kafrust/actions/runs/32634691272)
+- [32634877270](https://github.com/TaeeunKil/kafrust/actions/runs/32634877270)
+
+Both used source `07705c518f2f2c3e9f924c0a0f77ecf1f272742f`, Kafka 4.3.1
+single-node KRaft/PLAINTEXT, 1-KiB values, no compression, 10-second warmup,
+60-second measured window, 10-second samples, and the four profile paths above.
+All eight jobs reconciled produced/consumed records with zero retries,
+unknown outcomes, loss, duplicates, and final in-flight/buffered records.
+
+| Profile | Run 32634691272 throughput | Run 32634877270 throughput | p99 (both) | Context switches (run 1 / run 2) |
+| --- | ---: | ---: | ---: | ---: |
+| immediate, 1 worker, batch 200 | 76,756.67 | 76,613.33 | 1 ms | 60,648 / 78,559 |
+| immediate, 4 workers, batch 200 | 182,610.00 | 196,560.00 | 5 ms | 405,121 / 407,164 |
+| buffered, 4 workers, batch 200 | 15,403.33 | 16,203.33 | 10 ms | 378,946 / 1,349,630 |
+| direct-consumer, 1 worker, batch 1 | 3,054.02 | 1,999.48 | 1 ms | 420,372 / 272,426 |
+
+The buffered throughput is below the earlier 18,283 records/s pair and near
+the 16,217 records/s replication, while context switches vary from 378,946 to
+1,349,630. This supports retaining the allocation/scan reduction as a
+semantics-preserving diagnostic, but does not establish a stable throughput or
+resource percentage, lock a baseline, qualify an SLO, or authorize a release.
 
 ## Non-claims
 
