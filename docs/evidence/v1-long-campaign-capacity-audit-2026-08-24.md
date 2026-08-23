@@ -126,3 +126,38 @@ filesystem free space reserved inside the image; only a successful WSL boot
 and live filesystem inspection can distinguish those cases. No claim about
 the current VHDX's internal top consumer is promoted until that inspection is
 possible.
+
+## Live VHDX consumer and runner recovery (2026-08-24)
+
+After the export backup was copied to `C:\Users\user\Backups\Ubuntu-full.tar`
+and the original `T:\Backups\Ubuntu-full.tar` was removed, `Ubuntu-T9` booted
+normally. A live inspection then showed `/dev/sdd` at `771 GiB` used of `1007
+GiB` with `185 GiB` available. The 773.79 GiB VHDX is therefore not an
+unexplained filesystem allocation: Docker accounts for the dominant usage.
+
+`docker system df` reported `631.7 GB` of reclaimable container writable
+layers and `85.89 GB` of build cache (`61.44 GB` reclaimable). The three
+containers named `kafrust-published-secure-multi-soak-1/2/3` each had a `211 GB`
+writable layer, exited with code `255`, and were created by failed run
+`32649020906`. Their diffs contain the run's Kafka log/data trees under
+`/tmp/kafka-logs` and `/opt/kafka/logs`; these stale containers, not the small
+Docker JSON log rotation files, are the primary live consumer. They are not
+qualification evidence and must not be reused for a later campaign.
+
+The registered `wsl-ubuntu-t9` listener was not installed as a systemd service
+and was consequently offline after WSL recovery. It was restarted from the
+existing configured runner directory; the repository inventory now reports one
+online, idle runner with labels `self-hosted`, `Linux`, `X64`, `docker`, and
+`wsl2`. This restores runner capacity, but it does not qualify V1-21 or V1-22.
+The stale Kafka containers and reclaimable build cache still require an
+explicit cleanup before dispatching another long campaign.
+
+The stale containers were removed with their anonymous data volumes and the
+unused Docker build cache was pruned. `/dev/sdd` then reported `110 GiB` used
+and `846 GiB` available. A fresh WSL export completed with exit code `0` at
+`T:\Backups\Ubuntu-full-2026-08-24.tar` (`115,386,419,200` bytes, last write
+`2026-08-24 08:51:42`). Only after that success was the old C: copy
+`C:\Users\user\Backups\Ubuntu-full.tar` deleted; it no longer exists. The
+new export remains on T:, so it is a same-volume recovery copy rather than an
+independent disaster-recovery location. Current host free space is
+approximately `53.7 GB` on T: and `205.6 GB` on C:.

@@ -779,6 +779,34 @@ approximately `773.8 GiB`; the near-full host volume is the primary recovery
 hypothesis. No V1-21 ledger row, V1-22 campaign, RC, stable release, or
 publication is authorized by this failed run.
 
+## V1-21 Capacity Recovery Update (2026-08-24)
+
+The export backup was moved to `C:\Users\user\Backups\Ubuntu-full.tar` and
+the old `T:\Backups\Ubuntu-full.tar` copy was removed. `Ubuntu-T9` now starts
+normally with `185 GiB` free on its Linux filesystem. Live Docker inspection
+found the concrete VHDX consumers: the three exited
+`kafrust-published-secure-multi-soak-{1,2,3}` containers created by failed run
+`32649020906` each retain a `211 GB` writable layer (`631.7 GB` total), while
+Docker build cache reports `85.89 GB` (`61.44 GB` reclaimable). Their Kafka
+log/data trees are stale failure-run state, not qualification evidence.
+
+The configured `wsl-ubuntu-t9` listener was restarted manually because its
+runner service was not installed. GitHub now reports one idle online runner
+with the required `self-hosted`, `Linux`, `X64`, `docker`, and `wsl2` labels.
+This restores execution capacity but does not qualify V1-21 or V1-22. The
+stale containers/cache must be explicitly cleaned before the exact V1-21
+six-hour manifest is rerun; no RC, stable release, or registry publication is
+authorized by this recovery state.
+
+The three stale containers were removed with their anonymous data volumes and
+the unused Docker build cache was pruned. WSL then reported `110 GiB` used and
+`846 GiB` available. A fresh export completed with exit code `0` at
+`T:\Backups\Ubuntu-full-2026-08-24.tar` (`115,386,419,200` bytes). The old C:
+copy was deleted only after that success; the new export remains a
+same-volume recovery copy, not independent disaster-recovery storage. The
+runner is online and idle, but the exact V1-21 six-hour manifest still must be
+rerun and adjudicated before any release decision.
+
 ## V1-23 Execution Update (2026-08-23)
 
 The current published competitor check was run before making any release-path

@@ -389,3 +389,29 @@ services are running, so this is a host-capacity failure rather than a
 campaign or client result. Freeing safe host storage and confirming the WSL
 instance can start is required before any V1-21 rerun; the VHDX must not be
 deleted or repaired in place without a backup.
+
+### Live recovery update (2026-08-24)
+
+The backup was moved to `C:\Users\user\Backups\Ubuntu-full.tar` and the old
+`T:\Backups\Ubuntu-full.tar` copy was removed. `Ubuntu-T9` now boots with
+`185 GiB` free on `/dev/sdd`. Live Docker accounting identifies the previous
+capacity failure: the three exited
+`kafrust-published-secure-multi-soak-{1,2,3}` containers from run
+`32649020906` each retain a `211 GB` writable layer, for `631.7 GB` total;
+Docker build cache adds `85.89 GB` (`61.44 GB` reclaimable). Their Kafka log
+trees are stale failure-run data and produce no V1-21 evidence.
+
+The configured `wsl-ubuntu-t9` listener was restarted manually because no
+systemd service was installed. GitHub now reports one idle online runner with
+the required `self-hosted`, `Linux`, `X64`, `docker`, and `wsl2` labels. The
+runner recovery removes the infrastructure blocker, but V1-21 remains open:
+the stale containers/cache must be cleaned, then the exact six-hour manifest
+must be rerun and adjudicated before any ledger row can pass.
+
+The three stale containers were removed with their anonymous data volumes and
+the unused Docker build cache was pruned. WSL then reported `110 GiB` used and
+`846 GiB` available. A fresh export completed with exit code `0` at
+`T:\Backups\Ubuntu-full-2026-08-24.tar` (`115,386,419,200` bytes). The old C:
+copy was deleted only after this success; the new export is a same-volume
+recovery copy, not independent disaster-recovery storage. V1-21 still requires
+the exact six-hour manifest rerun and adjudication.
