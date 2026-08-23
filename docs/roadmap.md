@@ -433,8 +433,9 @@ awaiting the next exact-head CI documentation row.
 
 ## V1-21~V1-26 Release-Path Preparation (2026-08-22)
 
-V1-21 through V1-23 remain `Planned` while the exact published matrix,
-long-duration fault/SLO campaigns, and a named migration service are pending.
+V1-21 and V1-22 remain `Planned` while the exact published matrix and
+long-duration fault/SLO campaigns are pending; V1-23 is `Blocked` until a
+named migration service and approved canary environment are supplied.
 Their preparation records explicitly preserve the six-hour/24-hour campaign
 capacity, five-repetition performance requirements, and canary rollback
 prerequisites. The V1-21 fault manifest/checker now names the four six-hour

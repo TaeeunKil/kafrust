@@ -51,7 +51,7 @@ track of ambiguous operations.
 
 ## Preparation Record (2026-08-22)
 
-V1-23 remains `Planned`. The repository contains the row-by-row
+V1-23 is `Blocked`. The repository contains the row-by-row
 [`rust-rdkafka` migration guide](../../migration-from-rust-rdkafka.md) and
 typed operation/error mappings, but no named representative service, owner, or
 canary environment has been registered in this v1 program. The existing
@@ -60,9 +60,9 @@ comparison and forward/rollback canary. The preparation manifest at
 [`v1-23-migration-canary-manifest.json`](../../evidence/v1-23-migration-canary-manifest.json),
 its checker, and the manual `Migration Reference Canary` workflow now provide a
 reproducible 1,000-record smoke path with isolated topics plus a declared
-1,000,000-record exit path. V1-23 will be explicitly marked `Blocked` if a
-named service or approved reference environment is still absent when its
-dependency window opens.
+1,000,000-record exit path. The reference fixture is retained as preparation
+evidence only; the external canary cannot be promoted without a named service
+or approved production-like environment.
 
 The baseline smoke path passed on current source commit `7a686b0` in
 [Migration Reference Canary run 32552631034](https://github.com/TaeeunKil/kafrust/actions/runs/32552631034):
