@@ -482,7 +482,10 @@ continuity remain open.
 The V1-22 `throughput_benchmark` example now has a timed campaign mode with
 barrier-synchronized warmup/measurement windows, worker-per-partition
 concurrency, configurable JSONL samples (ten-second campaign target), RSS/retry/latency fields, and final
-record/gauge reconciliation. The bounded manual diagnostic workflow archives
+record/gauge reconciliation. It now also emits attempted/acknowledged/unknown
+outcome counts and qualified business-ID expected/observed SHA-256 digests;
+the adjudicator rejects missing or mismatched identity evidence. The bounded
+manual diagnostic workflow archives
 short current-source runs only; it does not promote them to the required
 five-repetition, eight-hour published SLO campaign.
 

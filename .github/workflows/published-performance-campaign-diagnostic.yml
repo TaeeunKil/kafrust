@@ -166,6 +166,14 @@ jobs:
             (.measured_seconds == $measured) and
             (.sample_seconds == $sample) and
             (.produced_records == .consumed_records) and
+            (.attempted_records == .produced_records) and
+            (.acknowledged_records == .consumed_records) and
+            (.unknown_outcomes == 0) and
+            (.record_id_reconciliation.qualified == true) and
+            (.record_id_reconciliation.unique_records == .consumed_records) and
+            (.record_id_reconciliation.loss_count == 0) and
+            (.record_id_reconciliation.duplicate_count == 0) and
+            (.record_id_reconciliation.expected_digest == .record_id_reconciliation.observed_digest) and
             (.in_flight_requests == 0) and
             (.buffered_records == 0)
           ' published-performance-campaign.jsonl >/dev/null

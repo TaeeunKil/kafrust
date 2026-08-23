@@ -37,6 +37,13 @@ The four retained descriptors and JSONL result files are available in the run's
 execution and result shape, but they cannot establish RSS slope, regression
 budgets, or steady-state retry limits over six hours.
 
+The current timed harness has since tightened the result contract: measured
+records carry deterministic partition/sequence business IDs, and the final
+JSONL row now reports attempted, acknowledged, consumed, unknown, loss, and
+duplicate counts plus matching expected/observed SHA-256 identity digests.
+The historical artifact above predates those fields; no historical diagnostic
+is retroactively promoted to `qualified: true`.
+
 ## Failure history retained
 
 - [32619156690](https://github.com/TaeeunKil/kafrust/actions/runs/32619156690)

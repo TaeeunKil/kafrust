@@ -158,10 +158,31 @@ def validate_final(
     consumed = integer(final.get("consumed_records"), "consumed_records")
     if produced == 0 or produced != consumed:
         raise ResultError(f"{descriptor_path}: produced/consumed records do not reconcile")
+    attempted = integer(final.get("attempted_records"), "attempted_records")
+    acknowledged = integer(final.get("acknowledged_records"), "acknowledged_records")
+    if attempted != produced or acknowledged != consumed or attempted != acknowledged:
+        raise ResultError(f"{descriptor_path}: attempted/acknowledged records do not reconcile")
+    if integer(final.get("unknown_outcomes"), "unknown_outcomes") != 0:
+        raise ResultError(f"{descriptor_path}: unknown outcomes are non-zero")
     if integer(final.get("loss_count"), "loss_count") != 0:
         raise ResultError(f"{descriptor_path}: acknowledged loss is non-zero")
     if integer(final.get("duplicate_count"), "duplicate_count") != 0:
         raise ResultError(f"{descriptor_path}: duplicate count is non-zero")
+    reconciliation = final.get("record_id_reconciliation")
+    if not isinstance(reconciliation, dict) or reconciliation.get("qualified") is not True:
+        raise ResultError(f"{descriptor_path}: record-ID reconciliation is not qualified")
+    if integer(reconciliation.get("unique_records"), "record_id_reconciliation.unique_records") != consumed:
+        raise ResultError(f"{descriptor_path}: record-ID unique count differs from consumed records")
+    if integer(reconciliation.get("loss_count"), "record_id_reconciliation.loss_count") != 0:
+        raise ResultError(f"{descriptor_path}: record-ID loss count is non-zero")
+    if integer(reconciliation.get("duplicate_count"), "record_id_reconciliation.duplicate_count") != 0:
+        raise ResultError(f"{descriptor_path}: record-ID duplicate count is non-zero")
+    expected_digest = str(reconciliation.get("expected_digest", ""))
+    observed_digest = str(reconciliation.get("observed_digest", ""))
+    if not HEX64.fullmatch(expected_digest) or not HEX64.fullmatch(observed_digest):
+        raise ResultError(f"{descriptor_path}: record-ID digests are not immutable")
+    if expected_digest != observed_digest:
+        raise ResultError(f"{descriptor_path}: expected and observed record-ID digests differ")
     if integer(final.get("in_flight_requests"), "in_flight_requests") != 0:
         raise ResultError(f"{descriptor_path}: in-flight requests did not drain")
     if integer(final.get("buffered_records"), "buffered_records") != 0:

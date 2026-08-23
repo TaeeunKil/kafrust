@@ -48,6 +48,10 @@
     "latency_p50_p95_p99",
     "rss_baseline_terminal_slope",
     "retry_ratio",
+    "attempted_records",
+    "acknowledged_records",
+    "unknown_outcomes",
+    "record_id_reconciliation",
     "loss_count",
     "duplicate_count",
     "final_resource_gauges"

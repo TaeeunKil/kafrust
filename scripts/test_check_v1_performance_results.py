@@ -72,9 +72,12 @@ def write_bundle(root: Path, repetition: int, *, qualified: bool = True, p99: in
             "sample_seconds": 2,
             "produced_records": 400,
             "consumed_records": 400,
+            "attempted_records": 400,
+            "acknowledged_records": 400,
             "requests_started": 400,
             "retries": 0,
             "retry_ratio": 0.0,
+            "unknown_outcomes": 0,
             "latency_p50_p95_p99": {"p50_ms": 1, "p95_ms": 2, "p99_ms": p99},
             "rss_baseline_terminal_slope": {
                 "baseline_bytes": 100,
@@ -85,6 +88,14 @@ def write_bundle(root: Path, repetition: int, *, qualified: bool = True, p99: in
             },
             "loss_count": 0,
             "duplicate_count": 0,
+            "record_id_reconciliation": {
+                "qualified": True,
+                "unique_records": 400,
+                "loss_count": 0,
+                "duplicate_count": 0,
+                "expected_digest": "d" * 64,
+                "observed_digest": "d" * 64,
+            },
             "in_flight_requests": 0,
             "buffered_records": 0,
         }
@@ -152,6 +163,18 @@ class PerformanceResultsTests(unittest.TestCase):
             }
             with self.assertRaises(MODULE.ResultError):
                 MODULE.validate_results(root, manifest(), baseline)
+
+    def test_record_identity_digest_mismatch_fails(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            write_bundle(root, 1)
+            write_bundle(root, 2)
+            result_path = root / "result-1.jsonl"
+            rows = [json.loads(line) for line in result_path.read_text(encoding="utf-8").splitlines()]
+            rows[-1]["record_id_reconciliation"]["observed_digest"] = "e" * 64
+            result_path.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
+            with self.assertRaises(MODULE.ResultError):
+                MODULE.validate_results(root, manifest())
 
 
 if __name__ == "__main__":

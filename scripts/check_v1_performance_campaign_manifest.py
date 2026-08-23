@@ -48,7 +48,7 @@ def main() -> int:
         return fail("steady-state retry ratio threshold must be one percent")
     if thresholds.get("final_resource_gauges_must_be_zero") is not True:
         return fail("final resource gauges must be required to drain")
-    required_fields = {"artifact_digest", "profile_id", "repetition", "throughput", "latency_p50_p95_p99", "rss_baseline_terminal_slope", "retry_ratio", "final_resource_gauges"}
+    required_fields = {"artifact_digest", "profile_id", "repetition", "throughput", "latency_p50_p95_p99", "rss_baseline_terminal_slope", "retry_ratio", "final_resource_gauges", "attempted_records", "acknowledged_records", "unknown_outcomes", "record_id_reconciliation"}
     if not required_fields <= set(manifest.get("result_fields", ())):
         return fail("result fields omit a required SLO measurement")
     bundle = manifest.get("result_bundle", {})

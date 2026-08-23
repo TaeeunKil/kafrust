@@ -9,6 +9,7 @@ use kafrust::{
     consumer::Consumer, producer::Producer, Acks, ClientMetrics, ClientMetricsSnapshot,
     Compression, ConsumerConfig, ProducerConfig, ProducerRecord,
 };
+use sha2::{Digest, Sha256};
 use tokio::sync::Barrier;
 
 const DEFAULT_RECORDS: usize = 20_000;
@@ -193,6 +194,7 @@ struct CampaignSettings {
 struct CampaignBarriers {
     start: Arc<Barrier>,
     measurement: Arc<Barrier>,
+    measurement_start: Arc<Barrier>,
 }
 
 struct BatchWork<'a> {
@@ -200,6 +202,142 @@ struct BatchWork<'a> {
     partition: i32,
     payload: &'a [u8],
     batch_size: usize,
+}
+
+struct IdentityTracker {
+    partition: i32,
+    expected_next_sequence: u64,
+    observed_next_sequence: u64,
+    attempted_records: u64,
+    acknowledged_records: u64,
+    consumed_records: u64,
+    loss_count: u64,
+    duplicate_count: u64,
+    expected_digest: Sha256,
+    observed_digest: Sha256,
+}
+
+struct IdentitySummary {
+    partition: i32,
+    attempted_records: u64,
+    acknowledged_records: u64,
+    consumed_records: u64,
+    loss_count: u64,
+    duplicate_count: u64,
+    expected_digest: String,
+    observed_digest: String,
+}
+
+impl IdentityTracker {
+    fn new(partition: i32) -> Self {
+        Self::from_sequence(partition, 0)
+    }
+
+    fn from_sequence(partition: i32, sequence: u64) -> Self {
+        Self {
+            partition,
+            expected_next_sequence: sequence,
+            observed_next_sequence: sequence,
+            attempted_records: 0,
+            acknowledged_records: 0,
+            consumed_records: 0,
+            loss_count: 0,
+            duplicate_count: 0,
+            expected_digest: Sha256::new(),
+            observed_digest: Sha256::new(),
+        }
+    }
+
+    fn reserve_batch(&mut self, count: usize) -> kafrust::Result<u64> {
+        let count = u64::try_from(count)
+            .map_err(|_| kafrust::Error::Unsupported("benchmark batch count is too large"))?;
+        let start = self.expected_next_sequence;
+        self.expected_next_sequence = start
+            .checked_add(count)
+            .ok_or(kafrust::Error::Unsupported("benchmark sequence overflow"))?;
+        self.attempted_records =
+            self.attempted_records
+                .checked_add(count)
+                .ok_or(kafrust::Error::Unsupported(
+                    "benchmark record count overflow",
+                ))?;
+        for sequence in start..self.expected_next_sequence {
+            update_identity_digest(&mut self.expected_digest, self.partition, sequence);
+        }
+        Ok(start)
+    }
+
+    fn acknowledge_batch(&mut self, count: usize) -> kafrust::Result<()> {
+        let count = u64::try_from(count)
+            .map_err(|_| kafrust::Error::Unsupported("benchmark metadata count is too large"))?;
+        self.acknowledged_records =
+            self.acknowledged_records
+                .checked_add(count)
+                .ok_or(kafrust::Error::Unsupported(
+                    "benchmark acknowledgement count overflow",
+                ))?;
+        Ok(())
+    }
+
+    fn observe(&mut self, value: &[u8]) -> kafrust::Result<()> {
+        let (partition, sequence) = record_identity(value)?;
+        if partition != self.partition {
+            return Err(kafrust::Error::Unsupported(
+                "benchmark record partition identity diverged",
+            ));
+        }
+        update_identity_digest(&mut self.observed_digest, partition, sequence);
+        self.consumed_records =
+            self.consumed_records
+                .checked_add(1)
+                .ok_or(kafrust::Error::Unsupported(
+                    "benchmark consumed count overflow",
+                ))?;
+        match sequence.cmp(&self.observed_next_sequence) {
+            std::cmp::Ordering::Less => {
+                self.duplicate_count = self.duplicate_count.saturating_add(1);
+            }
+            std::cmp::Ordering::Greater => {
+                self.loss_count = self
+                    .loss_count
+                    .saturating_add(sequence - self.observed_next_sequence);
+                self.observed_next_sequence = sequence.saturating_add(1);
+            }
+            std::cmp::Ordering::Equal => {
+                self.observed_next_sequence = self.observed_next_sequence.saturating_add(1);
+            }
+        }
+        Ok(())
+    }
+
+    fn finish(mut self) -> kafrust::Result<IdentitySummary> {
+        match self
+            .observed_next_sequence
+            .cmp(&self.expected_next_sequence)
+        {
+            std::cmp::Ordering::Less => {
+                self.loss_count = self
+                    .loss_count
+                    .saturating_add(self.expected_next_sequence - self.observed_next_sequence);
+            }
+            std::cmp::Ordering::Greater => {
+                return Err(kafrust::Error::Unsupported(
+                    "benchmark observed an out-of-range record identity",
+                ));
+            }
+            std::cmp::Ordering::Equal => {}
+        }
+        Ok(IdentitySummary {
+            partition: self.partition,
+            attempted_records: self.attempted_records,
+            acknowledged_records: self.acknowledged_records,
+            consumed_records: self.consumed_records,
+            loss_count: self.loss_count,
+            duplicate_count: self.duplicate_count,
+            expected_digest: hex_digest(self.expected_digest),
+            observed_digest: hex_digest(self.observed_digest),
+        })
+    }
 }
 
 async fn run_campaign(
@@ -249,6 +387,7 @@ async fn run_campaign(
     let barriers = CampaignBarriers {
         start: Arc::new(Barrier::new(settings.workers + 1)),
         measurement: Arc::new(Barrier::new(settings.workers + 1)),
+        measurement_start: Arc::new(Barrier::new(settings.workers + 1)),
     };
     let mut handles = Vec::with_capacity(settings.workers);
     for (producer, consumer, partition, next_offset) in workers {
@@ -270,6 +409,7 @@ async fn run_campaign(
     let profile =
         std::env::var("KAFRUST_BENCH_PROFILE").unwrap_or_else(|_| "throughput-campaign".to_owned());
     let measured_started = Instant::now();
+    wait_for_barrier(barriers.measurement_start.clone(), CONSUME_TIMEOUT).await?;
     let measured_deadline = measured_started + Duration::from_secs(settings.measured_seconds);
     let mut window_start = measured_started;
     let mut sample_index = 0_u64;
@@ -308,11 +448,15 @@ async fn run_campaign(
         window_start = window_end;
     }
 
+    let mut identity_summaries = Vec::with_capacity(settings.workers);
     for handle in handles {
-        handle
-            .await
-            .map_err(|_| kafrust::Error::Unsupported("benchmark campaign worker panicked"))??;
+        identity_summaries.push(
+            handle
+                .await
+                .map_err(|_| kafrust::Error::Unsupported("benchmark campaign worker panicked"))??,
+        );
     }
+    identity_summaries.sort_unstable_by_key(|summary| summary.partition);
     let final_snapshot = metrics.snapshot();
     if final_snapshot.produced_records != final_snapshot.consumed_records {
         return Err(kafrust::Error::Unsupported(
@@ -322,6 +466,45 @@ async fn run_campaign(
     if final_snapshot.in_flight_requests != 0 || final_snapshot.buffered_records != 0 {
         return Err(kafrust::Error::Unsupported(
             "benchmark campaign detected a non-zero final client gauge",
+        ));
+    }
+    let attempted_records = identity_summaries
+        .iter()
+        .map(|summary| summary.attempted_records)
+        .sum::<u64>();
+    let acknowledged_records = identity_summaries
+        .iter()
+        .map(|summary| summary.acknowledged_records)
+        .sum::<u64>();
+    let consumed_records = identity_summaries
+        .iter()
+        .map(|summary| summary.consumed_records)
+        .sum::<u64>();
+    let loss_count = identity_summaries
+        .iter()
+        .map(|summary| summary.loss_count)
+        .sum::<u64>();
+    let duplicate_count = identity_summaries
+        .iter()
+        .map(|summary| summary.duplicate_count)
+        .sum::<u64>();
+    let expected_digest = aggregate_identity_digest(&identity_summaries, true);
+    let observed_digest = aggregate_identity_digest(&identity_summaries, false);
+    let measured_produced = delta_u64(final_snapshot.produced_records, baseline.produced_records);
+    let measured_consumed = delta_u64(final_snapshot.consumed_records, baseline.consumed_records);
+    if identity_summaries
+        .iter()
+        .any(|summary| summary.expected_digest != summary.observed_digest)
+        || attempted_records != measured_produced
+        || consumed_records != measured_consumed
+        || attempted_records != acknowledged_records
+        || acknowledged_records != consumed_records
+        || loss_count != 0
+        || duplicate_count != 0
+        || expected_digest != observed_digest
+    {
+        return Err(kafrust::Error::Unsupported(
+            "benchmark campaign record identities did not reconcile",
         ));
     }
     let measured_metrics = ClientMetricsSnapshot {
@@ -339,7 +522,12 @@ async fn run_campaign(
             "\"latency_p50_p95_p99\":{{\"p50_ms\":{},\"p95_ms\":{},\"p99_ms\":{}}},",
             "\"rss_baseline_terminal_slope\":{{\"baseline_bytes\":{},\"terminal_bytes\":{},",
             "\"growth_bytes\":{},\"slope_bytes_per_second\":{},\"sample_count\":{}}},",
-            "\"loss_count\":0,\"duplicate_count\":0,\"rss_bytes\":{},",
+            "\"attempted_records\":{},\"acknowledged_records\":{},",
+            "\"unknown_outcomes\":0,\"loss_count\":{},\"duplicate_count\":{},",
+            "\"record_id_reconciliation\":{{\"qualified\":true,",
+            "\"unique_records\":{},\"loss_count\":{},\"duplicate_count\":{},",
+            "\"expected_digest\":\"{}\",\"observed_digest\":\"{}\"}},",
+            "\"rss_bytes\":{},",
             "\"in_flight_requests\":{},\"buffered_records\":{}}}"
         ),
         profile,
@@ -364,6 +552,15 @@ async fn run_campaign(
         optional_i128_json(rss_growth),
         optional_f64_json(rss_slope),
         rss_samples.len(),
+        attempted_records,
+        acknowledged_records,
+        loss_count,
+        duplicate_count,
+        consumed_records,
+        loss_count,
+        duplicate_count,
+        expected_digest,
+        observed_digest,
         optional_u64_json(resident_bytes()),
         final_snapshot.in_flight_requests,
         final_snapshot.buffered_records,
@@ -379,8 +576,9 @@ async fn run_campaign_worker(
     mut next_offset: i64,
     settings: CampaignSettings,
     barriers: CampaignBarriers,
-) -> kafrust::Result<()> {
+) -> kafrust::Result<IdentitySummary> {
     let payload = vec![b'x'; settings.payload_bytes];
+    let mut identity = IdentityTracker::new(partition);
     wait_for_barrier(barriers.start.clone(), CONSUME_TIMEOUT).await?;
     let warmup_deadline = Instant::now() + Duration::from_secs(settings.warmup_seconds);
     while Instant::now() < warmup_deadline {
@@ -395,12 +593,15 @@ async fn run_campaign_worker(
             },
             next_offset,
             warmup_deadline + CONSUME_TIMEOUT,
+            &mut identity,
         )
         .await?;
     }
     let measurement_wait =
         Duration::from_secs(settings.warmup_seconds).saturating_add(CONSUME_TIMEOUT);
     wait_for_barrier(barriers.measurement.clone(), measurement_wait).await?;
+    identity = IdentityTracker::from_sequence(partition, identity.expected_next_sequence);
+    wait_for_barrier(barriers.measurement_start.clone(), CONSUME_TIMEOUT).await?;
     let measured_deadline = Instant::now() + Duration::from_secs(settings.measured_seconds);
     while Instant::now() < measured_deadline {
         next_offset = send_and_consume_batch(
@@ -414,10 +615,11 @@ async fn run_campaign_worker(
             },
             next_offset,
             measured_deadline + CONSUME_TIMEOUT,
+            &mut identity,
         )
         .await?;
     }
-    Ok(())
+    identity.finish()
 }
 
 async fn send_and_consume_batch(
@@ -426,13 +628,16 @@ async fn send_and_consume_batch(
     work: BatchWork<'_>,
     next_offset: i64,
     deadline: Instant,
+    identity: &mut IdentityTracker,
 ) -> kafrust::Result<i64> {
+    let sequence_start = identity.reserve_batch(work.batch_size)?;
     let metadata = producer
         .send_batch(records_on_partition(
             work.topic,
             work.partition,
             work.payload,
             work.batch_size,
+            sequence_start,
         ))
         .await?;
     let Some(first) = metadata.first() else {
@@ -440,6 +645,12 @@ async fn send_and_consume_batch(
             "benchmark campaign producer returned no record metadata",
         ));
     };
+    if metadata.len() != work.batch_size {
+        return Err(kafrust::Error::Unsupported(
+            "benchmark campaign acknowledgement count differed from the batch",
+        ));
+    }
+    identity.acknowledge_batch(metadata.len())?;
     if first.offset() < 0 {
         return Err(kafrust::Error::Unsupported(
             "benchmark campaign requires concrete broker offsets",
@@ -476,6 +687,9 @@ async fn send_and_consume_batch(
                     "benchmark campaign observed a non-contiguous fetched offset",
                 ));
             }
+            identity.observe(record.value().ok_or(kafrust::Error::Unsupported(
+                "benchmark campaign record value was null",
+            ))?)?;
             next_offset = record.offset().saturating_add(1);
             remaining -= 1;
         }
@@ -511,7 +725,7 @@ fn campaign_config() -> kafrust::Result<Option<(u64, u64, u64)>> {
 }
 
 fn records(topic: &str, payload: &[u8], count: usize) -> Vec<ProducerRecord> {
-    records_on_partition(topic, 0, payload, count)
+    records_on_partition(topic, 0, payload, count, 0)
 }
 
 fn records_on_partition(
@@ -519,14 +733,72 @@ fn records_on_partition(
     partition: i32,
     payload: &[u8],
     count: usize,
+    sequence_start: u64,
 ) -> Vec<ProducerRecord> {
     (0..count)
-        .map(|_| {
+        .map(|index| {
+            let sequence = sequence_start.saturating_add(index as u64);
             ProducerRecord::to(topic.to_owned())
                 .partition(partition)
-                .value(payload.to_vec())
+                .value(record_value(payload, partition, sequence))
         })
         .collect()
+}
+
+fn record_value(payload: &[u8], partition: i32, sequence: u64) -> Vec<u8> {
+    let mut value = vec![b'x'; payload.len().max(12)];
+    value[..4].copy_from_slice(&partition.to_be_bytes());
+    value[4..12].copy_from_slice(&sequence.to_be_bytes());
+    value
+}
+
+fn record_identity(value: &[u8]) -> kafrust::Result<(i32, u64)> {
+    let partition = value.get(..4).ok_or(kafrust::Error::Unsupported(
+        "benchmark record identity is truncated",
+    ))?;
+    let sequence = value.get(4..12).ok_or(kafrust::Error::Unsupported(
+        "benchmark record identity is truncated",
+    ))?;
+    let partition = i32::from_be_bytes(
+        partition
+            .try_into()
+            .map_err(|_| kafrust::Error::Unsupported("benchmark partition identity is invalid"))?,
+    );
+    let sequence = u64::from_be_bytes(
+        sequence
+            .try_into()
+            .map_err(|_| kafrust::Error::Unsupported("benchmark sequence identity is invalid"))?,
+    );
+    Ok((partition, sequence))
+}
+
+fn update_identity_digest(digest: &mut Sha256, partition: i32, sequence: u64) {
+    digest.update(partition.to_be_bytes());
+    digest.update(sequence.to_be_bytes());
+}
+
+fn hex_digest(digest: Sha256) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut output = String::with_capacity(64);
+    for byte in digest.finalize() {
+        output.push(HEX[(byte >> 4) as usize] as char);
+        output.push(HEX[(byte & 0x0f) as usize] as char);
+    }
+    output
+}
+
+fn aggregate_identity_digest(summaries: &[IdentitySummary], expected: bool) -> String {
+    let mut digest = Sha256::new();
+    for summary in summaries {
+        digest.update(summary.partition.to_be_bytes());
+        let value = if expected {
+            &summary.expected_digest
+        } else {
+            &summary.observed_digest
+        };
+        digest.update(value.as_bytes());
+    }
+    hex_digest(digest)
 }
 
 fn usize_from_env(name: &'static str, default: usize) -> kafrust::Result<usize> {
@@ -776,8 +1048,8 @@ fn least_squares_slope(samples: &[(f64, u64)]) -> Option<f64> {
 #[cfg(test)]
 mod tests {
     use super::{
-        delta_snapshot, least_squares_slope, median_u64, percentile_ms, rate,
-        request_percentile_ms, retry_ratio, rss_summary,
+        delta_snapshot, least_squares_slope, median_u64, percentile_ms, rate, record_identity,
+        record_value, request_percentile_ms, retry_ratio, rss_summary, IdentityTracker,
     };
     use kafrust::ClientMetricsSnapshot;
     use std::time::Duration;
@@ -842,5 +1114,52 @@ mod tests {
             (Some(115), Some(115), Some(0), Some(1.0))
         );
         assert_eq!(least_squares_slope(&samples), Some(1.0));
+    }
+
+    #[test]
+    fn reconciles_campaign_record_identity_and_digest() {
+        let mut tracker = IdentityTracker::new(2);
+        let start = tracker.reserve_batch(3).expect("batch must reserve");
+        assert_eq!(start, 0);
+        tracker
+            .acknowledge_batch(3)
+            .expect("acknowledgement must fit");
+        for sequence in 0..3 {
+            let value = record_value(b"payload", 2, sequence);
+            assert_eq!(
+                record_identity(&value).expect("identity must decode"),
+                (2, sequence)
+            );
+            tracker.observe(&value).expect("identity must reconcile");
+        }
+        let summary = tracker.finish().expect("tracker must finish");
+        assert_eq!(summary.attempted_records, 3);
+        assert_eq!(summary.acknowledged_records, 3);
+        assert_eq!(summary.consumed_records, 3);
+        assert_eq!(summary.loss_count, 0);
+        assert_eq!(summary.duplicate_count, 0);
+        assert_eq!(summary.expected_digest, summary.observed_digest);
+    }
+
+    #[test]
+    fn records_identity_gaps_and_duplicates() {
+        let mut tracker = IdentityTracker::new(1);
+        tracker.reserve_batch(3).expect("batch must reserve");
+        tracker
+            .acknowledge_batch(3)
+            .expect("acknowledgement must fit");
+        tracker
+            .observe(&record_value(b"payload", 1, 0))
+            .expect("identity must decode");
+        tracker
+            .observe(&record_value(b"payload", 1, 2))
+            .expect("identity must decode");
+        tracker
+            .observe(&record_value(b"payload", 1, 2))
+            .expect("identity must decode");
+        let summary = tracker.finish().expect("tracker must finish");
+        assert_eq!(summary.loss_count, 1);
+        assert_eq!(summary.duplicate_count, 1);
+        assert_ne!(summary.expected_digest, summary.observed_digest);
     }
 }

@@ -69,8 +69,9 @@ records per second, request p50/p95/p99 estimates, retries, retry ratio, RSS
 when `/proc/self/status` is available, and current in-flight/buffered gauges.
 The final object also includes aggregate measured latency p50/p95/p99, RSS
 baseline/terminal/growth/slope summary over the sampled windows, sample count,
-and explicit loss/duplicate counts. It requires produced records to equal
-consumed records with both final gauges at zero. The bounded manual
+and explicit attempted/acknowledged/unknown outcome and loss/duplicate counts.
+It requires produced records to equal consumed records with business-ID
+digests reconciled and both final gauges at zero. The bounded manual
 [`Kafka Benchmark Campaign Diagnostic`](../.github/workflows/benchmark-campaign-diagnostic.yml)
 workflow exercises this mode on Kafka 4.3.1 and uploads the JSONL artifact.
 
@@ -83,8 +84,9 @@ For a qualification attempt, retain one descriptor beside each JSONL result
 and run [`check_v1_performance_results.py`](../scripts/check_v1_performance_results.py)
 against the complete bundle. The checker requires the manifest's full
 `profile × topology × security × repetition` matrix, exact timing and
-contiguous sample windows, one published artifact digest, zero acknowledged
-loss/duplicates, drained gauges, and the RSS/retry budgets. Passing a locked
+contiguous sample windows, one published artifact digest, qualified business-ID
+reconciliation with matching expected/observed digests, zero acknowledged
+loss/duplicates/unknown outcomes, drained gauges, and the RSS/retry budgets. Passing a locked
 baseline also requires median throughput and p99 latency regression checks.
 Descriptors from this diagnostic workflow are deliberately marked
 `qualified: false` and must fail that adjudicator; this prevents a short
