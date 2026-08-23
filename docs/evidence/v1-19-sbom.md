@@ -1,7 +1,7 @@
 # V1-19 SBOM Evidence
 
 - date_utc: 2026-08-23
-- source_commit: `b834254ff83d08f12cac023c970afe6eb2945e5e`
+- source_commit: `1ec37af6ee47ebcf995b9927e008700a8ad584da`
 - generator: `scripts/check_v1_sbom.py`
 - format: CycloneDX 1.5 JSON
 - platform: `x86_64-unknown-linux-gnu`
@@ -17,12 +17,15 @@ graph. The command is deterministic for the selected platform and feature
 set:
 
 ```text
-python scripts/check_v1_sbom.py --check --require-artifacts
+python scripts/check_v1_sbom.py --check --require-artifacts --allow-resolved-version-drift
 ```
 
 The checker validates CycloneDX structure, unique package URLs, license
 metadata for every component, complete dependency references, the generator
-property, and package archive presence. It also reports the archive digests:
+property, and package archive presence. CI permits only transitive version
+re-resolution caused by platform/index state; workspace versions, direct
+dependency versions, package names, licenses, source kinds, and graph edges
+must remain identical. It also reports the archive digests:
 
 - `kafrust-protocol-0.3.6.crate`: `f12e95a30ce46fd7ffc097a97a31b0a918bcee9f83cefb72fe2484cfe9c255cc`
 - `kafrust-0.3.6.crate`: `2ae1a135d3de7f00fb25455809ab9fc201ea41c398aa62ac14f34c2a2758fca9`

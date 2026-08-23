@@ -105,7 +105,7 @@ the metadata-completeness slice, not publication or full V1-19 completion.
 
 ### Deterministic SBOM slice (2026-08-23)
 
-Commit `b834254ff83d08f12cac023c970afe6eb2945e5e` refreshes the
+Commit `1ec37af6ee47ebcf995b9927e008700a8ad584da` finalizes the
 platform-neutral form of the SBOM added in `6e24a247c2aa4aa9c63086e68d753988adbfe3aa`.
 It includes
 [`check_v1_sbom.py`](../../scripts/check_v1_sbom.py), its focused unit tests,
@@ -120,6 +120,10 @@ SBOM after the staged package boundary and requires both `0.3.6` archives.
 This closes the reproducible SBOM/drift-inventory slice only; advisory,
 yank, optional-TLS native tooling, and reviewed transitive unsafe/native
 ownership remain open.
+
+CI permits only transitive version re-resolution caused by platform or Cargo
+index state; workspace versions, direct dependency versions, package names,
+licenses, source kinds, and graph edges must remain identical.
 
 ## Failure And Lifecycle Contract
 

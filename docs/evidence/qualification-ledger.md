@@ -25,7 +25,7 @@ unqualified relative artifact label.
 ## Q-LOCAL-V119-003
 
 - date_utc: 2026-08-23
-- source_commit: b834254ff83d08f12cac023c970afe6eb2945e5e
+- source_commit: 1ec37af6ee47ebcf995b9927e008700a8ad584da
 - client_version: 0.3.6
 - protocol_version: 0.3.6
 - work_status: Done
@@ -37,7 +37,7 @@ unqualified relative artifact label.
 - security: not-applicable
 - group_protocol: not-applicable
 - workload: locked all-feature runtime/build dependency graph and deterministic CycloneDX SBOM
-- workflow: scripts/check_v1_sbom.py --check --require-artifacts
+- workflow: scripts/check_v1_sbom.py --check --require-artifacts --allow-resolved-version-drift
 - fault: missing license metadata, duplicate package URL, unresolved edge, or SBOM drift
 - duration: not-recorded
 - record_count: 89 resolved components
