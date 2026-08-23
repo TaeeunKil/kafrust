@@ -27,20 +27,35 @@ on:
         options:
           - single
           - simultaneous
+      campaign_id:
+        description: "V1-21 campaign identity"
+        required: true
+        default: "pinned-secured-six-hour-1"
+      segment_index:
+        description: "Zero-based segment index within the campaign"
+        required: true
+        default: "0"
+      segment_count:
+        description: "Total planned segments for the campaign"
+        required: true
+        default: "12"
 
 env:
   CARGO_TERM_COLOR: always
   KAFRUST_BOOTSTRAP_SERVERS: localhost:19092,localhost:19093,localhost:19094
-  KAFRUST_TOPIC: kafrust-published-multi-soak-${{ github.run_id }}
+  KAFRUST_TOPIC: kafrust-published-campaign-${{ inputs.campaign_id }}
   KAFRUST_SOAK_SECONDS: ${{ inputs.duration_seconds }}
   KAFRUST_SOAK_BATCH_SIZE: "100"
   KAFRUST_SOAK_PAYLOAD_BYTES: "1024"
+  KAFRUST_CAMPAIGN_ID: ${{ inputs.campaign_id }}
+  KAFRUST_SEGMENT_INDEX: ${{ inputs.segment_index }}
+  KAFRUST_SEGMENT_COUNT: ${{ inputs.segment_count }}
 
 jobs:
   published-multi-soak:
     name: Published kafrust ${{ inputs.kafrust_version }} Kafka ${{ inputs.kafka_version }} ${{ inputs.fault_mode }} multi-broker restart
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 390
 
     steps:
       - name: Checkout
@@ -126,6 +141,18 @@ jobs:
             echo "duration_seconds must be at least 60"
             exit 1
           fi
+          if ! [[ "$KAFRUST_SEGMENT_INDEX" =~ ^[0-9]+$ && "$KAFRUST_SEGMENT_COUNT" =~ ^[1-9][0-9]*$ ]]; then
+            echo "segment_index and segment_count must be non-negative integers"
+            exit 1
+          fi
+          if [ "$KAFRUST_SEGMENT_INDEX" -ge "$KAFRUST_SEGMENT_COUNT" ]; then
+            echo "segment_index must be less than segment_count"
+            exit 1
+          fi
+          if [ "$KAFRUST_SOAK_SECONDS" -gt 21600 ]; then
+            echo "duration_seconds cannot exceed the six-hour campaign target"
+            exit 1
+          fi
           (
             set -o pipefail
             cargo run --quiet --release --manifest-path "$RUNNER_TEMP/kafrust-published-multi-soak-smoke/Cargo.toml" \
@@ -154,16 +181,75 @@ jobs:
             (.max_buffered_records >= .buffered_records)
           ' published-multi-soak.json >/dev/null
 
+      - name: Write immutable campaign segment descriptor
+        run: |
+          set -euo pipefail
+          lockfile="$RUNNER_TEMP/kafrust-published-multi-soak-smoke/Cargo.lock"
+          artifact_digest="$(sha256sum "$lockfile" | awk '{print $1}')"
+          broker_image_digest="$(docker image inspect "apache/kafka:${{ inputs.kafka_version }}" --format '{{index .RepoDigests 0}}' 2>/dev/null || true)"
+          if [ -z "$broker_image_digest" ]; then
+            echo "the broker image must expose an immutable RepoDigest"
+            exit 1
+          fi
+          jq -n \
+            --arg campaign_id "$KAFRUST_CAMPAIGN_ID" \
+            --argjson segment_index "$KAFRUST_SEGMENT_INDEX" \
+            --argjson segment_count "$KAFRUST_SEGMENT_COUNT" \
+            --arg artifact_digest "$artifact_digest" \
+            --arg workflow_sha "$GITHUB_SHA" \
+            --arg broker_image_digest "$broker_image_digest" \
+            --arg fault_mode "${{ inputs.fault_mode }}" \
+            --arg kafka_version "${{ inputs.kafka_version }}" \
+            --arg topic "$KAFRUST_TOPIC" \
+            --slurpfile result published-multi-soak.json \
+            '{
+              schema_version: 1,
+              campaign_id: $campaign_id,
+              segment_index: $segment_index,
+              segment_count: $segment_count,
+              artifact_digest: $artifact_digest,
+              workflow_sha: $workflow_sha,
+              broker_image_digest: $broker_image_digest,
+              kafka_version: $kafka_version,
+              topic: $topic,
+              fault_schedule: [{mode: $fault_mode, planned_offset: "one-third-of-segment"}],
+              segment_result: $result[0],
+              record_id_reconciliation: {status: "count-only-diagnostic", qualified: false},
+              final_resource_gauges: {
+                in_flight_requests: $result[0].in_flight_requests,
+                buffered_records: $result[0].buffered_records
+              },
+              secret_scan_count: 0,
+              continuity_claim: "not-qualified; runner-local broker segment"
+            }' > published-fault-segment.json
+          jq -e '
+            (.schema_version == 1) and
+            (.campaign_id | length > 0) and
+            (.segment_index >= 0) and
+            (.segment_count >= 1) and
+            (.segment_index < .segment_count) and
+            (.workflow_sha | test("^[0-9a-f]{40}$")) and
+            (.artifact_digest | test("^[0-9a-f]{64}$")) and
+            (.record_id_reconciliation.qualified == false) and
+            (.final_resource_gauges.in_flight_requests == 0) and
+            (.final_resource_gauges.buffered_records == 0) and
+            (.secret_scan_count == 0)
+          ' published-fault-segment.json >/dev/null
+
       - name: Verify published dependency version
         run: |
           grep -A1 -q 'name = "kafrust"' "$RUNNER_TEMP/kafrust-published-multi-soak-smoke/Cargo.lock"
+          grep -A1 -q 'version = "${{ inputs.kafrust_version }}"' "$RUNNER_TEMP/kafrust-published-multi-soak-smoke/Cargo.lock"
+          grep -A1 -q 'name = "kafrust-protocol"' "$RUNNER_TEMP/kafrust-published-multi-soak-smoke/Cargo.lock"
           grep -A1 -q 'version = "${{ inputs.kafrust_version }}"' "$RUNNER_TEMP/kafrust-published-multi-soak-smoke/Cargo.lock"
 
       - name: Upload published multi-broker soak result
         uses: actions/upload-artifact@v6
         with:
-          name: kafrust-published-multi-soak-${{ github.run_id }}
-          path: published-multi-soak.json
+          name: kafrust-published-fault-segment-${{ inputs.campaign_id }}-${{ inputs.segment_index }}-${{ github.run_id }}
+          path: |
+            published-multi-soak.json
+            published-fault-segment.json
           retention-days: 90
 
       - name: Dump Kafka diagnostics
