@@ -531,7 +531,9 @@ The published Share repeated-member-loss workflow now accepts a bounded
 `cycles` input and dynamically checks per-member ownership records and the
 final cycle, while retaining the historical eight-cycle default. A qualification
 run may request exactly 100 cycles and receives a retained JSON summary marked
-qualified only at that bound; no such run has been promoted yet.
+qualified only at that bound. The 100-cycle Share qualification remains in
+progress; it is not promoted until the run completes and its summary passes
+the ledger checks.
 
 The first parallel six-hour fault set also revealed hosted-runner disk
 exhaustion caused by unbounded broker logs during failure diagnostics. The
@@ -551,9 +553,17 @@ be rerun from the bounded-error-log HEAD.
 The published classic/KIP-848 group-rebalance fixture now accepts up to 100
 cycles (previously 64), with a cycle-scaled client timeout and a 35-minute job
 bound. This only enables the required executions; no 100-cycle published result
-is counted before its run output is retained and checked. The workflow now
-uploads an immutable JSON summary with the published lockfile digest and broker
-image identity; the earlier successful 3.7.2 log-only run remains unpromoted.
+is counted before its run output is retained and checked. The exact published
+classic run [32642112754](https://github.com/TaeeunKil/kafrust/actions/runs/32642112754)
+now passes the 100-cycle gate and uploads an immutable JSON summary with the
+published lockfile digest and broker image identity. This closes only the
+classic group sub-gate; the KIP-848 consumer run remains open.
+
+The promoted classic summary records source `7cc0b55`, `cycle_count=100`, six
+partitions, zero ownership loss/duplicates, and drained final gauges. It is
+published-artifact evidence for that exact group protocol and broker profile,
+not six-hour fault, Share, ambiguity-family, controlled-data-loss, SLO, or V1
+completion evidence.
 
 Share 100-cycle attempts with one- and ten-second member dwell both ended before
 the surviving member reacquired its first post-loss assignment. These are

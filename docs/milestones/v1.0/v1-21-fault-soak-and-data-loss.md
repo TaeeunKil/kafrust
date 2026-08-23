@@ -157,8 +157,9 @@ computes expected ownership records, per-member output, and the final-cycle
 diagnostic dynamically. It rejects values above the V1-21 bound of 100 and
 uploads a JSON campaign summary with `qualified: true` only when exactly 100
 cycles are requested. This makes the required 100-cycle published gate
-executable without promoting the existing eight-cycle evidence; no 100-cycle
-run has been executed yet.
+executable without promoting the existing eight-cycle evidence. The Share
+qualification run remains in progress; the classic group result is recorded
+separately below.
 
 The first parallel six-hour execution set exposed an infrastructure failure,
 not a client result: the Kafka 3.7.2 floor run exhausted the hosted runner
@@ -181,11 +182,22 @@ The published classic/KIP-848 group-rebalance fixture was likewise raised from
 its previous 64-cycle guard to a maximum of 100 cycles. Its timeout now scales
 with the requested cycle count, and the workflow timeout was extended so a
 100-cycle run is not silently cut off. These changes make the two remaining
-group-family executions possible; they do not count as evidence until the
-published runs and retained cycle summaries pass. The workflow now retains an
-immutable JSON summary with the published lockfile digest and broker image
-identity; the earlier successful 3.7.2 log-only run is therefore not promoted
-and will be repeated with the artifact contract.
+group-family executions possible. The exact published `0.3.6` classic run
+[32642112754](https://github.com/TaeeunKil/kafrust/actions/runs/32642112754)
+completed all 100 cycles and uploaded the immutable summary with the published
+lockfile digest and broker image identity; it closes only the classic 100-cycle
+sub-gate. The KIP-848 consumer run is still pending, and no group-family
+result is promoted beyond the exact row recorded in the ledger.
+
+### Published classic 100-cycle member-loss result (2026-08-23)
+
+The published `kafrust 0.3.6` classic group run on Kafka 3.7.2 completed 100
+forced member-loss/rejoin cycles across six partitions. The retained summary
+reports `cycle_count=100`, `records_per_cycle=6`, zero loss and duplicates, and
+zero final in-flight/buffered gauges. It records source `7cc0b55`, the exact
+published version, lockfile SHA-256, and broker image identity. This qualifies
+the classic group sub-gate only; KIP-848, Share, ambiguity-family, long-soak,
+and controlled data-loss gates remain open.
 
 Two Share qualification attempts with member dwell values of one and ten
 seconds also failed before the first post-loss seed was consumed: the surviving
