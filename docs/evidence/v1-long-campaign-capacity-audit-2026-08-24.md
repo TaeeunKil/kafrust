@@ -95,3 +95,10 @@ but Ubuntu-T9 remains `Stopped` and instance creation returns
 event was observed. The near-full host volume is therefore the primary
 recovery hypothesis and must be relieved before filesystem repair is
 considered; the VHDX itself must not be deleted or modified without a backup.
+
+The volume breakdown explains the exhaustion: `T:\WSL\Ubuntu\ext4.vhdx` uses
+`830,855,970,816` bytes (`773.79 GiB`) and the separate full export backup
+`T:\Backups\Ubuntu-full.tar` uses `169,161,779,200` bytes (`157.54 GiB`).
+Those two files account for approximately `931.33 GiB` of the volume. The
+backup is not deleted as part of this audit; it should be moved to a different
+volume (or otherwise retained) before any cleanup decision is made.
