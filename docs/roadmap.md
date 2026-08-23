@@ -416,6 +416,14 @@ passed ([32614875041](https://github.com/TaeeunKil/kafrust/actions/runs/32614875
 [32615024395](https://github.com/TaeeunKil/kafrust/actions/runs/32615024395)),
 and the pinned-current secure Kafka 4.3.1 KIP-848 leader-failover row passed in
 [32615403411](https://github.com/TaeeunKil/kafrust/actions/runs/32615403411).
+
+The current-source matrix was refreshed once more from `e90fc6c` in
+[run 32635573529](https://github.com/TaeeunKil/kafrust/actions/runs/32635573529).
+All 17 jobs passed across the four broker versions, plaintext/TLS/SASL
+profiles, ACL, transactions, KIP-848, and three-broker failover slices. The
+result is recorded as `Q-LIVE-MATRIX-003`; it remains source-only evidence and
+does not close V1-20 or authorize a release.
+
 The published crate smoke workflow now covers twelve draft continuity,
 security, and codec profiles, including explicit PLAIN and SCRAM-SHA-512
 authentication; Kafka 3.8.1, 3.9.1, and 4.0.0 classic rows passed alongside

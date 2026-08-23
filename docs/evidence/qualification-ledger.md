@@ -3058,6 +3058,39 @@ unqualified relative artifact label.
 - artifact: GitHub Actions run 32555053351; source-only job logs
 - non_claims: not exact published 0.3.6 lockfile evidence, not complete V1-20 exit evidence, not long-duration SLO evidence, not service canary, not universal Kafka compatibility
 
+## Q-LIVE-MATRIX-003
+
+- date_utc: 2026-08-23
+- source_commit: e90fc6c3d02c527bdabc350837ee53a6c95b20fc
+- client_version: 0.3.6 source checkout
+- protocol_version: 0.3.6 source checkout
+- work_status: In progress
+- evidence_level: Live current-source
+- kafka_version: 3.7.2, 3.8.1, 3.9.1, and 4.3.1
+- kafka_image: apache/kafka:3.7.2, apache/kafka:3.8.1, apache/kafka:3.9.1, and apache/kafka:4.3.1
+- mode: KRaft
+- topology: single-node and three-broker failover profiles
+- security: PLAINTEXT, TLS, SASL_PLAINTEXT, SASL_SSL with SCRAM-SHA-256/512, SASL_SSL with signed OAUTHBEARER, SASL_SSL with OAUTHBEARER, and ACL authorization
+- group_protocol: classic and KIP-848 consumer
+- workload: 17-job source-only compatibility smoke covering data-plane, producer, consumer, groups, transactions, Admin, security, and failover
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32635573529
+- fault: selected broker, leader, coordinator, transaction, and response-loss fixtures in the matrix
+- duration: 25m23s workflow window
+- record_count: not-recorded
+- member_count: not-recorded
+- repetition_count: 17 jobs
+- expected_errors: fixture-specific transient faults and typed ambiguous outcomes only
+- observed_errors: all 17 jobs passed
+- retry_count: not-recorded
+- duplicate_count: not-recorded
+- loss_count: not-recorded
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: workflow-specific final-resource assertions passed
+- result: passed
+- artifact: GitHub Actions run 32635573529; source-only job logs
+- non_claims: not exact published 0.3.6 lockfile evidence, not complete V1-20 exit evidence, not long-duration SLO evidence, not service canary, not universal Kafka compatibility, and not evidence from the later buffered-performance source commits
+
 ## Q-LIVE-V123-002
 
 - date_utc: 2026-08-22

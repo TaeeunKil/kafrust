@@ -94,6 +94,14 @@ transaction response-loss reconciliation, and three-broker leader/coordinator
 failover. This refreshes current-source evidence only; it does not satisfy the
 exact published `0.3.6` lockfile pair or V1-20 exit criteria.
 
+The current-source 17-job matrix was refreshed again from `e90fc6c` in
+[run 32635573529](https://github.com/TaeeunKil/kafrust/actions/runs/32635573529).
+All jobs passed across Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1, including the
+single-node and three-broker failover, TLS, SCRAM, signed OAUTHBEARER,
+OAUTHBEARER, ACL, transaction response-loss, and KIP-848 slices. This is
+source-only refresh evidence; it does not replace the exact published lockfile
+pair, close the accepted matrix, or authorize a release.
+
 The ordered `0.3.6` publication has now completed. The protocol and client
 checksums, registry timestamps, exact external lockfile, and Rust 1.81/stable
 package checks are archived in
