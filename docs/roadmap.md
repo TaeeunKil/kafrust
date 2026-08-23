@@ -576,6 +576,11 @@ with fresh registry evidence. Internal or incomplete changes stay grouped in
 the current candidate; the next RC/stable decision requires a refreshed dated
 competitor comparison and a completed release gate.
 
+The 0.3.6 competitor review on 2026-08-23 found a material workload-specific
+throughput gap versus rust-rdkafka, so V1-22 has been re-planned for profiling,
+optimization evidence, and the full SLO campaign before any 0.3.7 or 1.0.0
+decision. No version bump is being made solely to reflect the comparison.
+
 ## Historical Release Qualification
 
 `0.3.5` is now published on crates.io in protocol-first order. The fresh

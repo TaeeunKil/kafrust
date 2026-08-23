@@ -122,6 +122,20 @@ eight-hour, five-repetition, six-profile, secured/topology matrix and baseline
 comparison remain open. The complete result and failure history are recorded
 in [`v1-22-performance-diagnostic-2026-08-23.md`](../../evidence/v1-22-performance-diagnostic-2026-08-23.md).
 
+### Competitor review and re-plan (2026-08-23)
+
+The companion published comparison
+[32619987006](https://github.com/TaeeunKil/kafrust/actions/runs/32619987006)
+measured `kafrust 0.3.6` at roughly 50.0% of rust-rdkafka Produce throughput
+and 46.2% of Consume throughput for the recorded 20,000-record profile, while
+business-record reconciliation remained exact. This is not a universal parity
+threshold, but it is a material signal for the release decision. V1-22 is
+therefore re-planned to profile batching, request concurrency, allocation and
+queue behavior on the target workload, preserve before/after evidence for any
+optimization, and rerun the six-profile/five-repetition SLO campaign before
+V1-25 RC review. No `0.3.7` or `1.0.0` publication is justified by the
+comparison alone.
+
 ## Failure And Lifecycle Contract
 
 - Benchmark backpressure uses the same bounded production queues and reports
