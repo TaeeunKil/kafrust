@@ -36,8 +36,9 @@ published from that same-version package state.
 ## Current Execution
 
 As of 2026-08-24, V1-00, V1-01, V1-02, and V1-19 are `Done`; V1-03 through
-V1-18 and V1-20 through V1-22 remain `In progress`; V1-23
-is `Blocked` on a named service canary; and V1-24 through V1-26 are `Planned`.
+V1-18 and V1-20/V1-22 remain `In progress`; V1-21 is `Blocked` on recovery
+of the WSL2 self-hosted runner; V1-23 is `Blocked` on a named service canary;
+and V1-24 through V1-26 are `Planned`.
 The coordinated
 `0.3.6` pair is published and resolves from fresh external projects on Rust
 1.81.0 and stable. The historical regression against published protocol
@@ -86,15 +87,16 @@ requires a safe Linux/Docker self-hosted runner, a named V1-23 service canary,
 and the two remaining scheduled weekly fuzz campaign sets; none can be
 replaced by a shortened hosted run or a reference-fixture claim.
 
-The pushed documentation refresh `4a2b472` passed both stable and Rust 1.81.0
-CI. The initial capacity audit recorded in
+The initial capacity audit recorded in
 [`v1-long-campaign-capacity-audit-2026-08-24.md`](../../evidence/v1-long-campaign-capacity-audit-2026-08-24.md)
 found zero registered self-hosted runners and no Windows Docker substitute.
-The follow-up WSL2 preflight registered `wsl-ubuntu-t9`; the first actual
-V1-21 six-hour campaign is now running as
-[32649020906](https://github.com/TaeeunKil/kafrust/actions/runs/32649020906).
-V1-21 remains explicitly unqualified until its descriptor is adjudicated, and
-V1-22 still needs its complete matrix capacity and locked baseline.
+The follow-up WSL2 preflight registered `wsl-ubuntu-t9` and passed a
+non-qualification diagnostic, but the first actual V1-21 six-hour campaign
+[32649020906](https://github.com/TaeeunKil/kafrust/actions/runs/32649020906)
+lost its Ubuntu-T9 instance and completed as `failure` without an artifact.
+V1-21 remains explicitly blocked until the runner is restored and the exact
+manifest campaign is rerun; V1-22 still needs its complete matrix capacity and
+locked baseline.
 
 ## Status And Evidence
 
