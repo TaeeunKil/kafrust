@@ -20,6 +20,16 @@ Reference APIs:
 - [`rust-rdkafka` AdminClient](https://docs.rs/rdkafka/latest/rdkafka/admin/struct.AdminClient.html)
 - [kafrust compatibility claim](compatibility.md)
 
+## Changes from kafrust 0.3.5 to 0.3.6
+
+The `0.3.6` release is a coordinated package-boundary repair: the client and
+`kafrust-protocol` now publish and resolve as the same pair from crates.io.
+There is no intentional breaking public-API change recorded for this patch;
+existing callers should still review the capability and operational limits
+below before rollout. The release does not imply `1.0.0` stability, drop-in
+`rust-rdkafka` parity, or production SLO qualification. Those claims remain
+separate V1 gates and require the target service canary.
+
 ## Dependency and Runtime
 
 Replace the dependency:
