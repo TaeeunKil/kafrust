@@ -180,7 +180,8 @@ jobs:
       - name: Write diagnostic descriptor
         run: |
           set -euo pipefail
-          image_digest=$(docker inspect --format '{{index .RepoDigests 0}}' kafrust-published-campaign)
+          broker_image_ref=$(docker inspect --format '{{.Config.Image}}' kafrust-published-campaign)
+          broker_image_id=$(docker inspect --format '{{.Image}}' kafrust-published-campaign)
           lockfile_sha256=$(sha256sum "$RUNNER_TEMP/kafrust-published-campaign/Cargo.lock" | awk '{print $1}')
           jq -n \
             --arg campaign_id '${{ inputs.campaign_id }}' \
@@ -190,7 +191,8 @@ jobs:
             --arg compression "$KAFRUST_COMPRESSION" \
             --arg artifact_version '${{ inputs.kafrust_version }}' \
             --arg runner_image "$RUNNER_OS/${{ runner.arch }}" \
-            --arg broker_image_digest "$image_digest" \
+            --arg broker_image_ref "$broker_image_ref" \
+            --arg broker_image_id "$broker_image_id" \
             --arg lockfile_sha256 "$lockfile_sha256" \
             --arg source_commit "$GITHUB_SHA" \
             --arg result_file published-performance-campaign.jsonl \
@@ -209,7 +211,7 @@ jobs:
               repetition: ($repetition | tonumber),
               profile: $profile,
               artifact: {kafrust_version: $artifact_version, source_commit: $source_commit, lockfile_sha256: $lockfile_sha256},
-              runner: {image: $runner_image, broker: $kafka_version, broker_image_digest: $broker_image_digest},
+              runner: {image: $runner_image, broker: $kafka_version, broker_image_ref: $broker_image_ref, broker_image_id: $broker_image_id},
               workload: {compression: $compression, warmup_seconds: $warmup_seconds, measured_seconds: $measured_seconds, sample_seconds: $sample_seconds, workers: $workers, batch_size: $batch_size, payload_bytes: $payload_bytes},
               result_file: $result_file,
               non_claims: ["not eight-hour SLO evidence", "not five-repetition profile completion", "not a universal Kafka performance claim"]
