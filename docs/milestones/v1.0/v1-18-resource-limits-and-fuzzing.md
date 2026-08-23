@@ -50,7 +50,7 @@ under deterministic faults and recurring fuzz campaigns.
    deliver the required 60 cumulative minutes per target before accepting its
    evidence.
 
-## Current Execution Record (2026-08-22)
+## Current Execution Record (2026-08-22; refreshed 2026-08-23)
 
 V1-18 is now `In progress`. The current decoder path rejects negative, overflow,
 truncated, and over-limit frame/string/bytes/array/tagged-field lengths before
