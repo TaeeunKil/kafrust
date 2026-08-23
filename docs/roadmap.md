@@ -565,6 +565,12 @@ objective, and the million-record migration exit remain unexecuted; V1-24 and
 V1-25 preparation may continue, but their completion gates cannot close until
 the canary dependency is supplied.
 
+Reference smoke evidence was refreshed from `429f19f` in
+[32625629138](https://github.com/TaeeunKil/kafrust/actions/runs/32625629138):
+both isolated clients processed 1,000 unique 1-KiB records with zero
+loss/duplicates and matching digest. This is baseline evidence only and does
+not change the blocked external-canary decision.
+
 V1-24 through V1-26 also remain `Planned`: the API snapshot is only a freeze input,
 and no RC or `1.0.0` publication/tag exists. Protocol-first publication is
 allowed only when the named release milestone, exact artifact evidence, and

@@ -94,6 +94,15 @@ This is stronger baseline reconciliation evidence, but it still does not
 close the named-service, fault, forward-cutover, rollback, or million-record
 exit gate.
 
+The current-source smoke was refreshed from `429f19f` in
+[Migration Reference Canary run 32625629138](https://github.com/TaeeunKil/kafrust/actions/runs/32625629138).
+The two isolated implementations each processed 1,000 unique 1-KiB records
+with zero loss/duplicates and the same digest
+`98fb6a3dfe9a9ac1765160a42e05b2c63e0ed231af678f370de194c0f5044e26`.
+This refreshes the reference baseline only; it does not execute staged
+cutover, fault observation, credential rotation, rollback, or the million-
+record exit gate.
+
 ### Published 0.3.6 competitor comparison (2026-08-23)
 
 The published comparator was rerun before advancing the release path in
