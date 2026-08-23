@@ -11,6 +11,7 @@ const DEFAULT_DURATION_SECONDS: u64 = 120;
 const DEFAULT_BATCH_SIZE: usize = 100;
 const DEFAULT_PAYLOAD_BYTES: usize = 1_024;
 const RECOVERY_BACKOFF: Duration = Duration::from_millis(100);
+const ERROR_REPORT_INTERVAL: Duration = Duration::from_secs(10);
 const DRAIN_TIMEOUT: Duration = Duration::from_secs(300);
 
 #[tokio::main]
@@ -65,6 +66,7 @@ async fn main() -> kafrust::Result<()> {
     let mut saw_error = false;
     let mut recovered_after_error = false;
     let mut last_progress = Instant::now();
+    let mut last_error_report = None;
 
     while Instant::now() < deadline {
         for (partition, next_offset) in next_offsets.iter_mut().enumerate() {
@@ -101,7 +103,13 @@ async fn main() -> kafrust::Result<()> {
                     metadata
                 }
                 Err(error) => {
-                    eprintln!("published multi-soak produce operation failed: {error}");
+                    let should_report = last_error_report
+                        .map(|last| last.elapsed() >= ERROR_REPORT_INTERVAL)
+                        .unwrap_or(true);
+                    if should_report {
+                        eprintln!("published multi-soak produce operation failed: {error}");
+                        last_error_report = Some(Instant::now());
+                    }
                     pending_batches[partition] = Some(batch_records);
                     operation_errors += 1;
                     unknown_outcomes = unknown_outcomes.saturating_add(batch_len);
@@ -178,7 +186,13 @@ async fn main() -> kafrust::Result<()> {
                         remaining -= accepted;
                     }
                     Err(error) => {
-                        eprintln!("published multi-soak fetch operation failed: {error}");
+                        let should_report = last_error_report
+                            .map(|last| last.elapsed() >= ERROR_REPORT_INTERVAL)
+                            .unwrap_or(true);
+                        if should_report {
+                            eprintln!("published multi-soak fetch operation failed: {error}");
+                            last_error_report = Some(Instant::now());
+                        }
                         operation_errors += 1;
                         saw_error = true;
                         tokio::time::sleep(RECOVERY_BACKOFF).await;

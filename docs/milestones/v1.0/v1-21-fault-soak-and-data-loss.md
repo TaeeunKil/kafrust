@@ -169,6 +169,14 @@ the final 200 diagnostic lines on failure. Those runs are classified as
 infrastructure failures and must be rerun; they do not pass or fail the
 client's fault semantics.
 
+The first rerun with bounded broker logs still exhausted a runner because the
+published clients printed every retryable Produce/Fetch error while brokers
+were unavailable. The plaintext and secured soak clients now retain the same
+error counters and reconciliation behavior but rate-limit repeated error
+diagnostics to one line per ten seconds. The affected run is still
+infrastructure-only evidence; the six-hour campaign must be rerun from the
+HEAD containing this client-side log bound.
+
 The published classic/KIP-848 group-rebalance fixture was likewise raised from
 its previous 64-cycle guard to a maximum of 100 cycles. Its timeout now scales
 with the requested cycle count, and the workflow timeout was extended so a

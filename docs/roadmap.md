@@ -540,6 +540,14 @@ files per broker and retain only the last 200 lines when a run fails. The
 affected runs are infrastructure failures requiring rerun, not client fault
 qualification evidence.
 
+The first rerun with bounded broker logs exposed a second log-volume source:
+the published soak clients emitted every retryable Produce/Fetch error during
+an outage. That run again exhausted the hosted runner before its descriptor
+could be retained. Both published soak clients now rate-limit repeated error
+diagnostics to one line per ten seconds while preserving counters and final
+reconciliation; the failed run remains infrastructure-only evidence and must
+be rerun from the bounded-error-log HEAD.
+
 The published classic/KIP-848 group-rebalance fixture now accepts up to 100
 cycles (previously 64), with a cycle-scaled client timeout and a 35-minute job
 bound. This only enables the required executions; no 100-cycle published result

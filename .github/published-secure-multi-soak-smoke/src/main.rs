@@ -12,6 +12,7 @@ use sha2::{Digest, Sha256};
 const PARTITIONS: usize = 3;
 const DRAIN_TIMEOUT: Duration = Duration::from_secs(300);
 const RECOVERY_BACKOFF: Duration = Duration::from_millis(100);
+const ERROR_REPORT_INTERVAL: Duration = Duration::from_secs(10);
 
 struct SecuritySettings {
     server_name: String,
@@ -117,6 +118,7 @@ async fn main() -> kafrust::Result<()> {
     let mut saw_error = false;
     let mut recovered = false;
     let mut last_progress = Instant::now();
+    let mut last_error_report = None;
 
     while Instant::now() < deadline {
         for (partition, next_offset) in next_offsets.iter_mut().enumerate() {
@@ -153,7 +155,13 @@ async fn main() -> kafrust::Result<()> {
                     metadata
                 }
                 Err(error) => {
-                    eprintln!("secure multi-soak produce failed: {error}");
+                    let should_report = last_error_report
+                        .map(|last| last.elapsed() >= ERROR_REPORT_INTERVAL)
+                        .unwrap_or(true);
+                    if should_report {
+                        eprintln!("secure multi-soak produce failed: {error}");
+                        last_error_report = Some(Instant::now());
+                    }
                     pending_batches[partition] = Some(batch_records);
                     operation_errors += 1;
                     unknown_outcomes = unknown_outcomes.saturating_add(batch_len);
@@ -232,7 +240,13 @@ async fn main() -> kafrust::Result<()> {
                         remaining -= accepted;
                     }
                     Err(error) => {
-                        eprintln!("secure multi-soak fetch failed: {error}");
+                        let should_report = last_error_report
+                            .map(|last| last.elapsed() >= ERROR_REPORT_INTERVAL)
+                            .unwrap_or(true);
+                        if should_report {
+                            eprintln!("secure multi-soak fetch failed: {error}");
+                            last_error_report = Some(Instant::now());
+                        }
                         operation_errors += 1;
                         saw_error = true;
                         tokio::time::sleep(RECOVERY_BACKOFF).await;
