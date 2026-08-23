@@ -120,6 +120,16 @@ rows, and the twelve-profile security/continuity rerun in
 [32616834901](https://github.com/TaeeunKil/kafrust/actions/runs/32616834901).
 Passing named rows do not authorize a stable release by themselves.
 
+The exact published pair was rerun after the documentation baseline refresh in
+[32626214201](https://github.com/TaeeunKil/kafrust/actions/runs/32626214201).
+All twelve `published-crate-smoke` profiles passed again from external Cargo
+projects: Kafka 3.7.2/3.8.1/3.9.1/4.0.0/4.3.1 plaintext and KIP-848 rows,
+SCRAM-256/SCRAM-512/PLAIN security rows, and gzip/snappy/lz4/zstd codec rows.
+The detailed row list and qualification boundary are in
+[`v1-20-published-smoke-rerun-2026-08-23.md`](../../evidence/v1-20-published-smoke-rerun-2026-08-23.md).
+This refresh strengthens the named published rows only; it does not close the
+full V1-20 matrix or downstream fault, SLO, migration, and release gates.
+
 ## Failure And Lifecycle Contract
 
 - One required row failure blocks the matrix; it is not averaged away.

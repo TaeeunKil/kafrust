@@ -623,6 +623,16 @@ and CI enforces this default-version invariant. A future RC may change the
 source Cargo.toml version without changing this published baseline until the RC
 is actually visible in the registry.
 
+The exact published pair was freshly rerun through all twelve
+`published-crate-smoke` profiles in
+[32626214201](https://github.com/TaeeunKil/kafrust/actions/runs/32626214201)
+from pushed source `8331079`. The external projects resolved the registry pair
+and passed the Kafka 3.7.2/3.8.1/3.9.1/4.0.0/4.3.1, security, group, and codec
+rows listed in
+[`v1-20-published-smoke-rerun-2026-08-23.md`](evidence/v1-20-published-smoke-rerun-2026-08-23.md).
+This is a fresh published-row refresh, not full V1-20 completion or a release
+decision.
+
 The 0.3.6 competitor review on 2026-08-23 found a material workload-specific
 throughput gap versus rust-rdkafka, so V1-22 has been re-planned for profiling,
 optimization evidence, and the full SLO campaign before any 0.3.7 or 1.0.0
