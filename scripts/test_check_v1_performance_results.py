@@ -18,6 +18,7 @@ def manifest():
         "profiles": [
             {
                 "id": "profile",
+                "mode": "immediate",
                 "payload_bytes": 1024,
                 "batch_size": 2,
                 "concurrency": 1,
@@ -67,6 +68,7 @@ def write_bundle(root: Path, repetition: int, *, qualified: bool = True, p99: in
         {
             "mode": "campaign-final",
             "profile": "profile",
+            "campaign_mode": "immediate",
             "warmup_seconds": 2,
             "measured_seconds": 4,
             "sample_seconds": 2,
@@ -116,7 +118,7 @@ def write_bundle(root: Path, repetition: int, *, qualified: bool = True, p99: in
             "security": "PLAINTEXT",
         },
         "timing": {"warmup_seconds": 2, "measured_seconds": 4, "sample_seconds": 2},
-        "workload": {"payload_bytes": 1024, "batch_size": 2, "workers": 1, "compression": "none"},
+        "workload": {"mode": "immediate", "payload_bytes": 1024, "batch_size": 2, "workers": 1, "compression": "none"},
         "result_file": result_name,
     }
     (root / f"run-{repetition}-descriptor.json").write_text(json.dumps(descriptor), encoding="utf-8")
@@ -148,6 +150,21 @@ class PerformanceResultsTests(unittest.TestCase):
             root = Path(directory)
             write_bundle(root, 1, qualified=False)
             write_bundle(root, 2)
+            with self.assertRaises(MODULE.ResultError):
+                MODULE.validate_results(root, manifest())
+
+    def test_campaign_mode_mismatch_fails(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            write_bundle(root, 1)
+            write_bundle(root, 2)
+            result_path = root / "result-1.jsonl"
+            rows = [json.loads(line) for line in result_path.read_text(encoding="utf-8").splitlines()]
+            rows[-1]["campaign_mode"] = "buffered"
+            result_path.write_text(
+                "\n".join(json.dumps(row) for row in rows) + "\n",
+                encoding="utf-8",
+            )
             with self.assertRaises(MODULE.ResultError):
                 MODULE.validate_results(root, manifest())
 

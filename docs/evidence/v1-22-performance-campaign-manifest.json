@@ -14,12 +14,12 @@
   },
   "repetitions": 5,
   "profiles": [
-    {"id": "immediate-100b-batch-1-concurrency-1", "payload_bytes": 100, "batch_size": 1, "concurrency": 1, "compression": "none"},
-    {"id": "immediate-1kib-batch-100-concurrency-1", "payload_bytes": 1024, "batch_size": 100, "concurrency": 1, "compression": "none"},
-    {"id": "immediate-1kib-batch-200-concurrency-4", "payload_bytes": 1024, "batch_size": 200, "concurrency": 4, "compression": "none"},
-    {"id": "immediate-1kib-zstd-batch-200-concurrency-4", "payload_bytes": 1024, "batch_size": 200, "concurrency": 4, "compression": "zstd"},
-    {"id": "buffered-1kib-batch-200-concurrency-4", "payload_bytes": 1024, "batch_size": 200, "concurrency": 4, "compression": "none"},
-    {"id": "direct-consumer-1kib-concurrency-1", "payload_bytes": 1024, "batch_size": 1, "concurrency": 1, "compression": "none"}
+    {"id": "immediate-100b-batch-1-concurrency-1", "mode": "immediate", "payload_bytes": 100, "batch_size": 1, "concurrency": 1, "compression": "none"},
+    {"id": "immediate-1kib-batch-100-concurrency-1", "mode": "immediate", "payload_bytes": 1024, "batch_size": 100, "concurrency": 1, "compression": "none"},
+    {"id": "immediate-1kib-batch-200-concurrency-4", "mode": "immediate", "payload_bytes": 1024, "batch_size": 200, "concurrency": 4, "compression": "none"},
+    {"id": "immediate-1kib-zstd-batch-200-concurrency-4", "mode": "immediate", "payload_bytes": 1024, "batch_size": 200, "concurrency": 4, "compression": "zstd"},
+    {"id": "buffered-1kib-batch-200-concurrency-4", "mode": "buffered", "payload_bytes": 1024, "batch_size": 200, "concurrency": 4, "compression": "none"},
+    {"id": "direct-consumer-1kib-concurrency-1", "mode": "direct-consumer", "payload_bytes": 1024, "batch_size": 1, "concurrency": 1, "compression": "none"}
   ],
   "thresholds": {
     "median_throughput_regression_fraction": 0.20,
@@ -45,6 +45,7 @@
     "repetition",
     "sample_window",
     "throughput",
+    "campaign_mode",
     "latency_p50_p95_p99",
     "rss_baseline_terminal_slope",
     "retry_ratio",

@@ -39,6 +39,12 @@ on:
         description: Value bytes per record
         required: true
         default: "1024"
+      mode:
+        description: Campaign execution path
+        required: true
+        type: choice
+        options: [immediate, buffered, direct-consumer]
+        default: immediate
 
 env:
   CARGO_TERM_COLOR: always
@@ -63,6 +69,7 @@ jobs:
       KAFRUST_BENCH_WORKERS: ${{ inputs.workers }}
       KAFRUST_BENCH_BATCH_SIZE: ${{ inputs.batch_size }}
       KAFRUST_BENCH_PAYLOAD_BYTES: ${{ inputs.payload_bytes }}
+      KAFRUST_BENCH_MODE: ${{ inputs.mode }}
       KAFRUST_BENCH_PROFILE: published-${{ inputs.campaign_id }}-${{ inputs.repetition }}
       KAFRUST_COMPRESSION: ${{ matrix.compression }}
 
@@ -165,6 +172,7 @@ jobs:
             (.warmup_seconds == $warmup) and
             (.measured_seconds == $measured) and
             (.sample_seconds == $sample) and
+            (.campaign_mode == "${{ inputs.mode }}") and
             (.produced_records == .consumed_records) and
             (.attempted_records == .produced_records) and
             (.acknowledged_records == .consumed_records) and
@@ -210,6 +218,7 @@ jobs:
             --argjson workers "$KAFRUST_BENCH_WORKERS" \
             --argjson batch_size "$KAFRUST_BENCH_BATCH_SIZE" \
             --argjson payload_bytes "$KAFRUST_BENCH_PAYLOAD_BYTES" \
+            --arg campaign_mode "$KAFRUST_BENCH_MODE" \
             '{
               schema_version: 1,
               status: "diagnostic",
@@ -220,7 +229,7 @@ jobs:
               profile: $profile,
               artifact: {kafrust_version: $artifact_version, source_commit: $source_commit, lockfile_sha256: $lockfile_sha256},
               runner: {image: $runner_image, broker: $kafka_version, broker_image_ref: $broker_image_ref, broker_image_id: $broker_image_id},
-              workload: {compression: $compression, warmup_seconds: $warmup_seconds, measured_seconds: $measured_seconds, sample_seconds: $sample_seconds, workers: $workers, batch_size: $batch_size, payload_bytes: $payload_bytes},
+              workload: {mode: $campaign_mode, compression: $compression, warmup_seconds: $warmup_seconds, measured_seconds: $measured_seconds, sample_seconds: $sample_seconds, workers: $workers, batch_size: $batch_size, payload_bytes: $payload_bytes},
               result_file: $result_file,
               non_claims: ["not eight-hour SLO evidence", "not five-repetition profile completion", "not a universal Kafka performance claim"]
             }' > published-performance-campaign-descriptor.json

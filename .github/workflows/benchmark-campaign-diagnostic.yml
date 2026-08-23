@@ -27,6 +27,12 @@ on:
         description: Value bytes per record
         required: true
         default: "1024"
+      mode:
+        description: Campaign execution path
+        required: true
+        type: choice
+        options: [immediate, buffered, direct-consumer]
+        default: immediate
 
 env:
   CARGO_TERM_COLOR: always
@@ -39,6 +45,7 @@ env:
   KAFRUST_BENCH_WORKERS: ${{ inputs.workers }}
   KAFRUST_BENCH_BATCH_SIZE: ${{ inputs.batch_size }}
   KAFRUST_BENCH_PAYLOAD_BYTES: ${{ inputs.payload_bytes }}
+  KAFRUST_BENCH_MODE: ${{ inputs.mode }}
   KAFRUST_BENCH_PROFILE: diagnostic-campaign
 
 jobs:
@@ -125,6 +132,7 @@ jobs:
           jq -e --argjson workers "$KAFRUST_BENCH_WORKERS" '
             select(.mode == "campaign-final") |
             (.workers == $workers) and
+            (.campaign_mode == env.KAFRUST_BENCH_MODE) and
             (.produced_records == .consumed_records) and
             (.in_flight_requests == 0) and
             (.buffered_records == 0)

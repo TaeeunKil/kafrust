@@ -142,6 +142,7 @@ def validate_samples(
 def validate_final(
     final: dict[str, Any],
     descriptor: dict[str, Any],
+    expected_profile: dict[str, Any],
     timing: dict[str, int],
     thresholds: dict[str, Any],
     descriptor_path: Path,
@@ -151,6 +152,8 @@ def validate_final(
     profile_id = descriptor.get("profile_id")
     if not isinstance(profile_id, str) or not profile_id or final.get("profile") != profile_id:
         raise ResultError(f"{descriptor_path}: final profile does not match descriptor")
+    if final.get("campaign_mode") != expected_profile.get("mode"):
+        raise ResultError(f"{descriptor_path}: final campaign mode does not match profile")
     for field, expected in timing.items():
         if final.get(field) != expected:
             raise ResultError(f"{descriptor_path}: final {field} does not match descriptor timing")
@@ -258,7 +261,7 @@ def validate_descriptor(
     expected_profile = profile_map[profile_id]
     if not isinstance(workload, dict):
         raise ResultError(f"{path}: workload must be an object")
-    for field in ("payload_bytes", "batch_size", "compression"):
+    for field in ("mode", "payload_bytes", "batch_size", "compression"):
         if workload.get(field) != expected_profile.get(field):
             raise ResultError(f"{path}: workload.{field} differs from profile {profile_id}")
     if workload.get("workers") != expected_profile.get("concurrency"):
@@ -269,6 +272,7 @@ def validate_descriptor(
     profile, throughput, p99 = validate_final(
         final,
         descriptor,
+        expected_profile,
         {
             "warmup_seconds": expected_timing["warmup_seconds"],
             "measured_seconds": expected_timing["measured_seconds"],

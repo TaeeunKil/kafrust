@@ -94,6 +94,20 @@ measured) and archives the raw JSONL output. This is preparation evidence only;
 the six-hour measured window, five repetitions, published artifact identity,
 and regression/RSS adjudication remain open.
 
+### Profile-path implementation (2026-08-23)
+
+The timed harness now selects an explicit `KAFRUST_BENCH_MODE` for each
+manifest profile and emits that mode in the final result. `immediate` exercises
+`Producer::send_batch`, `buffered` exercises the bounded `BufferedProducer`
+queue and waits on every delivery handle before consuming, and
+`direct-consumer` assigns the partition and drains it through
+`Consumer::poll`. The direct-consumer profile still produces its records with
+the immediate producer so the measurement remains a round-trip workload; its
+distinguishing path is the assigned consumer API. The result adjudicator now
+requires the descriptor workload mode and final `campaign_mode` to match the
+manifest profile. This removes a profile-labeling gap but does not qualify any
+short run or the full matrix.
+
 ### Bounded timed-campaign diagnostic (2026-08-22)
 
 Run [32558818231](https://github.com/TaeeunKil/kafrust/actions/runs/32558818231)

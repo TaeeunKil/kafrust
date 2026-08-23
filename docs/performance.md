@@ -62,6 +62,16 @@ roundtrips batches on its assigned partition until the measured window ends.
 | `KAFRUST_BENCH_SAMPLE_SECONDS` | `10` | sample window period |
 | `KAFRUST_BENCH_WORKERS` | `2` | producer/consumer pairs and partitions |
 | `KAFRUST_BENCH_PROFILE` | `diagnostic-campaign` | result profile label |
+| `KAFRUST_BENCH_MODE` | `immediate` | `immediate`, `buffered`, or `direct-consumer` campaign path |
+
+The campaign mode is part of the workload identity and is emitted as
+`campaign_mode` in the final JSONL record. `immediate` uses `Producer::send_batch`,
+`buffered` uses the bounded `BufferedProducer` queue with delivery handles, and
+`direct-consumer` assigns a partition and drains it through `Consumer::poll`.
+The producer is still used to create the measured records in the direct-consumer
+profile; that profile distinguishes the assigned direct-consumer read path, not a
+consume-only workload. A qualified descriptor must repeat the same mode in its
+workload object, and the V1-22 adjudicator rejects a mismatched final mode.
 
 Campaign output is JSON Lines: one `campaign-sample` object per window and one
 `campaign-final` object after all workers drain. Samples include Produce/Fetch

@@ -39,6 +39,9 @@ def main() -> int:
     ids = [profile.get("id") for profile in profiles]
     if any(not isinstance(identifier, str) or not identifier for identifier in ids) or len(set(ids)) != len(ids):
         return fail("profile IDs must be non-empty and unique")
+    modes = {"immediate", "buffered", "direct-consumer"}
+    if any(profile.get("mode") not in modes for profile in profiles):
+        return fail("each profile must declare a supported execution mode")
     thresholds = manifest.get("thresholds", {})
     if thresholds.get("median_throughput_regression_fraction") != 0.20:
         return fail("throughput regression threshold must be 20 percent")

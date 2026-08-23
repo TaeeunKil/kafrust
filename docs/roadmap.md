@@ -532,6 +532,15 @@ locked baseline before it can return a passing result. This makes the eventual
 campaign decision reproducible; no qualified bundle or locked baseline exists
 yet, so V1-22 remains `Planned`.
 
+The benchmark profile paths are now explicit rather than label-only. The
+`immediate` profile uses `Producer::send_batch`, `buffered` uses the bounded
+`BufferedProducer` queue and waits for each delivery, and `direct-consumer`
+assigns a partition and drains it through `Consumer::poll`. The final JSONL
+record emits `campaign_mode`, while the adjudicator requires the descriptor and
+final mode to match the manifest profile. This closes the harness identity gap;
+it is not a qualification result and does not change the current no-publication
+decision.
+
 V1-21 now has the corresponding cross-segment adjudicator in
 [`scripts/check_v1_fault_results.py`](../scripts/check_v1_fault_results.py).
 It rejects count-only or continuity-unqualified diagnostics and requires

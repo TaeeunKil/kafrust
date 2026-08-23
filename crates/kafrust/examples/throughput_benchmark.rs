@@ -6,8 +6,10 @@ use std::{
 };
 
 use kafrust::{
-    consumer::Consumer, producer::Producer, Acks, ClientMetrics, ClientMetricsSnapshot,
-    Compression, ConsumerConfig, ProducerConfig, ProducerRecord,
+    consumer::Consumer,
+    producer::{BufferedProducer, Producer},
+    Acks, ClientMetrics, ClientMetricsSnapshot, Compression, ConsumerConfig, ProducerConfig,
+    ProducerRecord, RecordMetadata,
 };
 use sha2::{Digest, Sha256};
 use tokio::sync::Barrier;
@@ -47,6 +49,7 @@ async fn main() -> kafrust::Result<()> {
             measured_seconds,
             sample_seconds,
             workers: campaign_workers()?,
+            mode: campaign_mode_from_env()?,
         };
         return run_campaign(bootstrap_servers, topic, settings).await;
     }
@@ -188,6 +191,73 @@ struct CampaignSettings {
     measured_seconds: u64,
     sample_seconds: u64,
     workers: usize,
+    mode: CampaignMode,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CampaignMode {
+    Immediate,
+    Buffered,
+    DirectConsumer,
+}
+
+impl CampaignMode {
+    fn parse(value: &str) -> kafrust::Result<Self> {
+        match value {
+            "immediate" => Ok(Self::Immediate),
+            "buffered" => Ok(Self::Buffered),
+            "direct-consumer" => Ok(Self::DirectConsumer),
+            _ => Err(kafrust::Error::Unsupported(
+                "KAFRUST_BENCH_MODE must be immediate, buffered, or direct-consumer",
+            )),
+        }
+    }
+
+    fn is_direct_consumer(self) -> bool {
+        matches!(self, Self::DirectConsumer)
+    }
+
+    fn name(self) -> &'static str {
+        match self {
+            Self::Immediate => "immediate",
+            Self::Buffered => "buffered",
+            Self::DirectConsumer => "direct-consumer",
+        }
+    }
+}
+
+enum CampaignProducer {
+    Immediate(Producer),
+    Buffered(BufferedProducer),
+}
+
+impl CampaignProducer {
+    async fn send_batch(
+        &mut self,
+        records: Vec<ProducerRecord>,
+    ) -> kafrust::Result<Vec<RecordMetadata>> {
+        match self {
+            Self::Immediate(producer) => producer.send_batch(records).await,
+            Self::Buffered(producer) => {
+                let mut deliveries = Vec::with_capacity(records.len());
+                for record in records {
+                    deliveries.push(producer.send(record).await?);
+                }
+                let mut metadata = Vec::with_capacity(deliveries.len());
+                for delivery in deliveries {
+                    metadata.push(delivery.wait().await?);
+                }
+                Ok(metadata)
+            }
+        }
+    }
+
+    async fn close(&mut self) -> kafrust::Result<()> {
+        match self {
+            Self::Immediate(_) => Ok(()),
+            Self::Buffered(producer) => producer.close().await,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -355,23 +425,47 @@ async fn run_campaign(
     let mut workers = Vec::with_capacity(settings.workers);
     for partition in 0..settings.workers {
         let partition = partition as i32;
-        let producer = common::apply_security(
-            ProducerConfig::new(bootstrap_servers.clone())
-                .client_id(format!("kafrust-throughput-campaign-producer-{partition}"))
-                .metrics(metrics.clone()),
-        )?
-        .acks(Acks::Leader)
-        .compression(settings.compression)
-        .max_records_per_batch(settings.batch_size)
-        .max_batch_bytes(settings.max_batch_bytes)
-        .build()
-        .await?;
+        let producer = match settings.mode {
+            CampaignMode::Buffered => {
+                let producer = common::apply_security(
+                    ProducerConfig::new(bootstrap_servers.clone())
+                        .client_id(format!(
+                            "kafrust-throughput-campaign-buffered-producer-{partition}"
+                        ))
+                        .metrics(metrics.clone()),
+                )?
+                .acks(Acks::Leader)
+                .compression(settings.compression)
+                .max_records_per_batch(settings.batch_size)
+                .max_batch_bytes(settings.max_batch_bytes)
+                .linger_ms(5)
+                .buffer_capacity(settings.batch_size.saturating_mul(2).max(1))
+                .build_buffered()
+                .await?;
+                CampaignProducer::Buffered(producer)
+            }
+            CampaignMode::Immediate | CampaignMode::DirectConsumer => {
+                let producer = common::apply_security(
+                    ProducerConfig::new(bootstrap_servers.clone())
+                        .client_id(format!("kafrust-throughput-campaign-producer-{partition}"))
+                        .metrics(metrics.clone()),
+                )?
+                .acks(Acks::Leader)
+                .compression(settings.compression)
+                .max_records_per_batch(settings.batch_size)
+                .max_batch_bytes(settings.max_batch_bytes)
+                .build()
+                .await?;
+                CampaignProducer::Immediate(producer)
+            }
+        };
         let mut consumer = common::apply_security(
             ConsumerConfig::new(bootstrap_servers.clone())
                 .client_id(format!("kafrust-throughput-campaign-consumer-{partition}"))
                 .metrics(metrics.clone()),
         )?
         .max_wait_ms(100)
+        .max_poll_records(settings.batch_size)
         .max_partition_bytes(max_partition_bytes)
         .build()
         .await?;
@@ -380,6 +474,9 @@ async fn run_campaign(
             return Err(kafrust::Error::Unsupported(
                 "benchmark campaign requires concrete broker offsets",
             ));
+        }
+        if settings.mode.is_direct_consumer() {
+            consumer.assign(topic.clone(), partition, next_offset);
         }
         workers.push((producer, consumer, partition, next_offset));
     }
@@ -515,6 +612,7 @@ async fn run_campaign(
     println!(
         concat!(
             "{{\"mode\":\"campaign-final\",\"profile\":\"{}\",",
+            "\"campaign_mode\":\"{}\",",
             "\"warmup_seconds\":{},\"measured_seconds\":{},\"sample_seconds\":{},\"workers\":{},",
             "\"batch_size\":{},\"payload_bytes\":{},\"compression\":\"{}\",",
             "\"produced_records\":{},\"consumed_records\":{},\"requests_started\":{},",
@@ -531,6 +629,7 @@ async fn run_campaign(
             "\"in_flight_requests\":{},\"buffered_records\":{}}}"
         ),
         profile,
+        settings.mode.name(),
         settings.warmup_seconds,
         settings.measured_seconds,
         settings.sample_seconds,
@@ -569,8 +668,37 @@ async fn run_campaign(
 }
 
 async fn run_campaign_worker(
-    mut producer: Producer,
+    mut producer: CampaignProducer,
     mut consumer: Consumer,
+    topic: String,
+    partition: i32,
+    next_offset: i64,
+    settings: CampaignSettings,
+    barriers: CampaignBarriers,
+) -> kafrust::Result<IdentitySummary> {
+    let result = run_campaign_worker_inner(
+        &mut producer,
+        &mut consumer,
+        topic,
+        partition,
+        next_offset,
+        settings,
+        barriers,
+    )
+    .await;
+    let close_result = producer.close().await;
+    match result {
+        Err(error) => Err(error),
+        Ok(summary) => {
+            close_result?;
+            Ok(summary)
+        }
+    }
+}
+
+async fn run_campaign_worker_inner(
+    producer: &mut CampaignProducer,
+    consumer: &mut Consumer,
     topic: String,
     partition: i32,
     mut next_offset: i64,
@@ -583,8 +711,8 @@ async fn run_campaign_worker(
     let warmup_deadline = Instant::now() + Duration::from_secs(settings.warmup_seconds);
     while Instant::now() < warmup_deadline {
         next_offset = send_and_consume_batch(
-            &mut producer,
-            &mut consumer,
+            producer,
+            consumer,
             BatchWork {
                 topic: &topic,
                 partition,
@@ -594,6 +722,7 @@ async fn run_campaign_worker(
             next_offset,
             warmup_deadline + CONSUME_TIMEOUT,
             &mut identity,
+            settings.mode,
         )
         .await?;
     }
@@ -605,8 +734,8 @@ async fn run_campaign_worker(
     let measured_deadline = Instant::now() + Duration::from_secs(settings.measured_seconds);
     while Instant::now() < measured_deadline {
         next_offset = send_and_consume_batch(
-            &mut producer,
-            &mut consumer,
+            producer,
+            consumer,
             BatchWork {
                 topic: &topic,
                 partition,
@@ -616,6 +745,7 @@ async fn run_campaign_worker(
             next_offset,
             measured_deadline + CONSUME_TIMEOUT,
             &mut identity,
+            settings.mode,
         )
         .await?;
     }
@@ -623,12 +753,13 @@ async fn run_campaign_worker(
 }
 
 async fn send_and_consume_batch(
-    producer: &mut Producer,
+    producer: &mut CampaignProducer,
     consumer: &mut Consumer,
     work: BatchWork<'_>,
     next_offset: i64,
     deadline: Instant,
     identity: &mut IdentityTracker,
+    mode: CampaignMode,
 ) -> kafrust::Result<i64> {
     let sequence_start = identity.reserve_batch(work.batch_size)?;
     let metadata = producer
@@ -669,9 +800,13 @@ async fn send_and_consume_batch(
                 "benchmark campaign consumer did not drain the current batch",
             ));
         }
-        let fetched = consumer
-            .fetch(work.topic.to_owned(), work.partition, next_offset)
-            .await?;
+        let fetched = if mode.is_direct_consumer() {
+            consumer.poll().await?
+        } else {
+            consumer
+                .fetch(work.topic.to_owned(), work.partition, next_offset)
+                .await?
+        };
         if fetched.is_empty() {
             tokio::time::sleep(Duration::from_millis(10)).await;
             continue;
@@ -722,6 +857,16 @@ fn campaign_config() -> kafrust::Result<Option<(u64, u64, u64)>> {
         ));
     }
     Ok(Some((warmup, measured, sample)))
+}
+
+fn campaign_mode_from_env() -> kafrust::Result<CampaignMode> {
+    match std::env::var("KAFRUST_BENCH_MODE") {
+        Ok(value) => CampaignMode::parse(&value),
+        Err(std::env::VarError::NotPresent) => Ok(CampaignMode::Immediate),
+        Err(std::env::VarError::NotUnicode(_)) => Err(kafrust::Error::Unsupported(
+            "KAFRUST_BENCH_MODE must be valid UTF-8",
+        )),
+    }
 }
 
 fn records(topic: &str, payload: &[u8], count: usize) -> Vec<ProducerRecord> {
@@ -1049,7 +1194,8 @@ fn least_squares_slope(samples: &[(f64, u64)]) -> Option<f64> {
 mod tests {
     use super::{
         delta_snapshot, least_squares_slope, median_u64, percentile_ms, rate, record_identity,
-        record_value, request_percentile_ms, retry_ratio, rss_summary, IdentityTracker,
+        record_value, request_percentile_ms, retry_ratio, rss_summary, CampaignMode,
+        IdentityTracker,
     };
     use kafrust::ClientMetricsSnapshot;
     use std::time::Duration;
@@ -1161,5 +1307,22 @@ mod tests {
         assert_eq!(summary.loss_count, 1);
         assert_eq!(summary.duplicate_count, 1);
         assert_ne!(summary.expected_digest, summary.observed_digest);
+    }
+
+    #[test]
+    fn parses_campaign_execution_modes() {
+        assert_eq!(
+            CampaignMode::parse("immediate").expect("immediate mode must parse"),
+            CampaignMode::Immediate
+        );
+        assert_eq!(
+            CampaignMode::parse("buffered").expect("buffered mode must parse"),
+            CampaignMode::Buffered
+        );
+        assert_eq!(
+            CampaignMode::parse("direct-consumer").expect("direct consumer mode must parse"),
+            CampaignMode::DirectConsumer
+        );
+        assert!(CampaignMode::parse("unknown").is_err());
     }
 }
