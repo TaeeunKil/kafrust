@@ -577,7 +577,10 @@ the current candidate; the next RC/stable decision requires a refreshed dated
 competitor comparison and a completed release gate.
 All 35 published smoke workflows now default to the current published `0.3.6`
 client, while explicit version inputs remain available for historical reruns;
-CI enforces this default-version invariant.
+the machine-readable baseline is [published-baseline.json](evidence/published-baseline.json)
+and CI enforces this default-version invariant. A future RC may change the
+source Cargo.toml version without changing this published baseline until the RC
+is actually visible in the registry.
 
 The 0.3.6 competitor review on 2026-08-23 found a material workload-specific
 throughput gap versus rust-rdkafka, so V1-22 has been re-planned for profiling,

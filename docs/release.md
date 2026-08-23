@@ -33,8 +33,12 @@ documentation-only, or incomplete changes remain unpublished until grouped into
 the next qualified boundary. Every such decision is recorded with explicit
 non-claims, and the competitor review is refreshed before an RC or stable release.
 Published smoke workflows keep their no-input defaults aligned with the current
-client package; historical artifact reruns must pass an explicit version. CI
-enforces this boundary with `scripts/check_published_workflow_versions.py`.
+published registry baseline; historical artifact reruns must pass an explicit
+version. The baseline is recorded in
+[`published-baseline.json`](evidence/published-baseline.json), and CI enforces
+this boundary with `scripts/check_published_workflow_versions.py`. Update that
+manifest only after both coordinated crates are visible and fresh external
+resolution has passed.
 
 When the V1-25 release gate is explicitly recorded, publish the exact frozen protocol RC
 first, wait for fresh Rust 1.81/stable registry resolution, then run the client

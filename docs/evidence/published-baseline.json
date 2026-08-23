@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "client_crate": "kafrust",
+  "protocol_crate": "kafrust-protocol",
+  "version": "0.3.6",
+  "published_at_utc": "2026-08-23T02:45:02.515315Z",
+  "boundary_evidence": "docs/evidence/v1-20-published-0.3.6-boundary-2026-08-23.md",
+  "policy": "Update only after both coordinated crates are visible on crates.io and fresh external resolution passes. Historical reruns must pass an explicit workflow version."
+}

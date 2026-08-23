@@ -8,13 +8,14 @@ an older artifact.
 
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-CLIENT_MANIFEST = ROOT / "crates" / "kafrust" / "Cargo.toml"
+BASELINE = ROOT / "docs" / "evidence" / "published-baseline.json"
 WORKFLOW_DIR = ROOT / ".github" / "workflows"
 
 
@@ -23,12 +24,21 @@ def fail(message: str) -> int:
     return 1
 
 
-def current_version() -> str:
-    text = CLIENT_MANIFEST.read_text(encoding="utf-8")
-    match = re.search(r"^version\s*=\s*\"([^\"]+)\"\s*$", text, re.MULTILINE)
-    if match is None:
-        raise ValueError("client Cargo.toml has no exact package version")
-    return match.group(1)
+def published_version() -> str:
+    baseline = json.loads(BASELINE.read_text(encoding="utf-8"))
+    if baseline.get("schema_version") != 1:
+        raise ValueError("published baseline has an unsupported schema version")
+    if baseline.get("client_crate") != "kafrust" or baseline.get("protocol_crate") != "kafrust-protocol":
+        raise ValueError("published baseline must name the coordinated kafrust crates")
+    version = baseline.get("version")
+    if not isinstance(version, str) or not re.fullmatch(r"\d+\.\d+\.\d+", version):
+        raise ValueError("published baseline version must be a stable semver")
+    evidence = baseline.get("boundary_evidence")
+    if not isinstance(evidence, str) or not evidence:
+        raise ValueError("published baseline must cite boundary evidence")
+    if not (ROOT / evidence).is_file():
+        raise ValueError(f"published baseline evidence does not exist: {evidence}")
+    return version
 
 
 def input_default(lines: list[str], workflow: Path) -> str:
@@ -47,7 +57,7 @@ def input_default(lines: list[str], workflow: Path) -> str:
 
 def main() -> int:
     try:
-        version = current_version()
+        version = published_version()
     except (OSError, ValueError) as error:
         return fail(str(error))
 
