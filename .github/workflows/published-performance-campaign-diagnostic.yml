@@ -1,0 +1,229 @@
+name: Published Performance Campaign Diagnostic
+
+on:
+  workflow_dispatch:
+    inputs:
+      kafrust_version:
+        description: Published kafrust version to benchmark from crates.io
+        required: true
+        default: "0.3.6"
+      campaign_id:
+        description: Stable campaign identifier retained in the result descriptor
+        required: true
+        default: v1-22-diagnostic
+      repetition:
+        description: Repetition number for this bounded diagnostic segment
+        required: true
+        default: "1"
+      warmup_seconds:
+        description: Unmeasured warmup duration (diagnostic maximum 60 seconds)
+        required: true
+        default: "5"
+      measured_seconds:
+        description: Measured duration (diagnostic maximum 300 seconds)
+        required: true
+        default: "20"
+      sample_seconds:
+        description: Resource and throughput sample period
+        required: true
+        default: "5"
+      workers:
+        description: Producer/consumer workers and topic partitions (maximum 4)
+        required: true
+        default: "2"
+      batch_size:
+        description: Records per Produce batch
+        required: true
+        default: "50"
+      payload_bytes:
+        description: Value bytes per record
+        required: true
+        default: "1024"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  published-campaign:
+    name: Published kafrust ${{ inputs.kafrust_version }} Kafka ${{ matrix.kafka_version }} ${{ matrix.compression }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        kafka_version: ["3.7.2", "4.3.1"]
+        compression: ["none", "zstd"]
+    env:
+      KAFRUST_BOOTSTRAP_SERVERS: localhost:25097
+      KAFRUST_TOPIC: kafrust-published-campaign-${{ github.run_id }}-${{ matrix.kafka_version }}-${{ matrix.compression }}
+      KAFRUST_BENCH_RECORDS: "1"
+      KAFRUST_BENCH_WARMUP_SECONDS: ${{ inputs.warmup_seconds }}
+      KAFRUST_BENCH_MEASURED_SECONDS: ${{ inputs.measured_seconds }}
+      KAFRUST_BENCH_SAMPLE_SECONDS: ${{ inputs.sample_seconds }}
+      KAFRUST_BENCH_WORKERS: ${{ inputs.workers }}
+      KAFRUST_BENCH_BATCH_SIZE: ${{ inputs.batch_size }}
+      KAFRUST_BENCH_PAYLOAD_BYTES: ${{ inputs.payload_bytes }}
+      KAFRUST_BENCH_PROFILE: published-${{ inputs.campaign_id }}-${{ inputs.repetition }}
+      KAFRUST_COMPRESSION: ${{ matrix.compression }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Validate campaign inputs
+        run: |
+          set -euo pipefail
+          for value in \
+            "${{ inputs.repetition }}" \
+            "$KAFRUST_BENCH_WARMUP_SECONDS" \
+            "$KAFRUST_BENCH_MEASURED_SECONDS" \
+            "$KAFRUST_BENCH_SAMPLE_SECONDS" \
+            "$KAFRUST_BENCH_WORKERS" \
+            "$KAFRUST_BENCH_BATCH_SIZE" \
+            "$KAFRUST_BENCH_PAYLOAD_BYTES"; do
+            [[ "$value" =~ ^[0-9]+$ ]] || { echo "campaign inputs must be non-negative integers"; exit 1; }
+          done
+          test "${{ inputs.repetition }}" -gt 0
+          test "$KAFRUST_BENCH_MEASURED_SECONDS" -gt 0
+          test "$KAFRUST_BENCH_SAMPLE_SECONDS" -gt 0
+          test "$KAFRUST_BENCH_WORKERS" -ge 1
+          test "$KAFRUST_BENCH_WORKERS" -le 4
+          test "$KAFRUST_BENCH_WARMUP_SECONDS" -le 60
+          test "$KAFRUST_BENCH_MEASURED_SECONDS" -le 300
+          test "$KAFRUST_BENCH_SAMPLE_SECONDS" -le "$KAFRUST_BENCH_MEASURED_SECONDS"
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.81.0"
+
+      - name: Start Kafka
+        run: |
+          docker run -d --name kafrust-published-campaign \
+            -p 25097:9098 \
+            -e KAFKA_NODE_ID=1 \
+            -e KAFKA_PROCESS_ROLES=broker,controller \
+            -e KAFKA_LISTENERS=INTERNAL://:9097,PLAINTEXT://:9098,CONTROLLER://:9093 \
+            -e KAFKA_ADVERTISED_LISTENERS=INTERNAL://localhost:9097,PLAINTEXT://localhost:25097 \
+            -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+            -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT \
+            -e KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL \
+            -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@localhost:9093 \
+            -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
+            apache/kafka:${{ matrix.kafka_version }}
+
+      - name: Wait for Kafka
+        run: |
+          for attempt in {1..90}; do
+            if docker exec kafrust-published-campaign /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server localhost:9097 >/tmp/kafrust-published-campaign-probe.log 2>&1; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/kafrust-published-campaign-probe.log || true
+          docker logs kafrust-published-campaign
+          exit 1
+
+      - name: Create campaign topic
+        run: |
+          docker exec kafrust-published-campaign /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server localhost:9097 \
+            --create \
+            --topic "$KAFRUST_TOPIC" \
+            --partitions "$KAFRUST_BENCH_WORKERS" \
+            --replication-factor 1
+
+      - name: Create fresh external project
+        env:
+          KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version }}
+        run: |
+          set -euo pipefail
+          project_dir="$RUNNER_TEMP/kafrust-published-campaign"
+          if [ "$project_dir" = "$GITHUB_WORKSPACE" ]; then
+            echo "the published campaign project must be outside the repository"
+            exit 1
+          fi
+          cargo new --bin "$project_dir"
+          cp crates/kafrust/examples/throughput_benchmark.rs "$project_dir/src/main.rs"
+          cp -R crates/kafrust/examples/common "$project_dir/src/common"
+          sed "s/__KAFRUST_VERSION__/$KAFRUST_PUBLISHED_VERSION/; s/__KAFRUST_FEATURES__/[]/" \
+            .github/published-performance-smoke/Cargo.toml > "$project_dir/Cargo.toml"
+
+      - name: Run published timed campaign diagnostic
+        run: |
+          set -euo pipefail
+          cargo run --quiet --release --manifest-path "$RUNNER_TEMP/kafrust-published-campaign/Cargo.toml" \
+            | tee published-performance-campaign.jsonl
+          jq -e 'select(.mode == "campaign-sample")' published-performance-campaign.jsonl >/dev/null
+          jq -e --argjson workers "$KAFRUST_BENCH_WORKERS" \
+            --argjson warmup "$KAFRUST_BENCH_WARMUP_SECONDS" \
+            --argjson measured "$KAFRUST_BENCH_MEASURED_SECONDS" \
+            --argjson sample "$KAFRUST_BENCH_SAMPLE_SECONDS" '
+            select(.mode == "campaign-final") |
+            (.workers == $workers) and
+            (.warmup_seconds == $warmup) and
+            (.measured_seconds == $measured) and
+            (.sample_seconds == $sample) and
+            (.produced_records == .consumed_records) and
+            (.in_flight_requests == 0) and
+            (.buffered_records == 0)
+          ' published-performance-campaign.jsonl >/dev/null
+
+      - name: Verify published dependency versions
+        run: |
+          set -euo pipefail
+          grep -A1 -q 'name = "kafrust"' "$RUNNER_TEMP/kafrust-published-campaign/Cargo.lock"
+          grep -A1 -q 'version = "${{ inputs.kafrust_version }}"' "$RUNNER_TEMP/kafrust-published-campaign/Cargo.lock"
+          grep -A1 -q 'name = "kafrust-protocol"' "$RUNNER_TEMP/kafrust-published-campaign/Cargo.lock"
+
+      - name: Write diagnostic descriptor
+        run: |
+          set -euo pipefail
+          image_digest=$(docker inspect --format '{{index .RepoDigests 0}}' kafrust-published-campaign)
+          lockfile_sha256=$(sha256sum "$RUNNER_TEMP/kafrust-published-campaign/Cargo.lock" | awk '{print $1}')
+          jq -n \
+            --arg campaign_id '${{ inputs.campaign_id }}' \
+            --arg repetition '${{ inputs.repetition }}' \
+            --arg profile "$KAFRUST_BENCH_PROFILE" \
+            --arg kafka_version '${{ matrix.kafka_version }}' \
+            --arg compression "$KAFRUST_COMPRESSION" \
+            --arg artifact_version '${{ inputs.kafrust_version }}' \
+            --arg runner_image "$RUNNER_OS/${{ runner.arch }}" \
+            --arg broker_image_digest "$image_digest" \
+            --arg lockfile_sha256 "$lockfile_sha256" \
+            --arg source_commit "$GITHUB_SHA" \
+            --arg result_file published-performance-campaign.jsonl \
+            --argjson warmup_seconds "$KAFRUST_BENCH_WARMUP_SECONDS" \
+            --argjson measured_seconds "$KAFRUST_BENCH_MEASURED_SECONDS" \
+            --argjson sample_seconds "$KAFRUST_BENCH_SAMPLE_SECONDS" \
+            --argjson workers "$KAFRUST_BENCH_WORKERS" \
+            --argjson batch_size "$KAFRUST_BENCH_BATCH_SIZE" \
+            --argjson payload_bytes "$KAFRUST_BENCH_PAYLOAD_BYTES" \
+            '{
+              schema_version: 1,
+              status: "diagnostic",
+              qualified: false,
+              qualification_reason: "bounded published-artifact diagnostic; not an eight-hour five-repetition SLO result",
+              campaign_id: $campaign_id,
+              repetition: ($repetition | tonumber),
+              profile: $profile,
+              artifact: {kafrust_version: $artifact_version, source_commit: $source_commit, lockfile_sha256: $lockfile_sha256},
+              runner: {image: $runner_image, broker: $kafka_version, broker_image_digest: $broker_image_digest},
+              workload: {compression: $compression, warmup_seconds: $warmup_seconds, measured_seconds: $measured_seconds, sample_seconds: $sample_seconds, workers: $workers, batch_size: $batch_size, payload_bytes: $payload_bytes},
+              result_file: $result_file,
+              non_claims: ["not eight-hour SLO evidence", "not five-repetition profile completion", "not a universal Kafka performance claim"]
+            }' > published-performance-campaign-descriptor.json
+
+      - name: Upload published campaign diagnostic
+        uses: actions/upload-artifact@v6
+        with:
+          name: kafrust-published-performance-campaign-${{ matrix.kafka_version }}-${{ matrix.compression }}-${{ github.run_id }}
+          path: |
+            published-performance-campaign.jsonl
+            published-performance-campaign-descriptor.json
+          retention-days: 90
+
+      - name: Dump Kafka logs
+        if: failure()
+        run: docker logs kafrust-published-campaign
