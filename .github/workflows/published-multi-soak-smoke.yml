@@ -90,19 +90,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Reject hosted runner labels
-        run: |
-          case "${{ inputs.runner_label }}" in
-            ubuntu-*|windows-*|macos-*)
-              echo "V1-21 six-hour campaigns require a self-hosted runner with setup overhead capacity"
-              exit 1
-              ;;
-            "")
-              echo "runner_label must be non-empty"
-              exit 1
-              ;;
-          esac
-
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
