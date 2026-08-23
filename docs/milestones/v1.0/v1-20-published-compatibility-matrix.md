@@ -92,6 +92,13 @@ transaction response-loss reconciliation, and three-broker leader/coordinator
 failover. This refreshes current-source evidence only; it does not satisfy the
 exact published `0.3.6` lockfile pair or V1-20 exit criteria.
 
+The ordered `0.3.6` publication has now completed. The protocol and client
+checksums, registry timestamps, exact external lockfile, and Rust 1.81/stable
+package checks are archived in
+[`v1-20-published-0.3.6-boundary-2026-08-23.md`](../../evidence/v1-20-published-0.3.6-boundary-2026-08-23.md).
+This closes only the published-package boundary prerequisite; every broker,
+security, workload, docs.rs, and later-milestone matrix row remains open.
+
 ## Failure And Lifecycle Contract
 
 - One required row failure blocks the matrix; it is not averaged away.

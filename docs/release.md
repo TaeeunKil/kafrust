@@ -19,6 +19,13 @@ review, exact package evidence, and hardening gates show no material gap; a
 separate user prompt is not required. Any ordered publish discrepancy stops the
 sequence and triggers a new version decision.
 
+The ordered publication completed on 2026-08-23: protocol first, registry
+visibility, client dry-run against the published protocol, then client upload.
+The exact checksums and fresh external Rust 1.81/stable lockfile checks are in
+[`v1-20-published-0.3.6-boundary-2026-08-23.md`](evidence/v1-20-published-0.3.6-boundary-2026-08-23.md).
+docs.rs indexing was still HTTP 404 at capture time and remains pending; the
+full V1-20 matrix is not complete.
+
 When the V1-25 release gate is explicitly recorded, publish the exact frozen protocol RC
 first, wait for fresh Rust 1.81/stable registry resolution, then run the client
 package dry-run against that registry artifact before publishing the client RC.

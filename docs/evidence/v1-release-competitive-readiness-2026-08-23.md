@@ -68,3 +68,9 @@ This is an autonomous release-gate decision, not a request for separate user
 confirmation. It authorizes only the ordered `0.3.6` pre-1.0 path; any package,
 registry, external-project, competitor, or validation discrepancy stops the
 sequence and triggers a new milestone/version decision.
+
+The ordered publication completed successfully. The exact registry checksums,
+timestamps, and fresh external lockfile evidence are recorded in
+[`v1-20-published-0.3.6-boundary-2026-08-23.md`](v1-20-published-0.3.6-boundary-2026-08-23.md).
+This advances V1-20 to its published-artifact matrix; it does not make a stable
+release or change the `1.0.0` deferral.

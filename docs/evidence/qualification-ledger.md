@@ -22,6 +22,39 @@ and are checked in CI. Values such as `not-applicable` and `not-recorded` are
 deliberate classifications, not missing data. A row must never use an
 unqualified relative artifact label.
 
+## Q-PUBLISHED-V120-001
+
+- date_utc: 2026-08-23
+- source_commit: 8feeb1a0c8a6f1356ee2ad3bd5e375666cd0e6d0
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: not-applicable
+- kafka_image: not-applicable
+- mode: protocol-first published package boundary
+- topology: fresh external Cargo project
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: exact registry resolution and package compile on Rust 1.81.0/stable
+- workflow: scripts/check_v1_compatibility_matrix.py
+- fault: protocol visibility, package dry-run, lockfile version, path/patch source, or compile failure
+- duration: not-recorded
+- record_count: 2 published crates; 2 exact lockfile package identities
+- member_count: 1 external project
+- repetition_count: 2 toolchains
+- expected_errors: protocol-first order, exact 0.3.6 versions, no path/patch dependency, and successful checks
+- observed_errors: none; both toolchains passed
+- retry_count: not-applicable
+- duplicate_count: not-applicable
+- loss_count: not-applicable
+- latency: not-applicable
+- memory: not-applicable
+- final_resource_gauges: not-applicable
+- result: passed
+- artifact: docs/evidence/v1-20-published-0.3.6-boundary-2026-08-23.md; protocol sha256 731e80f6e2588f6c3c460896d0521c6582bae51c42a386ac05f26ec37e1279bd; client sha256 4fe2758d0093ef4b2a236090cca4dc7511b9e865f5e18ce42823e428a6be71d2
+- non_claims: not docs.rs completion, not full V1-20 matrix, not V1-21 through V1-24 completion, not API freeze, not 1.0.0 readiness
+
 ## Q-DECISION-V1-002
 
 - date_utc: 2026-08-23
