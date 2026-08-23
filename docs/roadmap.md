@@ -585,6 +585,19 @@ campaign harness, including the published SASL_SSL/SCRAM workflow's six-hour
 timeout contract, but does not itself provide the required six-hour campaign
 results or completion evidence.
 
+After exact-head CI run
+[32644139214](https://github.com/TaeeunKil/kafrust/actions/runs/32644139214)
+passed, the four V1-21 six-hour published campaigns were relaunched from
+commit 7c24f7399325b5d0ab6f91f6e2ecd4d5b49985ec: plaintext Kafka 3.7.2 floor
+run [32644605379](https://github.com/TaeeunKil/kafrust/actions/runs/32644605379)
+and secured Kafka 4.3.1 runs
+[32644605637](https://github.com/TaeeunKil/kafrust/actions/runs/32644605637),
+[32644605633](https://github.com/TaeeunKil/kafrust/actions/runs/32644605633),
+and [32644605743](https://github.com/TaeeunKil/kafrust/actions/runs/32644605743).
+They are recorded as In progress/not-run until immutable descriptors and the
+fault-result adjudicator pass; no long-soak or V1-21 completion claim follows
+from launch alone.
+
 The V1-22 `throughput_benchmark` example now has a timed campaign mode with
 barrier-synchronized warmup/measurement windows, worker-per-partition
 concurrency, configurable JSONL samples (ten-second campaign target), RSS/retry/latency fields, and final

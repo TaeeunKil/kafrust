@@ -210,6 +210,25 @@ member exited before coordinator assignment recovered. They are retained as
 harness timing failures, not client data-loss evidence; the 100-cycle attempt
 must use the existing 120-second member dwell that passes the bounded workflow.
 
+### Six-hour campaign rerun set (2026-08-23)
+
+After the broker-log and client-error-rate limits passed exact-head CI
+32644139214, the four manifest campaigns were relaunched from source
+7c24f7399325b5d0ab6f91f6e2ecd4d5b49985ec:
+
+- plaintext Kafka 3.7.2 floor: run 32644605379
+- secured Kafka 4.3.1 repetition 1: run 32644605637
+- secured Kafka 4.3.1 repetition 2: run 32644605633
+- secured Kafka 4.3.1 repetition 3: run 32644605743
+
+All use a single contiguous segment, the manifest six-hour duration, ten-second
+broker outages, and the declared increasing fault schedule. The four ledger
+rows record these as In progress with result not-run. They become qualifying
+evidence only after the immutable segment descriptors, reconciliation,
+resource-gauge drain, and fault-result adjudicator all pass; an infrastructure
+failure is retained as non-qualification rather than converted into a client
+claim.
+
 ### Bounded current-source diagnostic runs (2026-08-22)
 
 The first 60-second manual run on source `3fdfc778` (run
