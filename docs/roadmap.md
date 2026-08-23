@@ -531,9 +531,10 @@ The published Share repeated-member-loss workflow now accepts a bounded
 `cycles` input and dynamically checks per-member ownership records and the
 final cycle, while retaining the historical eight-cycle default. A qualification
 run may request exactly 100 cycles and receives a retained JSON summary marked
-qualified only at that bound. The 100-cycle Share qualification remains in
-progress; it is not promoted until the run completes and its summary passes
-the ledger checks.
+qualified only at that bound. The 100-cycle run
+[32642115585](https://github.com/TaeeunKil/kafrust/actions/runs/32642115585)
+became a stale hosted-run cancellation after more than ten hours without a
+summary; it is infrastructure-only evidence and was not promoted.
 
 The first parallel six-hour fault set also revealed hosted-runner disk
 exhaustion caused by unbounded broker logs during failure diagnostics. The
@@ -597,6 +598,15 @@ and [32644605743](https://github.com/TaeeunKil/kafrust/actions/runs/32644605743)
 They are recorded as In progress/not-run until immutable descriptors and the
 fault-result adjudicator pass; no long-soak or V1-21 completion claim follows
 from launch alone.
+
+The same four runs later exceeded nine hours wall time without descriptors.
+Runs [32644605379](https://github.com/TaeeunKil/kafrust/actions/runs/32644605379),
+[32644605637](https://github.com/TaeeunKil/kafrust/actions/runs/32644605637),
+and [32644605743](https://github.com/TaeeunKil/kafrust/actions/runs/32644605743)
+were cancelled as stale infrastructure runs; [32644605633](https://github.com/TaeeunKil/kafrust/actions/runs/32644605633)
+remained stuck in `in_progress` after cancellation was requested. No run
+produced a result descriptor, so none is client or V1-21 evidence. The workflow
+now requires a self-hosted-capable runner before any replacement dispatch.
 
 The V1-22 `throughput_benchmark` example now has a timed campaign mode with
 barrier-synchronized warmup/measurement windows, worker-per-partition
