@@ -140,6 +140,9 @@ all twelve profiles passed and the downloaded run contained 12 lockfiles plus
 fixture-readiness failure diagnostic; its single Kafka 3.9.1 failure is not
 promoted into the passing matrix evidence. The clean artifact details are in
 [`v1-20-published-smoke-artifact-rerun-2026-08-23.md`](../../evidence/v1-20-published-smoke-artifact-rerun-2026-08-23.md).
+The external smoke fixture now also waits up to ten seconds for created topic
+and active group metadata to become visible, preserving a real timeout failure
+while avoiding a false negative from normal KRaft metadata propagation.
 
 ## Failure And Lifecycle Contract
 

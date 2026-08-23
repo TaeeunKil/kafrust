@@ -189,14 +189,23 @@ async fn main() -> kafrust::Result<()> {
         });
     }
 
-    let listed_topic = admin
-        .list_topics()
-        .await?
-        .into_iter()
-        .find(|listed| listed.name() == admin_topic)
-        .ok_or(Error::Unsupported(
-            "published admin list did not return the created topic",
-        ))?;
+    let topic_deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+    let listed_topic = loop {
+        if let Some(listed_topic) = admin
+            .list_topics()
+            .await?
+            .into_iter()
+            .find(|listed| listed.name() == admin_topic)
+        {
+            break listed_topic;
+        }
+        if tokio::time::Instant::now() >= topic_deadline {
+            return Err(Error::Unsupported(
+                "published admin list did not return the created topic",
+            ));
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    };
     if listed_topic.partition_count() != 1 || !listed_topic.is_success() {
         return Err(Error::Unsupported(
             "published admin list returned an invalid created topic",
@@ -364,14 +373,22 @@ async fn main() -> kafrust::Result<()> {
     group.commit_record(committed_record)?;
     group.commit_queued_offsets().await?;
 
-    let listed_groups = admin.list_groups().await?;
-    if !listed_groups
-        .iter()
-        .any(|listing| listing.group_id() == group_id)
-    {
-        return Err(Error::Unsupported(
-            "published admin list_groups did not return the active group",
-        ));
+    let group_deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+    loop {
+        if admin
+            .list_groups()
+            .await?
+            .iter()
+            .any(|listing| listing.group_id() == group_id)
+        {
+            break;
+        }
+        if tokio::time::Instant::now() >= group_deadline {
+            return Err(Error::Unsupported(
+                "published admin list_groups did not return the active group",
+            ));
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
     }
     let described_group = admin
         .describe_consumer_groups(std::slice::from_ref(&group_id))
