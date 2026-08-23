@@ -2,7 +2,7 @@
 
 This directory decomposes roadmap milestone M21 into small, evidence-backed
 execution milestones. It is the planning source of truth for work from the
-current `0.3.5` line through the `1.0.0` release. Historical implementation and
+current `0.3.6` line through the `1.0.0` release. Historical implementation and
 release evidence remains in [the roadmap](../../roadmap.md) and
 [compatibility record](../../compatibility.md).
 
@@ -19,33 +19,34 @@ The dated baseline and known contradictions are recorded in
 - planning date: 2026-08-21
 - source baseline: `9eba7e5`
 - branch state at inspection: clean `main`, synchronized with `origin/main`
-- published crates: `kafrust 0.3.5` and `kafrust-protocol 0.3.5`
+- published crates: `kafrust 0.3.6` and `kafrust-protocol 0.3.6`
 - exact baseline CI: passing run `32468949663`
 - protocol audit: 63 modules and 76 unique Kafka API keys
 - pinned schema audit: 12 high-risk schema identity/version/flexible-version
   metadata entries against Kafka 4.3.1
-- package blocker: the source client package does not compile against the
-  already-published `kafrust-protocol 0.3.5`; the workspace path dependency
-  masks newly added transaction protocol types
+- historical package blocker: the source client package did not compile against
+  the already-published `kafrust-protocol 0.3.5`; the coordinated `0.3.6`
+  publication repaired that registry boundary
 
-The package blocker makes [V1-00](v1-00-repository-and-package-baseline.md) the
-only valid first implementation milestone. No later source capability should
-be published from the current same-version package state.
+At the dated baseline, the package blocker made
+[V1-00](v1-00-repository-and-package-baseline.md) the only valid first
+implementation milestone. No later source capability should have been
+published from that same-version package state.
 
 ## Current Execution
 
-As of 2026-08-22, V1-00, V1-01, and V1-02 are `Done`; V1-03 through V1-20
-are `In progress`. The coordinated `0.3.6` candidate
-has passed the local package-only boundary verifier across five feature
-profiles on Rust 1.81.0. The regression against published protocol `0.3.5`
-also passes by reproducing the four missing transaction type families. Exact
-commit `3e12192` passed both Rust 1.81.0 and stable in
-[CI run 32545563612](https://github.com/TaeeunKil/kafrust/actions/runs/32545563612).
-The latest exact-head CI run on `0a08e29` is
-[32559629510](https://github.com/TaeeunKil/kafrust/actions/runs/32559629510);
-stable and Rust 1.81.0 both pass the repository gates, including the staged
-package boundary and V1 dependency-graph posture. The candidate remains
-unpublished.
+As of 2026-08-23, V1-00, V1-01, V1-02, and V1-19 are `Done`; V1-03 through
+V1-18 and V1-20 remain `In progress`; V1-21 and V1-22 are `Planned`; V1-23
+is `Blocked` on a named service canary; and V1-24 through V1-26 are `Planned`.
+The coordinated
+`0.3.6` pair is published and resolves from fresh external projects on Rust
+1.81.0 and stable. The historical regression against published protocol
+`0.3.5` was reproduced for the four missing transaction type families, then
+closed by the protocol-first `0.3.6` package boundary recorded in
+[`v1-20-published-0.3.6-boundary-2026-08-23.md`](../../evidence/v1-20-published-0.3.6-boundary-2026-08-23.md).
+The exact pushed-head CI and published diagnostic runs remain the evidence
+source for later gates; neither this publication nor those diagnostics claim
+V1-20 completion or `1.0.0` readiness.
 
 V1-02 has since generated the all-features public API snapshot at
 [`docs/evidence/public-api-snapshot.json`](../../evidence/public-api-snapshot.json):
@@ -69,9 +70,11 @@ credential and redaction slice, V1-17 the bounded metrics/telemetry contract,
 V1-18 the decoder/resource-limit and fuzz baseline, V1-19 the staged
 pure-Rust package boundary, and V1-20 the checked draft compatibility matrix.
 V1-21 through V1-26 have preparation records that preserve the long-soak,
-SLO, migration, freeze, RC, and stable-publication prerequisites without
-starting or authorizing a registry upload. These are implementation and
-qualification increments, not published-artifact completion claims.
+SLO, migration, freeze, RC, and stable-publication prerequisites. The `0.3.6`
+publication is a bounded pre-1.0 package boundary only; it does not satisfy
+the later fault, SLO, service-canary, API-freeze, RC, or stable-release gates.
+These remain implementation and qualification increments, not
+`1.0.0`-readiness claims.
 The V1-25 and V1-26 release manifests and checkers now lock the coordinated
 version identities, protocol-first publication order, exact RC dependency,
 metadata-only stable diff, and explicit authorization boundary; both remain
