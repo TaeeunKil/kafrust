@@ -102,3 +102,17 @@ The volume breakdown explains the exhaustion: `T:\WSL\Ubuntu\ext4.vhdx` uses
 Those two files account for approximately `931.33 GiB` of the volume. The
 backup is not deleted as part of this audit; it should be moved to a different
 volume (or otherwise retained) before any cleanup decision is made.
+
+## Backup contents inventory (read-only, 2026-08-24)
+
+The export tar was indexed without extraction (`3,723,551` members). Its
+logical file totals are concentrated in `/var` (`114.76 GiB`) and `/home`
+(`38.28 GiB`), with `/usr` at `2.28 GiB`. The largest single regular file is
+the Docker JSON container log
+`/var/lib/docker/containers/ee7487fb260abf351fa9f36cbc4ce26e7cf132ae760cd61a988fe5b2394ce84c/ee7487fb260abf351fa9f36cbc4ce84c-json.log`
+at `14.65 GiB`. Many additional `0.34 GiB` containerd content blobs account
+for substantial image/cache storage. The largest `/home` entries include a
+`3.29 GiB` Git pack, a `1.04 GiB` Trivy database, and repeated project data
+files around `0.6–0.9 GiB` each. This identifies Docker logs/image content and
+duplicated project/cache data as the main internal consumers; no files were
+removed or extracted during the inventory.
