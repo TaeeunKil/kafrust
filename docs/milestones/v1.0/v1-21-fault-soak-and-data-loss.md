@@ -1,6 +1,6 @@
 # V1-21 Fault Soak And Data-Loss Semantics
 
-- Status: In progress
+- Status: Blocked (WSL2 runner unavailable; host recovery required)
 - Target evidence: Published artifact
 - Dependencies: V1-15, V1-16, V1-18, V1-20
 
@@ -260,12 +260,12 @@ or summary artifact.
 
 ### Long-campaign capacity re-audit (2026-08-24)
 
-The repository runner inventory still reports zero registered self-hosted
-runners. The exact-head CI pass in
+The repository runner inventory has one registered self-hosted runner, but it
+is offline and not usable for a campaign. The exact-head CI pass in
 [32646817241](https://github.com/TaeeunKil/kafrust/actions/runs/32646817241)
 confirms the manifest and hosted-label guard, while the workstation has no
 Docker executable for a local substitute. The four six-hour campaigns and the
-Share 100-cycle run therefore remain `In progress` infrastructure gates; no
+Share 100-cycle run therefore remain unqualified infrastructure gates; no
 campaign is dispatched or promoted by reducing the duration or changing the
 runner requirement. The audit is retained in
 [`v1-long-campaign-capacity-audit-2026-08-24.md`](../../evidence/v1-long-campaign-capacity-audit-2026-08-24.md).
@@ -361,7 +361,7 @@ Record artifact, broker/min-ISR/acks/security topology, six-hour run and fault
 schedules, records/transactions/members/ambiguities, expected/observed loss and
 duplicates, retry/error totals, resource series/final gauges, and SLA non-claim.
 
-### WSL2 runner activation and first long campaign (2026-08-24)
+### WSL2 runner interruption and first long campaign failure (2026-08-24)
 
 The available Ubuntu-T9 WSL2 environment passed a non-qualification 60-second
 diagnostic after installing the missing `python` and `jq` host utilities. The
@@ -375,6 +375,9 @@ The first actual manifest campaign, `pinned-secured-six-hour-1`, was dispatched
 from source `54c8e21` as
 [32649020906](https://github.com/TaeeunKil/kafrust/actions/runs/32649020906)
 with Kafka 4.3.1, SASL_SSL/SCRAM-SHA-256, the four-event fault schedule, and
-`duration_seconds=21600`. The run is currently in progress; no V1-21 ledger row
-or milestone completion claim is made until its descriptor, artifact identity,
-record reconciliation, resource gauges, and secret scan pass adjudication.
+`duration_seconds=21600`. The WSL distribution then stopped and returned
+`Wsl/Service/CreateInstance/E_FAIL`/`E_UNEXPECTED` on restart; the GitHub run
+eventually completed as `failure` at `2026-08-23T18:07:57Z` with no downloadable
+artifact. No V1-21 ledger row or milestone completion claim is made. The
+runner must be restored, the orphaned run's failure retained, and this exact
+manifest campaign rerun before any result adjudication.
