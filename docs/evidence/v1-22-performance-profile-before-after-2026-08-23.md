@@ -114,6 +114,33 @@ the 16,217 records/s replication, while context switches vary from 378,946 to
 semantics-preserving diagnostic, but does not establish a stable throughput or
 resource percentage, lock a baseline, qualify an SLO, or authorize a release.
 
+## Buffered deadline-scan diagnostic
+
+Commit `866509a` reuses the worker's maintained oldest pending enqueue time
+when calculating the delivery-timeout wake-up. It removes a full pending-queue
+minimum scan from each select-loop iteration; the worker already updates that
+oldest timestamp when records are appended or expired. This run also includes
+the threshold-scan reduction from `07705c5`, so it is a combined source
+profile, not an isolated attribution of either optimization.
+
+Run [32635871875](https://github.com/TaeeunKil/kafrust/actions/runs/32635871875)
+used source `866509a3b25f657275d958738bad7b721048362d`, Kafka 4.3.1 single-node
+KRaft/PLAINTEXT, 1-KiB values, no compression, 10-second warmup, 60-second
+measurement, and 10-second samples. All four jobs reconciled exactly with
+zero retries, unknown outcomes, loss, duplicates, and final gauges.
+
+| Profile | Throughput | p99 | Context switches | Max RSS |
+| --- | ---: | ---: | ---: | ---: |
+| immediate, 1 worker, batch 200 | 84,446.67 records/s | 1 ms | 60,417 | 38,816 KiB |
+| immediate, 4 workers, batch 200 | 211,860.00 records/s | 5 ms | 410,252 | 38,964 KiB |
+| buffered, 4 workers, batch 200 | 15,976.67 records/s | 10 ms | 1,524,618 | 39,124 KiB |
+| direct-consumer, 1 worker, batch 1 | 2,015.97 records/s | 1 ms | 274,783 | 38,676 KiB |
+
+The buffered result remains within the earlier same-source diagnostic range,
+so this is evidence that the deadline calculation can reuse maintained state
+without a correctness regression, not a stable performance percentage or
+SLO/baseline result.
+
 ## Non-claims
 
 - Not an eight-hour, five-repetition, six-profile SLO campaign.

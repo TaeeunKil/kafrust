@@ -3486,3 +3486,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-22-performance-profile-before-after-2026-08-23.md; profile descriptors and raw JSONL artifacts in runs 32634691272 and 32634877270
 - non_claims: not eight-hour/five-repetition SLO, not locked baseline, not stable throughput/resource percentage, not published-artifact or secured/three-broker evidence, not competitor parity, not release authorization
+
+## Q-SOURCE-V122-PROFILE-005
+
+- date_utc: 2026-08-23
+- source_commit: 866509a3b25f657275d958738bad7b721048362d
+- client_version: 0.3.6 source checkout
+- protocol_version: 0.3.6 source checkout
+- work_status: In progress
+- evidence_level: CI
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
+- mode: combined buffered deadline and threshold scan diagnostic
+- topology: single-node KRaft
+- security: PLAINTEXT
+- group_protocol: not-applicable
+- workload: four 1-KiB/no-compression profiles; 10-second warmup, 60-second measured window, 10-second samples; immediate 1/4 workers, buffered 4 workers, direct consumer 1 worker
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32635871875
+- fault: none injected
+- duration: one bounded 60-second measured repetition per profile
+- record_count: profile-dependent; every run reconciled produced = consumed
+- member_count: not-applicable
+- repetition_count: 1 source repetition across 4 profiles
+- expected_errors: zero retries, unknown outcomes, loss, duplicates, and final in-flight/buffered gauges
+- observed_errors: none; buffered throughput 15,976.67 records/s, p99 10 ms, maximum RSS 39,124 KiB
+- retry_count: 0 in all four jobs
+- duplicate_count: 0
+- loss_count: 0
+- latency: buffered p99 10 ms; other profile p99 1/5 ms
+- memory: maximum RSS recorded by `/usr/bin/time -v`; no SLO adjudication
+- final_resource_gauges: zero in all four jobs
+- result: passed
+- artifact: docs/evidence/v1-22-performance-profile-before-after-2026-08-23.md; profile descriptors and raw JSONL artifacts in run 32635871875
+- non_claims: not isolated attribution, not eight-hour/five-repetition SLO, not locked baseline, not stable throughput/resource percentage, not published-artifact or secured/three-broker evidence, not competitor parity, not release authorization

@@ -608,6 +608,16 @@ duplicates, and drained gauges. Buffered throughput measured 15,403 and
 the hosted-runner variation does not establish a stable percentage, lock a
 baseline, qualify V1-22, or authorize a publication.
 
+Commit `866509a` additionally reuses the maintained oldest pending enqueue time
+for the buffered delivery-timeout wake-up instead of scanning the queue on
+each select-loop iteration. Combined source profile
+[32635871875](https://github.com/TaeeunKil/kafrust/actions/runs/32635871875)
+reconciled all four paths with zero retries, unknown outcomes, loss,
+duplicates, and drained gauges; buffered throughput was 15,977 records/s with
+p99 10 ms and 39,124 KiB maximum RSS. The result remains within hosted-runner
+variation and is recorded as diagnostic evidence only; V1-22's baseline and
+SLO gates remain open.
+
 V1-21 now has the corresponding cross-segment adjudicator in
 [`scripts/check_v1_fault_results.py`](../scripts/check_v1_fault_results.py).
 It rejects count-only or continuity-unqualified diagnostics and requires

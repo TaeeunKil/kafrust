@@ -253,6 +253,16 @@ The surrounding throughput/resource variation means this is retained as
 semantics-preserving diagnostic evidence only. It does not lock a baseline,
 qualify an SLO, or close the six-profile/five-repetition eight-hour campaign.
 
+Commit `866509a` then reuses the maintained oldest pending enqueue timestamp for
+the buffered delivery-timeout wake-up, avoiding a full queue minimum scan on
+each select-loop iteration. Combined source profile
+[32635871875](https://github.com/TaeeunKil/kafrust/actions/runs/32635871875)
+reconciled all four profiles with zero retries, unknown outcomes, loss,
+duplicates, and drained gauges. Buffered throughput was 15,977 records/s with
+p99 10 ms and 39,124 KiB maximum RSS. Because this run includes both queue
+changes and remains within hosted-runner variation, it is diagnostic evidence,
+not a stable percentage, locked baseline, SLO qualification, or release gate.
+
 ## Failure And Lifecycle Contract
 
 - Benchmark backpressure uses the same bounded production queues and reports
