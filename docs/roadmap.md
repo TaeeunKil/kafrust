@@ -557,6 +557,13 @@ direct-consumer paths. Its descriptors are deliberately `qualified=false`; it
 is the before/after profiling input for the V1-22 batching/concurrency/queue
 re-plan, not a locked baseline or release authorization.
 
+The first source before/after profile pair is retained in
+[`v1-22-performance-profile-before-after-2026-08-23.md`](evidence/v1-22-performance-profile-before-after-2026-08-23.md): concurrent buffered
+delivery waits cut measured context switches by approximately 73% but did not
+improve its roughly 13.5k records/s throughput. This keeps the optimization
+work open and directs the next slice to buffered queue batching and repeated
+encoded-size work; no SLO or publication decision follows from this pair.
+
 V1-21 now has the corresponding cross-segment adjudicator in
 [`scripts/check_v1_fault_results.py`](../scripts/check_v1_fault_results.py).
 It rejects count-only or continuity-unqualified diagnostics and requires

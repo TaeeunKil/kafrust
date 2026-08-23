@@ -215,6 +215,14 @@ evidence required by the batching, concurrency, allocation, and queue re-plan.
 No optimization or locked baseline is inferred until it produces a retained
 pair on equivalent runners.
 
+The first retained before/after pair is documented in
+[`v1-22-performance-profile-before-after-2026-08-23.md`](../../evidence/v1-22-performance-profile-before-after-2026-08-23.md).
+Concurrent buffered delivery waits reduced the timed process's context
+switches by approximately 73% while throughput remained approximately 13.5k
+records/s and identity/final-gauge checks stayed green. This is a bounded
+resource improvement only; the next profile slice must investigate repeated
+buffered encoded-size and queue-batching work before another optimization.
+
 ## Failure And Lifecycle Contract
 
 - Benchmark backpressure uses the same bounded production queues and reports

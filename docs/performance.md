@@ -103,6 +103,13 @@ V1-22 baseline, an SLO result, or a release gate. Any source performance change
 must retain a comparable before/after pair and rerun correctness and identity
 reconciliation checks before it can be considered for the qualified campaign.
 
+The first retained before/after pair is recorded in
+[`v1-22-performance-profile-before-after-2026-08-23.md`](evidence/v1-22-performance-profile-before-after-2026-08-23.md).
+Concurrent buffered delivery waits reduced measured context switches by about
+73% while leaving buffered throughput near 13.5k records/s; the result is a
+resource improvement, not a throughput-parity or SLO claim. The next profile
+slice targets repeated buffered queue encoding and batching work.
+
 For a qualification attempt, retain one descriptor beside each JSONL result
 and run [`check_v1_performance_results.py`](../scripts/check_v1_performance_results.py)
 against the complete bundle. The checker requires the manifest's full
