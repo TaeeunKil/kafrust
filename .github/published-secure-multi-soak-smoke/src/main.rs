@@ -118,7 +118,7 @@ async fn main() -> kafrust::Result<()> {
     let mut saw_error = false;
     let mut recovered = false;
     let mut last_progress = Instant::now();
-    let mut last_error_report = None;
+    let mut last_error_report: Option<Instant> = None;
 
     while Instant::now() < deadline {
         for (partition, next_offset) in next_offsets.iter_mut().enumerate() {
