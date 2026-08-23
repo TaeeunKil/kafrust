@@ -77,6 +77,9 @@ async fn main() -> kafrust::Result<()> {
                 // replication; leader-only acknowledgements can be lost when
                 // the leader and a follower stop together.
                 .acks(Acks::All)
+                // Preserve producer identity across retryable failover errors
+                // instead of turning an ambiguous batch into an untracked gap.
+                .enable_idempotence(true)
                 .max_retries(5)
                 .max_records_per_batch(batch_size)
                 .max_batch_bytes(900 * 1024),
