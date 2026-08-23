@@ -75,6 +75,18 @@ cross-segment continuity claim is unqualified. Active work is limited to
 hardening and qualifying this campaign harness and its published-artifact
 diagnostics until the long-duration gates can run.
 
+### Executable fault schedule hardening (2026-08-23)
+
+The published multi-broker soak workflow now accepts an ordered fault schedule
+such as `leader@25,coordinator@50,combined@70,simultaneous@85` instead of
+injecting only one broker stop at one-third of a segment. The schedule parser
+rejects unknown modes, non-increasing or terminal percentages, and durations
+outside the 60-second to six-hour campaign bounds; focused tests cover those
+boundaries. A one-segment campaign can now truthfully mark continuity as
+qualified because production and reconciliation occur in one retained broker
+run, while multi-segment runner-local descriptors remain explicitly
+unqualified. No long campaign is promoted by this workflow change alone.
+
 ### Published bounded diagnostic (2026-08-23)
 
 The exact published `0.3.6` pair passed one 60-second Kafka 4.3.1 three-broker
