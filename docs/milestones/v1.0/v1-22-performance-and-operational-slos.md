@@ -1,6 +1,6 @@
 # V1-22 Performance And Operational SLOs
 
-- Status: Planned
+- Status: In progress
 - Target evidence: Published artifact
 - Dependencies: V1-18, V1-20, V1-21
 
@@ -50,7 +50,7 @@ material regressions on the same controlled runners.
 
 ## Preparation Record (2026-08-22)
 
-V1-22 remains `Planned` pending V1-20 and V1-21. `docs/performance.md` and the
+V1-22 remains `In progress` pending V1-20 and V1-21. `docs/performance.md` and the
 manual benchmark workflow already record end-to-end Produce/Fetch throughput,
 batch/request percentiles, retry counts, and peak/final resource gauges for
 four diagnostic profiles. Those hosted-runner samples are not yet the required
@@ -176,7 +176,10 @@ matrix, or a missing baseline is therefore never promoted by accident.
 
 The checker and its malformed-bundle/regression tests are exercised in normal
 CI. No qualified bundle or locked baseline exists yet; this closes the
-adjudication tooling gap but does not close V1-22.
+adjudication tooling gap but does not close V1-22. The current source branch is
+now exercising bounded before/after diagnostics for buffered enqueue threshold
+and delivery-deadline scans; those runs are retained as non-qualifying evidence
+while the six-profile, five-repetition, locked-baseline campaign remains open.
 
 ### Competitor review and re-plan (2026-08-23)
 

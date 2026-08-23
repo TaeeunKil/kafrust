@@ -1,6 +1,6 @@
 # V1-21 Fault Soak And Data-Loss Semantics
 
-- Status: Planned
+- Status: In progress
 - Target evidence: Published artifact
 - Dependencies: V1-15, V1-16, V1-18, V1-20
 
@@ -47,7 +47,7 @@ retention, and unclean-election data loss.
 
 ## Preparation Record (2026-08-22)
 
-V1-21 remains `Planned` because the exact V1-20 published pair and the V1-15,
+V1-21 remains `In progress` because the exact V1-20 published pair and the V1-15,
 V1-16, and V1-18 artifact gates are not complete. Historical published soak
 rows remain immutable evidence for their named profiles only. The checked-in
 soak workflow currently proves a bounded broker-restart smoke with final queue
@@ -71,7 +71,9 @@ unaccounted loss/duplicates, drained gauges, and zero secret-scan findings. It a
 100 member-loss cycles, and 100 outcomes per ambiguity family, and requires the
 controlled data-loss fixtures to match their predeclared outcomes. Existing
 diagnostic descriptors intentionally fail this adjudicator because their
-cross-segment continuity claim is unqualified.
+cross-segment continuity claim is unqualified. Active work is limited to
+hardening and qualifying this campaign harness and its published-artifact
+diagnostics until the long-duration gates can run.
 
 ### Published bounded diagnostic (2026-08-23)
 

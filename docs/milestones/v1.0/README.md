@@ -36,7 +36,7 @@ published from that same-version package state.
 ## Current Execution
 
 As of 2026-08-23, V1-00, V1-01, V1-02, and V1-19 are `Done`; V1-03 through
-V1-18 and V1-20 remain `In progress`; V1-21 and V1-22 are `Planned`; V1-23
+V1-22 remain `In progress`; V1-23
 is `Blocked` on a named service canary; and V1-24 through V1-26 are `Planned`.
 The coordinated
 `0.3.6` pair is published and resolves from fresh external projects on Rust

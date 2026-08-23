@@ -474,7 +474,7 @@ million-record exit gate.
 
 ## V1-21 Execution Update (2026-08-23)
 
-V1-21 remains `Planned`. The published multi-broker soak now accepts campaign
+V1-21 is `In progress`. The published multi-broker soak now accepts campaign
 and segment identity, emits immutable artifact/workflow/broker descriptors, and
 supports a six-hour-compatible job timeout. The exact published `0.3.6` pair
 passed one bounded Kafka 4.3.1 three-broker restart segment in
@@ -553,7 +553,8 @@ tests. It requires the full profile/topology/security/repetition matrix,
 contiguous ten-second windows, one artifact digest, drained resources, and a
 locked baseline before it can return a passing result. This makes the eventual
 campaign decision reproducible; no qualified bundle or locked baseline exists
-yet, so V1-22 remains `Planned`.
+yet, so V1-22 remains `In progress` while the bounded before/after diagnostics
+and the full campaign preparation continue.
 
 The benchmark profile paths are now explicit rather than label-only. The
 `immediate` profile uses `Producer::send_batch`, `buffered` uses the bounded
