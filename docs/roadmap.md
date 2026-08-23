@@ -547,6 +547,11 @@ is counted before its run output is retained and checked. The workflow now
 uploads an immutable JSON summary with the published lockfile digest and broker
 image identity; the earlier successful 3.7.2 log-only run remains unpromoted.
 
+Share 100-cycle attempts with one- and ten-second member dwell both ended before
+the surviving member reacquired its first post-loss assignment. These are
+harness timing failures, not data-loss results; the qualification rerun uses
+the existing 120-second dwell that the bounded workflow has already exercised.
+
 The published multi-broker soak workflow now accepts and validates an ordered
 fault schedule (`leader`, `coordinator`, `combined`, and `simultaneous` events
 at increasing percentages of the segment). The parser has focused boundary

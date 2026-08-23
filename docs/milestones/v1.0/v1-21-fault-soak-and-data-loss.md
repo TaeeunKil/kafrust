@@ -179,6 +179,12 @@ immutable JSON summary with the published lockfile digest and broker image
 identity; the earlier successful 3.7.2 log-only run is therefore not promoted
 and will be repeated with the artifact contract.
 
+Two Share qualification attempts with member dwell values of one and ten
+seconds also failed before the first post-loss seed was consumed: the surviving
+member exited before coordinator assignment recovered. They are retained as
+harness timing failures, not client data-loss evidence; the 100-cycle attempt
+must use the existing 120-second member dwell that passes the bounded workflow.
+
 ### Bounded current-source diagnostic runs (2026-08-22)
 
 The first 60-second manual run on source `3fdfc778` (run
