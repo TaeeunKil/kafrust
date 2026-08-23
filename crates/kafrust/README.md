@@ -14,7 +14,7 @@ The optional `blocking` feature provides synchronous adapters for direct and
 bounded-buffered producers, direct consumer, consumer group, Share, Streams,
 and expanded Admin operations.
 
-Current release: `0.3.5`.
+Current release: `0.3.6`.
 
 This crate is alpha. Use it for experiments, local broker checks, simple
 internal tools, and API evaluation. For broad production Kafka workloads that

@@ -2,12 +2,13 @@
 
 ## Artifact Qualification Boundary
 
-The published compatibility record currently ends at the crates.io `0.3.5`
-artifacts. The coordinated `0.3.6` package candidate is being qualified by
-V1-00, but it is not published and must not be treated as published-artifact
-or broker-compatibility evidence. Package-only checks use unpacked tarballs
-outside the workspace; live and published claims remain tied to their named
-source commits and workflow runs below.
+The current published compatibility baseline is the coordinated crates.io
+`0.3.6` pair. Its exact registry checksums, lockfile identity, and initial
+external-project checks are recorded in
+[`v1-20-published-0.3.6-boundary-2026-08-23.md`](evidence/v1-20-published-0.3.6-boundary-2026-08-23.md).
+The complete V1-20 matrix and later fault, SLO, migration, and API-freeze gates
+remain open; live and published claims stay tied to their named source commits,
+artifact versions, and workflow runs below.
 
 ## v1.0 Support Contract
 

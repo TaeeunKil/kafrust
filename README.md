@@ -15,7 +15,7 @@ visible in public APIs: bootstrap servers, client IDs, topics, partitions,
 offsets, acknowledgements, metadata refresh, consumer groups, heartbeats, and
 commits.
 
-Current release: `0.3.5`.
+Current release: `0.3.6`.
 
 Use kafrust today for experiments, local broker checks, simple internal tools,
 and API evaluation. For broad production Kafka workloads that need mature
@@ -489,7 +489,7 @@ async fn main() -> kafrust::Result<()> {
 }
 ```
 
-The API is pre-1.0, but the published `0.3.5` artifact now includes this
+The API is pre-1.0, and the current published `0.3.6` line includes this
 surface. It has focused protocol tests and an injected-broker wire roundtrip
 test, plus an opt-in cancellable background heartbeat task. A Kafka 4.3.1
 single-node live smoke passed the KIP-1222 renewal, expiry/redelivery, and
@@ -797,8 +797,8 @@ Primary public entry points:
 
 Generated API documentation:
 
-- [`kafrust`](https://docs.rs/kafrust/0.3.5/kafrust/)
-- [`kafrust-protocol`](https://docs.rs/kafrust-protocol/0.3.5/kafrust_protocol/)
+- [`kafrust`](https://docs.rs/kafrust/0.3.6/kafrust/)
+- [`kafrust-protocol`](https://docs.rs/kafrust-protocol/0.3.6/kafrust_protocol/)
 
 ## Documentation
 

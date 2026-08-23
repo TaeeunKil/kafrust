@@ -3,7 +3,7 @@
 ## Candidate under review
 
 - coordinated candidate: `kafrust 0.3.6` / `kafrust-protocol 0.3.6`
-- current published line: `0.3.5`
+- current published line: `0.3.6`
 - decision: publish `0.3.6` as a pre-1.0 package-boundary release; do not call it `1.0.0`
 - reference audit: [`docs/competitor-source-audit-2026-08-20.md`](../competitor-source-audit-2026-08-20.md)
 
@@ -18,8 +18,8 @@
 
 ## Where kafrust is weaker or not yet proven
 
-- the `0.3.6` pair has not yet been verified as a fresh published artifact by
-  the complete V1-20 matrix;
+- the `0.3.6` pair has passed the initial fresh published-artifact boundary,
+  but not the complete V1-20 matrix;
 - krafka/kacrab currently provide stronger competitor-facing evidence in
   generated protocol/oracle tests, fake/real broker fault infrastructure, and
   broader published operational coverage;
@@ -37,8 +37,9 @@ support contract or a breaking public API requires a re-planned pre-1.0 minor
 line. Any material competitor gap or failed qualification result must update
 the milestone graph and roadmap before the next version is chosen.
 
-This record is a planning decision, not publication authorization or evidence
-that the candidate is ready for crates.io.
+This record began as a planning decision. The ordered 0.3.6 publication later
+completed; the remaining statements describe qualification limits, not a claim
+that the package is ready for 1.0.0.
 
 ## Post-V1-19 decision update (2026-08-23)
 
