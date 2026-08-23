@@ -60,7 +60,7 @@ Minimum matrix unless V1-01 changes it:
    commit; retain results and reconcile differences.
 7. Update compatibility claims only after all required rows pass.
 
-## Current Execution Record (2026-08-22)
+## Current Execution Record (2026-08-23)
 
 V1-20 is now `In progress`. The first machine-readable matrix draft is
 [`v1-20-compatibility-matrix.json`](../../evidence/v1-20-compatibility-matrix.json)
@@ -70,14 +70,15 @@ single-node and three-broker/controller-listener profiles, separates security
 and feature profiles, and requires protocol-first exact registry resolution
 without path or patch dependencies.
 
-The checker currently validates ten non-Cartesian draft profiles and the
-mandatory floor, pinned secured-failover, and package-codec rows. It does not
-claim that any draft row has passed: fresh external lockfiles, exact published
-`0.3.6` artifacts, complete V1-15~V1-19 evidence, and the later fault/SLO
-profiles must be attached before the matrix can be frozen or used as release
-evidence. The dated V1-19/competitor gate authorizes one ordered protocol-first
-`0.3.6` publication attempt; it does not mark any published row passed. The
-source-only 17-job Live Kafka Smoke matrix passed on commit
+The checker validates ten non-Cartesian draft profiles and the mandatory floor,
+pinned secured-failover, and package-codec rows. At draft creation it did not
+claim any published row. The exact `0.3.6` registry pair is now attached to
+the named published rows in the qualification ledger: fresh external
+lockfiles, the 10-profile continuity/codec smoke, Share/Streams/group/Admin/
+transaction/security/failover slices, and the exact toolchain checks all have
+retained results. The matrix remains draft because the later fault/SLO,
+migration, API-freeze, and stable-release gates are separate dependencies.
+The source-only 17-job Live Kafka Smoke matrix passed on commit
 `e6de5c5` in [run 32551145773](https://github.com/TaeeunKil/kafrust/actions/runs/32551145773),
 including the SCRAM transaction failover assertion for either Kafka fencing code
 47 or 90. This is current-source evidence only; publication remains separately
@@ -96,8 +97,9 @@ The ordered `0.3.6` publication has now completed. The protocol and client
 checksums, registry timestamps, exact external lockfile, and Rust 1.81/stable
 package checks are archived in
 [`v1-20-published-0.3.6-boundary-2026-08-23.md`](../../evidence/v1-20-published-0.3.6-boundary-2026-08-23.md).
-This closes only the published-package boundary prerequisite; every broker,
-security, workload, docs.rs, and later-milestone matrix row remains open.
+This closes the published-package boundary prerequisite; the retained published
+rows now cover the named broker/security/workload slices, while the full
+accepted matrix and later-milestone rows remain open.
 
 The first published smoke slice then passed all seven profiles in
 [run 32613844625](https://github.com/TaeeunKil/kafrust/actions/runs/32613844625),
@@ -109,6 +111,11 @@ The retained details are in
 [`v1-20-published-smoke-2026-08-23.md`](../../evidence/v1-20-published-smoke-2026-08-23.md).
 These are published-artifact smoke slices, not completion of the accepted
 matrix or downstream fault/SLO/API-freeze gates.
+
+The expanded published evidence is retained in
+[`v1-20-published-smoke-2026-08-23.md`](../../evidence/v1-20-published-smoke-2026-08-23.md),
+including the 10-profile broker/codec matrix and the repeated Share/failover
+rows. Passing named rows do not authorize a stable release by themselves.
 
 ## Failure And Lifecycle Contract
 
