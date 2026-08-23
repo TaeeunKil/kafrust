@@ -22,6 +22,39 @@ and are checked in CI. Values such as `not-applicable` and `not-recorded` are
 deliberate classifications, not missing data. A row must never use an
 unqualified relative artifact label.
 
+## Q-LOCAL-V119-009
+
+- date_utc: 2026-08-23
+- source_commit: 5df170b6438290f87f4aeeb1dd14852f7847565b
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: not-applicable
+- kafka_image: not-applicable
+- mode: unsafe/native owner and risk review matrix
+- topology: x86_64-unknown-linux-gnu all-feature closure
+- security: native/platform boundary review
+- group_protocol: not-applicable
+- workload: every entry from the V1-19 unsafe/native inventory
+- workflow: scripts/check_v1_unsafe_native_review.py --check
+- fault: missing owner, classification, review action, or inventory identity drift
+- duration: not-recorded
+- record_count: 62 review entries; 6 native/platform boundaries
+- member_count: 2 workspace package roots
+- repetition_count: 1
+- expected_errors: every inventory entry has a dated candidate-only disposition
+- observed_errors: none; 62 entries covered
+- retry_count: not-applicable
+- duplicate_count: not-applicable
+- loss_count: not-applicable
+- latency: not-applicable
+- memory: not-applicable
+- final_resource_gauges: not-applicable
+- result: passed
+- artifact: docs/evidence/v1-19-unsafe-native-review.json sha256 64aabcb52b79f58668068f3562b720f86ad71acda6bfe06a1e42f2cfc8ae470c
+- non_claims: not every upstream unsafe block source-audited, not a vulnerability or maintainer-trust guarantee, not universal no-native/no-C optional-feature evidence, not final 1.0.0 risk acceptance, not crates.io publication
+
 ## Q-CI-V119-009
 
 - date_utc: 2026-08-23

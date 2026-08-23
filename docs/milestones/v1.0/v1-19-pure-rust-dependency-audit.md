@@ -159,8 +159,12 @@ now scans the 89-package all-feature closure and records 62 unsafe/build or
 platform-boundary entries with owner and rationale fields. Both workspace
 crates have zero unsafe constructs under the scanner, while optional TLS and
 OS/runtime boundaries are explicitly named. The report is a review queue, not
-a completion claim: manual source review and dated risk acceptance remain
-required for the V1-19 exit gate.
+a completion claim: the dated owner-review matrix in
+[`v1-19-unsafe-native-review.md`](../../evidence/v1-19-unsafe-native-review.md)
+now covers all 62 entries, classifies 46 upstream-unsafe, 10 build/codegen, and
+six native/platform boundaries, and records candidate-only risk disposition.
+This closes the owner/review-matrix slice, but it is not a source audit of
+every upstream unsafe block or final 1.0.0 risk acceptance.
 
 ### Registry provenance slice (2026-08-23)
 
@@ -201,6 +205,11 @@ the Rust 1.81.0/stable matrix in
 including the offline advisory snapshot gate and its focused tests. This
 confirms the advisory slice on both toolchains; manual unsafe/native ownership,
 multi-platform/package evidence, and published-artifact gates remain open.
+
+The owner-review matrix is now enforced by CI with
+[`check_v1_unsafe_native_review.py`](../../scripts/check_v1_unsafe_native_review.py)
+and its focused tests. This validates coverage and drift against the inventory;
+it does not weaken the documented candidate-only disposition.
 
 ## Failure And Lifecycle Contract
 

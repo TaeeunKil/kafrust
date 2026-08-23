@@ -327,8 +327,10 @@ The transitive unsafe/native inventory is recorded in
 [`docs/evidence/v1-19-unsafe-native-inventory.md`](evidence/v1-19-unsafe-native-inventory.md).
 It scans the 89-package closure, finds zero unsafe constructs in the two
 workspace crates, and records 62 third-party review entries with owner and
-rationale fields. This is a reproducible review queue only; manual source and
-risk-acceptance review remains an explicit V1-19 exit gate.
+rationale fields. The companion owner-review matrix covers all 62 entries and
+six named native/platform boundaries with candidate-only dispositions. It does
+not claim a source audit of every upstream unsafe block or final 1.0.0 risk
+acceptance; package/target/advisory changes require rerunning the matrix.
 
 The local registry provenance slice also records checksums for 87 registry
 packages with zero missing or yanked entries. It is explicitly local-index
