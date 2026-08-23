@@ -105,7 +105,9 @@ the metadata-completeness slice, not publication or full V1-19 completion.
 
 ### Deterministic SBOM slice (2026-08-23)
 
-Commit `6e24a247c2aa4aa9c63086e68d753988adbfe3aa` adds
+Commit `368a2080092cd9ba42afeb73ae23047251432803` finalizes the
+platform-neutral form of the SBOM added in `6e24a247c2aa4aa9c63086e68d753988adbfe3aa`.
+It includes
 [`check_v1_sbom.py`](../../scripts/check_v1_sbom.py), its focused unit tests,
 and a CI drift gate. The checker resolves the locked all-feature graph for
 the explicit `x86_64-unknown-linux-gnu` platform, follows normal/build edges

@@ -289,7 +289,8 @@ from `f499ee6`; this confirms the metadata-completeness slice while the
 remaining V1-19 audit gates stay open.
 
 The reproducible SBOM slice is now checked in at commit
-`6e24a247c2aa4aa9c63086e68d753988adbfe3aa`. The new
+`368a2080092cd9ba42afeb73ae23047251432803` (the platform-neutral follow-up
+to `6e24a247c2aa4aa9c63086e68d753988adbfe3aa`). The new
 [`check_v1_sbom.py`](scripts/check_v1_sbom.py) follows locked normal/build
 edges for the explicit Linux release platform, excludes dev-only edges,
 requires license metadata for every component, and verifies the checked-in

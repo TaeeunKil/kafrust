@@ -1,14 +1,14 @@
 # V1-19 SBOM Evidence
 
 - date_utc: 2026-08-23
-- source_commit: `6e24a247c2aa4aa9c63086e68d753988adbfe3aa`
+- source_commit: `368a2080092cd9ba42afeb73ae23047251432803`
 - generator: `scripts/check_v1_sbom.py`
 - format: CycloneDX 1.5 JSON
 - platform: `x86_64-unknown-linux-gnu`
 - feature_set: `all-features`
 - dependency_scope: runtime and build dependencies; dev-only edges excluded
 - component_count: 89
-- sbom_sha256: `b5708a2b911ee0387064a606697e60ad13f7b61bad2a473e7688947d230a7827`
+- sbom_sha256: `01c14214426c4846533dae6d626283c5f4107e25b2d9f07d380042281e7f495a`
 
 ## Reproduction
 
