@@ -26,6 +26,9 @@ def main() -> int:
         return fail("schema_version must be 1")
     if manifest.get("status") not in {"preparation", "frozen"}:
         return fail("status must be preparation or frozen")
+    runner = manifest.get("runner")
+    if not isinstance(runner, str) or not runner.startswith("self-hosted"):
+        return fail("runner must identify a self-hosted label with setup plus six-hour capacity")
     policy = manifest.get("artifact_policy", {})
     for key in ("source_and_published_runs_are_separate", "exact_published_pair_required", "segment_identity_must_be_continuous"):
         if policy.get(key) is not True:

@@ -192,8 +192,11 @@ the two-hour warmup plus six-hour measured window with ten-second JSONL samples,
 and uploads a relative result/descriptor pair. The aggregate job runs the
 existing adjudicator and can require a checked-in locked baseline through
 require_baseline=true; without that baseline it deliberately reports
-matrix-complete-baseline-pending. The default runner label is a convenience
-only: the full eight-hour contract requires a runner with that capacity.
+matrix-complete-baseline-pending. The workflow now defaults to the
+`self-hosted` label and rejects GitHub-hosted labels, because the eight-hour
+contract cannot fit the hosted six-hour job limit. The repository currently has
+no self-hosted runner registered, so no campaign has been dispatched and this
+remains an external-capacity gate.
 
 This adds an executable qualification path but no campaign has been dispatched
 yet, so V1-22 remains In progress and no SLO, baseline, competitor-parity, or

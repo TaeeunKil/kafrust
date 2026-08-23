@@ -658,9 +658,13 @@ profile job resolves a fresh external project against one exact published
 artifact digest, runs the two-hour warmup plus six-hour measured window, and
 uploads the descriptor and relative JSONL result required by the adjudicator.
 The aggregate job can require a checked-in locked baseline; without one it
-reports matrix-complete-baseline-pending. No campaign has been dispatched yet,
-so this closes the execution-path preparation gap but does not qualify V1-22 or
-authorize a release.
+reports matrix-complete-baseline-pending. The workflow now defaults to a
+pinned `self-hosted` runner label and rejects hosted labels before the matrix
+starts, because the eight-hour contract cannot fit the hosted six-hour job
+limit. No self-hosted runner is currently registered, so this is an explicit
+external-capacity gate. No campaign has been dispatched yet, so this closes the
+execution-path preparation gap but does not qualify V1-22 or authorize a
+release.
 
 The benchmark profile paths are now explicit rather than label-only. The
 `immediate` profile uses `Producer::send_batch`, `buffered` uses the bounded

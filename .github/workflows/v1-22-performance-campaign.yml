@@ -18,7 +18,7 @@ on:
       runner_label:
         description: Runner label with capacity for the eight-hour jobs
         required: true
-        default: "ubuntu-latest"
+        default: "self-hosted"
       baseline_path:
         description: Optional checked-in locked baseline JSON for regression adjudication
         required: false
@@ -39,8 +39,28 @@ env:
   KAFRUST_KAFKA_VERSION: "4.3.1"
 
 jobs:
+  validate-runner:
+    name: Validate long-campaign runner selection
+    runs-on: ubuntu-latest
+    steps:
+      - name: Reject hosted runner labels
+        env:
+          RUNNER_LABEL: ${{ inputs.runner_label }}
+        run: |
+          case "$RUNNER_LABEL" in
+            ubuntu-*|windows-*|macos-*)
+              echo "V1-22 requires a self-hosted runner: hosted runners cannot provide the eight-hour contract."
+              exit 1
+              ;;
+            "")
+              echo "runner_label must be non-empty"
+              exit 1
+              ;;
+          esac
+
   campaign:
     name: ${{ matrix.profile.id }} / ${{ matrix.topology }} / ${{ matrix.security }} / r${{ matrix.repetition }}
+    needs: validate-runner
     runs-on: ${{ inputs.runner_label }}
     timeout-minutes: 540
     env:

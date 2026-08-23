@@ -26,6 +26,9 @@ def main() -> int:
         return fail("schema_version must be 1")
     if manifest.get("status") not in {"preparation", "frozen"}:
         return fail("status must be preparation or frozen")
+    runner = manifest.get("runner")
+    if not isinstance(runner, str) or not runner.startswith("self-hosted"):
+        return fail("runner must identify a self-hosted label with eight-hour capacity")
     timing = manifest.get("timing", {})
     if timing.get("total_seconds") != 28_800 or timing.get("warmup_seconds") != 7_200 or timing.get("measured_seconds") != 21_600:
         return fail("campaign timing must be eight hours with two-hour warmup and six-hour measurement")

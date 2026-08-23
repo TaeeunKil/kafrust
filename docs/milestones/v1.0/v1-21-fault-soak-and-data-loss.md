@@ -178,6 +178,14 @@ diagnostics to one line per ten seconds. The affected run is still
 infrastructure-only evidence; the six-hour campaign must be rerun from the
 HEAD containing this client-side log bound.
 
+The rerun workflows now default to a pinned `self-hosted` runner label and
+reject `ubuntu-*`, `windows-*`, and `macos-*` labels before allocating the
+long-running job. GitHub-hosted jobs cannot provide setup plus a six-hour soak
+within their six-hour execution ceiling. No self-hosted runner is currently
+registered for this repository, so the pending runs remain infrastructure
+diagnostics and the campaign cannot be promoted until that runner capacity is
+provided.
+
 The published classic/KIP-848 group-rebalance fixture was likewise raised from
 its previous 64-cycle guard to a maximum of 100 cycles. Its timeout now scales
 with the requested cycle count, and the workflow timeout was extended so a

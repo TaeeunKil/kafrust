@@ -2,6 +2,7 @@
   "schema_version": 1,
   "status": "preparation",
   "date_utc": "2026-08-22",
+  "runner": "self-hosted (pinned repository label with setup plus six-hour capacity)",
   "artifact_policy": {
     "source_and_published_runs_are_separate": true,
     "exact_published_pair_required": true,

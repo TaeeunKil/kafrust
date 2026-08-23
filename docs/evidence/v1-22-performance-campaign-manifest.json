@@ -2,7 +2,7 @@
   "schema_version": 1,
   "status": "preparation",
   "date_utc": "2026-08-22",
-  "runner": "ubuntu-latest",
+  "runner": "self-hosted (pinned repository label with eight-hour capacity)",
   "broker": "4.3.1",
   "topologies": ["single-node", "three-broker"],
   "security": ["PLAINTEXT", "SASL_SSL/SCRAM-SHA-256"],

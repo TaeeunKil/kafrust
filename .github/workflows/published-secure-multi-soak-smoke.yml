@@ -63,6 +63,10 @@ on:
         description: "Maximum retries as a percentage of acknowledged records"
         required: true
         default: "1.0"
+      runner_label:
+        description: "Self-hosted runner label with capacity for setup plus a six-hour soak"
+        required: true
+        default: "self-hosted"
   schedule:
     - cron: "47 4 * * 6"
 
@@ -93,14 +97,47 @@ env:
   KAFRUST_SEGMENT_COUNT: ${{ inputs.segment_count || '1' }}
 
 jobs:
+  validate-runner:
+    name: Validate long-campaign runner selection
+    runs-on: ubuntu-latest
+    steps:
+      - name: Reject hosted runner labels
+        env:
+          RUNNER_LABEL: ${{ inputs.runner_label || 'self-hosted' }}
+        run: |
+          case "$RUNNER_LABEL" in
+            ubuntu-*|windows-*|macos-*)
+              echo "V1-21 six-hour campaigns require a self-hosted runner with setup overhead capacity"
+              exit 1
+              ;;
+            "")
+              echo "runner_label must be non-empty"
+              exit 1
+              ;;
+          esac
+
   published-secure-multi-soak:
     name: Published kafrust ${{ inputs.kafrust_version || '0.3.6' }} Kafka ${{ inputs.kafka_version || '4.3.1' }} secure ${{ inputs.fault_mode || 'simultaneous' }} multi-broker restart
-    runs-on: ubuntu-latest
+    needs: validate-runner
+    runs-on: ${{ inputs.runner_label || 'self-hosted' }}
     timeout-minutes: 390
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+
+      - name: Reject hosted runner labels
+        run: |
+          case "${{ inputs.runner_label || 'self-hosted' }}" in
+            ubuntu-*|windows-*|macos-*)
+              echo "V1-21 six-hour campaigns require a self-hosted runner with setup overhead capacity"
+              exit 1
+              ;;
+            "")
+              echo "runner_label must be non-empty"
+              exit 1
+              ;;
+          esac
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
