@@ -213,6 +213,20 @@ The eight-hour matrix therefore remains an external-capacity gate rather than
 a shortened or hosted-runner claim. The audit is retained in
 [`v1-long-campaign-capacity-audit-2026-08-24.md`](../../evidence/v1-long-campaign-capacity-audit-2026-08-24.md).
 
+### WSL2 capacity activation follow-up (2026-08-24)
+
+The follow-up WSL2 preflight registered one `wsl-ubuntu-t9` runner with the
+`self-hosted`, `Linux`, `X64`, `docker`, and `wsl2` labels. A 60-second
+non-qualification diagnostic passed after the host's missing `python` and
+`jq` utilities were installed. The first exact V1-21 campaign,
+`pinned-secured-six-hour-1` ([run 32649020906](https://github.com/TaeeunKil/kafrust/actions/runs/32649020906)),
+is now running on that runner from the published `0.3.6` artifact. This
+registration clears the execution-path prerequisite but does not qualify
+V1-21 or V1-22: the V1-21 descriptor and adjudicator remain pending, and the
+single runner would serialize V1-22's 120-job matrix. Additional performance-
+isolated runner capacity is therefore still required before dispatching the
+full V1-22 campaign; no matrix, duration, or baseline requirement is reduced.
+
 ### Competitor review and re-plan (2026-08-23)
 
 The companion published comparison
