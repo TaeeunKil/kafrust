@@ -3717,3 +3717,135 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-22-performance-profile-before-after-2026-08-23.md; profile descriptors and raw JSONL artifacts in run 32635871875
 - non_claims: not isolated attribution, not eight-hour/five-repetition SLO, not locked baseline, not stable throughput/resource percentage, not published-artifact or secured/three-broker evidence, not competitor parity, not release authorization
+
+## Q-PUBLISHED-V121-010
+
+- date_utc: 2026-08-23
+- source_commit: 7c24f7399325b5d0ab6f91f6e2ecd4d5b49985ec
+- client_version: 0.3.6 published artifact
+- protocol_version: 0.3.6 published dependency
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 3.7.2
+- kafka_image: apache/kafka:3.7.2
+- mode: six-hour multi-broker fault soak
+- topology: three-broker
+- security: PLAINTEXT
+- group_protocol: not-applicable
+- workload: published 100-record batches with 1-KiB values; one segment; leader/coordinator/combined fault schedule
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32644605379
+- fault: leader@25,coordinator@50,combined@70; broker outage 10 seconds
+- duration: 21600 seconds measured soak
+- record_count: not-recorded until immutable segment artifact is retained
+- member_count: not-applicable
+- repetition_count: one named campaign attempt
+- expected_errors: scheduled recovery only; zero unaccounted loss, duplicates, or unknown outcomes
+- observed_errors: not-recorded while workflow is in progress
+- retry_count: not-recorded while workflow is in progress
+- duplicate_count: not-recorded while workflow is in progress
+- loss_count: not-recorded while workflow is in progress
+- latency: not-recorded while workflow is in progress
+- memory: not-recorded while workflow is in progress
+- final_resource_gauges: not-recorded while workflow is in progress
+- result: not-run
+- artifact: workflow run 32644605379; segment artifact pending
+- non_claims: not a passing six-hour gate, not V1-21 completion, not SLO, not 1.0.0 readiness
+
+## Q-PUBLISHED-V121-011
+
+- date_utc: 2026-08-23
+- source_commit: 7c24f7399325b5d0ab6f91f6e2ecd4d5b49985ec
+- client_version: 0.3.6 published artifact
+- protocol_version: 0.3.6 published dependency
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka:4.3.1
+- mode: six-hour multi-broker fault soak
+- topology: three-broker
+- security: SASL_SSL/SCRAM-SHA-256
+- group_protocol: not-applicable
+- workload: published 100-record batches with 1-KiB values; one segment; leader/coordinator/combined/simultaneous fault schedule
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32644605637
+- fault: leader@25,coordinator@50,combined@70,simultaneous@85; broker outage 10 seconds
+- duration: 21600 seconds measured soak
+- record_count: not-recorded until immutable segment artifact is retained
+- member_count: not-applicable
+- repetition_count: one named campaign attempt
+- expected_errors: scheduled recovery only; zero unaccounted loss, duplicates, or unknown outcomes
+- observed_errors: not-recorded while workflow is in progress
+- retry_count: not-recorded while workflow is in progress
+- duplicate_count: not-recorded while workflow is in progress
+- loss_count: not-recorded while workflow is in progress
+- latency: not-recorded while workflow is in progress
+- memory: not-recorded while workflow is in progress
+- final_resource_gauges: not-recorded while workflow is in progress
+- result: not-run
+- artifact: workflow run 32644605637; segment artifact pending
+- non_claims: not a passing six-hour gate, not V1-21 completion, not SLO, not 1.0.0 readiness
+
+## Q-PUBLISHED-V121-012
+
+- date_utc: 2026-08-23
+- source_commit: 7c24f7399325b5d0ab6f91f6e2ecd4d5b49985ec
+- client_version: 0.3.6 published artifact
+- protocol_version: 0.3.6 published dependency
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka:4.3.1
+- mode: six-hour multi-broker fault soak
+- topology: three-broker
+- security: SASL_SSL/SCRAM-SHA-256
+- group_protocol: not-applicable
+- workload: published 100-record batches with 1-KiB values; one segment; leader/coordinator/combined/simultaneous fault schedule
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32644605633
+- fault: leader@25,coordinator@50,combined@70,simultaneous@85; broker outage 10 seconds
+- duration: 21600 seconds measured soak
+- record_count: not-recorded until immutable segment artifact is retained
+- member_count: not-applicable
+- repetition_count: one named campaign attempt
+- expected_errors: scheduled recovery only; zero unaccounted loss, duplicates, or unknown outcomes
+- observed_errors: not-recorded while workflow is in progress
+- retry_count: not-recorded while workflow is in progress
+- duplicate_count: not-recorded while workflow is in progress
+- loss_count: not-recorded while workflow is in progress
+- latency: not-recorded while workflow is in progress
+- memory: not-recorded while workflow is in progress
+- final_resource_gauges: not-recorded while workflow is in progress
+- result: not-run
+- artifact: workflow run 32644605633; segment artifact pending
+- non_claims: not a passing six-hour gate, not V1-21 completion, not SLO, not 1.0.0 readiness
+
+## Q-PUBLISHED-V121-013
+
+- date_utc: 2026-08-23
+- source_commit: 7c24f7399325b5d0ab6f91f6e2ecd4d5b49985ec
+- client_version: 0.3.6 published artifact
+- protocol_version: 0.3.6 published dependency
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka:4.3.1
+- mode: six-hour multi-broker fault soak
+- topology: three-broker
+- security: SASL_SSL/SCRAM-SHA-256
+- group_protocol: not-applicable
+- workload: published 100-record batches with 1-KiB values; one segment; leader/coordinator/combined/simultaneous fault schedule
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32644605743
+- fault: leader@25,coordinator@50,combined@70,simultaneous@85; broker outage 10 seconds
+- duration: 21600 seconds measured soak
+- record_count: not-recorded until immutable segment artifact is retained
+- member_count: not-applicable
+- repetition_count: one named campaign attempt
+- expected_errors: scheduled recovery only; zero unaccounted loss, duplicates, or unknown outcomes
+- observed_errors: not-recorded while workflow is in progress
+- retry_count: not-recorded while workflow is in progress
+- duplicate_count: not-recorded while workflow is in progress
+- loss_count: not-recorded while workflow is in progress
+- latency: not-recorded while workflow is in progress
+- memory: not-recorded while workflow is in progress
+- final_resource_gauges: not-recorded while workflow is in progress
+- result: not-run
+- artifact: workflow run 32644605743; segment artifact pending
+- non_claims: not a passing six-hour gate, not V1-21 completion, not SLO, not 1.0.0 readiness
