@@ -238,6 +238,19 @@ resource-gauge drain, and fault-result adjudicator all pass; an infrastructure
 failure is retained as non-qualification rather than converted into a client
 claim.
 
+### Stale hosted-run cancellation (2026-08-23)
+
+By 23:34 KST, the Share 100-cycle run `32642115585` had been in progress for
+more than ten hours without a result artifact, and the four six-hour runs had
+been in progress for more than nine hours. Four of the six-hour runs
+(`32644605379`, `32644605637`, `32644605743`) and the Share run were cancelled
+after the stale-run check; `32644605633` received the same cancellation request
+but remained stuck in the GitHub `in_progress` state at the time of recording.
+None produced a descriptor or campaign summary, so all are infrastructure-only
+non-results. The hosted-runner timeout/capacity problem is now prevented by the
+self-hosted runner guard above; no client fault claim or V1-21 promotion is
+derived from these runs.
+
 ### Bounded current-source diagnostic runs (2026-08-22)
 
 The first 60-second manual run on source `3fdfc778` (run

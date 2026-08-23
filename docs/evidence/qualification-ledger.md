@@ -3751,6 +3751,72 @@ unqualified relative artifact label.
 - artifact: workflow run 32644605379; segment artifact pending
 - non_claims: not a passing six-hour gate, not V1-21 completion, not SLO, not 1.0.0 readiness
 
+## Q-INFRA-V121-STALE-001
+
+- date_utc: 2026-08-23
+- source_commit: 7c24f7399325b5d0ab6f91f6e2ecd4d5b49985ec
+- client_version: 0.3.6 published artifact
+- protocol_version: 0.3.6 published dependency
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 3.7.2 and 4.3.1
+- kafka_image: apache/kafka images declared by the four workflows
+- mode: six-hour multi-broker fault soak stale-run cancellation
+- topology: three-broker
+- security: PLAINTEXT and SASL_SSL/SCRAM-SHA-256
+- group_protocol: not-applicable
+- workload: four one-segment V1-21 campaigns; runs 32644605379, 32644605637, 32644605633, and 32644605743
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32644605379
+- fault: declared leader/coordinator/combined/simultaneous schedules; no retained segment result
+- duration: runs exceeded nine hours wall time without completing a six-hour artifact; three were cancelled and one remained cancellation-requested/in_progress at recording
+- record_count: not-recorded
+- member_count: not-applicable
+- repetition_count: four infrastructure attempts
+- expected_errors: immutable descriptor and qualified reconciliation artifact required
+- observed_errors: no descriptor, reconciliation, resource-gauge, or adjudicator result; stale GitHub Actions jobs
+- retry_count: not-recorded
+- duplicate_count: not-recorded
+- loss_count: not-recorded
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: not-recorded
+- result: not-run
+- artifact: workflow runs 32644605379, 32644605637, 32644605633, and 32644605743; the latter three links are retained in workload; no result artifact retained; infrastructure cancellation/non-result
+- non_claims: not a client fault result, not a passing six-hour gate, not V1-21 completion, not SLO, not 1.0.0 readiness
+
+## Q-INFRA-V121-SHARE-STALE-001
+
+- date_utc: 2026-08-23
+- source_commit: 7cc0b555336b0285fc5f8c5882f03a8b59aabe3d
+- client_version: 0.3.6 published artifact
+- protocol_version: 0.3.6 published dependency
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka image declared by the workflow
+- mode: 100-cycle Share member-loss/rejoin stale-run cancellation
+- topology: three-broker
+- security: SASL_SSL/SCRAM-SHA-256
+- group_protocol: Share
+- workload: 100 forced member-loss/rejoin cycles
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32642115585
+- fault: repeated member loss; no campaign summary retained
+- duration: more than ten hours wall time without completion; cancelled after stale-run check
+- record_count: not-recorded
+- member_count: not-recorded
+- repetition_count: not-recorded
+- expected_errors: 100 cycles, zero ownership loss/duplicates, and drained gauges
+- observed_errors: no summary or cycle artifact; stale GitHub Actions job
+- retry_count: not-recorded
+- duplicate_count: not-recorded
+- loss_count: not-recorded
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: not-recorded
+- result: not-run
+- artifact: workflow run 32642115585; no result artifact retained
+- non_claims: not Share 100-cycle qualification, not V1-21 completion, not SLO, not 1.0.0 readiness
+
 ## Q-PUBLISHED-V121-011
 
 - date_utc: 2026-08-23
