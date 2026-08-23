@@ -52,6 +52,9 @@ a successful representative service cutover and rollback.
    service owner approves.
 8. Observe at least two consecutive scheduled campaign sets with no open P0/P1
    issue. Any source fix produces `rc.2` or later and restarts required gates.
+9. Complete the dated competitor comparison and version-readiness decision
+   required by the execution rules. A gap that changes the support contract or
+   release identity triggers a milestone/roadmap replan before RC publication.
 
 ## Preparation Record (2026-08-22)
 
@@ -102,6 +105,8 @@ RC.
 3. Service canary cutover and rollback pass on the exact RC.
 4. Two consecutive scheduled campaign sets pass with no source change.
 5. No open P0/P1 issue remains; release owner accepts the RC evidence manifest.
+6. The competitor comparison and version-readiness decision support the exact
+   RC identity, or the revised intermediate-release plan is archived.
 
 ## Migration And Rollback
 

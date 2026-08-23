@@ -10,6 +10,25 @@ packages may be split across commits, but unrelated capability additions do not
 belong in the same milestone. If investigation reveals a materially different
 scope, update the dependency map before implementing it.
 
+## Release Authorization And Competitive Review
+
+No agent may publish to crates.io, create a release tag, or create a GitHub
+release from milestone progress alone. Those are irreversible or externally
+visible actions and are allowed only after the release gate below is satisfied;
+the agent may make that release decision autonomously when the evidence is
+complete. Dry-runs, package verification, and evidence collection do not by
+themselves justify publication.
+
+Before proposing an RC or stable version, record a dated comparison against
+the relevant competing clients (at minimum rust-rdkafka/librdkafka and the
+closest pure-Rust alternatives). The comparison must identify where kafrust is
+better, where it is weaker, and which documented support/operational tradeoffs
+remain. If the comparison or qualification results show that the planned
+version is premature, stop publication planning, update the milestone
+dependency graph and roadmap, choose the required intermediate version(s), and
+restart the affected gates from the new plan. Never silently turn an
+intermediate release into `1.0.0`.
+
 ## Entry Procedure
 
 Before changing source:

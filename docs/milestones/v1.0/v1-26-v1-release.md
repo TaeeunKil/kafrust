@@ -49,6 +49,9 @@ matrix checks, and state the stable support contract without overstating it.
 6. Run the named post-publish canary and full matrix; keep rollback artifact and
    runbook available until acceptance.
 7. Activate patch/security/advisory and broker-matrix refresh policy.
+8. Archive the final competitor comparison and version-readiness decision. If
+   it identifies a material gap, do not publish stable; replan the release path
+   and return to the appropriate milestone/version.
 
 ## Preparation Record (2026-08-22)
 
@@ -108,6 +111,8 @@ The preparation checker does not publish, tag, or mark the release complete.
    rollback rehearsal remains valid.
 4. No open release-blocking P0/P1 issue remains and known limits are public.
 5. Roadmap M21/V1 program is marked done only after all evidence rows land.
+6. The dated competitor comparison supports the exact stable version and no
+   unresolved gap requires an intermediate release or milestone replan.
 
 ## Migration And Rollback
 

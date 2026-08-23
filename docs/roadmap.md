@@ -330,6 +330,17 @@ workspace crates, and records 62 third-party review entries with owner and
 rationale fields. This is a reproducible review queue only; manual source and
 risk-acceptance review remains an explicit V1-19 exit gate.
 
+The local registry provenance slice also records checksums for 87 registry
+packages with zero missing or yanked entries. It is explicitly local-index
+evidence; live advisory/current-index review remains open.
+
+Release planning now also requires a dated competitor comparison and a
+version-readiness decision before any RC/stable artifact is published. The
+agent may make the publication decision autonomously only after those results,
+the complete milestone gates, and exact artifact verification show no material
+gap; otherwise the milestone graph and roadmap must be replanned around the
+needed intermediate version.
+
 ## V1-20 Execution Update (2026-08-22)
 
 V1-20 is `In progress`. The draft machine-readable matrix at

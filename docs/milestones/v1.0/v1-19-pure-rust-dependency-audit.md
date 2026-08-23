@@ -162,6 +162,15 @@ OS/runtime boundaries are explicitly named. The report is a review queue, not
 a completion claim: manual source review and dated risk acceptance remain
 required for the V1-19 exit gate.
 
+### Registry provenance slice (2026-08-23)
+
+[`check_v1_registry_provenance.py`](../../scripts/check_v1_registry_provenance.py)
+decodes the local crates.io sparse-index cache for the same closure, requiring
+checksums and rejecting missing or yanked resolved versions. The 87-package
+result is archived in [`v1-19-registry-provenance.md`](../../evidence/v1-19-registry-provenance.md).
+It is local index evidence only and does not close live advisory or current
+server-side yank review.
+
 ## Failure And Lifecycle Contract
 
 - A required default-build C compiler/link to librdkafka or a C Kafka client is

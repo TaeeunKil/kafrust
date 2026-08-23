@@ -1,0 +1,631 @@
+{
+  "dependency_scope": "runtime-and-build",
+  "features": "all-features",
+  "generator": "scripts/check_v1_registry_provenance.py",
+  "non_claims": [
+    "not a live crates.io server query",
+    "not an advisory or vulnerability database scan",
+    "not a source provenance or maintainer trust guarantee",
+    "workspace package archive hashes are recorded by the V1-19 SBOM gate"
+  ],
+  "packages": [
+    {
+      "checksum": "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa",
+      "name": "adler2",
+      "pubtime": "2025-06-09T22:31:53Z",
+      "version": "2.0.1",
+      "yanked": false
+    },
+    {
+      "checksum": "c982642fa9e8606056828ee9a8505737230110bb1099153c79efe865c59d12ba",
+      "name": "aho-corasick",
+      "pubtime": "2026-08-03T11:44:11Z",
+      "version": "1.1.5",
+      "yanked": false
+    },
+    {
+      "checksum": "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470",
+      "name": "anyhow",
+      "pubtime": "2026-07-18T20:59:37Z",
+      "version": "1.0.104",
+      "yanked": false
+    },
+    {
+      "checksum": "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6",
+      "name": "base64",
+      "pubtime": "2024-04-30T23:16:40Z",
+      "version": "0.22.1",
+      "yanked": false
+    },
+    {
+      "checksum": "b588b76d00fde79687d7646a9b5bdf3cc0f655e0bbd080335a95d7e96f3587da",
+      "name": "bitflags",
+      "pubtime": "2026-07-15T20:36:19Z",
+      "version": "2.13.1",
+      "yanked": false
+    },
+    {
+      "checksum": "3078c7629b62d3f0439517fa394996acacc5cbc91c5a20d8c658e77abd503a71",
+      "name": "block-buffer",
+      "pubtime": "2023-03-09T02:08:25Z",
+      "version": "0.10.4",
+      "yanked": false
+    },
+    {
+      "checksum": "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b",
+      "name": "byteorder",
+      "pubtime": "2023-10-06T00:45:57Z",
+      "version": "1.5.0",
+      "yanked": false
+    },
+    {
+      "checksum": "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04",
+      "name": "bytes",
+      "pubtime": "2026-07-08T10:01:28Z",
+      "version": "1.12.1",
+      "yanked": false
+    },
+    {
+      "checksum": "0ad534f4357a5264cce5019c989cf66a4f0dc4e0d1b1d15f8aacec0ff7360273",
+      "name": "cc",
+      "pubtime": "2026-08-21T08:20:10Z",
+      "version": "1.4.4",
+      "yanked": false
+    },
+    {
+      "checksum": "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801",
+      "name": "cfg-if",
+      "pubtime": "2025-10-15T08:12:46Z",
+      "version": "1.0.4",
+      "yanked": false
+    },
+    {
+      "checksum": "59ed5838eebb26a2bb2e58f6d5b5316989ae9d08bab10e0e6d103e656d1b0280",
+      "name": "cpufeatures",
+      "pubtime": "2025-01-25T01:35:46Z",
+      "version": "0.2.17",
+      "yanked": false
+    },
+    {
+      "checksum": "9481c1c90cbf2ac953f07c8d4a58aa3945c425b7185c9154d67a65e4230da511",
+      "name": "crc32fast",
+      "pubtime": "2025-07-13T15:09:03Z",
+      "version": "1.5.0",
+      "yanked": false
+    },
+    {
+      "checksum": "78c8292055d1c1df0cce5d180393dc8cce0abec0a7102adb6c7b1eef6016d60a",
+      "name": "crypto-common",
+      "pubtime": "2025-11-12T14:20:00Z",
+      "version": "0.1.7",
+      "yanked": false
+    },
+    {
+      "checksum": "1234e1717066d3c71dcf89b75e7b586299e41204d361db56ec51e6ded5014279",
+      "name": "culpa-macros",
+      "pubtime": "2024-01-10T22:56:02Z",
+      "version": "1.0.2",
+      "yanked": false
+    },
+    {
+      "checksum": "5ae0bfe9317b1cb4ff5a56d766ee4b157b3e1f47f11979253570e88d10fd1fd3",
+      "name": "culpa",
+      "pubtime": "2024-01-10T22:56:10Z",
+      "version": "1.0.2",
+      "yanked": false
+    },
+    {
+      "checksum": "9ed9a281f7bc9b7576e61468ba615a66a5c8cfdff42420a70aa82701a3b1e292",
+      "name": "digest",
+      "pubtime": "2023-05-19T17:11:30Z",
+      "version": "0.10.7",
+      "yanked": false
+    },
+    {
+      "checksum": "252afb9ae5eaa683babdc6a068b3f5726eb19e05070c731f9b2a23a7c3e8ed34",
+      "name": "either",
+      "pubtime": "2026-08-20T19:36:48Z",
+      "version": "1.18.0",
+      "yanked": false
+    },
+    {
+      "checksum": "d45db016d36b838f563236e9193d0ee6ce38f3f68b6c94e914b4929c96bbb890",
+      "name": "find-msvc-tools",
+      "pubtime": "2026-08-14T13:13:50Z",
+      "version": "0.1.11",
+      "yanked": false
+    },
+    {
+      "checksum": "c936bfdafb507ebbf50b8074c54fa31c5be9a1e7e5f467dd659697041407d07c",
+      "name": "flate2",
+      "pubtime": "2024-11-14T13:56:22Z",
+      "version": "1.0.35",
+      "yanked": false
+    },
+    {
+      "checksum": "b1f9e3d69d39e4862ffed03ed071a76f9a13ba1d9109d355b0f0aa6b15e393c4",
+      "name": "futures-channel",
+      "pubtime": "2026-08-11T12:13:10Z",
+      "version": "0.3.34",
+      "yanked": false
+    },
+    {
+      "checksum": "92d699e522242e69e3003b94ecc1f960f3a5e015aa7c5d7486e65ad01dd94f5e",
+      "name": "futures-core",
+      "pubtime": "2026-08-11T12:13:01Z",
+      "version": "0.3.34",
+      "yanked": false
+    },
+    {
+      "checksum": "031b47cf1a3c6cc8bc2fc76cd437f521619387907d469316e7c0bc278f1f5432",
+      "name": "futures-executor",
+      "pubtime": "2026-08-11T12:13:23Z",
+      "version": "0.3.34",
+      "yanked": false
+    },
+    {
+      "checksum": "9fb9654ba8355388abeb8dcb4fc62f511300867002afc858860463bdd9fe0c44",
+      "name": "futures-macro",
+      "pubtime": "2026-08-11T12:13:14Z",
+      "version": "0.3.34",
+      "yanked": false
+    },
+    {
+      "checksum": "1944426bf7d03f1d14f708785e4b33efd750b36d48a157b836b3efc15ede8e1d",
+      "name": "futures-sink",
+      "pubtime": "2026-08-11T12:13:06Z",
+      "version": "0.3.34",
+      "yanked": false
+    },
+    {
+      "checksum": "cd417de3d1d015fc3bfd2b1ea46dfc7bab72ef86f1cc7cc9c78e728b34a6d1fd",
+      "name": "futures-task",
+      "pubtime": "2026-08-11T12:13:07Z",
+      "version": "0.3.34",
+      "yanked": false
+    },
+    {
+      "checksum": "0d50a92467f8ba5dd6e3ee5d4bd04d73ab2e4e1c44474a0674821dfce14b79bc",
+      "name": "futures-util",
+      "pubtime": "2026-08-11T12:13:19Z",
+      "version": "0.3.34",
+      "yanked": false
+    },
+    {
+      "checksum": "85649ca51fd72272d7821adaf274ad91c288277713d9c18820d8499a7ff69e9a",
+      "name": "generic-array",
+      "pubtime": "2023-03-28T00:01:29Z",
+      "version": "0.14.7",
+      "yanked": false
+    },
+    {
+      "checksum": "ff2abc00be7fca6ebc474524697ae276ad847ad0a6b3faa4bcb027e9a4614ad0",
+      "name": "getrandom",
+      "pubtime": "2026-01-11T21:09:53Z",
+      "version": "0.2.17",
+      "yanked": false
+    },
+    {
+      "checksum": "6c49c37c09c17a53d937dfbb742eb3a961d65a994e6bcdcf37e7399d0cc8ab5e",
+      "name": "hmac",
+      "pubtime": "2022-02-17T10:50:37Z",
+      "version": "0.12.1",
+      "yanked": false
+    },
+    {
+      "checksum": "2b192c782037fadd9cfa75548310488aabdbf3d2da73885b31bd0abd03351285",
+      "name": "itertools",
+      "pubtime": "2024-12-31T12:32:06Z",
+      "version": "0.14.0",
+      "yanked": false
+    },
+    {
+      "checksum": "3eaf3ede3fee6db1a4c2ee091bf8a8b4dccdc6d17f656fb07896ee72867612f2",
+      "name": "libc",
+      "pubtime": "2026-07-21T21:33:28Z",
+      "version": "0.2.189",
+      "yanked": false
+    },
+    {
+      "checksum": "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad",
+      "name": "log",
+      "pubtime": "2026-06-20T22:08:55Z",
+      "version": "0.4.33",
+      "yanked": false
+    },
+    {
+      "checksum": "26a280471e5ff9dda51cf34863c338ffde7df78139210f9c819943b29cdb091d",
+      "name": "lz-fear",
+      "pubtime": "2024-02-08T14:06:42Z",
+      "version": "0.2.0",
+      "yanked": false
+    },
+    {
+      "checksum": "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98",
+      "name": "memchr",
+      "pubtime": "2026-07-08T00:49:54Z",
+      "version": "2.8.3",
+      "yanked": false
+    },
+    {
+      "checksum": "1fa76a2c86f704bdb222d66965fb3d63269ce38518b83cb0575fca855ebb6316",
+      "name": "miniz_oxide",
+      "pubtime": "2025-06-09T22:26:12Z",
+      "version": "0.8.9",
+      "yanked": false
+    },
+    {
+      "checksum": "30d65c71f1ce40ab09135ce117d742b9f8a19ff91a41a8b57ed50bc2de59c427",
+      "name": "mio",
+      "pubtime": "2026-07-13T15:39:09Z",
+      "version": "1.2.2",
+      "yanked": false
+    },
+    {
+      "checksum": "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50",
+      "name": "once_cell",
+      "pubtime": "2026-03-12T10:59:52Z",
+      "version": "1.21.4",
+      "yanked": false
+    },
+    {
+      "checksum": "7c87def4c32ab89d880effc9e097653c8da5d6ef28e6b539d313baaacfbafcbe",
+      "name": "openssl-probe",
+      "pubtime": "2026-01-20T19:53:29Z",
+      "version": "0.2.1",
+      "yanked": false
+    },
+    {
+      "checksum": "56d658ba1faf63f7b9c492cfbe6e0ec365440a16132d3270c1065f7b33f1b638",
+      "name": "opentelemetry-proto",
+      "pubtime": "2026-05-08T23:42:56Z",
+      "version": "0.32.0",
+      "yanked": false
+    },
+    {
+      "checksum": "b0142c63252a9e054e68a4c61a5778f7b14f576274d593f8ce883d191a099682",
+      "name": "opentelemetry",
+      "pubtime": "2026-05-08T23:40:55Z",
+      "version": "0.32.0",
+      "yanked": false
+    },
+    {
+      "checksum": "9b59f80e1ac4d5ff7a2db8fb6c80badb7f0f3f858211fba08dd9aaec750894f9",
+      "name": "opentelemetry_sdk",
+      "pubtime": "2026-05-26T16:54:45Z",
+      "version": "0.32.1",
+      "yanked": false
+    },
+    {
+      "checksum": "f8ed6a7761f76e3b9f92dfb0a60a6a6477c61024b775147ff0973a02653abaf2",
+      "name": "pbkdf2",
+      "pubtime": "2023-07-08T15:26:53Z",
+      "version": "0.12.2",
+      "yanked": false
+    },
+    {
+      "checksum": "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd",
+      "name": "pin-project-lite",
+      "pubtime": "2026-02-27T15:19:08Z",
+      "version": "0.2.17",
+      "yanked": false
+    },
+    {
+      "checksum": "85eae3c4ed2f50dcfe72643da4befc30deadb458a9b590d720cde2f2b1e97da9",
+      "name": "ppv-lite86",
+      "pubtime": "2025-03-09T20:01:40Z",
+      "version": "0.2.21",
+      "yanked": false
+    },
+    {
+      "checksum": "985e7ec9bb745e6ce6535b544d84d6cd6f7ad8bd711c398938ae983b91a766d9",
+      "name": "proc-macro2",
+      "pubtime": "2026-07-19T00:18:25Z",
+      "version": "1.0.107",
+      "yanked": false
+    },
+    {
+      "checksum": "9120690fafc389a67ba3803df527d0ec9cbbc9cc45e4cc20b332996dfb672425",
+      "name": "prost-derive",
+      "pubtime": "2025-06-18T04:36:11Z",
+      "version": "0.14.1",
+      "yanked": false
+    },
+    {
+      "checksum": "7231bd9b3d3d33c86b58adbac74b5ec0ad9f496b19d22801d773636feaa95f3d",
+      "name": "prost",
+      "pubtime": "2025-06-18T04:36:25Z",
+      "version": "0.14.1",
+      "yanked": false
+    },
+    {
+      "checksum": "1fbf4db142a473a8d80c26bbf18454ed458bf8d26c8219c331daecfdbd079001",
+      "name": "quote",
+      "pubtime": "2026-07-19T00:16:57Z",
+      "version": "1.0.47",
+      "yanked": false
+    },
+    {
+      "checksum": "22f6172bdec972074665ed81ed53b71da00bfc44b65a753cfde883ec4c702a1a",
+      "name": "rand",
+      "pubtime": "2026-07-11T11:16:35Z",
+      "version": "0.8.7",
+      "yanked": false
+    },
+    {
+      "checksum": "e6c10a63a0fa32252be49d21e7709d4d4baf8d231c2dbce1eaa8141b9b127d88",
+      "name": "rand_chacha",
+      "pubtime": "2021-06-09T19:46:38Z",
+      "version": "0.3.1",
+      "yanked": false
+    },
+    {
+      "checksum": "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c",
+      "name": "rand_core",
+      "pubtime": "2022-09-15T13:23:44Z",
+      "version": "0.6.4",
+      "yanked": false
+    },
+    {
+      "checksum": "ad8553b9b26413251cbf30e620595c7a41b3887f03da04579c0e6b0d6a06b4b2",
+      "name": "regex-automata",
+      "pubtime": "2026-08-04T13:10:37Z",
+      "version": "0.4.18",
+      "yanked": false
+    },
+    {
+      "checksum": "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4",
+      "name": "regex-syntax",
+      "pubtime": "2026-06-09T15:00:25Z",
+      "version": "0.8.11",
+      "yanked": false
+    },
+    {
+      "checksum": "f020237b6c8eed93db2e2cb53c00c60a8e1bc73da7d073199a1180401450218d",
+      "name": "regex",
+      "pubtime": "2026-07-15T20:19:35Z",
+      "version": "1.13.1",
+      "yanked": false
+    },
+    {
+      "checksum": "a4689e6c2294d81e88dc6261c768b63bc4fcdb852be6d1352498b114f61383b7",
+      "name": "ring",
+      "pubtime": "2025-03-11T19:42:03Z",
+      "version": "0.17.14",
+      "yanked": false
+    },
+    {
+      "checksum": "dab5152771c58876a2146916e53e35057e1a4dfa2b9df0f0305b07f611fdea4d",
+      "name": "rustls-native-certs",
+      "pubtime": "2026-06-01T12:16:09Z",
+      "version": "0.8.4",
+      "yanked": false
+    },
+    {
+      "checksum": "2f4925028c7eb5d1fcdaf196971378ed9d2c1c4efc7dc5d011256f76c99c0a96",
+      "name": "rustls-pki-types",
+      "pubtime": "2026-07-23T09:56:11Z",
+      "version": "1.15.1",
+      "yanked": false
+    },
+    {
+      "checksum": "1d99feebc72bae7ab76ba994bb5e121b8d83d910ca40b36e0921f53becc41784",
+      "name": "rustls-platform-verifier",
+      "pubtime": "2025-10-22T11:43:28Z",
+      "version": "0.6.2",
+      "yanked": false
+    },
+    {
+      "checksum": "f3c3cf1d8b1e7d4927e2d154c3fcb02979afb9939629c62cd9048d4f07b60ac2",
+      "name": "rustls-webpki",
+      "pubtime": "2026-08-21T16:40:00Z",
+      "version": "0.103.15",
+      "yanked": false
+    },
+    {
+      "checksum": "0283386ce02abc0151e1761d08802dfe86c173b0b494af5cbc086574e453da06",
+      "name": "rustls",
+      "pubtime": "2026-07-29T16:14:13Z",
+      "version": "0.23.43",
+      "yanked": false
+    },
+    {
+      "checksum": "3640bec8aad418d7d03c72ea2de10d5c646a598f9883c7babc160d91e3c1b26c",
+      "name": "ruzstd",
+      "pubtime": "2025-05-03T14:02:15Z",
+      "version": "0.8.1",
+      "yanked": false
+    },
+    {
+      "checksum": "a7507d819769d01a365ab707794a4084392c824f54a7a6a7862f8c3d0892b283",
+      "name": "sha2",
+      "pubtime": "2025-04-30T14:38:09Z",
+      "version": "0.10.9",
+      "yanked": false
+    },
+    {
+      "checksum": "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba",
+      "name": "shlex",
+      "pubtime": "2026-05-17T18:56:12Z",
+      "version": "2.0.1",
+      "yanked": false
+    },
+    {
+      "checksum": "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5",
+      "name": "slab",
+      "pubtime": "2026-01-31T12:59:22Z",
+      "version": "0.4.12",
+      "yanked": false
+    },
+    {
+      "checksum": "199905e6153d6405f9728fe44daace35f8f837bbf830bb6e85fbd5828709a886",
+      "name": "snap",
+      "pubtime": "2026-07-15T11:40:42Z",
+      "version": "1.1.2",
+      "yanked": false
+    },
+    {
+      "checksum": "c3d1e2c7f27f8d4cb10542a02c49005dbd6e93095799d6f3be745fae9f8fedd4",
+      "name": "socket2",
+      "pubtime": "2026-07-13T19:45:58Z",
+      "version": "0.6.5",
+      "yanked": false
+    },
+    {
+      "checksum": "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f",
+      "name": "static_assertions",
+      "pubtime": "2019-11-03T17:02:11Z",
+      "version": "1.1.0",
+      "yanked": false
+    },
+    {
+      "checksum": "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292",
+      "name": "subtle",
+      "pubtime": "2024-06-24T17:25:24Z",
+      "version": "2.6.1",
+      "yanked": false
+    },
+    {
+      "checksum": "872831b642d1a07999a962a351ed35b955ea2cfc8f3862091e2a240a84f17297",
+      "name": "syn",
+      "pubtime": "2026-07-15T00:23:48Z",
+      "version": "2.0.119",
+      "yanked": false
+    },
+    {
+      "checksum": "53e9bae58849f64dfa4f5d5ae372c8341f7305f82a3868709269343628b659a3",
+      "name": "syn",
+      "pubtime": "2026-07-22T00:35:52Z",
+      "version": "3.0.3",
+      "yanked": false
+    },
+    {
+      "checksum": "4fee6c4efc90059e10f81e6d42c60a18f76588c3d74cb83a0b242a2b6c7504c1",
+      "name": "thiserror-impl",
+      "pubtime": "2024-11-10T06:24:04Z",
+      "version": "1.0.69",
+      "yanked": false
+    },
+    {
+      "checksum": "bc04cd3e1236dd4a98afca4569f2deb3f120e5422a4023be2cb683f8486292af",
+      "name": "thiserror-impl",
+      "pubtime": "2026-08-08T06:22:19Z",
+      "version": "2.0.20",
+      "yanked": false
+    },
+    {
+      "checksum": "b6aaf5339b578ea85b50e080feb250a3e8ae8cfcdff9a461c9ec2904bc923f52",
+      "name": "thiserror",
+      "pubtime": "2024-11-10T06:24:10Z",
+      "version": "1.0.69",
+      "yanked": false
+    },
+    {
+      "checksum": "ec86235f5fcc2a73650310756d2ac5b138a5780bbbdfae3eeccec992c435ba4f",
+      "name": "thiserror",
+      "pubtime": "2026-08-08T06:22:23Z",
+      "version": "2.0.20",
+      "yanked": false
+    },
+    {
+      "checksum": "78773a2a397f451582ce068015985c33193cf6dea8b74d2a639fe457b2f07b0e",
+      "name": "tokio-macros",
+      "pubtime": "2026-07-29T13:15:27Z",
+      "version": "2.7.2",
+      "yanked": false
+    },
+    {
+      "checksum": "1729aa945f29d91ba541258c8df89027d5792d85a8841fb65e8bf0f4ede4ef61",
+      "name": "tokio-rustls",
+      "pubtime": "2025-09-26T15:31:04Z",
+      "version": "0.26.4",
+      "yanked": false
+    },
+    {
+      "checksum": "202caea871b69668250d242070849eb495be178ed697a3e98aebce5bc81a0bed",
+      "name": "tokio",
+      "pubtime": "2026-07-20T17:06:09Z",
+      "version": "1.53.1",
+      "yanked": false
+    },
+    {
+      "checksum": "7490cfa5ec963746568740651ac6781f701c9c5ea257c58e057f3ba8cf69e8da",
+      "name": "tracing-attributes",
+      "pubtime": "2025-11-26T11:23:01Z",
+      "version": "0.1.31",
+      "yanked": false
+    },
+    {
+      "checksum": "db97caf9d906fbde555dd62fa95ddba9eecfd14cb388e4f491a66d74cd5fb79a",
+      "name": "tracing-core",
+      "pubtime": "2025-12-18T14:13:04Z",
+      "version": "0.1.36",
+      "yanked": false
+    },
+    {
+      "checksum": "63e71662fa4b2a2c3a26f570f037eb95bb1f85397f3cd8076caed2f026a6d100",
+      "name": "tracing",
+      "pubtime": "2025-12-18T14:26:12Z",
+      "version": "0.1.44",
+      "yanked": false
+    },
+    {
+      "checksum": "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675",
+      "name": "twox-hash",
+      "pubtime": "2022-05-04T15:00:52Z",
+      "version": "1.6.3",
+      "yanked": false
+    },
+    {
+      "checksum": "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20",
+      "name": "typenum",
+      "pubtime": "2026-05-29T16:00:41Z",
+      "version": "1.20.1",
+      "yanked": false
+    },
+    {
+      "checksum": "e6e4313cd5fcd3dad5cafa179702e2b244f760991f45397d14d4ebf38247da75",
+      "name": "unicode-ident",
+      "pubtime": "2026-02-16T02:46:44Z",
+      "version": "1.0.24",
+      "yanked": false
+    },
+    {
+      "checksum": "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1",
+      "name": "untrusted",
+      "pubtime": "2021-07-13T22:13:26Z",
+      "version": "0.9.0",
+      "yanked": false
+    },
+    {
+      "checksum": "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a",
+      "name": "version_check",
+      "pubtime": "2024-07-25T23:38:14Z",
+      "version": "0.9.5",
+      "yanked": false
+    },
+    {
+      "checksum": "556764e583adb45a9f8d413c2a147fa7e8d821e48e12b14fd560b607998b75eb",
+      "name": "zerocopy",
+      "pubtime": "2026-08-06T11:23:48Z",
+      "version": "0.8.56",
+      "yanked": false
+    },
+    {
+      "checksum": "b97154e67e32c85465826e8bcc1c59429aaaf107c1e4a9e53c8d8ccd5eff88d0",
+      "name": "zeroize",
+      "pubtime": "2025-09-29T20:20:03Z",
+      "version": "1.8.2",
+      "yanked": false
+    }
+  ],
+  "platform": "x86_64-unknown-linux-gnu",
+  "registry": "crates.io sparse-index cache",
+  "schema_version": 1,
+  "summary": {
+    "checksum_entries": 87,
+    "missing_index_entries": 0,
+    "registry_packages": 87,
+    "yanked_packages": 0
+  }
+}
