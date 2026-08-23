@@ -37,7 +37,7 @@ unqualified relative artifact label.
 - security: not-applicable
 - group_protocol: not-applicable
 - workload: dated comparison of kafrust against krafka, kacrab, rskafka, kafka-rust, kafkit-client, and rust-rdkafka
-- workflow: docs/evidence/v1-release-competitive-readiness-2026-08-23.md
+- workflow: scripts/check_qualification_ledger.py
 - fault: material competitor gap or premature version identity
 - duration: not-recorded
 - record_count: not-applicable
