@@ -255,7 +255,7 @@
       "version": "0.2.17"
     },
     {
-      "bom-ref": "pkg:cargo/crc32fast@1.5.0",
+      "bom-ref": "pkg:cargo/crc32fast@1.5.1",
       "licenses": [
         {
           "expression": "MIT OR Apache-2.0"
@@ -269,13 +269,13 @@
         },
         {
           "name": "kafrust:package-id",
-          "value": "registry+https://github.com/rust-lang/crates.io-index#crc32fast@1.5.0"
+          "value": "registry+https://github.com/rust-lang/crates.io-index#crc32fast@1.5.1"
         }
       ],
-      "purl": "pkg:cargo/crc32fast@1.5.0",
+      "purl": "pkg:cargo/crc32fast@1.5.1",
       "scope": "required",
       "type": "library",
-      "version": "1.5.0"
+      "version": "1.5.1"
     },
     {
       "bom-ref": "pkg:cargo/crypto-common@0.1.7",
@@ -761,7 +761,7 @@
       "version": "0.2.189"
     },
     {
-      "bom-ref": "pkg:cargo/log@0.4.33",
+      "bom-ref": "pkg:cargo/log@0.4.34",
       "licenses": [
         {
           "expression": "MIT OR Apache-2.0"
@@ -775,13 +775,13 @@
         },
         {
           "name": "kafrust:package-id",
-          "value": "registry+https://github.com/rust-lang/crates.io-index#log@0.4.33"
+          "value": "registry+https://github.com/rust-lang/crates.io-index#log@0.4.34"
         }
       ],
-      "purl": "pkg:cargo/log@0.4.33",
+      "purl": "pkg:cargo/log@0.4.34",
       "scope": "required",
       "type": "library",
-      "version": "0.4.33"
+      "version": "0.4.34"
     },
     {
       "bom-ref": "pkg:cargo/lz-fear@0.2.0",
@@ -2105,7 +2105,7 @@
       "dependsOn": [
         "pkg:cargo/cfg-if@1.0.4"
       ],
-      "ref": "pkg:cargo/crc32fast@1.5.0"
+      "ref": "pkg:cargo/crc32fast@1.5.1"
     },
     {
       "dependsOn": [
@@ -2146,7 +2146,7 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/crc32fast@1.5.0",
+        "pkg:cargo/crc32fast@1.5.1",
         "pkg:cargo/miniz_oxide@0.8.9"
       ],
       "ref": "pkg:cargo/flate2@1.0.35"
@@ -2258,7 +2258,7 @@
     },
     {
       "dependsOn": [],
-      "ref": "pkg:cargo/log@0.4.33"
+      "ref": "pkg:cargo/log@0.4.34"
     },
     {
       "dependsOn": [
@@ -2428,7 +2428,7 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/log@0.4.33",
+        "pkg:cargo/log@0.4.34",
         "pkg:cargo/rustls-native-certs@0.8.4",
         "pkg:cargo/rustls-webpki@0.103.15",
         "pkg:cargo/rustls@0.23.43"
