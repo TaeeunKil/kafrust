@@ -171,6 +171,16 @@ result is archived in [`v1-19-registry-provenance.md`](../../evidence/v1-19-regi
 It is local index evidence only and does not close live advisory or current
 server-side yank review.
 
+### Combined CI validation (2026-08-23)
+
+The exact pushed commit `af73b8d2eaf19e33d9e90dbc79189f74bd9ad538` passed the
+Rust 1.81.0/stable matrix in
+[CI run 32610559177](https://github.com/TaeeunKil/kafrust/actions/runs/32610559177),
+including all dependency hardening checkers, package isolation, tests, Clippy,
+and documentation. This confirms the implemented slices on both toolchains;
+the remaining advisory/current-index, manual unsafe ownership, platform/package
+matrix, and published-artifact gates remain open.
+
 ## Failure And Lifecycle Contract
 
 - A required default-build C compiler/link to librdkafka or a C Kafka client is

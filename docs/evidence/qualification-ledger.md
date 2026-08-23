@@ -22,6 +22,39 @@ and are checked in CI. Values such as `not-applicable` and `not-recorded` are
 deliberate classifications, not missing data. A row must never use an
 unqualified relative artifact label.
 
+## Q-CI-V119-008
+
+- date_utc: 2026-08-23
+- source_commit: af73b8d2eaf19e33d9e90dbc79189f74bd9ad538
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: CI
+- kafka_version: not-applicable
+- kafka_image: not-applicable
+- mode: V1-19 dependency hardening matrix
+- topology: GitHub Actions Rust 1.81.0 and stable matrix
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: dependency graph, native tooling, license policy, unsafe/native inventory, registry provenance, SBOM, package boundary, tests, clippy, and docs
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32610559177
+- fault: checker drift, missing metadata, yanked registry package, build/test/clippy/docs/package failure
+- duration: 7m46s stable; 7m44s Rust 1.81.0
+- record_count: 89 SBOM components; 87 registry packages; 62 unsafe/native review entries
+- member_count: 2 workspace package roots
+- repetition_count: 2 toolchains
+- expected_errors: no dependency-gate or required validation failure
+- observed_errors: none; both jobs passed
+- retry_count: not-applicable
+- duplicate_count: not-applicable
+- loss_count: not-applicable
+- latency: not-applicable
+- memory: not-applicable
+- final_resource_gauges: not-applicable
+- result: passed
+- artifact: GitHub Actions run 32610559177; exact pushed source af73b8d2
+- non_claims: not V1-19 completion, not live advisory review, not crates.io publication, not full V1-20 matrix, not service canary
+
 ## Q-LOCAL-V119-007
 
 - date_utc: 2026-08-23

@@ -334,6 +334,11 @@ The local registry provenance slice also records checksums for 87 registry
 packages with zero missing or yanked entries. It is explicitly local-index
 evidence; live advisory/current-index review remains open.
 
+All current V1-19 dependency-hardening checkers passed on both Rust 1.81.0 and
+stable in [CI run 32610559177](https://github.com/TaeeunKil/kafrust/actions/runs/32610559177)
+from exact source `af73b8d`. This is CI confirmation of the slices, not V1-19
+completion or publication readiness.
+
 Release planning now also requires a dated competitor comparison and a
 version-readiness decision before any RC/stable artifact is published. The
 agent may make the publication decision autonomously only after those results,
