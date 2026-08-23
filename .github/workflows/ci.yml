@@ -75,6 +75,9 @@ jobs:
       - name: Check V1 license policy
         run: python scripts/check_v1_license_policy.py --check
 
+      - name: Check V1 unsafe/native inventory
+        run: python scripts/check_v1_unsafe_native_inventory.py --check
+
       - name: Check v1 migration canary manifest
         run: python scripts/check_v1_migration_canary_manifest.py
 
@@ -89,6 +92,9 @@ jobs:
 
       - name: Test V1-19 license-policy checker
         run: python -m unittest scripts/test_check_v1_license_policy.py
+
+      - name: Test V1-19 unsafe/native inventory checker
+        run: python -m unittest scripts/test_check_v1_unsafe_native_inventory.py
 
       - name: Check qualification ledger
         run: python scripts/check_qualification_ledger.py

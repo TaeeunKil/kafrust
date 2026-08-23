@@ -152,6 +152,16 @@ checker runs in both CI toolchain jobs. This closes license-expression policy
 and metadata drift only; advisory/yank review, packaged notice inspection, and
 transitive unsafe/native ownership remain open.
 
+### Unsafe/native ownership inventory (2026-08-23)
+
+[`check_v1_unsafe_native_inventory.py`](../../scripts/check_v1_unsafe_native_inventory.py)
+now scans the 89-package all-feature closure and records 62 unsafe/build or
+platform-boundary entries with owner and rationale fields. Both workspace
+crates have zero unsafe constructs under the scanner, while optional TLS and
+OS/runtime boundaries are explicitly named. The report is a review queue, not
+a completion claim: manual source review and dated risk acceptance remain
+required for the V1-19 exit gate.
+
 ## Failure And Lifecycle Contract
 
 - A required default-build C compiler/link to librdkafka or a C Kafka client is

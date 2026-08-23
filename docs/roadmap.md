@@ -323,6 +323,13 @@ license-policy or package-identity drift. This closes license-expression
 compatibility metadata only; advisory/yank review, packaged notice inspection,
 and reviewed transitive unsafe/native ownership remain open.
 
+The transitive unsafe/native inventory is recorded in
+[`docs/evidence/v1-19-unsafe-native-inventory.md`](evidence/v1-19-unsafe-native-inventory.md).
+It scans the 89-package closure, finds zero unsafe constructs in the two
+workspace crates, and records 62 third-party review entries with owner and
+rationale fields. This is a reproducible review queue only; manual source and
+risk-acceptance review remains an explicit V1-19 exit gate.
+
 ## V1-20 Execution Update (2026-08-22)
 
 V1-20 is `In progress`. The draft machine-readable matrix at
