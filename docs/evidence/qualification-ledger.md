@@ -22,6 +22,39 @@ and are checked in CI. Values such as `not-applicable` and `not-recorded` are
 deliberate classifications, not missing data. A row must never use an
 unqualified relative artifact label.
 
+## Q-LOCAL-V119-008
+
+- date_utc: 2026-08-23
+- source_commit: f42dbe3e9ffc56b637f19e4505bf7d18e24a4a77
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: not-applicable
+- kafka_image: not-applicable
+- mode: OSV/RustSec advisory snapshot
+- topology: not-applicable
+- security: advisory database query
+- group_protocol: not-applicable
+- workload: all-feature runtime/build dependency closure
+- workflow: scripts/check_v1_advisories.py --check
+- fault: changed dependency inventory, stale snapshot, or critical/high advisory
+- duration: not-recorded
+- record_count: 89 packages; 0 advisory matches
+- member_count: 2 workspace package roots
+- repetition_count: 1 live refresh plus offline check
+- expected_errors: zero critical/high advisory matches and snapshot age at most 30 days
+- observed_errors: none; zero advisory matches and zero critical/high matches
+- retry_count: not-applicable
+- duplicate_count: not-applicable
+- loss_count: not-applicable
+- latency: not-applicable
+- memory: not-applicable
+- final_resource_gauges: not-applicable
+- result: passed
+- artifact: docs/evidence/v1-19-advisories.json sha256 c54790c2d4ee4105f04671d4b809415c305fb29d0a001435170f135e56b97b7c; RustSec revision bf5c0d245a92671908518d7e765914d437954ed6
+- non_claims: not a future/undisclosed vulnerability guarantee, not live crates.io yank evidence, not source-provenance or maintainer-trust evidence, not manual unsafe/native ownership acceptance, not crates.io publication
+
 ## Q-DECISION-V1-001
 
 - date_utc: 2026-08-23

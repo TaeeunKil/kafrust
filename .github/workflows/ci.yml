@@ -81,6 +81,9 @@ jobs:
       - name: Check V1 registry provenance
         run: python scripts/check_v1_registry_provenance.py --check
 
+      - name: Check V1 advisory snapshot
+        run: python scripts/check_v1_advisories.py --check
+
       - name: Check v1 migration canary manifest
         run: python scripts/check_v1_migration_canary_manifest.py
 
@@ -101,6 +104,9 @@ jobs:
 
       - name: Test V1-19 registry-provenance checker
         run: python -m unittest scripts/test_check_v1_registry_provenance.py
+
+      - name: Test V1-19 advisory checker
+        run: python -m unittest scripts/test_check_v1_advisories.py
 
       - name: Check qualification ledger
         run: python scripts/check_qualification_ledger.py

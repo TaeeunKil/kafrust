@@ -1,0 +1,561 @@
+{
+  "dependency_scope": "runtime-and-build",
+  "endpoint": "https://api.osv.dev/v1/querybatch",
+  "features": "all-features",
+  "generator": "scripts/check_v1_advisories.py",
+  "max_age_days": 30,
+  "non_claims": [
+    "not a guarantee against undisclosed or future vulnerabilities",
+    "not a source-provenance or maintainer-trust guarantee",
+    "the offline CI check does not query OSV or crates.io",
+    "unreviewed low/moderate or informational advisories still require owner review before stable release"
+  ],
+  "observed_at_utc": "2026-08-23T01:54:25Z",
+  "packages": [
+    {
+      "advisories": [],
+      "name": "kafrust",
+      "source_kind": "workspace",
+      "version": "0.3.6"
+    },
+    {
+      "advisories": [],
+      "name": "kafrust-protocol",
+      "source_kind": "workspace",
+      "version": "0.3.6"
+    },
+    {
+      "advisories": [],
+      "name": "adler2",
+      "source_kind": "registry",
+      "version": "2.0.1"
+    },
+    {
+      "advisories": [],
+      "name": "aho-corasick",
+      "source_kind": "registry",
+      "version": "1.1.5"
+    },
+    {
+      "advisories": [],
+      "name": "anyhow",
+      "source_kind": "registry",
+      "version": "1.0.104"
+    },
+    {
+      "advisories": [],
+      "name": "base64",
+      "source_kind": "registry",
+      "version": "0.22.1"
+    },
+    {
+      "advisories": [],
+      "name": "bitflags",
+      "source_kind": "registry",
+      "version": "2.13.1"
+    },
+    {
+      "advisories": [],
+      "name": "block-buffer",
+      "source_kind": "registry",
+      "version": "0.10.4"
+    },
+    {
+      "advisories": [],
+      "name": "byteorder",
+      "source_kind": "registry",
+      "version": "1.5.0"
+    },
+    {
+      "advisories": [],
+      "name": "bytes",
+      "source_kind": "registry",
+      "version": "1.12.1"
+    },
+    {
+      "advisories": [],
+      "name": "cc",
+      "source_kind": "registry",
+      "version": "1.4.4"
+    },
+    {
+      "advisories": [],
+      "name": "cfg-if",
+      "source_kind": "registry",
+      "version": "1.0.4"
+    },
+    {
+      "advisories": [],
+      "name": "cpufeatures",
+      "source_kind": "registry",
+      "version": "0.2.17"
+    },
+    {
+      "advisories": [],
+      "name": "crc32fast",
+      "source_kind": "registry",
+      "version": "1.5.0"
+    },
+    {
+      "advisories": [],
+      "name": "crypto-common",
+      "source_kind": "registry",
+      "version": "0.1.7"
+    },
+    {
+      "advisories": [],
+      "name": "culpa-macros",
+      "source_kind": "registry",
+      "version": "1.0.2"
+    },
+    {
+      "advisories": [],
+      "name": "culpa",
+      "source_kind": "registry",
+      "version": "1.0.2"
+    },
+    {
+      "advisories": [],
+      "name": "digest",
+      "source_kind": "registry",
+      "version": "0.10.7"
+    },
+    {
+      "advisories": [],
+      "name": "either",
+      "source_kind": "registry",
+      "version": "1.18.0"
+    },
+    {
+      "advisories": [],
+      "name": "find-msvc-tools",
+      "source_kind": "registry",
+      "version": "0.1.11"
+    },
+    {
+      "advisories": [],
+      "name": "flate2",
+      "source_kind": "registry",
+      "version": "1.0.35"
+    },
+    {
+      "advisories": [],
+      "name": "futures-channel",
+      "source_kind": "registry",
+      "version": "0.3.34"
+    },
+    {
+      "advisories": [],
+      "name": "futures-core",
+      "source_kind": "registry",
+      "version": "0.3.34"
+    },
+    {
+      "advisories": [],
+      "name": "futures-executor",
+      "source_kind": "registry",
+      "version": "0.3.34"
+    },
+    {
+      "advisories": [],
+      "name": "futures-macro",
+      "source_kind": "registry",
+      "version": "0.3.34"
+    },
+    {
+      "advisories": [],
+      "name": "futures-sink",
+      "source_kind": "registry",
+      "version": "0.3.34"
+    },
+    {
+      "advisories": [],
+      "name": "futures-task",
+      "source_kind": "registry",
+      "version": "0.3.34"
+    },
+    {
+      "advisories": [],
+      "name": "futures-util",
+      "source_kind": "registry",
+      "version": "0.3.34"
+    },
+    {
+      "advisories": [],
+      "name": "generic-array",
+      "source_kind": "registry",
+      "version": "0.14.7"
+    },
+    {
+      "advisories": [],
+      "name": "getrandom",
+      "source_kind": "registry",
+      "version": "0.2.17"
+    },
+    {
+      "advisories": [],
+      "name": "hmac",
+      "source_kind": "registry",
+      "version": "0.12.1"
+    },
+    {
+      "advisories": [],
+      "name": "itertools",
+      "source_kind": "registry",
+      "version": "0.14.0"
+    },
+    {
+      "advisories": [],
+      "name": "libc",
+      "source_kind": "registry",
+      "version": "0.2.189"
+    },
+    {
+      "advisories": [],
+      "name": "log",
+      "source_kind": "registry",
+      "version": "0.4.33"
+    },
+    {
+      "advisories": [],
+      "name": "lz-fear",
+      "source_kind": "registry",
+      "version": "0.2.0"
+    },
+    {
+      "advisories": [],
+      "name": "memchr",
+      "source_kind": "registry",
+      "version": "2.8.3"
+    },
+    {
+      "advisories": [],
+      "name": "miniz_oxide",
+      "source_kind": "registry",
+      "version": "0.8.9"
+    },
+    {
+      "advisories": [],
+      "name": "mio",
+      "source_kind": "registry",
+      "version": "1.2.2"
+    },
+    {
+      "advisories": [],
+      "name": "once_cell",
+      "source_kind": "registry",
+      "version": "1.21.4"
+    },
+    {
+      "advisories": [],
+      "name": "openssl-probe",
+      "source_kind": "registry",
+      "version": "0.2.1"
+    },
+    {
+      "advisories": [],
+      "name": "opentelemetry-proto",
+      "source_kind": "registry",
+      "version": "0.32.0"
+    },
+    {
+      "advisories": [],
+      "name": "opentelemetry",
+      "source_kind": "registry",
+      "version": "0.32.0"
+    },
+    {
+      "advisories": [],
+      "name": "opentelemetry_sdk",
+      "source_kind": "registry",
+      "version": "0.32.1"
+    },
+    {
+      "advisories": [],
+      "name": "pbkdf2",
+      "source_kind": "registry",
+      "version": "0.12.2"
+    },
+    {
+      "advisories": [],
+      "name": "pin-project-lite",
+      "source_kind": "registry",
+      "version": "0.2.17"
+    },
+    {
+      "advisories": [],
+      "name": "ppv-lite86",
+      "source_kind": "registry",
+      "version": "0.2.21"
+    },
+    {
+      "advisories": [],
+      "name": "proc-macro2",
+      "source_kind": "registry",
+      "version": "1.0.107"
+    },
+    {
+      "advisories": [],
+      "name": "prost-derive",
+      "source_kind": "registry",
+      "version": "0.14.1"
+    },
+    {
+      "advisories": [],
+      "name": "prost",
+      "source_kind": "registry",
+      "version": "0.14.1"
+    },
+    {
+      "advisories": [],
+      "name": "quote",
+      "source_kind": "registry",
+      "version": "1.0.47"
+    },
+    {
+      "advisories": [],
+      "name": "rand",
+      "source_kind": "registry",
+      "version": "0.8.7"
+    },
+    {
+      "advisories": [],
+      "name": "rand_chacha",
+      "source_kind": "registry",
+      "version": "0.3.1"
+    },
+    {
+      "advisories": [],
+      "name": "rand_core",
+      "source_kind": "registry",
+      "version": "0.6.4"
+    },
+    {
+      "advisories": [],
+      "name": "regex-automata",
+      "source_kind": "registry",
+      "version": "0.4.18"
+    },
+    {
+      "advisories": [],
+      "name": "regex-syntax",
+      "source_kind": "registry",
+      "version": "0.8.11"
+    },
+    {
+      "advisories": [],
+      "name": "regex",
+      "source_kind": "registry",
+      "version": "1.13.1"
+    },
+    {
+      "advisories": [],
+      "name": "ring",
+      "source_kind": "registry",
+      "version": "0.17.14"
+    },
+    {
+      "advisories": [],
+      "name": "rustls-native-certs",
+      "source_kind": "registry",
+      "version": "0.8.4"
+    },
+    {
+      "advisories": [],
+      "name": "rustls-pki-types",
+      "source_kind": "registry",
+      "version": "1.15.1"
+    },
+    {
+      "advisories": [],
+      "name": "rustls-platform-verifier",
+      "source_kind": "registry",
+      "version": "0.6.2"
+    },
+    {
+      "advisories": [],
+      "name": "rustls-webpki",
+      "source_kind": "registry",
+      "version": "0.103.15"
+    },
+    {
+      "advisories": [],
+      "name": "rustls",
+      "source_kind": "registry",
+      "version": "0.23.43"
+    },
+    {
+      "advisories": [],
+      "name": "ruzstd",
+      "source_kind": "registry",
+      "version": "0.8.1"
+    },
+    {
+      "advisories": [],
+      "name": "sha2",
+      "source_kind": "registry",
+      "version": "0.10.9"
+    },
+    {
+      "advisories": [],
+      "name": "shlex",
+      "source_kind": "registry",
+      "version": "2.0.1"
+    },
+    {
+      "advisories": [],
+      "name": "slab",
+      "source_kind": "registry",
+      "version": "0.4.12"
+    },
+    {
+      "advisories": [],
+      "name": "snap",
+      "source_kind": "registry",
+      "version": "1.1.2"
+    },
+    {
+      "advisories": [],
+      "name": "socket2",
+      "source_kind": "registry",
+      "version": "0.6.5"
+    },
+    {
+      "advisories": [],
+      "name": "static_assertions",
+      "source_kind": "registry",
+      "version": "1.1.0"
+    },
+    {
+      "advisories": [],
+      "name": "subtle",
+      "source_kind": "registry",
+      "version": "2.6.1"
+    },
+    {
+      "advisories": [],
+      "name": "syn",
+      "source_kind": "registry",
+      "version": "2.0.119"
+    },
+    {
+      "advisories": [],
+      "name": "syn",
+      "source_kind": "registry",
+      "version": "3.0.3"
+    },
+    {
+      "advisories": [],
+      "name": "thiserror-impl",
+      "source_kind": "registry",
+      "version": "1.0.69"
+    },
+    {
+      "advisories": [],
+      "name": "thiserror-impl",
+      "source_kind": "registry",
+      "version": "2.0.20"
+    },
+    {
+      "advisories": [],
+      "name": "thiserror",
+      "source_kind": "registry",
+      "version": "1.0.69"
+    },
+    {
+      "advisories": [],
+      "name": "thiserror",
+      "source_kind": "registry",
+      "version": "2.0.20"
+    },
+    {
+      "advisories": [],
+      "name": "tokio-macros",
+      "source_kind": "registry",
+      "version": "2.7.2"
+    },
+    {
+      "advisories": [],
+      "name": "tokio-rustls",
+      "source_kind": "registry",
+      "version": "0.26.4"
+    },
+    {
+      "advisories": [],
+      "name": "tokio",
+      "source_kind": "registry",
+      "version": "1.53.1"
+    },
+    {
+      "advisories": [],
+      "name": "tracing-attributes",
+      "source_kind": "registry",
+      "version": "0.1.31"
+    },
+    {
+      "advisories": [],
+      "name": "tracing-core",
+      "source_kind": "registry",
+      "version": "0.1.36"
+    },
+    {
+      "advisories": [],
+      "name": "tracing",
+      "source_kind": "registry",
+      "version": "0.1.44"
+    },
+    {
+      "advisories": [],
+      "name": "twox-hash",
+      "source_kind": "registry",
+      "version": "1.6.3"
+    },
+    {
+      "advisories": [],
+      "name": "typenum",
+      "source_kind": "registry",
+      "version": "1.20.1"
+    },
+    {
+      "advisories": [],
+      "name": "unicode-ident",
+      "source_kind": "registry",
+      "version": "1.0.24"
+    },
+    {
+      "advisories": [],
+      "name": "untrusted",
+      "source_kind": "registry",
+      "version": "0.9.0"
+    },
+    {
+      "advisories": [],
+      "name": "version_check",
+      "source_kind": "registry",
+      "version": "0.9.5"
+    },
+    {
+      "advisories": [],
+      "name": "zerocopy",
+      "source_kind": "registry",
+      "version": "0.8.56"
+    },
+    {
+      "advisories": [],
+      "name": "zeroize",
+      "source_kind": "registry",
+      "version": "1.8.2"
+    }
+  ],
+  "platform": "x86_64-unknown-linux-gnu",
+  "rustsec_repository": "https://github.com/RustSec/advisory-db",
+  "rustsec_revision": "bf5c0d245a92671908518d7e765914d437954ed6",
+  "schema_version": 1,
+  "source": "OSV querybatch (RustSec advisory export)",
+  "summary": {
+    "advisory_matches": 0,
+    "critical_or_high_matches": 0,
+    "packages_queried": 89,
+    "packages_with_advisories": 0
+  }
+}

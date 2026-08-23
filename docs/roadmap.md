@@ -334,6 +334,14 @@ The local registry provenance slice also records checksums for 87 registry
 packages with zero missing or yanked entries. It is explicitly local-index
 evidence; live advisory/current-index review remains open.
 
+The dated advisory slice now records an OSV/RustSec query for all 89 resolved
+packages in [`v1-19-advisories.md`](evidence/v1-19-advisories.md): zero advisory
+matches and zero critical/high matches at the pinned 2026-08-23 review. The
+offline CI gate enforces the exact inventory and a 30-day freshness window; it
+does not claim future or undisclosed vulnerability coverage. Manual
+unsafe/native ownership, multi-platform/package evidence, and published
+artifact gates remain open.
+
 All current V1-19 dependency-hardening checkers passed on both Rust 1.81.0 and
 stable in [CI run 32610559177](https://github.com/TaeeunKil/kafrust/actions/runs/32610559177)
 from exact source `af73b8d`. This is CI confirmation of the slices, not V1-19

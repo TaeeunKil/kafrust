@@ -171,6 +171,19 @@ result is archived in [`v1-19-registry-provenance.md`](../../evidence/v1-19-regi
 It is local index evidence only and does not close live advisory or current
 server-side yank review.
 
+### Advisory snapshot slice (2026-08-23)
+
+[`check_v1_advisories.py`](../../scripts/check_v1_advisories.py) queried the
+all-feature runtime/build closure through the OSV batch API using the pinned
+RustSec advisory export revision `bf5c0d245a92671908518d7e765914d437954ed6`.
+All 89 resolved packages returned zero advisory matches, including zero
+critical/high matches. The report is archived in
+[`v1-19-advisories.md`](../../evidence/v1-19-advisories.md) and its JSON
+companion. CI checks the exact package inventory offline and expires the
+snapshot after 30 days, forcing a fresh live review. This is a dated snapshot,
+not a claim about future or undisclosed vulnerabilities, and the manual
+unsafe/native owner review remains open.
+
 ### Combined CI validation (2026-08-23)
 
 The exact pushed commit `af73b8d2eaf19e33d9e90dbc79189f74bd9ad538` passed the
