@@ -261,7 +261,7 @@ jobs:
           elif [ "${{ matrix.security_protocol }}" = "sasl_plaintext" ]; then
             for attempt in {1..90}; do
               if docker exec kafrust-published-kafka /opt/kafka/bin/kafka-broker-api-versions.sh \
-                --bootstrap-server localhost:9094 \
+                --bootstrap-server localhost:9092 \
                 >/tmp/kafrust-published-kafka-startup.log 2>&1; then
                 exit 0
               fi
