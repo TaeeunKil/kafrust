@@ -3948,3 +3948,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: GitHub Actions run 32645204676; kafrust-migration-canary-32645204676 artifact; docs/evidence/v1-23-migration-million-record-reference-2026-08-23.md
 - non_claims: not named service canary, not forward/fault/rollback, not transaction/Admin coverage, not published-artifact evidence, not production migration approval
+
+## Q-INFRA-V121-STALE-002
+
+- date_utc: 2026-08-23
+- source_commit: 7c24f7399325b5d0ab6f91f6e2ecd4d5b49985ec
+- client_version: 0.3.6 published artifact
+- protocol_version: 0.3.6 published dependency
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka image declared by the workflow
+- mode: six-hour secure multi-broker fault soak final cancellation
+- topology: three-broker
+- security: SASL_SSL/SCRAM-SHA-256
+- group_protocol: not-applicable
+- workload: pinned-secured-six-hour-2, one contiguous segment
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32644605633
+- fault: declared leader/coordinator/combined/simultaneous schedule; no retained segment result
+- duration: stale run exceeded nine hours wall time; cancellation eventually completed
+- record_count: not-recorded
+- member_count: not-applicable
+- repetition_count: one infrastructure attempt
+- expected_errors: immutable descriptor and qualified reconciliation artifact required
+- observed_errors: no descriptor or reconciliation artifact; final GitHub Actions conclusion `cancelled`
+- retry_count: not-recorded
+- duplicate_count: not-recorded
+- loss_count: not-recorded
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: not-recorded
+- result: not-run
+- artifact: workflow run 32644605633; no result artifact retained
+- non_claims: not a client fault result, not a passing six-hour gate, not V1-21 completion, not SLO, not 1.0.0 readiness

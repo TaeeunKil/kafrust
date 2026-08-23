@@ -251,6 +251,11 @@ non-results. The hosted-runner timeout/capacity problem is now prevented by the
 self-hosted runner guard above; no client fault claim or V1-21 promotion is
 derived from these runs.
 
+The outstanding secure run `32644605633` later accepted the cancellation
+request and completed as `cancelled`; all four six-hour runs and the Share
+100-cycle run are now terminal infrastructure non-results with no descriptor
+or summary artifact.
+
 ### Bounded current-source diagnostic runs (2026-08-22)
 
 The first 60-second manual run on source `3fdfc778` (run

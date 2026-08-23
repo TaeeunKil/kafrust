@@ -611,6 +611,8 @@ were cancelled as stale infrastructure runs; [32644605633](https://github.com/Ta
 remained stuck in `in_progress` after cancellation was requested. No run
 produced a result descriptor, so none is client or V1-21 evidence. The workflow
 now requires a self-hosted-capable runner before any replacement dispatch.
+The previously stuck secure run `32644605633` later completed as `cancelled`,
+so all four long runs are terminal infrastructure non-results.
 
 The V1-22 `throughput_benchmark` example now has a timed campaign mode with
 barrier-synchronized warmup/measurement windows, worker-per-partition
