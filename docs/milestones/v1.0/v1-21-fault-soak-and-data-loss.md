@@ -122,6 +122,21 @@ per-segment fault evidence, but continuity remains runner-local and
 unqualified; the six-hour, 100-cycle, ambiguity-family, controlled-data-loss,
 and repeated-campaign gates remain open.
 
+### Scheduled multi-fault bounded diagnostic (2026-08-23)
+
+The hardened schedule was exercised against the exact published `0.3.6` pair
+in [run 32638787704](https://github.com/TaeeunKil/kafrust/actions/runs/32638787704)
+on Kafka 4.3.1 three-broker KRaft. A single 120.005-second segment injected
+leader loss at 25%, coordinator loss at 50%, combined broker loss at 70%, and
+simultaneous two-broker loss at 85%, with ten-second outages. It processed
+3,553,800 attempted, acknowledged, and consumed unique records; six failed
+requests and 15 retries recovered with zero unknown outcomes, loss, duplicates,
+or final resource gauges. The retained descriptor records the immutable broker
+image digest, lockfile digest, schedule, reconciliation digest, and
+`continuity_claim: qualified` for this one-run segment. This validates the
+multi-fault harness only; it is not a six-hour campaign, 100-cycle or
+ambiguity-family result, controlled data-loss evidence, or V1-21 completion.
+
 ### Bounded current-source diagnostic runs (2026-08-22)
 
 The first 60-second manual run on source `3fdfc778` (run

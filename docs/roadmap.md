@@ -510,6 +510,16 @@ errors, 5 retries, and 30,000 transient unknown attempts that were recovered;
 this is stronger per-segment evidence, not six-hour or cross-segment
 qualification.
 
+The hardened schedule was then exercised from `dd605ff` in published run
+[32638787704](https://github.com/TaeeunKil/kafrust/actions/runs/32638787704):
+one 120.005-second Kafka 4.3.1 three-broker segment ran leader, coordinator,
+combined, and simultaneous fault events at 25/50/70/85% with ten-second
+outages. It reconciled 3,553,800 unique records with six failed requests, 15
+retries, zero unknown/loss/duplicate outcomes, drained gauges, and a qualified
+single-segment continuity claim. This validates the schedule harness only; the
+long campaign, churn, ambiguity-family, and controlled-data-loss gates remain
+open.
+
 The published multi-broker soak workflow now accepts and validates an ordered
 fault schedule (`leader`, `coordinator`, `combined`, and `simultaneous` events
 at increasing percentages of the segment). The parser has focused boundary

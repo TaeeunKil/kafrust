@@ -319,6 +319,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-21-fault-diagnostic-2026-08-23.md; descriptor artifact from run 32633658046
 - non_claims: not six-hour campaign, not 100 member-loss/rejoin cycles, not ambiguity-family outcomes, not controlled data-loss fixtures, not cross-segment continuity, not SLO, not 1.0.0 readiness
 
+## Q-PUBLISHED-V121-005
+
+- date_utc: 2026-08-23
+- source_commit: dd605ff28761f08d8519542145dedf665f235b00
+- client_version: 0.3.6 published artifact
+- protocol_version: 0.3.6 published dependency
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
+- mode: scheduled multi-fault bounded diagnostic
+- topology: three-broker KRaft
+- security: PLAINTEXT
+- group_protocol: not-applicable
+- workload: 120.005-second produce/fetch segment with four scheduled broker-fault events
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32638787704
+- fault: leader@25%, coordinator@50%, combined@70%, simultaneous@85%; ten-second outages
+- duration: 120.005s workload; one segment
+- record_count: 3553800 attempted, acknowledged, and consumed unique records
+- member_count: not-applicable
+- repetition_count: 1 segment
+- expected_errors: transient broker-fault requests followed by exact identity recovery and drained gauges
+- observed_errors: requests_failed=6, retries=15, unknown_outcomes=0, loss_count=0, duplicate_count=0, continuity_claim=qualified
+- retry_count: 15
+- duplicate_count: 0
+- loss_count: 0
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: in_flight_requests=0; buffered_records=0
+- result: passed
+- artifact: published-fault-segment.json and published-multi-soak.json from run 32638787704; artifact_digest=f471652bc0d721215e2b8918b37724be03ae7309f26d061ae0d0a07124dcb6f7; broker_image_digest=apache/kafka@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
+- non_claims: not a six-hour campaign, not 100 member-loss/rejoin cycles, not 100 outcomes per ambiguity family, not controlled data-loss evidence, not repeated-campaign qualification, not SLO, not V1-21 completion, not 1.0.0 readiness
+
 ## Q-PUBLISHED-V121-002
 
 - date_utc: 2026-08-23
