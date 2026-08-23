@@ -1,0 +1,451 @@
+name: V1-22 Published Performance Campaign
+
+on:
+  workflow_dispatch:
+    inputs:
+      kafrust_version:
+        description: Exact published kafrust version to benchmark from crates.io
+        required: true
+        default: "0.3.6"
+      artifact_digest:
+        description: Exact SHA-256 checksum for the published kafrust artifact
+        required: true
+        default: "4fe2758d0093ef4b2a236090cca4dc7511b9e865f5e18ce42823e428a6be71d2"
+      campaign_id:
+        description: Stable campaign identifier retained in the aggregate report
+        required: true
+        default: "v1-22-published-slo"
+      runner_label:
+        description: Runner label with capacity for the eight-hour jobs
+        required: true
+        default: "ubuntu-latest"
+      baseline_path:
+        description: Optional checked-in locked baseline JSON for regression adjudication
+        required: false
+        default: ""
+      require_baseline:
+        description: Fail aggregate adjudication unless baseline_path is supplied
+        required: true
+        type: boolean
+        default: false
+
+env:
+  CARGO_TERM_COLOR: always
+  KAFRUST_BENCH_RECORDS: "1"
+  KAFRUST_BENCH_WARMUP_SECONDS: "7200"
+  KAFRUST_BENCH_MEASURED_SECONDS: "21600"
+  KAFRUST_BENCH_SAMPLE_SECONDS: "10"
+  KAFRUST_BENCH_MAX_BATCH_BYTES: "921600"
+  KAFRUST_KAFKA_VERSION: "4.3.1"
+
+jobs:
+  campaign:
+    name: ${{ matrix.profile.id }} / ${{ matrix.topology }} / ${{ matrix.security }} / r${{ matrix.repetition }}
+    runs-on: ${{ inputs.runner_label }}
+    timeout-minutes: 540
+    env:
+      KAFRUST_BENCH_PROFILE: ${{ matrix.profile.id }}
+      KAFRUST_BENCH_WORKERS: ${{ matrix.profile.concurrency }}
+      KAFRUST_BENCH_BATCH_SIZE: ${{ matrix.profile.batch_size }}
+      KAFRUST_BENCH_PAYLOAD_BYTES: ${{ matrix.profile.payload_bytes }}
+      KAFRUST_BENCH_MODE: ${{ matrix.profile.mode }}
+      KAFRUST_COMPRESSION: ${{ matrix.profile.compression }}
+      KAFRUST_SECURITY_PROTOCOL: ${{ matrix.security == 'PLAINTEXT' && 'plaintext' || 'sasl_tls' }}
+      KAFRUST_SASL_MECHANISM: scram-sha-256
+      KAFRUST_SASL_USERNAME: kafrust
+      KAFRUST_SASL_PASSWORD: kafrust-secret
+      KAFRUST_TLS_SERVER_NAME: localhost
+      KAFRUST_TLS_ROOT_CERT_DER_PATH: ${{ github.workspace }}/sasl-ssl/ca.der
+      KAFRUST_TOPIC: kafrust-v1-22-${{ github.run_id }}-${{ matrix.profile.id }}-${{ matrix.topology }}-${{ matrix.repetition }}
+      KAFRUST_ARTIFACT_DIGEST: ${{ inputs.artifact_digest }}
+      KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version }}
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        profile:
+          - id: immediate-100b-batch-1-concurrency-1
+            mode: immediate
+            payload_bytes: 100
+            batch_size: 1
+            concurrency: 1
+            compression: none
+          - id: immediate-1kib-batch-100-concurrency-1
+            mode: immediate
+            payload_bytes: 1024
+            batch_size: 100
+            concurrency: 1
+            compression: none
+          - id: immediate-1kib-batch-200-concurrency-4
+            mode: immediate
+            payload_bytes: 1024
+            batch_size: 200
+            concurrency: 4
+            compression: none
+          - id: immediate-1kib-zstd-batch-200-concurrency-4
+            mode: immediate
+            payload_bytes: 1024
+            batch_size: 200
+            concurrency: 4
+            compression: zstd
+          - id: buffered-1kib-batch-200-concurrency-4
+            mode: buffered
+            payload_bytes: 1024
+            batch_size: 200
+            concurrency: 4
+            compression: none
+          - id: direct-consumer-1kib-concurrency-1
+            mode: direct-consumer
+            payload_bytes: 1024
+            batch_size: 1
+            concurrency: 1
+            compression: none
+        topology: [single-node, three-broker]
+        security: [PLAINTEXT, SASL_SSL/SCRAM-SHA-256]
+        repetition: [1, 2, 3, 4, 5]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.81.0"
+
+      - name: Validate immutable campaign inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$KAFRUST_PUBLISHED_VERSION" in
+            [0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "kafrust version must be a stable semver" >&2; exit 1 ;;
+          esac
+          [[ "$KAFRUST_ARTIFACT_DIGEST" =~ ^[0-9a-f]{64}$ ]]
+          test "$KAFRUST_BENCH_WARMUP_SECONDS" -eq 7200
+          test "$KAFRUST_BENCH_MEASURED_SECONDS" -eq 21600
+          test "$KAFRUST_BENCH_SAMPLE_SECONDS" -eq 10
+          test "${{ matrix.repetition }}" -ge 1
+          test "${{ matrix.repetition }}" -le 5
+
+      - name: Generate shared TLS certificates
+        if: matrix.security == 'SASL_SSL/SCRAM-SHA-256'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p sasl-ssl
+          openssl req -x509 -newkey rsa:2048 -days 1 -nodes -subj "/CN=kafrust-v1-22-ca" -keyout sasl-ssl/ca.key -out sasl-ssl/ca.crt
+          openssl x509 -in sasl-ssl/ca.crt -outform DER -out sasl-ssl/ca.der
+          openssl req -newkey rsa:2048 -nodes -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" -keyout sasl-ssl/server.key -out sasl-ssl/server.csr
+          openssl x509 -req -in sasl-ssl/server.csr -CA sasl-ssl/ca.crt -CAkey sasl-ssl/ca.key -CAcreateserial -days 1 -sha256 -copy_extensions copy -out sasl-ssl/server.crt
+          openssl pkcs12 -export -in sasl-ssl/server.crt -inkey sasl-ssl/server.key -certfile sasl-ssl/ca.crt -name localhost -out sasl-ssl/kafka.server.keystore.p12 -password pass:kafrust
+          printf kafrust > sasl-ssl/keystore-password
+          printf kafrust > sasl-ssl/key-password
+          chmod 644 sasl-ssl/*
+
+      - name: Write SCRAM broker config
+        if: matrix.security == 'SASL_SSL/SCRAM-SHA-256'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > sasl-ssl/kafka_server_jaas.conf <<'EOF'
+          KafkaServer {
+            org.apache.kafka.common.security.scram.ScramLoginModule required
+            username="broker"
+            password="broker-secret";
+          };
+          EOF
+          chmod 644 sasl-ssl/kafka_server_jaas.conf
+
+      - name: Start Kafka topology
+        shell: bash
+        run: |
+          set -euo pipefail
+          network="kafrust-v1-22-${GITHUB_RUN_ID}"
+          docker network create "$network"
+          node_count=1
+          if [ "${{ matrix.topology }}" = "three-broker" ]; then node_count=3; fi
+          cluster_id="$(docker run --rm "apache/kafka:$KAFRUST_KAFKA_VERSION" /opt/kafka/bin/kafka-storage.sh random-uuid)"
+          for node in $(seq 1 "$node_count"); do
+            external_port=$((23091 + node))
+            name="kafrust-v1-22-${GITHUB_RUN_ID}-$node"
+            listeners="INTERNAL://:29092,PLAINTEXT://:9092,CONTROLLER://:9093"
+            advertised="INTERNAL://${name}:29092,PLAINTEXT://localhost:${external_port}"
+            listener_map="CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT"
+            host_port=9092
+            if [ "${{ matrix.security }}" = "SASL_SSL/SCRAM-SHA-256" ]; then
+              listeners="INTERNAL://:29092,SASL_SSL://:9095,CONTROLLER://:9093"
+              advertised="INTERNAL://${name}:29092,SASL_SSL://localhost:${external_port}"
+              listener_map="CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,SASL_SSL:SASL_SSL"
+              host_port=9095
+            fi
+            voters="${node}@${name}:9093"
+            if [ "$node_count" -eq 3 ]; then voters="1@kafrust-v1-22-${GITHUB_RUN_ID}-1:9093,2@kafrust-v1-22-${GITHUB_RUN_ID}-2:9093,3@kafrust-v1-22-${GITHUB_RUN_ID}-3:9093"; fi
+            args=(
+              --name "$name" --hostname "$name" --network "$network"
+              --log-driver json-file --log-opt max-size=50m --log-opt max-file=3
+              -p "${external_port}:$host_port"
+              -e "KAFKA_CLUSTER_ID=$cluster_id"
+              -e "KAFKA_NODE_ID=$node"
+              -e KAFKA_PROCESS_ROLES=broker,controller
+              -e "KAFKA_LISTENERS=$listeners"
+              -e "KAFKA_ADVERTISED_LISTENERS=$advertised"
+              -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
+              -e "KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=$listener_map"
+              -e KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL
+              -e "KAFKA_CONTROLLER_QUORUM_VOTERS=$voters"
+              -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR="$node_count"
+              -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR="$node_count"
+              -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0
+            )
+            if [ "$node_count" -eq 3 ]; then
+              args+=( -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=2 -e KAFKA_MIN_INSYNC_REPLICAS=2 )
+            else
+              args+=( -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1 -e KAFKA_MIN_INSYNC_REPLICAS=1 )
+            fi
+            if [ "${{ matrix.security }}" = "SASL_SSL/SCRAM-SHA-256" ]; then
+              args+=(
+                -v "$PWD/sasl-ssl:/etc/kafka/secrets:ro"
+                -e KAFKA_OPTS=-Djava.security.auth.login.config=/etc/kafka/secrets/kafka_server_jaas.conf
+                -e KAFKA_SASL_ENABLED_MECHANISMS=SCRAM-SHA-256,SCRAM-SHA-512
+                -e KAFKA_SSL_KEYSTORE_FILENAME=kafka.server.keystore.p12
+                -e KAFKA_SSL_KEYSTORE_CREDENTIALS=keystore-password
+                -e KAFKA_SSL_KEY_CREDENTIALS=key-password
+                -e KAFKA_SSL_KEYSTORE_TYPE=PKCS12
+                -e KAFKA_SSL_CLIENT_AUTH=none
+              )
+            fi
+            docker run -d "${args[@]}" "apache/kafka:$KAFRUST_KAFKA_VERSION"
+          done
+
+      - name: Wait for Kafka
+        shell: bash
+        run: |
+          set -euo pipefail
+          broker="kafrust-v1-22-${GITHUB_RUN_ID}-1"
+          for attempt in $(seq 1 180); do
+            if docker exec "$broker" /opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server "$broker:29092" >/tmp/kafrust-v1-22-probe.log 2>&1; then exit 0; fi
+            sleep 2
+          done
+          cat /tmp/kafrust-v1-22-probe.log || true
+          docker logs --tail 200 "$broker"
+          exit 1
+
+      - name: Create security principal and topic
+        shell: bash
+        run: |
+          set -euo pipefail
+          broker="kafrust-v1-22-${GITHUB_RUN_ID}-1"
+          replication=1
+          if [ "${{ matrix.topology }}" = "three-broker" ]; then replication=3; fi
+          if [ "${{ matrix.security }}" = "SASL_SSL/SCRAM-SHA-256" ]; then
+            docker exec "$broker" /opt/kafka/bin/kafka-configs.sh --bootstrap-server "$broker:29092" --alter --add-config 'SCRAM-SHA-256=[iterations=4096,password=kafrust-secret]' --entity-type users --entity-name kafrust
+          fi
+          docker exec "$broker" /opt/kafka/bin/kafka-topics.sh --bootstrap-server "$broker:29092" --create --topic "$KAFRUST_TOPIC" --partitions "${{ matrix.profile.concurrency }}" --replication-factor "$replication"
+
+      - name: Verify external TLS listeners
+        if: matrix.security == 'SASL_SSL/SCRAM-SHA-256'
+        shell: bash
+        run: |
+          set -euo pipefail
+          ports=(23092)
+          if [ "${{ matrix.topology }}" = "three-broker" ]; then ports=(23092 23093 23094); fi
+          for port in "${ports[@]}"; do openssl s_client -connect "127.0.0.1:${port}" -servername localhost -CAfile sasl-ssl/ca.crt -verify_return_error </dev/null >/tmp/kafrust-v1-22-tls-${port}.log 2>&1; done
+
+      - name: Create fresh external published project
+        shell: bash
+        run: |
+          set -euo pipefail
+          project_dir="$RUNNER_TEMP/kafrust-v1-22-published"
+          cargo new --bin "$project_dir"
+          cp crates/kafrust/examples/throughput_benchmark.rs "$project_dir/src/main.rs"
+          cp -R crates/kafrust/examples/common "$project_dir/src/common"
+          features='[]'
+          if [ "${{ matrix.security }}" = "SASL_SSL/SCRAM-SHA-256" ]; then features='["tls"]'; fi
+          sed "s/__KAFRUST_VERSION__/$KAFRUST_PUBLISHED_VERSION/; s/__KAFRUST_FEATURES__/$features/" .github/published-performance-campaign/Cargo.toml > "$project_dir/Cargo.toml"
+          echo "KAFRUST_PUBLISHED_PROJECT=$project_dir" >> "$GITHUB_ENV"
+
+      - name: Verify exact published artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build --release --manifest-path "$KAFRUST_PUBLISHED_PROJECT/Cargo.toml"
+          python - "$KAFRUST_PUBLISHED_PROJECT/Cargo.lock" "$KAFRUST_PUBLISHED_VERSION" "$KAFRUST_ARTIFACT_DIGEST" <<'PY'
+          import sys
+          from pathlib import Path
+          lockfile, version, digest = sys.argv[1:]
+          lines = Path(lockfile).read_text(encoding="utf-8").splitlines()
+          for index, line in enumerate(lines):
+              if line == 'name = "kafrust"':
+                  block = lines[index:index + 8]
+                  if ('version = "' + version + '"' not in block or 'checksum = "' + digest + '"' not in block):
+                      raise SystemExit("Cargo.lock does not resolve the requested published artifact digest")
+                  break
+          else:
+              raise SystemExit("Cargo.lock does not contain kafrust")
+          for index, line in enumerate(lines):
+              if line == 'name = "kafrust-protocol"':
+                  if 'version = "' + version + '"' not in lines[index:index + 8]:
+                      raise SystemExit("Cargo.lock does not resolve the matching published protocol version")
+                  break
+          else:
+              raise SystemExit("Cargo.lock does not contain kafrust-protocol")
+          PY
+
+      - name: Run eight-hour published campaign
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.topology }}" = "single-node" ]; then
+            export KAFRUST_BOOTSTRAP_SERVERS=localhost:23092
+          else
+            export KAFRUST_BOOTSTRAP_SERVERS=localhost:23092,localhost:23093,localhost:23094
+          fi
+          if [ "${{ matrix.security }}" = "PLAINTEXT" ]; then
+            unset KAFRUST_SASL_MECHANISM KAFRUST_SASL_USERNAME KAFRUST_SASL_PASSWORD
+          fi
+          security_key="${{ matrix.security == 'PLAINTEXT' && 'plaintext' || 'sasl-ssl' }}"
+          result_file="v1-22-${{ matrix.profile.id }}-${{ matrix.topology }}-${security_key}-r${{ matrix.repetition }}.jsonl"
+          cargo run --quiet --release --manifest-path "$KAFRUST_PUBLISHED_PROJECT/Cargo.toml" | tee "$result_file"
+          jq -e --arg profile "${{ matrix.profile.id }}" --arg mode "${{ matrix.profile.mode }}" --argjson warmup 7200 --argjson measured 21600 --argjson sample 10 --argjson workers "${{ matrix.profile.concurrency }}" --argjson batch "${{ matrix.profile.batch_size }}" --argjson payload "${{ matrix.profile.payload_bytes }}" --arg compression "${{ matrix.profile.compression }}" 'select(.mode == "campaign-final") |
+             (.profile == $profile) and
+             (.campaign_mode == $mode) and
+             (.warmup_seconds == $warmup) and
+             (.measured_seconds == $measured) and
+             (.sample_seconds == $sample) and
+             (.workers == $workers) and
+             (.batch_size == $batch) and
+             (.payload_bytes == $payload) and
+             (.compression == $compression) and
+             (.produced_records == .consumed_records) and
+             (.attempted_records == .acknowledged_records) and
+             (.acknowledged_records == .consumed_records) and
+             (.unknown_outcomes == 0) and
+             (.loss_count == 0) and
+             (.duplicate_count == 0) and
+             (.record_id_reconciliation.qualified == true) and
+             (.record_id_reconciliation.loss_count == 0) and
+             (.record_id_reconciliation.duplicate_count == 0) and
+             (.record_id_reconciliation.expected_digest == .record_id_reconciliation.observed_digest) and
+             (.in_flight_requests == 0) and
+             (.buffered_records == 0)' "$result_file" >/dev/null
+          echo "KAFRUST_V122_RESULT_FILE=$result_file" >> "$GITHUB_ENV"
+
+      - name: Write qualified descriptor
+        shell: bash
+        run: |
+          set -euo pipefail
+          security_key="${{ matrix.security == 'PLAINTEXT' && 'plaintext' || 'sasl-ssl' }}"
+          broker="kafrust-v1-22-${GITHUB_RUN_ID}-1"
+          broker_digest="$(docker inspect --format '{{.Image}}' "$broker")"
+          lockfile_sha256="$(sha256sum "$KAFRUST_PUBLISHED_PROJECT/Cargo.lock" | awk '{print $1}')"
+          descriptor="v1-22-${{ matrix.profile.id }}-${{ matrix.topology }}-${security_key}-r${{ matrix.repetition }}-descriptor.json"
+          jq -n --arg campaign_id "${{ inputs.campaign_id }}" --arg profile "${{ matrix.profile.id }}" --arg repetition "${{ matrix.repetition }}" --arg result_file "$KAFRUST_V122_RESULT_FILE" --arg artifact_version "$KAFRUST_PUBLISHED_VERSION" --arg artifact_digest "$KAFRUST_ARTIFACT_DIGEST" --arg lockfile_sha256 "$lockfile_sha256" --arg source_commit "$GITHUB_SHA" --arg runner_image "$RUNNER_OS/$RUNNER_ARCH" --arg topology "${{ matrix.topology }}" --arg security "${{ matrix.security }}" --arg broker_digest "$broker_digest" --argjson warmup 7200 --argjson measured 21600 --argjson sample 10 --argjson workers "${{ matrix.profile.concurrency }}" --argjson batch "${{ matrix.profile.batch_size }}" --argjson payload "${{ matrix.profile.payload_bytes }}" --arg mode "${{ matrix.profile.mode }}" --arg compression "${{ matrix.profile.compression }}" '{
+              schema_version: 1,
+              qualified: true,
+              qualification_reason: "V1-22 published eight-hour profile result; aggregate adjudication remains required",
+              campaign_id: $campaign_id,
+              profile_id: $profile,
+              repetition: ($repetition | tonumber),
+              artifact: {
+                kafrust_version: $artifact_version,
+                artifact_digest: $artifact_digest,
+                source_commit: $source_commit,
+                lockfile_sha256: $lockfile_sha256
+              },
+              runner: {
+                image: $runner_image,
+                broker_version: "4.3.1",
+                broker_image_digest: $broker_digest,
+                topology: $topology,
+                security: $security
+              },
+              timing: {
+                warmup_seconds: $warmup,
+                measured_seconds: $measured,
+                sample_seconds: $sample
+              },
+              workload: {
+                mode: $mode,
+                payload_bytes: $payload,
+                batch_size: $batch,
+                workers: $workers,
+                compression: $compression
+              },
+              result_file: $result_file
+            }' > "$descriptor"
+
+      - name: Upload qualified profile result
+        uses: actions/upload-artifact@v6
+        with:
+          name: kafrust-v1-22-${{ matrix.profile.id }}-${{ matrix.topology }}-${{ matrix.security == 'PLAINTEXT' && 'plaintext' || 'sasl-ssl' }}-r${{ matrix.repetition }}
+          path: |
+            v1-22-*.jsonl
+            v1-22-*-descriptor.json
+          retention-days: 180
+
+      - name: Dump broker diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          docker ps -a
+          for container in $(docker ps -a --format '{{.Names}}' | grep "kafrust-v1-22-${GITHUB_RUN_ID}" || true); do
+            docker logs --tail 200 "$container" || true
+          done
+
+  adjudicate:
+    name: Adjudicate V1-22 result bundle
+    if: always()
+    needs: campaign
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download profile results
+        uses: actions/download-artifact@v6
+        continue-on-error: true
+        with:
+          pattern: kafrust-v1-22-*
+          path: v1-22-results
+          merge-multiple: true
+
+      - name: Validate complete profile matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ inputs.require_baseline }}" = "true" ] && [ -z "${{ inputs.baseline_path }}" ]; then
+            echo "require_baseline=true requires baseline_path" >&2
+            exit 1
+          fi
+          if [ -n "${{ inputs.baseline_path }}" ]; then
+            test -f "${{ inputs.baseline_path }}"
+            python scripts/check_v1_performance_results.py v1-22-results --baseline "${{ inputs.baseline_path }}" | tee v1-22-adjudication.txt
+            qualification="qualified-with-locked-baseline"
+          else
+            python scripts/check_v1_performance_results.py v1-22-results | tee v1-22-adjudication.txt
+            qualification="matrix-complete-baseline-pending"
+          fi
+          jq -n --arg campaign_id "${{ inputs.campaign_id }}" --arg version "${{ inputs.kafrust_version }}" --arg qualification "$qualification" --arg source_commit "${{ github.sha }}" '{
+              schema_version: 1,
+              campaign_id: $campaign_id,
+              kafrust_version: $version,
+              source_commit: $source_commit,
+              qualification: $qualification,
+              non_claims: [
+                "not a universal Kafka performance ranking",
+                "does not replace V1-23 service canary evidence",
+                "does not authorize publication without the remaining release gates"
+              ]
+            }' > v1-22-adjudication.json
+
+      - name: Upload adjudication
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: kafrust-v1-22-adjudication-${{ github.run_id }}
+          path: |
+            v1-22-adjudication.txt
+            v1-22-adjudication.json
+          if-no-files-found: warn
+          retention-days: 180

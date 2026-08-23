@@ -181,6 +181,24 @@ now exercising bounded before/after diagnostics for buffered enqueue threshold
 and delivery-deadline scans; those runs are retained as non-qualifying evidence
 while the six-profile, five-repetition, locked-baseline campaign remains open.
 
+### Full published campaign workflow (2026-08-23)
+
+The manual [V1-22 Published Performance Campaign](../../.github/workflows/v1-22-performance-campaign.yml)
+now materializes the complete manifest matrix: six profiles × single-node and
+three-broker Kafka 4.3.1 × PLAINTEXT and SASL_SSL/SCRAM-SHA-256 × five
+repetitions (120 jobs). Each job resolves a fresh external project against one
+exact crates.io artifact digest, records broker/runner/lockfile identity, runs
+the two-hour warmup plus six-hour measured window with ten-second JSONL samples,
+and uploads a relative result/descriptor pair. The aggregate job runs the
+existing adjudicator and can require a checked-in locked baseline through
+require_baseline=true; without that baseline it deliberately reports
+matrix-complete-baseline-pending. The default runner label is a convenience
+only: the full eight-hour contract requires a runner with that capacity.
+
+This adds an executable qualification path but no campaign has been dispatched
+yet, so V1-22 remains In progress and no SLO, baseline, competitor-parity, or
+release claim follows from the workflow definition alone.
+
 ### Competitor review and re-plan (2026-08-23)
 
 The companion published comparison

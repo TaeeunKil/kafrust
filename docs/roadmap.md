@@ -638,6 +638,17 @@ campaign decision reproducible; no qualified bundle or locked baseline exists
 yet, so V1-22 remains `In progress` while the bounded before/after diagnostics
 and the full campaign preparation continue.
 
+The manual V1-22 Published Performance Campaign workflow now exposes the
+complete executable matrix: six named profiles, two Kafka 4.3.1 topologies,
+PLAINTEXT and SASL_SSL/SCRAM-SHA-256, and five repetitions (120 jobs). Each
+profile job resolves a fresh external project against one exact published
+artifact digest, runs the two-hour warmup plus six-hour measured window, and
+uploads the descriptor and relative JSONL result required by the adjudicator.
+The aggregate job can require a checked-in locked baseline; without one it
+reports matrix-complete-baseline-pending. No campaign has been dispatched yet,
+so this closes the execution-path preparation gap but does not qualify V1-22 or
+authorize a release.
+
 The benchmark profile paths are now explicit rather than label-only. The
 `immediate` profile uses `Producer::send_batch`, `buffered` uses the bounded
 `BufferedProducer` queue and waits for each delivery, and `direct-consumer`
