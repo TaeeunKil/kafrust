@@ -660,9 +660,10 @@ uploads the descriptor and relative JSONL result required by the adjudicator.
 The aggregate job can require a checked-in locked baseline; without one it
 reports matrix-complete-baseline-pending. The workflow now defaults to a
 pinned `self-hosted` runner label and rejects hosted labels before the matrix
-starts, because the eight-hour contract cannot fit the hosted six-hour job
-limit. No self-hosted runner is currently registered, so this is an explicit
-external-capacity gate. No campaign has been dispatched yet, so this closes the
+starts, because the eight-hour contract cannot fit the [hosted six-hour job
+limit](https://docs.github.com/en/actions/reference/limits). No self-hosted
+runner is currently registered, so this is an explicit external-capacity gate.
+No campaign has been dispatched yet, so this closes the
 execution-path preparation gap but does not qualify V1-22 or authorize a
 release.
 

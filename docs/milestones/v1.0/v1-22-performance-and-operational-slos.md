@@ -194,7 +194,8 @@ existing adjudicator and can require a checked-in locked baseline through
 require_baseline=true; without that baseline it deliberately reports
 matrix-complete-baseline-pending. The workflow now defaults to the
 `self-hosted` label and rejects GitHub-hosted labels, because the eight-hour
-contract cannot fit the hosted six-hour job limit. The repository currently has
+contract cannot fit the [hosted six-hour job limit](https://docs.github.com/en/actions/reference/limits).
+The repository currently has
 no self-hosted runner registered, so no campaign has been dispatched and this
 remains an external-capacity gate.
 

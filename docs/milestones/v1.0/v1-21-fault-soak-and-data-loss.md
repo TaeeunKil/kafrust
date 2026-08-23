@@ -180,8 +180,9 @@ HEAD containing this client-side log bound.
 
 The rerun workflows now default to a pinned `self-hosted` runner label and
 reject `ubuntu-*`, `windows-*`, and `macos-*` labels before allocating the
-long-running job. GitHub-hosted jobs cannot provide setup plus a six-hour soak
-within their six-hour execution ceiling. No self-hosted runner is currently
+long-running job. [GitHub-hosted jobs](https://docs.github.com/en/actions/reference/limits)
+cannot provide setup plus a six-hour soak within their six-hour execution
+ceiling. No self-hosted runner is currently
 registered for this repository, so the pending runs remain infrastructure
 diagnostics and the campaign cannot be promoted until that runner capacity is
 provided.
