@@ -411,6 +411,11 @@ surface, Share state failover, and Share multi-member ownership in the retained
 The first Share multi-member attempt exposed a workflow variable-scope defect,
 which was corrected in `546a3a1` and passed on rerun
 [32614372643](https://github.com/TaeeunKil/kafrust/actions/runs/32614372643).
+The default-timing Share member-loss and eight-cycle repeated-loss rows also
+passed ([32614875041](https://github.com/TaeeunKil/kafrust/actions/runs/32614875041),
+[32615024395](https://github.com/TaeeunKil/kafrust/actions/runs/32615024395)),
+and the pinned-current secure Kafka 4.3.1 KIP-848 leader-failover row passed in
+[32615403411](https://github.com/TaeeunKil/kafrust/actions/runs/32615403411).
 The full accepted published matrix, long-duration campaigns, and downstream
 release gates remain open.
 

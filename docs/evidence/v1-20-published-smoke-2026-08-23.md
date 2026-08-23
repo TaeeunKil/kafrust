@@ -67,6 +67,8 @@ published pair also passed:
 - secure Admin authorization: [run 32614763007](https://github.com/TaeeunKil/kafrust/actions/runs/32614763007)
 - secure Admin mutation/offset paths: [run 32614764570](https://github.com/TaeeunKil/kafrust/actions/runs/32614764570)
 - Share member-loss rebalancing with the default 180-second member lifetime: [run 32614875041](https://github.com/TaeeunKil/kafrust/actions/runs/32614875041)
+- repeated Share member-loss ownership recovery across eight cycles with the default 120-second lifetime: [run 32615024395](https://github.com/TaeeunKil/kafrust/actions/runs/32615024395)
+- pinned-current secure Kafka 4.3.1 KIP-848 leader failover: [run 32615403411](https://github.com/TaeeunKil/kafrust/actions/runs/32615403411)
 
 The two short-parameter Share member-loss attempts (30 seconds) are retained as
 diagnostics only: both reached the initial member's partial assignment but

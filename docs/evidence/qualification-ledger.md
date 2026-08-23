@@ -22,6 +22,72 @@ and are checked in CI. Values such as `not-applicable` and `not-recorded` are
 deliberate classifications, not missing data. A row must never use an
 unqualified relative artifact label.
 
+## Q-PUBLISHED-V120-030
+
+- date_utc: 2026-08-23
+- source_commit: 8daf75d36e27117c9837a1ed51efbc98b4ee18d6
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka:4.3.1
+- mode: published secure KIP-848 leader failover
+- topology: three-broker KRaft
+- security: SASL_SSL/SCRAM-SHA-256
+- group_protocol: KIP-848 consumer
+- workload: secure multi-broker pre/post-failover produce and consume
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32615403411
+- fault: selected partition leader stop and replacement leader recovery
+- duration: recorded in workflow
+- record_count: pre/post records; exact count retained by workflow
+- member_count: 2
+- repetition_count: 1
+- expected_errors: authenticated group and data path recover after leader loss
+- observed_errors: none; job passed
+- retry_count: 0
+- duplicate_count: not-recorded
+- loss_count: 0
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: not-recorded
+- result: passed
+- artifact: docs/evidence/v1-20-published-smoke-2026-08-23.md; run 32615403411
+- non_claims: not secure combined/repeated fault, not long SLO, not full V1-20 matrix, not 1.0.0 readiness
+
+## Q-PUBLISHED-V120-029
+
+- date_utc: 2026-08-23
+- source_commit: 8daf75d36e27117c9837a1ed51efbc98b4ee18d6
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka:4.3.1
+- mode: published repeated ShareConsumer member-loss churn
+- topology: three-broker KRaft
+- security: PLAINTEXT
+- group_protocol: share
+- workload: eight alternating abrupt member-loss cycles
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32615024395
+- fault: alternating active Share member kill and reassignment
+- duration: default 120-second member lifetime; recorded in workflow
+- record_count: 48 observed records across eight ownership rounds
+- member_count: 2 alternating
+- repetition_count: 8 cycles
+- expected_errors: every cycle reassigns all six partitions without duplicate or loss
+- observed_errors: none; job passed
+- retry_count: 1 diagnostic short-timing attempt excluded
+- duplicate_count: 0
+- loss_count: 0
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: in_flight=0 and buffered=0 asserted in cycle logs
+- result: passed
+- artifact: docs/evidence/v1-20-published-smoke-2026-08-23.md; run 32615024395
+- non_claims: not six-hour fault campaign, not SLO, not full V1-20 matrix, not 1.0.0 readiness
+
 ## Q-PUBLISHED-V120-028
 
 - date_utc: 2026-08-23
