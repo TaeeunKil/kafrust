@@ -22,6 +22,39 @@ and are checked in CI. Values such as `not-applicable` and `not-recorded` are
 deliberate classifications, not missing data. A row must never use an
 unqualified relative artifact label.
 
+## Q-LOCAL-V119-007
+
+- date_utc: 2026-08-23
+- source_commit: c5f35d643396fac908a3f7bd235836e517e87aa8
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: not-applicable
+- kafka_image: not-applicable
+- mode: registry provenance and yank inventory
+- topology: not-applicable
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: all-feature runtime/build dependency closure against local crates.io sparse-index cache
+- workflow: scripts/check_v1_registry_provenance.py --check
+- fault: missing checksum/index entry or resolved yanked version
+- duration: not-recorded
+- record_count: 87 registry packages
+- member_count: 2 workspace package roots
+- repetition_count: 1
+- expected_errors: zero missing checksums/index entries and zero yanked packages
+- observed_errors: none; 87 checksums present and zero yanked packages
+- retry_count: not-applicable
+- duplicate_count: not-applicable
+- loss_count: not-applicable
+- latency: not-applicable
+- memory: not-applicable
+- final_resource_gauges: not-applicable
+- result: passed
+- artifact: docs/evidence/v1-19-registry-provenance.json sha256 f243c0806e9b2a7a45acc454d6bf617772cdf79236a0220377eacd511b600790
+- non_claims: not a live crates.io query, not advisory/vulnerability review, not source provenance guarantee, not crates.io publication
+
 ## Q-LOCAL-V119-006
 
 - date_utc: 2026-08-23
