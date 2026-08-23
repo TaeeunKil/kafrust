@@ -514,6 +514,14 @@ The descriptors are explicitly `qualified=false`: five repetitions, six
 profiles, secured/three-broker topology, two-hour warmup, six-hour measurement,
 RSS/regression adjudication, and baseline locking remain open.
 
+The identity-reconciled rerun
+[32625017236](https://github.com/TaeeunKil/kafrust/actions/runs/32625017236)
+from `99ef31f` passed all four bounded published combinations with attempted =
+acknowledged = consumed, zero unknown/loss/duplicate outcomes, and matching
+expected/observed SHA-256 business-ID digests. It remains diagnostic evidence:
+the descriptors are still `qualified=false`, and the full six-profile,
+five-repetition, eight-hour matrix and locked baseline are not closed.
+
 The result-bundle adjudicator is now implemented in
 [`scripts/check_v1_performance_results.py`](../scripts/check_v1_performance_results.py)
 and covered by focused malformed-bundle, incomplete-matrix, and regression

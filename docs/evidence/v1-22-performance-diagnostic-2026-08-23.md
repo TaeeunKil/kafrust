@@ -44,6 +44,27 @@ duplicate counts plus matching expected/observed SHA-256 identity digests.
 The historical artifact above predates those fields; no historical diagnostic
 is retroactively promoted to `qualified: true`.
 
+## Identity-reconciled rerun
+
+Run [32625017236](https://github.com/TaeeunKil/kafrust/actions/runs/32625017236)
+used commit `99ef31ff5a2f5aa383a5c0e421db8639e58ba0fc`, exact published
+`kafrust 0.3.6`, the same 5-second warmup/20-second measured window/5-second
+sample period, two workers, 50-record batches, and 1-KiB values. Its four
+matrix jobs all passed the strengthened business-ID gate:
+
+| Kafka | Compression | Produced/consumed | Approx. records/s | Loss/duplicates |
+| --- | --- | ---: | ---: | ---: |
+| 3.7.2 | none | 1,377,050 | 68,852.5 | 0/0 |
+| 3.7.2 | Zstd | 1,194,250 | 59,712.5 | 0/0 |
+| 4.3.1 | none | 1,466,550 | 73,327.5 | 0/0 |
+| 4.3.1 | Zstd | 1,037,450 | 51,872.5 | 0/0 |
+
+Every final row reported attempted = acknowledged = consumed, zero unknown
+outcomes, `record_id_reconciliation.qualified=true`, and matching expected /
+observed SHA-256 digests. The descriptors remain `qualified:false` because the
+run is still only a short one-repetition diagnostic, not the required full
+matrix and locked-baseline campaign.
+
 ## Failure history retained
 
 - [32619156690](https://github.com/TaeeunKil/kafrust/actions/runs/32619156690)
