@@ -71,6 +71,16 @@ and only afterward rerun the exact manifest campaign that produced no
 descriptor. Preserve the failed run URL and timestamps in the capacity audit;
 the rerun is the only candidate for V1-21 qualification.
 
+If the service reset still returns `CreateInstance/E_FAIL`, preserve a copy of
+the distribution VHDX before attempting filesystem repair. Microsoft documents
+the read-only attach-and-check path in [WSL disk-space recovery
+guidance](https://learn.microsoft.com/en-us/windows/wsl/disk-space): from an
+elevated session, attach the exact VHDX with `wsl --mount <path> --vhd --bare`,
+identify its block device with `wsl lsblk`, and run `e2fsck` from a separate
+healthy Linux/WSL distribution before unmounting it. Do not run `e2fsck`,
+`--unmount`, or any in-place repair against the only copy without a verified
+backup; these are host-recovery operations, not campaign steps.
+
 ## 2. Run the V1-21 gates in manifest order
 
 After the runner inventory is online, dispatch the exact published `0.3.6`
