@@ -573,8 +573,11 @@ release, or `1.0.0` publication exists.
 Version cadence remains evidence-driven: a `0.0.1`-sized change is published
 only when it forms a useful user-visible or independently consumable boundary
 with fresh registry evidence. Internal or incomplete changes stay grouped in
-the current candidate; the next RC/stable decision requires a refreshed dated
-competitor comparison and a completed release gate.
+the current candidate. Every external release decision—patch, minor, RC, or
+stable—must include a dated competitor comparison and affected verification
+rows; if those checks expose a material gap, re-plan the milestone instead of
+publishing automatically. The next release is allowed only after the revised
+exit criteria are complete and the resulting non-claims are recorded.
 All 35 published smoke workflows now default to the current published `0.3.6`
 client, while explicit version inputs remain available for historical reruns;
 the machine-readable baseline is [published-baseline.json](evidence/published-baseline.json)

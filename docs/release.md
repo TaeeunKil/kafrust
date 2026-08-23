@@ -30,8 +30,13 @@ Version cadence is evidence-driven rather than one-patch-per-commit. A pre-1.0
 patch is published only when a user-visible or independently consumable boundary
 justifies a fresh registry artifact and its affected smoke rows; internal,
 documentation-only, or incomplete changes remain unpublished until grouped into
-the next qualified boundary. Every such decision is recorded with explicit
-non-claims, and the competitor review is refreshed before an RC or stable release.
+the next qualified boundary. Before any external publication (patch, minor,
+RC, or stable), refresh the dated competitor comparison and check whether the
+new artifact closes, preserves, or worsens a material gap. If the comparison or
+the affected verification rows reveal a material gap, do not publish by habit:
+re-plan the milestone and continue under the revised exit criteria. Every
+release decision records that comparison, its explicit non-claims, and the
+reason the boundary is independently consumable.
 Published smoke workflows keep their no-input defaults aligned with the current
 published registry baseline; historical artifact reruns must pass an explicit
 version. The baseline is recorded in
