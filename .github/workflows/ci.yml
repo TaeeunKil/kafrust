@@ -75,6 +75,9 @@ jobs:
       - name: Test protocol audit scripts
         run: python -m unittest scripts/test_check_apache_schema_versions.py
 
+      - name: Test V1-19 SBOM checker
+        run: python -m unittest scripts/test_check_v1_sbom.py
+
       - name: Check qualification ledger
         run: python scripts/check_qualification_ledger.py
 
@@ -146,3 +149,7 @@ jobs:
 
       - name: Verify package-only protocol and client boundary
         run: python scripts/verify_package_boundary.py --staged
+
+      - name: Verify deterministic V1-19 SBOM and package artifacts
+        if: matrix.toolchain == 'stable'
+        run: python scripts/check_v1_sbom.py --check --require-artifacts
