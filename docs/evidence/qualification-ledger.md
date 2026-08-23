@@ -22,6 +22,39 @@ and are checked in CI. Values such as `not-applicable` and `not-recorded` are
 deliberate classifications, not missing data. A row must never use an
 unqualified relative artifact label.
 
+## Q-SOURCE-V122-PROFILE-002
+
+- date_utc: 2026-08-23
+- source_commit: e4f4f607be4228fa802be115d8cb92ad665ba56d
+- client_version: 0.3.6 source benchmark
+- protocol_version: 0.3.6 source workspace
+- work_status: In progress
+- evidence_level: Live current-source
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka:4.3.1
+- mode: bounded before/after clone-free buffered encoded-size profile
+- topology: single-node KRaft
+- security: PLAINTEXT
+- group_protocol: not-applicable
+- workload: four representative source paths; 1-KiB values, no compression, 10-second warmup, 60-second measured window, 10-second samples
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32631701269
+- fault: no injected fault; broker startup or roundtrip failure aborts the job
+- duration: 60-second measured window per profile in before and after runs
+- record_count: retained in each profile JSONL result
+- member_count: not-applicable
+- repetition_count: one before and one after run for four profile paths
+- expected_errors: all profiles reconcile records and drain final gauges
+- observed_errors: none in either retained workflow
+- retry_count: retained in JSONL; not promoted as an SLO claim
+- duplicate_count: 0 in each passing result
+- loss_count: 0 in each passing result
+- latency: p99 retained per profile; not adjudicated as a regression gate
+- memory: `/usr/bin/time -v` RSS retained; benchmark RSS windows retained
+- final_resource_gauges: in-flight and buffered gauges drained to zero
+- result: passed
+- artifact: docs/evidence/v1-22-performance-profile-before-after-2026-08-23.md; before run 32631000062; after run 32631701269
+- non_claims: profiling pair only, not eight-hour five-repetition SLO qualification, not a locked baseline, perf stat unavailable on hosted runner, not universal performance parity, not 1.0.0 readiness
+
 ## Q-SOURCE-V122-PROFILE-001
 
 - date_utc: 2026-08-23

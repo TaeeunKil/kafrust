@@ -564,6 +564,18 @@ improve its roughly 13.5k records/s throughput. This keeps the optimization
 work open and directs the next slice to buffered queue batching and repeated
 encoded-size work; no SLO or publication decision follows from this pair.
 
+The next retained pair compares source `fa419f2` (workflow
+[32631000062](https://github.com/TaeeunKil/kafrust/actions/runs/32631000062))
+with `e4f4f60` (workflow
+[32631701269](https://github.com/TaeeunKil/kafrust/actions/runs/32631701269)).
+The latter removes `ProducerRecord` clones from the repeated buffered
+encoded-size check without changing the wire-length calculation. In the
+bounded 1-KiB/60-second profile, buffered throughput increased from 13,480 to
+18,283 records/s and p99 fell from 25 ms to 10 ms; context switches rose in
+the after run. This is a promising diagnostic signal, not a locked baseline,
+SLO qualification, or publication decision. The next slice repeats the result
+and measures queue batching before another release decision.
+
 V1-21 now has the corresponding cross-segment adjudicator in
 [`scripts/check_v1_fault_results.py`](../scripts/check_v1_fault_results.py).
 It rejects count-only or continuity-unqualified diagnostics and requires

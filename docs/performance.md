@@ -107,8 +107,13 @@ The first retained before/after pair is recorded in
 [`v1-22-performance-profile-before-after-2026-08-23.md`](evidence/v1-22-performance-profile-before-after-2026-08-23.md).
 Concurrent buffered delivery waits reduced measured context switches by about
 73% while leaving buffered throughput near 13.5k records/s; the result is a
-resource improvement, not a throughput-parity or SLO claim. The next profile
-slice targets repeated buffered queue encoding and batching work.
+resource improvement, not a throughput-parity or SLO claim. A second pair on
+`e4f4f60` removed `ProducerRecord` clones from the repeated buffered byte-limit
+check while preserving the encoded-length calculation. The buffered path rose
+from 13,480 to 18,283 records/s in that bounded pair, with p99 moving from
+25 ms to 10 ms; context-switch counts rose in that run, so this remains a
+promising diagnostic direction rather than a qualified baseline or publication
+claim. The next profile slice repeats the result and targets queue batching.
 
 For a qualification attempt, retain one descriptor beside each JSONL result
 and run [`check_v1_performance_results.py`](../scripts/check_v1_performance_results.py)

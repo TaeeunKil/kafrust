@@ -223,6 +223,18 @@ records/s and identity/final-gauge checks stayed green. This is a bounded
 resource improvement only; the next profile slice must investigate repeated
 buffered encoded-size and queue-batching work before another optimization.
 
+The second source pair (before workflow
+[32631000062](https://github.com/TaeeunKil/kafrust/actions/runs/32631000062),
+after workflow
+[32631701269](https://github.com/TaeeunKil/kafrust/actions/runs/32631701269))
+removed `ProducerRecord` clones from the repeated buffered encoded-size check
+while preserving its wire-length calculation. The buffered profile increased
+from 13,480 to 18,283 records/s and p99 decreased from 25 ms to 10 ms in the
+bounded 60-second pair; context switches increased in the after run. This is
+promising source-profile evidence, not a locked baseline, SLO qualification,
+competitor parity result, or publication authorization. The retained details
+are in the same evidence record.
+
 ## Failure And Lifecycle Contract
 
 - Benchmark backpressure uses the same bounded production queues and reports
