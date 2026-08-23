@@ -165,6 +165,7 @@ jobs:
         run: |
           set -euo pipefail
           output_base="$RUNNER_TEMP/kafrust-published-share-member-output"
+          log_base="$RUNNER_TEMP/kafrust-published-share-member-log"
           expected_per_partition="$KAFRUST_SHARE_RECORDS_PER_PARTITION"
           expected_total=$((expected_per_partition * 6))
           cat "$output_base-1" "$output_base-2" | sort -t, -k2,2n -k3,3n > "$RUNNER_TEMP/share-member-observed"
