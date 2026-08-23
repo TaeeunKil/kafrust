@@ -36,6 +36,27 @@ jobs:
             security_protocol: plaintext
             kafrust_features: '[]'
             compression: none
+          - profile: kafka-3.8.1-classic
+            kafka_version: 3.8.1
+            group_protocol: classic
+            bootstrap_servers: localhost:9092
+            security_protocol: plaintext
+            kafrust_features: '[]'
+            compression: none
+          - profile: kafka-3.9.1-classic
+            kafka_version: 3.9.1
+            group_protocol: classic
+            bootstrap_servers: localhost:9092
+            security_protocol: plaintext
+            kafrust_features: '[]'
+            compression: none
+          - profile: kafka-4.0.0-classic
+            kafka_version: 4.0.0
+            group_protocol: classic
+            bootstrap_servers: localhost:9092
+            security_protocol: plaintext
+            kafrust_features: '[]'
+            compression: none
           - profile: kafka-3.7.2-sasl-ssl-scram
             kafka_version: 3.7.2
             group_protocol: classic
