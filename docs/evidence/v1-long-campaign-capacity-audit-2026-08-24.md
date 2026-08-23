@@ -67,14 +67,15 @@ timeout, or matrix size is reduced to work around capacity.
 
 ## WSL runner interruption during the first campaign (2026-08-24)
 
-The host-side runner inventory later reported `wsl-ubuntu-t9` as
-`offline` with `busy: true`, while GitHub still showed run
+The host-side runner inventory reported `wsl-ubuntu-t9` as `offline` with
+`busy: true`, while GitHub still showed run
 [`32649020906`](https://github.com/TaeeunKil/kafrust/actions/runs/32649020906)
 as `in_progress` in the soak step. The WSL distribution was `Stopped` and a
 direct start returned `Wsl/Service/CreateInstance/E_FAIL`; after an explicit
-WSL shutdown, a retry returned `Wsl/Service/E_UNEXPECTED`. No fault-segment
-descriptor or qualification artifact was produced, so this run is not
-evidence for V1-21 and must not be adjudicated as a pass.
+WSL shutdown, a retry returned `Wsl/Service/E_UNEXPECTED`. GitHub eventually
+closed the run as `failure` at `2026-08-23T18:07:57Z`, with no downloadable
+artifact. No fault-segment descriptor or qualification artifact was produced,
+so this run is not evidence for V1-21 and must not be adjudicated as a pass.
 
 Recovery requires restoring the host WSL service/VM (an elevated service
 restart or host restart may be necessary), confirming Docker and the
