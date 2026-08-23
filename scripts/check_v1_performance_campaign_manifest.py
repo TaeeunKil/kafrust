@@ -51,6 +51,17 @@ def main() -> int:
     required_fields = {"artifact_digest", "profile_id", "repetition", "throughput", "latency_p50_p95_p99", "rss_baseline_terminal_slope", "retry_ratio", "final_resource_gauges"}
     if not required_fields <= set(manifest.get("result_fields", ())):
         return fail("result fields omit a required SLO measurement")
+    bundle = manifest.get("result_bundle", {})
+    if bundle.get("descriptor_glob") != "*descriptor.json":
+        return fail("result bundle must discover immutable descriptor files")
+    if bundle.get("result_file_is_relative_to_descriptor") is not True:
+        return fail("result files must be relative to their descriptor")
+    if bundle.get("matrix_key") != "profile_id|topology|security|repetition":
+        return fail("result bundle matrix key must include profile, topology, security, and repetition")
+    if bundle.get("adjudicator") != "scripts/check_v1_performance_results.py":
+        return fail("result bundle adjudicator path is not pinned")
+    if bundle.get("qualification_requires_qualified_descriptor") is not True or bundle.get("qualification_requires_one_artifact_digest") is not True:
+        return fail("result bundle qualification guards are incomplete")
     print(f"v1 performance campaign manifest ok: {len(profiles)} profiles; five 8-hour repetitions declared")
     return 0
 

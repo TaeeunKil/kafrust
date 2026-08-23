@@ -133,6 +133,26 @@ short runs. Focused tests cover the median/window and slope calculations. This
 closes a result-shape preparation gap only; it does not qualify the long
 campaign or infer thresholds from the short diagnostic.
 
+### Result-bundle adjudicator (2026-08-23)
+
+The preparation manifest now pins an immutable result bundle contract. Each
+future qualified run contributes one `*descriptor.json` plus a relative JSONL
+result file. The descriptor records the exact artifact digest, broker image,
+runner, topology, security profile, workload, timing, profile ID, and
+repetition. The adjudicator
+[`check_v1_performance_results.py`](../../../scripts/check_v1_performance_results.py)
+requires every `profile × topology × security × repetition` combination,
+contiguous ten-second sample windows, one final record with zero loss/duplicate
+and drained gauges, the RSS/retry thresholds, and one artifact digest across
+the complete bundle. When a locked baseline is supplied, it compares the
+median throughput and p99 latency for every matrix key against the manifest
+budgets. A diagnostic descriptor marked `qualified: false`, an incomplete
+matrix, or a missing baseline is therefore never promoted by accident.
+
+The checker and its malformed-bundle/regression tests are exercised in normal
+CI. No qualified bundle or locked baseline exists yet; this closes the
+adjudication tooling gap but does not close V1-22.
+
 ### Competitor review and re-plan (2026-08-23)
 
 The companion published comparison

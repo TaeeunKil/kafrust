@@ -509,6 +509,15 @@ The descriptors are explicitly `qualified=false`: five repetitions, six
 profiles, secured/three-broker topology, two-hour warmup, six-hour measurement,
 RSS/regression adjudication, and baseline locking remain open.
 
+The result-bundle adjudicator is now implemented in
+[`scripts/check_v1_performance_results.py`](../scripts/check_v1_performance_results.py)
+and covered by focused malformed-bundle, incomplete-matrix, and regression
+tests. It requires the full profile/topology/security/repetition matrix,
+contiguous ten-second windows, one artifact digest, drained resources, and a
+locked baseline before it can return a passing result. This makes the eventual
+campaign decision reproducible; no qualified bundle or locked baseline exists
+yet, so V1-22 remains `Planned`.
+
 ## V1-23 Execution Update (2026-08-23)
 
 The current published competitor check was run before making any release-path

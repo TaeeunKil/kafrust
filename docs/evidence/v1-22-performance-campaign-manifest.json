@@ -30,6 +30,14 @@
     "acknowledged_loss_must_be_zero": true,
     "idempotent_duplicate_must_be_zero": true
   },
+  "result_bundle": {
+    "descriptor_glob": "*descriptor.json",
+    "result_file_is_relative_to_descriptor": true,
+    "matrix_key": "profile_id|topology|security|repetition",
+    "adjudicator": "scripts/check_v1_performance_results.py",
+    "qualification_requires_qualified_descriptor": true,
+    "qualification_requires_one_artifact_digest": true
+  },
   "result_fields": [
     "artifact_digest",
     "runner_image",
