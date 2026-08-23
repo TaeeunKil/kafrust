@@ -347,6 +347,12 @@ stable in [CI run 32610559177](https://github.com/TaeeunKil/kafrust/actions/runs
 from exact source `af73b8d`. This is CI confirmation of the slices, not V1-19
 completion or publication readiness.
 
+The advisory follow-up and drift-tolerant gate passed on both toolchains from
+exact source `68f7775` in [CI run 32611666435](https://github.com/TaeeunKil/kafrust/actions/runs/32611666435).
+This confirms the new advisory snapshot wiring only; manual unsafe/native
+ownership, multi-platform/package evidence, and published-artifact gates still
+block V1-19 completion.
+
 The dated version-readiness decision is archived in
 [`docs/evidence/v1-release-competitive-readiness-2026-08-23.md`](evidence/v1-release-competitive-readiness-2026-08-23.md):
 the next identity remains pre-1.0 `0.3.6`, while `1.0.0` is not justified yet.

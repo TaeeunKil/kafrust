@@ -195,6 +195,13 @@ and documentation. This confirms the implemented slices on both toolchains;
 the remaining advisory/current-index, manual unsafe ownership, platform/package
 matrix, and published-artifact gates remain open.
 
+The follow-up exact source `68f777512f097dfdc44eceafe7d1e9127c67e0ed` passed
+the Rust 1.81.0/stable matrix in
+[CI run 32611666435](https://github.com/TaeeunKil/kafrust/actions/runs/32611666435),
+including the offline advisory snapshot gate and its focused tests. This
+confirms the advisory slice on both toolchains; manual unsafe/native ownership,
+multi-platform/package evidence, and published-artifact gates remain open.
+
 ## Failure And Lifecycle Contract
 
 - A required default-build C compiler/link to librdkafka or a C Kafka client is
