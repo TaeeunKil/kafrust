@@ -19,6 +19,7 @@ SPEC.loader.exec_module(MODULE)
 
 build_bom = MODULE.build_bom
 validate_bom = MODULE.validate_bom
+allow_transitive_version_drift = MODULE.allow_transitive_version_drift
 
 
 CLIENT = "path+file:///workspace/crates/kafrust#0.3.6"
@@ -92,6 +93,15 @@ class SbomCheckerTests(unittest.TestCase):
         broken["metadata"]["properties"] = []
         with self.assertRaisesRegex(RuntimeError, "generator property"):
             validate_bom(broken)
+
+    def test_version_drift_guard_keeps_direct_dependencies_strict(self) -> None:
+        bom = build_bom(fixture_metadata(), "x86_64-unknown-linux-gnu")
+        broken = copy.deepcopy(bom)
+        for component in broken["components"]:
+            if component["name"] == "bytes":
+                component["version"] = "1.10.2"
+        with self.assertRaisesRegex(RuntimeError, "direct dependency versions"):
+            allow_transitive_version_drift(bom, broken)
 
 
 if __name__ == "__main__":

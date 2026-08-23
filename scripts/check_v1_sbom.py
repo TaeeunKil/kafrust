@@ -18,7 +18,7 @@ import hashlib
 import json
 import subprocess
 import sys
-from collections import deque
+from collections import Counter, deque
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -247,6 +247,89 @@ def validate_bom(bom: dict[str, Any]) -> None:
         raise RuntimeError("SBOM generator property is missing or stale")
 
 
+def _property(component_value: dict[str, Any], name: str) -> str:
+    for item in component_value.get("properties", []):
+        if item.get("name") == name:
+            return str(item.get("value", ""))
+    return ""
+
+
+def inventory_signature(
+    bom: dict[str, Any]
+) -> tuple[Counter[tuple[Any, ...]], Counter[tuple[str, tuple[tuple[str, str], ...]]]]:
+    """Return version-independent component and graph signatures.
+
+    Cargo may resolve a transitive patch release differently when the registry
+    index cache differs between runners.  The V1 drift gate still rejects new
+    packages, license/source changes, and graph changes; this signature lets
+    the caller distinguish those changes from a transitive version refresh.
+    """
+
+    components = {item["bom-ref"]: item for item in bom["components"]}
+    signatures: Counter[tuple[Any, ...]] = Counter()
+    for item in components.values():
+        licenses = json.dumps(item.get("licenses", []), sort_keys=True)
+        signatures[
+            (
+                item.get("name"),
+                item.get("type"),
+                item.get("scope"),
+                _property(item, "kafrust:source-kind"),
+                licenses,
+            )
+        ] += 1
+    graph: Counter[tuple[str, tuple[tuple[str, str], ...]]] = Counter()
+    for dependency in bom["dependencies"]:
+        component_value = components[dependency["ref"]]
+        children = tuple(
+            sorted(
+                (
+                    components[child]["name"],
+                    _property(components[child], "kafrust:source-kind"),
+                )
+                for child in dependency.get("dependsOn", [])
+            )
+        )
+        key = f"{component_value['name']}|{_property(component_value, 'kafrust:source-kind')}"
+        graph[(key, children)] += 1
+    return signatures, graph
+
+
+def root_versions(bom: dict[str, Any]) -> dict[str, str]:
+    return {
+        item["name"]: item["version"]
+        for item in bom["components"]
+        if item["name"] in ROOT_NAMES and _property(item, "kafrust:source-kind") == "workspace"
+    }
+
+
+def root_direct_versions(bom: dict[str, Any]) -> dict[str, tuple[tuple[str, str], ...]]:
+    components = {item["bom-ref"]: item for item in bom["components"]}
+    entries: dict[str, tuple[tuple[str, str], ...]] = {}
+    for dependency in bom["dependencies"]:
+        root = components[dependency["ref"]]
+        if root["name"] not in ROOT_NAMES:
+            continue
+        entries[root["name"]] = tuple(
+            sorted(
+                (components[child]["name"], components[child]["version"])
+                for child in dependency.get("dependsOn", [])
+            )
+        )
+    return entries
+
+
+def allow_transitive_version_drift(expected: dict[str, Any], actual: dict[str, Any]) -> None:
+    if root_versions(expected) != root_versions(actual):
+        raise RuntimeError("workspace package versions drifted from the checked-in SBOM")
+    if root_direct_versions(expected) != root_direct_versions(actual):
+        raise RuntimeError("direct dependency versions drifted from the checked-in SBOM")
+    if inventory_signature(expected) != inventory_signature(actual):
+        raise RuntimeError(
+            "SBOM inventory drift is not limited to transitive dependency versions"
+        )
+
+
 def canonical_json(value: Any) -> str:
     return json.dumps(value, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
 
@@ -279,6 +362,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--platform", default=DEFAULT_PLATFORM)
     parser.add_argument("--artifact-dir", type=Path, default=ROOT / "target" / "package")
     parser.add_argument("--require-artifacts", action="store_true")
+    parser.add_argument(
+        "--allow-resolved-version-drift",
+        action="store_true",
+        help="allow transitive patch/version re-resolution when inventory and direct roots match",
+    )
     return parser.parse_args()
 
 
@@ -309,12 +397,23 @@ def main() -> int:
         else:
             if not output.is_file():
                 raise RuntimeError(f"SBOM file does not exist: {output}")
-            existing = output.read_text(encoding="utf-8")
-            if existing != rendered:
+            existing_text = output.read_text(encoding="utf-8")
+            try:
+                existing_bom = json.loads(existing_text)
+            except json.JSONDecodeError as error:
+                raise RuntimeError(f"SBOM file is not valid JSON: {error}") from error
+            validate_bom(existing_bom)
+            if existing_text == rendered:
+                print(f"verified deterministic CycloneDX SBOM: {output}")
+            elif args.allow_resolved_version_drift:
+                allow_transitive_version_drift(existing_bom, bom)
+                print(
+                    f"verified SBOM inventory with an allowed transitive version refresh: {output}"
+                )
+            else:
                 raise RuntimeError(
                     f"SBOM drift detected in {output}; rerun with --write after review"
                 )
-            print(f"verified deterministic CycloneDX SBOM: {output}")
         print(f"  components: {len(bom['components'])}")
         print(f"  runtime/build dependency entries: {len(bom['dependencies'])}")
         print(f"  platform: {args.platform}")
