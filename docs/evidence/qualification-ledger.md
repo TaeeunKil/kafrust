@@ -22,6 +22,39 @@ and are checked in CI. Values such as `not-applicable` and `not-recorded` are
 deliberate classifications, not missing data. A row must never use an
 unqualified relative artifact label.
 
+## Q-PUBLISHED-V120-031
+
+- date_utc: 2026-08-23
+- source_commit: 69e12726847f082d69213348110c6f4e8fc9cdeb
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 3.7.2, 3.8.1, 3.9.1, 4.0.0, 4.3.1
+- kafka_image: apache/kafka:<matrix version>
+- mode: published ten-profile crate smoke matrix
+- topology: single-node KRaft
+- security: PLAINTEXT plus SASL_SSL/SCRAM-SHA-256
+- group_protocol: classic plus KIP-848 consumer
+- workload: produce/fetch/group plus gzip, snappy, lz4, and zstd codecs
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32615530030
+- fault: broker/profile startup or roundtrip failure
+- duration: recorded per matrix job
+- record_count: workflow roundtrip per profile
+- member_count: not-recorded
+- repetition_count: 10 matrix profiles
+- expected_errors: every profile resolves exact published pair and completes roundtrip
+- observed_errors: none; all ten jobs passed
+- retry_count: 0
+- duplicate_count: not-recorded
+- loss_count: 0
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: not-recorded
+- result: passed
+- artifact: docs/evidence/v1-20-published-smoke-2026-08-23.md; run 32615530030
+- non_claims: not full Cartesian security/workload matrix, not long fault/SLO, not migration canary, not 1.0.0 readiness
+
 ## Q-PUBLISHED-V120-030
 
 - date_utc: 2026-08-23

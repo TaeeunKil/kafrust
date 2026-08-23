@@ -416,6 +416,10 @@ passed ([32614875041](https://github.com/TaeeunKil/kafrust/actions/runs/32614875
 [32615024395](https://github.com/TaeeunKil/kafrust/actions/runs/32615024395)),
 and the pinned-current secure Kafka 4.3.1 KIP-848 leader-failover row passed in
 [32615403411](https://github.com/TaeeunKil/kafrust/actions/runs/32615403411).
+The published crate smoke workflow now covers all ten draft continuity,
+security, and codec profiles; Kafka 3.8.1, 3.9.1, and 4.0.0 classic rows passed
+alongside the existing floor/pinned/codecs in
+[32615530030](https://github.com/TaeeunKil/kafrust/actions/runs/32615530030).
 The full accepted published matrix, long-duration campaigns, and downstream
 release gates remain open.
 

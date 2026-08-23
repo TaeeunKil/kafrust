@@ -80,3 +80,15 @@ All listed passing jobs assert the exact `0.3.6` client/protocol lockfile pair;
 the secure rows use fresh external projects and Rust 1.81. These are named
 published profiles, not the full accepted matrix, long-duration fault/SLO,
 migration canary, API freeze, or stable-release gates.
+
+## Published continuity and codec matrix
+
+The published crate smoke matrix was expanded in commit
+`69e12726847f082d69213348110c6f4e8fc9cdeb` and passed all ten jobs in [run
+32615530030](https://github.com/TaeeunKil/kafrust/actions/runs/32615530030):
+Kafka 3.7.2 classic, 3.8.1 classic, 3.9.1 classic, 4.0.0 classic, 4.3.1
+KIP-848, 3.7.2 SASL_SSL/SCRAM-SHA-256, and the gzip, snappy, lz4, and zstd
+codec profiles. Each job built a fresh external project and checked the exact
+`0.3.6` client/protocol lockfile pair. This closes the draft matrix's
+continuity/package-codec smoke slice, but not every security/workload
+combination or the downstream fault/SLO/release gates.
