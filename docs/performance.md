@@ -90,6 +90,19 @@ not by itself satisfy the V1-22 requirement for six measured hours, ten-second
 sampling, five repetitions per profile, published artifacts, or regression and
 RSS adjudication.
 
+## Profile Before/After Diagnostics
+
+The manual [`Kafka Benchmark Profile Diagnostic`](../.github/workflows/benchmark-profile-diagnostic.yml)
+workflow runs four representative paths with the same Kafka 4.3.1 single-node
+runner: immediate with one and four workers, buffered with four workers, and
+direct-consumer with one worker. Each run retains runner/kernel/CPU identity,
+`time -v` resource counters, optional Linux `perf stat` counters, the timed
+JSONL result, and a descriptor explicitly marked `qualified: false`. These
+artifacts are profiling inputs for an optimization decision; they are not a
+V1-22 baseline, an SLO result, or a release gate. Any source performance change
+must retain a comparable before/after pair and rerun correctness and identity
+reconciliation checks before it can be considered for the qualified campaign.
+
 For a qualification attempt, retain one descriptor beside each JSONL result
 and run [`check_v1_performance_results.py`](../scripts/check_v1_performance_results.py)
 against the complete bundle. The checker requires the manifest's full

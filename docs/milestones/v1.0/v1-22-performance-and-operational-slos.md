@@ -203,6 +203,18 @@ raw result and non-claims are in
 This strengthens the comparison evidence but does not close V1-22's SLO,
 baseline, or optimization gates.
 
+### Profiling path (2026-08-23)
+
+The manual [`Kafka Benchmark Profile Diagnostic`](../../.github/workflows/benchmark-profile-diagnostic.yml)
+workflow now retains four comparable source profiles (immediate with one and
+four workers, buffered with four workers, and direct-consumer with one worker)
+with runner/kernel/CPU identity, `/usr/bin/time -v` counters, optional Linux
+`perf stat` counters, and the reconciled timed JSONL result. Its descriptors
+are explicitly `qualified: false`; the workflow establishes the before/after
+evidence required by the batching, concurrency, allocation, and queue re-plan.
+No optimization or locked baseline is inferred until it produces a retained
+pair on equivalent runners.
+
 ## Failure And Lifecycle Contract
 
 - Benchmark backpressure uses the same bounded production queues and reports

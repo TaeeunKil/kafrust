@@ -1,0 +1,196 @@
+name: Kafka Benchmark Profile Diagnostic
+
+on:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  KAFRUST_BOOTSTRAP_SERVERS: localhost:9092
+  KAFRUST_BENCH_RECORDS: "1"
+  KAFRUST_BENCH_WARMUP_SECONDS: "10"
+  KAFRUST_BENCH_MEASURED_SECONDS: "60"
+  KAFRUST_BENCH_SAMPLE_SECONDS: "10"
+  KAFRUST_BENCH_PAYLOAD_BYTES: "1024"
+  KAFRUST_BENCH_MAX_BATCH_BYTES: "921600"
+  KAFRUST_COMPRESSION: none
+
+jobs:
+  profile:
+    name: ${{ matrix.id }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: immediate-1kib-batch-200-concurrency-1
+            mode: immediate
+            workers: 1
+            batch_size: 200
+          - id: immediate-1kib-batch-200-concurrency-4
+            mode: immediate
+            workers: 4
+            batch_size: 200
+          - id: buffered-1kib-batch-200-concurrency-4
+            mode: buffered
+            workers: 4
+            batch_size: 200
+          - id: direct-consumer-1kib-concurrency-1
+            mode: direct-consumer
+            workers: 1
+            batch_size: 1
+
+    env:
+      KAFRUST_TOPIC: kafrust-profile-${{ github.run_id }}-${{ strategy.job-index }}
+      KAFRUST_BENCH_WORKERS: ${{ matrix.workers }}
+      KAFRUST_BENCH_BATCH_SIZE: ${{ matrix.batch_size }}
+      KAFRUST_BENCH_MODE: ${{ matrix.mode }}
+      KAFRUST_BENCH_PROFILE: ${{ matrix.id }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+
+      - name: Record runner identity
+        run: |
+          set -euo pipefail
+          {
+            echo "run_id=$GITHUB_RUN_ID"
+            echo "workflow_sha=$GITHUB_SHA"
+            echo "runner_os=$RUNNER_OS"
+            echo "runner_arch=$RUNNER_ARCH"
+            echo "kernel=$(uname -srv)"
+            echo "cpu=$(lscpu | awk -F: '/Model name/ {gsub(/^ +/, \"\", $2); print $2; exit}')"
+            echo "cargo=$(cargo --version)"
+            echo "rustc=$(rustc --version --verbose)"
+          } | tee runner-identity.txt
+          docker version
+
+      - name: Start Kafka
+        run: |
+          set -euo pipefail
+          docker run -d --name kafrust-profile-kafka \
+            -p 9092:9092 \
+            -e KAFKA_NODE_ID=1 \
+            -e KAFKA_PROCESS_ROLES=broker,controller \
+            -e KAFKA_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 \
+            -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092 \
+            -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+            -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
+            -e KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT \
+            -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@localhost:9093 \
+            -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
+            apache/kafka:4.3.1
+
+      - name: Wait for Kafka
+        run: |
+          set -euo pipefail
+          for attempt in {1..90}; do
+            if docker exec kafrust-profile-kafka /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server localhost:9092 >/tmp/kafrust-profile-probe.log 2>&1; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/kafrust-profile-probe.log || true
+          docker logs kafrust-profile-kafka
+          exit 1
+
+      - name: Create profile topic
+        run: |
+          set -euo pipefail
+          docker exec kafrust-profile-kafka /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server localhost:9092 \
+            --create \
+            --topic "$KAFRUST_TOPIC" \
+            --partitions "$KAFRUST_BENCH_WORKERS" \
+            --replication-factor 1
+
+      - name: Build release benchmark
+        run: cargo build --release -p kafrust --example throughput_benchmark
+
+      - name: Collect timed profile counters
+        run: |
+          set -euo pipefail
+          set -o pipefail
+          : > perf-stat.csv
+          : > perf-stderr.txt
+          perf_status=not-installed
+          if command -v perf >/dev/null 2>&1; then
+            perf_status=available
+            perf stat \
+              -x, \
+              -o perf-stat.csv \
+              -e task-clock,context-switches,cpu-migrations,page-faults,cycles,instructions,cache-misses \
+              cargo run --quiet --release -p kafrust --example throughput_benchmark \
+              >benchmark-profile.jsonl 2>perf-stderr.txt || {
+                perf_status=failed
+                true
+              }
+          else
+            cargo run --quiet --release -p kafrust --example throughput_benchmark \
+              >benchmark-profile.jsonl
+          fi
+          /usr/bin/time -v -o time-resource.txt \
+            cargo run --quiet --release -p kafrust --example throughput_benchmark \
+            >benchmark-profile-time.jsonl
+          printf 'perf_status=%s\n' "$perf_status" | tee profile-status.txt
+          jq -e --arg mode "$KAFRUST_BENCH_MODE" --arg profile "$KAFRUST_BENCH_PROFILE" \
+            'select(.mode == "campaign-final") | (.campaign_mode == $mode) and (.profile == $profile) and (.produced_records == .consumed_records) and (.in_flight_requests == 0) and (.buffered_records == 0)' \
+            benchmark-profile-time.jsonl >/dev/null
+
+      - name: Write profile evidence descriptor
+        run: |
+          set -euo pipefail
+          jq -s 'map(select(.mode == "campaign-final")) | if length == 1 then .[0] else error("expected one campaign-final row") end' \
+            benchmark-profile-time.jsonl > benchmark-profile-final.json
+          broker_image_digest="$(docker image inspect apache/kafka:4.3.1 --format '{{index .RepoDigests 0}}' 2>/dev/null || true)"
+          if [ -z "$broker_image_digest" ]; then
+            broker_image_digest="apache/kafka:4.3.1@$(docker image inspect apache/kafka:4.3.1 --format '{{.Id}}' | sed 's/^sha256://')"
+          fi
+          jq -n \
+            --arg profile "$KAFRUST_BENCH_PROFILE" \
+            --arg mode "$KAFRUST_BENCH_MODE" \
+            --argjson workers "$KAFRUST_BENCH_WORKERS" \
+            --argjson batch_size "$KAFRUST_BENCH_BATCH_SIZE" \
+            --arg broker_image_digest "$broker_image_digest" \
+            --arg workflow_sha "$GITHUB_SHA" \
+            --arg perf_status "$(awk -F= '/^perf_status=/{print $2}' profile-status.txt)" \
+            --slurpfile result benchmark-profile-final.json \
+            '{
+              schema_version: 1,
+              status: "diagnostic",
+              qualified: false,
+              qualification_reason: "bounded profiling run; not an eight-hour SLO result",
+              profile_id: $profile,
+              workflow_sha: $workflow_sha,
+              runner: {image: env.RUNNER_OS + "/" + env.RUNNER_ARCH, broker_image_digest: $broker_image_digest, broker_version: "4.3.1", topology: "single-node", security: "PLAINTEXT"},
+              workload: {mode: $mode, payload_bytes: 1024, batch_size: $batch_size, workers: $workers, compression: "none"},
+              profilers: {perf_stat: $perf_status, time_resource: "time-resource.txt"},
+              final: $result[0]
+            }' > benchmark-profile-descriptor.json
+
+      - name: Upload profile evidence
+        uses: actions/upload-artifact@v6
+        with:
+          name: kafrust-profile-${{ matrix.id }}-${{ github.run_id }}
+          path: |
+            runner-identity.txt
+            profile-status.txt
+            perf-stat.csv
+            perf-stderr.txt
+            time-resource.txt
+            benchmark-profile.jsonl
+            benchmark-profile-time.jsonl
+            benchmark-profile-descriptor.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Dump Kafka logs
+        if: failure()
+        run: docker logs kafrust-profile-kafka

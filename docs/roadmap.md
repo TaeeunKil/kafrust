@@ -550,6 +550,13 @@ drained final gauges; the retained descriptors are explicitly
 and `Q-PUBLISHED-V122-MODE-001`, and leaves the full SLO matrix and locked
 baseline open.
 
+The manual [`Kafka Benchmark Profile Diagnostic`](.github/workflows/benchmark-profile-diagnostic.yml)
+now captures runner/kernel/CPU identity, `/usr/bin/time -v` counters, optional
+Linux `perf stat` data, and reconciled timed JSONL for immediate, buffered, and
+direct-consumer paths. Its descriptors are deliberately `qualified=false`; it
+is the before/after profiling input for the V1-22 batching/concurrency/queue
+re-plan, not a locked baseline or release authorization.
+
 V1-21 now has the corresponding cross-segment adjudicator in
 [`scripts/check_v1_fault_results.py`](../scripts/check_v1_fault_results.py).
 It rejects count-only or continuity-unqualified diagnostics and requires
