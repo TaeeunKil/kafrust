@@ -180,6 +180,27 @@ def canonical_json(value: Any) -> str:
     return json.dumps(value, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
 
 
+def mismatch_detail(expected: dict[str, Any], actual: dict[str, Any]) -> str:
+    left = comparable(expected)
+    right = comparable(actual)
+    details: list[str] = []
+    for index, (expected_value, actual_value) in enumerate(zip(left, right)):
+        if expected_value == actual_value:
+            continue
+        if index == 7:
+            expected_entries = set(expected_value)
+            actual_entries = set(actual_value)
+            details.append(
+                "entries-only-in-report="
+                + repr(sorted(actual_entries - expected_entries)[:3])
+                + "; entries-only-in-evidence="
+                + repr(sorted(expected_entries - actual_entries)[:3])
+            )
+        else:
+            details.append(f"field[{index}] expected={expected_value!r} actual={actual_value!r}")
+    return "; ".join(details) or "unknown mismatch"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--platform", default=DEFAULT_PLATFORM)
@@ -191,6 +212,7 @@ def main() -> int:
         if args.check:
             expected = json.loads(args.output.read_text(encoding="utf-8"))
             if comparable(expected) != comparable(report):
+                print(mismatch_detail(expected, report), file=sys.stderr)
                 return fail("unsafe/native inventory drifted; review the report before updating evidence")
             print(
                 f"v1 unsafe/native inventory ok: {report['summary']['review_entries']} review entries; "
