@@ -169,7 +169,7 @@ jobs:
               qualification_reason: "bounded profiling run; not an eight-hour SLO result",
               profile_id: $profile,
               workflow_sha: $workflow_sha,
-              runner: {image: env.RUNNER_OS + "/" + env.RUNNER_ARCH, broker_image_digest: $broker_image_digest, broker_version: "4.3.1", topology: "single-node", security: "PLAINTEXT"},
+              runner: {image: (env.RUNNER_OS + "/" + env.RUNNER_ARCH), broker_image_digest: $broker_image_digest, broker_version: "4.3.1", topology: "single-node", security: "PLAINTEXT"},
               workload: {mode: $mode, payload_bytes: 1024, batch_size: $batch_size, workers: $workers, compression: "none"},
               profilers: {perf_stat: $perf_status, time_resource: "time-resource.txt"},
               final: $result[0]
