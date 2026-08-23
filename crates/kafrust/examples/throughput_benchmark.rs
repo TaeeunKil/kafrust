@@ -12,7 +12,7 @@ use kafrust::{
     ProducerRecord, RecordMetadata,
 };
 use sha2::{Digest, Sha256};
-use tokio::sync::Barrier;
+use tokio::{sync::Barrier, task::JoinSet};
 
 const DEFAULT_RECORDS: usize = 20_000;
 const DEFAULT_BATCH_SIZE: usize = 200;
@@ -243,11 +243,7 @@ impl CampaignProducer {
                 for record in records {
                     deliveries.push(producer.send(record).await?);
                 }
-                let mut metadata = Vec::with_capacity(deliveries.len());
-                for delivery in deliveries {
-                    metadata.push(delivery.wait().await?);
-                }
-                Ok(metadata)
+                wait_buffered_deliveries(deliveries).await
             }
         }
     }
@@ -258,6 +254,35 @@ impl CampaignProducer {
             Self::Buffered(producer) => producer.close().await,
         }
     }
+}
+
+async fn wait_buffered_deliveries(
+    deliveries: Vec<kafrust::producer::ProducerDelivery>,
+) -> kafrust::Result<Vec<RecordMetadata>> {
+    let delivery_count = deliveries.len();
+    let mut waits = JoinSet::new();
+    for (index, delivery) in deliveries.into_iter().enumerate() {
+        waits.spawn(async move { (index, delivery.wait().await) });
+    }
+
+    let mut metadata = std::iter::repeat_with(|| None)
+        .take(delivery_count)
+        .collect::<Vec<Option<RecordMetadata>>>();
+    while let Some(result) = waits.join_next().await {
+        let (index, result) = result.map_err(|_| {
+            kafrust::Error::Unsupported("buffered benchmark delivery task was cancelled")
+        })?;
+        metadata[index] = Some(result?);
+    }
+
+    metadata
+        .into_iter()
+        .map(|metadata| {
+            metadata.ok_or(kafrust::Error::Unsupported(
+                "buffered benchmark delivery result was missing",
+            ))
+        })
+        .collect()
 }
 
 #[derive(Clone)]
