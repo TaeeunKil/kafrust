@@ -485,7 +485,8 @@ million-record exit gate.
 
 ## V1-21 Execution Update (2026-08-23)
 
-V1-21 is `In progress`. The published multi-broker soak now accepts campaign
+V1-21 is `Blocked` pending recovery of the registered WSL2 self-hosted
+runner. The published multi-broker soak now accepts campaign
 and segment identity, emits immutable artifact/workflow/broker descriptors, and
 supports a six-hour-compatible job timeout. The exact published `0.3.6` pair
 passed one bounded Kafka 4.3.1 three-broker restart segment in
@@ -762,6 +763,18 @@ published artifact digest, drained gauges, the six-hour totals, the
 100-cycle/100-outcome family gates, and declared data-loss fixture matches.
 Both plaintext and secure published soak fixtures now emit the per-segment
 fields; no artifact currently satisfies the cross-segment qualified contract.
+
+The WSL2 runner was subsequently registered and passed the non-qualification
+diagnostic, but the first declared six-hour campaign
+[`32649020906`](https://github.com/TaeeunKil/kafrust/actions/runs/32649020906)
+lost its Ubuntu-T9 instance during the soak. WSL returned
+`CreateInstance/E_FAIL` and `E_UNEXPECTED` on restart, the runner went
+offline, and GitHub closed the run as `failure` without an artifact. This is an
+infrastructure non-result, recorded in the
+[`capacity audit`](evidence/v1-long-campaign-capacity-audit-2026-08-24.md);
+the exact manifest campaign must be rerun after an elevated WSL/Hyper-V
+recovery. No V1-21 ledger row, V1-22 campaign, RC, stable release, or
+publication is authorized by this failed run.
 
 ## V1-23 Execution Update (2026-08-23)
 
