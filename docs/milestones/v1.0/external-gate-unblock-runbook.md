@@ -49,6 +49,28 @@ expose credentials or other sensitive services to it. See the official
 [runner setup](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/add-runners)
 and [secure-use guidance](https://docs.github.com/en/actions/reference/security/secure-use).
 
+### WSL2 recovery when the runner goes offline
+
+If the WSL distribution is `Stopped`, the runner inventory reports the runner
+as `offline/busy`, and `wsl -d Ubuntu-T9` returns
+`Wsl/Service/CreateInstance/E_FAIL` or `E_UNEXPECTED`, treat the campaign as
+an infrastructure non-result. Do not promote a partial run or shorten its
+duration. From an elevated PowerShell session, reset the WSL/Hyper-V services
+and start the named distribution:
+
+```powershell
+wsl --shutdown
+Restart-Service WslService -Force
+Restart-Service vmcompute -Force
+wsl -d Ubuntu-T9 --user root -- /bin/true
+wsl -d Ubuntu-T9 -- docker version
+```
+
+Then confirm the runner service is online and idle, run the small diagnostic,
+and only afterward rerun the exact manifest campaign that produced no
+descriptor. Preserve the failed run URL and timestamps in the capacity audit;
+the rerun is the only candidate for V1-21 qualification.
+
 ## 2. Run the V1-21 gates in manifest order
 
 After the runner inventory is online, dispatch the exact published `0.3.6`
