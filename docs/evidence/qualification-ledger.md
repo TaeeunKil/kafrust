@@ -22,6 +22,369 @@ and are checked in CI. Values such as `not-applicable` and `not-recorded` are
 deliberate classifications, not missing data. A row must never use an
 unqualified relative artifact label.
 
+## Q-PUBLISHED-V120-020
+
+- date_utc: 2026-08-23
+- source_commit: 546a3a1697a2215fc48edc0f113ebc8996c46006
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka:4.3.1
+- mode: published ShareConsumer multi-member ownership
+- topology: three-broker KRaft
+- security: PLAINTEXT
+- group_protocol: share
+- workload: two-member disjoint Share ownership and drain
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32614372643
+- fault: concurrent member startup and assignment
+- duration: recorded in workflow
+- record_count: six seeded records
+- member_count: 2
+- repetition_count: 1
+- expected_errors: none; exact published dependency and disjoint ownership
+- observed_errors: none; job passed after workflow-scope correction
+- retry_count: 1 after verification-shell correction
+- duplicate_count: 0
+- loss_count: 0
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: in_flight=0 and buffered=0 asserted per member
+- result: passed
+- artifact: docs/evidence/v1-20-published-smoke-2026-08-23.md; run 32614372643
+- non_claims: not full V1-20 matrix, not long fault/SLO, not migration canary, not 1.0.0 readiness
+
+## Q-PUBLISHED-V120-019
+
+- date_utc: 2026-08-23
+- source_commit: fca0e22133bedd57c61050ad32c94bc572a84794
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka:4.3.1
+- mode: published Share Group State replication and coordinator failover
+- topology: three-broker KRaft
+- security: PLAINTEXT
+- group_protocol: share
+- workload: replicated internal state write/read/delete around coordinator loss
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32614253491
+- fault: Share coordinator broker stop and replacement
+- duration: recorded in workflow
+- record_count: not-recorded
+- member_count: not-applicable
+- repetition_count: 1
+- expected_errors: replicated state and post-failover read/delete succeed
+- observed_errors: none; job passed
+- retry_count: 0
+- duplicate_count: not-recorded
+- loss_count: 0
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: state topic replication factor 3 and ISR 1,2,3 before fault
+- result: passed
+- artifact: docs/evidence/v1-20-published-smoke-2026-08-23.md; run 32614253491
+- non_claims: not full V1-20 matrix, not long fault/SLO, not migration canary, not 1.0.0 readiness
+
+## Q-PUBLISHED-V120-018
+
+- date_utc: 2026-08-23
+- source_commit: fca0e22133bedd57c61050ad32c94bc572a84794
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: not-applicable
+- kafka_image: not-applicable
+- mode: published Streams API surface compilation
+- topology: fresh external Cargo project
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: all-features Streams API compile on stable and Rust 1.81
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32614303856
+- fault: package resolution or compilation failure
+- duration: recorded in workflow
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: 2 toolchains
+- expected_errors: exact published client/protocol pair resolves without path or patch dependency
+- observed_errors: none; both toolchain jobs passed
+- retry_count: 0
+- duplicate_count: 0
+- loss_count: not-applicable
+- latency: not-applicable
+- memory: not-recorded
+- final_resource_gauges: not-applicable
+- result: passed
+- artifact: docs/evidence/v1-20-published-smoke-2026-08-23.md; run 32614303856
+- non_claims: compile evidence only, not Streams runtime/SLO, not full V1-20 matrix, not 1.0.0 readiness
+
+## Q-PUBLISHED-V120-017
+
+- date_utc: 2026-08-23
+- source_commit: fca0e22133bedd57c61050ad32c94bc572a84794
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka:4.3.1
+- mode: published Streams group runtime
+- topology: single-node KRaft
+- security: PLAINTEXT
+- group_protocol: streams
+- workload: Streams group describe and stable membership
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32614251288
+- fault: group initialization or membership failure
+- duration: recorded in workflow
+- record_count: not-recorded
+- member_count: 1
+- repetition_count: 1
+- expected_errors: exact published dependency and group state Stable
+- observed_errors: none; job passed
+- retry_count: 0
+- duplicate_count: 0
+- loss_count: not-recorded
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: state=Stable and members=1 asserted
+- result: passed
+- artifact: docs/evidence/v1-20-published-smoke-2026-08-23.md; run 32614251288
+- non_claims: not multi-member Streams failover, not long fault/SLO, not full V1-20 matrix, not 1.0.0 readiness
+
+## Q-PUBLISHED-V120-016
+
+- date_utc: 2026-08-23
+- source_commit: fca0e22133bedd57c61050ad32c94bc572a84794
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka:4.3.1
+- mode: published ShareConsumer runtime
+- topology: single-node KRaft
+- security: PLAINTEXT
+- group_protocol: share
+- workload: ShareConsumer produce/fetch/ack runtime
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32614302188
+- fault: runtime or acknowledgement failure
+- duration: recorded in workflow
+- record_count: not-recorded
+- member_count: not-applicable
+- repetition_count: 1
+- expected_errors: exact published dependency and successful Share runtime
+- observed_errors: none; job passed
+- retry_count: 0
+- duplicate_count: not-recorded
+- loss_count: 0
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: not-recorded
+- result: passed
+- artifact: docs/evidence/v1-20-published-smoke-2026-08-23.md; run 32614302188
+- non_claims: not multi-member ownership/failover, not long fault/SLO, not full V1-20 matrix, not 1.0.0 readiness
+
+## Q-PUBLISHED-V120-015
+
+- date_utc: 2026-08-23
+- source_commit: fca0e22133bedd57c61050ad32c94bc572a84794
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka:4.3.1
+- mode: published KIP-848 regex and dynamic assignment
+- topology: single-node KRaft
+- security: PLAINTEXT
+- group_protocol: KIP-848 consumer
+- workload: regex subscription and dynamically created matching topic
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32614300424
+- fault: assignment or dynamic topic discovery failure
+- duration: recorded in workflow
+- record_count: not-recorded
+- member_count: not-recorded
+- repetition_count: 1
+- expected_errors: exact published dependency and matching dynamic assignment
+- observed_errors: none; job passed
+- retry_count: 0
+- duplicate_count: not-recorded
+- loss_count: 0
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: not-recorded
+- result: passed
+- artifact: docs/evidence/v1-20-published-smoke-2026-08-23.md; run 32614300424
+- non_claims: not complete KIP-848 matrix, not long fault/SLO, not full V1-20 matrix, not 1.0.0 readiness
+
+## Q-PUBLISHED-V120-014
+
+- date_utc: 2026-08-23
+- source_commit: fca0e22133bedd57c61050ad32c94bc572a84794
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka:4.3.1
+- mode: published member-aware offsets
+- topology: single-node KRaft
+- security: PLAINTEXT
+- group_protocol: KIP-848 consumer
+- workload: OffsetFetch/OffsetCommit v10 with member identity
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32614298827
+- fault: offset request or CLI reconciliation failure
+- duration: recorded in workflow
+- record_count: not-recorded
+- member_count: not-recorded
+- repetition_count: 1
+- expected_errors: exact published dependency and committed offset visible through Kafka CLI
+- observed_errors: none; job passed
+- retry_count: 0
+- duplicate_count: not-recorded
+- loss_count: 0
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: not-recorded
+- result: passed
+- artifact: docs/evidence/v1-20-published-smoke-2026-08-23.md; run 32614298827
+- non_claims: not complete offset matrix, not long fault/SLO, not full V1-20 matrix, not 1.0.0 readiness
+
+## Q-PUBLISHED-V120-013
+
+- date_utc: 2026-08-23
+- source_commit: fca0e22133bedd57c61050ad32c94bc572a84794
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka:4.3.1
+- mode: published consumer group rebalance churn
+- topology: three-broker KRaft
+- security: PLAINTEXT
+- group_protocol: KIP-848 consumer
+- workload: ten independent two-member drop/rejoin cycles
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32614297414
+- fault: abrupt member connection drop and replacement
+- duration: recorded in workflow
+- record_count: not-recorded
+- member_count: 2
+- repetition_count: 10 churn cycles
+- expected_errors: no ownership loss and exact published dependency
+- observed_errors: none; job passed
+- retry_count: 0
+- duplicate_count: not-recorded
+- loss_count: 0
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: workflow ownership and drain assertions passed
+- result: passed
+- artifact: docs/evidence/v1-20-published-smoke-2026-08-23.md; run 32614297414
+- non_claims: not long fault campaign, not complete group matrix, not full V1-20 matrix, not 1.0.0 readiness
+
+## Q-PUBLISHED-V120-012
+
+- date_utc: 2026-08-23
+- source_commit: fca0e22133bedd57c61050ad32c94bc572a84794
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka:4.3.1
+- mode: published ConsumerGroupDescribe
+- topology: single-node KRaft
+- security: PLAINTEXT
+- group_protocol: KIP-848 consumer
+- workload: group description and assignment visibility
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32614295845
+- fault: group description or assignment failure
+- duration: recorded in workflow
+- record_count: not-recorded
+- member_count: 1
+- repetition_count: 1
+- expected_errors: exact published dependency and assignment partition visible
+- observed_errors: none; job passed
+- retry_count: 0
+- duplicate_count: not-recorded
+- loss_count: 0
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: not-recorded
+- result: passed
+- artifact: docs/evidence/v1-20-published-smoke-2026-08-23.md; run 32614295845
+- non_claims: not complete group matrix, not long fault/SLO, not full V1-20 matrix, not 1.0.0 readiness
+
+## Q-PUBLISHED-V120-011
+
+- date_utc: 2026-08-23
+- source_commit: fca0e22133bedd57c61050ad32c94bc572a84794
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka:4.3.1
+- mode: published DescribeCluster
+- topology: single-node KRaft with controller listener
+- security: PLAINTEXT
+- group_protocol: not-applicable
+- workload: cluster/controller metadata and feature metadata
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32614294346
+- fault: metadata or controller endpoint failure
+- duration: recorded in workflow
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: 1
+- expected_errors: exact published dependency and API 60 metadata baseline
+- observed_errors: none; job passed
+- retry_count: 0
+- duplicate_count: 0
+- loss_count: not-applicable
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: not-applicable
+- result: passed
+- artifact: docs/evidence/v1-20-published-smoke-2026-08-23.md; run 32614294346
+- non_claims: not complete metadata matrix, not long fault/SLO, not full V1-20 matrix, not 1.0.0 readiness
+
+## Q-PUBLISHED-V120-010
+
+- date_utc: 2026-08-23
+- source_commit: fca0e22133bedd57c61050ad32c94bc572a84794
+- client_version: 0.3.6
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka:4.3.1
+- mode: published API 74 configuration smoke
+- topology: single-node KRaft
+- security: PLAINTEXT
+- group_protocol: not-applicable
+- workload: API 74 configuration/resource discovery
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32614292940
+- fault: resource discovery or configuration request failure
+- duration: recorded in workflow
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: 1
+- expected_errors: exact published dependency and API 74 response
+- observed_errors: none; job passed
+- retry_count: 0
+- duplicate_count: 0
+- loss_count: not-applicable
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: not-applicable
+- result: passed
+- artifact: docs/evidence/v1-20-published-smoke-2026-08-23.md; run 32614292940
+- non_claims: not complete API 74 matrix, not long fault/SLO, not full V1-20 matrix, not 1.0.0 readiness
+
 ## Q-PUBLISHED-V120-009
 
 - date_utc: 2026-08-23

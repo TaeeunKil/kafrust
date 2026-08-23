@@ -26,6 +26,13 @@ The exact checksums and fresh external Rust 1.81/stable lockfile checks are in
 Both exact docs.rs pages subsequently returned HTTP 200; this is page
 availability only. The full V1-20 matrix is not complete.
 
+Version cadence is evidence-driven rather than one-patch-per-commit. A pre-1.0
+patch is published only when a user-visible or independently consumable boundary
+justifies a fresh registry artifact and its affected smoke rows; internal,
+documentation-only, or incomplete changes remain unpublished until grouped into
+the next qualified boundary. Every such decision is recorded with explicit
+non-claims, and the competitor review is refreshed before an RC or stable release.
+
 When the V1-25 release gate is explicitly recorded, publish the exact frozen protocol RC
 first, wait for fresh Rust 1.81/stable registry resolution, then run the client
 package dry-run against that registry artifact before publishing the client RC.

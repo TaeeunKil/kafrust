@@ -24,3 +24,32 @@ This is the first published-artifact smoke slice for `0.3.6`. It does not
 close every accepted broker/security/workload row, long fault or SLO campaign,
 migration canary, API freeze, or stable release. Those remain separate V1-20+
 gates.
+
+## Additional published surface runs
+
+The same exact `0.3.6` registry pair was then exercised from source commit
+`fca0e22133bedd57c61050ad32c94bc572a84794`:
+
+- API 74 configuration on Kafka 4.3.1: [run 32614292940](https://github.com/TaeeunKil/kafrust/actions/runs/32614292940)
+- DescribeCluster on Kafka 4.3.1: [run 32614294346](https://github.com/TaeeunKil/kafrust/actions/runs/32614294346)
+- ConsumerGroupDescribe: [run 32614295845](https://github.com/TaeeunKil/kafrust/actions/runs/32614295845)
+- KIP-848 consumer churn (ten drop cycles): [run 32614297414](https://github.com/TaeeunKil/kafrust/actions/runs/32614297414)
+- member-aware OffsetFetch/OffsetCommit v10: [run 32614298827](https://github.com/TaeeunKil/kafrust/actions/runs/32614298827)
+- KIP-848 regex/dynamic assignment: [run 32614300424](https://github.com/TaeeunKil/kafrust/actions/runs/32614300424)
+- ShareConsumer runtime: [run 32614302188](https://github.com/TaeeunKil/kafrust/actions/runs/32614302188)
+- Streams group runtime: [run 32614251288](https://github.com/TaeeunKil/kafrust/actions/runs/32614251288)
+- Streams API surface on stable and Rust 1.81: [run 32614303856](https://github.com/TaeeunKil/kafrust/actions/runs/32614303856)
+- ShareConsumer multi-member ownership: [run 32614372643](https://github.com/TaeeunKil/kafrust/actions/runs/32614372643), rerun from corrective workflow commit `546a3a1`
+- Share Group State replication/coordinator failover: [run 32614253491](https://github.com/TaeeunKil/kafrust/actions/runs/32614253491)
+
+All listed runs passed and assert exact published dependency versions in fresh
+external lockfiles. An earlier multi-member attempt, [run
+32614249505](https://github.com/TaeeunKil/kafrust/actions/runs/32614249505),
+stopped in the verification shell because `log_base` was not scoped in that
+step; the ownership assertions before that reference failure completed. The
+workflow was corrected in `546a3a1` and the rerun above passed. This correction
+is workflow evidence, not a product-failure waiver.
+
+These rows expand the published smoke slice; they still do not close the full
+broker/security/workload matrix, repeated fault campaigns, SLO, migration,
+API-freeze, or release gates.

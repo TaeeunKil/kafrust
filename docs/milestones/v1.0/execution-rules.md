@@ -29,6 +29,16 @@ dependency graph and roadmap, choose the required intermediate version(s), and
 restart the affected gates from the new plan. Never silently turn an
 intermediate release into `1.0.0`.
 
+Patch-version cadence is evidence-driven, not automatic. A `0.0.1`-sized
+change is a release candidate only when it forms a useful external boundary:
+for example, a user-visible bug fix, a compatible API/protocol capability, or
+an independently consumable package whose fresh registry and smoke evidence is
+worth preserving. Internal refactors, docs-only changes, or incomplete slices
+stay in the current unpublished candidate. When a boundary is worth publishing,
+use the next coordinated protocol/client patch version, record the decision and
+non-claims in the ledger, and re-run the affected published rows; do not publish
+merely because the diff happens to look small.
+
 ## Entry Procedure
 
 Before changing source:
