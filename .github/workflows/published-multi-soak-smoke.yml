@@ -80,6 +80,9 @@ jobs:
             docker run -d --name "kafrust-published-multi-soak-${node}" \
               --hostname "kafrust-published-multi-soak-${node}" \
               --network kafrust-published-multi-soak \
+              --log-driver json-file \
+              --log-opt max-size=50m \
+              --log-opt max-file=3 \
               -p "${external_port}:9092" \
               -e KAFKA_CLUSTER_ID="${cluster_id}" \
               -e KAFKA_NODE_ID="${node}" \
@@ -320,6 +323,6 @@ jobs:
       - name: Dump Kafka diagnostics
         if: failure()
         run: |
-          docker logs kafrust-published-multi-soak-1 || true
-          docker logs kafrust-published-multi-soak-2 || true
-          docker logs kafrust-published-multi-soak-3 || true
+          docker logs --tail 200 kafrust-published-multi-soak-1 || true
+          docker logs --tail 200 kafrust-published-multi-soak-2 || true
+          docker logs --tail 200 kafrust-published-multi-soak-3 || true

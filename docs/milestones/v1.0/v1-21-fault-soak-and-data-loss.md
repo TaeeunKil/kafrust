@@ -160,6 +160,15 @@ cycles are requested. This makes the required 100-cycle published gate
 executable without promoting the existing eight-cycle evidence; no 100-cycle
 run has been executed yet.
 
+The first parallel six-hour execution set exposed an infrastructure failure,
+not a client result: the Kafka 3.7.2 floor run exhausted the hosted runner
+disk while its failure hook emitted unbounded Docker logs, and one secured
+repeat was terminated without a result artifact. The multi-broker workflows
+now cap each broker's JSON log rotation at three 50-MiB files and retain only
+the final 200 diagnostic lines on failure. Those runs are classified as
+infrastructure failures and must be rerun; they do not pass or fail the
+client's fault semantics.
+
 The published classic/KIP-848 group-rebalance fixture was likewise raised from
 its previous 64-cycle guard to a maximum of 100 cycles. Its timeout now scales
 with the requested cycle count, and the workflow timeout was extended so a

@@ -533,6 +533,13 @@ final cycle, while retaining the historical eight-cycle default. A qualification
 run may request exactly 100 cycles and receives a retained JSON summary marked
 qualified only at that bound; no such run has been promoted yet.
 
+The first parallel six-hour fault set also revealed hosted-runner disk
+exhaustion caused by unbounded broker logs during failure diagnostics. The
+plaintext and secured multi-broker workflows now use three 50-MiB JSON log
+files per broker and retain only the last 200 lines when a run fails. The
+affected runs are infrastructure failures requiring rerun, not client fault
+qualification evidence.
+
 The published classic/KIP-848 group-rebalance fixture now accepts up to 100
 cycles (previously 64), with a cycle-scaled client timeout and a 35-minute job
 bound. This only enables the required executions; no 100-cycle published result

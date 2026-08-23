@@ -139,6 +139,9 @@ jobs:
             docker run -d --name "kafrust-published-secure-multi-soak-${node}" \
               --hostname "kafrust-published-secure-multi-soak-${node}" \
               --network kafrust-published-secure-multi-soak \
+              --log-driver json-file \
+              --log-opt max-size=50m \
+              --log-opt max-file=3 \
               -p "${external_port}:9095" \
               -v "$PWD/sasl-ssl:/etc/kafka/secrets:ro" \
               -e KAFKA_OPTS="-Djava.security.auth.login.config=/etc/kafka/secrets/kafka_server_jaas.conf" \
@@ -380,6 +383,6 @@ jobs:
       - name: Dump Kafka diagnostics
         if: failure()
         run: |
-          docker logs kafrust-published-secure-multi-soak-1 || true
-          docker logs kafrust-published-secure-multi-soak-2 || true
-          docker logs kafrust-published-secure-multi-soak-3 || true
+          docker logs --tail 200 kafrust-published-secure-multi-soak-1 || true
+          docker logs --tail 200 kafrust-published-secure-multi-soak-2 || true
+          docker logs --tail 200 kafrust-published-secure-multi-soak-3 || true
