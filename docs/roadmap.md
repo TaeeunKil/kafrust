@@ -912,6 +912,15 @@ This strengthens published compatibility evidence only; V1-20, V1-21, V1-22,
 V1-23, and the release gates remain open, and no `0.3.7` or `1.0.0` decision is
 made from this refresh.
 
+On 2026-08-24 the long-campaign capacity was re-audited after the pushed
+refresh: the repository has zero registered self-hosted runners and the local
+workstation has no Docker executable. Exact-head CI
+[32646817241](https://github.com/TaeeunKil/kafrust/actions/runs/32646817241)
+passed the runner guards and adjudication tooling, so the missing capacity is
+an explicit external gate rather than a reason to weaken V1-21/V1-22 duration,
+matrix, or evidence requirements. The immutable audit is
+[`v1-long-campaign-capacity-audit-2026-08-24.md`](evidence/v1-long-campaign-capacity-audit-2026-08-24.md).
+
 ## Historical Release Qualification
 
 `0.3.5` is now published on crates.io in protocol-first order. The fresh

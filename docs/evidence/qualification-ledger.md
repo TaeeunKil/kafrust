@@ -4146,3 +4146,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: GitHub Actions run 32646376335; published API 74 client log; docs/evidence/v1-20-published-refresh-2026-08-23.md
 - non_claims: not complete API 74 matrix, not authorization coverage, not long fault or SLO evidence, not 1.0.0 readiness
+
+## Q-INFRA-CAPACITY-V121-V122-2026-08-24
+
+- date_utc: 2026-08-24
+- source_commit: 4a2b472d2ce1074cc83fe1df2cf672e021dcb2bf
+- client_version: 0.3.6 published baseline
+- protocol_version: 0.3.6 published dependency
+- work_status: Blocked
+- evidence_level: CI
+- kafka_version: not-applicable; no broker campaign dispatched
+- kafka_image: not-applicable; no broker campaign dispatched
+- mode: GitHub Actions runner-capacity audit
+- topology: repository-level runner inventory
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: V1-21 four six-hour campaigns plus Share 100-cycle gate; V1-22 120-job eight-hour matrix
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32646817241
+- fault: no client fault injected; capacity preflight only
+- duration: inventory query and CI guard audit completed on 2026-08-24
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: 1 capacity audit
+- expected_errors: zero registered self-hosted runners must prevent long-campaign dispatch
+- observed_errors: runner inventory total_count=0; local Docker executable unavailable; hosted-label guards passed in CI
+- retry_count: not-applicable
+- duplicate_count: not-applicable
+- loss_count: not-applicable
+- latency: not-applicable
+- memory: not-applicable
+- final_resource_gauges: not-applicable
+- result: blocked
+- artifact: GitHub Actions run 32646817241; runner inventory query; docs/evidence/v1-long-campaign-capacity-audit-2026-08-24.md
+- non_claims: not a client fault result, not a performance result, not V1-21 completion, not V1-22 completion, not SLO evidence, not 1.0.0 readiness

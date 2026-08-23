@@ -256,6 +256,18 @@ request and completed as `cancelled`; all four six-hour runs and the Share
 100-cycle run are now terminal infrastructure non-results with no descriptor
 or summary artifact.
 
+### Long-campaign capacity re-audit (2026-08-24)
+
+The repository runner inventory still reports zero registered self-hosted
+runners. The exact-head CI pass in
+[32646817241](https://github.com/TaeeunKil/kafrust/actions/runs/32646817241)
+confirms the manifest and hosted-label guard, while the workstation has no
+Docker executable for a local substitute. The four six-hour campaigns and the
+Share 100-cycle run therefore remain `In progress` infrastructure gates; no
+campaign is dispatched or promoted by reducing the duration or changing the
+runner requirement. The audit is retained in
+[`v1-long-campaign-capacity-audit-2026-08-24.md`](../../evidence/v1-long-campaign-capacity-audit-2026-08-24.md).
+
 ### Bounded current-source diagnostic runs (2026-08-22)
 
 The first 60-second manual run on source `3fdfc778` (run

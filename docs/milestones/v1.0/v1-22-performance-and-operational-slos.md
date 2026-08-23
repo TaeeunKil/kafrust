@@ -203,6 +203,16 @@ This adds an executable qualification path but no campaign has been dispatched
 yet, so V1-22 remains In progress and no SLO, baseline, competitor-parity, or
 release claim follows from the workflow definition alone.
 
+### Long-campaign capacity re-audit (2026-08-24)
+
+The repository runner inventory still reports zero registered self-hosted
+runners, and the workstation has no Docker executable for a local substitute.
+Exact-head CI [32646817241](https://github.com/TaeeunKil/kafrust/actions/runs/32646817241)
+passed the six-profile manifest, result adjudicator, and hosted-label guard.
+The eight-hour matrix therefore remains an external-capacity gate rather than
+a shortened or hosted-runner claim. The audit is retained in
+[`v1-long-campaign-capacity-audit-2026-08-24.md`](../../evidence/v1-long-campaign-capacity-audit-2026-08-24.md).
+
 ### Competitor review and re-plan (2026-08-23)
 
 The companion published comparison

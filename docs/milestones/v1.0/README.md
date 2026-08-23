@@ -35,8 +35,8 @@ published from that same-version package state.
 
 ## Current Execution
 
-As of 2026-08-23, V1-00, V1-01, V1-02, and V1-19 are `Done`; V1-03 through
-V1-22 remain `In progress`; V1-23
+As of 2026-08-24, V1-00, V1-01, V1-02, and V1-19 are `Done`; V1-03 through
+V1-18 and V1-20 through V1-22 remain `In progress`; V1-23
 is `Blocked` on a named service canary; and V1-24 through V1-26 are `Planned`.
 The coordinated
 `0.3.6` pair is published and resolves from fresh external projects on Rust
@@ -79,6 +79,12 @@ The V1-25 and V1-26 release manifests and checkers now lock the coordinated
 version identities, protocol-first publication order, exact RC dependency,
 metadata-only stable diff, and explicit authorization boundary; both remain
 preparation inputs until their external evidence exists.
+
+The pushed documentation refresh `4a2b472` passed both stable and Rust 1.81.0
+CI. A fresh capacity audit recorded in
+[`v1-long-campaign-capacity-audit-2026-08-24.md`](../../evidence/v1-long-campaign-capacity-audit-2026-08-24.md)
+found zero registered self-hosted runners and no local Docker substitute, so
+the V1-21 six-hour and V1-22 eight-hour gates remain explicitly unqualified.
 
 ## Status And Evidence
 
