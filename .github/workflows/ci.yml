@@ -90,6 +90,9 @@ jobs:
       - name: Check v1 migration canary manifest
         run: python scripts/check_v1_migration_canary_manifest.py
 
+      - name: Check published workflow version defaults
+        run: python scripts/check_published_workflow_versions.py
+
       - name: Test protocol audit scripts
         run: python -m unittest scripts/test_check_apache_schema_versions.py
 

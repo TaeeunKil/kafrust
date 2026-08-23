@@ -6,7 +6,7 @@ on:
       kafrust_version:
         description: "Published kafrust version to compare from crates.io"
         required: true
-        default: "0.3.5"
+        default: "0.3.6"
       record_count:
         description: "Measured records per implementation"
         required: true

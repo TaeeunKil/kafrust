@@ -575,6 +575,9 @@ only when it forms a useful user-visible or independently consumable boundary
 with fresh registry evidence. Internal or incomplete changes stay grouped in
 the current candidate; the next RC/stable decision requires a refreshed dated
 competitor comparison and a completed release gate.
+All 35 published smoke workflows now default to the current published `0.3.6`
+client, while explicit version inputs remain available for historical reruns;
+CI enforces this default-version invariant.
 
 The 0.3.6 competitor review on 2026-08-23 found a material workload-specific
 throughput gap versus rust-rdkafka, so V1-22 has been re-planned for profiling,
