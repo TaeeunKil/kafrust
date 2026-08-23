@@ -784,6 +784,15 @@ both isolated clients processed 1,000 unique 1-KiB records with zero
 loss/duplicates and matching digest. This is baseline evidence only and does
 not change the blocked external-canary decision.
 
+The reference fixture then completed a one-million-record comparison in
+[32645204676](https://github.com/TaeeunKil/kafrust/actions/runs/32645204676)
+from source `c56beaa`: both implementations reported 1,000,000 unique records,
+zero loss/duplicates, and the same payload digest. This strengthens the
+reference-comparison preparation rung only; it does not supply the named
+service, transaction/Admin, fault, credential-rotation, forward-cutover, or
+rollback evidence required to unblock V1-23. Detailed values are retained in
+[`v1-23-migration-million-record-reference-2026-08-23.md`](evidence/v1-23-migration-million-record-reference-2026-08-23.md).
+
 V1-24 through V1-26 also remain `Planned`: the API snapshot is only a freeze input,
 and no RC or `1.0.0` publication/tag exists. Protocol-first publication is
 allowed only when the named release milestone, exact artifact evidence, and

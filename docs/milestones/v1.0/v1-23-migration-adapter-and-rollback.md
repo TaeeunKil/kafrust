@@ -103,6 +103,23 @@ This refreshes the reference baseline only; it does not execute staged
 cutover, fault observation, credential rotation, rollback, or the million-
 record exit gate.
 
+### Million-record reference comparison (2026-08-23)
+
+The same reference fixture then processed one million unique 1-KiB records per
+implementation in [run 32645204676](https://github.com/TaeeunKil/kafrust/actions/runs/32645204676)
+from source `c56beaa`. Both implementations reported 1,000,000 unique records,
+zero loss, zero duplicates, and the matching payload digest
+`bb9d4e95e5a812aa63187d56c17de87631f3def47f96e7b92a535c396eba210f`. Kafrust
+measured 31,904.29 Produce and 31,251.06 Consume records/s; rust-rdkafka
+measured 57,602.65 and 33,632.97 respectively. The complete values and
+artifact boundary are recorded in
+[`v1-23-migration-million-record-reference-2026-08-23.md`](../../evidence/v1-23-migration-million-record-reference-2026-08-23.md).
+
+This is a stronger reference-comparison preparation result, not the V1-23 exit
+gate: it is a source-checkout, isolated single-node produce/consume fixture
+with no credential rotation, fault/cutover, transaction/Admin coverage, or
+named service rollback.
+
 ### Published 0.3.6 competitor comparison (2026-08-23)
 
 The published comparator was rerun before advancing the release path in

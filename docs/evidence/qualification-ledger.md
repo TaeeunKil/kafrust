@@ -3849,3 +3849,36 @@ unqualified relative artifact label.
 - result: not-run
 - artifact: workflow run 32644605743; segment artifact pending
 - non_claims: not a passing six-hour gate, not V1-21 completion, not SLO, not 1.0.0 readiness
+
+## Q-LIVE-V123-004
+
+- date_utc: 2026-08-23
+- source_commit: c56beaab3702d41ec6c7fc10de80bf3483c7711c
+- client_version: 0.3.6 source checkout
+- protocol_version: 0.3.6 source checkout
+- work_status: In progress
+- evidence_level: Live current-source
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka:4.3.1
+- mode: KRaft
+- topology: isolated single-node reference comparison
+- security: PLAINTEXT
+- group_protocol: not-applicable
+- workload: one million unique 1-KiB records per implementation; batch size 100; kafrust versus rust-rdkafka 0.39.0
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32645204676
+- fault: none injected; forward/fault-observe/rollback stages remain open
+- duration: workflow approximately 204 seconds; kafrust produce 31.343749s consume 31.998910s; rust-rdkafka produce 17.360312s consume 29.732733s
+- record_count: 1000000 unique records per implementation
+- member_count: not-applicable
+- repetition_count: 1
+- expected_errors: zero loss, duplicates, and normalized payload-digest divergence
+- observed_errors: none; both implementations reported 1000000 unique, zero loss/duplicates, matching digest `bb9d4e95e5a812aa63187d56c17de87631f3def47f96e7b92a535c396eba210f`
+- retry_count: not-applicable
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: not measured
+- result: passed
+- artifact: GitHub Actions run 32645204676; kafrust-migration-canary-32645204676 artifact; docs/evidence/v1-23-migration-million-record-reference-2026-08-23.md
+- non_claims: not named service canary, not forward/fault/rollback, not transaction/Admin coverage, not published-artifact evidence, not production migration approval
