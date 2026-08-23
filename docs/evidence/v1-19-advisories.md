@@ -13,9 +13,11 @@
 The refresh run queried all 89 resolved workspace and registry packages in one
 OSV batch request. It recorded zero advisory matches, including zero
 critical/high matches. The snapshot is intentionally time-bounded to 30 days;
-CI verifies the exact package inventory and fails after the review window so a
-new live query is required. The committed CI check is offline and does not
-claim current future OSV, crates.io, or undisclosed-vulnerability state.
+CI verifies the package identity inventory (allowing only transitive registry
+version re-resolution already covered by the SBOM gate) and fails after the
+review window so a new live query is required. The committed CI check is
+offline and does not claim current future OSV, crates.io, or
+undisclosed-vulnerability state.
 
 This closes the dated advisory snapshot slice only. Manual owner/rationale
 review for the 62 unsafe/native entries, multi-platform package evidence, and

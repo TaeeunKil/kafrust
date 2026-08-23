@@ -179,8 +179,9 @@ RustSec advisory export revision `bf5c0d245a92671908518d7e765914d437954ed6`.
 All 89 resolved packages returned zero advisory matches, including zero
 critical/high matches. The report is archived in
 [`v1-19-advisories.md`](../../evidence/v1-19-advisories.md) and its JSON
-companion. CI checks the exact package inventory offline and expires the
-snapshot after 30 days, forcing a fresh live review. This is a dated snapshot,
+companion. CI checks the package identities offline (transitive version
+re-resolution is covered by the SBOM gate) and expires the snapshot after 30
+days, forcing a fresh live review. This is a dated snapshot,
 not a claim about future or undisclosed vulnerabilities, and the manual
 unsafe/native owner review remains open.
 

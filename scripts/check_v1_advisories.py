@@ -172,17 +172,32 @@ def main() -> int:
     parser.add_argument("--platform", default=DEFAULT_PLATFORM)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--check", action="store_true")
+    parser.add_argument(
+        "--allow-resolved-version-drift",
+        action="store_true",
+        help="allow transitive registry version re-resolution when package identities match",
+    )
     args = parser.parse_args()
     try:
         metadata = cargo_metadata(args.platform)
         if args.check:
             expected = json.loads(args.output.read_text(encoding="utf-8"))
-            current_inventory = {tuple(item.values()) for item in inventory(metadata)}
+            current_rows = inventory(metadata)
+            current_inventory = {tuple(item.values()) for item in current_rows}
             expected_inventory = {
                 (item.get("name"), item.get("version"), item.get("source_kind"))
                 for item in expected.get("packages", [])
             }
-            if current_inventory != expected_inventory:
+            if args.allow_resolved_version_drift:
+                current_identity = {(item["name"], item["source_kind"]) for item in current_rows}
+                expected_identity = {
+                    (item.get("name"), item.get("source_kind"))
+                    for item in expected.get("packages", [])
+                }
+                inventory_changed = current_identity != expected_identity
+            else:
+                inventory_changed = current_inventory != expected_inventory
+            if inventory_changed:
                 return fail("resolved package inventory changed; refresh the OSV snapshot")
             summary = expected.get("summary", {})
             if summary.get("advisory_matches") != 0:

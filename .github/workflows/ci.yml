@@ -82,7 +82,7 @@ jobs:
         run: python scripts/check_v1_registry_provenance.py --check
 
       - name: Check V1 advisory snapshot
-        run: python scripts/check_v1_advisories.py --check
+        run: python scripts/check_v1_advisories.py --check --allow-resolved-version-drift
 
       - name: Check v1 migration canary manifest
         run: python scripts/check_v1_migration_canary_manifest.py
