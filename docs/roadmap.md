@@ -339,6 +339,12 @@ stable in [CI run 32610559177](https://github.com/TaeeunKil/kafrust/actions/runs
 from exact source `af73b8d`. This is CI confirmation of the slices, not V1-19
 completion or publication readiness.
 
+The dated version-readiness decision is archived in
+[`docs/evidence/v1-release-competitive-readiness-2026-08-23.md`](evidence/v1-release-competitive-readiness-2026-08-23.md):
+the next identity remains pre-1.0 `0.3.6`, while `1.0.0` is not justified yet.
+The candidate remains unpublished until the remaining package/published gates
+and the next competitor comparison are satisfied.
+
 Release planning now also requires a dated competitor comparison and a
 version-readiness decision before any RC/stable artifact is published. The
 agent may make the publication decision autonomously only after those results,

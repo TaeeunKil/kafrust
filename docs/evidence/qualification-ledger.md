@@ -22,6 +22,39 @@ and are checked in CI. Values such as `not-applicable` and `not-recorded` are
 deliberate classifications, not missing data. A row must never use an
 unqualified relative artifact label.
 
+## Q-DECISION-V1-001
+
+- date_utc: 2026-08-23
+- source_commit: 08743a813d3d33257cc12fc0767825aae620d8e7
+- client_version: 0.3.6 candidate
+- protocol_version: 0.3.6 candidate
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: not-applicable
+- kafka_image: not-applicable
+- mode: competitive release-readiness review
+- topology: not-applicable
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: dated comparison of kafrust against krafka, kacrab, rskafka, kafka-rust, kafkit-client, and rust-rdkafka
+- workflow: docs/evidence/v1-release-competitive-readiness-2026-08-23.md
+- fault: material competitor gap or premature version identity
+- duration: not-recorded
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: 1 dated review
+- expected_errors: no unsupported 1.0.0 readiness claim
+- observed_errors: 1.0.0 deferred; 0.3.6 retained as next pre-1.0 candidate
+- retry_count: not-applicable
+- duplicate_count: not-applicable
+- loss_count: not-applicable
+- latency: not-applicable
+- memory: not-applicable
+- final_resource_gauges: not-applicable
+- result: passed
+- artifact: docs/evidence/v1-release-competitive-readiness-2026-08-23.md
+- non_claims: not publication authorization, not published-artifact evidence, not V1-19 completion, not 1.0.0 readiness
+
 ## Q-CI-V119-008
 
 - date_utc: 2026-08-23
