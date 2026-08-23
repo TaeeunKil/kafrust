@@ -105,6 +105,7 @@ async fn main() -> kafrust::Result<()> {
     let mut next_offsets = [None; PARTITIONS];
     let mut next_produce_sequences = [0_u64; PARTITIONS];
     let mut next_consume_sequences = [0_u64; PARTITIONS];
+    let mut pending_batches: [Option<Vec<ProducerRecord>>; PARTITIONS] = [None, None, None];
     let mut produced = 0usize;
     let mut consumed = 0usize;
     let mut attempted_records = 0_u64;
@@ -119,20 +120,28 @@ async fn main() -> kafrust::Result<()> {
 
     while Instant::now() < deadline {
         for (partition, next_offset) in next_offsets.iter_mut().enumerate() {
-            let sequence_start = next_produce_sequences[partition];
-            let batch_records = records(
-                &topic,
-                &payload,
-                batch_size,
-                partition as i32,
-                sequence_start,
-            );
+            let batch_records = if let Some(batch_records) = pending_batches[partition].take() {
+                batch_records
+            } else {
+                let sequence_start = next_produce_sequences[partition];
+                let batch_records = records(
+                    &topic,
+                    &payload,
+                    batch_size,
+                    partition as i32,
+                    sequence_start,
+                );
+                let batch_len = u64::try_from(batch_records.len())
+                    .map_err(|_| Error::Unsupported("secure soak batch length is too large"))?;
+                attempted_records = attempted_records.saturating_add(batch_len);
+                batch_records
+            };
             let batch_len = u64::try_from(batch_records.len())
                 .map_err(|_| Error::Unsupported("secure soak batch length is too large"))?;
-            next_produce_sequences[partition] = sequence_start.saturating_add(batch_len);
-            attempted_records = attempted_records.saturating_add(batch_len);
-            let metadata = match producer.send_batch(batch_records).await {
+            let metadata = match producer.send_batch(batch_records.iter().cloned()).await {
                 Ok(metadata) => {
+                    next_produce_sequences[partition] =
+                        next_produce_sequences[partition].saturating_add(batch_len);
                     acknowledged_records = acknowledged_records.saturating_add(
                         u64::try_from(metadata.len()).map_err(|_| {
                             Error::Unsupported("secure soak metadata length is too large")
@@ -145,6 +154,7 @@ async fn main() -> kafrust::Result<()> {
                 }
                 Err(error) => {
                     eprintln!("secure multi-soak produce failed: {error}");
+                    pending_batches[partition] = Some(batch_records);
                     operation_errors += 1;
                     unknown_outcomes = unknown_outcomes.saturating_add(batch_len);
                     saw_error = true;
@@ -230,6 +240,12 @@ async fn main() -> kafrust::Result<()> {
                 }
             }
         }
+    }
+
+    if pending_batches.iter().any(Option::is_some) {
+        return Err(Error::Unsupported(
+            "secure soak ended with unresolved produce outcomes",
+        ));
     }
 
     let snapshot = metrics.snapshot();
