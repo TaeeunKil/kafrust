@@ -14,17 +14,38 @@ immediate host failure was exhaustion of the Windows `T:` volume that stores
 the WSL `ext4.vhdx`: only `29.8 MiB` remained. WSL consequently returned
 `CreateInstance/E_FAIL` and `E_UNEXPECTED`, and the GitHub runner went offline.
 
-The live VHDX inspection after recovery found the concrete cause. Three exited
-Kafka containers left by the failed campaign each retained a `211 GB` writable
-layer (`631.7 GB` total), mostly Kafka log/data trees under `/tmp/kafka-logs`
-and `/opt/kafka/logs`. Docker build cache added `85.89 GB`, of which `61.44 GB`
-was reclaimable. A separate `157.54 GiB` WSL export backup was also stored on
-the same `T:` volume as the `773.79 GiB` VHDX. The combination exhausted the
-host volume even though the filesystem inside the VHDX still had reclaimable
-space.
+The live VHDX inspection after recovery found the concrete capacity path.
+Three exited Kafka containers left by the failed campaign each retained a
+`211 GB` writable layer (`631.7 GB` total), mostly Kafka log/data trees under
+`/tmp/kafka-logs` and `/opt/kafka/logs`. That size is consistent with the
+declared workload's hundreds-of-gigabytes data budget (see below), so it is
+not safe to label all of it a leak. The lifecycle failure was that the data
+remained after the run failed. Docker build cache added `85.89 GB`, of which
+`61.44 GB` was reclaimable. A separate `157.54 GiB` WSL export backup was also
+stored on the same `T:` volume as the `773.79 GiB` VHDX. The combination
+exhausted the host volume even though the filesystem inside the VHDX still had
+reclaimable space.
 
 This is an infrastructure and lifecycle failure, not a Kafka client result:
 the run produced no descriptor or artifact and is not evidence for V1-21.
+
+## Workload storage budget
+
+The six-hour campaign is genuinely a large data operation. At the declared
+minimum of `10,000` records/s, `21,600` seconds, and `1,024` payload bytes per
+record, the logical payload lower bound is:
+
+```text
+10,000 × 21,600 × 1,024 = 221,184,000,000 bytes ≈ 206 GiB
+```
+
+With three Kafka replicas, the broker data lower bound is approximately
+`618 GiB`, before segment indexes, metadata, retries, and filesystem overhead.
+The observed `631.7 GB` across three broker writable layers is therefore in the
+expected order of magnitude for one campaign. The correct prevention goal is
+not to pretend this is a small test: it is to reserve capacity for one full
+campaign, clean it after every outcome, and keep backups off the campaign
+volume.
 
 ## Timeline and evidence
 
@@ -46,10 +67,12 @@ to an independent volume before claiming backup resilience.
 
 ### Root cause
 
-The long-campaign workflows created broker containers and never removed them
-when a job failed or the runner disappeared. Kafka data therefore remained in
-container writable layers. A failed six-hour run became a persistent host
-allocation rather than a bounded, disposable test environment.
+The long-campaign workflows created a workload that can legitimately consume
+roughly `600+ GiB` of broker storage, but they had no capacity preflight and
+never removed broker containers when a job failed or the runner disappeared.
+The expected campaign allocation therefore became a persistent host
+allocation, and competed with the VHDX's export backup, instead of being
+reserved, observed, and reclaimed as a bounded campaign resource.
 
 ### Contributing factors
 
@@ -69,7 +92,7 @@ The following controls are implemented in the long-campaign paths:
 
 | Control | Implementation | Failure behavior |
 | --- | --- | --- |
-| Host-capacity preflight | [`scripts/check_campaign_capacity.sh`](../../scripts/check_campaign_capacity.sh) is called by the published multi-soak, secured multi-soak, and V1-22 performance workflows. On WSL it checks `/mnt/t`; otherwise it checks the runner root. | Refuses dispatch below `200 GiB` host free or `100 GiB` Docker-root free and prints `docker system df`. |
+| Host-capacity preflight | [`scripts/check_campaign_capacity.sh`](../../scripts/check_campaign_capacity.sh) is called by the published multi-soak, secured multi-soak, and V1-22 performance workflows. On WSL it checks `/mnt/t`; otherwise it checks the runner root. | Refuses dispatch below `700 GiB` host free or `700 GiB` Docker-root free and prints `docker system df`; the threshold reserves one six-hour, three-replica workload plus headroom. |
 | Unconditional cleanup | [`scripts/cleanup_campaign_docker.sh`](../../scripts/cleanup_campaign_docker.sh) runs with `if: always()` after diagnostics. | Removes only the workflow's container prefix and network, removes anonymous volumes, prunes build cache unused for 24 hours, and prints final capacity. |
 | Runner lifecycle | Ubuntu-T9 now has an enabled systemd service for the configured GitHub runner. | WSL boot starts the listener automatically; a manual `run.sh` process is no longer the steady state. |
 | Backup sequencing | A backup is not deleted until the replacement export has exit code `0` and a non-zero recorded size. | Prevents deleting the only known copy during a failed export. |
