@@ -128,6 +128,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Check self-hosted runner capacity
+        shell: bash
+        run: bash scripts/check_campaign_capacity.sh
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
@@ -412,6 +416,11 @@ jobs:
           for container in $(docker ps -a --format '{{.Names}}' | grep "kafrust-v1-22-${GITHUB_RUN_ID}" || true); do
             docker logs --tail 200 "$container" || true
           done
+
+      - name: Cleanup Kafka and Docker resources
+        if: always()
+        shell: bash
+        run: bash scripts/cleanup_campaign_docker.sh "kafrust-v1-22-${GITHUB_RUN_ID}-" "kafrust-v1-22-${GITHUB_RUN_ID}"
 
   adjudicate:
     name: Adjudicate V1-22 result bundle

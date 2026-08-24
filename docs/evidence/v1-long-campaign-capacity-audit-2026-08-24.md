@@ -161,3 +161,14 @@ and `846 GiB` available. A fresh WSL export completed with exit code `0` at
 new export remains on T:, so it is a same-volume recovery copy rather than an
 independent disaster-recovery location. Current host free space is
 approximately `53.7 GB` on T: and `205.6 GB` on C:.
+
+## Incident record and prevention controls
+
+The complete root-cause, timeline, operational runbook, and follow-up list are
+maintained in
+[`v1-wsl-capacity-incident-2026-08-24.md`](v1-wsl-capacity-incident-2026-08-24.md).
+The long-campaign workflows now check the Windows volume that owns the VHDX
+(`df -P /mnt/t` under WSL) before dispatch, refuse less than `200 GiB` host or
+`100 GiB` Docker-root free, and run an unconditional prefix-scoped container,
+volume, network, and stale-build-cache cleanup. These guards prevent a known
+capacity failure from being dispatched, but they do not qualify a campaign.

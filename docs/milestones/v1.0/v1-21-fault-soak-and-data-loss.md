@@ -408,6 +408,13 @@ runner recovery removes the infrastructure blocker, but V1-21 remains open:
 the stale containers/cache must be cleaned, then the exact six-hour manifest
 must be rerun and adjudicated before any ledger row can pass.
 
+The root cause and prevention runbook are consolidated in
+[`v1-wsl-capacity-incident-2026-08-24.md`](../../evidence/v1-wsl-capacity-incident-2026-08-24.md).
+The long-campaign workflows now check the Windows volume that owns the WSL
+VHDX before dispatch and always clean campaign-scoped Docker resources after
+diagnostics. These controls prevent repeat host exhaustion but do not turn the
+failed run into V1-21 evidence.
+
 The three stale containers were removed with their anonymous data volumes and
 the unused Docker build cache was pruned. WSL then reported `110 GiB` used and
 `846 GiB` available. A fresh export completed with exit code `0` at

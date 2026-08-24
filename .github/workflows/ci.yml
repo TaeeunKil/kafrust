@@ -45,6 +45,9 @@ jobs:
       - name: Check whitespace
         run: git diff --check
 
+      - name: Check long-campaign safety scripts
+        run: bash -n scripts/check_campaign_capacity.sh scripts/cleanup_campaign_docker.sh
+
       - name: Check protocol API surface
         run: python scripts/check_protocol_api_surface.py
 

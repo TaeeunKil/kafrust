@@ -90,6 +90,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Check self-hosted runner capacity
+        shell: bash
+        run: bash scripts/check_campaign_capacity.sh
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
@@ -350,3 +354,8 @@ jobs:
           docker logs --tail 200 kafrust-published-multi-soak-1 || true
           docker logs --tail 200 kafrust-published-multi-soak-2 || true
           docker logs --tail 200 kafrust-published-multi-soak-3 || true
+
+      - name: Cleanup Kafka and Docker resources
+        if: always()
+        shell: bash
+        run: bash scripts/cleanup_campaign_docker.sh kafrust-published-multi-soak- kafrust-published-multi-soak

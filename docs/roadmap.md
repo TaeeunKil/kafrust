@@ -807,6 +807,15 @@ same-volume recovery copy, not independent disaster-recovery storage. The
 runner is online and idle, but the exact V1-21 six-hour manifest still must be
 rerun and adjudicated before any release decision.
 
+The incident and prevention runbook is now recorded in
+[`v1-wsl-capacity-incident-2026-08-24.md`](evidence/v1-wsl-capacity-incident-2026-08-24.md).
+Long-campaign workflows check the Windows volume that owns the WSL VHDX before
+dispatch, refuse insufficient host/Docker capacity, and always remove their
+campaign-scoped containers, anonymous volumes, networks, and stale build
+cache. The WSL runner is also installed as an enabled systemd service. These
+are operational safety controls; they do not qualify the failed campaign or
+authorize a release.
+
 ## V1-23 Execution Update (2026-08-23)
 
 The current published competitor check was run before making any release-path
