@@ -185,6 +185,12 @@ x86_64 at source `abaf82a`; it passed alongside all 29 scripted
 This remains deterministic transport evidence; producer retry classification
 for partial writes and published reconciliation are still open.
 
+The no-response request path was also canceled while its write was blocked at
+source `d9f1309`; the next operation was rejected with `NotConnected`. See
+[`v1-client-no-response-cancellation-2026-09-03.md`](../../evidence/v1-client-no-response-cancellation-2026-09-03.md).
+This is low-level transport evidence and does not close producer retry or
+published reconciliation.
+
 ## Failure And Lifecycle Contract
 
 - A safe retry retains the same producer identity and batch sequence.

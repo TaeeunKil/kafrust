@@ -5533,6 +5533,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-company-partial-write-smoke-2026-09-03.md; crates/kafrust/src/client.rs; crates/kafrust/tests/fault_injection.rs
 - non_claims: not producer partial-write retry qualification, not published-artifact qualification, not accepted-floor or three-broker qualification, not security, not long campaign, not service canary, not release authorization
 
+## Q-CLIENT-NO-RESPONSE-CANCEL-2026-09-03
+
+- date_utc: 2026-09-03
+- source_commit: d9f1309f4e5ce8dab3afd182d087e19eb304893f
+- client_version: 0.3.6 source workspace
+- protocol_version: no-response Kafka request path
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: injected transport fixture
+- kafka_image: not-applicable
+- mode: low-level canceled no-response request poisoning
+- topology: single injected AsyncWrite connection
+- security: PLAINTEXT fixture
+- group_protocol: not-applicable
+- workload: one blocked no-response write and one rejected reuse attempt
+- workflow: scripts/check_qualification_ledger.py
+- fault: writer remains pending until caller cancellation
+- duration: focused test 0.01 s; required workspace validation passed
+- record_count: 1 request attempted; 0 records
+- member_count: 0
+- repetition_count: one deterministic regression
+- expected_errors: canceled no-response request leaves connection unusable; next request returns NotConnected
+- observed_errors: focused regression passed; reuse was rejected before writing
+- retry_count: 0
+- duplicate_count: 0
+- loss_count: not-applicable
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: no Docker resources created or modified; injected stream owned by test
+- result: passed
+- artifact: docs/evidence/v1-client-no-response-cancellation-2026-09-03.md; crates/kafrust/src/client.rs
+- non_claims: not producer retry qualification, not partial-write qualification, not published-artifact qualification, not multi-broker or security qualification, not long campaign, not service canary, not release authorization
+
 ## Q-BUFFERED-INFLIGHT-DEADLINE-2026-09-03
 
 - date_utc: 2026-09-03

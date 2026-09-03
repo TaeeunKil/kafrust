@@ -233,6 +233,14 @@ passed. The short environment record is
 [`v1-company-partial-write-smoke-2026-09-03.md`](../../evidence/v1-company-partial-write-smoke-2026-09-03.md).
 This does not promote the result to a broker, published, or long-campaign gate.
 
+The no-response (`acks=0`) path is covered at the same source by
+`does_not_reuse_connection_after_canceled_no_response_request`, which cancels a
+blocked write and rejects the next operation with `NotConnected`. The detailed
+record is
+[`v1-client-no-response-cancellation-2026-09-03.md`](../../evidence/v1-client-no-response-cancellation-2026-09-03.md).
+This remains low-level cancellation evidence; producer-level retry and live
+gates remain open.
+
 ## Exit Criteria
 
 1. All three producer modes share the documented total-budget calculation.

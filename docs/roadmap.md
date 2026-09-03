@@ -279,6 +279,12 @@ The environment record is
 [`v1-company-partial-write-smoke-2026-09-03.md`](evidence/v1-company-partial-write-smoke-2026-09-03.md).
 No Docker resources were touched, and this remains short deterministic evidence.
 
+The no-response cancellation path is covered at source `d9f1309`; the focused
+regression passed and rejects reuse after a blocked `acks=0` write. Details are
+in [`v1-client-no-response-cancellation-2026-09-03.md`](evidence/v1-client-no-response-cancellation-2026-09-03.md).
+This remains low-level evidence and does not alter producer retry, published,
+long-campaign, canary, or release gates.
+
 ## V1-05 Execution Update (2026-08-22)
 
 V1-05 is `In progress`. The deterministic idempotent slice now records exact
