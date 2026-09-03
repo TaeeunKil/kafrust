@@ -5895,3 +5895,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-company-fault-matrix-29test-smoke-2026-09-03.md; crates/kafrust/tests/fault_injection.rs; crates/kafrust/tests/support/mod.rs
 - non_claims: not published-artifact qualification, not accepted-floor or three-broker qualification, not security, not long campaigns, not service canary, not release authorization
+
+## Q-TRANSACTION-MUTATION-CANCEL-2026-09-03
+
+- date_utc: 2026-09-03
+- source_commit: 391a0562af676abbf838eaa6435c85965322f6fc
+- client_version: 0.3.6 source workspace
+- protocol_version: AddPartitionsToTxn v3, AddOffsetsToTxn v3, TxnOffsetCommit v0
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: scripted transport fixture
+- kafka_image: not-applicable
+- mode: direct transaction mutation cancellation after transmission
+- topology: in-memory bootstrap and coordinator fixtures; no external broker
+- security: PLAINTEXT fixture
+- group_protocol: not-applicable
+- workload: one cancellation regression for each of three direct transaction mutations
+- workflow: scripts/check_qualification_ledger.py
+- fault: scripted coordinator observes each mutation frame and withholds its response
+- duration: focused Windows tests 0.06-0.07 s each; WSL tests 0.14-0.15 s each
+- record_count: 0 records; three mutation requests
+- member_count: 0
+- repetition_count: one deterministic run per mutation API on Windows and WSL2
+- expected_errors: cancellation after possible transmission marks producer Defunct, clears transaction state, and rejects reuse
+- observed_errors: all three focused tests passed; 29 fault-injection tests passed on WSL2
+- retry_count: 0 after cancellation; normal response retry behavior unchanged
+- duplicate_count: 0 client-visible duplicates
+- loss_count: transaction mutation outcome intentionally unknown after cancellation
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: no Docker resources created or modified; scripted sockets joined
+- result: passed
+- artifact: docs/evidence/v1-transaction-mutation-cancellation-2026-09-03.md; crates/kafrust/src/producer.rs; crates/kafrust/tests/fault_injection.rs
+- non_claims: not EndTxn cancellation qualification, not published-artifact qualification, not accepted-floor or three-broker qualification, not security, not read-committed reconciliation, not long campaigns, not service canary, not release authorization

@@ -111,6 +111,22 @@ complete 29-test fault-injection target passed; this is bounded scripted smoke
 evidence, not a long-campaign or published qualification. See
 [`v1-company-transaction-end-cancellation-smoke-2026-09-03.md`](../../evidence/v1-company-transaction-end-cancellation-smoke-2026-09-03.md).
 
+### Transaction mutation cancellation after transmission (2026-09-03)
+
+At source commit `391a0562af676abbf838eaa6435c85965322f6fc`, deterministic
+scripted-coordinator regressions cover cancellation after the request frame is
+observed for `AddPartitionsToTxn` v3, `AddOffsetsToTxn` v3, and
+`TxnOffsetCommit` v0. Each canceled future leaves the producer `Defunct`,
+clears transaction partition state, and rejects a subsequent transaction
+start. Completed responses continue through the existing retry/state path. The
+detailed record is [`v1-transaction-mutation-cancellation-2026-09-03.md`](../../evidence/v1-transaction-mutation-cancellation-2026-09-03.md).
+
+The same three focused tests and the complete 29-test fault-injection target
+passed on company Ubuntu-T9 WSL2 (`x86_64`, Rust 1.81.0) using in-memory
+fixtures. This closes direct post-transmission mutation cancellation only;
+published profiles, read-committed reconciliation, and long campaign gates
+remain open.
+
 ## Failure And Lifecycle Contract
 
 - A lost transmitted EndTxn response returns

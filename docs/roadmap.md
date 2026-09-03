@@ -391,6 +391,19 @@ cancelled commit cannot be reused as if its outcome were known. The evidence is
 This is a direct EndTxn boundary only; the other transaction mutations and
 published/reconciliation gates remain open.
 
+### Transaction mutation cancellation boundary (2026-09-03)
+
+Source commit `391a0562af676abbf838eaa6435c85965322f6fc` adds one deterministic
+post-transmission cancellation regression for each remaining direct mutation:
+`AddPartitionsToTxn` v3, `AddOffsetsToTxn` v3, and `TxnOffsetCommit` v0. The
+scripted coordinator observes each frame, withholds the response, and the
+caller cancellation leaves the producer `Defunct` with no reusable transaction
+state. All three focused tests passed on Windows and company Ubuntu-T9 WSL2;
+the complete 29-test fault-injection target also passed there. The record is
+[`v1-transaction-mutation-cancellation-2026-09-03.md`](evidence/v1-transaction-mutation-cancellation-2026-09-03.md).
+This is bounded direct-mutation evidence, not published, multi-broker,
+security, long-campaign, service-canary, or release evidence.
+
 ## V1-07 Execution Update (2026-08-22)
 
 V1-07 is `In progress`. Direct-consumer deterministic coverage now records
