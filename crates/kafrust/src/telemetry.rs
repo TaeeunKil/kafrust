@@ -915,7 +915,10 @@ fn jittered_interval(interval: Duration, enabled: bool) -> Duration {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::TelemetryClient;
-    use super::{jittered_interval, select_compression, TelemetryConfig, TelemetryMetricsProvider};
+    use super::{
+        jittered_interval, select_compression, TelemetryConfig, TelemetryMetricsProvider,
+        TelemetrySubscription,
+    };
     use crate::client::Client;
     use crate::error::Error;
     use kafrust_protocol::codec::{Decoder, Encoder};
@@ -1148,6 +1151,52 @@ mod tests {
             telemetry.subscription().unwrap().client_instance_id,
             [7; 16]
         );
+        broker.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn cancels_push_after_transmission_and_rejects_connection_reuse() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(4096);
+        let (push_seen_tx, push_seen_rx) = tokio::sync::oneshot::channel();
+        let broker = tokio::spawn(async move {
+            let request = read_frame(&mut broker_stream).await;
+            assert_eq!(i16::from_be_bytes([request[0], request[1]]), 72);
+            let _ = push_seen_tx.send(());
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        });
+
+        let client = Client::from_stream(
+            Box::new(client_stream),
+            Some("telemetry-cancellation-test".to_owned()),
+            Some(Duration::from_secs(1)),
+        );
+        let mut telemetry = TelemetryClient::from_client(
+            client,
+            |_requested: &[String], _delta: bool| Ok(vec![1, 2, 3]),
+            TelemetryConfig::new().jitter(false),
+        );
+        telemetry.subscription = Some(TelemetrySubscription {
+            client_instance_id: [7; 16],
+            subscription_id: 4,
+            accepted_compression_types: vec![0],
+            push_interval: Duration::from_millis(50),
+            telemetry_max_bytes: 1024,
+            delta_temporality: false,
+            requested_metrics: vec!["org.apache.kafka.".to_owned()],
+        });
+
+        let mut push = Box::pin(telemetry.push_once());
+        tokio::select! {
+            result = &mut push => assert!(result.is_err(), "push completed before cancellation: {result:?}"),
+            result = push_seen_rx => result.unwrap(),
+        }
+        drop(push);
+
+        assert!(telemetry.client.is_connection_poisoned());
+        assert!(matches!(
+            telemetry.push_once().await,
+            Err(Error::Io(error)) if error.kind() == std::io::ErrorKind::NotConnected
+        ));
         broker.await.unwrap();
     }
 
