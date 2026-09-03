@@ -279,6 +279,18 @@ The environment record is
 [`v1-company-partial-write-smoke-2026-09-03.md`](evidence/v1-company-partial-write-smoke-2026-09-03.md).
 No Docker resources were touched, and this remains short deterministic evidence.
 
+At pushed head `37c3a44bad1748f6f4a5b3b311db2357617b3b99`, the producer-level
+partial Produce write boundary is covered: after an injected three-byte write
+and `BrokenPipe`, the producer refreshes metadata, reconnects, and retries
+exactly once with the same `producer_id=42`, `producer_epoch=3`, and
+`base_sequence=0`. The focused regression passed on Windows and company
+Ubuntu-T9 WSL2 (`x86_64`, Rust 1.81.0), alongside all 29 WSL2 fault-injection
+tests. Details are in
+[`v1-producer-partial-write-retry-2026-09-04.md`](evidence/v1-producer-partial-write-retry-2026-09-04.md).
+This closes deterministic producer classification for this partial-write phase
+only; remaining cancellation/shutdown phases, published reconciliation,
+long-campaign, canary, and release gates remain open.
+
 The no-response cancellation path is covered at source `d9f1309`; the focused
 regression passed and rejects reuse after a blocked `acks=0` write. Details are
 in [`v1-client-no-response-cancellation-2026-09-03.md`](evidence/v1-client-no-response-cancellation-2026-09-03.md).

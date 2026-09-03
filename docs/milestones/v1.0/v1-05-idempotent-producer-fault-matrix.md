@@ -174,16 +174,16 @@ poisoned and the next operation is rejected with `NotConnected`, preserving the
 no-reuse boundary for uncertain idempotent requests. The detailed record is
 [`v1-client-partial-write-2026-09-03.md`](../../evidence/v1-client-partial-write-2026-09-03.md).
 
-This is low-level transport evidence only; it does not yet classify producer
-retry behavior for partial writes or satisfy the published ten-cycle and
-100,000-record reconciliation gates.
+This is low-level transport evidence only; producer-level retry classification
+is recorded separately, and the published ten-cycle and 100,000-record
+reconciliation gates remain open.
 
 The same partial-write regression was replayed on company Ubuntu-T9 WSL2
 x86_64 at source `abaf82a`; it passed alongside all 29 scripted
 `fault_injection` tests. The short record is
 [`v1-company-partial-write-smoke-2026-09-03.md`](../../evidence/v1-company-partial-write-smoke-2026-09-03.md).
-This remains deterministic transport evidence; producer retry classification
-for partial writes and published reconciliation are still open.
+This remains deterministic transport evidence; published reconciliation is
+still open.
 
 The no-response request path was also canceled while its write was blocked at
 source `d9f1309`; the next operation was rejected with `NotConnected`. See
@@ -197,6 +197,24 @@ tests passed. The short record is
 [`v1-company-no-response-cancellation-smoke-2026-09-03.md`](../../evidence/v1-company-no-response-cancellation-smoke-2026-09-03.md).
 This remains low-level evidence and does not close producer retry or published
 reconciliation.
+
+### Producer-level partial Produce write retry (2026-09-04)
+
+At source commit `37c3a44bad1748f6f4a5b3b311db2357617b3b99`,
+`retries_idempotent_producer_after_partial_produce_write_with_same_sequence`
+injects a three-byte Produce request prefix followed by `BrokenPipe` after the
+initial API-version handshake. The producer discards the poisoned connection,
+refreshes metadata, reconnects, and retries exactly once. The scripted retry
+broker validates the same `producer_id=42`, `producer_epoch=3`, and
+`base_sequence=0`, then the producer returns the successful offset and advances
+to sequence one. The detailed record is
+[`v1-producer-partial-write-retry-2026-09-04.md`](../../evidence/v1-producer-partial-write-retry-2026-09-04.md).
+
+The focused test passed on Windows and company Ubuntu-T9 WSL2 (`x86_64`, Rust
+1.81.0); the WSL2 run also passed all 29 scripted `fault_injection` tests. This
+closes deterministic producer classification for a partial client Produce
+write only; remaining cancellation/shutdown phases, published cycles, and
+100,000-record reconciliation remain open.
 
 ## Failure And Lifecycle Contract
 

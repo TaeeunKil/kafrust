@@ -6093,3 +6093,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-telemetry-terminating-push-2026-09-04.md; crates/kafrust/src/telemetry.rs
 - non_claims: not CI, not published-artifact qualification, not broker replacement, not throttling, not codec qualification, not secure transport, not 60-minute collection, not service canary, not release authorization
+
+## Q-PRODUCER-PARTIAL-PRODUCE-WRITE-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: 37c3a44bad1748f6f4a5b3b311db2357617b3b99
+- client_version: 0.3.6 source workspace
+- protocol_version: Produce v3
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: scripted transport fixture
+- kafka_image: not-applicable
+- mode: idempotent producer partial client write retry
+- topology: in-memory duplex first broker plus single TCP retry broker
+- security: PLAINTEXT fixture
+- group_protocol: not-applicable
+- workload: one idempotent record on orders-0
+- workflow: scripts/check_qualification_ledger.py
+- fault: first Produce write transmits three bytes then returns BrokenPipe after API-version handshake
+- duration: focused deterministic test under one second per platform
+- record_count: one
+- member_count: not-applicable
+- repetition_count: one deterministic run on Windows and one on WSL2
+- expected_errors: first attempt fails with BrokenPipe; one reconnect/retry preserves producer identity and base sequence
+- observed_errors: retry succeeded at offset 0; producer_id 42, epoch 3, base_sequence 0 matched; retry metric incremented once
+- retry_count: 1
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: poisoned first client discarded; retry broker and metadata tasks joined; no Docker resources
+- result: passed
+- artifact: docs/evidence/v1-producer-partial-write-retry-2026-09-04.md; crates/kafrust/src/producer.rs
+- non_claims: not CI, not published-artifact qualification, not ten-cycle fault qualification, not 100,000-record reconciliation, not secure transport, not long campaigns, not service canary, not release authorization
