@@ -315,10 +315,18 @@ jobs:
 
       - name: Wait for group coordinator
         run: |
+          readiness_group="kafrust-published-readiness-${{ github.run_id }}"
           for attempt in {1..90}; do
-            if docker exec kafrust-published-kafka /opt/kafka/bin/kafka-consumer-groups.sh \
+            set +e
+            docker exec kafrust-published-kafka /opt/kafka/bin/kafka-consumer-groups.sh \
               --bootstrap-server localhost:9092 \
-              --list >/tmp/kafrust-published-group-coordinator.log 2>&1; then
+              --describe \
+              --group "$readiness_group" \
+              >/tmp/kafrust-published-group-coordinator.log 2>&1
+            status=$?
+            set -e
+            if [ "$status" -eq 0 ] || grep -Eiq 'does not exist|groupidnotfound|group[[:space:]]+.*not found' \
+              /tmp/kafrust-published-group-coordinator.log; then
               exit 0
             fi
             sleep 1
