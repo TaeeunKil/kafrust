@@ -4939,6 +4939,40 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn rejects_trailing_data_plane_response_bytes_over_injected_broker_stream() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(1024);
+        let broker = tokio::spawn(async move {
+            let request = read_test_frame(&mut broker_stream).await;
+            assert_eq!(&request[0..2], &[0, 23]);
+            assert_eq!(&request[2..4], &[0, 3]);
+
+            let mut body = Encoder::new();
+            body.write_i32(0);
+            body.write_i32(0);
+            let mut response = vec![0, 0, 0, 1];
+            response.extend(body.into_bytes());
+            response.push(0xa5);
+            write_test_frame(&mut broker_stream, &response).await;
+        });
+
+        let mut client = Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-trailing-response-test".to_owned()),
+            Some(Duration::from_secs(1)),
+        );
+        let error = client
+            .offset_for_leader_epoch_v3(Vec::new())
+            .await
+            .unwrap_err();
+
+        assert!(matches!(
+            error,
+            Error::Protocol(kafrust_protocol::Error::TrailingBytes { remaining: 1 })
+        ));
+        broker.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn sends_flexible_api_versions_v3_over_injected_broker_stream() {
         let (client_stream, mut broker_stream) = tokio::io::duplex(1024);
         let broker = tokio::spawn(async move {
