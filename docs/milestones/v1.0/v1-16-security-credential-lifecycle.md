@@ -79,6 +79,19 @@ lockfile version check. These are short published rows only; credential
 rotation, provider outage/expiry, restricted-principal, zero-secret scan, and
 the complete V1-16 floor/current matrix remain open.
 
+### Checked security contract (2026-09-03)
+
+The supported security surface is now frozen in
+[`v1-16-security-contract.json`](../../evidence/v1-16-security-contract.json)
+and checked by [`check_v1_security_contract.py`](../../../scripts/check_v1_security_contract.py).
+The seven entries cover plaintext, TLS, SASL/PLAIN, SCRAM-SHA-256,
+SCRAM-SHA-512, OAUTHBEARER, and the mTLS client-authentication overlay. Each
+entry names the source paths, protocol/mechanism, validation and failure
+behavior, rotation/restart rule, redaction policy, and focused tests; the
+checker verifies the source enum variants and five tests pass. This closes the
+deterministic contract slice only; live rotation, restricted principals, and
+published security gates remain required.
+
 ## Failure And Lifecycle Contract
 
 - Authentication and provider calls are bounded by the configured request or

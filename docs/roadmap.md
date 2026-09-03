@@ -279,6 +279,15 @@ and poison the affected connection. Current-source rotation, restricted-principa
 profiles, zero-secret artifact scan, and exact-candidate floor/current security
 gates remain open.
 
+The supported security contract is now machine-checked by
+[`v1-16-security-contract.json`](evidence/v1-16-security-contract.json) and
+[`check_v1_security_contract.py`](../scripts/check_v1_security_contract.py).
+Seven transport/mechanism entries cover the source enum variants and explicitly
+record validation, failure, rotation, redaction, and focused-test references;
+the checker and five tests pass. This closes the deterministic contract slice
+only. Live rotation, restricted-principal, and published security gates remain
+open.
+
 ## V1-17 Execution Update (2026-08-22)
 
 V1-17 is `In progress`. The bounded `ClientMetricsSnapshot` and KIP-714 provider

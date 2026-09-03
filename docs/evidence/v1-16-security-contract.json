@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "milestone": "V1-16",
+  "source": "crates/kafrust/src/config.rs and client.rs security configuration",
+  "status": "deterministic-security-contract",
+  "non_claims": [
+    "does not prove credential rotation against a live broker",
+    "does not prove restricted-principal authorization or published security profiles",
+    "does not claim support for mechanisms absent from this contract"
+  ],
+  "entries": [
+    {
+      "contract_id": "plaintext",
+      "kind": "transport",
+      "protocols": ["Plaintext"],
+      "mechanisms": [],
+      "source_paths": ["crates/kafrust/src/config.rs", "crates/kafrust/src/client.rs"],
+      "validation": "uses raw TCP with no SASL credentials; configured protocol is retained on failure",
+      "failure": "transport or protocol error is returned without a security downgrade",
+      "rotation": "credential rotation is not applicable; replace the connection to change transport configuration",
+      "redaction": "credential redaction is not applicable; diagnostics still avoid payload secrets",
+      "tests": ["config::tests::stores_security_protocol", "config::tests::connects_to_later_bootstrap_server_when_first_fails"]
+    },
+    {
+      "contract_id": "tls",
+      "kind": "transport",
+      "protocols": ["Tls", "SaslTls"],
+      "mechanisms": [],
+      "source_paths": ["crates/kafrust/src/config.rs", "crates/kafrust/src/client.rs"],
+      "validation": "server name, root certificate, and optional client certificate/private-key pairing are checked before connect",
+      "failure": "TLS validation or handshake failure poisons the connection and never falls back to plaintext",
+      "rotation": "trust roots and client certificate/key changes apply on a replacement connection",
+      "redaction": "private-key and certificate bytes are redacted from Debug output",
+      "tests": ["config::tests::rejects_incomplete_or_inapplicable_tls_client_authentication", "config::tests::stores_tls_client_authentication_material_without_debugging_secrets"]
+    },
+    {
+      "contract_id": "sasl-plain",
+      "kind": "mechanism",
+      "protocols": ["SaslPlaintext", "SaslTls"],
+      "mechanisms": ["Plain"],
+      "source_paths": ["crates/kafrust/src/config.rs"],
+      "validation": "username/password credentials are required for the configured SASL protocol",
+      "failure": "handshake or authenticate failure returns a typed error and poisons the authenticated connection",
+      "rotation": "password changes require a new authenticated connection",
+      "redaction": "password is replaced with <redacted> in credentials, config, and errors",
+      "tests": ["config::tests::sasl_plaintext_connect_sends_handshake_and_authenticate", "config::tests::redacts_sasl_password_in_debug_output"]
+    },
+    {
+      "contract_id": "scram-sha-256",
+      "kind": "mechanism",
+      "protocols": ["SaslPlaintext", "SaslTls"],
+      "mechanisms": ["ScramSha256"],
+      "source_paths": ["crates/kafrust/src/config.rs", "crates/kafrust/src/scram.rs"],
+      "validation": "SCRAM username/password and server-final signature are checked during the bounded exchange",
+      "failure": "nonce, proof, signature, handshake, or broker errors poison the connection without plaintext fallback",
+      "rotation": "password changes require a replacement connection and a fresh SCRAM exchange",
+      "redaction": "password and SCRAM material are redacted from Debug and error text",
+      "tests": ["scram::tests::builds_scram_sha256_client_final_message", "scram::tests::rejects_bad_server_signature", "config::tests::sasl_scram_sha256_connect_sends_scram_exchange"]
+    },
+    {
+      "contract_id": "scram-sha-512",
+      "kind": "mechanism",
+      "protocols": ["SaslPlaintext", "SaslTls"],
+      "mechanisms": ["ScramSha512"],
+      "source_paths": ["crates/kafrust/src/config.rs", "crates/kafrust/src/scram.rs"],
+      "validation": "SCRAM-SHA-512 username/password and server-final signature are checked during the bounded exchange",
+      "failure": "nonce, proof, signature, handshake, or broker errors poison the connection without plaintext fallback",
+      "rotation": "password changes require a replacement connection and a fresh SCRAM exchange",
+      "redaction": "password and SCRAM material are redacted from Debug and error text",
+      "tests": ["scram::tests::builds_scram_sha512_client_final_message", "scram::tests::rejects_nonce_mismatch", "config::tests::stores_sasl_scram_credentials_without_changing_security_protocol"]
+    },
+    {
+      "contract_id": "oauthbearer",
+      "kind": "mechanism",
+      "protocols": ["SaslPlaintext", "SaslTls"],
+      "mechanisms": ["OAuthBearer"],
+      "source_paths": ["crates/kafrust/src/config.rs", "crates/kafrust/src/client.rs"],
+      "validation": "token expiry, provider timeout, and optional authorization identity are checked before SASL authenticate",
+      "failure": "provider, challenge, expiry, or broker errors poison the connection and preserve the configured SASL protocol",
+      "rotation": "cached provider refreshes inside its window; re-authentication or connection replacement uses the new token",
+      "redaction": "bearer token and provider material are replaced with <redacted> in Debug and errors",
+      "tests": ["config::tests::cached_oauth_provider_single_flights_concurrent_refreshes", "config::tests::times_out_oauthbearer_provider_without_exposing_token_material", "client::tests::reauthenticates_oauthbearer_provider_before_session_expiry"]
+    },
+    {
+      "contract_id": "mtls-overlay",
+      "kind": "client-authentication-overlay",
+      "protocols": ["Tls", "SaslTls"],
+      "mechanisms": [],
+      "source_paths": ["crates/kafrust/src/config.rs"],
+      "validation": "certificate chain and private key must be supplied together and are rejected for plaintext/SASL_PLAINTEXT",
+      "failure": "invalid DER or handshake failure returns a typed TLS error without changing the configured protocol",
+      "rotation": "certificate/key changes apply to replacement connections; existing authenticated sockets are not mutated",
+      "redaction": "certificate and private-key bytes are redacted from Debug output",
+      "tests": ["config::tests::rejects_incomplete_or_inapplicable_tls_client_authentication", "config::tests::stores_tls_client_authentication_material_without_debugging_secrets"]
+    }
+  ]
+}
