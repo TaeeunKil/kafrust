@@ -176,6 +176,16 @@ This strengthens deterministic V1-03 evidence only; live three-broker
 topic-ID/leader movement, the complete malformed matrix, transaction-selection
 proof, and the milestone exit criteria remain open.
 
+The complete `broker_roundtrip` integration target was also rerun at pushed
+head `3dc0d9c` from the company WSL2 Ubuntu-T9 workstation against an isolated
+Kafka 4.3.1 single-node broker. All 13 cases passed, with the configured
+single-node run intentionally skipping Share-specific phases. The container
+was uniquely named and removed after the run; existing Docker resources were
+left untouched. Details are in
+[`v1-company-broker-roundtrip-2026-09-03.md`](evidence/v1-company-broker-roundtrip-2026-09-03.md).
+This is short current-source diagnostic evidence only; accepted-floor,
+published, three-broker, long-campaign, canary, and release gates remain open.
+
 ## V1-04 Execution Update (2026-08-22)
 
 V1-04 is `In progress`. Producer delivery expiry now has a typed

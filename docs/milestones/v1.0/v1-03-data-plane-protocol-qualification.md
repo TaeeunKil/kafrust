@@ -283,6 +283,21 @@ retained diagnostic is
 This is current-source local evidence only; multi-broker movement, security,
 published, and release gates remain open.
 
+### Complete broker-roundtrip recheck on the company workstation (2026-09-03)
+
+The complete `broker_roundtrip` integration target was rerun at source commit
+`3dc0d9ca2ed97359d4297267a117fd32d52da998` from WSL2 Ubuntu-T9 (`x86_64`, Rust
+1.81.0) against an isolated Kafka 4.3.1 single-node KRaft broker. All 13 test
+cases passed, including data-plane version logging and a one-record
+Produce/Fetch roundtrip. Share-specific cases were intentionally skipped
+because no Share topic or failover phase was configured. The detailed record
+is [`v1-company-broker-roundtrip-2026-09-03.md`](../../evidence/v1-company-broker-roundtrip-2026-09-03.md).
+
+This recheck confirms valid response compatibility after the strict decoder
+boundary change; it does not replace official response oracles, accepted-floor
+or published qualification, three-broker movement, long campaigns, or the
+remaining V1-03 exit criteria.
+
 ## Exit Criteria
 
 1. Every stable high-level selected/fallback version has official metadata,
