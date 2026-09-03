@@ -636,6 +636,16 @@ semantics, and maximum cardinality one; five focused tests and the CI check
 pass. This closes the deterministic metric-inventory slice only. The published
 telemetry collection and broker-replacement gates remain open.
 
+The PushTelemetry cancellation boundary is also covered at source commit
+`528986f08c1fc8cee6ee37c57f2e1ae8e92608cb`: after a scripted broker observes a
+push frame, dropping `push_once` leaves the connection unusable and the next
+push returns `NotConnected` instead of reusing an uncertain response. The
+focused regression passed on Windows and company Ubuntu-T9 WSL2, with all 29
+WSL2 fault-injection tests passing as well. This is local deterministic
+evidence only; replacement, throttling, terminating-push, secure published,
+and long-duration gates remain open. See
+[`v1-telemetry-push-cancellation-2026-09-04.md`](evidence/v1-telemetry-push-cancellation-2026-09-04.md).
+
 ## V1-18 Execution Update (2026-08-22)
 
 V1-18 is `In progress`. Frame, collection, compact/tagged-field, decompression,

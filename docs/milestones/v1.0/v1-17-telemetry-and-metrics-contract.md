@@ -77,6 +77,19 @@ of one. Five focused checker tests and the CI check pass. This closes the
 deterministic metric inventory criterion only; published collection, broker
 replacement, throttling, and terminating-push gates remain required.
 
+### Push cancellation after transmission (2026-09-04)
+
+The KIP-714 `push_once` path now has a deterministic cancellation regression:
+after the scripted broker observes PushTelemetry, dropping the caller future
+leaves the persistent connection unusable and a subsequent push returns
+`NotConnected` instead of reusing an uncertain response. The focused test
+passed on Windows and company Ubuntu-T9 WSL2 (Rust 1.81.0); WSL2 also passed
+the 29-test fault-injection target. The evidence record is
+[`v1-telemetry-push-cancellation-2026-09-04.md`](../../evidence/v1-telemetry-push-cancellation-2026-09-04.md).
+This closes cancellation/reuse safety only; broker replacement, throttling,
+terminating-push, secure published collection, and long-duration gates remain
+open.
+
 ## Failure And Lifecycle Contract
 
 - Metrics updates never block the data path on network I/O.

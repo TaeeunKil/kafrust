@@ -6027,3 +6027,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-share-ack-cancellation-2026-09-04.md; crates/kafrust/src/share_consumer.rs
 - non_claims: not CI, not published-artifact qualification, not secure transport, not multi-broker or multi-member qualification, not 10,000-record qualification, not long campaigns, not service canary, not exactly-once, not release authorization
+
+## Q-TELEMETRY-PUSH-CANCEL-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: 528986f08c1fc8cee6ee37c57f2e1ae8e92608cb
+- client_version: 0.3.6 source workspace
+- protocol_version: PushTelemetry v0
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: scripted transport fixture
+- kafka_image: not-applicable
+- mode: telemetry push cancellation after transmission
+- topology: in-memory duplex broker fixture
+- security: PLAINTEXT fixture
+- group_protocol: not-applicable
+- workload: one telemetry push with a seeded subscription
+- workflow: scripts/check_qualification_ledger.py
+- fault: broker observes PushTelemetry and withholds its response; caller drops push_once
+- duration: focused deterministic test under one second per platform
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: one deterministic run on Windows and one on WSL2
+- expected_errors: canceled push poisons the persistent connection; later push returns NotConnected
+- observed_errors: focused cancellation test passed on both platforms; no connection reuse occurred
+- retry_count: 0
+- duplicate_count: 0
+- loss_count: telemetry push outcome intentionally unknown
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: broker task joined; no Docker resources; poisoned client retained no reusable request state
+- result: passed
+- artifact: docs/evidence/v1-telemetry-push-cancellation-2026-09-04.md; crates/kafrust/src/telemetry.rs
+- non_claims: not CI, not published-artifact qualification, not broker replacement, not throttling, not compression qualification, not secure transport, not long collection, not service canary, not release authorization
