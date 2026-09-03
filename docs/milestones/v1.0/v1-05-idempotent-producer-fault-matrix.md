@@ -216,6 +216,22 @@ closes deterministic producer classification for a partial client Produce
 write only; remaining cancellation/shutdown phases, published cycles, and
 100,000-record reconciliation remain open.
 
+### Idempotent send cancellation fence (2026-09-04)
+
+At source commit `d0e033fb2cc6bfe67f3302a29d01f4f1f9a45c0c`, immediate and batch
+Produce paths retain an in-flight outcome marker while an idempotent Produce
+request is awaited. Canceling after the scripted broker observes the frame
+leaves the producer defunct; a subsequent send returns the typed
+`Error::IdempotentProducerDefunct` before transmitting another sequence. A
+normal response or retry clears the marker, so existing same-sequence retry
+behavior remains unchanged. Windows required validation and company WSL2
+Ubuntu-T9/Rust 1.81 focused plus fault-injection validation passed. See
+[`v1-idempotent-send-cancellation-2026-09-04.md`](../../evidence/v1-idempotent-send-cancellation-2026-09-04.md).
+
+This closes deterministic immediate and batch cancellation after Produce
+transmission only. Buffered worker cancellation, published ten-cycle profiles,
+100,000-record reconciliation, and secure/live gates remain open.
+
 ## Failure And Lifecycle Contract
 
 - A safe retry retains the same producer identity and batch sequence.

@@ -232,6 +232,13 @@ Current implementation status:
   defunct; the failing call and future send calls return the fatal broker code.
   An injected-broker regression test covers an ambiguous connection loss,
   byte-identical retry, duplicate response, and single sequence advancement.
+- If an immediate or batch idempotent send is canceled after its Produce frame
+  has been transmitted but before the response is observed, the producer is
+  permanently fenced and a later operation returns
+  `Error::IdempotentProducerDefunct` before sending another sequence. Discard
+  that producer and reconcile the broker-side outcome using the application's
+  record identity; the typed error does not assert whether Kafka appended the
+  record. A normal response or transport retry clears the in-flight marker.
 - A fatal idempotent error during an active transaction also moves the
   transaction state to a terminal defunct state and clears registered
   partitions. `in_transaction()` then returns `false`, but this does not claim

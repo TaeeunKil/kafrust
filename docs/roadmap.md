@@ -381,6 +381,17 @@ for all three fatal broker codes. The short record is in
 [`v1-company-buffered-terminal-smoke-2026-09-03.md`](evidence/v1-company-buffered-terminal-smoke-2026-09-03.md)
 and remains non-published diagnostic evidence.
 
+At pushed head `d0e033f`, immediate and batch idempotent Produce paths now keep
+an in-flight outcome marker while awaiting the broker response. If the caller
+cancels after the frame is transmitted, the producer is fenced and the next
+operation returns `Error::IdempotentProducerDefunct` before sending another
+sequence. Normal responses and transport retries clear the marker. Windows
+required validation and company WSL2 Ubuntu-T9/Rust 1.81 focused plus all 29
+fault-injection tests passed. This closes deterministic immediate/batch
+cancellation only; buffered worker cancellation, published ten-cycle and
+100,000-record reconciliation, secure transport, and live gates remain open.
+Evidence: [`v1-idempotent-send-cancellation-2026-09-04.md`](evidence/v1-idempotent-send-cancellation-2026-09-04.md).
+
 ## V1-06 Execution Update (2026-08-22)
 
 V1-06 is `In progress`. The transaction path keeps one coherent legacy TV0/TV1

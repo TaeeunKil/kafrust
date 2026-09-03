@@ -622,6 +622,9 @@ Verified high-level paths include:
 - Idempotent single-record, batch, and buffered sends are available through
   `ProducerConfig::enable_idempotence(true)`. Transactional immediate and batch
   sends support explicit begin, commit, and abort.
+  If an immediate or batch idempotent send is canceled after Produce
+  transmission, the producer returns `Error::IdempotentProducerDefunct` on the
+  next operation and must be discarded so its uncertain sequence is not reused.
   Transaction coordinator partition/group registration prefers flexible
   `AddPartitionsToTxn` and `AddOffsetsToTxn` v3 on brokers that advertise it,
   with v0 fallback for Kafka 3.7-era compatibility.

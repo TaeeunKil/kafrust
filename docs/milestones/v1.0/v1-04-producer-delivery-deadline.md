@@ -256,6 +256,13 @@ tests passed. The short record is
 [`v1-company-no-response-cancellation-smoke-2026-09-03.md`](../../evidence/v1-company-no-response-cancellation-smoke-2026-09-03.md).
 No Docker resources were touched.
 
+The idempotent immediate and batch cancellation boundary is now explicit at
+source `d0e033fb2cc6bfe67f3302a29d01f4f1f9a45c0c`: if a Produce response is not
+observed because the caller cancels after transmission, the producer is fenced
+with `Error::IdempotentProducerDefunct` and cannot reuse the sequence. This
+does not change the deadline error contract and does not close buffered
+cancellation, published reconciliation, delayed capability, or live gates.
+
 ## Exit Criteria
 
 1. All three producer modes share the documented total-budget calculation.

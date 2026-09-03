@@ -6159,3 +6159,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-kip848-consumer-session-identity-2026-09-04.md; crates/kafrust/src/group.rs
 - non_claims: not CI, not broker churn, not member-loss cycles, not delete/recreate race qualification, not exact offset restoration, not published-artifact qualification, not secure transport, not long campaigns, not service canary, not release authorization
+
+## Q-IDEMPOTENT-SEND-CANCELLATION-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: d0e033fb2cc6bfe67f3302a29d01f4f1f9a45c0c
+- client_version: 0.3.6 source workspace
+- protocol_version: Produce v3
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: scripted transport fixture
+- kafka_image: not-applicable
+- mode: idempotent immediate and batch cancellation fence
+- topology: one scripted TCP broker per test
+- security: PLAINTEXT fixture
+- group_protocol: not-applicable
+- workload: one immediate record and one single-record batch on orders-0
+- workflow: scripts/check_qualification_ledger.py
+- fault: caller cancels after Produce transmission and before response
+- duration: focused deterministic tests under one second per platform
+- record_count: one per test
+- member_count: not-applicable
+- repetition_count: one deterministic run on Windows and one on WSL2
+- expected_errors: canceled idempotent operation leaves producer defunct; next operation sends no frame
+- observed_errors: both tests observed Produce v3, canceled the response wait, and returned IdempotentProducerDefunct before a second frame
+- retry_count: 0
+- duplicate_count: 0
+- loss_count: broker response intentionally delayed; broker-side append not claimed
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: scripted broker tasks joined; no Docker resources or detached tasks
+- result: passed
+- artifact: docs/evidence/v1-idempotent-send-cancellation-2026-09-04.md; crates/kafrust/src/producer.rs; crates/kafrust/src/error.rs
+- non_claims: not CI, not broker acceptance, not duplicate-free reconciliation, not buffered worker cancellation, not published-artifact qualification, not secure transport, not long campaigns, not service canary, not release authorization
