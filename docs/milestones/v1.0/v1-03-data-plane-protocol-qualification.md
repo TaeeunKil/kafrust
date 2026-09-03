@@ -247,6 +247,21 @@ transaction.version=2 coherent-state fixture owned by V1-06, live
 transactional roundtrips, three-broker movement, and the remaining V1-03
 qualification gates remain open.
 
+### Selected response trailing-byte rejection (2026-09-03)
+
+At source commit `f98275d35ebceba41dfeb77505fd08f857d48726`, the selected
+data-plane response decoders finish with `Decoder::finish()`, which returns a
+typed `TrailingBytes` error when a response body leaves input unconsumed. The
+malformed matrix appends one sentinel byte to every selected/fallback response
+shape across Produce, Fetch, Metadata, ListOffsets, OffsetForLeaderEpoch, and
+ApiVersions; all five focused malformed tests passed. The detailed record is
+[`v1-data-plane-malformed-trailing-2026-09-03.md`](../../evidence/v1-data-plane-malformed-trailing-2026-09-03.md).
+
+This closes the selected deterministic malformed length/tag/truncation/trailing
+boundary slice. Official Apache response oracles for every shape, live
+three-broker movement, accepted security/published qualification, and the
+remaining V1-03 exit criteria remain open.
+
 ## Exit Criteria
 
 1. Every stable high-level selected/fallback version has official metadata,

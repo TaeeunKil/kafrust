@@ -137,6 +137,16 @@ This closes only the deterministic selector guard; V1-06's coherent TV2
 fixture, live transactional roundtrips, three-broker movement, and accepted or
 published qualification remain open.
 
+The selected response decoders now also reject unconsumed trailing bytes at
+pushed head `f98275d`. A sentinel-byte matrix covers Produce v2/v7/v9/v11/v12/v13,
+Fetch v4/v11/v12/v13, Metadata v1/v12, ListOffsets v1, OffsetForLeaderEpoch v3,
+and ApiVersions v0/v3/v4; all five focused malformed tests passed. The exact
+record is [`v1-data-plane-malformed-trailing-2026-09-03.md`](evidence/v1-data-plane-malformed-trailing-2026-09-03.md),
+and the source CI is [33743888446](https://github.com/TaeeunKil/kafrust/actions/runs/33743888446).
+This closes the selected deterministic malformed boundary slice only; complete
+official response oracles, live three-broker movement, and accepted/published
+qualification remain open.
+
 The protocol fixture increment at pushed head `fd37184` adds fixed non-empty
 response bodies for the selected Produce, Fetch, Metadata, ListOffsets,
 OffsetForLeaderEpoch, and ApiVersions versions. Five golden tests and three
