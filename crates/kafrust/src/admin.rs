@@ -20442,6 +20442,60 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn retries_delete_records_after_response_loss_with_same_target() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut first, _) = listener.accept().await.unwrap();
+            let metadata_request = read_frame(&mut first).await;
+            assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+            write_frame(&mut first, &delete_records_metadata_response(addr.port())).await;
+
+            let first_request = read_frame(&mut first).await;
+            assert_eq!(&first_request[0..4], &[0, 21, 0, 1]);
+            drop(first);
+
+            let (mut replacement, _) = listener.accept().await.unwrap();
+            let metadata_request = read_frame(&mut replacement).await;
+            assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+            write_frame(
+                &mut replacement,
+                &delete_records_metadata_response(addr.port()),
+            )
+            .await;
+
+            let retry_request = read_frame(&mut replacement).await;
+            assert_eq!(retry_request, first_request);
+            write_frame(&mut replacement, &delete_records_response()).await;
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        )
+        .max_retries(1);
+
+        let result = admin
+            .delete_records(
+                &[
+                    DeleteRecordsTopic::new("orders")
+                        .partition(0, 100)
+                        .partition(1, -1),
+                    DeleteRecordsTopic::new("payments").partition(2, 40),
+                ],
+                DeleteRecordsOptions::new(),
+            )
+            .await
+            .unwrap();
+
+        assert!(result.has_errors());
+        assert_eq!(result.topics()[0].partitions()[0].low_watermark(), 100);
+        assert_eq!(metrics.snapshot().retries, 1);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn retries_delete_records_after_retryable_metadata_response() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
