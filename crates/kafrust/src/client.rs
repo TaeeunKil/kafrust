@@ -249,10 +249,11 @@ pub(crate) const DEFAULT_MAX_RESPONSE_BYTES: usize = 100 * 1024 * 1024;
 
 /// Low-level Kafka request client over a single broker connection.
 ///
-/// A connection is permanently marked unusable after a request timeout or a
-/// transport/framing failure. This prevents a later request from consuming
-/// bytes belonging to an earlier partially completed response; high-level
-/// clients create a replacement connection through their retry path.
+/// A connection is permanently marked unusable after a request timeout, a
+/// transport/framing failure, or cancellation of an in-flight request. This
+/// prevents a later request from consuming bytes belonging to an earlier
+/// partially completed response; high-level clients create a replacement
+/// connection through their retry path.
 pub struct Client {
     stream: Box<dyn BrokerStream>,
     client_id: Option<String>,
@@ -267,6 +268,7 @@ pub struct Client {
     sasl_authenticated_at: Option<std::time::Instant>,
     sasl_authentication_in_progress: bool,
     connection_poisoned: bool,
+    request_in_flight: bool,
     last_request_state: RequestState,
 }
 
@@ -395,6 +397,7 @@ impl Client {
             sasl_authenticated_at: None,
             sasl_authentication_in_progress: false,
             connection_poisoned: false,
+            request_in_flight: false,
             last_request_state: RequestState::Idle,
         }
     }
@@ -4133,6 +4136,13 @@ impl Client {
     }
 
     async fn send_request_no_response_unbounded(&mut self, request: &[u8]) -> Result<()> {
+        self.request_in_flight = true;
+        let result = self.send_request_no_response_unbounded_inner(request).await;
+        self.request_in_flight = false;
+        result
+    }
+
+    async fn send_request_no_response_unbounded_inner(&mut self, request: &[u8]) -> Result<()> {
         let frame = encode_frame(request)?;
         self.last_request_state = RequestState::Sent;
         if let Err(error) = self.stream.write_all(&frame).await {
@@ -4149,6 +4159,13 @@ impl Client {
     }
 
     async fn send_request_unbounded(&mut self, request: &[u8]) -> Result<Vec<u8>> {
+        self.request_in_flight = true;
+        let result = self.send_request_unbounded_inner(request).await;
+        self.request_in_flight = false;
+        result
+    }
+
+    async fn send_request_unbounded_inner(&mut self, request: &[u8]) -> Result<Vec<u8>> {
         let frame = encode_frame(request)?;
         self.last_request_state = RequestState::Sent;
         if let Err(error) = self.stream.write_all(&frame).await {
@@ -4203,7 +4220,7 @@ impl Client {
     }
 
     fn ensure_connection_usable(&self) -> Result<()> {
-        if self.connection_poisoned {
+        if self.connection_poisoned || self.request_in_flight {
             return Err(Error::Io(std::io::Error::new(
                 std::io::ErrorKind::NotConnected,
                 "broker connection is unusable after a prior request failure",
@@ -4218,7 +4235,7 @@ impl Client {
 
     #[cfg(test)]
     pub(crate) fn is_connection_poisoned(&self) -> bool {
-        self.connection_poisoned
+        self.connection_poisoned || self.request_in_flight
     }
 
     fn poison_connection_for_request_error<T>(&mut self, result: &Result<T>) {
@@ -4262,6 +4279,7 @@ impl fmt::Debug for Client {
             .field("max_response_bytes", &self.max_response_bytes)
             .field("decode_limits", &self.decode_limits)
             .field("connection_poisoned", &self.connection_poisoned)
+            .field("request_in_flight", &self.request_in_flight)
             .field("last_request_state", &self.last_request_state)
             .field("metrics", &self.metrics)
             .finish_non_exhaustive()
@@ -4557,6 +4575,33 @@ mod tests {
         );
 
         server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn does_not_reuse_connection_after_canceled_request() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(1024);
+        let broker = tokio::spawn(async move {
+            let _request = read_test_frame(&mut broker_stream).await;
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        });
+        let mut client = Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-cancel-reuse-test".to_owned()),
+            Some(Duration::from_secs(1)),
+        );
+
+        assert!(
+            tokio::time::timeout(Duration::from_millis(5), client.api_versions())
+                .await
+                .is_err()
+        );
+        assert!(client.is_connection_poisoned());
+        let error = client.api_versions().await.unwrap_err();
+        assert!(
+            matches!(error, Error::Io(error) if error.kind() == std::io::ErrorKind::NotConnected)
+        );
+
+        broker.await.unwrap();
     }
 
     #[tokio::test]
