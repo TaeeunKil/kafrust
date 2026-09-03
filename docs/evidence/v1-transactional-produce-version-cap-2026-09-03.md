@@ -19,7 +19,8 @@ cargo test -p kafrust caps_transactional_produce_at_v11_across_advertised_tv2_ve
 
 The source commit also passed the required workspace format, check, test,
 Clippy, documentation, and diff checks. The pushed commit is covered by the
-stable/Rust 1.81 CI workflow.
+stable/Rust 1.81 CI workflow in
+[run 33742103457](https://github.com/TaeeunKil/kafrust/actions/runs/33742103457).
 
 ## Boundary
 
