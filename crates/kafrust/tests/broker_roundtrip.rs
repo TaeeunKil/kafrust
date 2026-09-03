@@ -1,16 +1,28 @@
 #![allow(clippy::expect_used)]
 
+use kafrust::protocol::api::api_versions::API_KEY as API_VERSIONS_API_KEY;
+use kafrust::protocol::api::fetch::API_KEY as FETCH_API_KEY;
 use kafrust::protocol::api::find_coordinator::FindCoordinatorResponseV1;
 use kafrust::protocol::api::list_groups::API_KEY as LIST_GROUPS_API_KEY;
+use kafrust::protocol::api::list_offsets::{
+    ListOffsetsPartitionV1, ListOffsetsTopicV1, API_KEY as LIST_OFFSETS_API_KEY, LATEST_TIMESTAMP,
+};
 use kafrust::protocol::api::metadata::MetadataRequestTopicV12;
+use kafrust::protocol::api::metadata::API_KEY as METADATA_API_KEY;
+use kafrust::protocol::api::offset_for_leader_epoch::{
+    OffsetForLeaderEpochPartitionV3, OffsetForLeaderEpochTopicV3,
+    API_KEY as OFFSET_FOR_LEADER_EPOCH_API_KEY,
+};
+use kafrust::protocol::api::produce::API_KEY as PRODUCE_API_KEY;
 use kafrust::{
-    AdminClient, ClientConfig, ConfigResourceType, DescribeClusterEndpointType,
-    DescribeClusterOptions, DescribeConfigsOptions, ListConfigResourcesOptions, ListGroupsOptions,
-    SecurityProtocol, ShareAcknowledgementType, ShareAcquireMode, ShareConsumerConfig,
-    ShareGroupOffset, ShareGroupStateBatch, ShareGroupStateDeleteTopic,
-    ShareGroupStateInitializePartition, ShareGroupStateInitializeTopic,
-    ShareGroupStateReadPartition, ShareGroupStateReadTopic, ShareGroupStateWritePartition,
-    ShareGroupStateWriteTopic, TopicConfigResource, UpdateFeaturesOptions,
+    AdminClient, ClientConfig, ConfigResourceType, CreateTopicsOptions, DeleteTopicsOptions,
+    DescribeClusterEndpointType, DescribeClusterOptions, DescribeConfigsOptions,
+    ListConfigResourcesOptions, ListGroupsOptions, NewTopic, SecurityProtocol,
+    ShareAcknowledgementType, ShareAcquireMode, ShareConsumerConfig, ShareGroupOffset,
+    ShareGroupStateBatch, ShareGroupStateDeleteTopic, ShareGroupStateInitializePartition,
+    ShareGroupStateInitializeTopic, ShareGroupStateReadPartition, ShareGroupStateReadTopic,
+    ShareGroupStateWritePartition, ShareGroupStateWriteTopic, TopicConfigResource,
+    UpdateFeaturesOptions,
 };
 use std::collections::BTreeSet;
 use tokio::time::{sleep, Duration, Instant};
@@ -40,6 +52,44 @@ async fn api_versions_and_metadata_roundtrip_when_broker_is_configured() {
         .await
         .expect("flexible ApiVersions roundtrip should succeed");
     assert_eq!(api_versions_v3.error_code, 0);
+
+    let fetch_advertised_max = api_versions_v3
+        .highest_supported_version(FETCH_API_KEY, 18)
+        .unwrap_or(-1);
+    let fetch_high_level_version = match fetch_advertised_max {
+        13.. => 13,
+        12 => 12,
+        11 => 11,
+        _ => 4,
+    };
+    eprintln!(
+        "data_plane_version_log produce_max={} fetch_high_level={} metadata_v12={} list_offsets_v1=1 offset_for_leader_epoch_v3=3 api_versions_v3=3",
+        api_versions_v3
+            .highest_supported_version(PRODUCE_API_KEY, 13)
+            .unwrap_or(-1),
+        fetch_high_level_version,
+        api_versions_v3
+            .highest_supported_version(METADATA_API_KEY, 12)
+            .unwrap_or(-1),
+    );
+    assert!(
+        api_versions_v3
+            .highest_supported_version(LIST_OFFSETS_API_KEY, 1)
+            .is_some_and(|version| version >= 1),
+        "broker must advertise ListOffsets v1"
+    );
+    assert!(
+        api_versions_v3
+            .highest_supported_version(OFFSET_FOR_LEADER_EPOCH_API_KEY, 3)
+            .is_some_and(|version| version >= 3),
+        "broker must advertise OffsetForLeaderEpoch v3"
+    );
+    assert!(
+        api_versions_v3
+            .highest_supported_version(API_VERSIONS_API_KEY, 3)
+            .is_some_and(|version| version >= 3),
+        "broker must advertise ApiVersions v3"
+    );
 
     let metadata = client
         .metadata(None)
@@ -92,6 +142,98 @@ async fn api_versions_and_metadata_roundtrip_when_broker_is_configured() {
         .await
         .expect("Kafka feature metadata should be readable through AdminClient");
     assert!(features.finalized_features_epoch() >= -1);
+
+    if let Ok(topic) = std::env::var("KAFRUST_DATA_PLANE_TOPIC") {
+        let create = admin
+            .create_topics(&[NewTopic::new(&topic, 1, 1)], CreateTopicsOptions::new())
+            .await
+            .expect("data-plane probe topic creation should succeed");
+        assert!(
+            create
+                .topics()
+                .iter()
+                .all(|result| result.is_success() || result.error_code() == 36),
+            "data-plane probe topic creation returned an error: {:?}",
+            create.topics()
+        );
+
+        let leader_deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            let metadata = client
+                .metadata(Some(vec![topic.clone()]))
+                .await
+                .expect("data-plane probe metadata should succeed");
+            let leader_ready = metadata.topics.iter().any(|result| {
+                result.name == topic
+                    && result.error_code == 0
+                    && result
+                        .partitions
+                        .first()
+                        .is_some_and(|partition| partition.leader_id >= 0)
+            });
+            if leader_ready || Instant::now() >= leader_deadline {
+                assert!(
+                    leader_ready,
+                    "data-plane probe topic leader did not become ready"
+                );
+                break;
+            }
+            sleep(Duration::from_millis(100)).await;
+        }
+
+        let list_offsets = client
+            .list_offsets_v1(vec![ListOffsetsTopicV1 {
+                name: topic.clone(),
+                partitions: vec![ListOffsetsPartitionV1 {
+                    partition_index: 0,
+                    timestamp: LATEST_TIMESTAMP,
+                }],
+            }])
+            .await
+            .expect("ListOffsets v1 roundtrip should succeed");
+        let list_partition = list_offsets
+            .topics
+            .first()
+            .and_then(|result| result.partitions.first())
+            .expect("ListOffsets v1 should return the probe partition");
+        assert_eq!(list_partition.error_code, 0);
+
+        let leader_epoch = client
+            .offset_for_leader_epoch_v3(vec![OffsetForLeaderEpochTopicV3 {
+                name: topic.clone(),
+                partitions: vec![OffsetForLeaderEpochPartitionV3 {
+                    partition_index: 0,
+                    current_leader_epoch: -1,
+                    leader_epoch: -1,
+                }],
+            }])
+            .await
+            .expect("OffsetForLeaderEpoch v3 roundtrip should succeed");
+        let leader_partition = leader_epoch
+            .topics
+            .first()
+            .and_then(|result| result.partitions.first())
+            .expect("OffsetForLeaderEpoch v3 should return the probe partition");
+        assert_eq!(leader_partition.error_code, 0);
+        eprintln!(
+            "data_plane_roundtrip_log topic={} list_offsets_error={} list_offsets_offset={} offset_for_leader_epoch_error={} end_offset={}",
+            topic,
+            list_partition.error_code,
+            list_partition.offset,
+            leader_partition.error_code,
+            leader_partition.end_offset,
+        );
+
+        let delete = admin
+            .delete_topics(&[topic], DeleteTopicsOptions::new())
+            .await
+            .expect("data-plane probe topic cleanup should succeed");
+        assert!(
+            delete.topics().iter().all(|result| result.is_success()),
+            "data-plane probe topic cleanup returned an error: {:?}",
+            delete.topics()
+        );
+    }
 
     if let Some(expected_version) = std::env::var("KAFRUST_EXPECT_LIST_CONFIG_RESOURCES_VERSION")
         .ok()
