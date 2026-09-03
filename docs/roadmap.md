@@ -544,7 +544,9 @@ release gates remain open.
 The exact published-matrix documentation and continuity-workflow changes pass
 both Rust 1.81.0 and stable in [CI run 32615676173](https://github.com/TaeeunKil/kafrust/actions/runs/32615676173). The subsequent workflow-only
 security-profile corrections are recorded in the published evidence and are
-awaiting the next exact-head CI documentation row.
+validated again with the current documentation/ledger head `3fc4641` in
+[CI run 33715029984](https://github.com/TaeeunKil/kafrust/actions/runs/33715029984)
+on both Rust 1.81.0 and stable.
 
 On 2026-09-03, the exact published `0.3.6` pair passed all twelve published
 smoke profiles again in [run 33714006944](https://github.com/TaeeunKil/kafrust/actions/runs/33714006944)
