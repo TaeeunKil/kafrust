@@ -60,6 +60,12 @@ UpdateFeatures live workflow passed from the same commit in
 including the level-2 to level-1 downgrade and level-1 to level-2 upgrade.
 This is a named live diagnostic row, not the complete V1-11 operation matrix.
 
+The documentation/SBOM refresh commit `3fb31a3691a562d7315cb6dd3d6994f56d7df03c`
+then passed the full exact-head CI matrix in
+[33699218337](https://github.com/TaeeunKil/kafrust/actions/runs/33699218337)
+on Rust 1.81.0 and stable, including package-boundary and deterministic SBOM
+verification.
+
 ## Remaining gates and non-claims
 
 - No V1-21 six-hour fault campaign was started from this workstation.
