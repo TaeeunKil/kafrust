@@ -79,6 +79,17 @@ deterministic metric inventory criterion only; published collection, broker
 replacement, throttling, and the published terminating-push gate remain
 required.
 
+### Saturating metric arithmetic (2026-09-04)
+
+Source commit `c526c412460af17cacd3816f6c04709b34ca31f9` changes all metric
+counter and current-gauge updates to atomic compare-exchange loops with
+saturating arithmetic. This prevents cumulative `u64` counters from wrapping
+to zero and prevents current gauges from underflowing during cleanup. The
+`metric_atomic_updates_saturate_at_u64_boundaries` regression covers both
+overflow and underflow boundaries. This closes the deterministic arithmetic
+slice only; published collection, broker replacement, throttling, secure
+transport, and long-duration gates remain required.
+
 ### Push cancellation after transmission (2026-09-04)
 
 The KIP-714 `push_once` path now has a deterministic cancellation regression:

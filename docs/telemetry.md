@@ -58,8 +58,10 @@ peaks (`max_buffered_records` and `max_in_flight_requests`). Metric names use
 the `kafrust.client.` prefix by default and can be changed with
 `metric_prefix`. Broker-requested prefixes are applied before serialization.
 Counters honor the broker's cumulative or delta temporality request; a provider
-retains the previous snapshot for delta calculations. The provider intentionally
-does not add resource attributes or topic labels, keeping cardinality bounded.
+retains the previous snapshot for delta calculations. Counter and gauge updates
+use atomic saturating arithmetic, so an exhausted `u64` counter never wraps to
+zero and a current gauge never underflows. The provider intentionally does not
+add resource attributes or topic labels, keeping cardinality bounded.
 
 The runtime also accepts raw OTLP MetricsData v1 protobuf bytes from custom
 providers. It compresses those bytes with the strongest codec accepted by the

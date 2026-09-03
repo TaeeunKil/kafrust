@@ -6258,3 +6258,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-buffered-owner-drop-2026-09-04.md; crates/kafrust/src/producer.rs
 - non_claims: not graceful flush, not socket-I/O cancellation, not broker acceptance or reconciliation, not 100-cycle qualification, not published-artifact qualification, not secure transport, not long campaigns, not service canary, not release authorization
+
+## Q-METRICS-SATURATING-ARITHMETIC-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: c526c412460af17cacd3816f6c04709b34ca31f9
+- client_version: 0.3.6 source workspace
+- protocol_version: not-applicable; metrics lifecycle-only
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: not-applicable
+- kafka_image: not-applicable
+- mode: atomic metrics counter and gauge boundary handling
+- topology: no broker; in-process ClientMetrics atomics
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: one counter overflow and one gauge underflow boundary
+- workflow: scripts/check_qualification_ledger.py
+- fault: increment at u64::MAX and decrement at zero
+- duration: focused deterministic test under one second
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: one deterministic run on Windows
+- expected_errors: counters remain at u64::MAX and gauges remain at zero
+- observed_errors: saturating add/subtract returned the expected boundary values
+- retry_count: 0
+- duplicate_count: 0
+- loss_count: not-applicable
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: no broker, Docker, network, or detached task
+- result: passed
+- artifact: docs/evidence/v1-metrics-saturating-arithmetic-2026-09-04.md; crates/kafrust/src/metrics.rs
+- non_claims: not concurrent workload completeness, not published telemetry collection, not secure multi-broker qualification, not long-duration campaigns, not service canary, not release authorization

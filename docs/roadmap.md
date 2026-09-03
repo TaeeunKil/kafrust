@@ -711,6 +711,15 @@ This closes local request encoding and shutdown behavior only; published
 transport, and final task/resource/secret checks remain open. See
 [`v1-telemetry-terminating-push-2026-09-04.md`](evidence/v1-telemetry-terminating-push-2026-09-04.md).
 
+At source commit `c526c412460af17cacd3816f6c04709b34ca31f9`, all
+`ClientMetrics` counter and current-gauge updates use atomic saturating
+arithmetic. The `metric_atomic_updates_saturate_at_u64_boundaries` regression
+passed at both overflow and underflow boundaries, so metrics cannot wrap to
+zero or underflow during cleanup. This closes the deterministic arithmetic
+slice only; published telemetry, secure broker replacement, and long-duration
+gates remain open. See
+[`v1-metrics-saturating-arithmetic-2026-09-04.md`](evidence/v1-metrics-saturating-arithmetic-2026-09-04.md).
+
 ## V1-18 Execution Update (2026-08-22)
 
 V1-18 is `In progress`. Frame, collection, compact/tagged-field, decompression,
