@@ -3122,6 +3122,18 @@ impl Producer {
         }
     }
 
+    fn mark_transaction_end_in_flight(&mut self) {
+        if let Some(state) = &mut self.transaction_state {
+            state.status = TransactionStatus::Defunct;
+        }
+    }
+
+    fn restore_transaction_after_end_error(&mut self) {
+        if let Some(state) = &mut self.transaction_state {
+            state.status = TransactionStatus::InTransaction;
+        }
+    }
+
     async fn connect_or_reuse_broker(&mut self, broker_addr: &str) -> Result<Client> {
         if let Some(client) = self.broker_clients.take(broker_addr).await {
             return Ok(client);
@@ -3641,6 +3653,7 @@ impl Producer {
                 self.config.max_retries,
                 client.supports_end_txn_v3()
             );
+            self.mark_transaction_end_in_flight();
             let response = if use_flexible_version {
                 client
                     .end_txn_v3(
@@ -3671,6 +3684,7 @@ impl Producer {
                             operation: if committed { "commit" } else { "abort" },
                         });
                     }
+                    self.restore_transaction_after_end_error();
                     return Err(error);
                 }
             };
@@ -3681,6 +3695,7 @@ impl Producer {
             if attempt < self.config.max_retries
                 && is_retryable_transaction_coordinator_error(error_code)
             {
+                self.restore_transaction_after_end_error();
                 attempt += 1;
                 time::sleep(IDEMPOTENT_INIT_RETRY_BACKOFF).await;
                 self.config.client.record_retry();
@@ -3690,6 +3705,8 @@ impl Producer {
                 == IdempotentProduceErrorDisposition::Fatal
             {
                 self.record_idempotent_fatal_error(error_code);
+            } else {
+                self.restore_transaction_after_end_error();
             }
             return Err(Error::Broker {
                 code: error_code,
@@ -6795,6 +6812,79 @@ mod tests {
             Err(Error::TransactionProducerDefunct)
         ));
         assert_eq!(metrics.snapshot().retries, 0);
+
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn cancels_end_transaction_after_transmission_marks_producer_defunct() {
+        let bootstrap_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let bootstrap_addr = bootstrap_listener.local_addr().unwrap();
+        let coordinator_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let coordinator_addr = coordinator_listener.local_addr().unwrap();
+        let (end_seen_tx, end_seen_rx) = oneshot::channel();
+
+        let server = tokio::spawn(async move {
+            let (mut bootstrap_socket, _) = bootstrap_listener.accept().await.unwrap();
+            let request = read_frame(&mut bootstrap_socket).await;
+            assert_eq!(&request[0..4], &[0, 10, 0, 1]);
+            write_frame(
+                &mut bootstrap_socket,
+                &find_coordinator_response_frame(&request, 2, coordinator_addr),
+            )
+            .await;
+
+            let (mut coordinator_socket, _) = coordinator_listener.accept().await.unwrap();
+            let api_versions = read_frame(&mut coordinator_socket).await;
+            assert_eq!(&api_versions[0..4], &[0, 18, 0, 3]);
+            write_frame(
+                &mut coordinator_socket,
+                &api_versions_transaction_response_frame(&api_versions, 26, 3),
+            )
+            .await;
+            let end_txn = read_frame(&mut coordinator_socket).await;
+            assert_eq!(&end_txn[0..4], &[0, 26, 0, 3]);
+            assert!(end_txn
+                .windows(b"orders-tx".len())
+                .any(|window| window == b"orders-tx"));
+            let _ = end_seen_tx.send(());
+            time::sleep(Duration::from_millis(50)).await;
+        });
+
+        let config = ProducerConfig::new([bootstrap_addr.to_string()])
+            .transactional_id("orders-tx")
+            .max_retries(0);
+        let client = config.client.clone().connect().await.unwrap();
+        let mut transaction_state = TransactionState::new("orders-tx".to_owned());
+        transaction_state.status = TransactionStatus::InTransaction;
+        let mut producer = Producer {
+            client,
+            config,
+            metadata_cache: BTreeMap::new(),
+            leader_hints: BTreeMap::new(),
+            topic_id_cache: BTreeMap::new(),
+            keyless_partition_indexes: BTreeMap::new(),
+            broker_clients: std::sync::Arc::new(SharedBrokerClientCache::default()),
+            idempotent_state: Some(IdempotentProducerState::new(42, 3)),
+            transaction_state: Some(transaction_state),
+        };
+
+        let mut commit = Box::pin(producer.commit_transaction());
+        tokio::select! {
+            result = &mut commit => assert!(result.is_err(), "EndTxn completed before cancellation"),
+            _ = end_seen_rx => {}
+        }
+        drop(commit);
+
+        assert_eq!(
+            producer.transaction_status(),
+            Some(TransactionStatus::Defunct)
+        );
+        assert!(!producer.in_transaction());
+        assert!(matches!(
+            producer.begin_transaction(),
+            Err(Error::TransactionProducerDefunct)
+        ));
 
         server.await.unwrap();
     }
