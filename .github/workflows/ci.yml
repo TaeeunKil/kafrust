@@ -63,6 +63,9 @@ jobs:
       - name: Check V1 metrics contract
         run: python scripts/check_v1_metrics_contract.py
 
+      - name: Check V1 allocation-boundary ledger
+        run: python scripts/check_v1_allocation_boundary_ledger.py
+
       - name: Check Apache schema metadata
         run: python scripts/check_apache_schema_versions.py
 
@@ -131,6 +134,9 @@ jobs:
 
       - name: Test V1 metrics contract checker
         run: python -m unittest scripts/test_check_v1_metrics_contract.py
+
+      - name: Test V1 allocation-boundary ledger
+        run: python -m unittest scripts/test_check_v1_allocation_boundary_ledger.py
 
       - name: Test V1-19 SBOM checker
         run: python -m unittest scripts/test_check_v1_sbom.py

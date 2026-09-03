@@ -112,6 +112,19 @@ queued for more than nine hours and were cancelled without starting artifact
 collection. They are not campaign sets: the remaining requirement is two
 additional weekly scheduled passes with retained crash/OOM disposition.
 
+### Checked allocation-boundary ledger (2026-09-03)
+
+The reviewed allocation boundaries are now captured in
+[`v1-18-allocation-boundary-ledger.json`](../../evidence/v1-18-allocation-boundary-ledger.json)
+and checked by [`check_v1_allocation_boundary_ledger.py`](../../../scripts/check_v1_allocation_boundary_ledger.py).
+The 14 entries cover response frames, collection/string/bytes/tag lengths,
+varints, message sets, compressed batches, consumer budgets and queues,
+producer batch/buffer limits, and telemetry payloads. Each entry names its
+source file, limit, validation point, typed failure, allocation behavior, and
+focused test. The checker and five tests pass. This closes only the reviewed
+static ledger slice; full fuzz duration, recurring weekly passes, and any
+unreviewed boundary remain open.
+
 ## Failure And Lifecycle Contract
 
 - Limits are checked before unbounded allocation and return typed errors.

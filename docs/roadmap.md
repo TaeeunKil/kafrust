@@ -332,6 +332,14 @@ and [32645222921](https://github.com/TaeeunKil/kafrust/actions/runs/32645222921)
 were cancelled after remaining queued for more than nine hours; they are not
 counted as weekly campaign sets.
 
+The reviewed allocation-boundary ledger is now machine-checked by
+[`v1-18-allocation-boundary-ledger.json`](evidence/v1-18-allocation-boundary-ledger.json)
+and [`check_v1_allocation_boundary_ledger.py`](../scripts/check_v1_allocation_boundary_ledger.py).
+Fourteen boundary families name their source, finite limit, pre/during-allocation
+validation, typed failure, and focused test; the checker and five tests pass.
+This closes the static ledger slice only. Two additional weekly fuzz passes,
+crash/OOM disposition, and complete resource-limit coverage remain required.
+
 ## V1-19 Execution Update (2026-08-22; completed 2026-08-23)
 
 V1-19 is `Done` at packaged-candidate evidence level. The staged `0.3.6` package candidate passes five
