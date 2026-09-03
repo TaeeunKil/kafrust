@@ -19762,6 +19762,39 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn classifies_create_topics_response_loss_after_transmission() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let metadata_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+            write_frame(&mut bootstrap, &metadata_response(addr.port())).await;
+
+            let (mut controller, _) = listener.accept().await.unwrap();
+            let create_request = read_frame(&mut controller).await;
+            assert_eq!(&create_request[0..4], &[0, 19, 0, 2]);
+            drop(controller);
+        });
+        let admin =
+            AdminClient::new(ClientConfig::new([addr.to_string()]).request_timeout_ms(1_000))
+                .max_retries(0);
+
+        let error = admin
+            .create_topics(&[NewTopic::new("orders", 3, 1)], CreateTopicsOptions::new())
+            .await
+            .unwrap_err();
+
+        assert!(matches!(
+            error,
+            Error::AdminMutationOutcomeUnknown {
+                operation: "CreateTopics"
+            }
+        ));
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn retries_create_topics_after_controller_discovery_disconnect() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
