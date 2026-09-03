@@ -4707,3 +4707,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-data-plane-golden-fixtures-2026-09-03.md; crates/kafrust-protocol/tests/data_plane_golden.rs; crates/kafrust-protocol/tests/data_plane_malformed.rs
 - non_claims: not every non-empty response oracle, not malformed-boundary completion, not transaction-selection proof, not live floor/pinned-version qualification, not release authorization
+
+## Q-PRODUCER-DEADLINE-BUDGET-2026-09-03
+
+- date_utc: 2026-09-03
+- source_commit: b838fa36f0db45120b38757a47e296287526a2e1
+- client_version: 0.3.6 source checkout
+- protocol_version: 0.3.6 source checkout
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: not-applicable; helper fixture
+- kafka_image: not-applicable; helper fixture
+- mode: buffered producer total delivery-budget calculation
+- topology: not-applicable; unit test
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: oldest/newer/expired/empty buffered requests with a 100 ms delivery budget
+- workflow: scripts/check_qualification_ledger.py
+- fault: oldest queued record consumes the shared budget; expiry clamps to zero; empty batch falls back to configured timeout
+- duration: producer unit suite completed in 2.14s
+- record_count: not-applicable; budget fixture
+- member_count: not-applicable
+- repetition_count: three clock-anchor tests within 116 producer unit tests
+- expected_errors: oldest request determines the remaining budget without restarting the total deadline
+- observed_errors: all 116 producer unit tests passed, including the three budget cases
+- retry_count: 0
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: not-applicable
+- result: passed
+- artifact: docs/evidence/v1-producer-delivery-budget-2026-09-03.md; crates/kafrust/src/producer.rs
+- non_claims: not full clock-controlled producer matrix, not published mixed-outcome reconciliation, not broker compatibility, not long SLO, not release authorization

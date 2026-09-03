@@ -89,6 +89,18 @@ The published artifact profiles, clock-controlled coverage for every producer
 entry point, and exact CI/live evidence remain open. V1-03's live/golden gates
 also remain a prerequisite for closing this milestone.
 
+### Buffered budget clock-anchor slice (2026-09-03)
+
+`buffered_remaining_delivery_timeout` now receives an explicit clock anchor;
+the worker passes `Instant::now()`, while deterministic tests can assert the
+oldest request's exact remaining budget. Producer unit coverage now includes
+oldest/newer requests (80 ms remaining from a 100 ms budget), an expired
+request (zero remaining), and an empty pending batch (configured timeout
+retained). All 116 producer unit tests and the required local Rust validation
+passed on source commit `b838fa3`. This narrows the clock-controlled gap only;
+every producer entry point, published mixed-outcome reconciliation, and live
+evidence remain required.
+
 ## Exit Criteria
 
 1. All three producer modes share the documented total-budget calculation.

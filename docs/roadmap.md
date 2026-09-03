@@ -90,8 +90,11 @@ error. Queue expiry is replay-safe and sends zero Produce frames; immediate and
 batch deadline expiry poisons the producer path. Focused local deadline,
 poisoning, and retry-classification tests pass, and the public API snapshot was
 regenerated for the new export. Published mixed-outcome profiles and the full
-clock-controlled matrix remain open. The pushed candidate's stable and Rust
-1.81.0 jobs are green in [CI run 32548809314](https://github.com/TaeeunKil/kafrust/actions/runs/32548809314).
+clock-controlled matrix remain open. The buffered budget helper now accepts a
+fixed clock anchor, with oldest/newer/expired/empty queue tests passing on
+source commit `b838fa3`; the exact deterministic record is in
+[`v1-producer-delivery-budget-2026-09-03.md`](evidence/v1-producer-delivery-budget-2026-09-03.md).
+The pushed candidate's stable and Rust 1.81.0 jobs are green in [CI run 32548809314](https://github.com/TaeeunKil/kafrust/actions/runs/32548809314).
 
 ## V1-05 Execution Update (2026-08-22)
 
