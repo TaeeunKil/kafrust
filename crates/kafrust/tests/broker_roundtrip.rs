@@ -15,14 +15,14 @@ use kafrust::protocol::api::offset_for_leader_epoch::{
 };
 use kafrust::protocol::api::produce::API_KEY as PRODUCE_API_KEY;
 use kafrust::{
-    AdminClient, ClientConfig, ConfigResourceType, CreateTopicsOptions, DeleteTopicsOptions,
-    DescribeClusterEndpointType, DescribeClusterOptions, DescribeConfigsOptions,
-    ListConfigResourcesOptions, ListGroupsOptions, NewTopic, SecurityProtocol,
-    ShareAcknowledgementType, ShareAcquireMode, ShareConsumerConfig, ShareGroupOffset,
-    ShareGroupStateBatch, ShareGroupStateDeleteTopic, ShareGroupStateInitializePartition,
-    ShareGroupStateInitializeTopic, ShareGroupStateReadPartition, ShareGroupStateReadTopic,
-    ShareGroupStateWritePartition, ShareGroupStateWriteTopic, TopicConfigResource,
-    UpdateFeaturesOptions,
+    AdminClient, ClientConfig, ConfigResourceType, ConsumerConfig, CreateTopicsOptions,
+    DeleteTopicsOptions, DescribeClusterEndpointType, DescribeClusterOptions,
+    DescribeConfigsOptions, ListConfigResourcesOptions, ListGroupsOptions, NewTopic,
+    ProducerConfig, ProducerRecord, SecurityProtocol, ShareAcknowledgementType, ShareAcquireMode,
+    ShareConsumerConfig, ShareGroupOffset, ShareGroupStateBatch, ShareGroupStateDeleteTopic,
+    ShareGroupStateInitializePartition, ShareGroupStateInitializeTopic,
+    ShareGroupStateReadPartition, ShareGroupStateReadTopic, ShareGroupStateWritePartition,
+    ShareGroupStateWriteTopic, TopicConfigResource, UpdateFeaturesOptions,
 };
 use std::collections::BTreeSet;
 use tokio::time::{sleep, Duration, Instant};
@@ -53,6 +53,23 @@ async fn api_versions_and_metadata_roundtrip_when_broker_is_configured() {
         .expect("flexible ApiVersions roundtrip should succeed");
     assert_eq!(api_versions_v3.error_code, 0);
 
+    let produce_advertised_max = api_versions_v3
+        .highest_supported_version(PRODUCE_API_KEY, 13)
+        .unwrap_or(-1);
+    let produce_high_level_without_topic_id = match produce_advertised_max {
+        12.. => 12,
+        11 => 11,
+        9..=10 => 9,
+        7..=8 => 7,
+        3..=6 => 3,
+        2 => 2,
+        _ => -1,
+    };
+    let produce_high_level_with_topic_id = if produce_advertised_max >= 13 {
+        13
+    } else {
+        produce_high_level_without_topic_id
+    };
     let fetch_advertised_max = api_versions_v3
         .highest_supported_version(FETCH_API_KEY, 18)
         .unwrap_or(-1);
@@ -63,10 +80,11 @@ async fn api_versions_and_metadata_roundtrip_when_broker_is_configured() {
         _ => 4,
     };
     eprintln!(
-        "data_plane_version_log produce_max={} fetch_high_level={} metadata_v12={} list_offsets_v1=1 offset_for_leader_epoch_v3=3 api_versions_v3=3",
-        api_versions_v3
-            .highest_supported_version(PRODUCE_API_KEY, 13)
-            .unwrap_or(-1),
+        "data_plane_version_log produce_advertised_max={} produce_high_level_without_topic_id={} produce_high_level_with_topic_id={} fetch_advertised_max={} fetch_high_level={} metadata_v12={} list_offsets_v1=1 offset_for_leader_epoch_v3=3 api_versions_v3=3",
+        produce_advertised_max,
+        produce_high_level_without_topic_id,
+        produce_high_level_with_topic_id,
+        fetch_advertised_max,
         fetch_high_level_version,
         api_versions_v3
             .highest_supported_version(METADATA_API_KEY, 12)
@@ -222,6 +240,44 @@ async fn api_versions_and_metadata_roundtrip_when_broker_is_configured() {
             list_partition.offset,
             leader_partition.error_code,
             leader_partition.end_offset,
+        );
+
+        let mut producer = ProducerConfig::new(parse_bootstrap_servers(&bootstrap))
+            .client_id("kafrust-data-plane-version-probe-producer")
+            .build()
+            .await
+            .expect("Produce data-plane probe should connect");
+        let produced = producer
+            .send(
+                ProducerRecord::to(topic.clone())
+                    .key("data-plane-probe-key")
+                    .value("data-plane-probe-value"),
+            )
+            .await
+            .expect("Produce data-plane probe should succeed");
+        let mut consumer = ConsumerConfig::new(parse_bootstrap_servers(&bootstrap))
+            .client_id("kafrust-data-plane-version-probe-consumer")
+            .build()
+            .await
+            .expect("Fetch data-plane probe should connect");
+        let fetched = consumer
+            .fetch(topic.clone(), produced.partition(), produced.offset())
+            .await
+            .expect("Fetch data-plane probe should succeed");
+        assert!(
+            fetched.iter().any(|record| {
+                record.offset() == produced.offset()
+                    && record.key() == Some(b"data-plane-probe-key")
+                    && record.value() == Some(b"data-plane-probe-value")
+            }),
+            "Fetch data-plane probe should return the produced record"
+        );
+        eprintln!(
+            "data_plane_high_level_log produce_version={} fetch_version={} produced_offset={} fetched_records={}",
+            produce_high_level_with_topic_id,
+            fetch_high_level_version,
+            produced.offset(),
+            fetched.len(),
         );
 
         let delete = admin
