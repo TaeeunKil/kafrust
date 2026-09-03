@@ -5657,3 +5657,14 @@ Evidence history (mixed current-source and published tiers):
   [`31703868759`](https://github.com/TaeeunKil/kafrust/actions/runs/31703868759).
   Broader fault combinations, arbitrary retention timing, and unclean-election
   data-loss scenarios remain separate 1.0 gates.
+
+## V1 Current-source short recheck (2026-09-04)
+
+After the delivery-deadline phase classification change, pushed HEAD `513dc7e`
+passed the safe non-long hosted diagnostics: all 17 jobs in [Live Kafka Smoke](https://github.com/TaeeunKil/kafrust/actions/runs/33803553498),
+the ten-target [Fuzz Check](https://github.com/TaeeunKil/kafrust/actions/runs/33803556052), and all four profiles in [Kafka Benchmark Profile Diagnostic](https://github.com/TaeeunKil/kafrust/actions/runs/33803559070).
+The grouped evidence is
+[`v1-short-recheck-2026-09-04.md`](evidence/v1-short-recheck-2026-09-04.md).
+These runs confirm current-source compatibility and bounded diagnostics only;
+published matrices, long fuzz/SLO campaigns, named service canary, and release
+authorization remain open.

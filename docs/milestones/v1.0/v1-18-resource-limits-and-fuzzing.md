@@ -148,6 +148,14 @@ This refresh is discovery evidence only: it is not a 3,600-second target
 qualification set, does not count as a weekly campaign pass, and leaves the
 two remaining weekly sets plus crash/OOM disposition open.
 
+The same pushed HEAD `513dc7e` passed a second hosted discovery run in
+[Fuzz Check 33803556052](https://github.com/TaeeunKil/kafrust/actions/runs/33803556052).
+All ten targets compiled and completed the bounded run with no failed job. The
+combined current-source record is
+[`v1-short-recheck-2026-09-04.md`](../../evidence/v1-short-recheck-2026-09-04.md).
+This remains discovery-only evidence and does not count toward the remaining
+weekly qualification sets or the 3,600-second-per-target gate.
+
 ## Failure And Lifecycle Contract
 
 - Limits are checked before unbounded allocation and return typed errors.

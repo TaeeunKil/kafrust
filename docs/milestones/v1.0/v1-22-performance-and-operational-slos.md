@@ -434,3 +434,11 @@ Streams runtime checks alongside the previously recorded immediate, buffered,
 direct-consumer, and 120-second soak diagnostics. These runs are correctness
 and recovery evidence only; the locked baseline, five repetitions, eight-hour
 profiles, and SLO thresholds remain open.
+
+The delivery-deadline phase change was rechecked at source `513dc7e` through
+[Kafka Benchmark Profile Diagnostic 33803559070](https://github.com/TaeeunKil/kafrust/actions/runs/33803559070).
+All four declared immediate, buffered, and direct-consumer profiles passed. The
+grouped current-source record is
+[`v1-short-recheck-2026-09-04.md`](../../evidence/v1-short-recheck-2026-09-04.md).
+This remains a bounded hosted diagnostic; no locked baseline, eight-hour SLO,
+or release claim follows from it.

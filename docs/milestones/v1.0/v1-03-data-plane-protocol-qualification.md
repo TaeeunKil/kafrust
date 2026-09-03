@@ -320,6 +320,16 @@ This refresh is local deterministic evidence only; Share, security,
 three-broker movement, accepted-floor, published, long-campaign, and release
 gates remain open.
 
+### Current-source hosted matrix recheck (2026-09-04)
+
+After the producer deadline phase change, source `513dc7e` passed all 17 jobs
+of the hosted [Live Kafka Smoke workflow](https://github.com/TaeeunKil/kafrust/actions/runs/33803553498), covering the
+declared Kafka 3.7.2 through 4.3.1 plaintext, TLS, SASL, ACL, multi-broker,
+and KIP-848/failover profiles. The grouped record is
+[`v1-short-recheck-2026-09-04.md`](../../evidence/v1-short-recheck-2026-09-04.md).
+This is a non-long current-source diagnostic; accepted published matrix,
+official response oracles, and three-broker qualification gates remain open.
+
 ## Exit Criteria
 
 1. Every stable high-level selected/fallback version has official metadata,

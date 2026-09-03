@@ -6457,6 +6457,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-benchmark-diagnostic-2026-09-04.md; https://github.com/TaeeunKil/kafrust/actions/runs/33799886253; https://github.com/TaeeunKil/kafrust/actions/runs/33799889688
 - non_claims: not locked baseline, not five-repetition eight-hour SLO, not universal performance ranking, not published-artifact qualification, not release authorization
 
+## Q-CURRENT-SOURCE-SHORT-RECHECK-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: 513dc7ee06ff0a3749c782f295a6cce7f19066a0
+- client_version: 0.3.6 source workspace
+- protocol_version: 0.3.6 source workspace
+- work_status: In progress
+- evidence_level: CI
+- kafka_version: 3.7.2, 3.8.1, 3.9.1, 4.3.1; fuzz and benchmark workflows use their declared harness versions
+- kafka_image: workflow-declared Apache Kafka images; fuzz has no broker
+- mode: pushed-head non-long hosted recheck
+- topology: 17-job live matrix; benchmark single-node profiles; fuzz no broker
+- security: PLAINTEXT, TLS, SASL, ACL, and workflow-declared failover profiles
+- group_protocol: classic and KIP-848 where configured by Live Kafka Smoke
+- workload: 17 live jobs; ten libFuzzer discovery targets; four benchmark profiles
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/33803553498
+- fault: bounded workflow checks; no long fault or SLO campaign
+- duration: three hosted workflow runs completed successfully
+- record_count: not recorded by aggregate recheck
+- member_count: workflow-specific; not aggregated
+- repetition_count: one pushed-head dispatch per workflow
+- expected_errors: all declared workflow jobs and assertions pass
+- observed_errors: 17 live jobs, ten fuzz targets, and four benchmark profiles completed with zero failed jobs
+- retry_count: workflow-specific; not aggregated
+- duplicate_count: workflow-specific; not aggregated
+- loss_count: workflow-specific; not aggregated
+- latency: benchmark workflow-specific; not a locked SLO
+- memory: workflow-specific; not a locked SLO
+- final_resource_gauges: each workflow completed its declared cleanup and drain assertions
+- result: passed
+- artifact: docs/evidence/v1-short-recheck-2026-09-04.md; https://github.com/TaeeunKil/kafrust/actions/runs/33803553498; https://github.com/TaeeunKil/kafrust/actions/runs/33803556052; https://github.com/TaeeunKil/kafrust/actions/runs/33803559070
+- non_claims: not published lockfile qualification, not 3,600-second fuzz qualification, not five-repetition eight-hour SLO, not service canary, not release authorization
+
 ## Q-PRODUCER-DEADLINE-PHASES-2026-09-04
 
 - date_utc: 2026-09-04
