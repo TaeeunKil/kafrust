@@ -1220,8 +1220,10 @@ also passed.
 V1-03's missing deterministic request-shape and minimal response-boundary
 slice is now covered by complete golden bytes for the selected Produce, Fetch,
 Metadata, ListOffsets, ApiVersions, and OffsetForLeaderEpoch versions. The
-focused protocol test passed all four cases; the fixture and Apache-schema
-boundary are recorded in
+focused protocol test passed all four cases; the exact pushed head passed
+stable/Rust 1.81 CI in
+[run 33726318714](https://github.com/TaeeunKil/kafrust/actions/runs/33726318714).
+The fixture and Apache-schema boundary are recorded in
 [`v1-data-plane-golden-fixtures-2026-09-03.md`](evidence/v1-data-plane-golden-fixtures-2026-09-03.md).
 This is a current-source byte-audit increment only. Non-empty response oracles,
 malformed expansion, transaction-selection proof, and floor/pinned-current

@@ -39,8 +39,12 @@ explicitly rather than normalized.
 
 `cargo test -p kafrust-protocol --test data_plane_golden -- --nocapture`
 passed all four tests on 2026-09-03. This is deterministic current-source
-evidence; the follow-up CI run and the accepted floor/pinned-current live
-negotiation logs remain separate V1-03 gates.
+evidence. The exact pushed documentation/source head
+[`cc2c67e`](https://github.com/TaeeunKil/kafrust/commit/cc2c67efce92e69c3bf2b0988c4be895f6c33929)
+passed both stable and Rust 1.81 CI jobs in
+[run 33726318714](https://github.com/TaeeunKil/kafrust/actions/runs/33726318714).
+The accepted floor/pinned-current live negotiation logs remain separate V1-03
+gates.
 
 ## Boundary
 
