@@ -164,6 +164,21 @@ reproduction is recorded in
 [`v1-company-fault-matrix-short-smoke-2026-09-03.md`](../../evidence/v1-company-fault-matrix-short-smoke-2026-09-03.md)
 and does not change the published, multi-broker, or long-campaign gates.
 
+### Close edge cases (2026-09-03)
+
+At source commit `b88564748c56e1bcc8ae4c5944235b4cb1bb95e4`,
+`buffered_close_reports_in_flight_deadline_and_joins_worker` verifies that
+owner `close()` reports an in-flight Produce deadline with
+`possibly_transmitted=true`, completes the delivery, drains the gauge, and
+joins the worker. `buffered_close_flushes_handle_owned_record_before_worker_shutdown`
+verifies that an accepted record sent through `BufferedProducerHandle` is
+flushed by the owner close and resolves successfully. The detailed record is
+[`v1-buffered-close-edge-cases-2026-09-03.md`](../../evidence/v1-buffered-close-edge-cases-2026-09-03.md).
+
+This closes deterministic close handling for these two paths only;
+cancellation during socket I/O, delayed metadata/capability, published
+mixed-outcome reconciliation, and live evidence remain open.
+
 ## Exit Criteria
 
 1. All three producer modes share the documented total-budget calculation.

@@ -5466,3 +5466,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-buffered-inflight-deadline-2026-09-03.md; crates/kafrust/tests/fault_injection.rs; crates/kafrust/tests/support/mod.rs
 - non_claims: not delayed metadata/capability or close-while-in-flight coverage, not cancellation during transmission, not published mixed-outcome qualification, not long campaigns, not service canary, not release authorization
+
+## Q-BUFFERED-CLOSE-EDGE-CASES-2026-09-03
+
+- date_utc: 2026-09-03
+- source_commit: b88564748c56e1bcc8ae4c5944235b4cb1bb95e4
+- client_version: 0.3.6 source checkout
+- protocol_version: 0.3.6 source checkout
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: not-applicable; in-memory scripted broker
+- kafka_image: not-applicable
+- mode: buffered close in-flight deadline and handle-owned flush regressions
+- topology: in-memory scripted broker; held Produce response and successful Produce response
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: one in-flight deadline close and one handle-owned accepted delivery
+- workflow: scripts/check_qualification_ledger.py
+- fault: close command flushes accepted records while Produce is blocked; handle enqueue is owned by a separate sender
+- duration: deterministic integration tests under one second
+- record_count: two buffered deliveries across two bounded scripts
+- member_count: not-applicable
+- repetition_count: one run per edge case
+- expected_errors: in-flight close reports Produce-phase possibly-transmitted deadline; handle-owned record resolves on owner close
+- observed_errors: both tests passed; in-flight close joined worker and drained gauge; handle-owned close observed offset 43 and drained gauge
+- retry_count: 0
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: buffered workers closed cleanly; no external resources
+- result: passed
+- artifact: docs/evidence/v1-buffered-close-edge-cases-2026-09-03.md; crates/kafrust/tests/fault_injection.rs
+- non_claims: not cancellation during socket I/O, not delayed metadata/capability, not published mixed-outcome qualification, not long campaigns, not service canary, not release authorization

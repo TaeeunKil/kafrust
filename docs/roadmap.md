@@ -286,6 +286,15 @@ deadline. The short reproduction is recorded in
 and does not change the published or multi-broker gates. The prior 22-test
 record remains historical evidence at `83ec120`.
 
+At pushed head `b885647`, two additional close cases passed: owner close joins
+cleanly after a buffered in-flight Produce deadline with
+`possibly_transmitted=true`, and owner close flushes a record enqueued through
+`BufferedProducerHandle`. Both delivery outcomes and the buffered gauge were
+verified. Details are in
+[`v1-buffered-close-edge-cases-2026-09-03.md`](evidence/v1-buffered-close-edge-cases-2026-09-03.md).
+Cancellation during socket I/O, delayed metadata/capability, and published
+mixed-outcome reconciliation remain open.
+
 At pushed head `a46462f`, the buffered idempotent path now covers terminal
 sequence errors 45, 47, and 90. Each first delivery returns the fatal broker
 code; a second queued delivery emits no Produce frame and returns the same
