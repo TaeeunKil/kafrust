@@ -4550,6 +4550,36 @@ mod tests {
         }
     }
 
+    struct HoldWriteStream;
+
+    impl AsyncRead for HoldWriteStream {
+        fn poll_read(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            _buf: &mut ReadBuf<'_>,
+        ) -> Poll<io::Result<()>> {
+            Poll::Pending
+        }
+    }
+
+    impl AsyncWrite for HoldWriteStream {
+        fn poll_write(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            _buf: &[u8],
+        ) -> Poll<io::Result<usize>> {
+            Poll::Pending
+        }
+
+        fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+            Poll::Ready(Ok(()))
+        }
+
+        fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+            Poll::Ready(Ok(()))
+        }
+    }
+
     #[test]
     fn formats_topic_id_like_kafka_uuid() {
         assert_eq!(format_topic_id([7; 16]), "BwcHBwcHBwcHBwcHBwcHBw");
@@ -4673,6 +4703,30 @@ mod tests {
         assert!(client.is_connection_poisoned());
 
         let reuse_error = client.api_versions().await.unwrap_err();
+        assert!(matches!(
+            reuse_error,
+            Error::Io(error) if error.kind() == io::ErrorKind::NotConnected
+        ));
+    }
+
+    #[tokio::test]
+    async fn does_not_reuse_connection_after_canceled_no_response_request() {
+        let mut client = Client::from_stream(
+            Box::new(HoldWriteStream),
+            Some("kafrust-cancel-no-response-test".to_owned()),
+            Some(Duration::from_secs(1)),
+        );
+        let request = [0, 18, 0, 0, 0, 0, 0, 1];
+
+        assert!(tokio::time::timeout(
+            Duration::from_millis(5),
+            client.send_request_no_response(&request)
+        )
+        .await
+        .is_err());
+        assert!(client.is_connection_poisoned());
+
+        let reuse_error = client.send_request_no_response(&request).await.unwrap_err();
         assert!(matches!(
             reuse_error,
             Error::Io(error) if error.kind() == io::ErrorKind::NotConnected
