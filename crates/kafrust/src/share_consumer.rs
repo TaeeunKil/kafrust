@@ -14,6 +14,7 @@ use kafrust_protocol::api::share::{
 };
 use kafrust_protocol::api::{fetch::decode_message_set, share};
 use std::collections::{BTreeMap, BTreeSet};
+use std::future::Future;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::{oneshot, Mutex};
@@ -1707,72 +1708,118 @@ impl ShareConsumer {
                     "ShareAcknowledge v2 is required for renewal acknowledgements",
                 ));
             }
-            let mut broker = self.take_broker_client(broker_id).await?;
-            let response = if has_renew && renew_via_fetch && self.share_fetch_version >= 2 {
-                let topics = acknowledgement_fetch_topics_for(partitions.clone());
-                broker
-                    .share_fetch_v2_with_renew(
-                        Some(self.config.group_id.clone()),
-                        Some(self.member_id.clone()),
-                        session_epoch,
-                        0,
-                        0,
-                        0,
-                        0,
-                        0,
-                        self.config.acquire_mode.as_i8(),
-                        true,
-                        topics,
-                        Vec::new(),
-                    )
-                    .await
-                    .map(|response| {
-                        let partition_error_code = first_share_partition_error(&response)
-                            .or_else(|| first_share_fetch_acknowledgement_error(&response));
-                        ShareAcknowledgementResponseSummary {
-                            error_code: response.error_code,
-                            node_endpoints: response.node_endpoints,
-                            partition_error_code,
-                            acquisition_lock_timeout_ms: Some(response.acquisition_lock_timeout_ms),
-                        }
+            let acknowledgement_keys = partitions
+                .iter()
+                .flat_map(|(partition, offsets)| {
+                    offsets.iter().map(move |(offset, _)| ShareRecordKey {
+                        topic_id: partition.topic_id,
+                        partition: partition.partition,
+                        offset: *offset,
                     })
+                })
+                .collect::<Vec<_>>();
+            let group_id = self.config.group_id.clone();
+            let member_id = self.member_id.clone();
+            let acquire_mode = self.config.acquire_mode.as_i8();
+            let share_fetch_version = self.share_fetch_version;
+            let mut broker = self.take_broker_client(broker_id).await?;
+            let response = if has_renew && renew_via_fetch && share_fetch_version >= 2 {
+                let topics = acknowledgement_fetch_topics_for(partitions.clone());
+                let request = async {
+                    broker
+                        .share_fetch_v2_with_renew(
+                            Some(group_id.clone()),
+                            Some(member_id.clone()),
+                            session_epoch,
+                            0,
+                            0,
+                            0,
+                            0,
+                            0,
+                            acquire_mode,
+                            true,
+                            topics,
+                            Vec::new(),
+                        )
+                        .await
+                        .map(|response| {
+                            let partition_error_code = first_share_partition_error(&response)
+                                .or_else(|| first_share_fetch_acknowledgement_error(&response));
+                            ShareAcknowledgementResponseSummary {
+                                error_code: response.error_code,
+                                node_endpoints: response.node_endpoints,
+                                partition_error_code,
+                                acquisition_lock_timeout_ms: Some(
+                                    response.acquisition_lock_timeout_ms,
+                                ),
+                            }
+                        })
+                };
+                await_share_acknowledgement(
+                    &mut self.pending,
+                    &mut self.share_sessions,
+                    broker_id,
+                    acknowledgement_keys.clone(),
+                    request,
+                )
+                .await
             } else if has_renew {
                 let topics = acknowledgement_topics_for(partitions.clone());
-                broker
-                    .share_acknowledge_v2(
-                        Some(self.config.group_id.clone()),
-                        Some(self.member_id.clone()),
-                        session_epoch,
-                        true,
-                        topics,
-                    )
-                    .await
-                    .map(|response| ShareAcknowledgementResponseSummary {
-                        error_code: response.error_code,
-                        node_endpoints: response.node_endpoints,
-                        partition_error_code: first_share_acknowledgement_error_in(
-                            &response.responses,
-                        ),
-                        acquisition_lock_timeout_ms: Some(response.acquisition_lock_timeout_ms),
-                    })
+                let request = async {
+                    broker
+                        .share_acknowledge_v2(
+                            Some(group_id.clone()),
+                            Some(member_id.clone()),
+                            session_epoch,
+                            true,
+                            topics,
+                        )
+                        .await
+                        .map(|response| ShareAcknowledgementResponseSummary {
+                            error_code: response.error_code,
+                            node_endpoints: response.node_endpoints,
+                            partition_error_code: first_share_acknowledgement_error_in(
+                                &response.responses,
+                            ),
+                            acquisition_lock_timeout_ms: Some(response.acquisition_lock_timeout_ms),
+                        })
+                };
+                await_share_acknowledgement(
+                    &mut self.pending,
+                    &mut self.share_sessions,
+                    broker_id,
+                    acknowledgement_keys.clone(),
+                    request,
+                )
+                .await
             } else {
                 let topics = acknowledgement_topics_for(partitions.clone());
-                broker
-                    .share_acknowledge_v1(
-                        Some(self.config.group_id.clone()),
-                        Some(self.member_id.clone()),
-                        session_epoch,
-                        topics,
-                    )
-                    .await
-                    .map(|response| ShareAcknowledgementResponseSummary {
-                        error_code: response.error_code,
-                        node_endpoints: response.node_endpoints,
-                        partition_error_code: first_share_acknowledgement_error_in(
-                            &response.responses,
-                        ),
-                        acquisition_lock_timeout_ms: None,
-                    })
+                let request = async {
+                    broker
+                        .share_acknowledge_v1(
+                            Some(group_id),
+                            Some(member_id),
+                            session_epoch,
+                            topics,
+                        )
+                        .await
+                        .map(|response| ShareAcknowledgementResponseSummary {
+                            error_code: response.error_code,
+                            node_endpoints: response.node_endpoints,
+                            partition_error_code: first_share_acknowledgement_error_in(
+                                &response.responses,
+                            ),
+                            acquisition_lock_timeout_ms: None,
+                        })
+                };
+                await_share_acknowledgement(
+                    &mut self.pending,
+                    &mut self.share_sessions,
+                    broker_id,
+                    acknowledgement_keys,
+                    request,
+                )
+                .await
             };
             let response = match response {
                 Ok(response) => response,
@@ -1967,6 +2014,50 @@ struct ShareAcknowledgementResponseSummary {
     node_endpoints: Vec<ShareNodeEndpointV1>,
     partition_error_code: Option<i16>,
     acquisition_lock_timeout_ms: Option<i32>,
+}
+
+struct ShareAcknowledgementCancellationGuard<'a> {
+    pending: &'a mut BTreeMap<ShareRecordKey, PendingRecord>,
+    share_sessions: &'a mut BTreeMap<i32, ShareSession>,
+    broker_id: i32,
+    keys: Vec<ShareRecordKey>,
+    armed: bool,
+}
+
+impl Drop for ShareAcknowledgementCancellationGuard<'_> {
+    fn drop(&mut self) {
+        if !self.armed {
+            return;
+        }
+        for key in &self.keys {
+            if let Some(pending) = self.pending.get_mut(key) {
+                pending.acknowledgement_outcome_unknown = true;
+            }
+        }
+        self.share_sessions.remove(&self.broker_id);
+    }
+}
+
+async fn await_share_acknowledgement<T, F>(
+    pending: &mut BTreeMap<ShareRecordKey, PendingRecord>,
+    share_sessions: &mut BTreeMap<i32, ShareSession>,
+    broker_id: i32,
+    keys: Vec<ShareRecordKey>,
+    request: F,
+) -> Result<T>
+where
+    F: Future<Output = Result<T>>,
+{
+    let mut guard = ShareAcknowledgementCancellationGuard {
+        pending,
+        share_sessions,
+        broker_id,
+        keys,
+        armed: true,
+    };
+    let result = request.await;
+    guard.armed = false;
+    result
 }
 
 #[derive(Debug, Clone)]
@@ -2787,6 +2878,114 @@ mod tests {
         consumer.reconcile_acknowledgement_outcomes().await.unwrap();
         assert!(consumer.share_sessions.is_empty());
         assert!(!consumer.broker_clients.contains_key(&1));
+        broker_task.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn cancels_acknowledgement_after_transmission_marks_outcome_unknown() {
+        const TOPIC_ID: [u8; 16] = [6; 16];
+
+        let (client_stream, mut broker_stream) = tokio::io::duplex(8192);
+        let (ack_seen_tx, ack_seen_rx) = oneshot::channel();
+        let broker_task = tokio::spawn(async move {
+            let _request = read_test_frame(&mut broker_stream).await;
+            let _ = ack_seen_tx.send(());
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        });
+        let config = ShareConsumerConfig::new(["localhost:9092"], "orders").subscribe("orders");
+        let mut consumer = ShareConsumer {
+            config,
+            bootstrap: None,
+            coordinator: None,
+            coordinator_addr: "localhost:9092".to_owned(),
+            broker_clients: BTreeMap::new(),
+            broker_addresses: BTreeMap::new(),
+            share_sessions: BTreeMap::from([(
+                1,
+                ShareSession {
+                    epoch: 0,
+                    partitions: BTreeSet::from([SharePartitionKey {
+                        topic_id: TOPIC_ID,
+                        partition: 0,
+                    }]),
+                },
+            )]),
+            assignment: BTreeSet::new(),
+            topic_names: BTreeMap::from([(TOPIC_ID, "orders".to_owned())]),
+            partition_leaders: BTreeMap::from([(
+                SharePartitionKey {
+                    topic_id: TOPIC_ID,
+                    partition: 0,
+                },
+                1,
+            )]),
+            pending: BTreeMap::new(),
+            renewed_records: BTreeMap::new(),
+            member_id: "member-1".to_owned(),
+            member_epoch: 1,
+            next_heartbeat: Instant::now() + Duration::from_secs(60),
+            heartbeat_interval: Duration::from_secs(60),
+            needs_assignment_heartbeat: false,
+            heartbeat_task: None,
+            share_fetch_version: 1,
+            share_acknowledge_version: 1,
+            acquisition_lock_timeout_ms: None,
+            closed: false,
+        };
+        let record = ConsumerRecord::from_message_set(
+            "orders",
+            0,
+            kafrust_protocol::api::fetch::MessageSetRecord {
+                offset: 10,
+                leader_epoch: -1,
+                timestamp_ms: 123,
+                key: None,
+                value: Some(b"value".to_vec()),
+                headers: Vec::new(),
+                producer_id: None,
+                transactional: false,
+                control: false,
+            },
+        );
+        let record = ShareRecord {
+            record,
+            topic_id: TOPIC_ID,
+            broker_id: 1,
+            delivery_count: 1,
+        };
+        let key = ShareRecordKey::from_record(&record);
+        consumer.pending.insert(
+            key,
+            PendingRecord {
+                broker_id: 1,
+                acknowledgement: Some(ShareAcknowledgementType::Accept),
+                acknowledgement_outcome_unknown: false,
+                record,
+            },
+        );
+        consumer.broker_clients.insert(
+            1,
+            Client::from_stream(
+                Box::new(client_stream),
+                Some("kafrust-test".to_owned()),
+                Some(Duration::from_secs(1)),
+            ),
+        );
+
+        let mut commit = Box::pin(consumer.commit());
+        tokio::select! {
+            result = &mut commit => assert!(result.is_err(), "commit completed before cancellation: {result:?}"),
+            result = ack_seen_rx => result.unwrap(),
+        }
+        drop(commit);
+
+        assert!(consumer.pending[&key].acknowledgement_outcome_unknown);
+        assert!(consumer.share_sessions.is_empty());
+        assert!(!consumer.broker_clients.contains_key(&1));
+        assert!(matches!(
+            consumer.commit().await,
+            Err(Error::ShareAcknowledgementOutcomeUnknown { broker_id: 1 })
+        ));
         broker_task.await.unwrap();
     }
 
