@@ -1158,6 +1158,15 @@ performance or release claim; V1-22 still needs its controlled 120-job SLO
 matrix and locked baseline. See
 [`v1-23-published-competitor-comparison-2026-09-03.md`](evidence/v1-23-published-competitor-comparison-2026-09-03.md).
 
+The short published performance smoke exposed and corrected a fixture-only
+metrics-labeling defect: [33718369244](https://github.com/TaeeunKil/kafrust/actions/runs/33718369244)
+failed because JSON gauge arguments were ordered incorrectly, while the
+`6d5d7ec` rerun [33718664874](https://github.com/TaeeunKil/kafrust/actions/runs/33718664874)
+passed all four Kafka 3.7.2/4.3.1 none/Zstd profiles with zero final gauges.
+The failure and correction are retained in
+[`v1-published-performance-smoke-2026-09-03.md`](evidence/v1-published-performance-smoke-2026-09-03.md).
+This remains smoke evidence; V1-22's long matrix and locked baseline are open.
+
 ## Historical Release Qualification
 
 `0.3.5` is now published on crates.io in protocol-first order. The fresh

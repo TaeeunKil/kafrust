@@ -4377,3 +4377,69 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-23-published-competitor-comparison-2026-09-03.md; kafrust-rust-rdkafka-comparison-33718060135 artifact; digest 7384f0e0012fab42060df529e06bdc32a348caff3dcf143281fed226af91cffa
 - non_claims: workload-specific diagnostic only; not universal performance parity, not V1-22 SLO/baseline, not named service canary, not fault/cutover/rollback, not 1.0.0 readiness
+
+## Q-PUBLISHED-PERFORMANCE-SMOKE-FIX-2026-09-03
+
+- date_utc: 2026-09-03
+- source_commit: 80bb09b88c3a2a0a0bf9c6bc9df3cb8703aa8032
+- client_version: 0.3.6 published artifact
+- protocol_version: 0.3.6 published dependency
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 3.7.2 and 4.3.1
+- kafka_image: apache/kafka:{3.7.2,4.3.1}
+- mode: published performance smoke fixture diagnostic
+- topology: isolated single-node KRaft
+- security: PLAINTEXT
+- group_protocol: direct consumer fetch
+- workload: 10,000 1-KiB records; batch size 200; none/Zstd; four profiles
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/33718369244
+- fault: fixture JSON gauge argument order
+- duration: jobs completed in approximately 1m13s-1m15s
+- record_count: 10,000 per profile
+- member_count: not-applicable
+- repetition_count: 1 per profile
+- expected_errors: zero final gauges and successful roundtrip
+- observed_errors: client roundtrips succeeded, but all four jobs failed fixture gauge assertion due mislabeled JSON fields
+- retry_count: 0
+- duplicate_count: not measured
+- loss_count: not measured
+- latency: emitted metrics not accepted due fixture assertion
+- memory: not measured
+- final_resource_gauges: client snapshot was zero; emitted JSON labels were incorrect
+- result: failed
+- artifact: GitHub Actions run 33718369244 logs; corrected by 6d5d7ec
+- non_claims: not a published-library failure, not V1-22 SLO evidence, not a release gate
+
+## Q-PUBLISHED-PERFORMANCE-SMOKE-2026-09-03
+
+- date_utc: 2026-09-03
+- source_commit: 6d5d7eca9e8459af1092bbc4e88bfe6bec5fe84b
+- client_version: 0.3.6 published artifact
+- protocol_version: 0.3.6 published dependency
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 3.7.2 and 4.3.1
+- kafka_image: apache/kafka:{3.7.2,4.3.1}
+- mode: published performance smoke
+- topology: isolated single-node KRaft
+- security: PLAINTEXT
+- group_protocol: direct consumer fetch
+- workload: 10,000 1-KiB records; batch size 200; none/Zstd; four profiles
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/33718664874
+- fault: none; steady-state smoke
+- duration: jobs completed in approximately 1m15s-1m21s
+- record_count: 10,000 per profile
+- member_count: not-applicable
+- repetition_count: 1 per profile
+- expected_errors: successful roundtrip, zero retries, zero final gauges
+- observed_errors: all four profiles passed; 10,000 records and 10,240,000 bytes consumed per profile
+- retry_count: 0
+- duplicate_count: not measured
+- loss_count: not measured
+- latency: batch p50 3.544-3.993ms; p95 5.098-6.408ms; p99 18.782-40.051ms
+- memory: not measured
+- final_resource_gauges: in_flight_requests=0; buffered_records=0; max_in_flight_requests=1; max_buffered_records=0
+- result: passed
+- artifact: docs/evidence/v1-published-performance-smoke-2026-09-03.md; four published-performance.json artifacts from run 33718664874
+- non_claims: not V1-22 five-repetition eight-hour matrix, not locked baseline, not universal performance parity, not service canary, not release readiness

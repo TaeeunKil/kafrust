@@ -278,6 +278,22 @@ workload-specific gap to drive profiling; it is not an SLO, locked baseline,
 universal parity claim, or release authorization. Details are in
 [`v1-23-published-competitor-comparison-2026-09-03.md`](../../evidence/v1-23-published-competitor-comparison-2026-09-03.md).
 
+### Published performance smoke and fixture correction (2026-09-03)
+
+The short published smoke was first run in
+[33718369244](https://github.com/TaeeunKil/kafrust/actions/runs/33718369244).
+All client roundtrips completed, but the external fixture failed its gauge
+assertion because two JSON snapshot arguments were emitted under the wrong
+field names. Commit `6d5d7ec` corrected that test-fixture-only mapping. The
+four-profile rerun
+[33718664874](https://github.com/TaeeunKil/kafrust/actions/runs/33718664874)
+passed on Kafka 3.7.2/4.3.1 with none/Zstd: 10,000 records per profile, zero
+retries, `in_flight_requests=0`, and `buffered_records=0`. Batch p99 ranged
+from 18.782ms to 40.051ms. This is a corrected smoke diagnostic, not the
+five-repetition eight-hour matrix or a locked SLO baseline. Full values and
+the retained failure are in
+[`v1-published-performance-smoke-2026-09-03.md`](../../evidence/v1-published-performance-smoke-2026-09-03.md).
+
 ### Profiling path (2026-08-23)
 
 The manual [`Kafka Benchmark Profile Diagnostic`](../../.github/workflows/benchmark-profile-diagnostic.yml)
