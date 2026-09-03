@@ -780,6 +780,55 @@ async fn buffered_delivery_deadline_expires_before_produce_without_transmission(
 }
 
 #[tokio::test]
+async fn buffered_close_flushes_accepted_record_before_worker_shutdown() {
+    let broker = ScriptedBroker::start(vec![
+        ScriptedResponse::RespondWithAddressAndClose(metadata_response_for_address),
+        ScriptedResponse::Respond(api_versions_response_body(3)),
+        ScriptedResponse::Respond(produce_v3_response_body(0, 42)),
+    ])
+    .await
+    .expect("scripted broker should bind");
+    let address = broker.address();
+    let metrics = ClientMetrics::new();
+    let mut producer = ProducerConfig::new([address.to_string()])
+        .metrics(metrics.clone())
+        .request_timeout_ms(1_000)
+        .delivery_timeout_ms(1_000)
+        .linger_ms(10_000)
+        .build_buffered()
+        .await
+        .expect("buffered producer should initialize");
+
+    let delivery = producer
+        .send(ProducerRecord::to("orders").partition(0).value("value"))
+        .await
+        .expect("buffered record should enqueue");
+    producer
+        .close()
+        .await
+        .expect("close should flush accepted records before worker shutdown");
+    let metadata = delivery
+        .wait()
+        .await
+        .expect("flushed buffered delivery should resolve");
+
+    assert_eq!(metadata.offset(), 42);
+    assert_eq!(metrics.snapshot().buffered_records, 0);
+    let observations = broker
+        .finish()
+        .await
+        .expect("scripted broker should complete close flush");
+    assert_eq!(observations.len(), 3);
+    assert_eq!(
+        observations
+            .iter()
+            .map(|request| request.api_key)
+            .collect::<Vec<_>>(),
+        [3, 18, 0]
+    );
+}
+
+#[tokio::test]
 async fn transactional_commit_response_loss_marks_outcome_unknown_and_defunct() {
     let coordinator = ScriptedBroker::start(vec![
         ScriptedResponse::Respond(api_versions_producer_response_body()),
