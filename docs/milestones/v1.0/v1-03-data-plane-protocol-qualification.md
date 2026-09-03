@@ -298,6 +298,13 @@ boundary change; it does not replace official response oracles, accepted-floor
 or published qualification, three-broker movement, long campaigns, or the
 remaining V1-03 exit criteria.
 
+The same complete target was rerun against the planned Kafka 3.7.2 floor line
+with its actual ListGroups v4 advertisement. All 13 cases passed, including
+Produce v9 and Fetch v13 negotiation plus the one-record roundtrip. The
+floor-line record is [`v1-company-broker-roundtrip-floor-2026-09-03.md`](../../evidence/v1-company-broker-roundtrip-floor-2026-09-03.md).
+This remains short single-node evidence and does not satisfy the accepted
+floor security/workload or multi-broker exit gates.
+
 ## Exit Criteria
 
 1. Every stable high-level selected/fallback version has official metadata,

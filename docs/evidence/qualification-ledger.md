@@ -5136,3 +5136,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-company-broker-roundtrip-2026-09-03.md; crates/kafrust/tests/broker_roundtrip.rs
 - non_claims: not V1-03 completion, not accepted-floor security/workload qualification, not three-broker movement, not published compatibility completion, not long campaigns, not service canary, not release authorization
+
+## Q-COMPANY-BROKER-FLOOR-ROUNDTRIP-2026-09-03
+
+- date_utc: 2026-09-03
+- source_commit: 3dc0d9ca2ed97359d4297267a117fd32d52da998
+- client_version: 0.3.6 source checkout
+- protocol_version: 0.3.6 source checkout
+- work_status: In progress
+- evidence_level: Live current-source
+- kafka_version: 3.7.2
+- kafka_image: apache/kafka@sha256:8bd63e1bd445e5e19427a4bdbcc3d23bf6efd774b058a41b36ba87fda7623e34
+- mode: company WSL2 floor-line complete broker roundtrip smoke
+- topology: isolated single-node KRaft with one named container and port 19093
+- security: PLAINTEXT
+- group_protocol: not-applicable; Share phases intentionally skipped
+- workload: broker_roundtrip integration target, floor-line data-plane negotiation, and one-record Produce/Fetch roundtrip
+- workflow: scripts/check_qualification_ledger.py
+- fault: valid broker responses after strict response-boundary and client regression changes
+- duration: one broker test run under two minutes
+- record_count: one produced and fetched record
+- member_count: not-applicable
+- repetition_count: one corrected bounded run; 13 test cases
+- expected_errors: no errors on configured non-Share paths; ListGroups expectation fixed at advertised v4
+- observed_errors: 13 passed; 0 failed; initial v5 harness expectation rejected by broker advertisement and was corrected without code changes
+- retry_count: 1 harness correction; no product retry
+- duplicate_count: zero observed in fetched probe record
+- loss_count: zero observed in fetched probe record
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: named container removed; no Docker prune; pre-existing resources retained
+- result: passed
+- artifact: docs/evidence/v1-company-broker-roundtrip-floor-2026-09-03.md; crates/kafrust/tests/broker_roundtrip.rs
+- non_claims: not V1-03 completion, not accepted-floor security/workload qualification, not three-broker movement, not published compatibility completion, not long campaigns, not service canary, not release authorization

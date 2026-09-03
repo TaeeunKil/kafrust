@@ -186,6 +186,15 @@ left untouched. Details are in
 This is short current-source diagnostic evidence only; accepted-floor,
 published, three-broker, long-campaign, canary, and release gates remain open.
 
+The same current-source 13-case target also passed against the planned Kafka
+3.7.2 floor-line broker after setting its actual ListGroups v4 expectation.
+The first invocation exposed only a harness mismatch (v5 is not advertised by
+Kafka 3.7.2); the corrected rerun passed without product-code changes. Details
+are in
+[`v1-company-broker-roundtrip-floor-2026-09-03.md`](evidence/v1-company-broker-roundtrip-floor-2026-09-03.md).
+This remains short single-node diagnostic evidence, not accepted-floor
+security/workload qualification.
+
 ## V1-04 Execution Update (2026-08-22)
 
 V1-04 is `In progress`. Producer delivery expiry now has a typed
