@@ -62,7 +62,8 @@ checked before transmission and again after compression.
 The live workflows for telemetry negotiation and payload limits are available,
 but the exact coordinated candidate still needs the 60-minute floor/current
 published profiles, broker replacement with stable ClientInstanceId, mutation
-and throttle coverage, terminating-push count, and seeded secret scan. Until
+and throttle coverage, the published terminating-push count, and seeded secret
+scan. Until
 those gates pass, telemetry remains an explicitly bounded qualification slice,
 not a general OpenTelemetry backend or a completed stable-support claim.
 
@@ -75,7 +76,8 @@ parses the Rust snapshot directly and requires all 19 fields to retain their
 declared type, unit, aggregation/lifecycle semantics, and maximum cardinality
 of one. Five focused checker tests and the CI check pass. This closes the
 deterministic metric inventory criterion only; published collection, broker
-replacement, throttling, and terminating-push gates remain required.
+replacement, throttling, and the published terminating-push gate remain
+required.
 
 ### Push cancellation after transmission (2026-09-04)
 
@@ -87,8 +89,20 @@ passed on Windows and company Ubuntu-T9 WSL2 (Rust 1.81.0); WSL2 also passed
 the 29-test fault-injection target. The evidence record is
 [`v1-telemetry-push-cancellation-2026-09-04.md`](../../evidence/v1-telemetry-push-cancellation-2026-09-04.md).
 This closes cancellation/reuse safety only; broker replacement, throttling,
-terminating-push, secure published collection, and long-duration gates remain
-open.
+published terminating-push count, secure published collection, and
+long-duration gates remain open.
+
+### Deterministic terminating push (2026-09-04)
+
+`TelemetryClient::terminate` now has a focused regression that decodes the
+single PushTelemetry v0 shutdown request and verifies its terminating bit,
+subscription ID, compression, payload, tagged fields, successful response,
+and joined broker task. The test passed on Windows and company Ubuntu-T9 WSL2
+(Rust 1.81.0); WSL2 also passed the 29-test fault-injection target. This closes
+the local request-encoding/shutdown boundary only. Published 60-minute
+collection, broker replacement, mutation/throttle behavior, secure transport,
+and final task/resource/secret checks remain open. See
+[`v1-telemetry-terminating-push-2026-09-04.md`](../../evidence/v1-telemetry-terminating-push-2026-09-04.md).
 
 ## Failure And Lifecycle Contract
 

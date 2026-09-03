@@ -626,7 +626,8 @@ V1-17 is `In progress`. The bounded `ClientMetricsSnapshot` and KIP-714 provider
 cover filtered cumulative/delta metrics, subscription negotiation, codec and
 payload-limit handling, and a single-connection push path. The 60-minute
 published collection profiles, broker replacement with stable ClientInstanceId,
-throttle/mutation/termination checks, and secret scan remain open.
+throttle/mutation checks, published terminating-push count, and secret scan
+remain open.
 
 The public snapshot contract is now frozen and checked by
 [`v1-17-metrics-contract.json`](evidence/v1-17-metrics-contract.json) and
@@ -642,9 +643,20 @@ push frame, dropping `push_once` leaves the connection unusable and the next
 push returns `NotConnected` instead of reusing an uncertain response. The
 focused regression passed on Windows and company Ubuntu-T9 WSL2, with all 29
 WSL2 fault-injection tests passing as well. This is local deterministic
-evidence only; replacement, throttling, terminating-push, secure published,
-and long-duration gates remain open. See
+evidence only; replacement, throttling, published terminating-push count,
+secure published, and long-duration gates remain open. See
 [`v1-telemetry-push-cancellation-2026-09-04.md`](evidence/v1-telemetry-push-cancellation-2026-09-04.md).
+
+The deterministic terminating-shutdown boundary is now covered at source
+commit `75644e4b5a2ae85e8764eacc95f8bc95102bcdbc`: a scripted broker validates
+the single PushTelemetry v0 request, including its terminating bit,
+subscription ID, compression, compact payload, tagged fields, and response;
+the broker task is joined. The focused test passed on Windows and company
+Ubuntu-T9 WSL2 (Rust 1.81.0), and WSL2 passed all 29 fault-injection tests.
+This closes local request encoding and shutdown behavior only; published
+60-minute collection, broker replacement, mutation/throttle behavior, secure
+transport, and final task/resource/secret checks remain open. See
+[`v1-telemetry-terminating-push-2026-09-04.md`](evidence/v1-telemetry-terminating-push-2026-09-04.md).
 
 ## V1-18 Execution Update (2026-08-22)
 

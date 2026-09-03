@@ -6060,3 +6060,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-telemetry-push-cancellation-2026-09-04.md; crates/kafrust/src/telemetry.rs
 - non_claims: not CI, not published-artifact qualification, not broker replacement, not throttling, not compression qualification, not secure transport, not long collection, not service canary, not release authorization
+
+## Q-TELEMETRY-TERMINATING-PUSH-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: 75644e4b5a2ae85e8764eacc95f8bc95102bcdbc
+- client_version: 0.3.6 source workspace
+- protocol_version: PushTelemetry v0
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: scripted transport fixture
+- kafka_image: not-applicable
+- mode: telemetry terminating push request encoding and shutdown
+- topology: in-memory duplex broker fixture
+- security: PLAINTEXT fixture
+- group_protocol: not-applicable
+- workload: one terminating telemetry push with a seeded subscription
+- workflow: scripts/check_qualification_ledger.py
+- fault: scripted broker validates the terminating request and returns a success response
+- duration: focused deterministic test under one second per platform
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: one deterministic run on Windows and one on WSL2
+- expected_errors: none; exactly one terminating PushTelemetry request and joined broker task
+- observed_errors: terminating bit, subscription ID, compression, payload, tagged fields, response, and summary all matched
+- retry_count: 0
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: no Docker resources; scripted broker task joined; no detached task
+- result: passed
+- artifact: docs/evidence/v1-telemetry-terminating-push-2026-09-04.md; crates/kafrust/src/telemetry.rs
+- non_claims: not CI, not published-artifact qualification, not broker replacement, not throttling, not codec qualification, not secure transport, not 60-minute collection, not service canary, not release authorization
