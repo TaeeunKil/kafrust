@@ -780,6 +780,166 @@ async fn buffered_delivery_deadline_expires_before_produce_without_transmission(
 }
 
 #[tokio::test]
+async fn producer_delivery_deadline_expires_during_metadata_without_produce() {
+    let broker = ScriptedBroker::start(vec![ScriptedResponse::Hold])
+        .await
+        .expect("scripted broker should bind");
+    let address = broker.address();
+    let mut producer = ProducerConfig::new([address.to_string()])
+        .request_timeout_ms(1_000)
+        .delivery_timeout_ms(20)
+        .max_retries(0)
+        .build()
+        .await
+        .expect("producer should initialize");
+
+    let error = producer
+        .send(ProducerRecord::to("orders").partition(0).value("value"))
+        .await
+        .expect_err("metadata delay should exhaust the total delivery budget");
+    assert!(matches!(
+        error,
+        kafrust::Error::DeliveryDeadlineExceeded {
+            phase: kafrust::DeliveryPhase::Metadata,
+            possibly_transmitted: false,
+            timeout_ms: 20,
+        }
+    ));
+
+    let observations = broker
+        .finish()
+        .await
+        .expect("scripted broker should finish metadata timeout");
+    assert_eq!(observations.len(), 1);
+    assert_eq!(observations[0].api_key, 3);
+    assert_eq!(observations[0].api_version, 1);
+}
+
+#[tokio::test]
+async fn producer_delivery_deadline_expires_during_capability_without_produce() {
+    let broker = ScriptedBroker::start(vec![
+        ScriptedResponse::RespondWithAddressAndClose(metadata_response_for_address),
+        ScriptedResponse::Hold,
+    ])
+    .await
+    .expect("scripted broker should bind");
+    let address = broker.address();
+    let mut producer = ProducerConfig::new([address.to_string()])
+        .request_timeout_ms(1_000)
+        .delivery_timeout_ms(20)
+        .max_retries(0)
+        .build()
+        .await
+        .expect("producer should initialize");
+
+    let error = producer
+        .send(ProducerRecord::to("orders").partition(0).value("value"))
+        .await
+        .expect_err("capability delay should exhaust the total delivery budget");
+    assert!(matches!(
+        error,
+        kafrust::Error::DeliveryDeadlineExceeded {
+            phase: kafrust::DeliveryPhase::Capability,
+            possibly_transmitted: false,
+            timeout_ms: 20,
+        }
+    ));
+
+    let observations = broker
+        .finish()
+        .await
+        .expect("scripted broker should finish capability timeout");
+    assert_eq!(observations.len(), 2);
+    assert_eq!(
+        observations
+            .iter()
+            .map(|request| (request.api_key, request.api_version))
+            .collect::<Vec<_>>(),
+        [(3, 1), (18, 3)]
+    );
+}
+
+#[tokio::test]
+async fn producer_batch_delivery_deadline_expires_during_metadata_without_produce() {
+    let broker = ScriptedBroker::start(vec![ScriptedResponse::Hold])
+        .await
+        .expect("scripted broker should bind");
+    let address = broker.address();
+    let mut producer = ProducerConfig::new([address.to_string()])
+        .request_timeout_ms(1_000)
+        .delivery_timeout_ms(20)
+        .max_retries(0)
+        .build()
+        .await
+        .expect("producer should initialize");
+
+    let error = producer
+        .send_batch([ProducerRecord::to("orders").partition(0).value("value")])
+        .await
+        .expect_err("metadata delay should exhaust the batch delivery budget");
+    assert!(matches!(
+        error,
+        kafrust::Error::DeliveryDeadlineExceeded {
+            phase: kafrust::DeliveryPhase::Metadata,
+            possibly_transmitted: false,
+            timeout_ms: 20,
+        }
+    ));
+
+    let observations = broker
+        .finish()
+        .await
+        .expect("scripted broker should finish batch metadata timeout");
+    assert_eq!(observations.len(), 1);
+    assert_eq!(observations[0].api_key, 3);
+    assert_eq!(observations[0].api_version, 1);
+}
+
+#[tokio::test]
+async fn producer_batch_delivery_deadline_expires_during_capability_without_produce() {
+    let broker = ScriptedBroker::start(vec![
+        ScriptedResponse::RespondWithAddressAndClose(metadata_response_for_address),
+        ScriptedResponse::Hold,
+    ])
+    .await
+    .expect("scripted broker should bind");
+    let address = broker.address();
+    let mut producer = ProducerConfig::new([address.to_string()])
+        .request_timeout_ms(1_000)
+        .delivery_timeout_ms(20)
+        .max_retries(0)
+        .build()
+        .await
+        .expect("producer should initialize");
+
+    let error = producer
+        .send_batch([ProducerRecord::to("orders").partition(0).value("value")])
+        .await
+        .expect_err("capability delay should exhaust the batch delivery budget");
+    assert!(matches!(
+        error,
+        kafrust::Error::DeliveryDeadlineExceeded {
+            phase: kafrust::DeliveryPhase::Capability,
+            possibly_transmitted: false,
+            timeout_ms: 20,
+        }
+    ));
+
+    let observations = broker
+        .finish()
+        .await
+        .expect("scripted broker should finish batch capability timeout");
+    assert_eq!(observations.len(), 2);
+    assert_eq!(
+        observations
+            .iter()
+            .map(|request| (request.api_key, request.api_version))
+            .collect::<Vec<_>>(),
+        [(3, 1), (18, 3)]
+    );
+}
+
+#[tokio::test]
 async fn buffered_close_flushes_accepted_record_before_worker_shutdown() {
     let broker = ScriptedBroker::start(vec![
         ScriptedResponse::RespondWithAddressAndClose(metadata_response_for_address),

@@ -1982,21 +1982,32 @@ impl Producer {
         self.ensure_idempotent_producer_usable()?;
         self.ensure_transaction_active()?;
         let delivery_timeout = self.config.delivery_timeout;
-        match time::timeout(delivery_timeout, self.send_inner(record)).await {
+        let mut phase = DeliveryPhase::Metadata;
+        let mut produce_started = false;
+        match time::timeout(
+            delivery_timeout,
+            self.send_inner(record, &mut phase, &mut produce_started),
+        )
+        .await
+        {
             Ok(result) => result,
             Err(_) => {
-                let possibly_transmitted = self.client.last_request_may_have_been_transmitted();
                 self.poison_after_delivery_timeout();
                 Err(delivery_deadline_error(
                     delivery_timeout,
-                    DeliveryPhase::Produce,
-                    possibly_transmitted,
+                    phase,
+                    produce_started,
                 ))
             }
         }
     }
 
-    async fn send_inner(&mut self, record: ProducerRecord) -> Result<RecordMetadata> {
+    async fn send_inner(
+        &mut self,
+        record: ProducerRecord,
+        phase: &mut DeliveryPhase,
+        produce_started: &mut bool,
+    ) -> Result<RecordMetadata> {
         debug!(
             topic = record.topic(),
             partition = ?record.partition_ref(),
@@ -2012,12 +2023,21 @@ impl Producer {
         let topic = record.topic().to_owned();
 
         loop {
+            *phase = DeliveryPhase::Metadata;
             let result = self
-                .send_once(&record, &topic, timestamp, timestamp_ms)
+                .send_once(
+                    &record,
+                    &topic,
+                    timestamp,
+                    timestamp_ms,
+                    phase,
+                    produce_started,
+                )
                 .await;
 
             match result {
                 Err(error) if attempt < self.config.max_retries && can_retry_send(&error) => {
+                    *phase = DeliveryPhase::Retry;
                     invalidate_metadata_cache(&mut self.metadata_cache, &topic);
                     self.topic_id_cache.remove(&topic);
                     self.config.client.record_retry();
@@ -2046,10 +2066,19 @@ impl Producer {
         topic: &str,
         timestamp: SystemTime,
         timestamp_ms: i64,
+        phase: &mut DeliveryPhase,
+        produce_started: &mut bool,
     ) -> Result<RecordMetadata> {
         let metadata = self.metadata_for_topic(topic).await?;
-        self.send_with_metadata(record, &metadata, timestamp, timestamp_ms)
-            .await
+        self.send_with_metadata(
+            record,
+            &metadata,
+            timestamp,
+            timestamp_ms,
+            phase,
+            produce_started,
+        )
+        .await
     }
 
     fn poison_after_delivery_timeout(&mut self) {
@@ -2118,15 +2147,21 @@ impl Producer {
             return Ok(ProducerBatchReport::new(Vec::new()));
         }
 
-        match time::timeout(delivery_timeout, self.send_batch_report_inner(records)).await {
+        let mut phase = DeliveryPhase::Metadata;
+        let mut produce_started = false;
+        match time::timeout(
+            delivery_timeout,
+            self.send_batch_report_inner(records, &mut phase, &mut produce_started),
+        )
+        .await
+        {
             Ok(result) => result,
             Err(_) => {
-                let possibly_transmitted = self.client.last_request_may_have_been_transmitted();
                 self.poison_after_delivery_timeout();
                 Err(delivery_deadline_error(
                     delivery_timeout,
-                    DeliveryPhase::Produce,
-                    possibly_transmitted,
+                    phase,
+                    produce_started,
                 ))
             }
         }
@@ -2135,6 +2170,8 @@ impl Producer {
     async fn send_batch_report_inner(
         &mut self,
         records: Vec<BatchRecord>,
+        phase: &mut DeliveryPhase,
+        produce_started: &mut bool,
     ) -> Result<ProducerBatchReport> {
         debug!(record_count = records.len(), "sending kafka record batch");
 
@@ -2145,11 +2182,19 @@ impl Producer {
         let mut sequence_tracker = IdempotentBatchSequenceTracker::default();
         let mut attempt = 0;
         loop {
+            *phase = DeliveryPhase::Metadata;
             let result = self
-                .send_batch_once(&records, &pending_indexes, &mut sequence_tracker)
+                .send_batch_once(
+                    &records,
+                    &pending_indexes,
+                    &mut sequence_tracker,
+                    phase,
+                    produce_started,
+                )
                 .await;
             match result {
                 Err(error) if attempt < self.config.max_retries && can_retry_send(&error) => {
+                    *phase = DeliveryPhase::Retry;
                     invalidate_metadata_cache_for_record_indexes(
                         &mut self.metadata_cache,
                         &records,
@@ -2311,6 +2356,8 @@ impl Producer {
         records: &[BatchRecord],
         record_indexes: &[usize],
         sequence_tracker: &mut IdempotentBatchSequenceTracker,
+        phase: &mut DeliveryPhase,
+        produce_started: &mut bool,
     ) -> Result<Vec<(usize, ProducerBatchRecordOutcome)>> {
         let mut groups = BTreeMap::<ProduceBatchKey, Vec<PreparedBatchRecord<'_>>>::new();
         let mut topics = BTreeSet::new();
@@ -2355,7 +2402,7 @@ impl Producer {
             self.register_transaction_partition(&key.topic, key.partition)
                 .await?;
             output.extend(
-                self.send_batch_group(&key, &records, sequence_tracker)
+                self.send_batch_group(&key, &records, sequence_tracker, phase, produce_started)
                     .await?,
             );
         }
@@ -2370,6 +2417,8 @@ impl Producer {
         key: &ProduceBatchKey,
         records: &[PreparedBatchRecord<'_>],
         sequence_tracker: &mut IdempotentBatchSequenceTracker,
+        phase: &mut DeliveryPhase,
+        produce_started: &mut bool,
     ) -> Result<Vec<(usize, ProducerBatchRecordOutcome)>> {
         debug!(
             topic = key.topic.as_str(),
@@ -2381,6 +2430,7 @@ impl Producer {
 
         let mut leader_client = self.connect_or_reuse_broker(&key.broker_addr).await?;
         let result = async {
+            *phase = DeliveryPhase::Capability;
             let api_versions = leader_client
                 .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
                 .await?;
@@ -2394,6 +2444,7 @@ impl Producer {
                 .highest_supported_version(PRODUCE_API_KEY, 13)
                 .is_some_and(|version| version >= 13)
             {
+                *phase = DeliveryPhase::Capability;
                 self.topic_id_for_topic(&key.topic).await
             } else {
                 None
@@ -2437,6 +2488,8 @@ impl Producer {
                     key,
                     records,
                 )?;
+                *phase = DeliveryPhase::Produce;
+                *produce_started = true;
                 if self.config.acks == Acks::None {
                     self.mark_idempotent_produce_in_flight();
                     let send_result = async {
@@ -2822,6 +2875,8 @@ impl Producer {
         metadata: &MetadataResponseV1,
         timestamp: SystemTime,
         timestamp_ms: i64,
+        phase: &mut DeliveryPhase,
+        produce_started: &mut bool,
     ) -> Result<RecordMetadata> {
         let partition = self.choose_partition(record, metadata)?;
         let (leader, broker_addr) =
@@ -2838,6 +2893,7 @@ impl Producer {
 
         let mut leader_client = self.connect_or_reuse_broker(&broker_addr).await?;
         let result = async {
+            *phase = DeliveryPhase::Capability;
             let api_versions = leader_client
                 .api_versions_v3_cached("kafrust", env!("CARGO_PKG_VERSION"))
                 .await?;
@@ -2852,6 +2908,7 @@ impl Producer {
                 .highest_supported_version(PRODUCE_API_KEY, 13)
                 .is_some_and(|version| version >= 13)
             {
+                *phase = DeliveryPhase::Capability;
                 self.topic_id_for_topic(record.topic()).await
             } else {
                 None
@@ -2877,6 +2934,8 @@ impl Producer {
                 .transaction_state
                 .as_ref()
                 .map(|state| state.transactional_id.clone());
+            *phase = DeliveryPhase::Produce;
+            *produce_started = true;
             debug!(
                 topic = record.topic(),
                 partition,
