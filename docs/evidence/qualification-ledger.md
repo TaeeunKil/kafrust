@@ -6291,3 +6291,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-metrics-saturating-arithmetic-2026-09-04.md; crates/kafrust/src/metrics.rs
 - non_claims: not concurrent workload completeness, not published telemetry collection, not secure multi-broker qualification, not long-duration campaigns, not service canary, not release authorization
+
+## Q-METRICS-CONCURRENCY-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: 91c5592c6599eeb16df661616efa3fe0d5c7e0b4
+- client_version: 0.3.6 source workspace
+- protocol_version: not-applicable; metrics lifecycle-only
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: not-applicable
+- kafka_image: not-applicable
+- mode: concurrent shared ClientMetrics update consistency
+- topology: no broker; four in-process worker threads
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: four workers x 100 barrier-synchronized metric updates
+- workflow: scripts/check_qualification_ledger.py
+- fault: concurrent increments/decrements and latency observations on shared atomics
+- duration: focused deterministic test under one second
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: one deterministic run on Windows
+- expected_errors: exact cumulative counters, conserved latency buckets, and zero final in-flight gauge
+- observed_errors: all expected totals and lifecycle values matched
+- retry_count: 0
+- duplicate_count: 0
+- loss_count: not-applicable
+- latency: deterministic bucket counts only; elapsed latency not measured
+- memory: not measured
+- final_resource_gauges: zero in-flight; no broker, Docker, network, or detached task
+- result: passed
+- artifact: docs/evidence/v1-metrics-concurrency-2026-09-04.md; crates/kafrust/src/metrics.rs
+- non_claims: not published telemetry collection, not secure multi-broker qualification, not long-duration campaigns, not service canary, not release authorization

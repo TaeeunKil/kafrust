@@ -90,6 +90,19 @@ overflow and underflow boundaries. This closes the deterministic arithmetic
 slice only; published collection, broker replacement, throttling, secure
 transport, and long-duration gates remain required.
 
+### Concurrent metric updates (2026-09-04)
+
+Source commit `91c5592c6599eeb16df661616efa3fe0d5c7e0b4` adds a deterministic
+four-thread shared-`ClientMetrics` regression. A barrier starts four workers,
+each worker performs 100 updates, and the test verifies exact cumulative
+request/byte/error totals, latency-bucket conservation, and a zero final
+in-flight gauge. The focused test and the required workspace validation pass
+on the company Windows x64 checkout. See
+[`v1-metrics-concurrency-2026-09-04.md`](../../evidence/v1-metrics-concurrency-2026-09-04.md).
+This closes the in-process atomic-update consistency slice only; published
+collection, broker replacement, throttling, secure transport, and
+long-duration qualification remain open.
+
 ### Push cancellation after transmission (2026-09-04)
 
 The KIP-714 `push_once` path now has a deterministic cancellation regression:

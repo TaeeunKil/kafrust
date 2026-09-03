@@ -720,6 +720,14 @@ slice only; published telemetry, secure broker replacement, and long-duration
 gates remain open. See
 [`v1-metrics-saturating-arithmetic-2026-09-04.md`](evidence/v1-metrics-saturating-arithmetic-2026-09-04.md).
 
+At source commit `91c5592c6599eeb16df661616efa3fe0d5c7e0b4`, a deterministic
+four-thread shared-`ClientMetrics` regression performs 100 synchronized
+updates per worker and verifies exact counters, latency-bucket conservation,
+and final in-flight state. This closes the in-process atomic-update
+consistency slice only. Published collection, broker replacement,
+throttling, secure transport, and long-duration qualification remain open.
+See [`v1-metrics-concurrency-2026-09-04.md`](evidence/v1-metrics-concurrency-2026-09-04.md).
+
 ## V1-18 Execution Update (2026-08-22)
 
 V1-18 is `In progress`. Frame, collection, compact/tagged-field, decompression,
