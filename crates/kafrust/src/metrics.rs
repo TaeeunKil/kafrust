@@ -163,15 +163,9 @@ impl ClientMetrics {
     }
 
     pub(crate) fn start_request(&self, request_bytes: usize) -> RequestMetricsGuard {
-        self.inner.requests_started.fetch_add(1, Ordering::Relaxed);
-        self.inner
-            .request_bytes
-            .fetch_add(usize_to_u64(request_bytes), Ordering::Relaxed);
-        let depth = self
-            .inner
-            .in_flight_requests
-            .fetch_add(1, Ordering::Relaxed)
-            .saturating_add(1);
+        atomic_saturating_add(&self.inner.requests_started, 1);
+        atomic_saturating_add(&self.inner.request_bytes, usize_to_u64(request_bytes));
+        let depth = atomic_saturating_add(&self.inner.in_flight_requests, 1);
         self.inner
             .max_in_flight_requests
             .fetch_max(depth, Ordering::Relaxed);
@@ -183,39 +177,31 @@ impl ClientMetrics {
     }
 
     pub(crate) fn record_retry(&self) {
-        self.inner.retries.fetch_add(1, Ordering::Relaxed);
+        atomic_saturating_add(&self.inner.retries, 1);
     }
 
     pub(crate) fn record_broker_error(&self) {
-        self.inner.broker_errors.fetch_add(1, Ordering::Relaxed);
+        atomic_saturating_add(&self.inner.broker_errors, 1);
     }
 
     pub(crate) fn accept_buffered_record(&self) {
-        let depth = self
-            .inner
-            .buffered_records
-            .fetch_add(1, Ordering::Relaxed)
-            .saturating_add(1);
+        let depth = atomic_saturating_add(&self.inner.buffered_records, 1);
         self.inner
             .max_buffered_records
             .fetch_max(depth, Ordering::Relaxed);
     }
 
     pub(crate) fn complete_buffered_record(&self) {
-        self.inner.buffered_records.fetch_sub(1, Ordering::Relaxed);
+        atomic_saturating_sub(&self.inner.buffered_records, 1);
     }
 
     pub(crate) fn record_produce_batch(&self, records: usize) {
-        self.inner
-            .produced_records
-            .fetch_add(usize_to_u64(records), Ordering::Relaxed);
-        self.inner.produce_batches.fetch_add(1, Ordering::Relaxed);
+        atomic_saturating_add(&self.inner.produced_records, usize_to_u64(records));
+        atomic_saturating_add(&self.inner.produce_batches, 1);
     }
 
     pub(crate) fn record_consumed(&self, records: usize) {
-        self.inner
-            .consumed_records
-            .fetch_add(usize_to_u64(records), Ordering::Relaxed);
+        atomic_saturating_add(&self.inner.consumed_records, usize_to_u64(records));
     }
 }
 
@@ -243,46 +229,31 @@ pub(crate) struct RequestMetricsGuard {
 
 impl RequestMetricsGuard {
     pub(crate) fn succeed(mut self, response_bytes: usize) {
-        self.metrics
-            .inner
-            .requests_succeeded
-            .fetch_add(1, Ordering::Relaxed);
-        self.metrics
-            .inner
-            .response_bytes
-            .fetch_add(usize_to_u64(response_bytes), Ordering::Relaxed);
+        atomic_saturating_add(&self.metrics.inner.requests_succeeded, 1);
+        atomic_saturating_add(
+            &self.metrics.inner.response_bytes,
+            usize_to_u64(response_bytes),
+        );
         self.finish();
     }
 
     pub(crate) fn fail(mut self, timed_out: bool) {
-        self.metrics
-            .inner
-            .requests_failed
-            .fetch_add(1, Ordering::Relaxed);
+        atomic_saturating_add(&self.metrics.inner.requests_failed, 1);
         if timed_out {
-            self.metrics
-                .inner
-                .requests_timed_out
-                .fetch_add(1, Ordering::Relaxed);
+            atomic_saturating_add(&self.metrics.inner.requests_timed_out, 1);
         }
         self.finish();
     }
 
     fn finish(&mut self) {
         self.record_latency();
-        self.metrics
-            .inner
-            .in_flight_requests
-            .fetch_sub(1, Ordering::Relaxed);
+        atomic_saturating_sub(&self.metrics.inner.in_flight_requests, 1);
         self.completed = true;
     }
 
     fn record_latency(&self) {
         let latency_ns = duration_nanos(self.started_at.elapsed());
-        self.metrics
-            .inner
-            .total_latency_ns
-            .fetch_add(latency_ns, Ordering::Relaxed);
+        atomic_saturating_add(&self.metrics.inner.total_latency_ns, latency_ns);
         self.metrics
             .inner
             .max_latency_ns
@@ -291,7 +262,7 @@ impl RequestMetricsGuard {
             .iter()
             .position(|upper_bound| latency_ns <= *upper_bound)
             .unwrap_or(LATENCY_BUCKET_UPPER_BOUNDS_NS.len() - 1);
-        self.metrics.inner.latency_buckets[bucket].fetch_add(1, Ordering::Relaxed);
+        atomic_saturating_add(&self.metrics.inner.latency_buckets[bucket], 1);
     }
 }
 
@@ -300,15 +271,31 @@ impl Drop for RequestMetricsGuard {
         if self.completed {
             return;
         }
-        self.metrics
-            .inner
-            .requests_cancelled
-            .fetch_add(1, Ordering::Relaxed);
+        atomic_saturating_add(&self.metrics.inner.requests_cancelled, 1);
         self.record_latency();
-        self.metrics
-            .inner
-            .in_flight_requests
-            .fetch_sub(1, Ordering::Relaxed);
+        atomic_saturating_sub(&self.metrics.inner.in_flight_requests, 1);
+    }
+}
+
+fn atomic_saturating_add(atom: &AtomicU64, value: u64) -> u64 {
+    let mut current = atom.load(Ordering::Relaxed);
+    loop {
+        let next = current.saturating_add(value);
+        match atom.compare_exchange_weak(current, next, Ordering::Relaxed, Ordering::Relaxed) {
+            Ok(_) => return next,
+            Err(observed) => current = observed,
+        }
+    }
+}
+
+fn atomic_saturating_sub(atom: &AtomicU64, value: u64) -> u64 {
+    let mut current = atom.load(Ordering::Relaxed);
+    loop {
+        let next = current.saturating_sub(value);
+        match atom.compare_exchange_weak(current, next, Ordering::Relaxed, Ordering::Relaxed) {
+            Ok(_) => return next,
+            Err(observed) => current = observed,
+        }
     }
 }
 
@@ -322,9 +309,12 @@ fn duration_nanos(duration: Duration) -> u64 {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::Duration;
 
-    use super::{ClientMetrics, ClientMetricsSnapshot};
+    use super::{
+        atomic_saturating_add, atomic_saturating_sub, ClientMetrics, ClientMetricsSnapshot,
+    };
 
     #[test]
     fn shared_handle_records_success_and_failure() {
@@ -416,5 +406,17 @@ mod tests {
             snapshot.latency_percentile(99),
             Some(Duration::from_secs(5))
         );
+    }
+
+    #[test]
+    fn metric_atomic_updates_saturate_at_u64_boundaries() {
+        let counter = AtomicU64::new(u64::MAX - 1);
+        assert_eq!(atomic_saturating_add(&counter, 2), u64::MAX);
+        assert_eq!(counter.load(Ordering::Relaxed), u64::MAX);
+        assert_eq!(atomic_saturating_add(&counter, 1), u64::MAX);
+
+        let gauge = AtomicU64::new(0);
+        assert_eq!(atomic_saturating_sub(&gauge, 1), 0);
+        assert_eq!(gauge.load(Ordering::Relaxed), 0);
     }
 }
