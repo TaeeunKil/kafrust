@@ -127,6 +127,16 @@ This is deterministic truncation evidence only; complete malformed
 length/trailing-byte coverage, transaction-selection proof, three-broker
 movement, and accepted/published qualification remain open.
 
+The transactional Produce selector was then exercised at pushed head `fd9b939`
+against advertised maxima v11, v12, and v13, with topic IDs and both immediate
+and prepared-batch paths. Every case selected Produce v11 and reported wire
+API version 11. The focused test and full required workspace validation passed;
+the detailed record is
+[`v1-transactional-produce-version-cap-2026-09-03.md`](evidence/v1-transactional-produce-version-cap-2026-09-03.md).
+This closes only the deterministic selector guard; V1-06's coherent TV2
+fixture, live transactional roundtrips, three-broker movement, and accepted or
+published qualification remain open.
+
 The protocol fixture increment at pushed head `fd37184` adds fixed non-empty
 response bodies for the selected Produce, Fetch, Metadata, ListOffsets,
 OffsetForLeaderEpoch, and ApiVersions versions. Five golden tests and three

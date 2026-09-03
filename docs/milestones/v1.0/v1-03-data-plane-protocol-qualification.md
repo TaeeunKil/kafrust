@@ -233,6 +233,20 @@ length/trailing-byte coverage, transaction-selection proof, three-broker
 topic-ID/leader movement, accepted security or published-artifact
 qualification, and the V1-03 exit criteria remain open.
 
+### Deterministic transactional Produce selector guard (2026-09-03)
+
+At source commit `fd9b93938f65f7d5944175dd52225bd93b3d2af3`, the transactional
+selector matrix exercises brokers advertising Produce v11, v12, and v13 with
+a topic ID present. Both immediate and prepared-batch traffic resolve to
+Produce v11 and expose wire API version 11 in every case. The focused test
+passed, with the detailed record in
+[`v1-transactional-produce-version-cap-2026-09-03.md`](../../evidence/v1-transactional-produce-version-cap-2026-09-03.md).
+
+This closes the deterministic selector guard for V1-03. The Kafka 4.3.1
+transaction.version=2 coherent-state fixture owned by V1-06, live
+transactional roundtrips, three-broker movement, and the remaining V1-03
+qualification gates remain open.
+
 ## Exit Criteria
 
 1. Every stable high-level selected/fallback version has official metadata,

@@ -4971,3 +4971,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-data-plane-malformed-prefix-matrix-2026-09-03.md; crates/kafrust-protocol/tests/data_plane_malformed.rs
 - non_claims: not V1-03 completion, not complete malformed length/trailing-byte coverage, not official Apache response oracles, not live broker qualification, not three-broker movement, not long campaigns, not service canary, not release authorization
+
+## Q-DATAPLANE-TRANSACTIONAL-PRODUCE-CAP-2026-09-03
+
+- date_utc: 2026-09-03
+- source_commit: fd9b93938f65f7d5944175dd52225bd93b3d2af3
+- client_version: 0.3.6 source checkout
+- protocol_version: 0.3.6 source checkout
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: not-applicable; producer selector unit matrix
+- kafka_image: not-applicable; no broker required
+- mode: transactional Produce version-cap selector matrix
+- topology: not-applicable; deterministic producer unit test
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: immediate and prepared-batch transactional Produce selection with topic ID
+- workflow: scripts/check_qualification_ledger.py
+- fault: broker advertised Produce maximum v11, v12, or v13
+- duration: deterministic unit test under one second
+- record_count: one selector fixture per advertised maximum and path
+- member_count: not-applicable
+- repetition_count: three advertised maxima across two selector paths
+- expected_errors: transactional traffic must never select Produce v12 or v13 before TV2 qualification
+- observed_errors: none; all six selections returned Produce v11/API version 11
+- retry_count: 0
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: not-applicable
+- result: passed
+- artifact: docs/evidence/v1-transactional-produce-version-cap-2026-09-03.md; crates/kafrust/src/producer.rs
+- non_claims: not V1-03 completion, not Kafka transaction.version=2 qualification, not live transactional roundtrips, not three-broker movement, not accepted security or published-artifact qualification, not long campaigns, not service canary, not release authorization
