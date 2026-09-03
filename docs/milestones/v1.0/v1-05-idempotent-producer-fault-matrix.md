@@ -98,6 +98,23 @@ This closes the deterministic buffered response-loss slice only; partial-write
 classification, cancellation/shutdown faults, published ten-cycle profiles,
 and 100,000-record reconciliation remain open.
 
+### Partial response replay (2026-09-03)
+
+The scripted fault matrix now injects a truncated Kafka response frame for both
+immediate and linger-buffered idempotent sends. At source commit
+`ed7d5eb60d1c11de3ad6f6f07c4850a2d2daccc5`,
+`idempotent_producer_retries_partial_response_with_same_batch_sequence` and
+`buffered_idempotent_producer_retries_partial_response_with_same_batch_sequence`
+write only an eight-byte response prefix before closing the connection. Both
+paths reconnect, replay a byte-identical Produce frame with the original
+producer identity and batch sequence, and resolve from the duplicate-sequence
+response. The detailed record is
+[`v1-idempotent-partial-response-retry-2026-09-03.md`](../../evidence/v1-idempotent-partial-response-retry-2026-09-03.md).
+
+This closes deterministic partial-response classification only; partial client
+request writes, cancellation/shutdown faults, published ten-cycle profiles,
+and 100,000-record reconciliation remain open.
+
 ## Failure And Lifecycle Contract
 
 - A safe retry retains the same producer identity and batch sequence.

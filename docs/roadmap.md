@@ -234,6 +234,15 @@ required local Rust validation passed; details are in
 This closes only the buffered deterministic slice; published fault cycles and
 100,000-record reconciliation remain open.
 
+At pushed head `ed7d5eb`, the scripted broker now also writes only a partial
+response frame before closing the connection. Immediate and linger-buffered
+idempotent sends both reconnect and replay a byte-identical Produce frame with
+the original batch sequence; the duplicate-sequence response resolves each
+delivery. The exact deterministic record is in
+[`v1-idempotent-partial-response-retry-2026-09-03.md`](evidence/v1-idempotent-partial-response-retry-2026-09-03.md).
+Partial client request writes, cancellation/shutdown faults, published cycles,
+and 100,000-record reconciliation remain open.
+
 ## V1-06 Execution Update (2026-08-22)
 
 V1-06 is `In progress`. The transaction path keeps one coherent legacy TV0/TV1

@@ -5202,3 +5202,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-buffered-idempotent-retry-2026-09-03.md; crates/kafrust/tests/fault_injection.rs
 - non_claims: not complete idempotent fault-phase coverage, not published ten-cycle or 100,000-record qualification, not long campaigns, not service canary, not release authorization
+
+## Q-IDEMPOTENT-PARTIAL-RESPONSE-2026-09-03
+
+- date_utc: 2026-09-03
+- source_commit: ed7d5eb60d1c11de3ad6f6f07c4850a2d2daccc5
+- client_version: 0.3.6 source checkout
+- protocol_version: 0.3.6 source checkout
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: not-applicable; scripted broker
+- kafka_image: not-applicable
+- mode: immediate and buffered idempotent partial-response replay regression
+- topology: in-memory scripted broker; truncated response frame then reconnect
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: one immediate and one buffered idempotent Produce record
+- workflow: scripts/check_qualification_ledger.py
+- fault: response length and eight-byte frame prefix written; connection closed before complete response
+- duration: deterministic integration tests under one second
+- record_count: two deliveries (one immediate, one buffered)
+- member_count: not-applicable
+- repetition_count: one bounded scripted run per producer mode
+- expected_errors: truncated response is ambiguous; retry must preserve the original encoded batch and sequence
+- observed_errors: two retries and two broker errors; both replay frames byte-identical; duplicate-sequence responses resolved both deliveries
+- retry_count: 2 total
+- duplicate_count: 0 client-visible duplicates
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: buffered worker closed cleanly; no external resources
+- result: passed
+- artifact: docs/evidence/v1-idempotent-partial-response-retry-2026-09-03.md; crates/kafrust/tests/fault_injection.rs; crates/kafrust/tests/support/mod.rs
+- non_claims: not partial client request-write coverage, not cancellation/shutdown fault coverage, not published ten-cycle or 100,000-record qualification, not long campaigns, not service canary, not release authorization
