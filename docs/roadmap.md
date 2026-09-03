@@ -392,6 +392,13 @@ cancellation only; buffered worker cancellation, published ten-cycle and
 100,000-record reconciliation, secure transport, and live gates remain open.
 Evidence: [`v1-idempotent-send-cancellation-2026-09-04.md`](evidence/v1-idempotent-send-cancellation-2026-09-04.md).
 
+The company Windows/Ubuntu-T9 WSL2 recheck at pushed documentation head
+`d1fe161` repeated both cancellation tests and all 29 scripted fault-injection
+tests successfully with Rust 1.81.0. A separate full-workspace attempt reached
+the example-link stage but hit the WSL mounted-checkout linker memory limit;
+the authoritative stable/Rust 1.81 CI matrix remains green. The recheck record
+is [`v1-company-validation-recheck-2026-09-04.md`](evidence/v1-company-validation-recheck-2026-09-04.md).
+
 ## V1-06 Execution Update (2026-08-22)
 
 V1-06 is `In progress`. The transaction path keeps one coherent legacy TV0/TV1

@@ -6192,3 +6192,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-idempotent-send-cancellation-2026-09-04.md; crates/kafrust/src/producer.rs; crates/kafrust/src/error.rs
 - non_claims: not CI, not broker acceptance, not duplicate-free reconciliation, not buffered worker cancellation, not published-artifact qualification, not secure transport, not long campaigns, not service canary, not release authorization
+
+## Q-COMPANY-WSL-RECHECK-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: d1fe161563327a2d2c704224a00fa5a407fd1dc5
+- client_version: 0.3.6 source workspace
+- protocol_version: Produce v3 and scripted fault matrix
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: scripted transport fixture
+- kafka_image: not-applicable
+- mode: company WSL2 cancellation and fault-injection recheck
+- topology: Ubuntu-T9 WSL2 x86_64 mounted Windows checkout
+- security: PLAINTEXT fixture
+- group_protocol: mixed scripted consumer/group cases
+- workload: two idempotent cancellation regressions and complete fault_injection target
+- workflow: scripts/check_qualification_ledger.py
+- fault: caller cancellation after Produce transmission; scripted transport faults
+- duration: focused tests completed after single-job build
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: one recheck
+- expected_errors: canceled idempotent sends fence the producer; scripted fault cases preserve their typed outcomes
+- observed_errors: 2 cancellation tests passed; 29 fault-injection tests passed
+- retry_count: scripted cases only
+- duplicate_count: not-applicable
+- loss_count: not-applicable
+- latency: not measured
+- memory: full workspace example link hit linker Cannot allocate memory; focused run used one build job
+- final_resource_gauges: no Docker resources or detached tasks; WSL CRLF status clean with core.autocrlf=true
+- result: passed
+- artifact: docs/evidence/v1-company-validation-recheck-2026-09-04.md; source commit d1fe161563327a2d2c704224a00fa5a407fd1dc5
+- non_claims: not full WSL all-target validation, not broker acceptance, not published-artifact qualification, not secure transport, not long campaigns, not service canary, not release authorization
