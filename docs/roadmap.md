@@ -414,6 +414,18 @@ Smoke run is refreshing the broker/version slice; golden record-shape fixtures,
 retention/preferred-replica faults, and the published 100,000-record
 reconciliation gate remain open.
 
+### Record shape and Fetch cancellation boundaries (2026-09-03)
+
+Source commit `df43749cfd277509c8173ac5f68beb8bced866bd` adds a null-versus-empty
+record mapping regression and a Fetch v12 post-transmission cancellation test.
+The scripted broker observes the Fetch frame, withholds the response, and the
+next fetch succeeds through a fresh connection with no cached session reuse.
+Both focused cases and the 29-test fault-injection target passed on company
+Ubuntu-T9 WSL2. The evidence is
+[`v1-direct-consumer-integrity-2026-09-03.md`](evidence/v1-direct-consumer-integrity-2026-09-03.md).
+Retention, leader movement, published reconciliation, and queue/resource exit
+gates remain open.
+
 ## V1-08 Execution Update (2026-08-22)
 
 V1-08 is `In progress`. Classic and KIP-848 OffsetCommit now expose a typed

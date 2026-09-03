@@ -5896,6 +5896,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-company-fault-matrix-29test-smoke-2026-09-03.md; crates/kafrust/tests/fault_injection.rs; crates/kafrust/tests/support/mod.rs
 - non_claims: not published-artifact qualification, not accepted-floor or three-broker qualification, not security, not long campaigns, not service canary, not release authorization
 
+## Q-DIRECT-CONSUMER-INTEGRITY-2026-09-03
+
+- date_utc: 2026-09-03
+- source_commit: df43749cfd277509c8173ac5f68beb8bced866bd
+- client_version: 0.3.6 source workspace
+- protocol_version: Fetch v12 scripted fixture; ConsumerRecord stable mapping
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: scripted transport fixture
+- kafka_image: not-applicable
+- mode: direct consumer record-shape and Fetch cancellation boundary
+- topology: in-memory metadata and broker TCP fixtures; no external broker
+- security: PLAINTEXT fixture
+- group_protocol: not-applicable
+- workload: null/empty record mapping plus Fetch cancellation and reconnect
+- workflow: scripts/check_qualification_ledger.py
+- fault: Fetch v12 response withheld after the request frame was observed
+- duration: focused Windows tests under 0.01 s; WSL tests 0.02 s and 0.11 s
+- record_count: one recovered record; one canceled Fetch request
+- member_count: 0
+- repetition_count: one deterministic run per boundary on Windows and WSL2
+- expected_errors: canceled Fetch does not cache or reuse its session; null and empty fields remain distinguishable
+- observed_errors: both focused tests passed; 29 fault-injection tests passed on WSL2
+- retry_count: 0 in the focused cancellation path; fresh connection recovery verified
+- duplicate_count: 0 client-visible duplicates
+- loss_count: 0 recovered record loss in the scripted reconnect case
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: no Docker resources created or modified; scripted sockets joined
+- result: passed
+- artifact: docs/evidence/v1-direct-consumer-integrity-2026-09-03.md; crates/kafrust/src/consumer.rs; crates/kafrust/tests/fault_injection.rs
+- non_claims: not retention or unclean-election recovery, not published-artifact qualification, not accepted-floor or three-broker qualification, not security, not 100,000-record reconciliation, not long campaigns, not service canary, not release authorization
+
 ## Q-TRANSACTION-MUTATION-CANCEL-2026-09-03
 
 - date_utc: 2026-09-03

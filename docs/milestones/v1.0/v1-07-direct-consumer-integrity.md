@@ -61,6 +61,21 @@ retention fault matrices, 100,000-record published reconciliation, and final
 queue/resource gates remain open; no broker data-loss recovery or published
 artifact claim is made.
 
+### Record shape and Fetch cancellation boundaries (2026-09-03)
+
+At source commit `df43749cfd277509c8173ac5f68beb8bced866bd`, the stable record
+mapping is covered by an explicit null-versus-empty regression for keys, values,
+and header values. A second scripted-broker regression observes a Fetch v12
+frame, cancels the caller while its response is withheld, and verifies that no
+Fetch session is cached or reused; the next Fetch uses a fresh connection and
+returns the record. The detailed record is
+[`v1-direct-consumer-integrity-2026-09-03.md`](../../evidence/v1-direct-consumer-integrity-2026-09-03.md).
+
+Both focused tests and the 29-test fault-injection target passed on company
+Ubuntu-T9 WSL2. This closes the direct deterministic slice only; retention,
+leader movement, published reconciliation, and final queue/resource gates
+remain open.
+
 ## Failure And Lifecycle Contract
 
 - A lost Fetch response is safe to retry because delivery has not been exposed
