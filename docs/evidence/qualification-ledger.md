@@ -4212,3 +4212,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-20-published-smoke-rerun-2026-09-03.md; 12 retained artifacts from run 33714006944; client checksum 4fe2758d0093ef4b2a236090cca4dc7511b9e865f5e18ce42823e428a6be71d2
 - non_claims: not the complete V1-20 matrix, not mechanism-complete security coverage, not long fault or SLO evidence, not V1-23 service canary, not API freeze, not RC, not 1.0.0 readiness
+
+## Q-LIVE-MATRIX-004
+
+- date_utc: 2026-09-03
+- source_commit: c50420528f6e9aa11d938efc8bdc12e7efd2dc36
+- client_version: 0.3.6 source checkout
+- protocol_version: 0.3.6 source checkout
+- work_status: In progress
+- evidence_level: Live current-source
+- kafka_version: 3.7.2, 3.8.1, 3.9.1, and 4.3.1
+- kafka_image: apache/kafka:3.7.2, apache/kafka:3.8.1, apache/kafka:3.9.1, and apache/kafka:4.3.1
+- mode: KRaft
+- topology: single-node and three-broker failover profiles
+- security: PLAINTEXT, TLS, SASL_PLAINTEXT, SASL_SSL/SCRAM-SHA-256/512, SASL_SSL/OAUTHBEARER, signed OAUTHBEARER, and ACL authorization
+- group_protocol: classic and KIP-848 consumer
+- workload: 17-job source-only compatibility smoke covering data-plane, producer, consumer, groups, codecs, Admin, transactions, security, telemetry-adjacent, and failover paths
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/33714444474
+- fault: selected broker, leader, coordinator, controller, transaction, response-loss, and multi-broker failover fixtures
+- duration: 7m27s workflow window
+- record_count: workflow-specific; not aggregated
+- member_count: workflow-specific; not aggregated
+- repetition_count: 17 jobs
+- expected_errors: fixture-specific transient faults and typed ambiguous outcomes only
+- observed_errors: all 17 jobs passed
+- retry_count: workflow-specific; not aggregated
+- duplicate_count: workflow-specific final assertions passed; not aggregated
+- loss_count: workflow-specific final assertions passed; not aggregated
+- latency: not measured as a cross-matrix SLO
+- memory: not measured as a cross-matrix SLO
+- final_resource_gauges: workflow-specific final-resource assertions passed
+- result: passed
+- artifact: docs/evidence/v1-live-matrix-rerun-2026-09-03.md; GitHub Actions run 33714444474
+- non_claims: not exact published 0.3.6 lockfile evidence, not complete V1-20 exit evidence, not six-hour/24-hour fault qualification, not V1-22 SLO evidence, not service canary, not universal Kafka compatibility, not 1.0.0 readiness

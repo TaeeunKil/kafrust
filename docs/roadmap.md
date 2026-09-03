@@ -557,6 +557,15 @@ the full V1-20 matrix, long fault/SLO gates, migration canary, API freeze, and
 release gates remain open. Details are in
 [`v1-20-published-smoke-rerun-2026-09-03.md`](evidence/v1-20-published-smoke-rerun-2026-09-03.md).
 
+The latest current-source live matrix was rerun from documentation head
+`c504205` in [run 33714444474](https://github.com/TaeeunKil/kafrust/actions/runs/33714444474).
+All 17 jobs passed across Kafka 3.7.2/3.8.1/3.9.1/4.3.1, plaintext/TLS/SASL,
+classic/KIP-848, codecs, Admin/transaction, telemetry-adjacent, and
+three-broker failover paths. This refresh is short current-source evidence;
+it does not substitute for the exact published matrix, six-hour/24-hour
+campaigns, V1-22 SLO repetitions, or V1-23 service canary. The immutable
+record is [`v1-live-matrix-rerun-2026-09-03.md`](evidence/v1-live-matrix-rerun-2026-09-03.md).
+
 ## V1-21~V1-26 Release-Path Preparation (2026-08-22)
 
 V1-21 and V1-22 are `In progress` while the exact published matrix and

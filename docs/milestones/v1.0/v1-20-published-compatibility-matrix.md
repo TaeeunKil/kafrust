@@ -181,6 +181,14 @@ record is [`v1-20-published-smoke-rerun-2026-09-03.md`](../../evidence/v1-20-pub
 The result remains a named published smoke slice and does not close the full
 matrix, long-duration/SLO, migration-canary, API-freeze, or release criteria.
 
+For comparison, the short current-source live matrix was rerun from the same
+documentation head in [33714444474](https://github.com/TaeeunKil/kafrust/actions/runs/33714444474)
+and all 17 jobs passed across the accepted broker/security/failover slices.
+This source-only result is retained in
+[`v1-live-matrix-rerun-2026-09-03.md`](../../evidence/v1-live-matrix-rerun-2026-09-03.md)
+and is not substituted for exact published lockfile rows or downstream V1
+gates.
+
 ## Failure And Lifecycle Contract
 
 - One required row failure blocks the matrix; it is not averaged away.
