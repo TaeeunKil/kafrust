@@ -613,6 +613,14 @@ while fixed-target DeleteRecords remains separately state-idempotent. The owner
 ledger, UUID race, three-broker leader failover, and published profiles remain
 open.
 
+V1-12 now has a deterministic DeleteRecords response-loss regression at pushed
+source `983aab1`: after the broker reads the complete request and drops its
+response, the bounded retry rediscovers metadata and resends identical
+targets, preserving the typed partial result. The evidence is recorded in
+[`v1-admin-delete-records-response-loss-2026-09-04.md`](evidence/v1-admin-delete-records-response-loss-2026-09-04.md).
+This state-idempotent rule is operation-specific and does not close the
+published Admin matrix.
+
 ## V1-13 Execution Update (2026-08-22)
 
 V1-13 is `In progress`. Security Admin routes preserve typed mixed

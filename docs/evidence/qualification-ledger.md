@@ -6720,3 +6720,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-company-consumer-controls-short-smoke-2026-09-04.md; crates/kafrust/examples/consumer_group_offset_reset.rs; crates/kafrust/examples/consumer_position_control.rs; crates/kafrust/examples/producer_send.rs
 - non_claims: not published artifact qualification, not accepted-floor security/churn, not full retention or leader-failure matrix, not queue saturation, not long campaign, not service canary, not release authorization
+
+## Q-ADMIN-DELETERECORDS-RESPONSE-LOSS-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: 983aab126d5c033f5611bda33dfbd75b9ec8faec
+- client_version: 0.3.6 source checkout
+- protocol_version: DeleteRecords v1
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: not-applicable; scripted broker
+- kafka_image: not-applicable; in-memory fixture
+- mode: fixed-target DeleteRecords response-loss retry
+- topology: in-memory scripted broker
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: one complete request, dropped response, one metadata rediscovery and identical retry
+- workflow: scripts/check_qualification_ledger.py
+- fault: response dropped after complete DeleteRecords request transmission
+- duration: focused test 0.06 seconds on Windows
+- record_count: two identical DeleteRecords request frames; one typed partial result
+- member_count: not-applicable
+- repetition_count: one Windows focused run and one all-features workspace replay
+- expected_errors: no operation error; fixed target converges with one retry
+- observed_errors: byte-identical retry, preserved partition result, retries=1
+- retry_count: 1
+- duplicate_count: 0 client-visible records; broker-side operation is state-idempotent
+- loss_count: not-applicable
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: no external resources
+- result: passed
+- artifact: docs/evidence/v1-admin-delete-records-response-loss-2026-09-04.md; crates/kafrust/src/admin.rs
+- non_claims: not safe retry for other Admin mutations, not published floor qualification, not three-broker leader failover, not long campaign, not service canary, not release authorization

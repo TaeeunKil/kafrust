@@ -70,6 +70,16 @@ remain intact. The complete owner ledger, delete/recreate UUID race, three-broke
 leader failover, and published active-member profiles remain open; no data
 recovery or complete Admin compatibility claim is made.
 
+### DeleteRecords response-loss retry (2026-09-04)
+
+Source `983aab126d5c033f5611bda33dfbd75b9ec8faec` adds a scripted regression
+that reads a complete DeleteRecords v1 request, drops only its response, and
+asserts the one allowed retry sends byte-identical topic/partition/offset
+targets after metadata rediscovery. The partial result remains typed and the
+retry metric is exactly one. This is the fixed-target idempotence boundary only;
+other mutation retries and published leader-failover profiles remain open. See
+[`v1-admin-delete-records-response-loss-2026-09-04.md`](../../evidence/v1-admin-delete-records-response-loss-2026-09-04.md).
+
 ## Failure And Lifecycle Contract
 
 - Read-only operations may rediscover/retry inside their budget.
