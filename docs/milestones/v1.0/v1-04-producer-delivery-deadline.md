@@ -280,6 +280,21 @@ This closes deterministic pre-Produce phase classification for immediate and
 batch sends only. Published mixed-outcome reconciliation, cancellation while
 socket I/O is blocked, long campaigns, and live qualification remain open.
 
+### Buffered Metadata and capability phase expiry (2026-09-04)
+
+At source commit `09f6731`, the buffered producer path now exercises the same
+pre-Produce deadline contract. Two scripted regressions hold Metadata or
+ApiVersions after a buffered flush starts; both the flush and delivery handle
+return the matching `DeliveryDeadlineExceeded` phase with
+`possibly_transmitted=false`, the buffered gauge drains, and no Produce frame
+is observed. The detailed record is
+[`v1-buffered-delivery-phase-expiry-2026-09-04.md`](../../evidence/v1-buffered-delivery-phase-expiry-2026-09-04.md).
+
+This closes deterministic pre-Produce phase classification for all three
+producer entry modes. Published mixed-outcome reconciliation, cancellation
+while socket I/O is blocked, long campaigns, and live qualification remain
+open.
+
 ## Exit Criteria
 
 1. All three producer modes share the documented total-budget calculation.

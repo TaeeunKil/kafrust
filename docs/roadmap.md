@@ -5668,3 +5668,15 @@ The grouped evidence is
 These runs confirm current-source compatibility and bounded diagnostics only;
 published matrices, long fuzz/SLO campaigns, named service canary, and release
 authorization remain open.
+
+## V1-04 Buffered delivery phase expiry (2026-09-04)
+
+The buffered producer now records the total-budget phase when Metadata or
+ApiVersions is withheld before Produce. Source `09f6731` passed both focused
+regressions on Windows and company Ubuntu-T9 WSL2 x86_64; each returned the
+matching pre-Produce `DeliveryDeadlineExceeded`, drained the buffered gauge,
+and emitted zero Produce frames. Evidence is in
+[`v1-buffered-delivery-phase-expiry-2026-09-04.md`](evidence/v1-buffered-delivery-phase-expiry-2026-09-04.md).
+This completes deterministic pre-Produce classification for immediate, batch,
+and buffered entry modes only; published reconciliation and long/live gates
+remain open.

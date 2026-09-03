@@ -6490,6 +6490,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-short-recheck-2026-09-04.md; https://github.com/TaeeunKil/kafrust/actions/runs/33803553498; https://github.com/TaeeunKil/kafrust/actions/runs/33803556052; https://github.com/TaeeunKil/kafrust/actions/runs/33803559070
 - non_claims: not published lockfile qualification, not 3,600-second fuzz qualification, not five-repetition eight-hour SLO, not service canary, not release authorization
 
+## Q-BUFFERED-DEADLINE-PHASES-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: 09f673173c5cb507056e8c426a549edfb453e83a
+- client_version: 0.3.6 source checkout
+- protocol_version: 0.3.6 source checkout
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: not-applicable; scripted broker
+- kafka_image: not-applicable; scripted broker
+- mode: buffered pre-produce delivery phase expiry
+- topology: in-process scripted broker
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: two 20 ms buffered delivery-budget cases with Metadata or ApiVersions withheld
+- workflow: scripts/check_qualification_ledger.py
+- fault: total delivery deadline expires before Produce while Metadata or capability response is withheld
+- duration: Windows focused target 0.04 seconds; company WSL2 focused target 0.07 seconds
+- record_count: two timeout cases; zero Produce frames observed
+- member_count: not-applicable
+- repetition_count: one Windows run and one Ubuntu-T9 WSL2 x86_64 replay
+- expected_errors: typed DeliveryDeadlineExceeded with matching pre-Produce phase and possibly_transmitted false
+- observed_errors: both buffered regressions passed; Metadata and Capability classifications matched and the buffered gauge reached zero
+- retry_count: 0
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: buffered_records=0; no external resources
+- result: passed
+- artifact: docs/evidence/v1-buffered-delivery-phase-expiry-2026-09-04.md; crates/kafrust/tests/fault_injection.rs
+- non_claims: not published mixed-outcome reconciliation, not socket-I/O cancellation qualification, not long campaign, not service canary, not release authorization
+
 ## Q-PRODUCER-DEADLINE-PHASES-2026-09-04
 
 - date_utc: 2026-09-04
