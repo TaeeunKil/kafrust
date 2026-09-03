@@ -8,7 +8,7 @@ deterministic test checks the same `Arc` identity as `Current`, a different
 session or a missing session as `StaleGeneration`, and a different group as
 `DifferentGroup`; the heartbeat task is then stopped and joined.
 
-Source commit: `3cc672a19c238e837d4c3e08fab04460b6a5c1ce`.
+Source commit: `3cc672a063cc0b3f2d4d3c0119fa17284190fd3f`.
 
 The test uses a scripted Tokio task only. It does not create a broker, Docker
 resource, network listener, or long-running campaign.

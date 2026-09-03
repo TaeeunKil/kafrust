@@ -6130,7 +6130,7 @@ unqualified relative artifact label.
 ## Q-KIP848-CONSUMER-SESSION-IDENTITY-2026-09-04
 
 - date_utc: 2026-09-04
-- source_commit: 3cc672a19c238e837d4c3e08fab04460b6a5c1ce
+- source_commit: 3cc672a063cc0b3f2d4d3c0119fa17284190fd3f
 - client_version: 0.3.6 source workspace
 - protocol_version: KIP-848 ConsumerGroupHeartbeat v0/v1 helper state
 - work_status: In progress

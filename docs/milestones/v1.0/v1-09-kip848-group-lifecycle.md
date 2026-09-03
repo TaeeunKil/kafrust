@@ -77,7 +77,7 @@ artifact or 40-cycle claim is made.
 ### Deterministic session-identity fence (2026-09-04)
 
 The private KIP-848 heartbeat-handle session fence now has a direct regression
-test at source commit `3cc672a19c238e837d4c3e08fab04460b6a5c1ce`. It classifies
+test at source commit `3cc672a063cc0b3f2d4d3c0119fa17284190fd3f`. It classifies
 the same consumer session as `Current`, a replaced or missing session as
 `StaleGeneration`, and a wrong group as `DifferentGroup`, then stops and joins
 the scripted heartbeat task. Windows required validation and company WSL2

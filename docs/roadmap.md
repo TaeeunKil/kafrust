@@ -475,7 +475,7 @@ and exact 40-cycle ownership/offset gates remain open.
 ### V1-09 deterministic session-identity fence (2026-09-04)
 
 The KIP-848 heartbeat handle now has a direct regression test at source
-`3cc672a19c238e837d4c3e08fab04460b6a5c1ce`: the same consumer session is
+`3cc672a063cc0b3f2d4d3c0119fa17284190fd3f`: the same consumer session is
 `Current`, a replaced or missing session is `StaleGeneration`, and a wrong
 group is `DifferentGroup`; the scripted task is stopped and joined. Windows
 required validation and company WSL2 Ubuntu-T9/Rust 1.81 focused plus all 29
