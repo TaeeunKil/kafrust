@@ -105,13 +105,15 @@ manifest campaign is rerun; V1-22 still needs its complete matrix capacity and
 locked baseline.
 
 On 2026-09-03, the company workstation was confirmed as Windows x64 with an
-x86_64 WSL2 environment. Non-long work was completed from exact source
-`924540c`: required Rust validation, all static V1 checkers, package-boundary
-profiles, and the deterministic SBOM passed. The exact-head UpdateFeatures live
-workflow had exposed a stale ApiVersions feature cache; the fix and regression
-record are in
+x86_64 WSL2 environment. Exact source `951f0ead` passed the required Rust
+validation, static V1 checkers, package-boundary profiles, deterministic SBOM,
+and exact-head CI. The same workstation also ran isolated Kafka 4.3.1/3.7.2
+short producer, consumer, group, Admin, Streams, Share, quorum, and telemetry
+diagnostics. The detailed local record is
+[`v1-company-workstation-nonlong-2026-09-03.md`](../../evidence/v1-company-workstation-nonlong-2026-09-03.md);
+the UpdateFeatures cache fix and CI record remain in
 [`v1-nonlong-validation-2026-09-03.md`](../../evidence/v1-nonlong-validation-2026-09-03.md).
-This refresh is deterministic/CI evidence only. It does not promote a live
+These are deterministic/CI diagnostics only. They do not promote a live
 qualification row or remove the dedicated Linux/Docker, long-campaign, or
 named-service prerequisites.
 

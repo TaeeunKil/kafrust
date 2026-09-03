@@ -205,6 +205,24 @@ classification checker and tests are wired into CI. This closes the V1-14
 classification inventory slice only; retained expert/experimental live gates,
 long campaigns, migration canary, and release gates remain open.
 
+## Company Workstation Non-Long Validation (2026-09-03)
+
+On the company Windows x64 workstation, WSL2 Ubuntu-T9 (`x86_64`) and isolated
+Docker brokers made the short deterministic surface executable again. Kafka
+4.3.1 single-node checks passed producer delivery (including compression,
+buffering, idempotence, and transactions), direct and group consumers (classic
+and KIP-848), regex assignment, retention/offset recovery, Admin mutations,
+Streams group membership, ShareConsumer/ShareGroup lifecycle, quorum/topic
+description, and the telemetry plugin/OTLP push path. The same broker-roundtrip
+suite also passed against Kafka 3.7.2. Detailed commands, image digests,
+topology caveats, and cleanup evidence are in
+[`v1-company-workstation-nonlong-2026-09-03.md`](evidence/v1-company-workstation-nonlong-2026-09-03.md).
+
+These are local diagnostics only. They do not close V1-03 through V1-18 or
+V1-20 through V1-23, do not substitute for the six-hour/24-hour campaigns or
+named migration canary, and do not authorize a version/tag or crates.io
+publication.
+
 ## V1-15 Execution Update (2026-08-22)
 
 V1-15 is `In progress`. The current owner audit keeps stateless producer/Admin

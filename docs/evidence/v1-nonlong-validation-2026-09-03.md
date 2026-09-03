@@ -46,6 +46,12 @@ observes the new finalized level.
 | staged package boundary | passed for default, `tls`, `blocking`, `otlp`, and `all` profiles |
 | deterministic SBOM | passed: 89 components, platform `x86_64-unknown-linux-gnu` |
 
+The company-workstation rerun of the executable short-broker surface is
+retained separately in
+[`v1-company-workstation-nonlong-2026-09-03.md`](v1-company-workstation-nonlong-2026-09-03.md).
+It uses isolated Kafka 4.3.1/3.7.2 containers and remains diagnostic evidence;
+it does not add a qualification-ledger row or promote any long-duration gate.
+
 The staged package hashes used by the SBOM check are:
 
 - `kafrust-protocol-0.3.6.crate`: `5106ed2d161b01d19e639fa807781138ffe97be0f3ee8b140d7ac5f3dd879144`
