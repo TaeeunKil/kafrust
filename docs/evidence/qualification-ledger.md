@@ -4245,3 +4245,69 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-live-matrix-rerun-2026-09-03.md; GitHub Actions run 33714444474
 - non_claims: not exact published 0.3.6 lockfile evidence, not complete V1-20 exit evidence, not six-hour/24-hour fault qualification, not V1-22 SLO evidence, not service canary, not universal Kafka compatibility, not 1.0.0 readiness
+
+## Q-INFRA-CAPACITY-RECOVERY-2026-09-03
+
+- date_utc: 2026-09-03
+- source_commit: 72edcb3507750d2c418af6ca4e24b5002dc069cd
+- client_version: 0.3.6 published baseline
+- protocol_version: 0.3.6 published dependency
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: not-applicable; capacity preflight
+- kafka_image: not-applicable; capacity preflight
+- mode: WSL2 self-hosted runner and disk-capacity recovery
+- topology: repository runner and host-volume inventory
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: V1-21/V1-22 campaign capacity preflight
+- workflow: scripts/check_campaign_capacity.sh
+- fault: stale backup occupied host capacity; generated WSL resolver prevented runner connectivity
+- duration: preflight completed on 2026-09-03
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: 1 recovery audit
+- expected_errors: host and Docker free space at least 700 GiB; runner online and idle
+- observed_errors: T volume 736 GiB free, Docker root 854 GiB free, runner online and idle after temporary DNS override
+- retry_count: not-applicable
+- duplicate_count: not-applicable
+- loss_count: not-applicable
+- latency: not-applicable
+- memory: not-applicable
+- final_resource_gauges: Docker and host capacity values retained in evidence
+- result: passed
+- artifact: docs/evidence/v1-company-capacity-recovery-2026-09-03.md; scripts/check_campaign_capacity.sh output
+- non_claims: not a V1-21 long-campaign result, not V1-22 SLO evidence, not V1-23 service-canary authority, not release readiness
+
+## Q-LIVE-V121-DIAG-002
+
+- date_utc: 2026-09-03
+- source_commit: 72edcb3507750d2c418af6ca4e24b5002dc069cd
+- client_version: 0.3.6 published artifact
+- protocol_version: 0.3.6 published dependency
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
+- mode: bounded simultaneous multi-broker restart diagnostic
+- topology: three-broker KRaft
+- security: PLAINTEXT
+- group_protocol: not-applicable
+- workload: 120-second published soak; 1-KiB payloads; four scheduled fault events
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/33716428169
+- fault: leader@25, coordinator@50, combined@70, simultaneous@85; 10-second outages
+- duration: 120.006 seconds measured workload; approximately 4m24s workflow
+- record_count: 3,012,600 attempted, acknowledged, and consumed uniquely
+- member_count: not-applicable
+- repetition_count: 1 bounded diagnostic segment
+- expected_errors: scheduled recovery; zero unaccounted loss, duplicates, or unknown outcomes
+- observed_errors: 4 failed requests, 11 retries, 0 operation errors, 0 unknown outcomes, zero loss/duplicates; final gauges drained
+- retry_count: 11
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: in_flight_requests=0; buffered_records=0
+- result: passed
+- artifact: docs/evidence/v1-company-selfhosted-short-fault-2026-09-03.md; run artifact kafrust-published-fault-segment-company-short-diagnostic-2026-09-03-0-33716428169; descriptor lockfile digest 2f81a33ed05baf0321bb7a643355bec49a5e3a8904d7cd2354e54a86314f976b
+- non_claims: not a six-hour V1-21 campaign, not 100-cycle or ambiguity-family completion, not cross-segment continuity, not V1-22 SLO evidence, not V1-23 service canary, not 1.0.0 readiness

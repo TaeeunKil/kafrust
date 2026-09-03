@@ -36,9 +36,10 @@ published from that same-version package state.
 ## Current Execution
 
 As of 2026-09-03, V1-00, V1-01, V1-02, and V1-19 are `Done`; V1-03 through
-V1-18 and V1-20/V1-22 remain `In progress`; V1-21 is `Blocked` on a dedicated
-Linux x64/Docker runner for its long campaign; V1-23 is `Blocked` on a named
-service canary; and V1-24 through V1-26 are `Planned`.
+V1-18 and V1-20/V1-22 remain `In progress`; V1-21 is `In progress` with its
+dedicated Linux x64/Docker runner and host-capacity preflight recovered, while
+the long campaigns remain pending; V1-23 is `Blocked` on a named service
+canary; and V1-24 through V1-26 are `Planned`.
 The coordinated
 `0.3.6` pair is published and resolves from fresh external projects on Rust
 1.81.0 and stable. The historical regression against published protocol
@@ -103,9 +104,14 @@ The follow-up WSL2 preflight registered `wsl-ubuntu-t9` and passed a
 non-qualification diagnostic, but the first actual V1-21 six-hour campaign
 [32649020906](https://github.com/TaeeunKil/kafrust/actions/runs/32649020906)
 lost its Ubuntu-T9 instance and completed as `failure` without an artifact.
-V1-21 remains explicitly blocked until the runner is restored and the exact
-manifest campaign is rerun; V1-22 still needs its complete matrix capacity and
-locked baseline.
+The 2026-09-03 recovery removed the explicitly authorized stale export,
+restored 736 GiB host and 854 GiB Docker free space, and brought the runner
+online. A 120-second published diagnostic then passed in
+[33716428169](https://github.com/TaeeunKil/kafrust/actions/runs/33716428169).
+V1-21 is no longer blocked on preflight, but the exact manifest campaigns must
+still be run and adjudicated; V1-22 still needs its complete matrix capacity
+and locked baseline. The recovery details are in
+[`v1-company-capacity-recovery-2026-09-03.md`](../../evidence/v1-company-capacity-recovery-2026-09-03.md).
 
 On 2026-09-03, the company workstation was confirmed as Windows x64 with an
 x86_64 WSL2 environment. Exact source `951f0ead` passed the required Rust

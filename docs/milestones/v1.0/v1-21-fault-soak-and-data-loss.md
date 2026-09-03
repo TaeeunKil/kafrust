@@ -1,6 +1,6 @@
 # V1-21 Fault Soak And Data-Loss Semantics
 
-- Status: Blocked (WSL2 runner unavailable; host recovery required)
+- Status: In progress (long campaigns pending; runner/capacity preflight recovered 2026-09-03)
 - Target evidence: Published artifact
 - Dependencies: V1-15, V1-16, V1-18, V1-20
 
@@ -422,3 +422,24 @@ the unused Docker build cache was pruned. WSL then reported `110 GiB` used and
 copy was deleted only after this success; the new export is a same-volume
 recovery copy, not independent disaster-recovery storage. V1-21 still requires
 the exact six-hour manifest rerun and adjudication.
+
+### Company capacity recovery and short self-hosted diagnostic (2026-09-03)
+
+The stale same-volume export was later inspected and, under the previously
+authorized backup cleanup, removed as the exact 115,386,419,200-byte file. No
+other T: content, the WSL VHDX, or existing Docker resources was changed. The
+capacity guard now passes with 736 GiB free on `/mnt/t` and 854 GiB free under
+`/var/lib/docker`. A temporary resolver override brought the installed
+`wsl-ubuntu-t9` service online and idle; no persistent WSL network setting was
+changed.
+
+The published `0.3.6` 120-second self-hosted diagnostic
+[33716428169](https://github.com/TaeeunKil/kafrust/actions/runs/33716428169)
+ran Kafka 4.3.1 three-broker leader/coordinator/combined/simultaneous faults.
+It reconciled 3,012,600 unique records with zero loss/duplicates/unknown
+outcomes, 4 failed requests, 11 retries, and drained gauges. This is evidence
+that the execution path is usable again, not a six-hour campaign result. The
+full four six-hour campaigns, 100-cycle/ambiguity families, controlled
+data-loss fixtures, and adjudication remain open. Details are in
+[`v1-company-capacity-recovery-2026-09-03.md`](../../evidence/v1-company-capacity-recovery-2026-09-03.md)
+and [`v1-company-selfhosted-short-fault-2026-09-03.md`](../../evidence/v1-company-selfhosted-short-fault-2026-09-03.md).

@@ -213,6 +213,19 @@ The eight-hour matrix therefore remains an external-capacity gate rather than
 a shortened or hosted-runner claim. The audit is retained in
 [`v1-long-campaign-capacity-audit-2026-08-24.md`](../../evidence/v1-long-campaign-capacity-audit-2026-08-24.md).
 
+### Company self-hosted capacity recovery (2026-09-03)
+
+The company WSL2 runner was recovered without lowering the campaign contract.
+After removal of the explicitly authorized stale backup, the unchanged guard
+reported 736 GiB free on `/mnt/t` and 854 GiB free under `/var/lib/docker`.
+The `wsl-ubuntu-t9` runner was online and idle, and a published `0.3.6`
+three-broker short diagnostic passed in
+[33716428169](https://github.com/TaeeunKil/kafrust/actions/runs/33716428169).
+This clears the host preflight for a future campaign dispatch only. The full
+120-job matrix still requires five repetitions, two-hour warmup, six-hour
+measurement, ten-second samples, and a locked baseline; no V1-22 SLO result is
+claimed from the short diagnostic.
+
 ### WSL2 capacity activation follow-up (2026-08-24)
 
 The follow-up WSL2 preflight registered one `wsl-ubuntu-t9` runner with the

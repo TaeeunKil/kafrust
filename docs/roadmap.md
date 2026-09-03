@@ -1123,6 +1123,23 @@ campaign, `pinned-secured-six-hour-1`, is running from `54c8e21` in
 [32649020906](https://github.com/TaeeunKil/kafrust/actions/runs/32649020906);
 this is active execution evidence only, not a qualification or release claim.
 
+### External gate recovery (2026-09-03)
+
+The stale 115,386,419,200-byte same-volume backup export was removed under
+the previously authorized cleanup. The unchanged capacity guard now passes
+with 736 GiB free on T: and 854 GiB free under `/var/lib/docker`. A temporary
+WSL resolver override restored the installed `wsl-ubuntu-t9` service to
+`online/idle`; no persistent resolver setting or existing Docker resource was
+changed. The published `0.3.6` self-hosted short diagnostic
+[33716428169](https://github.com/TaeeunKil/kafrust/actions/runs/33716428169)
+then completed successfully: 120.006 seconds, 3,012,600 unique records,
+zero loss/duplicates/unknown outcomes, and drained gauges across the four
+fault events. This clears the runner/capacity preflight only. V1-21's four
+six-hour campaigns and family gates, V1-22's 120-job SLO matrix and locked
+baseline, and V1-23's named service canary remain open. Full details are in
+[`v1-company-capacity-recovery-2026-09-03.md`](evidence/v1-company-capacity-recovery-2026-09-03.md)
+and [`v1-company-selfhosted-short-fault-2026-09-03.md`](evidence/v1-company-selfhosted-short-fault-2026-09-03.md).
+
 ## Historical Release Qualification
 
 `0.3.5` is now published on crates.io in protocol-first order. The fresh
