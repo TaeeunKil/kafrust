@@ -1167,6 +1167,18 @@ The failure and correction are retained in
 [`v1-published-performance-smoke-2026-09-03.md`](evidence/v1-published-performance-smoke-2026-09-03.md).
 This remains smoke evidence; V1-22's long matrix and locked baseline are open.
 
+The published 0.3.6 single-node broker-restart smoke then passed in
+[33719565892](https://github.com/TaeeunKil/kafrust/actions/runs/33719565892)
+from 003561b: a ten-second outage in a 120.001-second run produced 139
+recoverable operation errors, 6,375,800 produced/consumed records, 972
+retries, recovered=true, and zero final in-flight/buffered gauges. The
+preceding [33718942779](https://github.com/TaeeunKil/kafrust/actions/runs/33718942779)
+failed only because its fixture JSON omitted the peak-gauge fields checked by
+the workflow; the formatter correction is retained in the evidence document
+and ledger. This closes one bounded published single-node recovery diagnostic
+only. V1-21's six-hour campaigns, V1-22's controlled SLO matrix, V1-23's named
+service canary, and all release gates remain open.
+
 ## Historical Release Qualification
 
 `0.3.5` is now published on crates.io in protocol-first order. The fresh

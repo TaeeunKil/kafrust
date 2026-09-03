@@ -4443,3 +4443,69 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-published-performance-smoke-2026-09-03.md; four published-performance.json artifacts from run 33718664874
 - non_claims: not V1-22 five-repetition eight-hour matrix, not locked baseline, not universal performance parity, not service canary, not release readiness
+
+## Q-PUBLISHED-SOAK-SMOKE-FIX-2026-09-03
+
+- date_utc: 2026-09-03
+- source_commit: e702de7939ca80160ed29d18e38bde28e5cd578d
+- client_version: 0.3.6 published artifact
+- protocol_version: 0.3.6 published dependency
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka:4.3.1
+- mode: published single-node broker-restart soak fixture diagnostic
+- topology: isolated single-node KRaft
+- security: PLAINTEXT
+- group_protocol: direct consumer fetch
+- workload: 120-second run; 1-KiB payloads; batch size 100; broker stopped after one third for 10 seconds
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/33718942779
+- fault: fixture result formatter omitted max in-flight and max buffered gauge fields
+- duration: 120.001 seconds before the final workflow assertion
+- record_count: 6,439,200 produced and consumed
+- member_count: not-applicable
+- repetition_count: one
+- expected_errors: injected broker outage produces recoverable operation errors; final gauges and recovery assertion must pass
+- observed_errors: client recovered with zero final gauges, but the workflow assertion failed because two checked JSON fields were absent
+- retry_count: 972
+- duplicate_count: not measured
+- loss_count: 0 by produced/consumed reconciliation
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: in_flight_requests=0; buffered_records=0; max fields absent from emitted JSON
+- result: failed
+- artifact: docs/evidence/v1-published-soak-smoke-2026-09-03.md; GitHub Actions run 33718942779 logs
+- non_claims: fixture-only failure; not a published-library failure, not V1-21, not V1-22 SLO evidence, not V1-23 service-canary evidence, not release authorization
+
+## Q-PUBLISHED-SOAK-SMOKE-2026-09-03
+
+- date_utc: 2026-09-03
+- source_commit: 003561bc36da76eb448640918f3f3add273dc7aa
+- client_version: 0.3.6 published artifact
+- protocol_version: 0.3.6 published dependency
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka:4.3.1
+- mode: published single-node broker-restart soak smoke
+- topology: isolated single-node KRaft
+- security: PLAINTEXT
+- group_protocol: direct consumer fetch
+- workload: 120-second run; 1-KiB payloads; batch size 100; broker stopped after one third for 10 seconds
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/33719565892
+- fault: broker stopped and restarted during the measured run
+- duration: 120.001 seconds
+- record_count: 6,375,800 produced and consumed
+- member_count: not-applicable
+- repetition_count: one
+- expected_errors: recoverable operation errors during the outage; matching produced/consumed counts; recovery and zero final gauges
+- observed_errors: 139 operation errors during the outage; recovery true; produced/consumed counts matched; zero final gauges
+- retry_count: 972
+- duplicate_count: not measured
+- loss_count: 0 by produced/consumed reconciliation
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: in_flight_requests=0; buffered_records=0; max_in_flight_requests=1; max_buffered_records=0
+- result: passed
+- artifact: docs/evidence/v1-published-soak-smoke-2026-09-03.md; kafrust-published-soak-33719565892/published-soak.json artifact
+- non_claims: bounded single-node diagnostic only; not V1-21 six-hour campaigns, not V1-22 SLO qualification, not V1-23 service-canary evidence, not universal performance parity, not release authorization

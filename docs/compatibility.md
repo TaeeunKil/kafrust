@@ -10,6 +10,16 @@ The complete V1-20 matrix and later fault, SLO, migration, and API-freeze gates
 remain open; live and published claims stay tied to their named source commits,
 artifact versions, and workflow runs below.
 
+A bounded published 0.3.6 single-node broker-restart smoke also passed in
+[run 33719565892](https://github.com/TaeeunKil/kafrust/actions/runs/33719565892):
+the ten-second injected outage produced recoverable errors, the fresh external
+project reconciled 6,375,800 records, and final in-flight/buffered gauges were
+zero. The preceding [run 33718942779](https://github.com/TaeeunKil/kafrust/actions/runs/33718942779)
+is retained as a fixture-only failure because its JSON omitted the peak-gauge
+fields required by the workflow assertion; source 003561b corrected the
+formatter. This is bounded diagnostic evidence, not a V1-21 campaign, V1-22
+SLO result, V1-23 service canary, or release decision.
+
 ## v1.0 Support Contract
 
 V1-01 sets the accepted support boundary below. “Required” means the named
