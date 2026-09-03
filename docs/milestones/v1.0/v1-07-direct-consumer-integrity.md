@@ -76,6 +76,18 @@ Ubuntu-T9 WSL2. This closes the direct deterministic slice only; retention,
 leader movement, published reconciliation, and final queue/resource gates
 remain open.
 
+### Pushed-source partition-queue smoke (2026-09-04)
+
+The pushed source `c68088526cae753edde00310df1697ef0f40eedf` was run on the
+company Windows x64 workstation's Ubuntu-T9 WSL2 environment against an
+isolated Kafka 4.3.1 broker. `producer_send` created one record at partition 0,
+offset 0; `consumer_partition_queue` assigned and split that partition,
+polled once, and drained exactly one queued record with the expected key and
+value. This is short single-node diagnostic evidence only; saturation,
+backpressure, leader movement, retention, and published reconciliation remain
+open. See
+[`v1-company-partition-queue-short-smoke-2026-09-04.md`](../../evidence/v1-company-partition-queue-short-smoke-2026-09-04.md).
+
 ## Failure And Lifecycle Contract
 
 - A lost Fetch response is safe to retry because delivery has not been exposed

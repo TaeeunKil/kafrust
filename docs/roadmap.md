@@ -499,6 +499,13 @@ Ubuntu-T9 WSL2. The evidence is
 Retention, leader movement, published reconciliation, and queue/resource exit
 gates remain open.
 
+The pushed source `c680885` also passed a company WSL2 Ubuntu-T9 partition-queue
+smoke against isolated Kafka 4.3.1: one produced record was assigned, queued,
+and drained with its expected key/value. The bounded record is
+[`v1-company-partition-queue-short-smoke-2026-09-04.md`](evidence/v1-company-partition-queue-short-smoke-2026-09-04.md).
+This does not replace saturation, retention, leader-movement, or published
+reconciliation evidence.
+
 ## V1-08 Execution Update (2026-08-22)
 
 V1-08 is `In progress`. Classic and KIP-848 OffsetCommit now expose a typed

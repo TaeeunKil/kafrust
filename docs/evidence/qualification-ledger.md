@@ -6654,3 +6654,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-company-consumer-group-short-smoke-2026-09-04.md; crates/kafrust/examples/consumer_group_poll.rs; crates/kafrust/examples/producer_send.rs
 - non_claims: not published artifact qualification, not accepted-floor security or churn, not failover, not partition-queue mode, not Share, not long campaign, not service canary, not release authorization
+
+## Q-COMPANY-PARTITION-QUEUE-SHORT-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: c68088526cae753edde00310df1697ef0f40eedf
+- client_version: 0.3.6 source checkout
+- protocol_version: 0.3.6 source checkout
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
+- mode: pushed-source direct partition queue example
+- topology: isolated single-node KRaft broker
+- security: PLAINTEXT
+- group_protocol: not-applicable; direct assignment
+- workload: one produced record; assign, split queue, poll, drain
+- workflow: scripts/check_qualification_ledger.py
+- fault: none injected
+- duration: under two minutes after warm build
+- record_count: one queued record at partition 0 offset 0
+- member_count: not-applicable
+- repetition_count: one company WSL2 x86_64 run
+- expected_errors: none; expected key/value delivered through queue
+- observed_errors: zero failures; queue delivered exactly one record
+- retry_count: not aggregated
+- duplicate_count: 0 observed
+- loss_count: 0 observed in the one-record check
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: uniquely named broker container and topic removed
+- result: passed
+- artifact: docs/evidence/v1-company-partition-queue-short-smoke-2026-09-04.md; crates/kafrust/examples/consumer_partition_queue.rs; crates/kafrust/examples/producer_send.rs
+- non_claims: not published artifact qualification, not queue saturation/backpressure, not accepted-floor security, not leader movement or retention, not long campaign, not service canary, not release authorization
