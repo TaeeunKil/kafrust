@@ -6456,3 +6456,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-benchmark-diagnostic-2026-09-04.md; https://github.com/TaeeunKil/kafrust/actions/runs/33799886253; https://github.com/TaeeunKil/kafrust/actions/runs/33799889688
 - non_claims: not locked baseline, not five-repetition eight-hour SLO, not universal performance ranking, not published-artifact qualification, not release authorization
+
+## Q-PRODUCER-DEADLINE-PHASES-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: eeb675eba670634ae902d1ce89ad8e15d4994d16
+- client_version: 0.3.6 source checkout
+- protocol_version: 0.3.6 source checkout
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: not-applicable; scripted broker
+- kafka_image: not-applicable; scripted broker
+- mode: immediate and batch producer delivery phase expiry
+- topology: in-memory scripted broker
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: four 20 ms delivery-budget cases; immediate and batch Metadata and ApiVersions holds
+- workflow: scripts/check_qualification_ledger.py
+- fault: total delivery deadline expires before Produce while metadata or broker capability response is withheld
+- duration: Windows fault target 0.14 seconds; company WSL2 replay 0.61 seconds
+- record_count: four timeout cases; zero Produce frames observed
+- member_count: not-applicable
+- repetition_count: one Windows run and one Ubuntu-T9 WSL2 x86_64 replay
+- expected_errors: typed DeliveryDeadlineExceeded with Metadata or Capability phase and possibly_transmitted false
+- observed_errors: all four regressions passed; broker observed Metadata-only or Metadata-plus-ApiVersions and no Produce
+- retry_count: 0
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: no external resources; producer timeout connections discarded
+- result: passed
+- artifact: docs/evidence/v1-producer-delivery-phase-expiry-2026-09-04.md; crates/kafrust/src/producer.rs; crates/kafrust/tests/fault_injection.rs
+- non_claims: not published mixed-outcome reconciliation, not accepted-floor or multi-broker qualification, not long campaigns, not service canary, not release authorization

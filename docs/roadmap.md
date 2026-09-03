@@ -314,6 +314,17 @@ tests passed. See
 [`v1-company-no-response-cancellation-smoke-2026-09-03.md`](evidence/v1-company-no-response-cancellation-smoke-2026-09-03.md).
 No Docker resources were touched.
 
+At pushed head `eeb675e`, immediate and batch producer deadlines now retain
+their active phase through Metadata, broker ApiVersions capability negotiation,
+retry, and Produce. Four scripted regressions hold Metadata or ApiVersions and
+verify typed Metadata/Capability expiry with `possibly_transmitted=false` and
+zero Produce frames. Windows and company Ubuntu-T9 WSL2 x86_64 Rust 1.81 both
+passed all 33 fault-injection tests. Details are in
+[`v1-producer-delivery-phase-expiry-2026-09-04.md`](evidence/v1-producer-delivery-phase-expiry-2026-09-04.md).
+This closes only deterministic pre-Produce phase classification; published
+mixed-outcome reconciliation, blocked-I/O cancellation, long campaigns, and
+release gates remain open.
+
 ## V1-05 Execution Update (2026-08-22)
 
 V1-05 is `In progress`. The deterministic idempotent slice now records exact

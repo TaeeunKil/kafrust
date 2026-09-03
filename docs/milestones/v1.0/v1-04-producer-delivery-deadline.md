@@ -263,6 +263,23 @@ with `Error::IdempotentProducerDefunct` and cannot reuse the sequence. This
 does not change the deadline error contract and does not close buffered
 cancellation, published reconciliation, delayed capability, or live gates.
 
+### Metadata and capability phase expiry (2026-09-04)
+
+At source `eeb675e`, immediate and batch sends record the active delivery phase
+through metadata lookup, broker capability negotiation, retries, and Produce.
+The four new scripted regressions hold the Metadata or ApiVersions response and
+assert a typed `DeliveryDeadlineExceeded` with the corresponding
+`DeliveryPhase`, `possibly_transmitted=false`, and zero Produce frames. A
+separate transmission flag preserves ambiguity if an earlier Produce attempt
+already started before a later retry consumes the shared budget. Windows
+validation and company Ubuntu-T9 WSL2 x86_64 Rust 1.81 replay both passed all
+33 fault-injection tests. The detailed record is
+[`v1-producer-delivery-phase-expiry-2026-09-04.md`](../../evidence/v1-producer-delivery-phase-expiry-2026-09-04.md).
+
+This closes deterministic pre-Produce phase classification for immediate and
+batch sends only. Published mixed-outcome reconciliation, cancellation while
+socket I/O is blocked, long campaigns, and live qualification remain open.
+
 ## Exit Criteria
 
 1. All three producer modes share the documented total-budget calculation.
