@@ -472,6 +472,18 @@ stable while assignment offsets are restored. Published pinned-current
 plaintext/SASL churn, stale-task cancellation, delete/recreate fallback races,
 and exact 40-cycle ownership/offset gates remain open.
 
+### V1-09 deterministic session-identity fence (2026-09-04)
+
+The KIP-848 heartbeat handle now has a direct regression test at source
+`3cc672a19c238e837d4c3e08fab04460b6a5c1ce`: the same consumer session is
+`Current`, a replaced or missing session is `StaleGeneration`, and a wrong
+group is `DifferentGroup`; the scripted task is stopped and joined. Windows
+required validation and company WSL2 Ubuntu-T9/Rust 1.81 focused plus all 29
+fault-injection tests passed. This closes only the deterministic helper fence;
+stale-task broker churn, member-loss, delete/recreate races, exact restoration,
+and published qualification remain open. Evidence:
+[`v1-kip848-consumer-session-identity-2026-09-04.md`](evidence/v1-kip848-consumer-session-identity-2026-09-04.md).
+
 ## V1-10 Execution Update (2026-08-22)
 
 V1-10 is `In progress`. ShareConsumer deterministic coverage now records v1/v2

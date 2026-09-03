@@ -74,6 +74,18 @@ cycles, stale-task cancellation, delete/recreate name-fallback races, and
 exact offset-restoration evidence remain open. No modern-group published
 artifact or 40-cycle claim is made.
 
+### Deterministic session-identity fence (2026-09-04)
+
+The private KIP-848 heartbeat-handle session fence now has a direct regression
+test at source commit `3cc672a19c238e837d4c3e08fab04460b6a5c1ce`. It classifies
+the same consumer session as `Current`, a replaced or missing session as
+`StaleGeneration`, and a wrong group as `DifferentGroup`, then stops and joins
+the scripted heartbeat task. Windows required validation and company WSL2
+Ubuntu-T9/Rust 1.81 focused plus fault-injection validation passed. This is a
+helper-level deterministic boundary only; stale-task broker churn, member-loss,
+delete/recreate races, exact restoration, and published gates remain open.
+See [`v1-kip848-consumer-session-identity-2026-09-04.md`](../../evidence/v1-kip848-consumer-session-identity-2026-09-04.md).
+
 ## Failure And Lifecycle Contract
 
 - The group handle and heartbeat task share one fenced member/assignment state;

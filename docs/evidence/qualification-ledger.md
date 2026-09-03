@@ -6126,3 +6126,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-producer-partial-write-retry-2026-09-04.md; crates/kafrust/src/producer.rs
 - non_claims: not CI, not published-artifact qualification, not ten-cycle fault qualification, not 100,000-record reconciliation, not secure transport, not long campaigns, not service canary, not release authorization
+
+## Q-KIP848-CONSUMER-SESSION-IDENTITY-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: 3cc672a19c238e837d4c3e08fab04460b6a5c1ce
+- client_version: 0.3.6 source workspace
+- protocol_version: KIP-848 ConsumerGroupHeartbeat v0/v1 helper state
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: scripted task fixture
+- kafka_image: not-applicable
+- mode: consumer heartbeat session identity fence
+- topology: one scripted Tokio heartbeat task
+- security: not-applicable
+- group_protocol: consumer
+- workload: one heartbeat handle with two distinct session identities
+- workflow: scripts/check_qualification_ledger.py
+- fault: replaced or missing session, plus wrong group identity
+- duration: focused deterministic test under one second per platform
+- record_count: not-applicable
+- member_count: one handle
+- repetition_count: one deterministic run on Windows and one on WSL2
+- expected_errors: replaced or missing session is stale; wrong group is different
+- observed_errors: same Arc session classified the active heartbeat state; replacement/missing classified StaleGeneration; wrong group classified DifferentGroup; task joined
+- retry_count: 0
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: heartbeat task joined; no broker, Docker, network, or detached task
+- result: passed
+- artifact: docs/evidence/v1-kip848-consumer-session-identity-2026-09-04.md; crates/kafrust/src/group.rs
+- non_claims: not CI, not broker churn, not member-loss cycles, not delete/recreate race qualification, not exact offset restoration, not published-artifact qualification, not secure transport, not long campaigns, not service canary, not release authorization
