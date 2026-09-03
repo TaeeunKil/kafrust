@@ -19666,6 +19666,91 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn classifies_consumer_group_offset_delete_disconnect_as_unknown() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let coordinator_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&coordinator_request[0..4], &[0, 10, 0, 1]);
+            write_frame(
+                &mut bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let (mut coordinator, _) = listener.accept().await.unwrap();
+            let delete_request = read_frame(&mut coordinator).await;
+            assert_eq!(&delete_request[0..4], &[0, 47, 0, 0]);
+            drop(coordinator);
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        )
+        .max_retries(0);
+
+        let error = admin
+            .delete_consumer_group_offsets(
+                "orders-group",
+                &[ConsumerGroupOffsetDelete::new("orders", [0])],
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            Error::AdminMutationOutcomeUnknown {
+                operation: "OffsetDelete"
+            }
+        ));
+        assert_eq!(metrics.snapshot().retries, 0);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn classifies_delete_group_disconnect_as_unknown() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let coordinator_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&coordinator_request[0..4], &[0, 10, 0, 1]);
+            write_frame(
+                &mut bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let (mut coordinator, _) = listener.accept().await.unwrap();
+            let delete_request = read_frame(&mut coordinator).await;
+            assert_eq!(&delete_request[0..4], &[0, 42, 0, 1]);
+            drop(coordinator);
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        )
+        .max_retries(0);
+
+        let error = admin
+            .delete_consumer_groups(&["orders-group".to_owned()])
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            Error::AdminMutationOutcomeUnknown {
+                operation: "DeleteGroups"
+            }
+        ));
+        assert_eq!(metrics.snapshot().retries, 0);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn retries_consumer_group_offset_commit_after_transient_broker_error() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
