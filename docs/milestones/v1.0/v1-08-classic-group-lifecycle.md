@@ -105,6 +105,12 @@ bounded single-node diagnostic evidence; published security/churn,
 coordinator-failover, and exact offset-restoration gates remain open. See
 [`v1-company-consumer-group-short-smoke-2026-09-04.md`](../../evidence/v1-company-consumer-group-short-smoke-2026-09-04.md).
 
+The same controls smoke exercised the classic group's earliest/latest reset
+and committed out-of-range recovery path after a bounded DeleteRecords
+operation. It is one current-source single-node diagnostic only; published
+churn and exact restoration remain open. See
+[`v1-company-consumer-controls-short-smoke-2026-09-04.md`](../../evidence/v1-company-consumer-controls-short-smoke-2026-09-04.md).
+
 ## Failure And Lifecycle Contract
 
 - The group session exclusively owns member ID, generation, assignment, and

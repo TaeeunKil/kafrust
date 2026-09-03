@@ -88,6 +88,18 @@ backpressure, leader movement, retention, and published reconciliation remain
 open. See
 [`v1-company-partition-queue-short-smoke-2026-09-04.md`](../../evidence/v1-company-partition-queue-short-smoke-2026-09-04.md).
 
+### Pushed-source consumer controls smoke (2026-09-04)
+
+At source `a981a35a32db0ca61b5aa1a391a58a0ccf9f184c`, the company WSL2
+workstation ran `consumer_position_control` against an isolated Kafka 4.3.1
+broker. Direct and group watermarks were valid; pause suppressed delivery,
+resume and seek restored delivery, and positions advanced after the expected
+record was fetched. The paired `consumer_group_offset_reset` run also covered
+earliest/latest reset and committed out-of-range recovery. This remains short
+single-node diagnostic evidence; published retention, leader movement, and
+reconciliation gates remain open. See
+[`v1-company-consumer-controls-short-smoke-2026-09-04.md`](../../evidence/v1-company-consumer-controls-short-smoke-2026-09-04.md).
+
 ## Failure And Lifecycle Contract
 
 - A lost Fetch response is safe to retry because delivery has not been exposed

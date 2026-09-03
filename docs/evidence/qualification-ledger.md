@@ -6687,3 +6687,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-company-partition-queue-short-smoke-2026-09-04.md; crates/kafrust/examples/consumer_partition_queue.rs; crates/kafrust/examples/producer_send.rs
 - non_claims: not published artifact qualification, not queue saturation/backpressure, not accepted-floor security, not leader movement or retention, not long campaign, not service canary, not release authorization
+
+## Q-COMPANY-CONSUMER-CONTROLS-SHORT-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: a981a35a32db0ca61b5aa1a391a58a0ccf9f184c
+- client_version: 0.3.6 source checkout
+- protocol_version: 0.3.6 source checkout
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
+- mode: pushed-source consumer offset and position controls
+- topology: isolated single-node KRaft broker
+- security: PLAINTEXT
+- group_protocol: classic for offset reset and position control
+- workload: earliest/end-offset reset, committed out-of-range recovery, watermark, pause/resume, seek, position
+- workflow: scripts/check_qualification_ledger.py
+- fault: bounded DeleteRecords retention boundary; no broker fault injection
+- duration: under three minutes after warm build
+- record_count: reset and recovered records plus one position-control record
+- member_count: one classic group member per group run
+- repetition_count: one combined company WSL2 x86_64 run
+- expected_errors: none; reset and position contracts complete successfully
+- observed_errors: zero failures; all checks passed
+- retry_count: not aggregated
+- duplicate_count: 0 observed in bounded checks
+- loss_count: expected pre-delete records were excluded after reset; recovered record observed
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: uniquely named broker container and topics removed
+- result: passed
+- artifact: docs/evidence/v1-company-consumer-controls-short-smoke-2026-09-04.md; crates/kafrust/examples/consumer_group_offset_reset.rs; crates/kafrust/examples/consumer_position_control.rs; crates/kafrust/examples/producer_send.rs
+- non_claims: not published artifact qualification, not accepted-floor security/churn, not full retention or leader-failure matrix, not queue saturation, not long campaign, not service canary, not release authorization

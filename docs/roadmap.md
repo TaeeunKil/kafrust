@@ -506,6 +506,13 @@ and drained with its expected key/value. The bounded record is
 This does not replace saturation, retention, leader-movement, or published
 reconciliation evidence.
 
+The same workstation run also passed `consumer_position_control` (direct and
+group watermark, pause/resume, seek, and position advancement) and
+`consumer_group_offset_reset` (earliest/latest and committed out-of-range
+recovery) on separate isolated topics. Details are recorded in
+[`v1-company-consumer-controls-short-smoke-2026-09-04.md`](evidence/v1-company-consumer-controls-short-smoke-2026-09-04.md);
+these remain bounded single-node diagnostics.
+
 ## V1-08 Execution Update (2026-08-22)
 
 V1-08 is `In progress`. Classic and KIP-848 OffsetCommit now expose a typed
