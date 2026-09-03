@@ -5169,3 +5169,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-company-broker-roundtrip-floor-2026-09-03.md; crates/kafrust/tests/broker_roundtrip.rs
 - non_claims: not V1-03 completion, not accepted-floor security/workload qualification, not three-broker movement, not published compatibility completion, not long campaigns, not service canary, not release authorization
+
+## Q-IDEMPOTENT-BUFFERED-RESPONSE-LOSS-2026-09-03
+
+- date_utc: 2026-09-03
+- source_commit: 27a9f466bc87651123ba1cb9592de3f76574474a
+- client_version: 0.3.6 source checkout
+- protocol_version: 0.3.6 source checkout
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: not-applicable; scripted broker
+- kafka_image: not-applicable
+- mode: buffered idempotent response-loss replay regression
+- topology: in-memory scripted broker with reconnect
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: one buffered idempotent Produce record
+- workflow: scripts/check_qualification_ledger.py
+- fault: first Produce response dropped; reconnect and duplicate-sequence response
+- duration: deterministic integration test under one second
+- record_count: one buffered delivery
+- member_count: not-applicable
+- repetition_count: one bounded scripted run
+- expected_errors: dropped response must replay the same encoded batch and duplicate sequence must resolve the original delivery
+- observed_errors: one retry and one broker error; replay frame byte-identical; delivery resolved with offset -1; producer closed cleanly
+- retry_count: 1
+- duplicate_count: 0 client-visible duplicates; broker duplicate-sequence acknowledgement accepted
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: buffered worker closed cleanly
+- result: passed
+- artifact: docs/evidence/v1-buffered-idempotent-retry-2026-09-03.md; crates/kafrust/tests/fault_injection.rs
+- non_claims: not complete idempotent fault-phase coverage, not published ten-cycle or 100,000-record qualification, not long campaigns, not service canary, not release authorization

@@ -225,6 +225,15 @@ scoped batch sequencing, and sequence-modulus rollover. The focused tests are
 fault-phase table, and the exact published ten-cycle/100,000-record
 reconciliation gate remain open, so no published-artifact claim is made.
 
+The buffered idempotent path now has the same deterministic response-loss
+replay guard at pushed head `27a9f46`: the first Produce response is dropped,
+the reconnect replay is byte-identical, and duplicate-sequence success resolves
+the original delivery without a new sequence. The focused regression and full
+required local Rust validation passed; details are in
+[`v1-buffered-idempotent-retry-2026-09-03.md`](evidence/v1-buffered-idempotent-retry-2026-09-03.md).
+This closes only the buffered deterministic slice; published fault cycles and
+100,000-record reconciliation remain open.
+
 ## V1-06 Execution Update (2026-08-22)
 
 V1-06 is `In progress`. The transaction path keeps one coherent legacy TV0/TV1

@@ -82,6 +82,22 @@ contains no injected fault and does not count toward the published fault
 matrix or ten-cycle gate; details are in
 [`v1-company-floor-short-smoke-2026-09-03.md`](../../evidence/v1-company-floor-short-smoke-2026-09-03.md).
 
+### Buffered response-loss replay (2026-09-03)
+
+The scripted fault matrix now covers the opt-in `BufferedProducer` idempotent
+path as well as immediate sends. At source commit
+`27a9f466bc87651123ba1cb9592de3f76574474a`,
+`buffered_idempotent_producer_retries_dropped_response_with_same_batch_sequence`
+causes the first Produce response to be dropped, verifies reconnect, and
+asserts the replay frame is byte-identical to the original. A duplicate
+sequence response resolves the original delivery; no new sequence is
+allocated, and the buffered worker closes cleanly. The detailed evidence is
+[`v1-buffered-idempotent-retry-2026-09-03.md`](../../evidence/v1-buffered-idempotent-retry-2026-09-03.md).
+
+This closes the deterministic buffered response-loss slice only; partial-write
+classification, cancellation/shutdown faults, published ten-cycle profiles,
+and 100,000-record reconciliation remain open.
+
 ## Failure And Lifecycle Contract
 
 - A safe retry retains the same producer identity and batch sequence.
