@@ -313,6 +313,20 @@ jobs:
             --partitions 1 \
             --replication-factor 1
 
+      - name: Wait for group coordinator
+        run: |
+          for attempt in {1..90}; do
+            if docker exec kafrust-published-kafka /opt/kafka/bin/kafka-consumer-groups.sh \
+              --bootstrap-server localhost:9092 \
+              --list >/tmp/kafrust-published-group-coordinator.log 2>&1; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/kafrust-published-group-coordinator.log || true
+          docker logs kafrust-published-kafka
+          exit 1
+
       - name: Create fresh external project
         env:
           KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version }}
