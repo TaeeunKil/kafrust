@@ -1016,6 +1016,55 @@ async fn buffered_close_flushes_handle_owned_record_before_worker_shutdown() {
 }
 
 #[tokio::test]
+async fn buffered_delivery_sender_cancellation_releases_record_after_flush() {
+    let broker = ScriptedBroker::start(vec![
+        ScriptedResponse::RespondWithAddressAndClose(metadata_response_for_address),
+        ScriptedResponse::Respond(api_versions_response_body(3)),
+        ScriptedResponse::Respond(produce_v3_response_body(0, 44)),
+    ])
+    .await
+    .expect("scripted broker should bind");
+    let address = broker.address();
+    let metrics = ClientMetrics::new();
+    let mut producer = ProducerConfig::new([address.to_string()])
+        .metrics(metrics.clone())
+        .request_timeout_ms(1_000)
+        .delivery_timeout_ms(1_000)
+        .linger_ms(10_000)
+        .build_buffered()
+        .await
+        .expect("buffered producer should initialize");
+
+    let delivery = producer
+        .send(ProducerRecord::to("orders").partition(0).value("value"))
+        .await
+        .expect("buffered record should enqueue");
+    drop(delivery);
+    producer
+        .flush()
+        .await
+        .expect("dropping the delivery sender must not cancel Produce");
+    assert_eq!(metrics.snapshot().buffered_records, 0);
+
+    producer
+        .close()
+        .await
+        .expect("buffered producer should close after canceled delivery");
+    let observations = broker
+        .finish()
+        .await
+        .expect("scripted broker should complete canceled delivery flush");
+    assert_eq!(observations.len(), 3);
+    assert_eq!(
+        observations
+            .iter()
+            .map(|request| request.api_key)
+            .collect::<Vec<_>>(),
+        [3, 18, 0]
+    );
+}
+
+#[tokio::test]
 async fn transactional_commit_response_loss_marks_outcome_unknown_and_defunct() {
     let coordinator = ScriptedBroker::start(vec![
         ScriptedResponse::Respond(api_versions_producer_response_body()),
