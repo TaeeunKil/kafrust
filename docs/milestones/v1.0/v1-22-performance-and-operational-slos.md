@@ -195,9 +195,10 @@ require_baseline=true; without that baseline it deliberately reports
 matrix-complete-baseline-pending. The workflow now defaults to the
 `self-hosted` label and rejects GitHub-hosted labels, because the eight-hour
 contract cannot fit the [hosted six-hour job limit](https://docs.github.com/en/actions/reference/limits).
-The repository currently has
-no self-hosted runner registered, so no campaign has been dispatched and this
-remains an external-capacity gate.
+The repository now has a registered self-hosted runner that has passed a
+temporary DNS recovery, but the resolver change is not persistent and no
+campaign has been dispatched; the full matrix remains an external-capacity and
+qualification gate.
 
 This adds an executable qualification path but no campaign has been dispatched
 yet, so V1-22 remains In progress and no SLO, baseline, competitor-parity, or

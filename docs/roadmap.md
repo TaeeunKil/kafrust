@@ -1513,6 +1513,18 @@ covering the safe downgrade and upgrade lifecycle. This closes the named
 diagnostic only; no long-campaign, service-canary, `0.3.7`, or `1.0.0` claim
 is made.
 
+## Runner DNS Recovery Update (2026-09-04)
+
+The company WSL2 runner was rechecked after the generated resolver returned to
+`10.255.255.254` and caused GitHub Actions endpoint timeouts. A root-only
+temporary override to `168.126.63.1` and `8.8.8.8`, followed by restarting only
+the runner service, restored `Listening for Jobs`; the GitHub inventory now
+reports `wsl-ubuntu-t9` online and idle. Capacity remains above the unchanged
+guard at 736 GiB on `/mnt/t` and 856 GiB in Docker. This is a temporary
+connectivity recovery, not a persistent WSL resolver policy, and no V1-21 or
+V1-22 long campaign was dispatched. See the updated
+[`v1-long-campaign-capacity-audit-2026-08-24.md`](evidence/v1-long-campaign-capacity-audit-2026-08-24.md).
+
 ## V1-23 Execution Update (2026-08-23)
 
 The current published competitor check was run before making any release-path

@@ -449,3 +449,14 @@ Share member-loss window; a 30-second shortened-input attempt failed its
 three-to-six partition reassignment assertion and is retained separately.
 Neither result is promoted to the six-hour V1-21 campaign or its adjudicated
 100-cycle/data-loss evidence.
+
+### Runner DNS recovery follow-up (2026-09-04)
+
+The generated WSL resolver regressed to `10.255.255.254` after the prior short
+diagnostic, leaving the installed listener offline even though its service and
+Docker were active. A root-only, temporary override using `168.126.63.1` and
+`8.8.8.8`, followed by a runner-service-only restart, restored DNS and returned
+the listener to `Listening for Jobs`; GitHub now reports it online and idle.
+The WSL VM, Docker daemon, and existing resources were not restarted or
+pruned. This restores execution capacity but is not a persistent resolver fix,
+and no long campaign is dispatched until an online preflight is repeated.

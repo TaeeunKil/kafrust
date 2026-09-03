@@ -210,3 +210,20 @@ available. No resolver, Docker resource, or existing container was modified,
 and no long campaign was dispatched. Recovery requires an authorized root-only
 resolver fix (preferably persistent through the WSL networking policy), then a
 fresh runner-online preflight before any V1-21/V1-22 dispatch.
+
+## Root-only temporary DNS recovery (2026-09-04)
+
+An authorized root-only operation verified that both workstation/public
+resolvers (`168.126.63.1` and `8.8.8.8`) resolve the GitHub Actions endpoints.
+The generated resolver was temporarily replaced with those two nameservers and
+only the `actions.runner.TaeeunKil-kafrust.wsl-ubuntu-t9.service` unit was
+restarted; Docker and the WSL VM were not restarted. The listener log then
+reported `Listening for Jobs`, and the GitHub runner inventory reported
+`wsl-ubuntu-t9` as `online`, `busy: false` with its existing labels.
+
+This is a connectivity recovery, not a persistent WSL networking fix:
+`/etc/resolv.conf` will be regenerated after a WSL restart unless an
+administrator applies the resolver policy permanently. The capacity guard
+still passes, but no long campaign was dispatched during this recheck. A
+fresh online/idle preflight is required immediately before any official
+V1-21/V1-22 campaign.

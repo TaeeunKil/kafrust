@@ -4312,6 +4312,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-long-campaign-capacity-audit-2026-08-24.md; scripts/check_campaign_capacity.sh output; GitHub runner inventory
 - non_claims: not a client fault result, not V1-21 completion, not V1-22 SLO evidence, not V1-23 service-canary authority, not release readiness
 
+## Q-INFRA-RUNNER-DNS-RECOVERY-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: 22bb3d570a9fbf289b5fe30ea7eb0031cf65df28
+- client_version: 0.3.6 published baseline
+- protocol_version: 0.3.6 published dependency
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: not-applicable; runner connectivity recovery
+- kafka_image: not-applicable; no broker campaign dispatched
+- mode: WSL2 self-hosted runner temporary DNS recovery
+- topology: repository runner and host resolver inventory
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: runner-only preflight; no Kafka workload
+- workflow: scripts/check_campaign_capacity.sh
+- fault: generated WSL resolver could not resolve GitHub Actions endpoints
+- duration: bounded recovery completed on 2026-09-04
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: one root-only resolver update and runner-service restart
+- expected_errors: runner online and idle after DNS recovery
+- observed_errors: listener reported `Listening for Jobs`; GitHub inventory reported online and idle
+- retry_count: not-applicable
+- duplicate_count: not-applicable
+- loss_count: not-applicable
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: `/mnt/t` 736 GiB free; `/var/lib/docker` 856 GiB free; Docker not restarted
+- result: passed
+- artifact: docs/evidence/v1-long-campaign-capacity-audit-2026-08-24.md; docs/evidence/v1-company-capacity-recovery-2026-09-03.md; GitHub runner inventory
+- non_claims: temporary rather than persistent resolver policy, not V1-21 completion, not V1-22 SLO evidence, not V1-23 service-canary authority, not release readiness
+
 ## Q-LIVE-V121-DIAG-002
 
 - date_utc: 2026-09-03
