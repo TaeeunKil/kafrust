@@ -43,6 +43,12 @@ impl BrokerClientCache {
         self.idle_order.push_back(broker_addr);
     }
 
+    pub(crate) fn clear_api_versions_cache(&mut self) {
+        for client in self.clients.values_mut() {
+            client.clear_api_versions_cache();
+        }
+    }
+
     #[cfg(test)]
     pub(crate) fn len(&self) -> usize {
         self.clients.len()
@@ -88,6 +94,10 @@ impl SharedBrokerClientCache {
             .lock()
             .await
             .insert(broker_addr, client, max_connections);
+    }
+
+    pub(crate) async fn clear_api_versions_cache(&self) {
+        self.cache.lock().await.clear_api_versions_cache();
     }
 
     #[cfg(test)]

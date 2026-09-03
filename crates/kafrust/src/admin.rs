@@ -859,16 +859,15 @@ impl AdminClient {
                 "broker does not advertise UpdateFeatures v0 or v1",
             ))?;
         let response = match api_version {
-            1 => controller_client
-                .update_features_v1(
-                    duration_millis_i32(options.timeout),
-                    updates.iter().map(FeatureUpdate::as_protocol_v1).collect(),
-                    options.validate_only,
-                )
-                .await
-                .map_err(|error| {
-                    admin_mutation_error(&controller_client, "UpdateFeatures", error)
-                })?,
+            1 => {
+                controller_client
+                    .update_features_v1(
+                        duration_millis_i32(options.timeout),
+                        updates.iter().map(FeatureUpdate::as_protocol_v1).collect(),
+                        options.validate_only,
+                    )
+                    .await
+            }
             0 => {
                 if options.validate_only {
                     return Err(Error::Unsupported(
@@ -885,12 +884,16 @@ impl AdminClient {
                 controller_client
                     .update_features_v0(duration_millis_i32(options.timeout), updates)
                     .await
-                    .map_err(|error| {
-                        admin_mutation_error(&controller_client, "UpdateFeatures", error)
-                    })?
             }
             _ => unreachable!("negotiated UpdateFeatures version exceeds client support"),
         };
+
+        // ApiVersions carries finalized feature metadata. Any successful or
+        // ambiguous UpdateFeatures attempt may change that metadata, so idle
+        // admin connections must renegotiate before a later read.
+        self.broker_clients.clear_api_versions_cache().await;
+        let response = response
+            .map_err(|error| admin_mutation_error(&controller_client, "UpdateFeatures", error))?;
 
         if response.error_code != 0 {
             self.config.record_broker_error();
@@ -16062,15 +16065,16 @@ mod tests {
         DeleteRecordsOptions, DeleteRecordsTopic, DeleteTopicsOptions, DescribeClusterEndpointType,
         DescribeClusterOptions, DescribeConfigsOptions, DescribeProducersTopic,
         DescribeQuorumTopic, DescribeTopicPartitionsCursor, DescribeTopicPartitionsOptions,
-        ElectLeadersOptions, ElectionType, LeaderElection, ListConfigResourcesOptions,
-        ListGroupsOptions, ListTransactionsOptions, LogDirTopic, NewPartitions, NewTopic,
-        PartitionReassignment, PartitionReassignmentOptions, PartitionReassignmentQuery,
-        RaftVoterListener, RemoveRaftVoterOptions, ReplicaLogDirAssignment,
-        ScramCredentialDeletion, ScramCredentialMechanism, ScramCredentialUpsertion,
-        ShareGroupStateBatch, ShareGroupStateDeleteTopic, ShareGroupStateInitializePartition,
-        ShareGroupStateInitializeTopic, ShareGroupStateReadPartition, ShareGroupStateReadTopic,
-        ShareGroupStateWritePartition, ShareGroupStateWriteTopic, TopicConfigAlteration,
-        TopicConfigResource, TopicConfigUpdate,
+        ElectLeadersOptions, ElectionType, FeatureUpdate, LeaderElection,
+        ListConfigResourcesOptions, ListGroupsOptions, ListTransactionsOptions, LogDirTopic,
+        NewPartitions, NewTopic, PartitionReassignment, PartitionReassignmentOptions,
+        PartitionReassignmentQuery, RaftVoterListener, RemoveRaftVoterOptions,
+        ReplicaLogDirAssignment, ScramCredentialDeletion, ScramCredentialMechanism,
+        ScramCredentialUpsertion, ShareGroupStateBatch, ShareGroupStateDeleteTopic,
+        ShareGroupStateInitializePartition, ShareGroupStateInitializeTopic,
+        ShareGroupStateReadPartition, ShareGroupStateReadTopic, ShareGroupStateWritePartition,
+        ShareGroupStateWriteTopic, TopicConfigAlteration, TopicConfigResource, TopicConfigUpdate,
+        UpdateFeaturesOptions,
     };
     use crate::{BrokerErrorKind, Client, ClientConfig, ClientMetrics, Error};
     use kafrust_protocol::codec::DecodeLimits;
@@ -16462,6 +16466,67 @@ mod tests {
 
         assert_eq!(first, second);
         assert_eq!(admin.broker_clients.len().await, 1);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn update_features_invalidates_cached_feature_metadata() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let request = read_frame(&mut bootstrap).await;
+            assert_eq!(&request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut bootstrap, &api_versions_with_finalized_feature(2)).await;
+
+            let (mut controller, _) = listener.accept().await.unwrap();
+            let request = read_frame(&mut controller).await;
+            assert_eq!(&request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut controller, &api_versions_with_update_features()).await;
+            let request = read_frame(&mut controller).await;
+            assert_eq!(&request[0..4], &[0, 57, 0, 1]);
+            write_frame(&mut controller, &update_features_success_response()).await;
+
+            let request = read_frame(&mut bootstrap).await;
+            assert_eq!(&request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut bootstrap, &api_versions_with_finalized_feature(1)).await;
+        });
+
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .controller_bootstrap_servers([addr.to_string()])
+                .request_timeout_ms(1_000),
+        );
+        let before = admin.describe_features().await.unwrap();
+        assert_eq!(
+            before
+                .finalized_features()
+                .iter()
+                .find(|feature| feature.name() == "transaction.version")
+                .unwrap()
+                .max_version_level(),
+            2
+        );
+
+        let result = admin
+            .update_features(
+                &[FeatureUpdate::new("transaction.version", 1).allow_downgrade(true)],
+                UpdateFeaturesOptions::default(),
+            )
+            .await
+            .unwrap();
+        assert!(result.is_success());
+
+        let after = admin.describe_features().await.unwrap();
+        assert_eq!(
+            after
+                .finalized_features()
+                .iter()
+                .find(|feature| feature.name() == "transaction.version")
+                .unwrap()
+                .max_version_level(),
+            1
+        );
         server.await.unwrap();
     }
 
@@ -21201,6 +21266,72 @@ mod tests {
         encoder.write_empty_tagged_fields();
         encoder.write_i32(0); // throttle time
         encoder.write_empty_tagged_fields();
+        encoder.into_bytes()
+    }
+
+    fn api_versions_with_update_features() -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_i16(0); // success
+        encoder.write_unsigned_varint(2); // one API key
+        encoder.write_i16(57);
+        encoder.write_i16(0);
+        encoder.write_i16(1);
+        encoder.write_empty_tagged_fields();
+        encoder.write_i32(0); // throttle time
+        encoder.write_empty_tagged_fields();
+        encoder.into_bytes()
+    }
+
+    fn api_versions_with_finalized_feature(level: i16) -> Vec<u8> {
+        let mut finalized = Encoder::new();
+        finalized
+            .write_compact_array(Some(&[()]), |encoder, ()| {
+                encoder.write_compact_string("transaction.version")?;
+                encoder.write_i16(level);
+                encoder.write_i16(0);
+                encoder.write_empty_tagged_fields();
+                Ok(())
+            })
+            .unwrap();
+        let finalized = finalized.into_bytes();
+
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_i16(0); // success
+        encoder.write_unsigned_varint(2); // one API key
+        encoder.write_i16(18);
+        encoder.write_i16(0);
+        encoder.write_i16(3);
+        encoder.write_empty_tagged_fields();
+        encoder.write_i32(0); // throttle time
+        encoder.write_unsigned_varint(2); // finalized epoch and features tags
+        encoder.write_unsigned_varint(1);
+        encoder.write_unsigned_varint(8);
+        encoder.write_i64(i64::from(level));
+        encoder.write_unsigned_varint(2);
+        encoder.write_unsigned_varint(finalized.len() as u32);
+        encoder.write_raw(&finalized);
+        encoder.into_bytes()
+    }
+
+    fn update_features_success_response() -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_i32(1); // correlation ID
+        encoder.write_empty_tagged_fields(); // response header tags
+        encoder.write_i32(0); // throttle time
+        encoder.write_i16(0); // top-level success
+        encoder.write_compact_nullable_string(None).unwrap();
+        encoder
+            .write_compact_array(Some(&[()]), |encoder, ()| {
+                encoder.write_compact_string("transaction.version")?;
+                encoder.write_i16(0);
+                encoder.write_compact_nullable_string(None)?;
+                encoder.write_empty_tagged_fields();
+                Ok(())
+            })
+            .unwrap();
+        encoder.write_empty_tagged_fields(); // response tags
         encoder.into_bytes()
     }
 
