@@ -116,6 +116,8 @@ diagnostics. The detailed local record is
 [`v1-company-workstation-nonlong-2026-09-03.md`](../../evidence/v1-company-workstation-nonlong-2026-09-03.md);
 the UpdateFeatures cache fix and CI record remain in
 [`v1-nonlong-validation-2026-09-03.md`](../../evidence/v1-nonlong-validation-2026-09-03.md).
+The return preflight and fresh Kafka 4.3.1/3.7.2 13-test roundtrip results are
+in [`v1-company-workstation-return-2026-09-03.md`](../../evidence/v1-company-workstation-return-2026-09-03.md).
 These are deterministic/CI diagnostics only. They do not promote a live
 qualification row or remove the dedicated Linux/Docker, long-campaign, or
 named-service prerequisites.

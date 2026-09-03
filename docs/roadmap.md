@@ -246,6 +246,14 @@ deletion was performed, and the generated WSL resolver was restored after a
 temporary DNS connectivity probe. Details are in
 [`v1-long-campaign-capacity-audit-2026-08-24.md`](evidence/v1-long-campaign-capacity-audit-2026-08-24.md).
 
+The return-to-workstation preflight on source `7c578f0a` re-established the
+runner as online/idle long enough to run isolated `broker_roundtrip` against
+Kafka 4.3.1 and 3.7.2; both 13-test runs passed. The generated resolver was
+restored after the temporary connectivity probe, and the 629 GiB T: free-space
+guard remains unchanged. This refresh is recorded in
+[`v1-company-workstation-return-2026-09-03.md`](evidence/v1-company-workstation-return-2026-09-03.md)
+and does not promote any long-campaign or release gate.
+
 These are local diagnostics only. They do not close V1-03 through V1-18 or
 V1-20 through V1-23, do not substitute for the six-hour/24-hour campaigns or
 named migration canary, and do not authorize a version/tag or crates.io
