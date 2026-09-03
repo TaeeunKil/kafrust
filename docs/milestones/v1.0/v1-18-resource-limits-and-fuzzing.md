@@ -125,6 +125,17 @@ focused test. The checker and five tests pass. This closes only the reviewed
 static ledger slice; full fuzz duration, recurring weekly passes, and any
 unreviewed boundary remain open.
 
+### Company local fuzz preflight (2026-09-03)
+
+The company Windows host cannot link libFuzzer targets with its MSVC nightly
+toolchain (`LNK1561`), and Ubuntu-T9 WSL2 has no Linux nightly installed. The
+WSL toolchain refresh was blocked before compilation by temporary DNS failure
+against `static.rust-lang.org`. No target or corpus was run or changed; this is
+retained as a prerequisite blocker only in
+[`v1-local-fuzz-preflight-2026-09-03.md`](../../evidence/v1-local-fuzz-preflight-2026-09-03.md).
+The two required weekly campaign sets, crash/OOM disposition, and remaining
+resource-limit gates are unaffected.
+
 ## Failure And Lifecycle Contract
 
 - Limits are checked before unbounded allocation and return typed errors.

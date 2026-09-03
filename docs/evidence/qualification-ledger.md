@@ -5566,6 +5566,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-package-boundary-2026-09-03.md; target/package/kafrust-0.3.6.crate; target/package/kafrust-protocol-0.3.6.crate
 - non_claims: not crates.io publication, not live broker compatibility, not multi-platform qualification, not long campaign, not service canary, not release authorization
 
+## Q-FUZZ-LOCAL-PREFLIGHT-2026-09-03
+
+- date_utc: 2026-09-03
+- source_commit: fb1abf7bafd1ea6d82013070d1a9c4c26c1b98ef
+- client_version: 0.3.6 source checkout
+- protocol_version: fuzz preflight
+- work_status: Blocked
+- evidence_level: Local deterministic
+- kafka_version: not-applicable
+- kafka_image: not-applicable
+- mode: Windows MSVC and Ubuntu-T9 WSL2 fuzz prerequisite preflight
+- topology: company Windows host; Ubuntu-T9 WSL2 x86_64
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: nightly/libFuzzer executable build and toolchain availability check
+- workflow: scripts/check_v1_fuzz_campaign_manifest.py
+- fault: MSVC link entry-point failure and unavailable Linux nightly download
+- duration: bounded preflight; no target execution
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: one Windows build and one WSL toolchain check
+- expected_errors: supported Linux nightly/libFuzzer runner must be available before a local smoke can run
+- observed_errors: Windows link.exe returned LNK1561; WSL nightly download failed on DNS resolution
+- retry_count: 0
+- duplicate_count: 0
+- loss_count: not-applicable
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: no target or corpus changed; no Docker resources created or modified
+- result: blocked
+- artifact: docs/evidence/v1-local-fuzz-preflight-2026-09-03.md; fuzz/Cargo.toml
+- non_claims: not fuzz campaign evidence, not crash/OOM disposition, not absence-of-bugs evidence, not long campaign completion, not release authorization
+
 ## Q-CLIENT-CANCELED-INFLIGHT-2026-09-03
 
 - date_utc: 2026-09-03

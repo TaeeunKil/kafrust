@@ -634,6 +634,13 @@ validation, typed failure, and focused test; the checker and five tests pass.
 This closes the static ledger slice only. Two additional weekly fuzz passes,
 crash/OOM disposition, and complete resource-limit coverage remain required.
 
+The 2026-09-03 company preflight did not produce fuzz evidence: Windows MSVC
+cannot link the libFuzzer executables (`LNK1561`), while WSL2's missing Linux
+nightly could not be downloaded because of DNS failure. No target or corpus was
+changed. The retained details are in
+[`v1-local-fuzz-preflight-2026-09-03.md`](evidence/v1-local-fuzz-preflight-2026-09-03.md);
+the two additional weekly campaign sets remain pending.
+
 ## V1-19 Execution Update (2026-08-22; completed 2026-08-23)
 
 V1-19 is `Done` at packaged-candidate evidence level. The staged `0.3.6` package candidate passes five
