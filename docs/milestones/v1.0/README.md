@@ -35,10 +35,10 @@ published from that same-version package state.
 
 ## Current Execution
 
-As of 2026-08-24, V1-00, V1-01, V1-02, and V1-19 are `Done`; V1-03 through
-V1-18 and V1-20/V1-22 remain `In progress`; V1-21 is `Blocked` on recovery
-of the WSL2 self-hosted runner; V1-23 is `Blocked` on a named service canary;
-and V1-24 through V1-26 are `Planned`.
+As of 2026-09-03, V1-00, V1-01, V1-02, and V1-19 are `Done`; V1-03 through
+V1-18 and V1-20/V1-22 remain `In progress`; V1-21 is `Blocked` on a dedicated
+Linux x64/Docker runner for its long campaign; V1-23 is `Blocked` on a named
+service canary; and V1-24 through V1-26 are `Planned`.
 The coordinated
 `0.3.6` pair is published and resolves from fresh external projects on Rust
 1.81.0 and stable. The historical regression against published protocol
@@ -47,7 +47,10 @@ closed by the protocol-first `0.3.6` package boundary recorded in
 [`v1-20-published-0.3.6-boundary-2026-08-23.md`](../../evidence/v1-20-published-0.3.6-boundary-2026-08-23.md).
 The exact pushed-head CI and published diagnostic runs remain the evidence
 source for later gates; neither this publication nor those diagnostics claim
-V1-20 completion or `1.0.0` readiness.
+V1-20 completion or `1.0.0` readiness. The company workstation now supplies
+short local Kafka diagnostics, including a three-broker Streams coordinator
+failover, but those runs do not replace the dedicated long-campaign or service
+canary requirements.
 
 V1-02 has since generated the all-features public API snapshot at
 [`docs/evidence/public-api-snapshot.json`](../../evidence/public-api-snapshot.json):
