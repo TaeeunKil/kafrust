@@ -66,6 +66,17 @@ and throttle coverage, terminating-push count, and seeded secret scan. Until
 those gates pass, telemetry remains an explicitly bounded qualification slice,
 not a general OpenTelemetry backend or a completed stable-support claim.
 
+### Frozen metric contract (2026-09-03)
+
+The public `ClientMetricsSnapshot` field set is now frozen in
+[`v1-17-metrics-contract.json`](../../evidence/v1-17-metrics-contract.json).
+[`check_v1_metrics_contract.py`](../../../scripts/check_v1_metrics_contract.py)
+parses the Rust snapshot directly and requires all 19 fields to retain their
+declared type, unit, aggregation/lifecycle semantics, and maximum cardinality
+of one. Five focused checker tests and the CI check pass. This closes the
+deterministic metric inventory criterion only; published collection, broker
+replacement, throttling, and terminating-push gates remain required.
+
 ## Failure And Lifecycle Contract
 
 - Metrics updates never block the data path on network I/O.

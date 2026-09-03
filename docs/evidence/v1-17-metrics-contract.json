@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "milestone": "V1-17",
+  "source": "crates/kafrust/src/metrics.rs::ClientMetricsSnapshot",
+  "status": "deterministic-contract",
+  "non_claims": [
+    "does not prove published telemetry collection",
+    "does not prove secured multi-broker or 60-minute telemetry behavior",
+    "does not cover metrics not listed in this contract"
+  ],
+  "metrics": [
+    {"name": "requests_started", "rust_type": "u64", "kind": "counter", "unit": "requests", "aggregation": "cumulative", "lifecycle": "client-handle lifetime", "max_cardinality": 1},
+    {"name": "requests_succeeded", "rust_type": "u64", "kind": "counter", "unit": "requests", "aggregation": "cumulative", "lifecycle": "client-handle lifetime", "max_cardinality": 1},
+    {"name": "requests_failed", "rust_type": "u64", "kind": "counter", "unit": "requests", "aggregation": "cumulative", "lifecycle": "client-handle lifetime", "max_cardinality": 1},
+    {"name": "requests_timed_out", "rust_type": "u64", "kind": "counter", "unit": "requests", "aggregation": "cumulative", "lifecycle": "client-handle lifetime", "max_cardinality": 1},
+    {"name": "requests_cancelled", "rust_type": "u64", "kind": "counter", "unit": "requests", "aggregation": "cumulative", "lifecycle": "client-handle lifetime", "max_cardinality": 1},
+    {"name": "broker_errors", "rust_type": "u64", "kind": "counter", "unit": "errors", "aggregation": "cumulative", "lifecycle": "client-handle lifetime", "max_cardinality": 1},
+    {"name": "retries", "rust_type": "u64", "kind": "counter", "unit": "attempts", "aggregation": "cumulative", "lifecycle": "client-handle lifetime", "max_cardinality": 1},
+    {"name": "buffered_records", "rust_type": "u64", "kind": "gauge", "unit": "records", "aggregation": "current", "lifecycle": "until buffered delivery completes or is canceled", "max_cardinality": 1},
+    {"name": "max_buffered_records", "rust_type": "u64", "kind": "gauge", "unit": "records", "aggregation": "peak", "lifecycle": "client-handle lifetime", "max_cardinality": 1},
+    {"name": "produced_records", "rust_type": "u64", "kind": "counter", "unit": "records", "aggregation": "cumulative", "lifecycle": "client-handle lifetime", "max_cardinality": 1},
+    {"name": "produce_batches", "rust_type": "u64", "kind": "counter", "unit": "batches", "aggregation": "cumulative", "lifecycle": "client-handle lifetime", "max_cardinality": 1},
+    {"name": "consumed_records", "rust_type": "u64", "kind": "counter", "unit": "records", "aggregation": "cumulative", "lifecycle": "client-handle lifetime", "max_cardinality": 1},
+    {"name": "request_bytes", "rust_type": "u64", "kind": "counter", "unit": "bytes", "aggregation": "cumulative", "lifecycle": "client-handle lifetime", "max_cardinality": 1},
+    {"name": "response_bytes", "rust_type": "u64", "kind": "counter", "unit": "bytes", "aggregation": "cumulative", "lifecycle": "client-handle lifetime", "max_cardinality": 1},
+    {"name": "in_flight_requests", "rust_type": "u64", "kind": "gauge", "unit": "requests", "aggregation": "current", "lifecycle": "until request completion or cancellation", "max_cardinality": 1},
+    {"name": "max_in_flight_requests", "rust_type": "u64", "kind": "gauge", "unit": "requests", "aggregation": "peak", "lifecycle": "client-handle lifetime", "max_cardinality": 1},
+    {"name": "total_latency", "rust_type": "Duration", "kind": "counter", "unit": "nanoseconds", "aggregation": "cumulative", "lifecycle": "client-handle lifetime", "max_cardinality": 1},
+    {"name": "max_latency", "rust_type": "Duration", "kind": "gauge", "unit": "nanoseconds", "aggregation": "peak", "lifecycle": "client-handle lifetime", "max_cardinality": 1},
+    {"name": "request_latency_buckets", "rust_type": "[u64; LATENCY_BUCKET_UPPER_BOUNDS_NS.len()]", "kind": "histogram", "unit": "requests per upper-bound bucket", "aggregation": "cumulative-or-delta", "lifecycle": "client-handle lifetime", "max_cardinality": 1}
+  ]
+}

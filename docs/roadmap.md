@@ -287,6 +287,14 @@ payload-limit handling, and a single-connection push path. The 60-minute
 published collection profiles, broker replacement with stable ClientInstanceId,
 throttle/mutation/termination checks, and secret scan remain open.
 
+The public snapshot contract is now frozen and checked by
+[`v1-17-metrics-contract.json`](evidence/v1-17-metrics-contract.json) and
+[`check_v1_metrics_contract.py`](../scripts/check_v1_metrics_contract.py).
+All 19 snapshot fields retain explicit types, units, lifecycle/aggregation
+semantics, and maximum cardinality one; five focused tests and the CI check
+pass. This closes the deterministic metric-inventory slice only. The published
+telemetry collection and broker-replacement gates remain open.
+
 ## V1-18 Execution Update (2026-08-22)
 
 V1-18 is `In progress`. Frame, collection, compact/tagged-field, decompression,
