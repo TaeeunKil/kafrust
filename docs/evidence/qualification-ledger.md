@@ -4806,3 +4806,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-company-short-fault-protocol-smoke-2026-09-03.md
 - non_claims: not V1-03/V1-05 completion, not live broker qualification, not published-artifact evidence, not long campaigns, not service canary, not release authorization
+
+## Q-COMPANY-FLOOR-SHORT-SMOKE-2026-09-03
+
+- date_utc: 2026-09-03
+- source_commit: 4f81471bd56fecc47a37f23e95a6eb4a09872d13
+- client_version: 0.3.6 source checkout
+- protocol_version: 0.3.6 source checkout
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: 3.7.2
+- kafka_image: apache/kafka@sha256:8bd63e1bd445e5e19427a4bdbcc3d23bf6efd774b058a41b36ba87fda7623e34
+- mode: company workstation floor short broker smoke
+- topology: isolated single-node KRaft; uniquely named container and host port
+- security: PLAINTEXT
+- group_protocol: classic consumer smoke
+- workload: broker_roundtrip 13-test binary; immediate/idempotent producer; buffered/idempotent producer with fetch; classic group poll/commit/leave; Admin topic lifecycle
+- workflow: scripts/check_qualification_ledger.py
+- fault: no fault injection; bounded floor-line connectivity and lifecycle diagnostic
+- duration: short local run; no long campaign
+- record_count: eight records observed by the group poll after immediate and buffered sends
+- member_count: one classic member
+- repetition_count: one bounded floor-line diagnostic
+- expected_errors: none for configured paths; Share-specific broker tests intentionally skipped
+- observed_errors: zero operation failures
+- retry_count: not measured by this smoke
+- duplicate_count: zero observed in fetched buffered records
+- loss_count: zero observed in fetched buffered records
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: not exposed by these examples
+- result: passed
+- artifact: docs/evidence/v1-company-floor-short-smoke-2026-09-03.md
+- non_claims: not accepted-floor qualification, not V1-20 completion, not published-artifact evidence, not three-broker/security matrix, not long campaigns, not service canary, not release authorization

@@ -98,6 +98,12 @@ the selected-version golden/malformed protocol fixture suites on Windows Rust
 it strengthens local deterministic evidence without changing the live or
 published exit gates.
 
+The planned Kafka 3.7.2 floor line was also exercised at pushed head `4f81471`
+from WSL2 with the same short producer, classic-group, Admin, and roundtrip
+checks. The record is
+[`v1-company-floor-short-smoke-2026-09-03.md`](evidence/v1-company-floor-short-smoke-2026-09-03.md);
+it is a single-node diagnostic and does not replace the accepted-floor matrix.
+
 ## V1-04 Execution Update (2026-08-22)
 
 V1-04 is `In progress`. Producer delivery expiry now has a typed

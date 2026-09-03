@@ -140,6 +140,10 @@ The same source head also passed the 19-test scripted fault suite plus the
 four golden and three malformed protocol fixture tests on Windows Rust 1.81;
 the run is recorded in
 [`v1-company-short-fault-protocol-smoke-2026-09-03.md`](../../evidence/v1-company-short-fault-protocol-smoke-2026-09-03.md).
+Kafka 3.7.2, the planned floor line, was also rerun with the same short
+producer/group/Admin smoke; it is recorded separately in
+[`v1-company-floor-short-smoke-2026-09-03.md`](../../evidence/v1-company-floor-short-smoke-2026-09-03.md)
+and remains diagnostic-only.
 
 ## Status And Evidence
 

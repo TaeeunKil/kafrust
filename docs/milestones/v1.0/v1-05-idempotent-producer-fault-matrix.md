@@ -76,6 +76,12 @@ Admin routing all passed. The record is
 The suite still does not provide buffered fault injection or the published
 ten-cycle/100,000-record reconciliation gate.
 
+The planned floor-line short smoke also passed immediate and buffered
+idempotent sends against Kafka 3.7.2, with buffered fetch reconciliation. It
+contains no injected fault and does not count toward the published fault
+matrix or ten-cycle gate; details are in
+[`v1-company-floor-short-smoke-2026-09-03.md`](../../evidence/v1-company-floor-short-smoke-2026-09-03.md).
+
 ## Failure And Lifecycle Contract
 
 - A safe retry retains the same producer identity and batch sequence.

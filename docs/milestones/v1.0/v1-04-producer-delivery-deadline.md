@@ -96,6 +96,12 @@ buffered producer examples (normal and idempotent) against isolated Kafka
 This does not replace the published mixed-outcome reconciliation or long SLO
 requirements.
 
+The same short workstation run also passed normal and idempotent buffered
+delivery against Kafka 3.7.2; see
+[`v1-company-floor-short-smoke-2026-09-03.md`](../../evidence/v1-company-floor-short-smoke-2026-09-03.md).
+This is diagnostic support for the planned floor line, not published deadline
+or SLO evidence.
+
 ### Buffered budget clock-anchor slice (2026-09-03)
 
 `buffered_remaining_delivery_timeout` now receives an explicit clock anchor;

@@ -169,6 +169,14 @@ record is
 This remains local deterministic evidence; live floor/pinned-current version
 negotiation and non-empty response oracles are still required.
 
+The planned floor line was also exercised from WSL2 against Kafka 3.7.2 at
+pushed head `4f81471`: the 13-test broker roundtrip, immediate/buffered
+producer (normal and idempotent), classic group, and Admin lifecycle smoke
+passed. The record is
+[`v1-company-floor-short-smoke-2026-09-03.md`](../../evidence/v1-company-floor-short-smoke-2026-09-03.md).
+This is a single-node diagnostic only; it does not satisfy the accepted-floor
+security/workload matrix or V1-20 published gate.
+
 ## Exit Criteria
 
 1. Every stable high-level selected/fallback version has official metadata,
