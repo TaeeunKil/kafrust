@@ -5994,3 +5994,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-transaction-mutation-cancellation-2026-09-03.md; crates/kafrust/src/producer.rs; crates/kafrust/tests/fault_injection.rs
 - non_claims: not EndTxn cancellation qualification, not published-artifact qualification, not accepted-floor or three-broker qualification, not security, not read-committed reconciliation, not long campaigns, not service canary, not release authorization
+
+## Q-SHARE-ACK-CANCEL-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: 2f04e650d55ff172eb30f1a07b8652e15a55d2fd
+- client_version: 0.3.6 source workspace
+- protocol_version: ShareAcknowledge v1/v2 and ShareFetch v2 renewal path
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: scripted transport fixture
+- kafka_image: not-applicable
+- mode: direct acknowledgement cancellation after transmission
+- topology: in-memory duplex broker fixture
+- security: PLAINTEXT fixture
+- group_protocol: Share
+- workload: one pending Accept acknowledgement
+- workflow: scripts/check_qualification_ledger.py
+- fault: broker observes the acknowledgement frame and withholds its response; caller drops commit
+- duration: focused deterministic test under one second per platform
+- record_count: one pending Share record
+- member_count: one client-side Share member; no broker members
+- repetition_count: one deterministic run on Windows and one on WSL2
+- expected_errors: ShareAcknowledgementOutcomeUnknown; no acknowledgement replay; affected session discarded
+- observed_errors: focused cancellation test passed on both platforms; later commit returned typed unknown outcome
+- retry_count: 0
+- duplicate_count: 0
+- loss_count: broker acknowledgement outcome intentionally unknown
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: no Docker resources; broker client not cached; affected Share session discarded
+- result: passed
+- artifact: docs/evidence/v1-share-ack-cancellation-2026-09-04.md; crates/kafrust/src/share_consumer.rs
+- non_claims: not CI, not published-artifact qualification, not secure transport, not multi-broker or multi-member qualification, not 10,000-record qualification, not long campaigns, not service canary, not exactly-once, not release authorization

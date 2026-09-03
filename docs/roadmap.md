@@ -475,6 +475,17 @@ isolated Kafka 4.3.1 Share coordinator at pushed head `74ee4dc`. The record is
 it is single-node diagnostic evidence and does not replace the secure
 multi-member published gate.
 
+The direct acknowledgement cancellation boundary is now covered at pushed head
+`2f04e650d55ff172eb30f1a07b8652e15a55d2fd`. If a caller drops `commit` after a
+ShareAcknowledge frame is observed but before its response, the affected
+pending records become `acknowledgement_outcome_unknown`, the Share session is
+discarded, and the broker connection is not cached; a later commit cannot
+replay the acknowledgement. The focused regression passed on Windows and
+company WSL2, and WSL2 also passed all 29 fault-injection tests. This is local
+deterministic evidence only; published secure multi-member coverage, long
+campaigns, and the 10,000-record gate remain open. See
+[`v1-share-ack-cancellation-2026-09-04.md`](evidence/v1-share-ack-cancellation-2026-09-04.md).
+
 ## V1-11 Execution Update (2026-08-22)
 
 V1-11 is `In progress`. Controller-routed Admin operations now share explicit

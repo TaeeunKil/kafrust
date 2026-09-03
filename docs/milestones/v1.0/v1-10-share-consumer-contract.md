@@ -75,6 +75,21 @@ acknowledgement types under delayed/lost responses, multi-member churn, and the
 10,000-record gate remain open; no exactly-once or published-artifact claim is
 made.
 
+### Share acknowledgement cancellation after transmission (2026-09-04)
+
+The direct `ShareConsumer::commit` path now guards ShareAcknowledge v1/v2 and
+ShareFetch-v2-with-renew requests against caller cancellation after the request
+frame is observed. Cancellation marks each affected pending acknowledgement as
+`acknowledgement_outcome_unknown`, discards the broker Share session, and keeps
+the broker connection out of the cache. A subsequent commit returns the typed
+unknown-outcome error instead of replaying the acknowledgement. The focused
+regression passed on Windows and company WSL2 (Rust 1.81.0); the WSL2
+`fault_injection` target also passed all 29 tests. The immutable record is
+[`v1-share-ack-cancellation-2026-09-04.md`](../../evidence/v1-share-ack-cancellation-2026-09-04.md).
+This closes only the direct cancellation boundary; published secure
+multi-member coverage, long campaigns, and the 10,000-record exit gate remain
+open.
+
 ## Failure And Lifecycle Contract
 
 - ShareFetch sessions and epochs are broker/session-owned and never enter a
