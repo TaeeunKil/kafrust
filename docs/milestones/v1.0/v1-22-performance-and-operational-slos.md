@@ -443,3 +443,11 @@ grouped current-source record is
 [`v1-short-recheck-2026-09-04.md`](../../evidence/v1-short-recheck-2026-09-04.md).
 This remains a bounded hosted diagnostic; no locked baseline, eight-hour SLO,
 or release claim follows from it.
+
+The temporary DNS recovery was also exercised by the 60-second published
+self-hosted multi-broker diagnostic in
+[run 33817682088](https://github.com/TaeeunKil/kafrust/actions/runs/33817682088).
+It processed 1,736,700 unique records with zero loss, duplicates, or unknown
+outcomes and drained final gauges. This confirms only runner/Docker execution
+after recovery; it is not a throughput baseline, five-repetition matrix,
+eight-hour SLO result, or release authorization.

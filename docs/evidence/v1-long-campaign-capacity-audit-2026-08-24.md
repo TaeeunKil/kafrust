@@ -227,3 +227,11 @@ administrator applies the resolver policy permanently. The capacity guard
 still passes, but no long campaign was dispatched during this recheck. A
 fresh online/idle preflight is required immediately before any official
 V1-21/V1-22 campaign.
+
+The follow-up bounded published diagnostic
+[33817682088](https://github.com/TaeeunKil/kafrust/actions/runs/33817682088)
+then ran on the recovered runner with Kafka 4.3.1 for 60.002 seconds. It
+processed 1,736,700 unique 1-KiB records through leader, coordinator, and
+combined events with zero loss, duplicates, or unknown outcomes, and drained
+all final gauges. Its descriptor and non-qualification boundary are retained
+in [`v1-company-selfhosted-short-dns-recovery-2026-09-04.md`](v1-company-selfhosted-short-dns-recovery-2026-09-04.md).

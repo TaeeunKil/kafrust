@@ -1525,6 +1525,14 @@ connectivity recovery, not a persistent WSL resolver policy, and no V1-21 or
 V1-22 long campaign was dispatched. See the updated
 [`v1-long-campaign-capacity-audit-2026-08-24.md`](evidence/v1-long-campaign-capacity-audit-2026-08-24.md).
 
+The root-only temporary DNS recovery was then exercised by self-hosted run
+[33817682088](https://github.com/TaeeunKil/kafrust/actions/runs/33817682088).
+The exact published `0.3.6` pair processed 1,736,700 unique 1-KiB records for
+60.002 seconds across leader, coordinator, and combined events, with zero
+loss, duplicates, or unknown outcomes and drained gauges. This is a bounded
+runner/Docker diagnostic only; the resolver policy is not persistent and no
+V1-21/V1-22 long campaign or release claim follows.
+
 ## V1-23 Execution Update (2026-08-23)
 
 The current published competitor check was run before making any release-path

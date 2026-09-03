@@ -460,3 +460,12 @@ the listener to `Listening for Jobs`; GitHub now reports it online and idle.
 The WSL VM, Docker daemon, and existing resources were not restarted or
 pruned. This restores execution capacity but is not a persistent resolver fix,
 and no long campaign is dispatched until an online preflight is repeated.
+
+The immediate recovery check then passed in
+[run 33817682088](https://github.com/TaeeunKil/kafrust/actions/runs/33817682088):
+the exact published `0.3.6` pair processed 1,736,700 unique 1-KiB records for
+60.002 seconds across leader, coordinator, and combined events, with four
+failed requests, eight retries, zero unknown/loss/duplicate outcomes, and
+drained gauges. This confirms the temporary DNS-recovered runner path only;
+the six-hour campaigns and all V1-21 qualification gates remain open. See
+[`v1-company-selfhosted-short-dns-recovery-2026-09-04.md`](../../evidence/v1-company-selfhosted-short-dns-recovery-2026-09-04.md).

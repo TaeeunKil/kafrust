@@ -6918,3 +6918,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-admin-coordinator-response-loss-matrix-2026-09-04.md; crates/kafrust/src/admin.rs
 - non_claims: not member-aware OffsetCommit qualification, not safe retry for other Admin mutations, not published floor or authorization qualification, not reconciliation or three-broker failover qualification, not long campaign, not service canary, not release authorization
+
+## Q-LIVE-V121-COMPANY-DNS-DIAG-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: e2fbcf3865b9fcb4a05f0c7032731c1dbfced4bf
+- client_version: 0.3.6 published artifact
+- protocol_version: 0.3.6 published dependency
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
+- mode: bounded self-hosted multi-broker restart diagnostic after DNS recovery
+- topology: three-broker KRaft
+- security: PLAINTEXT
+- group_protocol: not-applicable
+- workload: 60-second published soak; 1-KiB payloads; three scheduled fault events
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/33817682088
+- fault: leader@25, coordinator@50, combined@75; 5-second outages
+- duration: 60.002 seconds measured workload; approximately 2m32s workflow
+- record_count: 1,736,700 attempted, acknowledged, and consumed uniquely
+- member_count: not-applicable
+- repetition_count: 1 bounded diagnostic segment
+- expected_errors: scheduled recovery; zero unaccounted loss, duplicates, or unknown outcomes
+- observed_errors: 4 failed requests, 8 retries, 0 operation errors, 0 unknown outcomes, zero loss/duplicates; final gauges drained
+- retry_count: 8
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: in_flight_requests=0; buffered_records=0
+- result: passed
+- artifact: docs/evidence/v1-company-selfhosted-short-dns-recovery-2026-09-04.md; run artifact kafrust-published-fault-segment-company-short-dns-recovery-2026-09-04-0-33817682088; descriptor lockfile digest 2f81a33ed05baf0321bb7a643355bec49a5e3a8904d7cd2354e54a86314f976b
+- non_claims: not a six-hour V1-21 campaign, not 100-cycle or ambiguity-family completion, not cross-segment continuity, not V1-22 SLO evidence, not V1-23 service canary, not persistent resolver policy, not 1.0.0 readiness
