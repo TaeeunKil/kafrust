@@ -523,6 +523,15 @@ missed intervals follow the normal rejoin path and are not hidden. This closes
 the policy decision only; published churn, callback, heartbeat, and exact
 offset-restoration gates remain open.
 
+The pushed source `108b432` was also exercised on the company Windows x64
+workstation's Ubuntu-T9 WSL2 environment against an isolated Kafka 4.3.1
+single-node broker. Classic and KIP-848 `consumer_group_poll` runs each joined
+one assignment, fetched a pre-populated record, committed it, and left cleanly.
+The short diagnostic is recorded in
+[`v1-company-consumer-group-short-smoke-2026-09-04.md`](evidence/v1-company-consumer-group-short-smoke-2026-09-04.md).
+It does not replace published security/churn, failover, or offset-restoration
+qualification.
+
 ## V1-09 Execution Update (2026-08-22)
 
 V1-09 is `In progress`. The KIP-848 path now has deterministic evidence for

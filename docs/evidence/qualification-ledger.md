@@ -6621,3 +6621,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-company-pushed-short-kafka-smoke-2026-09-04.md; crates/kafrust/tests/broker_roundtrip.rs; crates/kafrust/examples/producer_send.rs; crates/kafrust/examples/producer_buffered.rs; crates/kafrust/examples/admin_create_topic.rs
 - non_claims: not published artifact qualification, not accepted-floor security, not three-broker movement, not long campaign, not service canary, not release authorization
+
+## Q-COMPANY-CONSUMER-GROUP-SHORT-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: 108b4329fd022890ecfa0155c62bfcc28a1f1f2f
+- client_version: 0.3.6 source checkout
+- protocol_version: 0.3.6 source checkout
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
+- mode: pushed-source classic and KIP-848 consumer-group examples
+- topology: isolated single-node KRaft broker
+- security: PLAINTEXT
+- group_protocol: classic; consumer (KIP-848)
+- workload: one pre-populated record per protocol; join, poll, commit, leave
+- workflow: scripts/check_qualification_ledger.py
+- fault: none injected; controlled pre-populated topic ordering
+- duration: under two minutes after warm build
+- record_count: one classic record and one KIP-848 record fetched at offset 0
+- member_count: one member per run
+- repetition_count: one classic run and one KIP-848 run on company WSL2 x86_64
+- expected_errors: none; one polled record committed and clean leave
+- observed_errors: zero failures; both runs joined, fetched, committed, and left
+- retry_count: not aggregated
+- duplicate_count: 0 observed
+- loss_count: 0 observed in the one-record checks
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: uniquely named broker container and topics removed
+- result: passed
+- artifact: docs/evidence/v1-company-consumer-group-short-smoke-2026-09-04.md; crates/kafrust/examples/consumer_group_poll.rs; crates/kafrust/examples/producer_send.rs
+- non_claims: not published artifact qualification, not accepted-floor security or churn, not failover, not partition-queue mode, not Share, not long campaign, not service canary, not release authorization

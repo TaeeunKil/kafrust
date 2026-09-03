@@ -86,6 +86,15 @@ helper-level deterministic boundary only; stale-task broker churn, member-loss,
 delete/recreate races, exact restoration, and published gates remain open.
 See [`v1-kip848-consumer-session-identity-2026-09-04.md`](../../evidence/v1-kip848-consumer-session-identity-2026-09-04.md).
 
+### Pushed-source company group smoke (2026-09-04)
+
+The same pushed source was run with `KAFRUST_GROUP_PROTOCOL=consumer` against
+an isolated Kafka 4.3.1 broker. The KIP-848 example joined one assignment,
+fetched record offset 0, committed the polled record, and left cleanly. This
+is short current-source diagnostic evidence only; secure churn, member-loss,
+UUID delete/recreate races, and published qualification remain open. See
+[`v1-company-consumer-group-short-smoke-2026-09-04.md`](../../evidence/v1-company-consumer-group-short-smoke-2026-09-04.md).
+
 ## Failure And Lifecycle Contract
 
 - The group handle and heartbeat task share one fenced member/assignment state;

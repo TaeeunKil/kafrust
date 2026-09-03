@@ -94,6 +94,17 @@ This is an explicit unsupported-client-enforcement decision for work package 5,
 not a live `max.poll.interval` qualification. The published churn and offset
 restoration gates remain open.
 
+### Pushed-source company group smoke (2026-09-04)
+
+At source `108b4329fd022890ecfa0155c62bfcc28a1f1f2f`, the company Windows x64
+workstation's Ubuntu-T9 WSL2 x86_64 environment ran the classic
+`consumer_group_poll` example against an isolated Kafka 4.3.1 KRaft broker.
+With a uniquely populated topic, the example joined one assignment, fetched
+record offset 0, committed the polled record, and left cleanly. The run is
+bounded single-node diagnostic evidence; published security/churn,
+coordinator-failover, and exact offset-restoration gates remain open. See
+[`v1-company-consumer-group-short-smoke-2026-09-04.md`](../../evidence/v1-company-consumer-group-short-smoke-2026-09-04.md).
+
 ## Failure And Lifecycle Contract
 
 - The group session exclusively owns member ID, generation, assignment, and
