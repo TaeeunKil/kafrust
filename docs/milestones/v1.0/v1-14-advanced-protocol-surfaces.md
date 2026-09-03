@@ -60,10 +60,11 @@ stability boundaries.
 
 Deterministic coverage includes Streams heartbeat/task assignment validation,
 Share Group State request/response routing, add/remove voter controller paths,
-blocking nested-runtime rejection, and low-level protocol bytes. Live dynamic
-quorum convergence, unstable Share state replication, retained Streams churn,
-and the final API-key 0-92 decision table remain open. Experimental and
-broker-internal paths are not counted as stable core compatibility.
+blocking nested-runtime rejection, and low-level protocol bytes. The API-key
+0-92 classification inventory is now closed by the machine-readable checker;
+live dynamic quorum convergence, unstable Share state replication, and
+retained Streams churn remain open. Experimental and broker-internal paths are
+not counted as stable core compatibility.
 
 ### API-key classification gate (2026-09-03)
 

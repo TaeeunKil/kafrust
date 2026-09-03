@@ -551,8 +551,8 @@ The Apache Kafka 4.3.1 `ApiKeys` inventory is now explicit for every key
 The checker covers all 93 entries, identifies 16 broker-internal RPCs, and
 keeps the unimplemented `UPDATE_RAFT_VOTER` key 82 explicitly excluded. The
 classification checker and tests are wired into CI. This closes the V1-14
-classification inventory slice only; retained expert/experimental live gates,
-long campaigns, migration canary, and release gates remain open.
+classification inventory slice; retained expert/experimental live gates, long
+campaigns, migration canary, and release gates remain open.
 
 ## Company Workstation Non-Long Validation (2026-09-03)
 

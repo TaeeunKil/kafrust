@@ -227,6 +227,15 @@ This closes low-level partial-write connection reuse only. Producer retry
 classification, delayed metadata/capability, published mixed-outcome
 reconciliation, and live qualification gates remain open.
 
+The producer-level partial-write classification is now covered separately at
+source `37c3a44bad1748f6f4a5b3b311db2357617b3b99`: an idempotent Produce write
+that transmits three bytes before `BrokenPipe` is discarded, metadata is
+refreshed, and one retry preserves the producer identity and base sequence.
+See [`v1-producer-partial-write-retry-2026-09-04.md`](../../evidence/v1-producer-partial-write-retry-2026-09-04.md).
+This closes that deterministic producer phase only; delayed
+metadata/capability, cancellation/shutdown ambiguity, published reconciliation,
+and live gates remain open.
+
 The same source was replayed on company Ubuntu-T9 WSL2 x86_64: the focused
 partial-write regression passed and all 29 scripted fault-injection tests
 passed. The short environment record is
