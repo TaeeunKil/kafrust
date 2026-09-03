@@ -136,6 +136,18 @@ retained as a prerequisite blocker only in
 The two required weekly campaign sets, crash/OOM disposition, and remaining
 resource-limit gates are unaffected.
 
+### Current-source discovery refresh (2026-09-04)
+
+The pushed source commit `ce4719b17dc1f62cc8d5ee46a56a1d7b61493e6f` passed the
+short `Fuzz Check` workflow in [run 33799057829](https://github.com/TaeeunKil/kafrust/actions/runs/33799057829).
+All ten libFuzzer targets compiled and ran against their checked-in corpora
+for the workflow's 30-second-per-target discovery window, and artifacts were
+uploaded. The immutable record is
+[`v1-fuzz-corpus-check-2026-09-04.md`](../../evidence/v1-fuzz-corpus-check-2026-09-04.md).
+This refresh is discovery evidence only: it is not a 3,600-second target
+qualification set, does not count as a weekly campaign pass, and leaves the
+two remaining weekly sets plus crash/OOM disposition open.
+
 ## Failure And Lifecycle Contract
 
 - Limits are checked before unbounded allocation and return typed errors.

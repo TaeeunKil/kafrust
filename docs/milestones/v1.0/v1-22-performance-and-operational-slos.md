@@ -354,6 +354,13 @@ p99 10 ms and 39,124 KiB maximum RSS. Because this run includes both queue
 changes and remains within hosted-runner variation, it is diagnostic evidence,
 not a stable percentage, locked baseline, SLO qualification, or release gate.
 
+### Current-source benchmark harness refresh (2026-09-04)
+
+The current pushed source commit `ce4719b17dc1f62cc8d5ee46a56a1d7b61493e6f`
+passed all four profiles in [Kafka Benchmark Profile Diagnostic run 33799886253](https://github.com/TaeeunKil/kafrust/actions/runs/33799886253): immediate with one and four workers, buffered with four workers, and direct-consumer with one worker. The bounded campaign path also passed in [run 33799889688](https://github.com/TaeeunKil/kafrust/actions/runs/33799889688), reconciling 871,900 produced/consumed 1-KiB records with zero failures, retries, unknown outcomes, loss, or duplicates and zero final gauges. The retained record is [`v1-benchmark-diagnostic-2026-09-04.md`](../../evidence/v1-benchmark-diagnostic-2026-09-04.md).
+These descriptors remain non-qualifying diagnostics; the locked baseline and
+five-repetition, eight-hour published SLO campaign remain open.
+
 ## Failure And Lifecycle Contract
 
 - Benchmark backpressure uses the same bounded production queues and reports

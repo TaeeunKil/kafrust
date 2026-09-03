@@ -189,6 +189,18 @@ This source-only result is retained in
 and is not substituted for exact published lockfile rows or downstream V1
 gates.
 
+### Current-source matrix refresh (2026-09-04)
+
+The source-only Live Kafka Smoke matrix was rerun from commit
+`ce4719b17dc1f62cc8d5ee46a56a1d7b61493e6f` in [run 33799054637](https://github.com/TaeeunKil/kafrust/actions/runs/33799054637).
+All 17 jobs passed across Kafka 3.7.2/3.8.1/3.9.1/4.3.1, including
+plaintext/TLS/SASL/OAUTHBEARER profiles, ACL authorization, KIP-848, and
+three-broker transaction/leader/coordinator failover paths. The retained
+record is [`v1-live-kafka-smoke-2026-09-04.md`](../../evidence/v1-live-kafka-smoke-2026-09-04.md).
+This refresh strengthens current-source rows only; exact published lockfiles,
+the complete accepted matrix, long fault/SLO campaigns, migration canary, API
+freeze, and release gates remain open.
+
 ## Failure And Lifecycle Contract
 
 - One required row failure blocks the matrix; it is not averaged away.

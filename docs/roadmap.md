@@ -1017,6 +1017,15 @@ it does not substitute for the exact published matrix, six-hour/24-hour
 campaigns, V1-22 SLO repetitions, or V1-23 service canary. The immutable
 record is [`v1-live-matrix-rerun-2026-09-03.md`](evidence/v1-live-matrix-rerun-2026-09-03.md).
 
+The source-only Live Kafka Smoke matrix was rerun from `ce4719b` in
+[run 33799054637](https://github.com/TaeeunKil/kafrust/actions/runs/33799054637).
+All 17 jobs passed across Kafka 3.7.2/3.8.1/3.9.1/4.3.1, plaintext/TLS/SASL,
+OAUTHBEARER, ACL, KIP-848, and three-broker failover slices. The immutable
+record is [`v1-live-kafka-smoke-2026-09-04.md`](evidence/v1-live-kafka-smoke-2026-09-04.md).
+This is a short current-source refresh only; published lockfile rows, the
+complete accepted matrix, long fault/SLO, canary, and release gates remain
+open.
+
 ## V1-21~V1-26 Release-Path Preparation (2026-08-22)
 
 V1-21 and V1-22 are `In progress` while the exact published matrix and
@@ -1345,6 +1354,17 @@ recovery. Follow-up inspection found the `T:` host volume has only
 approximately `773.8 GiB`; the near-full host volume is the primary recovery
 hypothesis. No V1-21 ledger row, V1-22 campaign, RC, stable release, or
 publication is authorized by this failed run.
+
+The current source `ce4719b` also passed the four-profile benchmark diagnostic
+in [33799886253](https://github.com/TaeeunKil/kafrust/actions/runs/33799886253)
+and the bounded immediate campaign in
+[33799889688](https://github.com/TaeeunKil/kafrust/actions/runs/33799889688).
+The campaign reconciled 871,900 produced/consumed 1-KiB records with zero
+failures, retries, unknown outcomes, loss, duplicates, and final gauges; the
+four profiles all uploaded runner/resource descriptors. The record is
+[`v1-benchmark-diagnostic-2026-09-04.md`](evidence/v1-benchmark-diagnostic-2026-09-04.md).
+These are non-qualifying source diagnostics only; the locked baseline and
+five-repetition eight-hour published SLO matrix remain open.
 
 ## V1-21 Capacity Recovery Update (2026-08-24)
 

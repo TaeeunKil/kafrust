@@ -6357,3 +6357,102 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-company-workstation-kafka-short-smoke-2026-09-04.md; crates/kafrust/tests/broker_roundtrip.rs; crates/kafrust/examples/producer_send.rs; crates/kafrust/examples/producer_buffered.rs; crates/kafrust/examples/consumer_group_poll.rs; crates/kafrust/examples/admin_create_topic.rs
 - non_claims: not Share qualification, not security qualification, not accepted-floor matrix, not three-broker movement, not long-duration campaigns, not service canary, not published-artifact qualification, not release authorization
+
+## Q-LIVE-MATRIX-006
+
+- date_utc: 2026-09-03
+- source_commit: ce4719b17dc1f62cc8d5ee46a56a1d7b61493e6f
+- client_version: 0.3.6 source workspace
+- protocol_version: documented selected versions per broker profile
+- work_status: In progress
+- evidence_level: Live current-source
+- kafka_version: 3.7.2, 3.8.1, 3.9.1, and 4.3.1
+- kafka_image: apache/kafka images for each documented broker line
+- mode: 17-job source compatibility and failover matrix
+- topology: single-node and three-broker KRaft profiles
+- security: PLAINTEXT, TLS, SASL_PLAINTEXT, SASL_SSL SCRAM, OAUTHBEARER, signed OAUTHBEARER, and ACL authorization
+- group_protocol: classic and KIP-848 where configured
+- workload: broker roundtrip, producer/buffered producer, direct and group consumers, Admin, codecs, transactions, authentication, and failover
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/33799054637
+- fault: bounded response-loss and leader/coordinator failover sub-gates as configured; no long campaign
+- duration: short matrix workflow; individual jobs bounded by workflow timeout
+- record_count: not recorded by the matrix ledger row
+- member_count: not recorded by the matrix ledger row
+- repetition_count: one workflow dispatch
+- expected_errors: all 17 jobs pass with configured negative authorization and ambiguity assertions
+- observed_errors: zero job failures
+- retry_count: not recorded
+- duplicate_count: not applicable to the aggregate matrix row
+- loss_count: not applicable to the aggregate matrix row
+- latency: not measured as an SLO
+- memory: not measured as an SLO
+- final_resource_gauges: each job completed cleanup and its configured lifecycle assertions
+- result: passed
+- artifact: docs/evidence/v1-live-kafka-smoke-2026-09-04.md; https://github.com/TaeeunKil/kafrust/actions/runs/33799054637
+- non_claims: not exact published lockfile matrix, not long fault/SLO campaigns, not service canary, not release authorization
+
+## Q-FUZZ-DISCOVERY-2026-09-04
+
+- date_utc: 2026-09-03
+- source_commit: ce4719b17dc1f62cc8d5ee46a56a1d7b61493e6f
+- client_version: 0.3.6 source workspace
+- protocol_version: not-applicable; fuzz target inputs
+- work_status: In progress
+- evidence_level: CI
+- kafka_version: not-applicable
+- kafka_image: not-applicable
+- mode: corpus-backed discovery fuzz check
+- topology: Ubuntu hosted CI runner; no broker
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: ten libFuzzer targets, 30 seconds per target
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/33799057829
+- fault: malformed and adversarial corpus inputs; no broker fault injection
+- duration: 6 minutes 32 seconds
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: one discovery workflow dispatch
+- expected_errors: all ten targets compile and complete their bounded run without a crash failure
+- observed_errors: zero target failures; corpus and crash-artifact upload completed
+- retry_count: not-applicable
+- duplicate_count: not-applicable
+- loss_count: not-applicable
+- latency: not-applicable
+- memory: RSS cap configured at 2048 MB; peak not recorded in this row
+- final_resource_gauges: no broker resources; CI artifact upload completed
+- result: passed
+- artifact: docs/evidence/v1-fuzz-corpus-check-2026-09-04.md; https://github.com/TaeeunKil/kafrust/actions/runs/33799057829
+- non_claims: not 3,600-second per-target qualification, not a weekly campaign set, not absence-of-bugs evidence, not V1-18 completion, not release authorization
+
+## Q-BENCH-DIAGNOSTIC-2026-09-04
+
+- date_utc: 2026-09-03
+- source_commit: ce4719b17dc1f62cc8d5ee46a56a1d7b61493e6f
+- client_version: 0.3.6 source workspace
+- protocol_version: Kafka 4.3.1 benchmark harness
+- work_status: In progress
+- evidence_level: CI
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka:4.3.1
+- mode: four-profile and bounded timed benchmark diagnostics
+- topology: hosted Linux single-node KRaft broker
+- security: PLAINTEXT
+- group_protocol: direct-consumer path; no group protocol in immediate/buffered campaign
+- workload: immediate 1/4 workers, buffered 4 workers, direct-consumer 1 worker; 1-KiB payloads; batch 200 profiles; 2s warmup/10s measured immediate campaign with batch 100
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/33799889688
+- fault: none injected; reconciliation and final-resource drain assertions
+- duration: bounded profiling jobs; campaign 2s warmup plus 10s measured window
+- record_count: 871900 produced and consumed in the timed campaign
+- member_count: two benchmark workers; no broker group membership
+- repetition_count: one profile workflow dispatch and one campaign workflow dispatch
+- expected_errors: zero failed requests/retries/unknown outcomes/loss/duplicates; all four profile jobs reconcile and drain
+- observed_errors: zero
+- retry_count: 0
+- duplicate_count: 0
+- loss_count: 0
+- latency: timed campaign p50 1ms, p95 5ms, p99 5ms
+- memory: RSS baseline and terminal 10674176 bytes; growth 0
+- final_resource_gauges: in_flight_requests=0; buffered_records=0
+- result: passed
+- artifact: docs/evidence/v1-benchmark-diagnostic-2026-09-04.md; https://github.com/TaeeunKil/kafrust/actions/runs/33799886253; https://github.com/TaeeunKil/kafrust/actions/runs/33799889688
+- non_claims: not locked baseline, not five-repetition eight-hour SLO, not universal performance ranking, not published-artifact qualification, not release authorization
