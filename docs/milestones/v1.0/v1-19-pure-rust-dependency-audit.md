@@ -121,6 +121,15 @@ This closes the reproducible SBOM/drift-inventory slice only; advisory,
 yank, optional-TLS native tooling, and reviewed transitive unsafe/native
 ownership remain open.
 
+### Resolved-index refresh (2026-09-03)
+
+The explicit Linux-target SBOM was regenerated after Cargo's registry index
+resolved transitive `mio` `1.2.2` to `1.2.3`, `rand` `0.8.7` to `0.8.8`, and
+`syn` `3.0.3` to `3.0.4`. The refreshed document passes the drift-tolerant
+checker with the same 89-component closure and package hashes. This is
+dependency-resolution evidence only; it does not change V1-19's packaged-
+candidate status or authorize publication.
+
 CI permits only transitive version re-resolution caused by platform or Cargo
 index state; workspace versions, direct dependency versions, package names,
 licenses, source kinds, and graph edges must remain identical.

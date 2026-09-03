@@ -74,6 +74,22 @@ operation-by-operation authorization/failover table, active-controller
 replacement, and published floor/current profiles remain open; no complete
 Admin compatibility claim is made.
 
+### UpdateFeatures cache regression (2026-09-03)
+
+The exact-head live UpdateFeatures transaction workflow reproduced a stale
+finalized-feature read twice: the broker accepted the mutation while a later
+DescribeFeatures call reused an idle connection's cached ApiVersions response.
+`AdminClient::update_features` now invalidates ApiVersions caches across the
+shared broker-client cache after every attempted update, preserving the
+post-transmission unknown-outcome classifier. A scripted-broker regression
+test proves that the subsequent read renegotiates and observes the new feature
+level. The deterministic and CI record is
+[`v1-nonlong-validation-2026-09-03.md`](../../evidence/v1-nonlong-validation-2026-09-03.md);
+the fixed source passed the Kafka 4.3.1 live workflow in
+[33698683806](https://github.com/TaeeunKil/kafrust/actions/runs/33698683806).
+This closes the named UpdateFeatures diagnostic only; the complete operation
+matrix and published floor/current profiles remain open.
+
 ## Failure And Lifecycle Contract
 
 - Pre-transmission discovery/connect errors may retry within the Admin budget.

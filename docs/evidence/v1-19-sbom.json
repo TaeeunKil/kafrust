@@ -853,7 +853,7 @@
       "version": "0.8.9"
     },
     {
-      "bom-ref": "pkg:cargo/mio@1.2.2",
+      "bom-ref": "pkg:cargo/mio@1.2.3",
       "licenses": [
         {
           "expression": "MIT"
@@ -867,13 +867,13 @@
         },
         {
           "name": "kafrust:package-id",
-          "value": "registry+https://github.com/rust-lang/crates.io-index#mio@1.2.2"
+          "value": "registry+https://github.com/rust-lang/crates.io-index#mio@1.2.3"
         }
       ],
-      "purl": "pkg:cargo/mio@1.2.2",
+      "purl": "pkg:cargo/mio@1.2.3",
       "scope": "required",
       "type": "library",
-      "version": "1.2.2"
+      "version": "1.2.3"
     },
     {
       "bom-ref": "pkg:cargo/once_cell@1.21.4",
@@ -1152,7 +1152,7 @@
       "version": "1.0.47"
     },
     {
-      "bom-ref": "pkg:cargo/rand@0.8.7",
+      "bom-ref": "pkg:cargo/rand@0.8.8",
       "licenses": [
         {
           "expression": "MIT OR Apache-2.0"
@@ -1166,13 +1166,13 @@
         },
         {
           "name": "kafrust:package-id",
-          "value": "registry+https://github.com/rust-lang/crates.io-index#rand@0.8.7"
+          "value": "registry+https://github.com/rust-lang/crates.io-index#rand@0.8.8"
         }
       ],
-      "purl": "pkg:cargo/rand@0.8.7",
+      "purl": "pkg:cargo/rand@0.8.8",
       "scope": "required",
       "type": "library",
-      "version": "0.8.7"
+      "version": "0.8.8"
     },
     {
       "bom-ref": "pkg:cargo/rand_chacha@0.3.1",
@@ -1635,7 +1635,7 @@
       "version": "2.0.119"
     },
     {
-      "bom-ref": "pkg:cargo/syn@3.0.3",
+      "bom-ref": "pkg:cargo/syn@3.0.4",
       "licenses": [
         {
           "expression": "MIT OR Apache-2.0"
@@ -1649,13 +1649,13 @@
         },
         {
           "name": "kafrust:package-id",
-          "value": "registry+https://github.com/rust-lang/crates.io-index#syn@3.0.3"
+          "value": "registry+https://github.com/rust-lang/crates.io-index#syn@3.0.4"
         }
       ],
-      "purl": "pkg:cargo/syn@3.0.3",
+      "purl": "pkg:cargo/syn@3.0.4",
       "scope": "required",
       "type": "library",
-      "version": "3.0.3"
+      "version": "3.0.4"
     },
     {
       "bom-ref": "pkg:cargo/thiserror-impl@1.0.69",
@@ -2173,7 +2173,7 @@
       "dependsOn": [
         "pkg:cargo/proc-macro2@1.0.107",
         "pkg:cargo/quote@1.0.47",
-        "pkg:cargo/syn@3.0.3"
+        "pkg:cargo/syn@3.0.4"
       ],
       "ref": "pkg:cargo/futures-macro@0.3.34"
     },
@@ -2240,7 +2240,7 @@
         "pkg:cargo/pbkdf2@0.12.2",
         "pkg:cargo/prost-derive@0.14.1",
         "pkg:cargo/prost@0.14.1",
-        "pkg:cargo/rand@0.8.7",
+        "pkg:cargo/rand@0.8.8",
         "pkg:cargo/regex@1.13.1",
         "pkg:cargo/rustls-platform-verifier@0.6.2",
         "pkg:cargo/rustls@0.23.43",
@@ -2284,7 +2284,7 @@
       "dependsOn": [
         "pkg:cargo/libc@0.2.189"
       ],
-      "ref": "pkg:cargo/mio@1.2.2"
+      "ref": "pkg:cargo/mio@1.2.3"
     },
     {
       "dependsOn": [],
@@ -2368,7 +2368,7 @@
         "pkg:cargo/rand_chacha@0.3.1",
         "pkg:cargo/rand_core@0.6.4"
       ],
-      "ref": "pkg:cargo/rand@0.8.7"
+      "ref": "pkg:cargo/rand@0.8.8"
     },
     {
       "dependsOn": [
@@ -2506,7 +2506,7 @@
         "pkg:cargo/quote@1.0.47",
         "pkg:cargo/unicode-ident@1.0.24"
       ],
-      "ref": "pkg:cargo/syn@3.0.3"
+      "ref": "pkg:cargo/syn@3.0.4"
     },
     {
       "dependsOn": [
@@ -2520,7 +2520,7 @@
       "dependsOn": [
         "pkg:cargo/proc-macro2@1.0.107",
         "pkg:cargo/quote@1.0.47",
-        "pkg:cargo/syn@3.0.3"
+        "pkg:cargo/syn@3.0.4"
       ],
       "ref": "pkg:cargo/thiserror-impl@2.0.20"
     },
@@ -2540,7 +2540,7 @@
       "dependsOn": [
         "pkg:cargo/proc-macro2@1.0.107",
         "pkg:cargo/quote@1.0.47",
-        "pkg:cargo/syn@3.0.3"
+        "pkg:cargo/syn@3.0.4"
       ],
       "ref": "pkg:cargo/tokio-macros@2.7.2"
     },
@@ -2555,7 +2555,7 @@
       "dependsOn": [
         "pkg:cargo/bytes@1.12.1",
         "pkg:cargo/libc@0.2.189",
-        "pkg:cargo/mio@1.2.2",
+        "pkg:cargo/mio@1.2.3",
         "pkg:cargo/pin-project-lite@0.2.17",
         "pkg:cargo/socket2@0.6.5",
         "pkg:cargo/tokio-macros@2.7.2"

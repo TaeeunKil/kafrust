@@ -98,6 +98,17 @@ V1-21 remains explicitly blocked until the runner is restored and the exact
 manifest campaign is rerun; V1-22 still needs its complete matrix capacity and
 locked baseline.
 
+On 2026-09-03, the company workstation was confirmed as Windows x64 with an
+x86_64 WSL2 environment. Non-long work was completed from exact source
+`924540c`: required Rust validation, all static V1 checkers, package-boundary
+profiles, and the deterministic SBOM passed. The exact-head UpdateFeatures live
+workflow had exposed a stale ApiVersions feature cache; the fix and regression
+record are in
+[`v1-nonlong-validation-2026-09-03.md`](../../evidence/v1-nonlong-validation-2026-09-03.md).
+This refresh is deterministic/CI evidence only. It does not promote a live
+qualification row or remove the dedicated Linux/Docker, long-campaign, or
+named-service prerequisites.
+
 ## Status And Evidence
 
 Work status and evidence level are separate axes.

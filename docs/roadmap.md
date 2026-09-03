@@ -816,6 +816,25 @@ cache. The WSL runner is also installed as an enabled systemd service. These
 are operational safety controls; they do not qualify the failed campaign or
 authorize a release.
 
+## Non-Long Validation Update (2026-09-03)
+
+The company workstation is Windows x64, with an x86_64 WSL2 environment
+available for diagnostics. Existing Docker resources were inspected without
+prune or mutation. From source `924540c`, all required local Rust validation,
+the V1 static/manifest gates, staged package profiles, and the 89-component
+Linux-target SBOM passed. The exact-head UpdateFeatures transaction workflow
+had failed twice because an idle Admin connection reused stale ApiVersions
+feature metadata after a successful mutation. The cache invalidation fix and
+scripted-broker regression are recorded in
+[`v1-nonlong-validation-2026-09-03.md`](evidence/v1-nonlong-validation-2026-09-03.md).
+The pushed CI run is
+[33698482547](https://github.com/TaeeunKil/kafrust/actions/runs/33698482547);
+the fixed Kafka 4.3.1 UpdateFeatures workflow then passed in
+[33698683806](https://github.com/TaeeunKil/kafrust/actions/runs/33698683806),
+covering the safe downgrade and upgrade lifecycle. This closes the named
+diagnostic only; no long-campaign, service-canary, `0.3.7`, or `1.0.0` claim
+is made.
+
 ## V1-23 Execution Update (2026-08-23)
 
 The current published competitor check was run before making any release-path
