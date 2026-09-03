@@ -196,6 +196,12 @@ never prints marker contents. The local 47-file scan and four checker tests
 passed, and CI now runs both checks. This does not close the required
 restricted-principal/delegation-token published security profiles.
 
+On 2026-09-03, exact-head CI for `ddaedb2` passed both the stable and Rust
+1.81.0 jobs in [run 33708343106](https://github.com/TaeeunKil/kafrust/actions/runs/33708343106),
+including the seeded secret-artifact scan and its four tests. This records the
+checker and workflow slice only; it does not close the live security profiles
+or authorize a release.
+
 ## V1-14 Execution Update (2026-08-22)
 
 V1-14 is `In progress`. Streams, Share Group State, dynamic quorum, low-level
