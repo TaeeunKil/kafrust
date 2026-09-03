@@ -197,6 +197,14 @@ experimental, or excluded from the stable core claim. Deterministic routing,
 task/runtime, controller, and nested-runtime tests exist; final API-key
 classification and required live retained-surface gates remain open.
 
+The Apache Kafka 4.3.1 `ApiKeys` inventory is now explicit for every key
+0-92 in [`v1-14-api-key-classification.json`](evidence/v1-14-api-key-classification.json).
+The checker covers all 93 entries, identifies 16 broker-internal RPCs, and
+keeps the unimplemented `UPDATE_RAFT_VOTER` key 82 explicitly excluded. The
+classification checker and tests are wired into CI. This closes the V1-14
+classification inventory slice only; retained expert/experimental live gates,
+long campaigns, migration canary, and release gates remain open.
+
 ## V1-15 Execution Update (2026-08-22)
 
 V1-15 is `In progress`. The current owner audit keeps stateless producer/Admin

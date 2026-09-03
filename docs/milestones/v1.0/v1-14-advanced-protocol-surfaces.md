@@ -65,6 +65,18 @@ quorum convergence, unstable Share state replication, retained Streams churn,
 and the final API-key 0-92 decision table remain open. Experimental and
 broker-internal paths are not counted as stable core compatibility.
 
+### API-key classification gate (2026-09-03)
+
+The Apache Kafka 4.3.1 `ApiKeys` inventory is now captured in
+[`v1-14-api-key-classification.json`](../../evidence/v1-14-api-key-classification.json)
+and checked by `scripts/check_v1_api_key_classification.py`. All 93 keys from
+0 through 92 have an explicit class, owner, and rationale: 16 are
+broker-internal, key 82 (`UPDATE_RAFT_VOTER`) is explicitly excluded because
+the client does not implement it, and every implemented key is classified as
+stable-core, expert, or experimental. The checker and regression tests run in
+CI. This closes the classification inventory only; retained expert/experimental
+live gates and the broader V1-14 exit criteria remain open.
+
 ## Failure And Lifecycle Contract
 
 - Streams membership owns member/endpoint epochs and task assignments; it does

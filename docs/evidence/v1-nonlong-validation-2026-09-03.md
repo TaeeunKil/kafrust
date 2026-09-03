@@ -39,6 +39,7 @@ observes the new finalized level.
 | `cargo clippy --workspace --all-targets --all-features -- -D warnings` | passed |
 | `cargo doc --workspace --all-features --no-deps` | passed |
 | `git diff --check` | passed |
+| V1 API-key classification | passed: all 93 Kafka 4.3.1 keys (0-92), 16 broker-internal, key 82 excluded |
 | protocol/schema/data-plane/matrix/dependency/native/license/registry/advisory/unsafe checks | passed |
 | fuzz/fault/performance/migration/freeze/RC/release manifest checks | passed |
 | qualification ledger check | passed: 126 immutable rows |

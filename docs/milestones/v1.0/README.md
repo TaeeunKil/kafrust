@@ -76,6 +76,12 @@ publication is a bounded pre-1.0 package boundary only; it does not satisfy
 the later fault, SLO, service-canary, API-freeze, RC, or stable-release gates.
 These remain implementation and qualification increments, not
 `1.0.0`-readiness claims.
+V1-14 now also has a machine-checked Apache 4.3.1 API-key classification for
+all keys 0-92, including the explicit exclusion of `UPDATE_RAFT_VOTER` (key
+82). The inventory and checker are recorded in
+[`v1-14-api-key-classification.json`](../../evidence/v1-14-api-key-classification.json);
+this is a classification slice, not live qualification of retained expert or
+experimental surfaces.
 The V1-25 and V1-26 release manifests and checkers now lock the coordinated
 version identities, protocol-first publication order, exact RC dependency,
 metadata-only stable diff, and explicit authorization boundary; both remain
