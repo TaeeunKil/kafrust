@@ -218,6 +218,14 @@ requests. The detailed record is in
 Delayed metadata/capability, post-write deadlines, cancellation/shutdown
 ambiguity, and published mixed-outcome reconciliation remain open.
 
+At pushed head `40905f1`, `BufferedProducer::close()` was exercised with one
+accepted record and a long linger. Close flushed Metadata, ApiVersions, and
+Produce before joining the worker; the delivery resolved at offset 42 and the
+buffered gauge drained. Details are in
+[`v1-buffered-close-flush-2026-09-03.md`](evidence/v1-buffered-close-flush-2026-09-03.md).
+Expired or in-flight close ambiguity, cancellation during transmission, and
+published mixed-outcome reconciliation remain open.
+
 ## V1-05 Execution Update (2026-08-22)
 
 V1-05 is `In progress`. The deterministic idempotent slice now records exact

@@ -5302,6 +5302,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-buffered-queue-expiry-2026-09-03.md; crates/kafrust/tests/fault_injection.rs
 - non_claims: not delayed metadata/capability or post-write deadline coverage, not cancellation/shutdown ambiguity, not published mixed-outcome qualification, not long campaigns, not service canary, not release authorization
 
+## Q-BUFFERED-CLOSE-FLUSH-2026-09-03
+
+- date_utc: 2026-09-03
+- source_commit: 40905f137e5a1f13cb99e4923d95e35e4aa3f1c8
+- client_version: 0.3.6 source checkout
+- protocol_version: 0.3.6 source checkout
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: not-applicable; scripted broker
+- kafka_image: not-applicable
+- mode: buffered close flush and worker-join regression
+- topology: in-memory scripted broker
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: one accepted buffered record with 10 second linger, close without explicit flush
+- workflow: scripts/check_qualification_ledger.py
+- fault: shutdown command arrives while one accepted record is pending
+- duration: deterministic integration test under one second
+- record_count: one buffered delivery
+- member_count: not-applicable
+- repetition_count: one bounded scripted run
+- expected_errors: close flushes accepted data before worker exit and returns successful delivery
+- observed_errors: one Metadata, one ApiVersions, and one Produce request; offset 42; buffered gauge zero; worker joined
+- retry_count: 0
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: worker closed cleanly; no external resources
+- result: passed
+- artifact: docs/evidence/v1-buffered-close-flush-2026-09-03.md; crates/kafrust/tests/fault_injection.rs
+- non_claims: not expired/in-flight close ambiguity, not cancellation during transmission, not published mixed-outcome qualification, not long campaigns, not service canary, not release authorization
+
 ## Q-IDEMPOTENT-BUFFERED-FATAL-2026-09-03
 
 - date_utc: 2026-09-03

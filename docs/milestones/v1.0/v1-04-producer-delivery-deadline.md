@@ -128,6 +128,19 @@ This closes the buffered queue-expiry/no-transmission slice only; delayed
 metadata/capability, post-write deadlines, cancellation/shutdown ambiguity,
 published mixed-outcome reconciliation, and live evidence remain open.
 
+### Close flushes accepted buffered data (2026-09-03)
+
+At source commit `40905f137e5a1f13cb99e4923d95e35e4aa3f1c8`,
+`buffered_close_flushes_accepted_record_before_worker_shutdown` enqueues a
+record with a long linger and calls `BufferedProducer::close()` directly. The
+close path performs Metadata, ApiVersions, and Produce, resolves offset 42,
+drains the buffered gauge, and joins the worker. The detailed record is
+[`v1-buffered-close-flush-2026-09-03.md`](../../evidence/v1-buffered-close-flush-2026-09-03.md).
+
+This closes the accepted-record close/flush slice only; expired or in-flight
+close ambiguity, cancellation during transmission, published mixed-outcome
+reconciliation, and live evidence remain open.
+
 ## Exit Criteria
 
 1. All three producer modes share the documented total-budget calculation.
