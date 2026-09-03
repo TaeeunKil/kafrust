@@ -4494,9 +4494,61 @@ mod tests {
     use kafrust_protocol::api::update_features::{FeatureUpdateV0, FeatureUpdateV1};
     use kafrust_protocol::codec::Encoder;
     use kafrust_protocol::codec::{DecodeLimits, Decoder};
+    use std::io;
+    use std::pin::Pin;
+    use std::task::{Context, Poll};
     use std::time::Duration;
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, ReadBuf};
     use tokio::net::TcpListener;
+
+    struct PartialWriteErrorStream {
+        wrote_partial: bool,
+        partial_len: usize,
+    }
+
+    impl PartialWriteErrorStream {
+        fn new(partial_len: usize) -> Self {
+            Self {
+                wrote_partial: false,
+                partial_len,
+            }
+        }
+    }
+
+    impl AsyncRead for PartialWriteErrorStream {
+        fn poll_read(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            _buf: &mut ReadBuf<'_>,
+        ) -> Poll<io::Result<()>> {
+            Poll::Pending
+        }
+    }
+
+    impl AsyncWrite for PartialWriteErrorStream {
+        fn poll_write(
+            mut self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            buf: &[u8],
+        ) -> Poll<io::Result<usize>> {
+            if self.wrote_partial {
+                return Poll::Ready(Err(io::Error::new(
+                    io::ErrorKind::BrokenPipe,
+                    "scripted partial request write failure",
+                )));
+            }
+            self.wrote_partial = true;
+            Poll::Ready(Ok(self.partial_len.min(buf.len())))
+        }
+
+        fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+            Poll::Ready(Ok(()))
+        }
+
+        fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+            Poll::Ready(Ok(()))
+        }
+    }
 
     #[test]
     fn formats_topic_id_like_kafka_uuid() {
@@ -4602,6 +4654,29 @@ mod tests {
         );
 
         broker.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn does_not_reuse_connection_after_partial_request_write() {
+        let mut client = Client::from_stream(
+            Box::new(PartialWriteErrorStream::new(3)),
+            Some("kafrust-partial-write-test".to_owned()),
+            Some(Duration::from_secs(1)),
+        );
+
+        let error = client.api_versions().await.unwrap_err();
+        assert!(matches!(
+            error,
+            Error::Io(error) if error.kind() == io::ErrorKind::BrokenPipe
+        ));
+        assert!(client.last_request_may_have_been_transmitted());
+        assert!(client.is_connection_poisoned());
+
+        let reuse_error = client.api_versions().await.unwrap_err();
+        assert!(matches!(
+            reuse_error,
+            Error::Io(error) if error.kind() == io::ErrorKind::NotConnected
+        ));
     }
 
     #[tokio::test]
