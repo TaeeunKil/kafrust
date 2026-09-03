@@ -123,6 +123,20 @@ cases. This reproduction is recorded in
 and remains short deterministic evidence rather than published or multi-broker
 qualification.
 
+### Buffered terminal sequence errors (2026-09-03)
+
+The buffered path now exercises the three terminal Kafka identity errors. At
+source commit `a46462f`,
+`buffered_idempotent_producer_fatal_sequence_errors_are_terminal` verifies
+codes 45, 47, and 90. Each first delivery returns the fatal code; a second
+queued delivery produces no additional Produce frame and returns the same code,
+after which the worker closes cleanly. The detailed record is
+[`v1-buffered-idempotent-terminal-sequence-2026-09-03.md`](../../evidence/v1-buffered-idempotent-terminal-sequence-2026-09-03.md).
+
+This closes buffered deterministic terminal-error coverage only; partial client
+request writes, cancellation/shutdown faults, published cycles, and
+100,000-record reconciliation remain open.
+
 ## Failure And Lifecycle Contract
 
 - A safe retry retains the same producer identity and batch sequence.

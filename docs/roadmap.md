@@ -250,6 +250,14 @@ short reproduction is recorded in
 [`v1-company-partial-fault-short-smoke-2026-09-03.md`](evidence/v1-company-partial-fault-short-smoke-2026-09-03.md)
 and does not change the published or multi-broker gates.
 
+At pushed head `a46462f`, the buffered idempotent path now covers terminal
+sequence errors 45, 47, and 90. Each first delivery returns the fatal broker
+code; a second queued delivery emits no Produce frame and returns the same
+terminal result. Details are in
+[`v1-buffered-idempotent-terminal-sequence-2026-09-03.md`](evidence/v1-buffered-idempotent-terminal-sequence-2026-09-03.md).
+Partial client request writes, cancellation/shutdown ambiguity, and published
+fault-cycle/reconciliation gates remain open.
+
 ## V1-06 Execution Update (2026-08-22)
 
 V1-06 is `In progress`. The transaction path keeps one coherent legacy TV0/TV1

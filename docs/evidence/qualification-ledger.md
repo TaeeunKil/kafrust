@@ -5268,3 +5268,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-company-partial-fault-short-smoke-2026-09-03.md; crates/kafrust/tests/fault_injection.rs
 - non_claims: not published-artifact qualification, not accepted-floor or three-broker qualification, not long campaigns, not service canary, not release authorization
+
+## Q-IDEMPOTENT-BUFFERED-FATAL-2026-09-03
+
+- date_utc: 2026-09-03
+- source_commit: a46462f1f51c257b18d85c8fd265e00d1b63f8a3
+- client_version: 0.3.6 source checkout
+- protocol_version: 0.3.6 source checkout
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: not-applicable; scripted broker
+- kafka_image: not-applicable
+- mode: buffered idempotent terminal sequence-error regression
+- topology: in-memory scripted broker
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: one fatal first delivery and one subsequent buffered delivery per error code
+- workflow: scripts/check_qualification_ledger.py
+- fault: OUT_OF_ORDER_SEQUENCE_NUMBER (45), INVALID_PRODUCER_EPOCH (47), and PRODUCER_FENCED (90)
+- duration: deterministic integration test under one second
+- record_count: two attempted buffered deliveries per error code
+- member_count: not-applicable
+- repetition_count: one bounded scripted run across three terminal broker codes
+- expected_errors: first delivery returns the fatal code; later delivery emits no Produce frame and returns the same terminal code
+- observed_errors: one broker error and zero retries per code; exactly one Produce request per broker script; second delivery had no frame
+- retry_count: 0
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: buffered worker closed cleanly; no external resources
+- result: passed
+- artifact: docs/evidence/v1-buffered-idempotent-terminal-sequence-2026-09-03.md; crates/kafrust/tests/fault_injection.rs
+- non_claims: not partial client request-write coverage, not cancellation/shutdown fault coverage, not published fault cycles or 100,000-record qualification, not long campaigns, not service canary, not release authorization
