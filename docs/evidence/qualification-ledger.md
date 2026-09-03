@@ -4705,5 +4705,5 @@ unqualified relative artifact label.
 - memory: not measured
 - final_resource_gauges: not-applicable
 - result: passed
-- artifact: docs/evidence/v1-data-plane-golden-fixtures-2026-09-03.md; crates/kafrust-protocol/tests/data_plane_golden.rs
+- artifact: docs/evidence/v1-data-plane-golden-fixtures-2026-09-03.md; crates/kafrust-protocol/tests/data_plane_golden.rs; crates/kafrust-protocol/tests/data_plane_malformed.rs
 - non_claims: not every non-empty response oracle, not malformed-boundary completion, not transaction-selection proof, not live floor/pinned-version qualification, not release authorization

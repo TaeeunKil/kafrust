@@ -1226,8 +1226,9 @@ stable/Rust 1.81 CI in
 The fixture and Apache-schema boundary are recorded in
 [`v1-data-plane-golden-fixtures-2026-09-03.md`](evidence/v1-data-plane-golden-fixtures-2026-09-03.md).
 This is a current-source byte-audit increment only. Non-empty response oracles,
-malformed expansion, transaction-selection proof, and floor/pinned-current
-live version logs remain open, so V1-03 stays `In progress`.
+the full malformed length/trailing-byte matrix, transaction-selection proof,
+and floor/pinned-current live version logs remain open, so V1-03 stays `In
+progress`.
 
 ## Historical Release Qualification
 

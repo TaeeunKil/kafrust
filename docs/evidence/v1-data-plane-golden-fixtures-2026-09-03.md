@@ -29,6 +29,11 @@ The same boundary fixture covers the selected response versions for these
 families, asserting zero records/topics/partitions, nullable cluster state,
 and fully consumed tagged fields.
 
+The complementary
+[`data_plane_malformed.rs`](../../crates/kafrust-protocol/tests/data_plane_malformed.rs)
+fixture now rejects truncated top-level tagged-field sections for the flexible
+Produce, Fetch, Metadata, and ApiVersions response families.
+
 The test also asserts that Fetch v13's empty-body shape differs only in the
 API-version header from Fetch v12, while Produce v13's topic UUID and compact
 topic structure are retained. Nullable client IDs, transactional IDs,
@@ -46,10 +51,14 @@ passed both stable and Rust 1.81 CI jobs in
 The accepted floor/pinned-current live negotiation logs remain separate V1-03
 gates.
 
+`cargo test -p kafrust-protocol --test data_plane_malformed -- --nocapture`
+also passed all three malformed-response tests, including the new truncated
+tag-section cases.
+
 ## Boundary
 
 These fixtures close the previously missing byte-auditable request-shape and
-minimal response-boundary slice. They do not by themselves prove every
-non-empty response fixture,
-malformed boundary, codec roundtrip, transactional selection rule, or live
+minimal response-boundary slice and the flexible tagged-field truncation
+slice. They do not by themselves prove every non-empty response fixture, the
+full malformed length/trailing-byte matrix, codec roundtrip, transactional selection rule, or live
 floor/pinned-current negotiation result required by V1-03.

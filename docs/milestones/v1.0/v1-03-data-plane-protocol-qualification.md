@@ -139,9 +139,10 @@ head passed stable/Rust 1.81 CI in
 details are in
 [`v1-data-plane-golden-fixtures-2026-09-03.md`](../../evidence/v1-data-plane-golden-fixtures-2026-09-03.md).
 This closes the deterministic request-shape and minimal empty-response slice;
-non-empty response
-oracles, malformed expansion, transaction-selection proof, and live version
-logs remain required.
+the flexible tagged-field truncation cases are also covered by
+[`data_plane_malformed.rs`](../../../crates/kafrust-protocol/tests/data_plane_malformed.rs).
+Non-empty response oracles, the full malformed length/trailing-byte matrix,
+transaction-selection proof, and live version logs remain required.
 
 ## Exit Criteria
 

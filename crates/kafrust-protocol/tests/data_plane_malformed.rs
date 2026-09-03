@@ -1,9 +1,9 @@
 use kafrust_protocol::api::api_versions::{ApiVersionsResponseV0, ApiVersionsResponseV3};
-use kafrust_protocol::api::fetch::FetchResponseV4;
+use kafrust_protocol::api::fetch::{FetchResponseV12, FetchResponseV4};
 use kafrust_protocol::api::list_offsets::ListOffsetsResponseV1;
 use kafrust_protocol::api::metadata::{MetadataResponseV1, MetadataResponseV12};
 use kafrust_protocol::api::offset_for_leader_epoch::OffsetForLeaderEpochResponseV3;
-use kafrust_protocol::api::produce::{ProduceResponseV2, ProduceResponseV9};
+use kafrust_protocol::api::produce::{ProduceResponseV13, ProduceResponseV2, ProduceResponseV9};
 use kafrust_protocol::codec::Decoder;
 
 #[test]
@@ -34,4 +34,23 @@ fn rejects_negative_or_truncated_collection_lengths() {
     assert!(MetadataResponseV12::decode_body(&mut Decoder::new(&truncated_flexible)).is_err());
     assert!(ApiVersionsResponseV3::decode_body(&mut Decoder::new(&truncated_flexible)).is_err());
     assert!(ProduceResponseV9::decode_body(&mut Decoder::new(&truncated_flexible)).is_err());
+}
+
+#[test]
+fn rejects_truncated_flexible_tag_sections() {
+    // Each body declares one top-level tagged field but omits its tag ID and
+    // payload. The decoder must fail before returning a partially parsed body.
+    assert!(ProduceResponseV9::decode_body(&mut Decoder::new(&[1, 0, 0, 0, 0, 1])).is_err());
+    assert!(ProduceResponseV13::decode_body(&mut Decoder::new(&[1, 0, 0, 0, 0, 1])).is_err());
+    assert!(FetchResponseV12::decode_body(&mut Decoder::new(&[
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1
+    ]))
+    .is_err());
+    assert!(MetadataResponseV12::decode_body(&mut Decoder::new(&[
+        0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1
+    ]))
+    .is_err());
+    assert!(
+        ApiVersionsResponseV3::decode_body(&mut Decoder::new(&[0, 0, 1, 0, 0, 0, 0, 1])).is_err()
+    );
 }
