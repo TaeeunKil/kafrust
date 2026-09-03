@@ -546,6 +546,17 @@ both Rust 1.81.0 and stable in [CI run 32615676173](https://github.com/TaeeunKil
 security-profile corrections are recorded in the published evidence and are
 awaiting the next exact-head CI documentation row.
 
+On 2026-09-03, the exact published `0.3.6` pair passed all twelve published
+smoke profiles again in [run 33714006944](https://github.com/TaeeunKil/kafrust/actions/runs/33714006944)
+from workflow head `bc0b40e`. The rerun covers Kafka 3.7.2/3.8.1/3.9.1/4.0.0/
+4.3.1, classic and KIP-848, PLAIN, SCRAM-256/512, and all four codecs, with
+fresh external lockfiles and retained outputs. The workflow now proves group
+coordinator readiness with a real describe request; the two preceding startup
+races remain diagnostics. This refresh strengthens named published rows only:
+the full V1-20 matrix, long fault/SLO gates, migration canary, API freeze, and
+release gates remain open. Details are in
+[`v1-20-published-smoke-rerun-2026-09-03.md`](evidence/v1-20-published-smoke-rerun-2026-09-03.md).
+
 ## V1-21~V1-26 Release-Path Preparation (2026-08-22)
 
 V1-21 and V1-22 are `In progress` while the exact published matrix and

@@ -4179,3 +4179,36 @@ unqualified relative artifact label.
 - result: blocked
 - artifact: GitHub Actions run 32646817241; runner inventory query; docs/evidence/v1-long-campaign-capacity-audit-2026-08-24.md
 - non_claims: not a client fault result, not a performance result, not V1-21 completion, not V1-22 completion, not SLO evidence, not 1.0.0 readiness
+
+## Q-PUBLISHED-V120-036
+
+- date_utc: 2026-09-03
+- source_commit: bc0b40e9edc94d4a9b4921b6a4422b7d53823802
+- client_version: 0.3.6 published artifact
+- protocol_version: 0.3.6 published dependency
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 3.7.2, 3.8.1, 3.9.1, 4.0.0, 4.3.1
+- kafka_image: apache/kafka:<matrix version>
+- mode: published twelve-profile smoke after real coordinator-readiness probe
+- topology: single-node KRaft
+- security: PLAINTEXT, SASL_PLAINTEXT/PLAIN, and SASL_SSL/SCRAM-SHA-256/512
+- group_protocol: classic plus KIP-848 consumer
+- workload: fresh external produce/fetch/group projects plus gzip, snappy, lz4, and zstd codecs
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/33714006944
+- fault: broker/profile startup, coordinator readiness, dependency, or roundtrip failure
+- duration: approximately 2 minutes wall time across twelve matrix jobs
+- record_count: one produced/read record per profile; profile-specific
+- member_count: one broker per profile
+- repetition_count: 12 matrix profiles; one rerun after readiness-probe correction
+- expected_errors: every profile resolves the exact published pair and completes its roundtrip
+- observed_errors: all twelve jobs passed; each uploaded an external Cargo.lock and captured fixture output
+- retry_count: coordinator-readiness polling only; no failed-job retry
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: not measured
+- result: passed
+- artifact: docs/evidence/v1-20-published-smoke-rerun-2026-09-03.md; 12 retained artifacts from run 33714006944; client checksum 4fe2758d0093ef4b2a236090cca4dc7511b9e865f5e18ce42823e428a6be71d2
+- non_claims: not the complete V1-20 matrix, not mechanism-complete security coverage, not long fault or SLO evidence, not V1-23 service canary, not API freeze, not RC, not 1.0.0 readiness

@@ -171,6 +171,16 @@ and [32646376335](https://github.com/TaeeunKil/kafrust/actions/runs/32646376335)
 This is a stronger published-row refresh only; it does not close the complete
 matrix or any downstream V1 gate.
 
+The company-workstation follow-up then reran the exact registry pair from
+workflow head `bc0b40e` in [33714006944](https://github.com/TaeeunKil/kafrust/actions/runs/33714006944).
+All twelve profiles passed with fresh external lockfiles and retained fixture
+outputs. The coordinator readiness step now performs a real group describe
+request and accepts the terminal nonexistent-group response; this removes the
+startup race seen in the two preceding retained diagnostics. The immutable
+record is [`v1-20-published-smoke-rerun-2026-09-03.md`](../../evidence/v1-20-published-smoke-rerun-2026-09-03.md).
+The result remains a named published smoke slice and does not close the full
+matrix, long-duration/SLO, migration-canary, API-freeze, or release criteria.
+
 ## Failure And Lifecycle Contract
 
 - One required row failure blocks the matrix; it is not averaged away.
