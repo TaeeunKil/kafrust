@@ -13,6 +13,10 @@ pub enum ScriptedResponse {
     RespondAndClose(Vec<u8>),
     RespondWithAddressAndClose(fn(SocketAddr) -> Vec<u8>),
     RespondAndKeepAlive(Vec<u8>),
+    RespondPartial {
+        body: Vec<u8>,
+        frame_prefix_len: usize,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -37,6 +41,7 @@ struct IncomingRequest {
 struct ConnectionResponse {
     frame: Option<Vec<u8>>,
     close: bool,
+    partial_frame_prefix_len: Option<usize>,
 }
 
 impl ScriptedBroker {
@@ -87,14 +92,18 @@ impl ScriptedBroker {
                 let correlation_id = observation.correlation_id;
                 observations.push(observation);
 
-                let (response_body, close_connection) = match step {
-                    ScriptedResponse::Drop => (None, true),
-                    ScriptedResponse::Respond(body) => (Some(body), false),
-                    ScriptedResponse::RespondAndClose(body) => (Some(body), true),
+                let (response_body, close_connection, partial_frame_prefix_len) = match step {
+                    ScriptedResponse::Drop => (None, true, None),
+                    ScriptedResponse::Respond(body) => (Some(body), false, None),
+                    ScriptedResponse::RespondAndClose(body) => (Some(body), true, None),
                     ScriptedResponse::RespondWithAddressAndClose(factory) => {
-                        (Some(factory(address)), true)
+                        (Some(factory(address)), true, None)
                     }
-                    ScriptedResponse::RespondAndKeepAlive(body) => (Some(body), false),
+                    ScriptedResponse::RespondAndKeepAlive(body) => (Some(body), false, None),
+                    ScriptedResponse::RespondPartial {
+                        body,
+                        frame_prefix_len,
+                    } => (Some(body), true, Some(frame_prefix_len)),
                 };
                 let frame = response_body.map(|body| {
                     let mut response = correlation_id.to_be_bytes().to_vec();
@@ -106,6 +115,7 @@ impl ScriptedBroker {
                     .send(ConnectionResponse {
                         frame,
                         close: close_connection,
+                        partial_frame_prefix_len,
                     })
                     .map_err(|_| {
                         io::Error::new(
@@ -181,7 +191,14 @@ async fn serve_connection(
             }
         };
         if let Some(frame) = response.frame {
-            if write_frame(&mut stream, &frame).await.is_err() {
+            if let Some(prefix_len) = response.partial_frame_prefix_len {
+                if write_partial_frame(&mut stream, &frame, prefix_len)
+                    .await
+                    .is_err()
+                {
+                    return;
+                }
+            } else if write_frame(&mut stream, &frame).await.is_err() {
                 return;
             }
         }
@@ -222,5 +239,17 @@ where
         .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "Kafka response too large"))?;
     stream.write_all(&size.to_be_bytes()).await?;
     stream.write_all(frame).await?;
+    stream.flush().await
+}
+
+async fn write_partial_frame<W>(stream: &mut W, frame: &[u8], prefix_len: usize) -> io::Result<()>
+where
+    W: AsyncWrite + Unpin,
+{
+    let size = i32::try_from(frame.len())
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "Kafka response too large"))?;
+    let prefix_len = prefix_len.min(frame.len().saturating_sub(1));
+    stream.write_all(&size.to_be_bytes()).await?;
+    stream.write_all(&frame[..prefix_len]).await?;
     stream.flush().await
 }

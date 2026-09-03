@@ -430,6 +430,54 @@ async fn idempotent_producer_retries_dropped_response_with_same_batch_sequence()
 }
 
 #[tokio::test]
+async fn idempotent_producer_retries_partial_response_with_same_batch_sequence() {
+    let broker = ScriptedBroker::start(vec![
+        ScriptedResponse::Respond(api_versions_producer_response_body()),
+        ScriptedResponse::Respond(init_producer_id_v2_response_body()),
+        ScriptedResponse::RespondWithAddressAndClose(metadata_response_for_address),
+        ScriptedResponse::Respond(api_versions_response_body(3)),
+        ScriptedResponse::RespondPartial {
+            body: produce_v3_response_body(46, -1),
+            frame_prefix_len: 8,
+        },
+        ScriptedResponse::RespondWithAddressAndClose(metadata_response_for_address),
+        ScriptedResponse::Respond(api_versions_response_body(3)),
+        ScriptedResponse::Respond(produce_v3_response_body(46, -1)),
+    ])
+    .await
+    .expect("scripted broker should bind");
+    let address = broker.address();
+    let metrics = ClientMetrics::new();
+    let mut producer = ProducerConfig::new([address.to_string()])
+        .metrics(metrics.clone())
+        .request_timeout_ms(1_000)
+        .enable_idempotence(true)
+        .max_retries(1)
+        .build()
+        .await
+        .expect("idempotent producer should initialize");
+
+    let metadata = producer
+        .send_batch([ProducerRecord::to("orders").partition(0).value("value")])
+        .await
+        .expect("partial produce response should be retried as ambiguous");
+
+    assert_eq!(metadata.len(), 1);
+    assert_eq!(metadata[0].offset(), -1);
+    assert!(metrics.snapshot().retries >= 1);
+    assert_eq!(metrics.snapshot().broker_errors, 1);
+
+    let observations = broker
+        .finish()
+        .await
+        .expect("scripted broker should complete all producer steps");
+    assert_eq!(observations.len(), 8);
+    assert_eq!(observations[4].api_key, 0);
+    assert_eq!(observations[7].api_key, 0);
+    assert_eq!(observations[4].frame, observations[7].frame);
+}
+
+#[tokio::test]
 async fn buffered_idempotent_producer_retries_dropped_response_with_same_batch_sequence() {
     let broker = ScriptedBroker::start(vec![
         ScriptedResponse::Respond(api_versions_producer_response_body()),
@@ -488,6 +536,66 @@ async fn buffered_idempotent_producer_retries_dropped_response_with_same_batch_s
     assert_eq!(observations[4].api_key, 0);
     assert_eq!(observations[5].api_key, 3);
     assert_eq!(observations[6].api_key, 18);
+    assert_eq!(observations[7].api_key, 0);
+    assert_eq!(observations[4].frame, observations[7].frame);
+}
+
+#[tokio::test]
+async fn buffered_idempotent_producer_retries_partial_response_with_same_batch_sequence() {
+    let broker = ScriptedBroker::start(vec![
+        ScriptedResponse::Respond(api_versions_producer_response_body()),
+        ScriptedResponse::Respond(init_producer_id_v2_response_body()),
+        ScriptedResponse::RespondWithAddressAndClose(metadata_response_for_address),
+        ScriptedResponse::Respond(api_versions_response_body(3)),
+        ScriptedResponse::RespondPartial {
+            body: produce_v3_response_body(46, -1),
+            frame_prefix_len: 8,
+        },
+        ScriptedResponse::RespondWithAddressAndClose(metadata_response_for_address),
+        ScriptedResponse::Respond(api_versions_response_body(3)),
+        ScriptedResponse::Respond(produce_v3_response_body(46, -1)),
+    ])
+    .await
+    .expect("scripted broker should bind");
+    let address = broker.address();
+    let metrics = ClientMetrics::new();
+    let mut producer = ProducerConfig::new([address.to_string()])
+        .metrics(metrics.clone())
+        .request_timeout_ms(1_000)
+        .enable_idempotence(true)
+        .max_retries(1)
+        .linger_ms(10_000)
+        .build_buffered()
+        .await
+        .expect("buffered idempotent producer should initialize");
+
+    let delivery = producer
+        .send(ProducerRecord::to("orders").partition(0).value("value"))
+        .await
+        .expect("buffered idempotent record should enqueue");
+    producer
+        .flush()
+        .await
+        .expect("buffered producer should flush after partial response loss");
+    let metadata = delivery
+        .wait()
+        .await
+        .expect("partial Produce response should resolve buffered delivery");
+
+    assert_eq!(metadata.offset(), -1);
+    assert!(metrics.snapshot().retries >= 1);
+    assert_eq!(metrics.snapshot().broker_errors, 1);
+
+    producer
+        .close()
+        .await
+        .expect("buffered producer should close cleanly");
+    let observations = broker
+        .finish()
+        .await
+        .expect("scripted broker should complete buffered producer steps");
+    assert_eq!(observations.len(), 8);
+    assert_eq!(observations[4].api_key, 0);
     assert_eq!(observations[7].api_key, 0);
     assert_eq!(observations[4].frame, observations[7].frame);
 }
