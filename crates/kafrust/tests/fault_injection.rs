@@ -738,6 +738,48 @@ async fn buffered_idempotent_producer_fatal_sequence_errors_are_terminal() {
 }
 
 #[tokio::test]
+async fn buffered_delivery_deadline_expires_before_produce_without_transmission() {
+    let broker = ScriptedBroker::start(Vec::new())
+        .await
+        .expect("scripted broker should bind");
+    let address = broker.address();
+    let metrics = ClientMetrics::new();
+    let mut producer = ProducerConfig::new([address.to_string()])
+        .metrics(metrics.clone())
+        .request_timeout_ms(1_000)
+        .delivery_timeout_ms(20)
+        .linger_ms(10_000)
+        .max_retries(0)
+        .build_buffered()
+        .await
+        .expect("buffered producer should initialize");
+
+    let delivery = producer
+        .send(ProducerRecord::to("orders").partition(0).value("value"))
+        .await
+        .expect("buffered record should enqueue");
+    assert!(matches!(
+        delivery.wait().await,
+        Err(kafrust::Error::DeliveryDeadlineExceeded {
+            phase: kafrust::DeliveryPhase::Queue,
+            possibly_transmitted: false,
+            timeout_ms: 20,
+        })
+    ));
+    assert_eq!(metrics.snapshot().buffered_records, 0);
+
+    producer
+        .close()
+        .await
+        .expect("buffered producer should close after queue expiry");
+    let observations = broker
+        .finish()
+        .await
+        .expect("scripted broker should finish without Produce requests");
+    assert!(observations.is_empty());
+}
+
+#[tokio::test]
 async fn transactional_commit_response_loss_marks_outcome_unknown_and_defunct() {
     let coordinator = ScriptedBroker::start(vec![
         ScriptedResponse::Respond(api_versions_producer_response_body()),
