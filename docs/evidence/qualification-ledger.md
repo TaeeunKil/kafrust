@@ -4509,3 +4509,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-published-soak-smoke-2026-09-03.md; kafrust-published-soak-33719565892/published-soak.json artifact
 - non_claims: bounded single-node diagnostic only; not V1-21 six-hour campaigns, not V1-22 SLO qualification, not V1-23 service-canary evidence, not universal performance parity, not release authorization
+
+## Q-PUBLISHED-PERFORMANCE-CAMPAIGN-DIAGNOSTIC-2026-09-03
+
+- date_utc: 2026-09-03
+- source_commit: e89e4d602a3ce12b8e32b4c2b339a7f50956ce68
+- client_version: 0.3.6 published artifact
+- protocol_version: 0.3.6 published dependency
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 3.7.2 and 4.3.1
+- kafka_image: apache/kafka:3.7.2 and apache/kafka:4.3.1
+- mode: published performance campaign diagnostic
+- topology: isolated single-node KRaft
+- security: PLAINTEXT
+- group_protocol: direct consumer fetch
+- workload: four profiles; none and Zstd; 5-second warmup; 20-second measured window; 2 workers; batch size 50; 1-KiB payloads
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/33720136913
+- fault: none; steady-state diagnostic
+- duration: 25 seconds configured per profile including warmup
+- record_count: 1,459,450; 1,019,700; 1,438,550; and 1,027,850 produced/consumed by profile
+- member_count: not-applicable
+- repetition_count: one per profile
+- expected_errors: zero failed requests, retries, unknown outcomes, loss, duplicates, and final gauges
+- observed_errors: all four profiles met the expected zero-error and reconciliation checks
+- retry_count: 0 for all four profiles
+- duplicate_count: 0 for all four profiles
+- loss_count: 0 for all four profiles
+- latency: p50 1 ms; p95 1-5 ms; p99 1-5 ms by profile
+- memory: RSS baseline-to-terminal growth 0 bytes; measured slope 491-15,073 bytes/second by profile
+- final_resource_gauges: in_flight_requests=0; buffered_records=0 for all four profiles
+- result: passed
+- artifact: docs/evidence/v1-published-performance-campaign-diagnostic-2026-09-03.md; four published-performance-campaign artifact directories from run 33720136913
+- non_claims: workload-specific diagnostic only; not V1-22 five-repetition eight-hour SLO evidence, not a locked baseline, not universal performance parity, not service-canary evidence, not release authorization

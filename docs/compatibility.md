@@ -20,6 +20,15 @@ fields required by the workflow assertion; source 003561b corrected the
 formatter. This is bounded diagnostic evidence, not a V1-21 campaign, V1-22
 SLO result, V1-23 service canary, or release decision.
 
+The bounded published performance diagnostic in
+[run 33720136913](https://github.com/TaeeunKil/kafrust/actions/runs/33720136913)
+also passed four Kafka 3.7.2/4.3.1 none/Zstd profiles with exact
+produce/consume reconciliation, zero retries and unknown outcomes, and zero
+final queue gauges. Its 5-second warmup and 20-second measured windows are
+retained for profiling only; this does not establish the V1-22 five-repetition
+eight-hour SLO or a universal performance ranking. Details are in
+[v1-published-performance-campaign-diagnostic-2026-09-03.md](evidence/v1-published-performance-campaign-diagnostic-2026-09-03.md).
+
 ## v1.0 Support Contract
 
 V1-01 sets the accepted support boundary below. “Required” means the named

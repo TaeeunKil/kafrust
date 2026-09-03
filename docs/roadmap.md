@@ -1179,6 +1179,16 @@ and ledger. This closes one bounded published single-node recovery diagnostic
 only. V1-21's six-hour campaigns, V1-22's controlled SLO matrix, V1-23's named
 service canary, and all release gates remain open.
 
+The bounded published performance campaign diagnostic
+[33720136913](https://github.com/TaeeunKil/kafrust/actions/runs/33720136913)
+also passed four 0.3.6 profiles (Kafka 3.7.2 and 4.3.1, none and Zstd) using
+5-second warmup and 20-second measured windows. Each profile reconciled more
+than one million produced/consumed records with zero retries, unknown
+outcomes, loss, duplicates, and final queue gauges. The retained descriptor
+marks these results diagnostic and qualified=false; they inform profiling only
+and do not close V1-22's five-repetition eight-hour SLO or authorize a release.
+See [v1-published-performance-campaign-diagnostic-2026-09-03.md](evidence/v1-published-performance-campaign-diagnostic-2026-09-03.md).
+
 ## Historical Release Qualification
 
 `0.3.5` is now published on crates.io in protocol-first order. The fresh
