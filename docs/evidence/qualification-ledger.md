@@ -5500,6 +5500,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-client-partial-write-2026-09-03.md; crates/kafrust/src/client.rs
 - non_claims: not producer retry classification, not published-artifact qualification, not multi-broker or security qualification, not long campaign, not service canary, not release authorization
 
+## Q-COMPANY-PARTIAL-WRITE-SMOKE-2026-09-03
+
+- date_utc: 2026-09-03
+- source_commit: abaf82af58e064b4a1c234eae4bf84b7bf24415f
+- client_version: 0.3.6 source workspace
+- protocol_version: Kafka ApiVersions v0 request path and scripted fault matrix
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: scripted broker fixture
+- kafka_image: not-applicable
+- mode: company WSL2 partial-write and deterministic fault smoke
+- topology: single injected transport plus in-memory scripted broker
+- security: PLAINTEXT fixture
+- group_protocol: not-applicable
+- workload: focused partial-write regression plus 29 fault-injection tests
+- workflow: scripts/check_qualification_ledger.py
+- fault: three request bytes accepted then BrokenPipe; scripted response loss and lifecycle faults
+- duration: focused test 0.04 s; fault matrix 0.62 s
+- record_count: 1 partial request attempt; 0 Kafka records
+- member_count: 0
+- repetition_count: one company WSL2 run
+- expected_errors: partial write poisons connection; deterministic fault assertions pass
+- observed_errors: focused test passed; 29 fault-injection tests passed
+- retry_count: covered by individual scripted assertions; not aggregated
+- duplicate_count: zero client-visible duplicates in covered idempotent cases
+- loss_count: zero in deterministic success/recovery cases
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: no Docker resources created or modified; WSL checkout retained
+- result: passed
+- artifact: docs/evidence/v1-company-partial-write-smoke-2026-09-03.md; crates/kafrust/src/client.rs; crates/kafrust/tests/fault_injection.rs
+- non_claims: not producer partial-write retry qualification, not published-artifact qualification, not accepted-floor or three-broker qualification, not security, not long campaign, not service canary, not release authorization
+
 ## Q-BUFFERED-INFLIGHT-DEADLINE-2026-09-03
 
 - date_utc: 2026-09-03

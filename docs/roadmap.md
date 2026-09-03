@@ -273,6 +273,12 @@ rejected with `NotConnected`. See
 This remains low-level transport evidence and does not close producer retry,
 published reconciliation, long-campaign, canary, or release gates.
 
+Company Ubuntu-T9 WSL2 x86_64 reproduced the partial-write regression at source
+`abaf82a`; the focused test and all 29 scripted fault-injection tests passed.
+The environment record is
+[`v1-company-partial-write-smoke-2026-09-03.md`](evidence/v1-company-partial-write-smoke-2026-09-03.md).
+No Docker resources were touched, and this remains short deterministic evidence.
+
 ## V1-05 Execution Update (2026-08-22)
 
 V1-05 is `In progress`. The deterministic idempotent slice now records exact

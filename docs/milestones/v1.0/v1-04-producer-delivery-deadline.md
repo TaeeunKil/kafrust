@@ -227,6 +227,12 @@ This closes low-level partial-write connection reuse only. Producer retry
 classification, delayed metadata/capability, published mixed-outcome
 reconciliation, and live qualification gates remain open.
 
+The same source was replayed on company Ubuntu-T9 WSL2 x86_64: the focused
+partial-write regression passed and all 29 scripted fault-injection tests
+passed. The short environment record is
+[`v1-company-partial-write-smoke-2026-09-03.md`](../../evidence/v1-company-partial-write-smoke-2026-09-03.md).
+This does not promote the result to a broker, published, or long-campaign gate.
+
 ## Exit Criteria
 
 1. All three producer modes share the documented total-budget calculation.

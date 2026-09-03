@@ -178,6 +178,13 @@ This is low-level transport evidence only; it does not yet classify producer
 retry behavior for partial writes or satisfy the published ten-cycle and
 100,000-record reconciliation gates.
 
+The same partial-write regression was replayed on company Ubuntu-T9 WSL2
+x86_64 at source `abaf82a`; it passed alongside all 29 scripted
+`fault_injection` tests. The short record is
+[`v1-company-partial-write-smoke-2026-09-03.md`](../../evidence/v1-company-partial-write-smoke-2026-09-03.md).
+This remains deterministic transport evidence; producer retry classification
+for partial writes and published reconciliation are still open.
+
 ## Failure And Lifecycle Contract
 
 - A safe retry retains the same producer identity and batch sequence.
