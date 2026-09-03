@@ -940,6 +940,126 @@ async fn producer_batch_delivery_deadline_expires_during_capability_without_prod
 }
 
 #[tokio::test]
+async fn buffered_delivery_deadline_expires_during_metadata_without_produce() {
+    let broker = ScriptedBroker::start(vec![ScriptedResponse::Hold])
+        .await
+        .expect("scripted broker should bind");
+    let address = broker.address();
+    let metrics = ClientMetrics::new();
+    let mut producer = ProducerConfig::new([address.to_string()])
+        .metrics(metrics.clone())
+        .request_timeout_ms(1_000)
+        .delivery_timeout_ms(20)
+        .linger_ms(10_000)
+        .max_retries(0)
+        .build_buffered()
+        .await
+        .expect("buffered producer should initialize");
+
+    let delivery = producer
+        .send(ProducerRecord::to("orders").partition(0).value("value"))
+        .await
+        .expect("buffered record should enqueue");
+    let flush_error = producer
+        .flush()
+        .await
+        .expect_err("metadata delay should exhaust the buffered delivery budget");
+    assert!(matches!(
+        flush_error,
+        kafrust::Error::DeliveryDeadlineExceeded {
+            phase: kafrust::DeliveryPhase::Metadata,
+            possibly_transmitted: false,
+            ..
+        }
+    ));
+    assert!(matches!(
+        delivery.wait().await,
+        Err(kafrust::Error::DeliveryDeadlineExceeded {
+            phase: kafrust::DeliveryPhase::Metadata,
+            possibly_transmitted: false,
+            ..
+        })
+    ));
+    assert_eq!(metrics.snapshot().buffered_records, 0);
+
+    producer
+        .close()
+        .await
+        .expect("buffered producer should close after metadata timeout");
+    let observations = broker
+        .finish()
+        .await
+        .expect("scripted broker should finish buffered metadata timeout");
+    assert_eq!(observations.len(), 1);
+    assert_eq!(observations[0].api_key, 3);
+    assert_eq!(observations[0].api_version, 1);
+}
+
+#[tokio::test]
+async fn buffered_delivery_deadline_expires_during_capability_without_produce() {
+    let broker = ScriptedBroker::start(vec![
+        ScriptedResponse::RespondWithAddressAndClose(metadata_response_for_address),
+        ScriptedResponse::Hold,
+    ])
+    .await
+    .expect("scripted broker should bind");
+    let address = broker.address();
+    let metrics = ClientMetrics::new();
+    let mut producer = ProducerConfig::new([address.to_string()])
+        .metrics(metrics.clone())
+        .request_timeout_ms(1_000)
+        .delivery_timeout_ms(20)
+        .linger_ms(10_000)
+        .max_retries(0)
+        .build_buffered()
+        .await
+        .expect("buffered producer should initialize");
+
+    let delivery = producer
+        .send(ProducerRecord::to("orders").partition(0).value("value"))
+        .await
+        .expect("buffered record should enqueue");
+    let flush_error = producer
+        .flush()
+        .await
+        .expect_err("capability delay should exhaust the buffered delivery budget");
+    assert!(matches!(
+        flush_error,
+        kafrust::Error::DeliveryDeadlineExceeded {
+            phase: kafrust::DeliveryPhase::Capability,
+            possibly_transmitted: false,
+            ..
+        }
+    ));
+    assert!(matches!(
+        delivery.wait().await,
+        Err(kafrust::Error::DeliveryDeadlineExceeded {
+            phase: kafrust::DeliveryPhase::Capability,
+            possibly_transmitted: false,
+            ..
+        })
+    ));
+    assert_eq!(metrics.snapshot().buffered_records, 0);
+
+    producer
+        .close()
+        .await
+        .expect("buffered producer should close after capability timeout");
+    let observations = broker
+        .finish()
+        .await
+        .expect("scripted broker should finish buffered capability timeout");
+    assert_eq!(observations.len(), 2);
+    assert_eq!(
+        observations
+            .iter()
+            .map(|request| (request.api_key, request.api_version))
+            .collect::<Vec<_>>(),
+        [(3, 1), (18, 3)]
+    );
+}
+
+#[tokio::test]
 async fn buffered_close_flushes_accepted_record_before_worker_shutdown() {
     let broker = ScriptedBroker::start(vec![
         ScriptedResponse::RespondWithAddressAndClose(metadata_response_for_address),
