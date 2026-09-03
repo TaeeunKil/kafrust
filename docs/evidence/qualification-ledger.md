@@ -4344,3 +4344,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-23-reference-smoke-2026-09-03.md; kafrust-migration-canary-33717760410 artifact; payload digest 98fb6a3dfe9a9ac1765160a42e05b2c63e0ed231af678f370de194c0f5044e26
 - non_claims: not a million-record comparison, not a named service canary, not forward cutover/fault observation/credential rotation/rollback, not V1-22 SLO evidence, not API freeze/RC/release readiness
+
+## Q-MIGRATION-PUBLISHED-COMPETITOR-2026-09-03
+
+- date_utc: 2026-09-03
+- source_commit: 8e45d99bc3834a1d0b27e72a6f7d2cc9bd163134
+- client_version: 0.3.6 published artifact
+- protocol_version: 0.3.6 published dependency
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka:4.3.1
+- mode: published kafrust versus rust-rdkafka comparison
+- topology: isolated single-node KRaft topics
+- security: PLAINTEXT
+- group_protocol: direct consumer comparison
+- workload: 20,000 unique 1-KiB records; batch size 200; three repetitions per implementation
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/33718060135
+- fault: none; steady-state comparison only
+- duration: three repetitions; exact per-row durations retained in workflow artifact
+- record_count: 20,000 per row; six rows
+- member_count: not-applicable
+- repetition_count: 3 per implementation
+- expected_errors: zero loss/duplicates and shared normalized payload digest
+- observed_errors: zero loss, zero duplicates, 20,000 unique records on all six rows
+- retry_count: not reported
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: not reported by comparison fixture
+- result: passed
+- artifact: docs/evidence/v1-23-published-competitor-comparison-2026-09-03.md; kafrust-rust-rdkafka-comparison-33718060135 artifact; digest 7384f0e0012fab42060df529e06bdc32a348caff3dcf143281fed226af91cffa
+- non_claims: workload-specific diagnostic only; not universal performance parity, not V1-22 SLO/baseline, not named service canary, not fault/cutover/rollback, not 1.0.0 readiness

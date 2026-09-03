@@ -1149,6 +1149,15 @@ canary, fault/cutover, credential rotation, rollback, and million-record exit
 remain absent. See
 [`v1-23-reference-smoke-2026-09-03.md`](evidence/v1-23-reference-smoke-2026-09-03.md).
 
+The published `0.3.6` competitor comparison was also refreshed in
+[33718060135](https://github.com/TaeeunKil/kafrust/actions/runs/33718060135):
+three repetitions of 20,000 1-KiB records on Kafka 4.3.1 reconciled exactly,
+while median kafrust Produce/Consume throughput was 52.36%/51.93% of
+rust-rdkafka for that workload. This is a profiling signal, not a universal
+performance or release claim; V1-22 still needs its controlled 120-job SLO
+matrix and locked baseline. See
+[`v1-23-published-competitor-comparison-2026-09-03.md`](evidence/v1-23-published-competitor-comparison-2026-09-03.md).
+
 ## Historical Release Qualification
 
 `0.3.5` is now published on crates.io in protocol-first order. The fresh

@@ -265,6 +265,19 @@ raw result and non-claims are in
 This strengthens the comparison evidence but does not close V1-22's SLO,
 baseline, or optimization gates.
 
+### Published comparison refresh (2026-09-03)
+
+The exact published `kafrust 0.3.6` versus `rust-rdkafka 0.39.0` comparison was
+rerun in [33718060135](https://github.com/TaeeunKil/kafrust/actions/runs/33718060135)
+with 20,000 unique 1-KiB records, batch size 200, and three repetitions per
+implementation on Kafka 4.3.1. All six rows reconciled zero loss and
+duplicates with one shared digest. Median kafrust throughput was 81,174.44
+Produce and 316,018.06 Consume records/s versus 155,028.38 and 608,580.00 for
+rust-rdkafka (52.36% and 51.93% for this workload). This confirms a material
+workload-specific gap to drive profiling; it is not an SLO, locked baseline,
+universal parity claim, or release authorization. Details are in
+[`v1-23-published-competitor-comparison-2026-09-03.md`](../../evidence/v1-23-published-competitor-comparison-2026-09-03.md).
+
 ### Profiling path (2026-08-23)
 
 The manual [`Kafka Benchmark Profile Diagnostic`](../../.github/workflows/benchmark-profile-diagnostic.yml)
