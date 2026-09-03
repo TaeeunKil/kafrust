@@ -141,6 +141,21 @@ This closes the accepted-record close/flush slice only; expired or in-flight
 close ambiguity, cancellation during transmission, published mixed-outcome
 reconciliation, and live evidence remain open.
 
+### Buffered in-flight deadline after Produce transmission (2026-09-03)
+
+At source commit `ed71f6d3d1ac50aa0f27e3a89d3a626238a452bb`,
+`buffered_delivery_deadline_expires_after_produce_without_response` holds the
+Produce response after the request is observed. The configured 100 ms total
+budget expires in the Produce phase with `possibly_transmitted=true`; both
+`flush()` and the delivery handle report the typed deadline error, the
+buffered gauge drains, and the worker closes cleanly. The detailed record is
+[`v1-buffered-inflight-deadline-2026-09-03.md`](../../evidence/v1-buffered-inflight-deadline-2026-09-03.md).
+
+This closes the deterministic buffered post-write deadline slice only. Close
+while a request is still blocked, delayed metadata/capability, cancellation
+during transmission, published mixed-outcome reconciliation, and live
+evidence remain open.
+
 ## Exit Criteria
 
 1. All three producer modes share the documented total-budget calculation.

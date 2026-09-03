@@ -226,6 +226,16 @@ buffered gauge drained. Details are in
 Expired or in-flight close ambiguity, cancellation during transmission, and
 published mixed-outcome reconciliation remain open.
 
+At pushed head `ed71f6d`, the buffered worker was also held after transmitting
+Produce until its 100 ms total delivery budget expired. Both `flush()` and the
+delivery handle reported `DeliveryDeadlineExceeded` in the Produce phase with
+`possibly_transmitted=true`; the buffered gauge drained and the worker joined
+cleanly. Details are in
+[`v1-buffered-inflight-deadline-2026-09-03.md`](evidence/v1-buffered-inflight-deadline-2026-09-03.md).
+This closes the deterministic buffered post-write deadline slice only; close
+while a request remains blocked, delayed metadata/capability, cancellation
+during transmission, and published mixed-outcome reconciliation remain open.
+
 ## V1-05 Execution Update (2026-08-22)
 
 V1-05 is `In progress`. The deterministic idempotent slice now records exact
