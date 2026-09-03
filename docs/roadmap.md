@@ -224,6 +224,15 @@ heartbeat pause, the member completed a post-failover heartbeat and clean
 leave, and the broker passed readiness after restart. This is diagnostic
 evidence only and does not satisfy the V1-21 fault-soak duration or ledger gate.
 
+The self-hosted runner is now technically online, but the unchanged campaign
+capacity guard refuses a long dispatch because T: has `629.32 GiB` free versus
+the required `700 GiB`; Docker root has `855 GiB` free. The T: backup
+`Ubuntu-full-2026-08-24.tar` is `107.46 GiB`, so relocating that verified copy
+to independent storage would clear the host threshold. No backup move or
+deletion was performed, and the generated WSL resolver was restored after a
+temporary DNS connectivity probe. Details are in
+[`v1-long-campaign-capacity-audit-2026-08-24.md`](evidence/v1-long-campaign-capacity-audit-2026-08-24.md).
+
 These are local diagnostics only. They do not close V1-03 through V1-18 or
 V1-20 through V1-23, do not substitute for the six-hour/24-hour campaigns or
 named migration canary, and do not authorize a version/tag or crates.io

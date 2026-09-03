@@ -173,3 +173,22 @@ The long-campaign workflows now check the Windows volume that owns the VHDX
 and run an unconditional prefix-scoped container,
 volume, network, and stale-build-cache cleanup. These guards prevent a known
 capacity failure from being dispatched, but they do not qualify a campaign.
+
+## Current runner preflight (2026-09-03)
+
+The registered `wsl-ubuntu-t9` listener and its systemd service are present on
+the company workstation. The repository inventory reported the runner online
+after a root-only temporary resolver override, because WSL's generated
+`10.255.255.254` resolver timed out for the GitHub Actions pipeline endpoints;
+the company DNS server resolved them. The override was restored to the
+generated resolver after the connectivity check, so no persistent WSL network
+configuration was changed.
+
+The long-campaign capacity guard was then run read-only and refused dispatch:
+T: (`/mnt/t`) had `629.32 GiB` free while the guard requires `700 GiB`, whereas
+the Docker root had `855 GiB` free. The only material movable item identified
+on T: is `T:\Backups\Ubuntu-full-2026-08-24.tar` at `115,386,419,200` bytes
+(`107.46 GiB`); `T:\WSL\Ubuntu\ext4.vhdx` is `208,931,913,728` bytes
+(`194.58 GiB`). Moving the verified backup to an independent volume would
+raise T: above the guard threshold, but no move or deletion was performed in
+this preflight. The exact long-campaign manifest therefore remains not-run.
