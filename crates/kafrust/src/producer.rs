@@ -74,6 +74,36 @@ macro_rules! transaction_transport_or_retry {
     };
 }
 
+struct TransactionMutationGuard<'a> {
+    state: &'a mut Option<TransactionState>,
+    armed: bool,
+}
+
+impl Drop for TransactionMutationGuard<'_> {
+    fn drop(&mut self) {
+        if !self.armed {
+            return;
+        }
+        if let Some(state) = self.state.as_mut() {
+            state.status = TransactionStatus::Defunct;
+            state.registered_partitions.clear();
+        }
+    }
+}
+
+async fn await_transaction_mutation<T, F>(
+    state: &mut Option<TransactionState>,
+    request: F,
+) -> Result<T>
+where
+    F: Future<Output = Result<T>>,
+{
+    let mut guard = TransactionMutationGuard { state, armed: true };
+    let result = request.await;
+    guard.armed = false;
+    result
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Kafka produce acknowledgement policy.
 pub enum Acks {
@@ -3228,14 +3258,17 @@ impl Producer {
                     &self.config.client,
                     &mut attempt,
                     self.config.max_retries,
-                    client.add_partitions_to_txn_v3(
-                        transactional_id.clone(),
-                        identity.producer_id,
-                        identity.producer_epoch,
-                        vec![AddPartitionsToTxnTopic {
-                            name: topic.to_owned(),
-                            partitions: vec![partition],
-                        }],
+                    await_transaction_mutation(
+                        &mut self.transaction_state,
+                        client.add_partitions_to_txn_v3(
+                            transactional_id.clone(),
+                            identity.producer_id,
+                            identity.producer_epoch,
+                            vec![AddPartitionsToTxnTopic {
+                                name: topic.to_owned(),
+                                partitions: vec![partition],
+                            }],
+                        ),
                     )
                 );
                 response
@@ -3255,14 +3288,17 @@ impl Producer {
                     &self.config.client,
                     &mut attempt,
                     self.config.max_retries,
-                    client.add_partitions_to_txn_v0(
-                        transactional_id.clone(),
-                        identity.producer_id,
-                        identity.producer_epoch,
-                        vec![AddPartitionsToTxnTopic {
-                            name: topic.to_owned(),
-                            partitions: vec![partition],
-                        }],
+                    await_transaction_mutation(
+                        &mut self.transaction_state,
+                        client.add_partitions_to_txn_v0(
+                            transactional_id.clone(),
+                            identity.producer_id,
+                            identity.producer_epoch,
+                            vec![AddPartitionsToTxnTopic {
+                                name: topic.to_owned(),
+                                partitions: vec![partition],
+                            }],
+                        ),
                     )
                 );
                 response
@@ -3364,11 +3400,14 @@ impl Producer {
                     &self.config.client,
                     &mut attempt,
                     self.config.max_retries,
-                    client.add_offsets_to_txn_v3(
-                        transactional_id.to_owned(),
-                        producer_id,
-                        producer_epoch,
-                        group_id.to_owned(),
+                    await_transaction_mutation(
+                        &mut self.transaction_state,
+                        client.add_offsets_to_txn_v3(
+                            transactional_id.to_owned(),
+                            producer_id,
+                            producer_epoch,
+                            group_id.to_owned(),
+                        ),
                     )
                 );
                 response.error_code
@@ -3378,11 +3417,14 @@ impl Producer {
                     &self.config.client,
                     &mut attempt,
                     self.config.max_retries,
-                    client.add_offsets_to_txn_v0(
-                        transactional_id.to_owned(),
-                        producer_id,
-                        producer_epoch,
-                        group_id.to_owned(),
+                    await_transaction_mutation(
+                        &mut self.transaction_state,
+                        client.add_offsets_to_txn_v0(
+                            transactional_id.to_owned(),
+                            producer_id,
+                            producer_epoch,
+                            group_id.to_owned(),
+                        ),
                     )
                 );
                 response.error_code
@@ -3457,12 +3499,15 @@ impl Producer {
                 &self.config.client,
                 &mut attempt,
                 self.config.max_retries,
-                client.txn_offset_commit_v0(
-                    transactional_id.to_owned(),
-                    group_id.to_owned(),
-                    producer_id,
-                    producer_epoch,
-                    topics.clone(),
+                await_transaction_mutation(
+                    &mut self.transaction_state,
+                    client.txn_offset_commit_v0(
+                        transactional_id.to_owned(),
+                        group_id.to_owned(),
+                        producer_id,
+                        producer_epoch,
+                        topics.clone(),
+                    ),
                 )
             );
             let error = response.topics.iter().find_map(|topic| {
@@ -3549,15 +3594,18 @@ impl Producer {
                 &self.config.client,
                 &mut attempt,
                 self.config.max_retries,
-                client.txn_offset_commit_v3(
-                    transactional_id,
-                    group_id,
-                    producer_id,
-                    producer_epoch,
-                    metadata.generation_id(),
-                    metadata.member_id(),
-                    metadata.group_instance_id().map(str::to_owned),
-                    topics.clone(),
+                await_transaction_mutation(
+                    &mut self.transaction_state,
+                    client.txn_offset_commit_v3(
+                        transactional_id,
+                        group_id,
+                        producer_id,
+                        producer_epoch,
+                        metadata.generation_id(),
+                        metadata.member_id(),
+                        metadata.group_instance_id().map(str::to_owned),
+                        topics.clone(),
+                    ),
                 )
             );
             let error = response.topics.iter().find_map(|topic| {
@@ -6477,6 +6525,77 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn cancels_add_partitions_after_transmission_marks_producer_defunct() {
+        let bootstrap_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let bootstrap_addr = bootstrap_listener.local_addr().unwrap();
+        let coordinator_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let coordinator_addr = coordinator_listener.local_addr().unwrap();
+        let (add_seen_tx, add_seen_rx) = oneshot::channel();
+
+        let server = tokio::spawn(async move {
+            let (mut bootstrap_socket, _) = bootstrap_listener.accept().await.unwrap();
+            let find_coordinator = read_frame(&mut bootstrap_socket).await;
+            assert_eq!(&find_coordinator[0..4], &[0, 10, 0, 1]);
+            write_frame(
+                &mut bootstrap_socket,
+                &find_coordinator_response_frame(&find_coordinator, 2, coordinator_addr),
+            )
+            .await;
+
+            let (mut coordinator_socket, _) = coordinator_listener.accept().await.unwrap();
+            let api_versions = read_frame(&mut coordinator_socket).await;
+            assert_eq!(&api_versions[0..4], &[0, 18, 0, 3]);
+            write_frame(
+                &mut coordinator_socket,
+                &api_versions_transaction_response_frame(&api_versions, 24, 3),
+            )
+            .await;
+
+            let add_partitions = read_frame(&mut coordinator_socket).await;
+            assert_eq!(&add_partitions[0..4], &[0, 24, 0, 3]);
+            let _ = add_seen_tx.send(());
+            time::sleep(Duration::from_millis(50)).await;
+        });
+
+        let config = ProducerConfig::new([bootstrap_addr.to_string()])
+            .transactional_id("orders-tx")
+            .max_retries(0);
+        let client = config.client.clone().connect().await.unwrap();
+        let mut transaction_state = TransactionState::new("orders-tx".to_owned());
+        transaction_state.status = TransactionStatus::InTransaction;
+        let mut producer = Producer {
+            client,
+            config,
+            metadata_cache: BTreeMap::new(),
+            leader_hints: BTreeMap::new(),
+            topic_id_cache: BTreeMap::new(),
+            keyless_partition_indexes: BTreeMap::new(),
+            broker_clients: std::sync::Arc::new(SharedBrokerClientCache::default()),
+            idempotent_state: Some(IdempotentProducerState::new(42, 3)),
+            transaction_state: Some(transaction_state),
+        };
+
+        let mut registration = Box::pin(producer.register_transaction_partition("orders", 0));
+        tokio::select! {
+            result = &mut registration => assert!(result.is_err(), "AddPartitionsToTxn completed before cancellation"),
+            _ = add_seen_rx => {}
+        }
+        drop(registration);
+
+        assert_eq!(
+            producer.transaction_status(),
+            Some(TransactionStatus::Defunct)
+        );
+        assert!(!producer.in_transaction());
+        assert!(matches!(
+            producer.begin_transaction(),
+            Err(Error::TransactionProducerDefunct)
+        ));
+
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn registers_transaction_partition_with_v0_when_flexible_version_is_unavailable() {
         let bootstrap_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let bootstrap_addr = bootstrap_listener.local_addr().unwrap();
@@ -6604,6 +6723,148 @@ mod tests {
             .add_group_offsets_to_transaction("orders-tx", "orders", 42, 3)
             .await
             .unwrap();
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn cancels_add_offsets_after_transmission_marks_producer_defunct() {
+        let bootstrap_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let bootstrap_addr = bootstrap_listener.local_addr().unwrap();
+        let coordinator_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let coordinator_addr = coordinator_listener.local_addr().unwrap();
+        let (add_seen_tx, add_seen_rx) = oneshot::channel();
+
+        let server = tokio::spawn(async move {
+            let (mut bootstrap_socket, _) = bootstrap_listener.accept().await.unwrap();
+            let find_coordinator = read_frame(&mut bootstrap_socket).await;
+            assert_eq!(&find_coordinator[0..4], &[0, 10, 0, 1]);
+            write_frame(
+                &mut bootstrap_socket,
+                &find_coordinator_response_frame(&find_coordinator, 2, coordinator_addr),
+            )
+            .await;
+
+            let (mut coordinator_socket, _) = coordinator_listener.accept().await.unwrap();
+            let api_versions = read_frame(&mut coordinator_socket).await;
+            assert_eq!(&api_versions[0..4], &[0, 18, 0, 3]);
+            write_frame(
+                &mut coordinator_socket,
+                &api_versions_transaction_response_frame(&api_versions, 25, 3),
+            )
+            .await;
+
+            let add_offsets = read_frame(&mut coordinator_socket).await;
+            assert_eq!(&add_offsets[0..4], &[0, 25, 0, 3]);
+            let _ = add_seen_tx.send(());
+            time::sleep(Duration::from_millis(50)).await;
+        });
+
+        let config = ProducerConfig::new([bootstrap_addr.to_string()])
+            .transactional_id("orders-tx")
+            .max_retries(0);
+        let client = config.client.clone().connect().await.unwrap();
+        let mut transaction_state = TransactionState::new("orders-tx".to_owned());
+        transaction_state.status = TransactionStatus::InTransaction;
+        let mut producer = Producer {
+            client,
+            config,
+            metadata_cache: BTreeMap::new(),
+            leader_hints: BTreeMap::new(),
+            topic_id_cache: BTreeMap::new(),
+            keyless_partition_indexes: BTreeMap::new(),
+            broker_clients: std::sync::Arc::new(SharedBrokerClientCache::default()),
+            idempotent_state: Some(IdempotentProducerState::new(42, 3)),
+            transaction_state: Some(transaction_state),
+        };
+
+        let mut add_offsets =
+            Box::pin(producer.add_group_offsets_to_transaction("orders-tx", "orders", 42, 3));
+        tokio::select! {
+            result = &mut add_offsets => assert!(result.is_err(), "AddOffsetsToTxn completed before cancellation"),
+            _ = add_seen_rx => {}
+        }
+        drop(add_offsets);
+
+        assert_eq!(
+            producer.transaction_status(),
+            Some(TransactionStatus::Defunct)
+        );
+        assert!(!producer.in_transaction());
+        assert!(matches!(
+            producer.begin_transaction(),
+            Err(Error::TransactionProducerDefunct)
+        ));
+
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn cancels_transaction_offset_commit_after_transmission_marks_producer_defunct() {
+        let bootstrap_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let bootstrap_addr = bootstrap_listener.local_addr().unwrap();
+        let coordinator_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let coordinator_addr = coordinator_listener.local_addr().unwrap();
+        let (commit_seen_tx, commit_seen_rx) = oneshot::channel();
+
+        let server = tokio::spawn(async move {
+            let (mut bootstrap_socket, _) = bootstrap_listener.accept().await.unwrap();
+            let find_coordinator = read_frame(&mut bootstrap_socket).await;
+            assert_eq!(&find_coordinator[0..4], &[0, 10, 0, 1]);
+            write_frame(
+                &mut bootstrap_socket,
+                &find_coordinator_response_frame(&find_coordinator, 2, coordinator_addr),
+            )
+            .await;
+
+            let (mut coordinator_socket, _) = coordinator_listener.accept().await.unwrap();
+            let txn_offset_commit = read_frame(&mut coordinator_socket).await;
+            assert_eq!(&txn_offset_commit[0..4], &[0, 28, 0, 0]);
+            let _ = commit_seen_tx.send(());
+            time::sleep(Duration::from_millis(50)).await;
+        });
+
+        let config = ProducerConfig::new([bootstrap_addr.to_string()])
+            .transactional_id("orders-tx")
+            .max_retries(0);
+        let client = config.client.clone().connect().await.unwrap();
+        let mut transaction_state = TransactionState::new("orders-tx".to_owned());
+        transaction_state.status = TransactionStatus::InTransaction;
+        let mut producer = Producer {
+            client,
+            config,
+            metadata_cache: BTreeMap::new(),
+            leader_hints: BTreeMap::new(),
+            topic_id_cache: BTreeMap::new(),
+            keyless_partition_indexes: BTreeMap::new(),
+            broker_clients: std::sync::Arc::new(SharedBrokerClientCache::default()),
+            idempotent_state: Some(IdempotentProducerState::new(42, 3)),
+            transaction_state: Some(transaction_state),
+        };
+
+        let assignments = [ConsumerAssignment::new("orders".to_owned(), 0, 42)];
+        let mut commit = Box::pin(producer.commit_group_offsets_to_transaction(
+            "orders-tx",
+            "orders",
+            42,
+            3,
+            transaction_offset_topics(&assignments),
+        ));
+        tokio::select! {
+            result = &mut commit => assert!(result.is_err(), "TxnOffsetCommit completed before cancellation"),
+            _ = commit_seen_rx => {}
+        }
+        drop(commit);
+
+        assert_eq!(
+            producer.transaction_status(),
+            Some(TransactionStatus::Defunct)
+        );
+        assert!(!producer.in_transaction());
+        assert!(matches!(
+            producer.begin_transaction(),
+            Err(Error::TransactionProducerDefunct)
+        ));
+
         server.await.unwrap();
     }
 
