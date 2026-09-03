@@ -19666,6 +19666,63 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn classifies_member_aware_consumer_group_offset_commit_disconnect_as_unknown() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let coordinator_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&coordinator_request[0..4], &[0, 10, 0, 1]);
+            write_frame(
+                &mut bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let (mut coordinator, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut coordinator).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            // Deliberately omit OffsetCommit from the capability response so
+            // the member-aware API exercises its v9 compatibility fallback.
+            write_frame(&mut coordinator, &api_versions_with_list_transactions()).await;
+
+            let commit_request = read_frame(&mut coordinator).await;
+            assert_eq!(&commit_request[0..4], &[0, 8, 0, 9]);
+            assert!(commit_request
+                .windows(9)
+                .any(|bytes| bytes[0] == 9 && &bytes[1..] == b"member-a"));
+            assert!(commit_request.windows(4).any(|bytes| bytes == [0, 0, 0, 7]));
+            drop(coordinator);
+        });
+        let metrics = ClientMetrics::new();
+        let admin = AdminClient::new(
+            ClientConfig::new([addr.to_string()])
+                .request_timeout_ms(1_000)
+                .metrics(metrics.clone()),
+        )
+        .max_retries(0);
+
+        let error = admin
+            .alter_consumer_group_offsets_with_member(
+                "orders-group",
+                "member-a",
+                7,
+                None,
+                &[ConsumerGroupOffset::new("orders", 0, 42)],
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            Error::AdminMutationOutcomeUnknown {
+                operation: "OffsetCommit"
+            }
+        ));
+        assert_eq!(metrics.snapshot().retries, 0);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn classifies_consumer_group_offset_delete_disconnect_as_unknown() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
