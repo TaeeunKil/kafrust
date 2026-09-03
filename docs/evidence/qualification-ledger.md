@@ -5499,3 +5499,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-buffered-close-edge-cases-2026-09-03.md; crates/kafrust/tests/fault_injection.rs
 - non_claims: not cancellation during socket I/O, not delayed metadata/capability, not published mixed-outcome qualification, not long campaigns, not service canary, not release authorization
+
+## Q-BUFFERED-DELIVERY-CANCELLATION-2026-09-03
+
+- date_utc: 2026-09-03
+- source_commit: c1dc20943dd9ae7e7f9971a665c4ca15dfd3b8cc
+- client_version: 0.3.6 source checkout
+- protocol_version: 0.3.6 source checkout
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: not-applicable; in-memory scripted broker
+- kafka_image: not-applicable
+- mode: buffered delivery receiver cancellation cleanup
+- topology: in-memory scripted broker
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: one buffered record whose delivery receiver is dropped before flush
+- workflow: scripts/check_qualification_ledger.py
+- fault: caller drops ProducerDelivery while the accepted record remains queued
+- duration: deterministic integration test 0.01 seconds
+- record_count: one accepted buffered delivery
+- member_count: not-applicable
+- repetition_count: one bounded scripted run
+- expected_errors: receiver cancellation must not cancel accepted Produce; flush/close complete and gauge drains
+- observed_errors: one Metadata, one ApiVersions, and one Produce response at offset 44; flush and close succeeded; buffered gauge zero
+- retry_count: 0
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: buffered worker closed cleanly; no external resources
+- result: passed
+- artifact: docs/evidence/v1-buffered-delivery-cancellation-2026-09-03.md; crates/kafrust/tests/fault_injection.rs
+- non_claims: not cancellation during socket I/O, not partial client request-write coverage, not delayed metadata/capability, not published mixed-outcome qualification, not long campaigns, not service canary, not release authorization

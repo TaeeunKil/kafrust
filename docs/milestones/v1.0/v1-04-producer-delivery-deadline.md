@@ -179,6 +179,19 @@ This closes deterministic close handling for these two paths only;
 cancellation during socket I/O, delayed metadata/capability, published
 mixed-outcome reconciliation, and live evidence remain open.
 
+### Buffered delivery receiver cancellation (2026-09-03)
+
+At source commit `c1dc20943dd9ae7e7f9971a665c4ca15dfd3b8cc`,
+`buffered_delivery_sender_cancellation_releases_record_after_flush` drops a
+delivery receiver after enqueue. The accepted record is still transmitted and
+acknowledged, `flush()` completes, the buffered gauge reaches zero, and owner
+close joins the worker. The detailed record is
+[`v1-buffered-delivery-cancellation-2026-09-03.md`](../../evidence/v1-buffered-delivery-cancellation-2026-09-03.md).
+
+This closes receiver-cancellation cleanup only; cancellation while socket I/O
+is blocked, partial client request writes, delayed metadata/capability,
+published mixed-outcome reconciliation, and live evidence remain open.
+
 ## Exit Criteria
 
 1. All three producer modes share the documented total-budget calculation.

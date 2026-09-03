@@ -295,6 +295,14 @@ verified. Details are in
 Cancellation during socket I/O, delayed metadata/capability, and published
 mixed-outcome reconciliation remain open.
 
+At pushed head `c1dc209`, dropping a buffered `ProducerDelivery` after enqueue
+was also exercised. The worker still sent and acknowledged the accepted
+record, `flush()` completed, and the buffered gauge drained before owner close.
+Details are in
+[`v1-buffered-delivery-cancellation-2026-09-03.md`](evidence/v1-buffered-delivery-cancellation-2026-09-03.md).
+Cancellation while socket I/O is blocked and partial client request writes
+remain open.
+
 At pushed head `a46462f`, the buffered idempotent path now covers terminal
 sequence errors 45, 47, and 90. Each first delivery returns the fatal broker
 code; a second queued delivery emits no Produce frame and returns the same
