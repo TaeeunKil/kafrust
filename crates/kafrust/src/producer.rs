@@ -8340,6 +8340,13 @@ mod tests {
 
             let produce = read_frame(&mut socket).await;
             assert_eq!(&produce[0..4], &[0, 0, 0, 3]);
+            let mut expected_identity = Vec::new();
+            expected_identity.extend_from_slice(&42_i64.to_be_bytes());
+            expected_identity.extend_from_slice(&3_i16.to_be_bytes());
+            expected_identity.extend_from_slice(&0_i32.to_be_bytes());
+            assert!(produce
+                .windows(expected_identity.len())
+                .any(|window| window == expected_identity));
             write_frame(&mut socket, &produce_v3_response_frame(0, 0)).await;
         });
 
