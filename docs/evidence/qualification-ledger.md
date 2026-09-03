@@ -5929,6 +5929,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-direct-consumer-integrity-2026-09-03.md; crates/kafrust/src/consumer.rs; crates/kafrust/tests/fault_injection.rs
 - non_claims: not retention or unclean-election recovery, not published-artifact qualification, not accepted-floor or three-broker qualification, not security, not 100,000-record reconciliation, not long campaigns, not service canary, not release authorization
 
+## Q-GROUP-MAX-POLL-POLICY-2026-09-03
+
+- date_utc: 2026-09-03
+- source_commit: b7b98f31d2977e3a795c11715ffbb7ff29fb68b7
+- client_version: 0.3.6 source workspace
+- protocol_version: classic consumer group lifecycle policy
+- work_status: In progress
+- evidence_level: Design
+- kafka_version: broker-configured `max.poll.interval.ms`
+- kafka_image: not-applicable
+- mode: explicit long-processing policy decision
+- topology: not-applicable
+- security: not-applicable
+- group_protocol: classic
+- workload: caller processing between group polls
+- workflow: scripts/check_qualification_ledger.py
+- fault: broker removes a member that misses the configured poll interval
+- duration: policy review; no runtime campaign
+- record_count: 0
+- member_count: 0
+- repetition_count: one documented decision
+- expected_errors: missed interval follows normal rebalance/rejoin; no hidden client-side timer
+- observed_errors: policy documented and ledger validation passed
+- retry_count: not-applicable
+- duplicate_count: not-applicable
+- loss_count: not-applicable
+- latency: not-applicable
+- memory: not-applicable
+- final_resource_gauges: not-applicable
+- result: passed
+- artifact: docs/milestones/v1.0/v1-08-classic-group-lifecycle.md; docs/roadmap.md
+- non_claims: not client-side max.poll enforcement, not published churn qualification, not callback or heartbeat qualification, not offset-restoration qualification, not long campaigns, not service canary, not release authorization
+
 ## Q-TRANSACTION-MUTATION-CANCEL-2026-09-03
 
 - date_utc: 2026-09-03

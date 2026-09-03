@@ -439,6 +439,17 @@ full local Rust validation and the regenerated public API snapshot. Published
 floor/current group profiles, churn, callback, heartbeat, and offset
 restoration gates remain open.
 
+### Long-processing and `max.poll.interval` policy (2026-09-03)
+
+V1-08 now records an explicit boundary: the classic group API does not expose
+or enforce a client-side `max.poll.interval.ms` timer. The broker setting is
+authoritative, and callers must return to `poll_with_heartbeat` within that
+interval even when background heartbeats run. Longer processing must be moved
+outside the group-poll call or covered by an explicitly larger broker setting;
+missed intervals follow the normal rejoin path and are not hidden. This closes
+the policy decision only; published churn, callback, heartbeat, and exact
+offset-restoration gates remain open.
+
 ## V1-09 Execution Update (2026-08-22)
 
 V1-09 is `In progress`. The KIP-848 path now has deterministic evidence for

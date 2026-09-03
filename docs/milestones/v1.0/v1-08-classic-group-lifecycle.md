@@ -78,6 +78,22 @@ callback ordering, heartbeat ownership, coordinator movement, and exact
 offset-restoration gates remain open. This record makes no published-artifact,
 40-cycle churn, or data-loss claim.
 
+### Long-processing and `max.poll.interval` policy (2026-09-03)
+
+The classic group API does not expose or enforce a client-side
+`max.poll.interval.ms` timer. The broker remains authoritative: callers must
+return to `poll_with_heartbeat` within the broker's configured interval, even
+when a background heartbeat task is running. Applications that need longer
+work must move processing outside the group-poll call, pause or split bounded
+partition queues, or choose a broker interval that covers the workload. A
+missed interval is surfaced through the normal rebalance/rejoin path; kafrust
+does not promise to prevent broker-initiated removal or to hide duplicate work
+after an application pause.
+
+This is an explicit unsupported-client-enforcement decision for work package 5,
+not a live `max.poll.interval` qualification. The published churn and offset
+restoration gates remain open.
+
 ## Failure And Lifecycle Contract
 
 - The group session exclusively owns member ID, generation, assignment, and
