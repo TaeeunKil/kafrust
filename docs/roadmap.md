@@ -249,6 +249,22 @@ The company WSL2 short smoke was refreshed at source `c1dc209`; the complete
 cancellation and the buffered close edge cases. The latest record is
 [`v1-company-fault-matrix-29test-smoke-2026-09-03.md`](evidence/v1-company-fault-matrix-29test-smoke-2026-09-03.md).
 
+## V1-04/V1-05 Execution Update (2026-09-03)
+
+The low-level client now poisons a connection when a caller cancels an
+in-flight request after socket I/O begins. The regression
+`does_not_reuse_connection_after_canceled_request` confirms that a subsequent
+request receives `NotConnected` instead of consuming an uncertain response.
+The focused test and the required workspace validation passed at source
+`2c28eec77911420e8dbb2d5d94bb96400f0148b9`. The detailed evidence is
+[`v1-client-cancellation-poisoning-2026-09-03.md`](evidence/v1-client-cancellation-poisoning-2026-09-03.md).
+
+This closes only low-level connection reuse after caller cancellation. Partial
+client request writes, published mixed-outcome reconciliation, long campaigns,
+multi-broker security profiles, service canary qualification, and release
+authorization remain open; no version or publication decision follows from
+this slice.
+
 ## V1-05 Execution Update (2026-08-22)
 
 V1-05 is `In progress`. The deterministic idempotent slice now records exact

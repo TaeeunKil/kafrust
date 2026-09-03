@@ -5434,6 +5434,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-company-fault-matrix-short-smoke-2026-09-03.md; crates/kafrust/tests/fault_injection.rs; crates/kafrust/tests/support/mod.rs
 - non_claims: not published-artifact qualification, not accepted-floor or three-broker qualification, not security, not long campaigns, not service canary, not release authorization
 
+## Q-CLIENT-CANCELED-INFLIGHT-2026-09-03
+
+- date_utc: 2026-09-03
+- source_commit: 2c28eec77911420e8dbb2d5d94bb96400f0148b9
+- client_version: 0.3.6 source workspace
+- protocol_version: Kafka ApiVersions v3 request path
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: scripted broker fixture
+- kafka_image: not-applicable
+- mode: low-level canceled in-flight request poisoning
+- topology: single in-memory duplex connection
+- security: PLAINTEXT fixture
+- group_protocol: not-applicable
+- workload: one ApiVersions request followed by caller cancellation and one rejected reuse attempt
+- workflow: scripts/check_qualification_ledger.py
+- fault: cancellation after request transmission while response read is blocked
+- duration: focused test 0.00 s; required workspace validation passed
+- record_count: 1 request observed; 0 records
+- member_count: 0
+- repetition_count: one deterministic regression
+- expected_errors: canceled request leaves connection unusable; next request returns NotConnected
+- observed_errors: focused regression passed; next ApiVersions call returned Error::Io(NotConnected)
+- retry_count: 0
+- duplicate_count: 0
+- loss_count: not-applicable
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: no Docker resources created or modified; in-memory broker task joined
+- result: passed
+- artifact: docs/evidence/v1-client-cancellation-poisoning-2026-09-03.md; crates/kafrust/src/client.rs
+- non_claims: not partial client request-write qualification, not producer delivery receiver cancellation, not published-artifact qualification, not multi-broker or security qualification, not long campaign, not service canary, not release authorization
+
 ## Q-BUFFERED-INFLIGHT-DEADLINE-2026-09-03
 
 - date_utc: 2026-09-03

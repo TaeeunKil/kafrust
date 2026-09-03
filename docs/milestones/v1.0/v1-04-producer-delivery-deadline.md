@@ -199,6 +199,21 @@ This closes receiver-cancellation cleanup only; cancellation while socket I/O
 is blocked, partial client request writes, delayed metadata/capability,
 published mixed-outcome reconciliation, and live evidence remain open.
 
+### Canceled low-level request cannot be reused (2026-09-03)
+
+At source commit `2c28eec77911420e8dbb2d5d94bb96400f0148b9`,
+`does_not_reuse_connection_after_canceled_request` cancels an `api_versions()`
+future after the request is observed by a scripted broker. The client marks the
+connection unusable and rejects the next request with `NotConnected`, so a
+possibly partial response cannot be consumed by a different operation. The
+detailed record is
+[`v1-client-cancellation-poisoning-2026-09-03.md`](../../evidence/v1-client-cancellation-poisoning-2026-09-03.md).
+
+This closes low-level connection reuse after caller cancellation only. It does
+not close producer delivery receiver cancellation, partial client request
+writes, delayed metadata/capability, published mixed-outcome reconciliation,
+or live qualification gates.
+
 ## Exit Criteria
 
 1. All three producer modes share the documented total-budget calculation.

@@ -151,6 +151,20 @@ three fatal codes. This short reproduction is recorded in
 [`v1-company-buffered-terminal-smoke-2026-09-03.md`](../../evidence/v1-company-buffered-terminal-smoke-2026-09-03.md)
 and does not change the published or multi-broker gates.
 
+### Canceled request connection poisoning (2026-09-03)
+
+At source commit `2c28eec77911420e8dbb2d5d94bb96400f0148b9`,
+`does_not_reuse_connection_after_canceled_request` cancels a low-level request
+after the scripted broker has observed it. The client permanently rejects the
+next request on that connection with `NotConnected`, preventing an uncertain
+response from being interpreted as a later idempotent operation. The detailed
+record is
+[`v1-client-cancellation-poisoning-2026-09-03.md`](../../evidence/v1-client-cancellation-poisoning-2026-09-03.md).
+
+This closes connection reuse safety for caller-canceled in-flight requests
+only; it does not classify partial client request writes or satisfy the
+published ten-cycle and 100,000-record reconciliation gates.
+
 ## Failure And Lifecycle Contract
 
 - A safe retry retains the same producer identity and batch sequence.
