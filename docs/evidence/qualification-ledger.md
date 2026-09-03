@@ -4674,3 +4674,36 @@ unqualified relative artifact label.
 - result: failed
 - artifact: docs/evidence/v1-published-short-surface-smoke-2026-09-03.md; follow-up with supported 180-second window passed in run 33722189166
 - non_claims: not a source regression finding, not a passing qualification result, not V1-21 completion, not SLO evidence, not release authorization
+
+## Q-DATAPLANE-GOLDEN-2026-09-03
+
+- date_utc: 2026-09-03
+- source_commit: e0a166fb2b0d27ca35b9985297945577c24eaee8
+- client_version: 0.3.6 source checkout
+- protocol_version: 0.3.6 source checkout
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: not-applicable; schema fixture
+- kafka_image: not-applicable; schema fixture
+- mode: complete selected data-plane request golden bytes
+- topology: not-applicable; pure protocol encoding
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: Produce v2/v3/v7/v11/v12/v13; Fetch v4/v11/v12/v13; Metadata v1/v12; ListOffsets v1; ApiVersions v0/v3/v4; OffsetForLeaderEpoch v3
+- workflow: scripts/check_data_plane_manifest.py
+- fault: empty and nullable collection boundaries, compact counts, and tagged-field terminators
+- duration: focused protocol test completed in under 1 second
+- record_count: not-applicable; wire fixture
+- member_count: not-applicable
+- repetition_count: three integration tests
+- expected_errors: exact request bytes match the checked Apache 4.3.1 schema shape
+- observed_errors: all three focused tests passed
+- retry_count: 0
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: not-applicable
+- result: passed
+- artifact: docs/evidence/v1-data-plane-golden-fixtures-2026-09-03.md; crates/kafrust-protocol/tests/data_plane_golden.rs
+- non_claims: not every non-empty response oracle, not malformed-boundary completion, not transaction-selection proof, not live floor/pinned-version qualification, not release authorization

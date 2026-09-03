@@ -1217,6 +1217,15 @@ accepted matrix, V1-21/V1-22 long gates, V1-23 service canary, or any release
 milestone. The documentation-head CI [33721524284](https://github.com/TaeeunKil/kafrust/actions/runs/33721524284)
 also passed.
 
+V1-03's missing deterministic request-shape slice is now covered by complete
+golden bytes for the selected Produce, Fetch, Metadata, ListOffsets,
+ApiVersions, and OffsetForLeaderEpoch versions. The focused protocol test
+passed all three cases; the fixture and Apache-schema boundary are recorded in
+[`v1-data-plane-golden-fixtures-2026-09-03.md`](evidence/v1-data-plane-golden-fixtures-2026-09-03.md).
+This is a current-source byte-audit increment only. Non-empty response oracles,
+malformed expansion, transaction-selection proof, and floor/pinned-current
+live version logs remain open, so V1-03 stays `In progress`.
+
 ## Historical Release Qualification
 
 `0.3.5` is now published on crates.io in protocol-first order. The fresh
