@@ -54,6 +54,10 @@ gates.
 `cargo test -p kafrust-protocol --test data_plane_malformed -- --nocapture`
 also passed all three malformed-response tests, including the new truncated
 tag-section cases.
+The pushed head
+[`8a9f5a0`](https://github.com/TaeeunKil/kafrust/commit/8a9f5a0999aa7996fa85e3b98b2e641c1e843ed7)
+passed both stable and Rust 1.81 CI jobs, including this malformed fixture, in
+[run 33727384183](https://github.com/TaeeunKil/kafrust/actions/runs/33727384183).
 
 ## Boundary
 

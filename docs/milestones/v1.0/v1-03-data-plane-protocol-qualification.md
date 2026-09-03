@@ -141,6 +141,9 @@ details are in
 This closes the deterministic request-shape and minimal empty-response slice;
 the flexible tagged-field truncation cases are also covered by
 [`data_plane_malformed.rs`](../../../crates/kafrust-protocol/tests/data_plane_malformed.rs).
+The pushed head also passed the malformed fixture in both stable and Rust 1.81
+CI jobs in
+[run 33727384183](https://github.com/TaeeunKil/kafrust/actions/runs/33727384183).
 Non-empty response oracles, the full malformed length/trailing-byte matrix,
 transaction-selection proof, and live version logs remain required.
 

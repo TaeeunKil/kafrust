@@ -1225,6 +1225,8 @@ stable/Rust 1.81 CI in
 [run 33726318714](https://github.com/TaeeunKil/kafrust/actions/runs/33726318714).
 The fixture and Apache-schema boundary are recorded in
 [`v1-data-plane-golden-fixtures-2026-09-03.md`](evidence/v1-data-plane-golden-fixtures-2026-09-03.md).
+The malformed tagged-field extension is also covered by the same stable/Rust
+1.81 CI run [33727384183](https://github.com/TaeeunKil/kafrust/actions/runs/33727384183).
 This is a current-source byte-audit increment only. Non-empty response oracles,
 the full malformed length/trailing-byte matrix, transaction-selection proof,
 and floor/pinned-current live version logs remain open, so V1-03 stays `In
