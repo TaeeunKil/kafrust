@@ -92,6 +92,16 @@ member-aware OffsetCommit, live owner movement, published profiles, and the
 remaining V1-12 gates stay open. See
 [`v1-admin-coordinator-response-loss-matrix-2026-09-04.md`](../../evidence/v1-admin-coordinator-response-loss-matrix-2026-09-04.md).
 
+Source `0a7b0426488cfe7040bdf71794bcccf97ff6a45d` adds the follow-up regression
+`classifies_member_aware_consumer_group_offset_commit_disconnect_as_unknown`
+now covers the public KIP-848 member-aware OffsetCommit entry point when the
+coordinator does not advertise v10. The fixture asserts OffsetCommit v9,
+member ID, and member epoch on the transmitted frame, then drops the response;
+the client returns `AdminMutationOutcomeUnknown` without replay. This closes
+the deterministic response-loss classification slice for both classic and
+member-aware coordinator commits. Live owner movement, published profiles,
+and the remaining V1-12 gates stay open.
+
 ## Failure And Lifecycle Contract
 
 - Read-only operations may rediscover/retry inside their budget.

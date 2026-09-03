@@ -6951,3 +6951,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-company-selfhosted-short-dns-recovery-2026-09-04.md; run artifact kafrust-published-fault-segment-company-short-dns-recovery-2026-09-04-0-33817682088; descriptor lockfile digest 2f81a33ed05baf0321bb7a643355bec49a5e3a8904d7cd2354e54a86314f976b
 - non_claims: not a six-hour V1-21 campaign, not 100-cycle or ambiguity-family completion, not cross-segment continuity, not V1-22 SLO evidence, not V1-23 service canary, not persistent resolver policy, not 1.0.0 readiness
+
+## Q-ADMIN-MEMBER-AWARE-RESPONSE-LOSS-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: 0a7b0426488cfe7040bdf71794bcccf97ff6a45d
+- client_version: 0.3.6 source checkout
+- protocol_version: OffsetCommit v9 member-aware fallback
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: not-applicable; scripted broker
+- kafka_image: not-applicable; in-memory fixture
+- mode: member-aware coordinator mutation response-loss classification
+- topology: in-memory scripted broker
+- security: not-applicable
+- group_protocol: KIP-848 member-aware Admin entry point with v9 fallback
+- workload: one complete member-aware OffsetCommit request followed by a dropped response
+- workflow: scripts/check_qualification_ledger.py
+- fault: response dropped after complete OffsetCommit v9 request transmission
+- duration: focused test 0.01 seconds on Windows
+- record_count: one complete OffsetCommit v9 mutation request frame; no response frame
+- member_count: one encoded member ID and member epoch
+- repetition_count: one Windows focused run and one all-features workspace replay
+- expected_errors: typed AdminMutationOutcomeUnknown for OffsetCommit
+- observed_errors: exact typed unknown outcome; no replay; API key/version, member ID, and epoch verified
+- retry_count: 0
+- duplicate_count: 0 client-visible mutations; no replay attempted
+- loss_count: one intentionally dropped coordinator response
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: no external resources
+- result: passed
+- artifact: docs/evidence/v1-admin-coordinator-response-loss-matrix-2026-09-04.md; docs/milestones/v1.0/v1-12-coordinator-leader-admin-mutations.md; crates/kafrust/src/admin.rs
+- non_claims: not published floor or authorization qualification, not reconciliation or three-broker failover qualification, not long campaign, not service canary, not release authorization

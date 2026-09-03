@@ -649,6 +649,15 @@ local deterministic evidence only; member-aware OffsetCommit, live movement,
 published profiles, and the remaining V1-12 gates remain open. See
 [`v1-admin-coordinator-response-loss-matrix-2026-09-04.md`](evidence/v1-admin-coordinator-response-loss-matrix-2026-09-04.md).
 
+At pushed source `0a7b0426488cfe7040bdf71794bcccf97ff6a45d`, the same local
+matrix now includes the member-aware Admin OffsetCommit entry
+point through its v9 compatibility fallback. A scripted coordinator verifies
+the complete v9 frame carries the member ID and epoch, drops the response, and
+the client returns `AdminMutationOutcomeUnknown` without replay. This closes
+the deterministic response-loss slice for classic and member-aware coordinator
+commits only; live owner movement, published profiles, and the remaining
+V1-12 gates remain open.
+
 ## V1-13 Execution Update (2026-08-22)
 
 V1-13 is `In progress`. Security Admin routes preserve typed mixed
