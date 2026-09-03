@@ -2095,8 +2095,10 @@ mod tests {
     };
     use kafrust_protocol::codec::Encoder;
     use std::collections::BTreeMap;
+    use std::time::Duration;
     use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
     use tokio::net::TcpListener;
+    use tokio::sync::oneshot;
 
     #[test]
     fn builds_consumer_config() {
@@ -2274,6 +2276,38 @@ mod tests {
         assert_eq!(record.headers().len(), 1);
         assert_eq!(record.headers()[0].key(), "source");
         assert_eq!(record.headers()[0].value(), Some(&b"checkout"[..]));
+    }
+
+    #[test]
+    fn preserves_null_and_empty_record_fields() {
+        let record = ConsumerRecord::from_message_set(
+            "orders",
+            1,
+            MessageSetRecord {
+                offset: 43,
+                leader_epoch: -1,
+                timestamp_ms: -1,
+                key: Some(Vec::new()),
+                value: None,
+                headers: vec![
+                    kafrust_protocol::api::produce::RecordBatchHeader::new(
+                        "empty",
+                        Some(Vec::new()),
+                    ),
+                    kafrust_protocol::api::produce::RecordBatchHeader::new("null", None),
+                ],
+                producer_id: None,
+                transactional: false,
+                control: false,
+            },
+        );
+
+        assert_eq!(record.key(), Some(&[][..]));
+        assert_eq!(record.value(), None);
+        assert_eq!(record.timestamp_ms(), -1);
+        assert_eq!(record.headers().len(), 2);
+        assert_eq!(record.headers()[0].value(), Some(&[][..]));
+        assert_eq!(record.headers()[1].value(), None);
     }
 
     #[test]
@@ -3089,6 +3123,66 @@ mod tests {
         assert_eq!(records.len(), 1);
         assert_eq!(records[0].offset(), 42);
         assert_eq!(metrics.snapshot().consumed_records, 1);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn cancels_fetch_after_transmission_and_reconnects_without_reusing_session() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let (fetch_seen_tx, fetch_seen_rx) = oneshot::channel();
+        let server = tokio::spawn(async move {
+            let (mut first_socket, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut first_socket).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut first_socket, &api_versions_v3_fetch_v12_response(1)).await;
+            let fetch_request = read_frame(&mut first_socket).await;
+            assert_eq!(&fetch_request[0..4], &[0, 1, 0, 12]);
+            let _ = fetch_seen_tx.send(());
+
+            let (mut second_socket, _) = listener.accept().await.unwrap();
+            let second_api_versions_request = read_frame(&mut second_socket).await;
+            assert_eq!(&second_api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut second_socket, &api_versions_v3_fetch_v12_response(1)).await;
+            let second_fetch_request = read_frame(&mut second_socket).await;
+            assert_eq!(&second_fetch_request[0..4], &[0, 1, 0, 12]);
+            write_frame(
+                &mut second_socket,
+                &fetch_v12_response_frame_with_record(2, 0),
+            )
+            .await;
+        });
+
+        let (client_stream, broker_stream) = tokio::io::duplex(64);
+        let _broker_stream = broker_stream;
+        let client = Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-consumer-cancel-test".to_owned()),
+            Some(Duration::from_millis(500)),
+        );
+        let config = ConsumerConfig::new([addr.to_string()])
+            .request_timeout_ms(500)
+            .max_retries(0);
+        let mut consumer = Consumer::from_assignments(client, config, Vec::new());
+        let mut metadata = metadata_fixture();
+        metadata.brokers[0].host = addr.ip().to_string();
+        metadata.brokers[0].port = i32::from(addr.port());
+        consumer
+            .metadata_cache
+            .insert("orders".to_owned(), metadata);
+
+        let mut canceled_fetch = Box::pin(consumer.fetch("orders", 0, 42));
+        tokio::select! {
+            result = &mut canceled_fetch => assert!(result.is_err(), "fetch completed before cancellation"),
+            _ = fetch_seen_rx => {}
+        }
+        drop(canceled_fetch);
+
+        assert!(consumer.fetch_sessions.is_empty());
+        let records = consumer.fetch("orders", 0, 42).await.unwrap();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].offset(), 42);
+
         server.await.unwrap();
     }
 
