@@ -32,6 +32,7 @@ pub struct ScriptedBroker {
     address: SocketAddr,
     task: JoinHandle<io::Result<Vec<ObservedRequest>>>,
     shutdown: Option<watch::Sender<bool>>,
+    observation_count: watch::Receiver<usize>,
 }
 
 struct IncomingRequest {
@@ -51,6 +52,7 @@ impl ScriptedBroker {
         let address = listener.local_addr()?;
         let (request_tx, mut request_rx) = mpsc::unbounded_channel();
         let (shutdown_tx, mut shutdown_rx) = watch::channel(false);
+        let (observation_tx, observation_rx) = watch::channel(0_usize);
         let task = tokio::spawn(async move {
             let mut observations = Vec::with_capacity(steps.len());
             for step in steps {
@@ -92,6 +94,7 @@ impl ScriptedBroker {
                 };
                 let correlation_id = observation.correlation_id;
                 observations.push(observation);
+                let _ = observation_tx.send(observations.len());
 
                 let (response_body, close_connection, partial_frame_prefix_len) = match step {
                     ScriptedResponse::Drop => (None, true, None),
@@ -135,11 +138,24 @@ impl ScriptedBroker {
             address,
             task,
             shutdown: Some(shutdown_tx),
+            observation_count: observation_rx,
         })
     }
 
     pub fn address(&self) -> SocketAddr {
         self.address
+    }
+
+    pub async fn wait_for_requests(&mut self, count: usize) -> io::Result<()> {
+        while *self.observation_count.borrow() < count {
+            self.observation_count.changed().await.map_err(|_| {
+                io::Error::new(
+                    io::ErrorKind::UnexpectedEof,
+                    "scripted broker stopped before observing the requested frames",
+                )
+            })?;
+        }
+        Ok(())
     }
 
     pub async fn finish(mut self) -> io::Result<Vec<ObservedRequest>> {

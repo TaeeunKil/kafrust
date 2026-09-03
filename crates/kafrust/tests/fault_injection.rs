@@ -738,6 +738,75 @@ async fn buffered_idempotent_producer_fatal_sequence_errors_are_terminal() {
 }
 
 #[tokio::test]
+async fn dropping_buffered_idempotent_producer_cancels_in_flight_delivery() {
+    let mut broker = ScriptedBroker::start(vec![
+        ScriptedResponse::Respond(api_versions_producer_response_body()),
+        ScriptedResponse::Respond(init_producer_id_v2_response_body()),
+        ScriptedResponse::RespondWithAddressAndClose(metadata_response_for_address),
+        ScriptedResponse::Respond(api_versions_response_body(3)),
+        ScriptedResponse::Hold,
+    ])
+    .await
+    .expect("scripted broker should bind");
+    let address = broker.address();
+    let metrics = ClientMetrics::new();
+    let mut producer = ProducerConfig::new([address.to_string()])
+        .metrics(metrics.clone())
+        .request_timeout_ms(1_000)
+        .delivery_timeout_ms(1_000)
+        .enable_idempotence(true)
+        .max_retries(1)
+        .linger_ms(10_000)
+        .build_buffered()
+        .await
+        .expect("buffered idempotent producer should initialize");
+    let handle = producer
+        .handle()
+        .expect("non-transactional buffered producer should expose a handle");
+
+    let delivery = producer
+        .send(ProducerRecord::to("orders").partition(0).value("value"))
+        .await
+        .expect("buffered idempotent record should enqueue");
+    let mut flush = Box::pin(producer.flush());
+    tokio::select! {
+        result = &mut flush => panic!("flush completed before the held Produce was observed: {result:?}"),
+        result = broker.wait_for_requests(5) => result.expect("scripted broker should observe the in-flight Produce"),
+    }
+    drop(flush);
+    drop(producer);
+
+    assert!(matches!(
+        delivery.wait().await,
+        Err(kafrust::Error::Unsupported(
+            "buffered producer delivery canceled"
+        ))
+    ));
+    assert_eq!(metrics.snapshot().buffered_records, 0);
+    assert!(matches!(
+        handle
+            .send(ProducerRecord::to("orders").partition(0).value("next"))
+            .await,
+        Err(kafrust::Error::Unsupported(
+            "buffered producer task stopped"
+        ))
+    ));
+
+    let observations = broker
+        .finish()
+        .await
+        .expect("scripted broker should finish after worker cancellation");
+    assert_eq!(observations.len(), 5);
+    assert_eq!(
+        observations
+            .iter()
+            .map(|request| request.api_key)
+            .collect::<Vec<_>>(),
+        [18, 22, 3, 18, 0]
+    );
+}
+
+#[tokio::test]
 async fn buffered_delivery_deadline_expires_before_produce_without_transmission() {
     let broker = ScriptedBroker::start(Vec::new())
         .await
