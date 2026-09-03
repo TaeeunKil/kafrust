@@ -60,7 +60,7 @@ pub struct ListOffsetsResponseV1 {
 
 impl ListOffsetsResponseV1 {
     pub fn decode_body(decoder: &mut Decoder<'_>) -> Result<Self> {
-        Ok(Self {
+        let response = Self {
             topics: decoder
                 .read_array("list offsets topic responses", |decoder| {
                     Ok(ListOffsetsTopicResponseV1 {
@@ -78,7 +78,9 @@ impl ListOffsetsResponseV1 {
                     })
                 })?
                 .unwrap_or_default(),
-        })
+        };
+        decoder.finish()?;
+        Ok(response)
     }
 }
 

@@ -47,6 +47,7 @@ def main() -> int:
         "rejects_truncated_data_plane_response_families",
         "rejects_negative_or_truncated_collection_lengths",
         "rejects_truncated_prefixes_for_every_selected_response_version",
+        "rejects_trailing_bytes_for_every_selected_response_version",
     ):
         if f"fn {test_name}" not in malformed_test_text:
             return fail(f"missing malformed boundary test {test_name}")

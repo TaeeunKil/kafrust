@@ -103,6 +103,17 @@ mod tests {
     }
 
     #[test]
+    fn rejects_trailing_bytes_when_decoding_finishes() {
+        let mut decoder = Decoder::new(&[0, 0xa5]);
+        assert_eq!(decoder.read_i8().unwrap(), 0);
+        assert_eq!(decoder.finish(), Err(Error::TrailingBytes { remaining: 1 }));
+
+        let mut decoder = Decoder::new(&[0]);
+        assert_eq!(decoder.read_i8().unwrap(), 0);
+        assert_eq!(decoder.finish(), Ok(()));
+    }
+
+    #[test]
     fn rejects_arrays_before_allocating_above_the_configured_limit() {
         let limits = DecodeLimits::new().with_max_array_elements(2);
 

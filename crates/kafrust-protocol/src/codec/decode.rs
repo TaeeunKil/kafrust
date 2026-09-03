@@ -106,6 +106,16 @@ impl<'a> Decoder<'a> {
         self.remaining() == 0
     }
 
+    /// Finishes decoding and rejects bytes left after the expected value.
+    pub fn finish(&self) -> Result<()> {
+        let remaining = self.remaining();
+        if remaining == 0 {
+            Ok(())
+        } else {
+            Err(Error::TrailingBytes { remaining })
+        }
+    }
+
     pub fn read_i8(&mut self) -> Result<i8> {
         Ok(self.read_exact(1)?[0] as i8)
     }

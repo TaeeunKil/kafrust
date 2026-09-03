@@ -466,12 +466,14 @@ pub struct ProduceResponseV2 {
 
 impl ProduceResponseV2 {
     pub fn decode_body(decoder: &mut Decoder<'_>) -> Result<Self> {
-        Ok(Self {
+        let response = Self {
             responses: decoder
                 .read_array("produce responses", ProduceTopicResponseV2::decode)?
                 .unwrap_or_default(),
             throttle_time_ms: decoder.read_i32()?,
-        })
+        };
+        decoder.finish()?;
+        Ok(response)
     }
 }
 
@@ -554,11 +556,13 @@ impl ProduceResponseV13 {
             .map(|data| decode_produce_node_endpoints(data, decoder.limits()))
             .transpose()?
             .unwrap_or_default();
-        Ok(Self {
+        let response = Self {
             responses,
             throttle_time_ms,
             node_endpoints,
-        })
+        };
+        decoder.finish()?;
+        Ok(response)
     }
 }
 
@@ -612,11 +616,13 @@ impl ProduceResponseV9 {
             .map(|data| decode_produce_node_endpoints(data, decoder.limits()))
             .transpose()?
             .unwrap_or_default();
-        Ok(Self {
+        let response = Self {
             responses,
             throttle_time_ms,
             node_endpoints,
-        })
+        };
+        decoder.finish()?;
+        Ok(response)
     }
 }
 
@@ -744,12 +750,14 @@ impl ProduceRecordErrorV9 {
 
 impl ProduceResponseV7 {
     pub fn decode_body(decoder: &mut Decoder<'_>) -> Result<Self> {
-        Ok(Self {
+        let response = Self {
             responses: decoder
                 .read_array("produce responses", ProduceTopicResponseV7::decode)?
                 .unwrap_or_default(),
             throttle_time_ms: decoder.read_i32()?,
-        })
+        };
+        decoder.finish()?;
+        Ok(response)
     }
 }
 

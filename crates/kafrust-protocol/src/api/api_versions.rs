@@ -229,10 +229,12 @@ impl ApiVersionsResponseV0 {
         let api_keys = decoder
             .read_array("api versions", ApiKeyVersion::decode)?
             .unwrap_or_default();
-        Ok(Self {
+        let response = Self {
             error_code,
             api_keys,
-        })
+        };
+        decoder.finish()?;
+        Ok(response)
     }
 
     pub fn highest_supported_version(&self, api_key: i16, max_supported: i16) -> Option<i16> {
@@ -313,7 +315,7 @@ impl ApiVersionsResponseV3 {
                 _ => unknown_tagged_fields.push(field),
             }
         }
-        Ok(Self {
+        let response = Self {
             error_code,
             api_keys,
             throttle_time_ms,
@@ -322,7 +324,9 @@ impl ApiVersionsResponseV3 {
             finalized_features,
             zk_migration_ready,
             tagged_fields: unknown_tagged_fields,
-        })
+        };
+        decoder.finish()?;
+        Ok(response)
     }
 
     /// Returns the highest broker-supported version not exceeding the client limit.

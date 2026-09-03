@@ -864,6 +864,7 @@ impl FetchResponseV12 {
         })
         .and_then(|response| {
             decoder.read_tagged_fields()?;
+            decoder.finish()?;
             Ok(response)
         })
     }
@@ -880,6 +881,7 @@ impl FetchResponseV13 {
                 .unwrap_or_default(),
         };
         decoder.read_tagged_fields()?;
+        decoder.finish()?;
         Ok(response)
     }
 }
@@ -1072,14 +1074,16 @@ impl AbortedTransactionV12 {
 
 impl FetchResponseV11 {
     pub fn decode_body(decoder: &mut Decoder<'_>) -> Result<Self> {
-        Ok(Self {
+        let response = Self {
             throttle_time_ms: decoder.read_i32()?,
             error_code: decoder.read_i16()?,
             session_id: decoder.read_i32()?,
             responses: decoder
                 .read_array("fetch responses", FetchTopicResponseV11::decode)?
                 .unwrap_or_default(),
-        })
+        };
+        decoder.finish()?;
+        Ok(response)
     }
 }
 
@@ -1135,12 +1139,14 @@ impl FetchPartitionResponseV11 {
 
 impl FetchResponseV4 {
     pub fn decode_body(decoder: &mut Decoder<'_>) -> Result<Self> {
-        Ok(Self {
+        let response = Self {
             throttle_time_ms: decoder.read_i32()?,
             responses: decoder
                 .read_array("fetch responses", FetchTopicResponseV4::decode)?
                 .unwrap_or_default(),
-        })
+        };
+        decoder.finish()?;
+        Ok(response)
     }
 }
 

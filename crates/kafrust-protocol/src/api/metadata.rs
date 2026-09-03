@@ -102,7 +102,7 @@ pub struct MetadataResponseV1 {
 
 impl MetadataResponseV1 {
     pub fn decode_body(decoder: &mut Decoder<'_>) -> Result<Self> {
-        Ok(Self {
+        let response = Self {
             brokers: decoder
                 .read_array("brokers", BrokerMetadata::decode)?
                 .unwrap_or_default(),
@@ -110,7 +110,9 @@ impl MetadataResponseV1 {
             topics: decoder
                 .read_array("topics", TopicMetadata::decode)?
                 .unwrap_or_default(),
-        })
+        };
+        decoder.finish()?;
+        Ok(response)
     }
 }
 
@@ -270,6 +272,7 @@ impl MetadataResponseV12 {
                 .unwrap_or_default(),
         };
         decoder.read_tagged_fields()?;
+        decoder.finish()?;
         Ok(response)
     }
 }

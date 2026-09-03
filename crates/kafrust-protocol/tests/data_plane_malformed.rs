@@ -13,6 +13,7 @@ use kafrust_protocol::api::produce::{
 };
 use kafrust_protocol::codec::Decoder;
 use kafrust_protocol::error::Result;
+use kafrust_protocol::Error;
 
 fn assert_all_truncated_prefixes_rejected<T>(
     body: &[u8],
@@ -26,6 +27,16 @@ fn assert_all_truncated_prefixes_rejected<T>(
             body.len()
         );
     }
+}
+
+fn assert_trailing_bytes_rejected<T>(body: &[u8], decode: fn(&mut Decoder<'_>) -> Result<T>) {
+    let mut with_trailing = body.to_vec();
+    with_trailing.push(0xa5);
+    let result = decode(&mut Decoder::new(&with_trailing));
+    assert!(
+        matches!(result, Err(Error::TrailingBytes { remaining: 1 })),
+        "decoder accepted a response body with one trailing byte"
+    );
 }
 
 #[test]
@@ -129,5 +140,54 @@ fn rejects_truncated_prefixes_for_every_selected_response_version() {
         ApiVersionsResponseV4::decode_body,
     ] {
         assert_all_truncated_prefixes_rejected(&[0, 0, 1, 0, 0, 0, 0, 0], decode);
+    }
+}
+
+#[test]
+fn rejects_trailing_bytes_for_every_selected_response_version() {
+    assert_trailing_bytes_rejected(&[0, 0, 0, 0, 0, 0, 0, 0], ProduceResponseV2::decode_body);
+    assert_trailing_bytes_rejected(&[0, 0, 0, 0, 0, 0, 0, 0], ProduceResponseV7::decode_body);
+    for decode in [
+        ProduceResponseV9::decode_body,
+        ProduceResponseV11::decode_body,
+        ProduceResponseV12::decode_body,
+    ] {
+        assert_trailing_bytes_rejected(&[1, 0, 0, 0, 0, 0], decode);
+    }
+    assert_trailing_bytes_rejected(&[1, 0, 0, 0, 0, 0], ProduceResponseV13::decode_body);
+
+    assert_trailing_bytes_rejected(&[0, 0, 0, 0, 0, 0, 0, 0], FetchResponseV4::decode_body);
+    assert_trailing_bytes_rejected(
+        &[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        FetchResponseV11::decode_body,
+    );
+    assert_trailing_bytes_rejected(
+        &[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        FetchResponseV12::decode_body,
+    );
+    assert_trailing_bytes_rejected(
+        &[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        FetchResponseV13::decode_body,
+    );
+
+    assert_trailing_bytes_rejected(
+        &[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        MetadataResponseV1::decode_body,
+    );
+    assert_trailing_bytes_rejected(
+        &[0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0],
+        MetadataResponseV12::decode_body,
+    );
+    assert_trailing_bytes_rejected(&[0, 0, 0, 0], ListOffsetsResponseV1::decode_body);
+    assert_trailing_bytes_rejected(
+        &[0, 0, 0, 0, 0, 0, 0, 0],
+        OffsetForLeaderEpochResponseV3::decode_body,
+    );
+    assert_trailing_bytes_rejected(&[0, 0, 0, 0, 0, 0], ApiVersionsResponseV0::decode_body);
+    for decode in [
+        ApiVersionsResponseV3::decode_body,
+        ApiVersionsResponseV4::decode_body,
+    ] {
+        assert_trailing_bytes_rejected(&[0, 0, 1, 0, 0, 0, 0, 0], decode);
     }
 }

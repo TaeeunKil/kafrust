@@ -63,7 +63,7 @@ pub struct OffsetForLeaderEpochResponseV3 {
 
 impl OffsetForLeaderEpochResponseV3 {
     pub fn decode_body(decoder: &mut Decoder<'_>) -> Result<Self> {
-        Ok(Self {
+        let response = Self {
             throttle_time_ms: decoder.read_i32()?,
             topics: decoder
                 .read_array("offset for leader epoch topic responses", |decoder| {
@@ -82,7 +82,9 @@ impl OffsetForLeaderEpochResponseV3 {
                     })
                 })?
                 .unwrap_or_default(),
-        })
+        };
+        decoder.finish()?;
+        Ok(response)
     }
 }
 

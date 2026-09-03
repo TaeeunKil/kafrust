@@ -8,6 +8,9 @@ pub enum Error {
         needed: usize,
         remaining: usize,
     },
+    TrailingBytes {
+        remaining: usize,
+    },
     InvalidBool(i8),
     InvalidNullableStruct(i8),
     NegativeLength {
@@ -42,6 +45,9 @@ impl fmt::Display for Error {
                 f,
                 "unexpected end of input: needed {needed} bytes, had {remaining}"
             ),
+            Self::TrailingBytes { remaining } => {
+                write!(f, "trailing bytes after decoded value: {remaining}")
+            }
             Self::InvalidBool(value) => write!(f, "invalid boolean value {value}"),
             Self::InvalidNullableStruct(value) => {
                 write!(f, "invalid nullable struct marker {value}")
