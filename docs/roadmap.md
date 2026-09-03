@@ -218,6 +218,12 @@ suite also passed against Kafka 3.7.2. Detailed commands, image digests,
 topology caveats, and cleanup evidence are in
 [`v1-company-workstation-nonlong-2026-09-03.md`](evidence/v1-company-workstation-nonlong-2026-09-03.md).
 
+The same workstation also completed a separate short Kafka 4.3.1 three-broker
+Streams coordinator-failover diagnostic: node 1 was stopped during the
+heartbeat pause, the member completed a post-failover heartbeat and clean
+leave, and the broker passed readiness after restart. This is diagnostic
+evidence only and does not satisfy the V1-21 fault-soak duration or ledger gate.
+
 These are local diagnostics only. They do not close V1-03 through V1-18 or
 V1-20 through V1-23, do not substitute for the six-hour/24-hour campaigns or
 named migration canary, and do not authorize a version/tag or crates.io

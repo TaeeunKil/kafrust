@@ -50,6 +50,11 @@ preconditions:
   `admin_consumer_group_offsets`, and `admin_delete_group_offsets` passed.
 - `streams_group_smoke` and `streams_group_multi_member` passed against an
   isolated Kafka 4.3.1 broker configured for the Streams protocol.
+- A separate three-broker Kafka 4.3.1 diagnostic stopped the discovered Streams
+  coordinator (node 1) during a 30-second heartbeat pause. The member
+  completed the post-failover heartbeat, left cleanly, and the stopped broker
+  passed readiness after restart. This is a short failover diagnostic, not a
+  long-running fault campaign.
 - ShareConsumer roundtrip, ShareGroup offset mutation, and ShareGroup state
   lifecycle passed against Kafka 4.3.1 with the workflow's share coordinator
   settings. The heartbeat failover variant was not claimed because it requires
