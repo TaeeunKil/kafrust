@@ -901,6 +901,121 @@ async fn buffered_delivery_deadline_expires_after_produce_without_response() {
 }
 
 #[tokio::test]
+async fn buffered_close_reports_in_flight_deadline_and_joins_worker() {
+    let broker = ScriptedBroker::start(vec![
+        ScriptedResponse::RespondWithAddressAndClose(metadata_response_for_address),
+        ScriptedResponse::Respond(api_versions_response_body(3)),
+        ScriptedResponse::Hold,
+    ])
+    .await
+    .expect("scripted broker should bind");
+    let address = broker.address();
+    let metrics = ClientMetrics::new();
+    let mut producer = ProducerConfig::new([address.to_string()])
+        .metrics(metrics.clone())
+        .request_timeout_ms(1_000)
+        .delivery_timeout_ms(100)
+        .linger_ms(10_000)
+        .max_retries(0)
+        .build_buffered()
+        .await
+        .expect("buffered producer should initialize");
+
+    let delivery = producer
+        .send(ProducerRecord::to("orders").partition(0).value("value"))
+        .await
+        .expect("buffered record should enqueue");
+    let close_error = producer
+        .close()
+        .await
+        .expect_err("close should report an in-flight delivery deadline");
+    assert!(matches!(
+        &close_error,
+        kafrust::Error::DeliveryDeadlineExceeded {
+            phase: kafrust::DeliveryPhase::Produce,
+            possibly_transmitted: true,
+            ..
+        }
+    ));
+    let delivery_error = delivery.wait().await;
+    assert!(matches!(
+        delivery_error,
+        Err(kafrust::Error::DeliveryDeadlineExceeded {
+            phase: kafrust::DeliveryPhase::Produce,
+            possibly_transmitted: true,
+            ..
+        })
+    ));
+    assert_eq!(metrics.snapshot().buffered_records, 0);
+
+    let observations = broker
+        .finish()
+        .await
+        .expect("scripted broker should complete close deadline");
+    assert_eq!(observations.len(), 3);
+    assert_eq!(
+        observations
+            .iter()
+            .map(|request| request.api_key)
+            .collect::<Vec<_>>(),
+        [3, 18, 0]
+    );
+}
+
+#[tokio::test]
+async fn buffered_close_flushes_handle_owned_record_before_worker_shutdown() {
+    let broker = ScriptedBroker::start(vec![
+        ScriptedResponse::RespondWithAddressAndClose(metadata_response_for_address),
+        ScriptedResponse::Respond(api_versions_response_body(3)),
+        ScriptedResponse::Respond(produce_v3_response_body(0, 43)),
+    ])
+    .await
+    .expect("scripted broker should bind");
+    let address = broker.address();
+    let metrics = ClientMetrics::new();
+    let mut producer = ProducerConfig::new([address.to_string()])
+        .metrics(metrics.clone())
+        .request_timeout_ms(1_000)
+        .delivery_timeout_ms(1_000)
+        .linger_ms(10_000)
+        .build_buffered()
+        .await
+        .expect("buffered producer should initialize");
+    let handle = producer
+        .handle()
+        .expect("non-transactional producer should expose a handle");
+
+    let delivery = handle
+        .send(ProducerRecord::to("orders").partition(0).value("value"))
+        .await
+        .expect("handle-owned record should enqueue");
+    drop(handle);
+    producer
+        .close()
+        .await
+        .expect("owner close should flush handle-owned records");
+    let metadata = delivery
+        .wait()
+        .await
+        .expect("handle-owned delivery should resolve");
+
+    assert_eq!(metadata.offset(), 43);
+    assert_eq!(metrics.snapshot().buffered_records, 0);
+    let observations = broker
+        .finish()
+        .await
+        .expect("scripted broker should complete handle-owned close flush");
+    assert_eq!(observations.len(), 3);
+    assert_eq!(
+        observations
+            .iter()
+            .map(|request| request.api_key)
+            .collect::<Vec<_>>(),
+        [3, 18, 0]
+    );
+}
+
+#[tokio::test]
 async fn transactional_commit_response_loss_marks_outcome_unknown_and_defunct() {
     let coordinator = ScriptedBroker::start(vec![
         ScriptedResponse::Respond(api_versions_producer_response_body()),
