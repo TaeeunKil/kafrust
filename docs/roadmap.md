@@ -189,6 +189,13 @@ secret redaction across configs, ACLs, quotas, SCRAM, and delegation tokens.
 Restricted-principal live qualification and the zero-secret artifact scan
 remain open.
 
+The deterministic secret-artifact slice is now implemented by
+`scripts/check_v1_secret_artifacts.py`: it scans retained evidence in bounded
+chunks for seven seeded credential markers, detects chunk-boundary splits, and
+never prints marker contents. The local 47-file scan and four checker tests
+passed, and CI now runs both checks. This does not close the required
+restricted-principal/delegation-token published security profiles.
+
 ## V1-14 Execution Update (2026-08-22)
 
 V1-14 is `In progress`. Streams, Share Group State, dynamic quorum, low-level

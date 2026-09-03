@@ -61,6 +61,17 @@ Restricted-principal live profiles, delegation-token authorization, and the
 zero-secret-marker artifact scan remain open; no security compatibility claim
 is made beyond the existing published baseline.
 
+### Seeded artifact scan (2026-09-03)
+
+`scripts/check_v1_secret_artifacts.py` now scans retained `docs/evidence` files
+for the seven deterministic credential markers used by the redaction tests.
+It reads in bounded chunks, detects markers split across chunk boundaries, and
+reports only marker indexes so a finding cannot echo the secret. The local
+scan covered 47 files with zero findings; the checker and its four unit tests
+are wired into the required CI. This closes the deterministic artifact-scan
+slice only. Restricted-principal/delegation-token live profiles and the
+published security rows remain open.
+
 ## Failure And Lifecycle Contract
 
 - Pre-send connect/authentication/controller-discovery failures may retry using
