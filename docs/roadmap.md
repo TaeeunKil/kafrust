@@ -381,6 +381,16 @@ fallbacks, fatal EndTxn handling, and the transactional Produce cap are also
 covered. Published floor/current reconciliation and the full mutation fault
 matrix remain open.
 
+### EndTxn cancellation boundary (2026-09-03)
+
+Source commit `34bbd443b835cd80056d330b21aa44ddc06ff6e0` adds a deterministic
+regression for cancellation after the coordinator has observed the EndTxn v3
+frame. The producer is marked `Defunct` while the response is pending, so a
+cancelled commit cannot be reused as if its outcome were known. The evidence is
+[`v1-transaction-end-cancellation-2026-09-03.md`](evidence/v1-transaction-end-cancellation-2026-09-03.md).
+This is a direct EndTxn boundary only; the other transaction mutations and
+published/reconciliation gates remain open.
+
 ## V1-07 Execution Update (2026-08-22)
 
 V1-07 is `In progress`. Direct-consumer deterministic coverage now records

@@ -5434,6 +5434,72 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-company-fault-matrix-short-smoke-2026-09-03.md; crates/kafrust/tests/fault_injection.rs; crates/kafrust/tests/support/mod.rs
 - non_claims: not published-artifact qualification, not accepted-floor or three-broker qualification, not security, not long campaigns, not service canary, not release authorization
 
+## Q-TRANSACTION-END-CANCEL-2026-09-03
+
+- date_utc: 2026-09-03
+- source_commit: 34bbd443b835cd80056d330b21aa44ddc06ff6e0
+- client_version: 0.3.6 source workspace
+- protocol_version: EndTxn v3
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: scripted coordinator fixture
+- kafka_image: not-applicable
+- mode: direct EndTxn cancellation after transmission
+- topology: bootstrap and single in-memory coordinator listener
+- security: PLAINTEXT fixture
+- group_protocol: not-applicable
+- workload: one active transaction, one observed EndTxn commit, and cancellation
+- workflow: scripts/check_qualification_ledger.py
+- fault: EndTxn response withheld after request frame observation
+- duration: focused test 0.07 seconds; required workspace validation passed
+- record_count: 0 Kafka records
+- member_count: 0
+- repetition_count: one deterministic regression
+- expected_errors: canceled EndTxn marks producer Defunct and blocks reuse
+- observed_errors: producer became Defunct; begin_transaction returned TransactionProducerDefunct
+- retry_count: 0
+- duplicate_count: 0
+- loss_count: unknown transaction outcome by design
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: coordinator task joined; no Docker resources created or modified
+- result: passed
+- artifact: docs/evidence/v1-transaction-end-cancellation-2026-09-03.md; crates/kafrust/src/producer.rs
+- non_claims: not AddOffsets/AddPartitions/TxnOffsetCommit cancellation qualification, not read-committed reconciliation, not published-artifact qualification, not multi-broker or security qualification, not long campaign, not service canary, not release authorization
+
+## Q-COMPANY-TRANSACTION-END-CANCEL-SMOKE-2026-09-03
+
+- date_utc: 2026-09-03
+- source_commit: 34bbd443b835cd80056d330b21aa44ddc06ff6e0
+- client_version: 0.3.6 source checkout
+- protocol_version: EndTxn v3
+- work_status: In progress
+- evidence_level: Live current-source
+- kafka_version: scripted coordinator fixture
+- kafka_image: not-applicable
+- mode: company WSL2 bounded transaction cancellation smoke
+- topology: DESKTOP-OTP568E, Ubuntu-T9 WSL2 x86_64; in-memory fixtures
+- security: PLAINTEXT fixture
+- group_protocol: covered by complete fault-injection target
+- workload: focused EndTxn cancellation plus complete 29-test fault-injection target
+- workflow: scripts/check_qualification_ledger.py
+- fault: EndTxn response withheld after observed request; scripted response-loss and lifecycle cases
+- duration: focused test 0.14 seconds; fault-injection target 0.62 seconds after compilation
+- record_count: bounded scripted cases; no Kafka broker records
+- member_count: not-applicable
+- repetition_count: one bounded company WSL2 run
+- expected_errors: canceled EndTxn marks producer Defunct; all existing fault assertions pass
+- observed_errors: focused test passed; fault-injection target 29 passed and 0 failed
+- retry_count: covered by individual scripted assertions; not aggregated
+- duplicate_count: zero client-visible duplicates in covered replay cases
+- loss_count: unknown transaction outcome preserved for canceled EndTxn; zero loss in deterministic success cases
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: no Docker resources created or modified; WSL mounted checkout retained
+- result: passed
+- artifact: docs/evidence/v1-company-transaction-end-cancellation-smoke-2026-09-03.md; crates/kafrust/src/producer.rs; crates/kafrust/tests/fault_injection.rs
+- non_claims: not long-campaign qualification, not multi-broker or security qualification, not published-artifact qualification, not service canary, not release authorization
+
 ## Q-CLIENT-CANCELED-INFLIGHT-2026-09-03
 
 - date_utc: 2026-09-03

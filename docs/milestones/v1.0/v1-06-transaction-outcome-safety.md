@@ -92,6 +92,25 @@ floor/current profiles, read-committed reconciliation, the complete
 pre/post-transmission matrix for every mutation, and TV2 exclusion fixtures
 remain open; this record makes no published-artifact or exactly-once claim.
 
+### EndTxn cancellation after transmission (2026-09-03)
+
+At source commit `34bbd443b835cd80056d330b21aa44ddc06ff6e0`,
+`cancels_end_transaction_after_transmission_marks_producer_defunct` waits for
+a scripted coordinator to observe EndTxn v3, then cancels the commit future
+while its response is withheld. The producer becomes `Defunct`, clears the
+active transaction, and rejects a new begin. The detailed record is
+[`v1-transaction-end-cancellation-2026-09-03.md`](../../evidence/v1-transaction-end-cancellation-2026-09-03.md).
+
+This closes direct EndTxn cancellation safety only. AddOffsets,
+AddPartitions, TxnOffsetCommit cancellation, read-committed reconciliation,
+and published transaction profiles remain open.
+
+The same boundary was reproduced on the company Windows host in Ubuntu-T9
+WSL2 at the same source commit. The focused cancellation test passed and the
+complete 29-test fault-injection target passed; this is bounded scripted smoke
+evidence, not a long-campaign or published qualification. See
+[`v1-company-transaction-end-cancellation-smoke-2026-09-03.md`](../../evidence/v1-company-transaction-end-cancellation-smoke-2026-09-03.md).
+
 ## Failure And Lifecycle Contract
 
 - A lost transmitted EndTxn response returns
