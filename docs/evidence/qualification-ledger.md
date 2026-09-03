@@ -6753,3 +6753,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-admin-delete-records-response-loss-2026-09-04.md; crates/kafrust/src/admin.rs
 - non_claims: not safe retry for other Admin mutations, not published floor qualification, not three-broker leader failover, not long campaign, not service canary, not release authorization
+
+## Q-ADMIN-CREATETOPICS-RESPONSE-LOSS-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: 7614cb9d2fe7ce349105eae146a39657a5aaa422
+- client_version: 0.3.6 source checkout
+- protocol_version: CreateTopics v2
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: not-applicable; scripted broker
+- kafka_image: not-applicable; in-memory fixture
+- mode: controller-routed CreateTopics response-loss classification
+- topology: in-memory scripted broker
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: one complete CreateTopics request followed by a dropped response
+- workflow: scripts/check_qualification_ledger.py
+- fault: response dropped after complete CreateTopics request transmission
+- duration: focused test 0.04 seconds on Windows
+- record_count: one complete mutation request frame; no response frame
+- member_count: not-applicable
+- repetition_count: one Windows focused run and one all-features workspace replay
+- expected_errors: typed AdminMutationOutcomeUnknown for CreateTopics
+- observed_errors: exact typed unknown outcome; no replay; request API key/version verified
+- retry_count: 0
+- duplicate_count: 0 client-visible mutations; no replay attempted
+- loss_count: one intentionally dropped controller response
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: no external resources
+- result: passed
+- artifact: docs/evidence/v1-admin-create-topics-response-loss-2026-09-04.md; crates/kafrust/src/admin.rs
+- non_claims: not safe retry for other Admin mutations, not published floor qualification, not authorization or three-broker failover qualification, not long campaign, not service canary, not release authorization

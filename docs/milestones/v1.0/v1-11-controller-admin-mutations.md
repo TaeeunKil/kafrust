@@ -74,6 +74,19 @@ operation-by-operation authorization/failover table, active-controller
 replacement, and published floor/current profiles remain open; no complete
 Admin compatibility claim is made.
 
+### CreateTopics response-loss boundary (2026-09-04)
+
+The operation-specific response-loss fixture now sends a complete CreateTopics
+v2 request to a scripted controller and drops the response before closing the
+connection. With retries disabled, the client returns
+`Error::AdminMutationOutcomeUnknown { operation: "CreateTopics" }` after proving
+that the mutation frame was fully transmitted. This closes the deterministic
+post-transmission classification slice for CreateTopics; it does not authorize
+replay, generalize the rule to other mutations, or close the published
+authorization/failover matrix. Evidence is recorded in
+[`v1-admin-create-topics-response-loss-2026-09-04.md`](../../evidence/v1-admin-create-topics-response-loss-2026-09-04.md)
+from source commit `7614cb9d2fe7ce349105eae146a39657a5aaa422`.
+
 ### UpdateFeatures cache regression (2026-09-03)
 
 The exact-head live UpdateFeatures transaction workflow reproduced a stale

@@ -604,6 +604,15 @@ result coverage spans topic, partition, election, reassignment, feature, voter,
 and broker-unregister operations. The complete authorization/reconciliation
 ledger and published controller failover profiles remain open.
 
+The CreateTopics-specific response-loss boundary is now covered at pushed
+source `7614cb9d2fe7ce349105eae146a39657a5aaa422`: a scripted controller read a
+complete CreateTopics v2 frame, dropped its response, and the client returned
+`Error::AdminMutationOutcomeUnknown { operation: "CreateTopics" }` without a
+replay. This is deterministic local evidence for one mutation family only; the
+published authorization/failover matrix and remaining operation-specific
+response-loss cases remain open. See
+[`v1-admin-create-topics-response-loss-2026-09-04.md`](evidence/v1-admin-create-topics-response-loss-2026-09-04.md).
+
 ## V1-12 Execution Update (2026-08-22)
 
 V1-12 is `In progress`. Coordinator/leader/broker Admin paths retain route
