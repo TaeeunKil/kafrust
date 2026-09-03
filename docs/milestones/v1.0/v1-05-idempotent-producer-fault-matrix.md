@@ -137,6 +137,12 @@ This closes buffered deterministic terminal-error coverage only; partial client
 request writes, cancellation/shutdown faults, published cycles, and
 100,000-record reconciliation remain open.
 
+The same regression was rerun from company Ubuntu-T9 WSL2 x86_64 at
+`a46462f1f51c257b18d85c8fd265e00d1b63f8a3`; the targeted test passed with all
+three fatal codes. This short reproduction is recorded in
+[`v1-company-buffered-terminal-smoke-2026-09-03.md`](../../evidence/v1-company-buffered-terminal-smoke-2026-09-03.md)
+and does not change the published or multi-broker gates.
+
 ## Failure And Lifecycle Contract
 
 - A safe retry retains the same producer identity and batch sequence.

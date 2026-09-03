@@ -5301,3 +5301,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-buffered-idempotent-terminal-sequence-2026-09-03.md; crates/kafrust/tests/fault_injection.rs
 - non_claims: not partial client request-write coverage, not cancellation/shutdown fault coverage, not published fault cycles or 100,000-record qualification, not long campaigns, not service canary, not release authorization
+
+## Q-COMPANY-BUFFERED-TERMINAL-SMOKE-2026-09-03
+
+- date_utc: 2026-09-03
+- source_commit: a46462f1f51c257b18d85c8fd265e00d1b63f8a3
+- client_version: 0.3.6 source checkout
+- protocol_version: 0.3.6 source checkout
+- work_status: In progress
+- evidence_level: Live current-source
+- kafka_version: not-applicable; in-memory scripted broker
+- kafka_image: not-applicable
+- mode: company WSL2 buffered terminal-sequence smoke
+- topology: company Windows host, Ubuntu-T9 WSL2 x86_64; no external broker
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: one buffered fatal-sequence regression across three broker error codes
+- workflow: scripts/check_qualification_ledger.py
+- fault: OUT_OF_ORDER_SEQUENCE_NUMBER (45), INVALID_PRODUCER_EPOCH (47), and PRODUCER_FENCED (90)
+- duration: test execution 0.33 seconds after compilation
+- record_count: two attempted buffered deliveries per error code
+- member_count: not-applicable
+- repetition_count: one bounded targeted run; one test, 22 filtered
+- expected_errors: fatal first delivery and no additional Produce transmission for the next delivery
+- observed_errors: test passed; all three codes remained terminal and worker closed cleanly
+- retry_count: 0
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: no Docker resources created or modified; WSL line-ending noise retained
+- result: passed
+- artifact: docs/evidence/v1-company-buffered-terminal-smoke-2026-09-03.md; crates/kafrust/tests/fault_injection.rs
+- non_claims: not published-artifact qualification, not accepted-floor or three-broker qualification, not long campaigns, not service canary, not release authorization

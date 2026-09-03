@@ -258,6 +258,12 @@ terminal result. Details are in
 Partial client request writes, cancellation/shutdown ambiguity, and published
 fault-cycle/reconciliation gates remain open.
 
+The buffered terminal regression was reproduced from company Ubuntu-T9 WSL2
+x86_64 at `a46462f1f51c257b18d85c8fd265e00d1b63f8a3`; the targeted test passed
+for all three fatal broker codes. The short record is in
+[`v1-company-buffered-terminal-smoke-2026-09-03.md`](evidence/v1-company-buffered-terminal-smoke-2026-09-03.md)
+and remains non-published diagnostic evidence.
+
 ## V1-06 Execution Update (2026-08-22)
 
 V1-06 is `In progress`. The transaction path keeps one coherent legacy TV0/TV1
