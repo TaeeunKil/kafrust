@@ -161,6 +161,14 @@ This is a bounded local diagnostic; accepted-floor/pinned-current version
 logs, three-broker topic-ID movement, and the published qualification gate
 remain open.
 
+The workstation also reran the deterministic protocol fixture suites at pushed
+head `e51384d`: four selected-version golden tests and three malformed-boundary
+tests passed, alongside the 19-test scripted fault suite. The exact local
+record is
+[`v1-company-short-fault-protocol-smoke-2026-09-03.md`](../../evidence/v1-company-short-fault-protocol-smoke-2026-09-03.md).
+This remains local deterministic evidence; live floor/pinned-current version
+negotiation and non-empty response oracles are still required.
+
 ## Exit Criteria
 
 1. Every stable high-level selected/fallback version has official metadata,

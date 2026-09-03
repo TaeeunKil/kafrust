@@ -68,6 +68,14 @@ buffered records by fetch. The bounded diagnostic is recorded in
 it contains no injected fault and does not count toward the published fault
 matrix or ten-cycle gate.
 
+At pushed head `e51384d`, the Windows workstation reran all 19 deterministic
+`fault_injection` tests. Producer response-loss replay and terminal sequence
+errors, transaction ambiguity, consumer/group recovery, Share ambiguity, and
+Admin routing all passed. The record is
+[`v1-company-short-fault-protocol-smoke-2026-09-03.md`](../../evidence/v1-company-short-fault-protocol-smoke-2026-09-03.md).
+The suite still does not provide buffered fault injection or the published
+ten-cycle/100,000-record reconciliation gate.
+
 ## Failure And Lifecycle Contract
 
 - A safe retry retains the same producer identity and batch sequence.

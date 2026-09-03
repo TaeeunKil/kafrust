@@ -136,6 +136,10 @@ buffered producer, classic/KIP-848 group, and Admin lifecycle examples. The
 exact record is
 [`v1-company-workstation-current-short-smoke-2026-09-03.md`](../../evidence/v1-company-workstation-current-short-smoke-2026-09-03.md);
 it remains local diagnostic evidence only.
+The same source head also passed the 19-test scripted fault suite plus the
+four golden and three malformed protocol fixture tests on Windows Rust 1.81;
+the run is recorded in
+[`v1-company-short-fault-protocol-smoke-2026-09-03.md`](../../evidence/v1-company-short-fault-protocol-smoke-2026-09-03.md).
 
 ## Status And Evidence
 

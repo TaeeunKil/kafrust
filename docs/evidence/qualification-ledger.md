@@ -4773,3 +4773,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: https://github.com/TaeeunKil/kafrust/actions/runs/33729541055
 - non_claims: not V1-03/V1-04/V1-05 completion, not published-artifact qualification, not accepted-floor coverage, not V1-21/V1-22/V1-23 evidence, not release authorization
+
+## Q-COMPANY-FAULT-PROTOCOL-SMOKE-2026-09-03
+
+- date_utc: 2026-09-03
+- source_commit: e51384da6d0c3bc78e0d47db26827a5dee41ce69
+- client_version: 0.3.6 source checkout
+- protocol_version: 0.3.6 source checkout
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: not-applicable; scripted broker and protocol fixtures
+- kafka_image: not-applicable; no broker required
+- mode: workstation deterministic fault and protocol smoke
+- topology: local scripted broker fixtures
+- security: not-applicable
+- group_protocol: classic and KIP-848 recovery fixtures
+- workload: fault_injection 19 tests; data_plane_golden 4 tests; data_plane_malformed 3 tests
+- workflow: scripts/check_qualification_ledger.py
+- fault: response loss/replay, terminal producer sequence errors, transaction ambiguity, consumer/group recovery, Share acknowledgement ambiguity, malformed wire boundaries
+- duration: deterministic local suites completed in under 1 minute
+- record_count: not-applicable; scripted responses and wire fixtures
+- member_count: not-applicable; scripted group fixtures
+- repetition_count: one bounded source-head test run
+- expected_errors: scripted failures are expected and must map to typed recovery or terminal outcomes
+- observed_errors: all 26 tests passed; no unexpected failures
+- retry_count: covered by scripted assertions; not aggregated
+- duplicate_count: covered by scripted assertions; not aggregated
+- loss_count: covered by scripted assertions; not aggregated
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: not-applicable
+- result: passed
+- artifact: docs/evidence/v1-company-short-fault-protocol-smoke-2026-09-03.md
+- non_claims: not V1-03/V1-05 completion, not live broker qualification, not published-artifact evidence, not long campaigns, not service canary, not release authorization

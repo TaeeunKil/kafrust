@@ -91,6 +91,13 @@ The bounded diagnostic is recorded in
 This is local diagnostic evidence only; accepted-floor/pinned-current version
 logs, three-broker topic-ID movement, and published qualification remain open.
 
+The same pushed head `e51384d` also passed the 19-test scripted fault suite and
+the selected-version golden/malformed protocol fixture suites on Windows Rust
+1.81. The bounded record is
+[`v1-company-short-fault-protocol-smoke-2026-09-03.md`](evidence/v1-company-short-fault-protocol-smoke-2026-09-03.md);
+it strengthens local deterministic evidence without changing the live or
+published exit gates.
+
 ## V1-04 Execution Update (2026-08-22)
 
 V1-04 is `In progress`. Producer delivery expiry now has a typed
