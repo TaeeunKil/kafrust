@@ -236,6 +236,14 @@ This closes the deterministic buffered post-write deadline slice only; close
 while a request remains blocked, delayed metadata/capability, cancellation
 during transmission, and published mixed-outcome reconciliation remain open.
 
+The complete 26-test deterministic fault target was then re-run from company
+Ubuntu-T9 WSL2 x86_64 at source `ed71f6d`; all cases passed, including the
+buffered queue-expiry, close-flush, and post-write deadline paths. The short
+record is in
+[`v1-company-fault-matrix-short-smoke-2026-09-03.md`](evidence/v1-company-fault-matrix-short-smoke-2026-09-03.md).
+It remains current-source scripted evidence, not published, accepted-floor,
+three-broker, long-campaign, canary, or release evidence.
+
 ## V1-05 Execution Update (2026-08-22)
 
 V1-05 is `In progress`. The deterministic idempotent slice now records exact
@@ -269,12 +277,14 @@ delivery. The exact deterministic record is in
 Partial client request writes, cancellation/shutdown faults, published cycles,
 and 100,000-record reconciliation remain open.
 
-The complete 22-test scripted fault target was also re-run from the company
-Windows/Ubuntu-T9 WSL2 x86_64 environment at `83ec120`; all tests passed,
-including the four immediate/buffered dropped- and partial-response cases. The
-short reproduction is recorded in
-[`v1-company-partial-fault-short-smoke-2026-09-03.md`](evidence/v1-company-partial-fault-short-smoke-2026-09-03.md)
-and does not change the published or multi-broker gates.
+The complete 26-test scripted fault target was also re-run from the company
+Windows/Ubuntu-T9 WSL2 x86_64 environment at `ed71f6d`; all tests passed,
+including immediate/buffered dropped- and partial-response cases, buffered
+terminal sequence errors, queue expiry, close flush, and the post-write
+deadline. The short reproduction is recorded in
+[`v1-company-fault-matrix-short-smoke-2026-09-03.md`](evidence/v1-company-fault-matrix-short-smoke-2026-09-03.md)
+and does not change the published or multi-broker gates. The prior 22-test
+record remains historical evidence at `83ec120`.
 
 At pushed head `a46462f`, the buffered idempotent path now covers terminal
 sequence errors 45, 47, and 90. Each first delivery returns the fatal broker

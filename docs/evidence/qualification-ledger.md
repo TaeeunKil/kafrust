@@ -5401,6 +5401,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-company-buffered-terminal-smoke-2026-09-03.md; crates/kafrust/tests/fault_injection.rs
 - non_claims: not published-artifact qualification, not accepted-floor or three-broker qualification, not long campaigns, not service canary, not release authorization
 
+## Q-COMPANY-FAULT-MATRIX-SHORT-SMOKE-2026-09-03
+
+- date_utc: 2026-09-03
+- source_commit: ed71f6d3d1ac50aa0f27e3a89d3a626238a452bb
+- client_version: 0.3.6 source checkout
+- protocol_version: 0.3.6 source checkout
+- work_status: In progress
+- evidence_level: Live current-source
+- kafka_version: not-applicable; in-memory scripted broker
+- kafka_image: not-applicable
+- mode: company WSL2 complete deterministic fault-injection smoke
+- topology: company Windows host, Ubuntu-T9 WSL2 x86_64; no external broker
+- security: not-applicable
+- group_protocol: covered by the complete target's group cases
+- workload: complete `fault_injection` integration target with 26 tests and two test threads
+- workflow: scripts/check_qualification_ledger.py
+- fault: response loss/partial response, terminal producer identity errors, queue expiry, close flush, and post-write deadline
+- duration: 1.83 seconds test execution after compilation
+- record_count: bounded scripted cases across Admin, consumer, group, Share, transaction, immediate, and buffered paths
+- member_count: not-applicable
+- repetition_count: one bounded company WSL run; 26 tests
+- expected_errors: all scripted recovery, ambiguity, expiry, shutdown, and terminal-error assertions pass
+- observed_errors: 26 passed; 0 failed; buffered post-write case reported Produce-phase possibly-transmitted deadline; worker/gauges clean
+- retry_count: covered by individual scripted assertions; not aggregated
+- duplicate_count: zero client-visible duplicates in idempotent replay cases
+- loss_count: zero in deterministic success/recovery cases
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: no Docker resources created or modified; WSL mounted checkout line-ending noise retained
+- result: passed
+- artifact: docs/evidence/v1-company-fault-matrix-short-smoke-2026-09-03.md; crates/kafrust/tests/fault_injection.rs; crates/kafrust/tests/support/mod.rs
+- non_claims: not published-artifact qualification, not accepted-floor or three-broker qualification, not security, not long campaigns, not service canary, not release authorization
+
 ## Q-BUFFERED-INFLIGHT-DEADLINE-2026-09-03
 
 - date_utc: 2026-09-03

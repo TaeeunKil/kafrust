@@ -156,6 +156,14 @@ while a request is still blocked, delayed metadata/capability, cancellation
 during transmission, published mixed-outcome reconciliation, and live
 evidence remain open.
 
+The complete deterministic `fault_injection` target was then re-run from the
+company Windows/Ubuntu-T9 WSL2 x86_64 environment at source
+`ed71f6d3d1ac50aa0f27e3a89d3a626238a452bb`; all 26 tests passed, including the
+buffered queue, close-flush, and post-write deadline cases. This short
+reproduction is recorded in
+[`v1-company-fault-matrix-short-smoke-2026-09-03.md`](../../evidence/v1-company-fault-matrix-short-smoke-2026-09-03.md)
+and does not change the published, multi-broker, or long-campaign gates.
+
 ## Exit Criteria
 
 1. All three producer modes share the documented total-budget calculation.

@@ -115,13 +115,15 @@ This closes deterministic partial-response classification only; partial client
 request writes, cancellation/shutdown faults, published ten-cycle profiles,
 and 100,000-record reconciliation remain open.
 
-The complete 22-test scripted fault target was re-run from the company
-Windows/Ubuntu-T9 WSL2 x86_64 environment at pushed source `83ec120`; all tests
-passed, including the four immediate/buffered dropped- and partial-response
-cases. This reproduction is recorded in
-[`v1-company-partial-fault-short-smoke-2026-09-03.md`](../../evidence/v1-company-partial-fault-short-smoke-2026-09-03.md)
+The complete 26-test scripted fault target was re-run from the company
+Windows/Ubuntu-T9 WSL2 x86_64 environment at pushed source `ed71f6d`; all tests
+passed, including immediate/buffered dropped- and partial-response cases,
+buffered terminal sequence errors, queue expiry, close flush, and the
+post-write deadline. This reproduction is recorded in
+[`v1-company-fault-matrix-short-smoke-2026-09-03.md`](../../evidence/v1-company-fault-matrix-short-smoke-2026-09-03.md)
 and remains short deterministic evidence rather than published or multi-broker
-qualification.
+qualification. The earlier 22-test record remains an immutable historical
+snapshot at source `83ec120`.
 
 ### Buffered terminal sequence errors (2026-09-03)
 
