@@ -305,6 +305,21 @@ floor-line record is [`v1-company-broker-roundtrip-floor-2026-09-03.md`](../../e
 This remains short single-node evidence and does not satisfy the accepted
 floor security/workload or multi-broker exit gates.
 
+### Current-source rerun after metrics changes (2026-09-04)
+
+The current pushed source commit `0ce95cabb5add692ab9b7e1465dfb6555c54d7ae`
+was rerun from the company Windows x64 workstation's WSL2 Ubuntu-T9 runtime
+against an isolated Kafka 4.3.1 single-node KRaft broker. The serial
+`broker_roundtrip` target passed all 13 cases, including the selected
+data-plane version log and one-record Produce/Fetch roundtrip. The
+`producer_send`, `producer_buffered`, `consumer_group_poll`, and
+`admin_create_topic` examples also passed their short lifecycle checks. The
+exact record is
+[`v1-company-workstation-kafka-short-smoke-2026-09-04.md`](../../evidence/v1-company-workstation-kafka-short-smoke-2026-09-04.md).
+This refresh is local deterministic evidence only; Share, security,
+three-broker movement, accepted-floor, published, long-campaign, and release
+gates remain open.
+
 ## Exit Criteria
 
 1. Every stable high-level selected/fallback version has official metadata,

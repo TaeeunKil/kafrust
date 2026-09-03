@@ -195,6 +195,17 @@ are in
 This remains short single-node diagnostic evidence, not accepted-floor
 security/workload qualification.
 
+The pushed metrics head `0ce95ca` was then rerun on the company Windows x64
+workstation's WSL2 Ubuntu-T9 environment against an isolated Kafka 4.3.1
+single-node broker. `broker_roundtrip` passed all 13 serial cases, including
+the selected data-plane version log and one-record Produce/Fetch roundtrip;
+the producer, buffered producer, consumer-group, and Admin lifecycle examples
+also passed. The current-source record is
+[`v1-company-workstation-kafka-short-smoke-2026-09-04.md`](evidence/v1-company-workstation-kafka-short-smoke-2026-09-04.md).
+This is a bounded local diagnostic only and does not close Share, security,
+accepted-floor, published, three-broker, long-campaign, canary, or release
+gates.
+
 ## V1-04 Execution Update (2026-08-22)
 
 V1-04 is `In progress`. Producer delivery expiry now has a typed

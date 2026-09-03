@@ -6324,3 +6324,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-metrics-concurrency-2026-09-04.md; crates/kafrust/src/metrics.rs
 - non_claims: not published telemetry collection, not secure multi-broker qualification, not long-duration campaigns, not service canary, not release authorization
+
+## Q-COMPANY-CURRENT-SHORT-SMOKE-2026-09-04
+
+- date_utc: 2026-09-03
+- source_commit: 0ce95cabb5add692ab9b7e1465dfb6555c54d7ae
+- client_version: 0.3.6 source workspace
+- protocol_version: Kafka 4.3.1 selected data-plane versions
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
+- mode: bounded single-broker broker and example smoke
+- topology: one broker, one partition probe topic, isolated Docker container
+- security: PLAINTEXT local diagnostic only
+- group_protocol: classic consumer group; KIP-848 group example lifecycle
+- workload: 13 serial broker_roundtrip tests plus producer, buffered producer, consumer-group poll, and Admin lifecycle examples
+- workflow: scripts/check_qualification_ledger.py
+- fault: none injected; Share and failover phases intentionally skipped
+- duration: under four minutes
+- record_count: four records observed by consumer-group poll; one direct Produce/Fetch probe
+- member_count: one broker; one classic consumer-group member
+- repetition_count: one deterministic run
+- expected_errors: zero test or example failures; selected versions and lifecycle operations complete
+- observed_errors: zero
+- retry_count: not recorded
+- duplicate_count: zero observed in the bounded records
+- loss_count: zero observed in the bounded records
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: named container removed; no pre-existing Docker resources changed
+- result: passed
+- artifact: docs/evidence/v1-company-workstation-kafka-short-smoke-2026-09-04.md; crates/kafrust/tests/broker_roundtrip.rs; crates/kafrust/examples/producer_send.rs; crates/kafrust/examples/producer_buffered.rs; crates/kafrust/examples/consumer_group_poll.rs; crates/kafrust/examples/admin_create_topic.rs
+- non_claims: not Share qualification, not security qualification, not accepted-floor matrix, not three-broker movement, not long-duration campaigns, not service canary, not published-artifact qualification, not release authorization
