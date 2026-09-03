@@ -129,7 +129,7 @@ progress`.
 
 The integration fixture
 [`data_plane_golden.rs`](../../../crates/kafrust-protocol/tests/data_plane_golden.rs)
-now records complete request bytes for Produce v2/v3/v7/v11/v12/v13, Fetch
+now records complete request bytes for Produce v2/v3/v7/v9/v11/v12/v13, Fetch
 v4/v11/v12/v13, Metadata v1/v12, ListOffsets v1, ApiVersions v0/v3/v4, and
 OffsetForLeaderEpoch v3. The empty/nullable shapes isolate header versions,
 compact counts, and tagged-field terminators against the Apache 4.3.1 schema

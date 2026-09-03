@@ -21,7 +21,7 @@ use kafrust_protocol::api::metadata::{MetadataRequestV1, MetadataRequestV12};
 use kafrust_protocol::api::offset_for_leader_epoch::OffsetForLeaderEpochRequestV3;
 use kafrust_protocol::api::produce::{
     ProduceRequestV11, ProduceRequestV12, ProduceRequestV13, ProduceRequestV2, ProduceRequestV3,
-    ProduceRequestV7, ProduceTopicV13,
+    ProduceRequestV7, ProduceRequestV9, ProduceTopicV13,
 };
 
 fn assert_golden(actual: impl AsRef<[u8]>, expected: &[u8]) {
@@ -123,6 +123,18 @@ fn produce_selected_versions_have_stable_headers_and_empty_body_shapes() {
     .encode()
     .unwrap();
     assert_golden(&v11, &expected_flexible(11));
+
+    let v9 = ProduceRequestV9 {
+        correlation_id: 42,
+        client_id: None,
+        transactional_id: None,
+        acks: 1,
+        timeout_ms: 1_000,
+        topics: Vec::new(),
+    }
+    .encode()
+    .unwrap();
+    assert_golden(&v9, &expected_flexible(9));
 
     let v12 = ProduceRequestV12 {
         correlation_id: 42,

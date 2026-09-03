@@ -4689,7 +4689,7 @@ unqualified relative artifact label.
 - topology: not-applicable; pure protocol encoding
 - security: not-applicable
 - group_protocol: not-applicable
-- workload: Produce v2/v3/v7/v11/v12/v13; Fetch v4/v11/v12/v13; Metadata v1/v12; ListOffsets v1; ApiVersions v0/v3/v4; OffsetForLeaderEpoch v3
+- workload: Produce v2/v3/v7/v9/v11/v12/v13; Fetch v4/v11/v12/v13; Metadata v1/v12; ListOffsets v1; ApiVersions v0/v3/v4; OffsetForLeaderEpoch v3
 - workflow: scripts/check_data_plane_manifest.py
 - fault: empty and nullable collection boundaries, compact counts, and tagged-field terminators
 - duration: focused protocol test completed in under 1 second

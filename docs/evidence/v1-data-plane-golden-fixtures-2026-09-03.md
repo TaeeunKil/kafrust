@@ -17,7 +17,7 @@ non-empty record batches, topic UUIDs, flexible tags, and all four codecs.
 
 ## Covered request families
 
-- Produce v2, v3, v7, v11, v12, and v13 (including the topic-UUID shape)
+- Produce v2, v3, v7, v9, v11, v12, and v13 (including the topic-UUID shape)
 - Fetch v4, v11, v12, and v13
 - Metadata v1 and v12
 - ListOffsets v1
