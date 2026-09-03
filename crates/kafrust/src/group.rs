@@ -6977,6 +6977,37 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn consumer_heartbeat_handle_matches_session_identity() {
+        let (shutdown, shutdown_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(async move {
+            let _ = shutdown_rx.await;
+            Ok(())
+        });
+        let mut heartbeat = heartbeat_handle(shutdown, handle, "orders-group", "member-a", 7);
+        let session_a = Arc::new(());
+        let session_b = Arc::new(());
+        heartbeat.consumer_session = Some(session_a.clone());
+
+        assert_eq!(
+            heartbeat.state_for_consumer("orders-group", Some(&session_a)),
+            HeartbeatHandleState::Current
+        );
+        assert_eq!(
+            heartbeat.state_for_consumer("orders-group", Some(&session_b)),
+            HeartbeatHandleState::StaleGeneration
+        );
+        assert_eq!(
+            heartbeat.state_for_consumer("orders-group", None),
+            HeartbeatHandleState::StaleGeneration
+        );
+        assert_eq!(
+            heartbeat.state_for_consumer("payments-group", Some(&session_a)),
+            HeartbeatHandleState::DifferentGroup
+        );
+        heartbeat.stop().await.unwrap();
+    }
+
+    #[tokio::test]
     async fn stale_heartbeat_shutdown_stops_running_task() {
         let (shutdown, shutdown_rx) = tokio::sync::oneshot::channel();
         let handle = tokio::spawn(async move {
