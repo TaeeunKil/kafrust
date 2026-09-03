@@ -9,6 +9,7 @@ use tokio::task::JoinHandle;
 #[derive(Debug, Clone)]
 pub enum ScriptedResponse {
     Drop,
+    Hold,
     Respond(Vec<u8>),
     RespondAndClose(Vec<u8>),
     RespondWithAddressAndClose(fn(SocketAddr) -> Vec<u8>),
@@ -94,6 +95,7 @@ impl ScriptedBroker {
 
                 let (response_body, close_connection, partial_frame_prefix_len) = match step {
                     ScriptedResponse::Drop => (None, true, None),
+                    ScriptedResponse::Hold => (None, false, None),
                     ScriptedResponse::Respond(body) => (Some(body), false, None),
                     ScriptedResponse::RespondAndClose(body) => (Some(body), true, None),
                     ScriptedResponse::RespondWithAddressAndClose(factory) => {

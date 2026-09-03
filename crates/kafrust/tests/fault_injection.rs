@@ -829,6 +829,78 @@ async fn buffered_close_flushes_accepted_record_before_worker_shutdown() {
 }
 
 #[tokio::test]
+async fn buffered_delivery_deadline_expires_after_produce_without_response() {
+    let broker = ScriptedBroker::start(vec![
+        ScriptedResponse::RespondWithAddressAndClose(metadata_response_for_address),
+        ScriptedResponse::Respond(api_versions_response_body(3)),
+        ScriptedResponse::Hold,
+    ])
+    .await
+    .expect("scripted broker should bind");
+    let address = broker.address();
+    let metrics = ClientMetrics::new();
+    let mut producer = ProducerConfig::new([address.to_string()])
+        .metrics(metrics.clone())
+        .request_timeout_ms(1_000)
+        .delivery_timeout_ms(100)
+        .linger_ms(10_000)
+        .max_retries(0)
+        .build_buffered()
+        .await
+        .expect("buffered producer should initialize");
+
+    let delivery = producer
+        .send(ProducerRecord::to("orders").partition(0).value("value"))
+        .await
+        .expect("buffered record should enqueue");
+    let flush_error = producer
+        .flush()
+        .await
+        .expect_err("an unacknowledged Produce must hit the delivery deadline");
+    assert!(matches!(
+        &flush_error,
+        kafrust::Error::DeliveryDeadlineExceeded {
+            phase: kafrust::DeliveryPhase::Produce,
+            possibly_transmitted: true,
+            ..
+        }
+    ));
+    if let kafrust::Error::DeliveryDeadlineExceeded { timeout_ms, .. } = flush_error {
+        assert!((1..=100).contains(&timeout_ms));
+    }
+    let delivery_error = delivery.wait().await;
+    assert!(matches!(
+        &delivery_error,
+        Err(kafrust::Error::DeliveryDeadlineExceeded {
+            phase: kafrust::DeliveryPhase::Produce,
+            possibly_transmitted: true,
+            ..
+        })
+    ));
+    if let Err(kafrust::Error::DeliveryDeadlineExceeded { timeout_ms, .. }) = delivery_error {
+        assert!((1..=100).contains(&timeout_ms));
+    }
+    assert_eq!(metrics.snapshot().buffered_records, 0);
+
+    producer
+        .close()
+        .await
+        .expect("buffered producer should close after in-flight deadline");
+    let observations = broker
+        .finish()
+        .await
+        .expect("scripted broker should complete in-flight deadline");
+    assert_eq!(observations.len(), 3);
+    assert_eq!(
+        observations
+            .iter()
+            .map(|request| request.api_key)
+            .collect::<Vec<_>>(),
+        [3, 18, 0]
+    );
+}
+
+#[tokio::test]
 async fn transactional_commit_response_loss_marks_outcome_unknown_and_defunct() {
     let coordinator = ScriptedBroker::start(vec![
         ScriptedResponse::Respond(api_versions_producer_response_body()),
