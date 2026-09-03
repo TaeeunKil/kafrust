@@ -322,6 +322,9 @@ pub enum Error {
     },
     /// A transactional producer can no longer safely issue transaction commands.
     TransactionProducerDefunct,
+    /// An idempotent producer may have transmitted a Produce request whose
+    /// outcome was not observed; discard it instead of reusing its sequence.
+    IdempotentProducerDefunct,
     /// A consumer-group offset commit may have reached Kafka but its response
     /// was not observed. The caller must reconcile these exact offsets before
     /// issuing a newer commit.
@@ -553,6 +556,9 @@ impl fmt::Display for Error {
             Self::TransactionProducerDefunct => {
                 f.write_str("transactional producer is defunct; discard the producer")
             }
+            Self::IdempotentProducerDefunct => {
+                f.write_str("idempotent producer outcome is unknown; discard the producer")
+            }
             Self::ConsumerGroupCommitOutcomeUnknown {
                 group_id,
                 member_id,
@@ -698,6 +704,7 @@ impl std::error::Error for Error {
             | Self::OAuthBearerTokenExpired
             | Self::TransactionOutcomeUnknown { .. }
             | Self::TransactionProducerDefunct
+            | Self::IdempotentProducerDefunct
             | Self::ConsumerGroupCommitOutcomeUnknown { .. }
             | Self::Broker { .. }
             | Self::RequestTimedOut { .. }
@@ -888,6 +895,17 @@ mod tests {
         assert_eq!(
             error.to_string(),
             "consumer group orders-group commit outcome is unknown for member member-a generation 7; reconcile 1 offset(s) before another commit"
+        );
+        assert!(std::error::Error::source(&error).is_none());
+    }
+
+    #[test]
+    fn displays_idempotent_producer_defunct() {
+        let error = Error::IdempotentProducerDefunct;
+
+        assert_eq!(
+            error.to_string(),
+            "idempotent producer outcome is unknown; discard the producer"
         );
         assert!(std::error::Error::source(&error).is_none());
     }

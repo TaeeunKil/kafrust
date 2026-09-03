@@ -486,6 +486,7 @@ struct IdempotentProducerState {
     producer_epoch: i16,
     next_sequences: BTreeMap<(String, i32), i32>,
     fatal_error_code: Option<i16>,
+    produce_in_flight: bool,
 }
 
 impl IdempotentProducerState {
@@ -495,6 +496,7 @@ impl IdempotentProducerState {
             producer_epoch,
             next_sequences: BTreeMap::new(),
             fatal_error_code: None,
+            produce_in_flight: false,
         }
     }
 
@@ -518,6 +520,9 @@ impl IdempotentProducerState {
     }
 
     fn ensure_usable(&self) -> Result<()> {
+        if self.produce_in_flight {
+            return Err(Error::IdempotentProducerDefunct);
+        }
         match self.fatal_error_code {
             Some(code) => Err(Error::Broker {
                 code,
@@ -529,6 +534,14 @@ impl IdempotentProducerState {
 
     fn record_fatal_error(&mut self, code: i16) {
         self.fatal_error_code.get_or_insert(code);
+    }
+
+    fn mark_produce_in_flight(&mut self) {
+        self.produce_in_flight = true;
+    }
+
+    fn clear_produce_in_flight(&mut self) {
+        self.produce_in_flight = false;
     }
 }
 
@@ -1656,6 +1669,7 @@ fn delivery_error_from_request_error(error: &Error) -> Error {
             Error::TransactionOutcomeUnknown { operation }
         }
         Error::TransactionProducerDefunct => Error::TransactionProducerDefunct,
+        Error::IdempotentProducerDefunct => Error::IdempotentProducerDefunct,
         Error::ConsumerGroupCommitOutcomeUnknown {
             group_id,
             member_id,
@@ -2416,160 +2430,233 @@ impl Producer {
                     records,
                 )?;
                 if self.config.acks == Acks::None {
-                    match produce_version {
-                        ProduceVersion::V9 | ProduceVersion::V11 | ProduceVersion::V12 => {
-                            leader_client
-                                .produce_flexible_no_response(
-                                    produce_version.api_version(),
-                                    transactional_id.clone(),
-                                    self.config.acks.as_i16(),
-                                    30_000,
-                                    vec![ProduceTopicV3 {
-                                        name: key.topic.clone(),
-                                        partitions: vec![ProducePartitionV3 {
-                                            partition_index: key.partition,
-                                            compression: self
-                                                .config
-                                                .compression
-                                                .as_record_batch_compression(),
-                                            identity,
-                                            records: records
-                                                .iter()
-                                                .map(|record| {
-                                                    record_batch_message(
-                                                        &record.record.record,
-                                                        record.record.timestamp_ms,
-                                                    )
-                                                })
-                                                .collect(),
+                    self.mark_idempotent_produce_in_flight();
+                    let send_result = async {
+                        match produce_version {
+                            ProduceVersion::V9 | ProduceVersion::V11 | ProduceVersion::V12 => {
+                                leader_client
+                                    .produce_flexible_no_response(
+                                        produce_version.api_version(),
+                                        transactional_id.clone(),
+                                        self.config.acks.as_i16(),
+                                        30_000,
+                                        vec![ProduceTopicV3 {
+                                            name: key.topic.clone(),
+                                            partitions: vec![ProducePartitionV3 {
+                                                partition_index: key.partition,
+                                                compression: self
+                                                    .config
+                                                    .compression
+                                                    .as_record_batch_compression(),
+                                                identity,
+                                                records: records
+                                                    .iter()
+                                                    .map(|record| {
+                                                        record_batch_message(
+                                                            &record.record.record,
+                                                            record.record.timestamp_ms,
+                                                        )
+                                                    })
+                                                    .collect(),
+                                            }],
                                         }],
-                                    }],
-                                )
-                                .await?;
-                        }
-                        ProduceVersion::V13 => {
-                            let topic_id = topic_id
-                                .ok_or(Error::Unsupported("Produce v13 requires a topic UUID"))?;
-                            leader_client
-                                .produce_v13_no_response(
-                                    transactional_id.clone(),
-                                    self.config.acks.as_i16(),
-                                    30_000,
-                                    vec![ProduceTopicV13 {
-                                        topic_id,
-                                        partitions: vec![ProducePartitionV3 {
-                                            partition_index: key.partition,
-                                            compression: self
-                                                .config
-                                                .compression
-                                                .as_record_batch_compression(),
-                                            identity,
-                                            records: records
-                                                .iter()
-                                                .map(|record| {
-                                                    record_batch_message(
-                                                        &record.record.record,
-                                                        record.record.timestamp_ms,
-                                                    )
-                                                })
-                                                .collect(),
+                                    )
+                                    .await?;
+                            }
+                            ProduceVersion::V13 => {
+                                let topic_id = topic_id.ok_or(Error::Unsupported(
+                                    "Produce v13 requires a topic UUID",
+                                ))?;
+                                leader_client
+                                    .produce_v13_no_response(
+                                        transactional_id.clone(),
+                                        self.config.acks.as_i16(),
+                                        30_000,
+                                        vec![ProduceTopicV13 {
+                                            topic_id,
+                                            partitions: vec![ProducePartitionV3 {
+                                                partition_index: key.partition,
+                                                compression: self
+                                                    .config
+                                                    .compression
+                                                    .as_record_batch_compression(),
+                                                identity,
+                                                records: records
+                                                    .iter()
+                                                    .map(|record| {
+                                                        record_batch_message(
+                                                            &record.record.record,
+                                                            record.record.timestamp_ms,
+                                                        )
+                                                    })
+                                                    .collect(),
+                                            }],
                                         }],
-                                    }],
-                                )
-                                .await?;
-                        }
-                        ProduceVersion::V7 => {
-                            leader_client
-                                .produce_v7_no_response(
-                                    transactional_id.clone(),
-                                    self.config.acks.as_i16(),
-                                    30_000,
-                                    vec![ProduceTopicV3 {
-                                        name: key.topic.clone(),
-                                        partitions: vec![ProducePartitionV3 {
-                                            partition_index: key.partition,
-                                            compression: self
-                                                .config
-                                                .compression
-                                                .as_record_batch_compression(),
-                                            identity,
-                                            records: records
-                                                .iter()
-                                                .map(|record| {
-                                                    record_batch_message(
-                                                        &record.record.record,
-                                                        record.record.timestamp_ms,
-                                                    )
-                                                })
-                                                .collect(),
+                                    )
+                                    .await?;
+                            }
+                            ProduceVersion::V7 => {
+                                leader_client
+                                    .produce_v7_no_response(
+                                        transactional_id.clone(),
+                                        self.config.acks.as_i16(),
+                                        30_000,
+                                        vec![ProduceTopicV3 {
+                                            name: key.topic.clone(),
+                                            partitions: vec![ProducePartitionV3 {
+                                                partition_index: key.partition,
+                                                compression: self
+                                                    .config
+                                                    .compression
+                                                    .as_record_batch_compression(),
+                                                identity,
+                                                records: records
+                                                    .iter()
+                                                    .map(|record| {
+                                                        record_batch_message(
+                                                            &record.record.record,
+                                                            record.record.timestamp_ms,
+                                                        )
+                                                    })
+                                                    .collect(),
+                                            }],
                                         }],
-                                    }],
-                                )
-                                .await?;
-                        }
-                        ProduceVersion::V3 => {
-                            leader_client
-                                .produce_v3_no_response(
-                                    transactional_id.clone(),
-                                    self.config.acks.as_i16(),
-                                    30_000,
-                                    vec![ProduceTopicV3 {
-                                        name: key.topic.clone(),
-                                        partitions: vec![ProducePartitionV3 {
-                                            partition_index: key.partition,
-                                            compression: self
-                                                .config
-                                                .compression
-                                                .as_record_batch_compression(),
-                                            identity,
-                                            records: records
-                                                .iter()
-                                                .map(|record| {
-                                                    record_batch_message(
-                                                        &record.record.record,
-                                                        record.record.timestamp_ms,
-                                                    )
-                                                })
-                                                .collect(),
+                                    )
+                                    .await?;
+                            }
+                            ProduceVersion::V3 => {
+                                leader_client
+                                    .produce_v3_no_response(
+                                        transactional_id.clone(),
+                                        self.config.acks.as_i16(),
+                                        30_000,
+                                        vec![ProduceTopicV3 {
+                                            name: key.topic.clone(),
+                                            partitions: vec![ProducePartitionV3 {
+                                                partition_index: key.partition,
+                                                compression: self
+                                                    .config
+                                                    .compression
+                                                    .as_record_batch_compression(),
+                                                identity,
+                                                records: records
+                                                    .iter()
+                                                    .map(|record| {
+                                                        record_batch_message(
+                                                            &record.record.record,
+                                                            record.record.timestamp_ms,
+                                                        )
+                                                    })
+                                                    .collect(),
+                                            }],
                                         }],
-                                    }],
-                                )
-                                .await?;
-                        }
-                        ProduceVersion::V2 => {
-                            leader_client
-                                .produce_v2_no_response(
-                                    self.config.acks.as_i16(),
-                                    30_000,
-                                    vec![ProduceTopicV2 {
-                                        name: key.topic.clone(),
-                                        partitions: vec![ProducePartitionV2 {
-                                            partition_index: key.partition,
-                                            records: records
-                                                .iter()
-                                                .map(|record| {
-                                                    message_set_message(
-                                                        &record.record.record,
-                                                        record.record.timestamp_ms,
-                                                    )
-                                                })
-                                                .collect(),
+                                    )
+                                    .await?;
+                            }
+                            ProduceVersion::V2 => {
+                                leader_client
+                                    .produce_v2_no_response(
+                                        self.config.acks.as_i16(),
+                                        30_000,
+                                        vec![ProduceTopicV2 {
+                                            name: key.topic.clone(),
+                                            partitions: vec![ProducePartitionV2 {
+                                                partition_index: key.partition,
+                                                records: records
+                                                    .iter()
+                                                    .map(|record| {
+                                                        message_set_message(
+                                                            &record.record.record,
+                                                            record.record.timestamp_ms,
+                                                        )
+                                                    })
+                                                    .collect(),
+                                            }],
                                         }],
-                                    }],
-                                )
-                                .await?;
+                                    )
+                                    .await?;
+                            }
                         }
+                        Ok::<(), Error>(())
                     }
+                    .await;
+                    self.clear_idempotent_produce_in_flight();
+                    send_result?;
                     self.config.client.record_produce_batch(records.len());
                     output.extend(batch_no_ack_outcomes(key, records));
                     continue;
                 }
-                let response = match produce_version {
-                    ProduceVersion::V9 | ProduceVersion::V11 | ProduceVersion::V12 => {
-                        ProduceResponse::V9(
+                self.mark_idempotent_produce_in_flight();
+                let response_result = async {
+                    Ok::<ProduceResponse, Error>(match produce_version {
+                        ProduceVersion::V9 | ProduceVersion::V11 | ProduceVersion::V12 => {
+                            ProduceResponse::V9(
+                                leader_client
+                                    .produce_flexible(
+                                        produce_version.api_version(),
+                                        transactional_id.clone(),
+                                        self.config.acks.as_i16(),
+                                        30_000,
+                                        vec![ProduceTopicV3 {
+                                            name: key.topic.clone(),
+                                            partitions: vec![ProducePartitionV3 {
+                                                partition_index: key.partition,
+                                                compression: self
+                                                    .config
+                                                    .compression
+                                                    .as_record_batch_compression(),
+                                                identity,
+                                                records: records
+                                                    .iter()
+                                                    .map(|record| {
+                                                        record_batch_message(
+                                                            &record.record.record,
+                                                            record.record.timestamp_ms,
+                                                        )
+                                                    })
+                                                    .collect(),
+                                            }],
+                                        }],
+                                    )
+                                    .await?,
+                            )
+                        }
+                        ProduceVersion::V13 => {
+                            let topic_id = topic_id
+                                .ok_or(Error::Unsupported("Produce v13 requires a topic UUID"))?;
+                            ProduceResponse::V13(
+                                leader_client
+                                    .produce_v13(
+                                        transactional_id.clone(),
+                                        self.config.acks.as_i16(),
+                                        30_000,
+                                        vec![ProduceTopicV13 {
+                                            topic_id,
+                                            partitions: vec![ProducePartitionV3 {
+                                                partition_index: key.partition,
+                                                compression: self
+                                                    .config
+                                                    .compression
+                                                    .as_record_batch_compression(),
+                                                identity,
+                                                records: records
+                                                    .iter()
+                                                    .map(|record| {
+                                                        record_batch_message(
+                                                            &record.record.record,
+                                                            record.record.timestamp_ms,
+                                                        )
+                                                    })
+                                                    .collect(),
+                                            }],
+                                        }],
+                                    )
+                                    .await?,
+                            )
+                        }
+                        ProduceVersion::V7 => ProduceResponse::V7(
                             leader_client
-                                .produce_flexible(
-                                    produce_version.api_version(),
+                                .produce_v7(
                                     transactional_id.clone(),
                                     self.config.acks.as_i16(),
                                     30_000,
@@ -2595,19 +2682,15 @@ impl Producer {
                                     }],
                                 )
                                 .await?,
-                        )
-                    }
-                    ProduceVersion::V13 => {
-                        let topic_id = topic_id
-                            .ok_or(Error::Unsupported("Produce v13 requires a topic UUID"))?;
-                        ProduceResponse::V13(
+                        ),
+                        ProduceVersion::V3 => ProduceResponse::V2(
                             leader_client
-                                .produce_v13(
+                                .produce_v3(
                                     transactional_id.clone(),
                                     self.config.acks.as_i16(),
                                     30_000,
-                                    vec![ProduceTopicV13 {
-                                        topic_id,
+                                    vec![ProduceTopicV3 {
+                                        name: key.topic.clone(),
                                         partitions: vec![ProducePartitionV3 {
                                             partition_index: key.partition,
                                             compression: self
@@ -2628,86 +2711,31 @@ impl Producer {
                                     }],
                                 )
                                 .await?,
-                        )
-                    }
-                    ProduceVersion::V7 => ProduceResponse::V7(
-                        leader_client
-                            .produce_v7(
-                                transactional_id.clone(),
-                                self.config.acks.as_i16(),
-                                30_000,
-                                vec![ProduceTopicV3 {
-                                    name: key.topic.clone(),
-                                    partitions: vec![ProducePartitionV3 {
-                                        partition_index: key.partition,
-                                        compression: self
-                                            .config
-                                            .compression
-                                            .as_record_batch_compression(),
-                                        identity,
-                                        records: records
-                                            .iter()
-                                            .map(|record| {
-                                                record_batch_message(
-                                                    &record.record.record,
-                                                    record.record.timestamp_ms,
-                                                )
-                                            })
-                                            .collect(),
-                                    }],
-                                }],
-                            )
-                            .await?,
-                    ),
-                    ProduceVersion::V3 => ProduceResponse::V2(
-                        leader_client
-                            .produce_v3(
-                                transactional_id.clone(),
-                                self.config.acks.as_i16(),
-                                30_000,
-                                vec![ProduceTopicV3 {
-                                    name: key.topic.clone(),
-                                    partitions: vec![ProducePartitionV3 {
-                                        partition_index: key.partition,
-                                        compression: self
-                                            .config
-                                            .compression
-                                            .as_record_batch_compression(),
-                                        identity,
-                                        records: records
-                                            .iter()
-                                            .map(|record| {
-                                                record_batch_message(
-                                                    &record.record.record,
-                                                    record.record.timestamp_ms,
-                                                )
-                                            })
-                                            .collect(),
-                                    }],
-                                }],
-                            )
-                            .await?,
-                    ),
-                    ProduceVersion::V2 => ProduceResponse::V2(
-                        leader_client
-                            .produce_one_v2(
-                                self.config.acks.as_i16(),
-                                30_000,
-                                key.topic.clone(),
-                                key.partition,
-                                records
-                                    .iter()
-                                    .map(|record| {
-                                        message_set_message(
-                                            &record.record.record,
-                                            record.record.timestamp_ms,
-                                        )
-                                    })
-                                    .collect(),
-                            )
-                            .await?,
-                    ),
-                };
+                        ),
+                        ProduceVersion::V2 => ProduceResponse::V2(
+                            leader_client
+                                .produce_one_v2(
+                                    self.config.acks.as_i16(),
+                                    30_000,
+                                    key.topic.clone(),
+                                    key.partition,
+                                    records
+                                        .iter()
+                                        .map(|record| {
+                                            message_set_message(
+                                                &record.record.record,
+                                                record.record.timestamp_ms,
+                                            )
+                                        })
+                                        .collect(),
+                                )
+                                .await?,
+                        ),
+                    })
+                }
+                .await;
+                self.clear_idempotent_produce_in_flight();
+                let response = response_result?;
                 let partition_response =
                     produce_partition_response(&response, &key.topic, key.partition)?;
                 self.remember_produce_leader_hint(
@@ -2849,110 +2877,132 @@ impl Producer {
             );
 
             if self.config.acks == Acks::None {
-                match produce_version {
-                    ProduceVersion::V9 | ProduceVersion::V11 | ProduceVersion::V12 => {
-                        leader_client
-                            .produce_flexible_no_response(
-                                produce_version.api_version(),
-                                transactional_id.clone(),
-                                self.config.acks.as_i16(),
-                                30_000,
-                                vec![ProduceTopicV3 {
-                                    name: record.topic().to_owned(),
-                                    partitions: vec![ProducePartitionV3 {
-                                        partition_index: partition,
-                                        compression: self
-                                            .config
-                                            .compression
-                                            .as_record_batch_compression(),
-                                        identity,
-                                        records: vec![record_batch_message(record, timestamp_ms)],
+                self.mark_idempotent_produce_in_flight();
+                let send_result = async {
+                    match produce_version {
+                        ProduceVersion::V9 | ProduceVersion::V11 | ProduceVersion::V12 => {
+                            leader_client
+                                .produce_flexible_no_response(
+                                    produce_version.api_version(),
+                                    transactional_id.clone(),
+                                    self.config.acks.as_i16(),
+                                    30_000,
+                                    vec![ProduceTopicV3 {
+                                        name: record.topic().to_owned(),
+                                        partitions: vec![ProducePartitionV3 {
+                                            partition_index: partition,
+                                            compression: self
+                                                .config
+                                                .compression
+                                                .as_record_batch_compression(),
+                                            identity,
+                                            records: vec![record_batch_message(
+                                                record,
+                                                timestamp_ms,
+                                            )],
+                                        }],
                                     }],
-                                }],
-                            )
-                            .await?;
-                    }
-                    ProduceVersion::V13 => {
-                        let topic_id = topic_id
-                            .ok_or(Error::Unsupported("Produce v13 requires a topic UUID"))?;
-                        leader_client
-                            .produce_v13_no_response(
-                                transactional_id.clone(),
-                                self.config.acks.as_i16(),
-                                30_000,
-                                vec![ProduceTopicV13 {
-                                    topic_id,
-                                    partitions: vec![ProducePartitionV3 {
-                                        partition_index: partition,
-                                        compression: self
-                                            .config
-                                            .compression
-                                            .as_record_batch_compression(),
-                                        identity,
-                                        records: vec![record_batch_message(record, timestamp_ms)],
+                                )
+                                .await?;
+                        }
+                        ProduceVersion::V13 => {
+                            let topic_id = topic_id
+                                .ok_or(Error::Unsupported("Produce v13 requires a topic UUID"))?;
+                            leader_client
+                                .produce_v13_no_response(
+                                    transactional_id.clone(),
+                                    self.config.acks.as_i16(),
+                                    30_000,
+                                    vec![ProduceTopicV13 {
+                                        topic_id,
+                                        partitions: vec![ProducePartitionV3 {
+                                            partition_index: partition,
+                                            compression: self
+                                                .config
+                                                .compression
+                                                .as_record_batch_compression(),
+                                            identity,
+                                            records: vec![record_batch_message(
+                                                record,
+                                                timestamp_ms,
+                                            )],
+                                        }],
                                     }],
-                                }],
-                            )
-                            .await?;
-                    }
-                    ProduceVersion::V7 => {
-                        leader_client
-                            .produce_v7_no_response(
-                                transactional_id.clone(),
-                                self.config.acks.as_i16(),
-                                30_000,
-                                vec![ProduceTopicV3 {
-                                    name: record.topic().to_owned(),
-                                    partitions: vec![ProducePartitionV3 {
-                                        partition_index: partition,
-                                        compression: self
-                                            .config
-                                            .compression
-                                            .as_record_batch_compression(),
-                                        identity,
-                                        records: vec![record_batch_message(record, timestamp_ms)],
+                                )
+                                .await?;
+                        }
+                        ProduceVersion::V7 => {
+                            leader_client
+                                .produce_v7_no_response(
+                                    transactional_id.clone(),
+                                    self.config.acks.as_i16(),
+                                    30_000,
+                                    vec![ProduceTopicV3 {
+                                        name: record.topic().to_owned(),
+                                        partitions: vec![ProducePartitionV3 {
+                                            partition_index: partition,
+                                            compression: self
+                                                .config
+                                                .compression
+                                                .as_record_batch_compression(),
+                                            identity,
+                                            records: vec![record_batch_message(
+                                                record,
+                                                timestamp_ms,
+                                            )],
+                                        }],
                                     }],
-                                }],
-                            )
-                            .await?;
-                    }
-                    ProduceVersion::V3 => {
-                        leader_client
-                            .produce_v3_no_response(
-                                transactional_id.clone(),
-                                self.config.acks.as_i16(),
-                                30_000,
-                                vec![ProduceTopicV3 {
-                                    name: record.topic().to_owned(),
-                                    partitions: vec![ProducePartitionV3 {
-                                        partition_index: partition,
-                                        compression: self
-                                            .config
-                                            .compression
-                                            .as_record_batch_compression(),
-                                        identity,
-                                        records: vec![record_batch_message(record, timestamp_ms)],
+                                )
+                                .await?;
+                        }
+                        ProduceVersion::V3 => {
+                            leader_client
+                                .produce_v3_no_response(
+                                    transactional_id.clone(),
+                                    self.config.acks.as_i16(),
+                                    30_000,
+                                    vec![ProduceTopicV3 {
+                                        name: record.topic().to_owned(),
+                                        partitions: vec![ProducePartitionV3 {
+                                            partition_index: partition,
+                                            compression: self
+                                                .config
+                                                .compression
+                                                .as_record_batch_compression(),
+                                            identity,
+                                            records: vec![record_batch_message(
+                                                record,
+                                                timestamp_ms,
+                                            )],
+                                        }],
                                     }],
-                                }],
-                            )
-                            .await?;
-                    }
-                    ProduceVersion::V2 => {
-                        leader_client
-                            .produce_v2_no_response(
-                                self.config.acks.as_i16(),
-                                30_000,
-                                vec![ProduceTopicV2 {
-                                    name: record.topic().to_owned(),
-                                    partitions: vec![ProducePartitionV2 {
-                                        partition_index: partition,
-                                        records: vec![message_set_message(record, timestamp_ms)],
+                                )
+                                .await?;
+                        }
+                        ProduceVersion::V2 => {
+                            leader_client
+                                .produce_v2_no_response(
+                                    self.config.acks.as_i16(),
+                                    30_000,
+                                    vec![ProduceTopicV2 {
+                                        name: record.topic().to_owned(),
+                                        partitions: vec![ProducePartitionV2 {
+                                            partition_index: partition,
+                                            records: vec![message_set_message(
+                                                record,
+                                                timestamp_ms,
+                                            )],
+                                        }],
                                     }],
-                                }],
-                            )
-                            .await?;
+                                )
+                                .await?;
+                        }
                     }
+                    Ok::<(), Error>(())
                 }
+                .await;
+                self.clear_idempotent_produce_in_flight();
+                send_result?;
                 self.config.client.record_produce_batch(1);
                 return Ok(RecordMetadata::new(
                     record.topic(),
@@ -2962,12 +3012,88 @@ impl Producer {
                 ));
             }
 
-            let response = match produce_version {
-                ProduceVersion::V9 | ProduceVersion::V11 | ProduceVersion::V12 => {
-                    ProduceResponse::V9(
+            self.mark_idempotent_produce_in_flight();
+            let response_result = async {
+                Ok::<ProduceResponse, Error>(match produce_version {
+                    ProduceVersion::V9 | ProduceVersion::V11 | ProduceVersion::V12 => {
+                        ProduceResponse::V9(
+                            leader_client
+                                .produce_flexible(
+                                    produce_version.api_version(),
+                                    transactional_id,
+                                    self.config.acks.as_i16(),
+                                    30_000,
+                                    vec![ProduceTopicV3 {
+                                        name: record.topic().to_owned(),
+                                        partitions: vec![ProducePartitionV3 {
+                                            partition_index: partition,
+                                            compression: self
+                                                .config
+                                                .compression
+                                                .as_record_batch_compression(),
+                                            identity,
+                                            records: vec![record_batch_message(
+                                                record,
+                                                timestamp_ms,
+                                            )],
+                                        }],
+                                    }],
+                                )
+                                .await?,
+                        )
+                    }
+                    ProduceVersion::V13 => {
+                        let topic_id = topic_id
+                            .ok_or(Error::Unsupported("Produce v13 requires a topic UUID"))?;
+                        ProduceResponse::V13(
+                            leader_client
+                                .produce_v13(
+                                    transactional_id,
+                                    self.config.acks.as_i16(),
+                                    30_000,
+                                    vec![ProduceTopicV13 {
+                                        topic_id,
+                                        partitions: vec![ProducePartitionV3 {
+                                            partition_index: partition,
+                                            compression: self
+                                                .config
+                                                .compression
+                                                .as_record_batch_compression(),
+                                            identity,
+                                            records: vec![record_batch_message(
+                                                record,
+                                                timestamp_ms,
+                                            )],
+                                        }],
+                                    }],
+                                )
+                                .await?,
+                        )
+                    }
+                    ProduceVersion::V7 => ProduceResponse::V7(
                         leader_client
-                            .produce_flexible(
-                                produce_version.api_version(),
+                            .produce_v7(
+                                transactional_id.clone(),
+                                self.config.acks.as_i16(),
+                                30_000,
+                                vec![ProduceTopicV3 {
+                                    name: record.topic().to_owned(),
+                                    partitions: vec![ProducePartitionV3 {
+                                        partition_index: partition,
+                                        compression: self
+                                            .config
+                                            .compression
+                                            .as_record_batch_compression(),
+                                        identity,
+                                        records: vec![record_batch_message(record, timestamp_ms)],
+                                    }],
+                                }],
+                            )
+                            .await?,
+                    ),
+                    ProduceVersion::V3 => ProduceResponse::V2(
+                        leader_client
+                            .produce_v3(
                                 transactional_id,
                                 self.config.acks.as_i16(),
                                 30_000,
@@ -2985,87 +3111,23 @@ impl Producer {
                                 }],
                             )
                             .await?,
-                    )
-                }
-                ProduceVersion::V13 => {
-                    let topic_id =
-                        topic_id.ok_or(Error::Unsupported("Produce v13 requires a topic UUID"))?;
-                    ProduceResponse::V13(
+                    ),
+                    ProduceVersion::V2 => ProduceResponse::V2(
                         leader_client
-                            .produce_v13(
-                                transactional_id,
+                            .produce_one_v2(
                                 self.config.acks.as_i16(),
                                 30_000,
-                                vec![ProduceTopicV13 {
-                                    topic_id,
-                                    partitions: vec![ProducePartitionV3 {
-                                        partition_index: partition,
-                                        compression: self
-                                            .config
-                                            .compression
-                                            .as_record_batch_compression(),
-                                        identity,
-                                        records: vec![record_batch_message(record, timestamp_ms)],
-                                    }],
-                                }],
+                                record.topic().to_owned(),
+                                partition,
+                                vec![message_set_message(record, timestamp_ms)],
                             )
                             .await?,
-                    )
-                }
-                ProduceVersion::V7 => ProduceResponse::V7(
-                    leader_client
-                        .produce_v7(
-                            transactional_id.clone(),
-                            self.config.acks.as_i16(),
-                            30_000,
-                            vec![ProduceTopicV3 {
-                                name: record.topic().to_owned(),
-                                partitions: vec![ProducePartitionV3 {
-                                    partition_index: partition,
-                                    compression: self
-                                        .config
-                                        .compression
-                                        .as_record_batch_compression(),
-                                    identity,
-                                    records: vec![record_batch_message(record, timestamp_ms)],
-                                }],
-                            }],
-                        )
-                        .await?,
-                ),
-                ProduceVersion::V3 => ProduceResponse::V2(
-                    leader_client
-                        .produce_v3(
-                            transactional_id,
-                            self.config.acks.as_i16(),
-                            30_000,
-                            vec![ProduceTopicV3 {
-                                name: record.topic().to_owned(),
-                                partitions: vec![ProducePartitionV3 {
-                                    partition_index: partition,
-                                    compression: self
-                                        .config
-                                        .compression
-                                        .as_record_batch_compression(),
-                                    identity,
-                                    records: vec![record_batch_message(record, timestamp_ms)],
-                                }],
-                            }],
-                        )
-                        .await?,
-                ),
-                ProduceVersion::V2 => ProduceResponse::V2(
-                    leader_client
-                        .produce_one_v2(
-                            self.config.acks.as_i16(),
-                            30_000,
-                            record.topic().to_owned(),
-                            partition,
-                            vec![message_set_message(record, timestamp_ms)],
-                        )
-                        .await?,
-                ),
-            };
+                    ),
+                })
+            }
+            .await;
+            self.clear_idempotent_produce_in_flight();
+            let response = response_result?;
             let partition_response =
                 produce_partition_response(&response, record.topic(), partition)?;
             self.remember_produce_leader_hint(
@@ -3135,6 +3197,18 @@ impl Producer {
         match &self.idempotent_state {
             Some(state) => state.ensure_usable(),
             None => Ok(()),
+        }
+    }
+
+    fn mark_idempotent_produce_in_flight(&mut self) {
+        if let Some(state) = &mut self.idempotent_state {
+            state.mark_produce_in_flight();
+        }
+    }
+
+    fn clear_idempotent_produce_in_flight(&mut self) {
+        if let Some(state) = &mut self.idempotent_state {
+            state.clear_produce_in_flight();
         }
     }
 
@@ -5274,6 +5348,7 @@ fn can_retry_send(error: &Error) -> bool {
         | Error::OAuthBearerTokenExpired
         | Error::TransactionOutcomeUnknown { .. }
         | Error::TransactionProducerDefunct
+        | Error::IdempotentProducerDefunct
         | Error::ConsumerGroupCommitOutcomeUnknown { .. }
         | Error::DeliveryDeadlineExceeded { .. }
         | Error::ResponseTooLarge { .. }
@@ -8325,6 +8400,122 @@ mod tests {
         ));
         assert!(producer.client.is_connection_poisoned());
         leader_server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn cancels_idempotent_send_after_transmission_marks_producer_defunct() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let (produce_seen_tx, produce_seen_rx) = oneshot::channel();
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+
+            let versions = read_frame(&mut socket).await;
+            assert_eq!(&versions[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut socket, &api_versions_response_frame(3)).await;
+
+            let produce = read_frame(&mut socket).await;
+            assert_eq!(&produce[0..4], &[0, 0, 0, 3]);
+            let _ = produce_seen_tx.send(());
+            time::sleep(Duration::from_millis(50)).await;
+        });
+
+        let (bootstrap_stream, bootstrap_peer) = tokio::io::duplex(4096);
+        drop(bootstrap_peer);
+        let config = ProducerConfig::new([addr.to_string()]).max_retries(0);
+        let mut producer = Producer {
+            client: Client::from_stream(
+                Box::new(bootstrap_stream),
+                Some("kafrust-idempotent-cancel-test".to_owned()),
+                Some(Duration::from_secs(1)),
+            ),
+            config,
+            metadata_cache: BTreeMap::from([("orders".to_owned(), metadata_fixture_for(addr))]),
+            leader_hints: BTreeMap::new(),
+            topic_id_cache: BTreeMap::new(),
+            keyless_partition_indexes: BTreeMap::new(),
+            broker_clients: std::sync::Arc::new(SharedBrokerClientCache::default()),
+            idempotent_state: Some(IdempotentProducerState::new(42, 3)),
+            transaction_state: None,
+        };
+
+        let mut send = Box::pin(
+            producer.send(
+                ProducerRecord::to("orders")
+                    .partition(0)
+                    .value("possibly-accepted"),
+            ),
+        );
+        tokio::select! {
+            result = &mut send => panic!("send completed before cancellation: {result:?}"),
+            _ = produce_seen_rx => {}
+        }
+        drop(send);
+
+        assert!(matches!(
+            producer
+                .send(ProducerRecord::to("orders").partition(0).value("next"))
+                .await,
+            Err(Error::IdempotentProducerDefunct)
+        ));
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn cancels_idempotent_batch_after_transmission_marks_producer_defunct() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let (produce_seen_tx, produce_seen_rx) = oneshot::channel();
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+
+            let versions = read_frame(&mut socket).await;
+            assert_eq!(&versions[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut socket, &api_versions_response_frame(3)).await;
+
+            let produce = read_frame(&mut socket).await;
+            assert_eq!(&produce[0..4], &[0, 0, 0, 3]);
+            let _ = produce_seen_tx.send(());
+            time::sleep(Duration::from_millis(50)).await;
+        });
+
+        let (bootstrap_stream, bootstrap_peer) = tokio::io::duplex(4096);
+        drop(bootstrap_peer);
+        let config = ProducerConfig::new([addr.to_string()]).max_retries(0);
+        let mut producer = Producer {
+            client: Client::from_stream(
+                Box::new(bootstrap_stream),
+                Some("kafrust-idempotent-batch-cancel-test".to_owned()),
+                Some(Duration::from_secs(1)),
+            ),
+            config,
+            metadata_cache: BTreeMap::from([("orders".to_owned(), metadata_fixture_for(addr))]),
+            leader_hints: BTreeMap::new(),
+            topic_id_cache: BTreeMap::new(),
+            keyless_partition_indexes: BTreeMap::new(),
+            broker_clients: std::sync::Arc::new(SharedBrokerClientCache::default()),
+            idempotent_state: Some(IdempotentProducerState::new(42, 3)),
+            transaction_state: None,
+        };
+
+        let mut send_batch = Box::pin(
+            producer.send_batch([ProducerRecord::to("orders")
+                .partition(0)
+                .value("possibly-accepted")]),
+        );
+        tokio::select! {
+            result = &mut send_batch => panic!("batch send completed before cancellation: {result:?}"),
+            _ = produce_seen_rx => {}
+        }
+        drop(send_batch);
+
+        assert!(matches!(
+            producer
+                .send_batch([ProducerRecord::to("orders").partition(0).value("next")])
+                .await,
+            Err(Error::IdempotentProducerDefunct)
+        ));
+        server.await.unwrap();
     }
 
     #[tokio::test]
