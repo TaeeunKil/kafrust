@@ -419,3 +419,11 @@ Record artifact, commit, hardware/runner, broker/topology/security, full
 configuration, repetitions, raw and aggregate throughput/latency/RSS/allocation/
 retry/loss/duplicate/queue results, baseline comparison, and universal-parity
 non-claim.
+
+### Bounded published follow-up (2026-09-03)
+
+The short published surface run added successful secure failover, Share, and
+Streams runtime checks alongside the previously recorded immediate, buffered,
+direct-consumer, and 120-second soak diagnostics. These runs are correctness
+and recovery evidence only; the locked baseline, five repetitions, eight-hour
+profiles, and SLO thresholds remain open.

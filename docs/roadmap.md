@@ -1198,6 +1198,25 @@ diagnostics extend profiling coverage only; their descriptors remain
 qualified=false, and V1-22's five-repetition eight-hour SLO and locked
 baseline remain open. See [v1-published-performance-mode-diagnostics-2026-09-03.md](evidence/v1-published-performance-mode-diagnostics-2026-09-03.md).
 
+The remaining bounded published surface checks were then run from the same
+workflow head `31b56aeb`. Eleven workflows passed: PLAINTEXT and SASL_SSL
+multi-broker failover, secure group rebalance and transaction failover,
+ShareGroupDescribe, Share multi-broker/member/state paths, Streams runtime,
+64-cycle Share acknowledgement, and the supported 180-second Share
+member-loss window. The run set and exact non-claims are recorded in
+[`v1-published-short-surface-smoke-2026-09-03.md`](evidence/v1-published-short-surface-smoke-2026-09-03.md)
+and ledger row `Q-PUBLISHED-SHORT-SURFACE-2026-09-03`.
+
+An intentionally shortened 30-second member-loss input failed its six-
+partition ownership assertion (`assignment=3`); it is retained as a failed
+diagnostic in `Q-PUBLISHED-SHORT-MEMBER-LOSS-FAIL-2026-09-03`. Re-running with
+the workflow's supported 180-second window passed, so no source change was
+inferred. Four duplicate dispatches were cancelled before execution. These
+results strengthen bounded V1-10/V1-14/V1-20 evidence but do not close the
+accepted matrix, V1-21/V1-22 long gates, V1-23 service canary, or any release
+milestone. The documentation-head CI [33721524284](https://github.com/TaeeunKil/kafrust/actions/runs/33721524284)
+also passed.
+
 ## Historical Release Qualification
 
 `0.3.5` is now published on crates.io in protocol-first order. The fresh

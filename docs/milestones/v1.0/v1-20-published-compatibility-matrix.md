@@ -251,3 +251,14 @@ affected profiles; use a new version for correction.
 Record the matrix manifest hash, source/artifact versions, every broker image,
 topology/security/workload/toolchain/feature row, run/result artifact, final
 gauges, and excluded profile list.
+
+### Bounded published follow-up (2026-09-03)
+
+Eleven short published workflows passed from workflow head
+`31b56aeb628ac80095f84239a16a6b8e5cb1f54e`, covering plaintext and SASL_SSL
+multi-broker failover, secure group/transaction paths, Share/Streams runtime,
+and acknowledgement/member-loss boundaries. The grouped evidence and the
+shortened-input failure diagnostic are in
+[`v1-published-short-surface-smoke-2026-09-03.md`](../../evidence/v1-published-short-surface-smoke-2026-09-03.md).
+The accepted matrix remains `In progress` because the full row-by-row
+Cartesian-independent contract and downstream V1 gates are not complete.

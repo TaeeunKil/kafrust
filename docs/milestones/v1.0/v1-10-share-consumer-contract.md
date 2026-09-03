@@ -144,3 +144,13 @@ reconciliation.
 Record Share API versions, acquire/ack modes, member/partition/record counts,
 loss and ambiguity cycles, redelivery and duplicate results, queue peaks/final
 gauges, artifact/security profile, and exactly-once/state-API non-claims.
+
+### Bounded published follow-up (2026-09-03)
+
+The `0.3.6` published artifact passed the short ShareGroupDescribe,
+multi-broker, multi-member, state-failover, acknowledgement (64 cycles), and
+supported 180-second member-loss workflows from one workflow head. The
+shortened 30-second member-loss diagnostic is retained as a failed input
+boundary; the supported-window rerun passed. These rows are recorded in
+[`v1-published-short-surface-smoke-2026-09-03.md`](../../evidence/v1-published-short-surface-smoke-2026-09-03.md).
+The exact 10,000-record/20-cycle/ambiguity exit gate remains open.

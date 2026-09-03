@@ -148,3 +148,10 @@ explicit restart window. Never record credential material in rollback notes.
 Record mechanisms and versions, rotation event type, provider/error class,
 connection replacement/re-auth result, broker/topology, artifact, secret scan
 count, final gauges, and provider/non-native-toolchain non-claims without secrets.
+
+### Bounded published follow-up (2026-09-03)
+
+Published `0.3.6` SASL_SSL/SCRAM-SHA-256 multi-broker, group-rebalance, and
+transaction-failover smokes passed on Kafka 3.7.2/4.3.1. These are bounded
+published rows only; the complete mechanism, rotation, provider, and
+three-broker credential-lifecycle exit set remains open.

@@ -52,6 +52,9 @@ V1-20 completion or `1.0.0` readiness. The company workstation now supplies
 short local Kafka diagnostics, including a three-broker Streams coordinator
 failover, but those runs do not replace the dedicated long-campaign or service
 canary requirements.
+The same published artifact also passed eleven bounded surface/failover
+workflows on 2026-09-03; the grouped record is
+[`v1-published-short-surface-smoke-2026-09-03.md`](../../evidence/v1-published-short-surface-smoke-2026-09-03.md).
 
 V1-02 has since generated the all-features public API snapshot at
 [`docs/evidence/public-api-snapshot.json`](../../evidence/public-api-snapshot.json):

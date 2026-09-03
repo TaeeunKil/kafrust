@@ -38,6 +38,14 @@ inform profiling only; they do not establish the V1-22 long SLO or release
 readiness. See
 [v1-published-performance-mode-diagnostics-2026-09-03.md](evidence/v1-published-performance-mode-diagnostics-2026-09-03.md).
 
+The bounded `0.3.6` published surface follow-up then passed eleven short
+multi-broker, secure group/transaction, Share, and Streams workflows from one
+workflow head, including the supported 180-second Share member-loss window.
+The 30-second shortened-input failure is retained as a diagnostic and was
+superseded only by the supported-window pass; neither is promoted to the
+long-duration gates. See
+[v1-published-short-surface-smoke-2026-09-03.md](evidence/v1-published-short-surface-smoke-2026-09-03.md).
+
 ## v1.0 Support Contract
 
 V1-01 sets the accepted support boundary below. “Required” means the named

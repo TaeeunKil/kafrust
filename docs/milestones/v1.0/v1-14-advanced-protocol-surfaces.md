@@ -129,3 +129,11 @@ any compensating action.
 Record each surface/API key, Kafka stability, symbol class, protocol/live
 evidence, broker profile, failure/reconciliation result, and explicit core
 replacement non-claim.
+
+### Bounded published follow-up (2026-09-03)
+
+The published `0.3.6` Share state, Streams runtime, and multi-broker surface
+smokes passed on Kafka 4.3.1; secure group and transaction surfaces also
+passed on the accepted published profiles. This strengthens the bounded
+surface evidence without changing the experimental/stable classification or
+closing the named advanced-surface exit criteria.

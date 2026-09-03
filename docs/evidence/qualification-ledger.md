@@ -4608,3 +4608,69 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-published-performance-mode-diagnostics-2026-09-03.md; four direct-consumer published-performance-campaign artifact directories from run 33721215334
 - non_claims: workload-specific diagnostic only; not V1-22 five-repetition eight-hour SLO evidence, not a locked baseline, not universal performance parity, not service-canary evidence, not release authorization
+
+## Q-PUBLISHED-SHORT-SURFACE-2026-09-03
+
+- date_utc: 2026-09-03
+- source_commit: 31b56aeb628ac80095f84239a16a6b8e5cb1f54e
+- client_version: 0.3.6 published artifact
+- protocol_version: 0.3.6 published dependency
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 3.7.2 and 4.3.1
+- kafka_image: apache/kafka:3.7.2 and apache/kafka:4.3.1
+- mode: bounded published surface and failover smoke
+- topology: single-node and three-broker KRaft
+- security: PLAINTEXT and SASL_SSL/SCRAM-SHA-256
+- group_protocol: classic, KIP-848 consumer, Share, Streams, and transaction paths
+- workload: eleven short workflows covering multi-broker, secure group/transaction, ShareGroupDescribe, Share ownership/failover/state, Streams runtime, and 64-cycle Share acknowledgement
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/33721922313
+- fault: selected leader, coordinator, transaction, member-loss, and Share-state failover fixtures
+- duration: approximately 1-5 minutes per workflow
+- record_count: workflow-specific; all final assertions passed
+- member_count: workflow-specific; all final ownership/rebalance assertions passed
+- repetition_count: eleven passing workflows from one workflow head
+- expected_errors: no unaccounted loss, duplicate, dependency mismatch, or outstanding-resource assertion
+- observed_errors: all eleven passing workflows completed successfully
+- retry_count: no product retry; one supported-parameter rerun after a shortened-input diagnostic
+- duplicate_count: 0 in passing fixtures
+- loss_count: 0 in passing fixtures
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: workflow-specific final-resource assertions passed where exposed
+- result: passed
+- artifact: docs/evidence/v1-published-short-surface-smoke-2026-09-03.md; runs 33721922313, 33721926455, 33721930630, 33721934670, 33721939764, 33721944682, 33721949931, 33721972300, 33721976423, 33721981000, and 33722189166
+- non_claims: not the complete V1-20 matrix, not long V1-21/V1-22 evidence, not SLO or service-canary evidence, not API freeze, not RC, not 1.0.0 readiness
+
+## Q-PUBLISHED-SHORT-MEMBER-LOSS-FAIL-2026-09-03
+
+- date_utc: 2026-09-03
+- source_commit: 31b56aeb628ac80095f84239a16a6b8e5cb1f54e
+- client_version: 0.3.6 published artifact
+- protocol_version: 0.3.6 published dependency
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka:4.3.1
+- mode: shortened published Share member-loss diagnostic
+- topology: three-broker KRaft
+- security: PLAINTEXT
+- group_protocol: Share
+- workload: two Share members, six partitions, one record per partition, surviving member window 30 seconds
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/33721954797
+- fault: SIGKILL of one member followed by surviving-member ownership assertion
+- duration: approximately 1 minute 58 seconds
+- record_count: six seeded records; surviving member accepted three before the window ended
+- member_count: two started; one forcibly terminated
+- repetition_count: one shortened-input diagnostic
+- expected_errors: surviving member owns all six partitions after member loss
+- observed_errors: surviving member reported assignment=3 and the six-partition assertion failed
+- retry_count: 0
+- duplicate_count: 0
+- loss_count: three records remained unconsumed at assertion time
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: not reached because ownership assertion failed
+- result: failed
+- artifact: docs/evidence/v1-published-short-surface-smoke-2026-09-03.md; follow-up with supported 180-second window passed in run 33722189166
+- non_claims: not a source regression finding, not a passing qualification result, not V1-21 completion, not SLO evidence, not release authorization

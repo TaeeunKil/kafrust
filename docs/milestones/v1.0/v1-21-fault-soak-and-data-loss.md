@@ -443,3 +443,9 @@ full four six-hour campaigns, 100-cycle/ambiguity families, controlled
 data-loss fixtures, and adjudication remain open. Details are in
 [`v1-company-capacity-recovery-2026-09-03.md`](../../evidence/v1-company-capacity-recovery-2026-09-03.md)
 and [`v1-company-selfhosted-short-fault-2026-09-03.md`](../../evidence/v1-company-selfhosted-short-fault-2026-09-03.md).
+
+The published short-surface follow-up also passed the bounded 180-second
+Share member-loss window; a 30-second shortened-input attempt failed its
+three-to-six partition reassignment assertion and is retained separately.
+Neither result is promoted to the six-hour V1-21 campaign or its adjudicated
+100-cycle/data-loss evidence.
