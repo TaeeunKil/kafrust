@@ -5500,6 +5500,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-company-transaction-end-cancellation-smoke-2026-09-03.md; crates/kafrust/src/producer.rs; crates/kafrust/tests/fault_injection.rs
 - non_claims: not long-campaign qualification, not multi-broker or security qualification, not published-artifact qualification, not service canary, not release authorization
 
+## Q-ADVISORY-SNAPSHOT-2026-09-03
+
+- date_utc: 2026-09-03
+- source_commit: 34bbd443b835cd80056d330b21aa44ddc06ff6e0
+- client_version: 0.3.6 source workspace
+- protocol_version: dependency metadata
+- work_status: In progress
+- evidence_level: Live current-source
+- kafka_version: not-applicable
+- kafka_image: not-applicable
+- mode: OSV querybatch dependency advisory refresh
+- topology: 89-package runtime/build dependency closure
+- security: advisory inventory only
+- group_protocol: not-applicable
+- workload: one OSV batch query covering all resolved packages
+- workflow: scripts/check_v1_advisories.py
+- fault: resolved registry versions drifted from the prior snapshot
+- duration: one bounded online query; offline checker passed
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: one refresh
+- expected_errors: inventory drift requires a fresh snapshot; no critical/high advisory may be present
+- observed_errors: prior check rejected stale inventory; refreshed report has zero advisory and critical/high matches
+- retry_count: 0
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: report written; no runtime or Docker resources
+- result: passed
+- artifact: docs/evidence/v1-19-advisories.md; docs/evidence/v1-19-advisories.json
+- non_claims: not a guarantee against future or undisclosed vulnerabilities, not full upstream unsafe-block review, not multi-platform or published-artifact qualification, not release authorization
+
 ## Q-CLIENT-CANCELED-INFLIGHT-2026-09-03
 
 - date_utc: 2026-09-03

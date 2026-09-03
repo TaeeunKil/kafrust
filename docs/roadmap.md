@@ -739,6 +739,13 @@ This confirms the new advisory snapshot wiring only; manual unsafe/native
 ownership, multi-platform/package evidence, and published-artifact gates still
 block V1-19 completion.
 
+The OSV/RustSec snapshot was refreshed on 2026-09-03 at source
+`34bbd443b835cd80056d330b21aa44ddc06ff6e0` after a resolved dependency
+inventory drift. All 89 queried packages returned zero advisory matches and
+zero critical/high matches; the offline freshness/inventory check now passes.
+This refresh is dated evidence and does not close multi-platform, owner-review,
+published-artifact, or release gates.
+
 The final owner-review matrix and exact-head package validation then passed both
 toolchains from `a3df635` in [CI run 32612304536](https://github.com/TaeeunKil/kafrust/actions/runs/32612304536).
 This closes V1-19's packaged-candidate exit criteria. The next gate is V1-20's

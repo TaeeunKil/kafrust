@@ -10,7 +10,7 @@
     "the offline CI check does not query OSV or crates.io",
     "unreviewed low/moderate or informational advisories still require owner review before stable release"
   ],
-  "observed_at_utc": "2026-08-23T01:54:25Z",
+  "observed_at_utc": "2026-09-03T13:47:36Z",
   "packages": [
     {
       "advisories": [],
@@ -94,7 +94,7 @@
       "advisories": [],
       "name": "crc32fast",
       "source_kind": "registry",
-      "version": "1.5.0"
+      "version": "1.5.1"
     },
     {
       "advisories": [],
@@ -214,7 +214,7 @@
       "advisories": [],
       "name": "log",
       "source_kind": "registry",
-      "version": "0.4.33"
+      "version": "0.4.34"
     },
     {
       "advisories": [],
@@ -238,7 +238,7 @@
       "advisories": [],
       "name": "mio",
       "source_kind": "registry",
-      "version": "1.2.2"
+      "version": "1.2.3"
     },
     {
       "advisories": [],
@@ -316,7 +316,7 @@
       "advisories": [],
       "name": "rand",
       "source_kind": "registry",
-      "version": "0.8.7"
+      "version": "0.8.8"
     },
     {
       "advisories": [],
@@ -442,7 +442,7 @@
       "advisories": [],
       "name": "syn",
       "source_kind": "registry",
-      "version": "3.0.3"
+      "version": "3.0.4"
     },
     {
       "advisories": [],

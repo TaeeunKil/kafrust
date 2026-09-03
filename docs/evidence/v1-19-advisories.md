@@ -1,11 +1,11 @@
 # V1-19 Advisory Snapshot
 
-- date_utc: 2026-08-23
+- date_utc: 2026-09-03
 - scope: all-feature runtime and build dependency closure
 - platform: `x86_64-unknown-linux-gnu`
 - checker: [`scripts/check_v1_advisories.py`](../../scripts/check_v1_advisories.py)
 - report: [`v1-19-advisories.json`](v1-19-advisories.json)
-- report_sha256: `c54790c2d4ee4105f04671d4b809415c305fb29d0a001435170f135e56b97b7c`
+- report_sha256: `48577a2fe010229adf9434c8ff5051a0bb2a29c7f325f5732416889419c2958e`
 - source: [OSV querybatch](https://osv.dev/docs/), RustSec advisory export
 - rustsec_repository: <https://github.com/RustSec/advisory-db>
 - rustsec_revision: `bf5c0d245a92671908518d7e765914d437954ed6`

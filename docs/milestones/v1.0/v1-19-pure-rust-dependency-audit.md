@@ -198,6 +198,17 @@ days, forcing a fresh live review. This is a dated snapshot,
 not a claim about future or undisclosed vulnerabilities, and the manual
 unsafe/native owner review remains open.
 
+### Advisory snapshot refresh (2026-09-03)
+
+The resolved dependency inventory changed through transitive registry
+re-resolution, so the dated OSV query was refreshed at source commit
+`34bbd443b835cd80056d330b21aa44ddc06ff6e0`. The batch covered all 89 runtime
+and build packages and recorded zero advisory matches, including zero
+critical/high matches. The refreshed report and digest are recorded in
+[`v1-19-advisories.md`](../../evidence/v1-19-advisories.md). The offline checker
+now passes; owner/rationale review, multi-platform package evidence, and
+published-artifact gates remain open.
+
 ### Combined CI validation (2026-08-23)
 
 The exact pushed commit `af73b8d2eaf19e33d9e90dbc79189f74bd9ad538` passed the
