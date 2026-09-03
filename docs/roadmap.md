@@ -644,6 +644,17 @@ verification fields; its five focused tests and CI check pass. This closes the
 static inventory slice only. The 100-cycle gauge audit and exact published
 secured churn gate remain open.
 
+### V1-15 buffered owner-drop fence (2026-09-04)
+
+At source `0e6c2057fe669d1522910294ec55a518ac2fda20`, the owning
+`BufferedProducer` now aborts its Tokio worker on `Drop` instead of detaching
+the task. The deterministic `dropping_buffered_producer_aborts_worker` test
+passed, and the owner-drop contract is documented in the producer guides and
+[`v1-buffered-owner-drop-2026-09-04.md`](evidence/v1-buffered-owner-drop-2026-09-04.md).
+This closes only the owner-drop lifecycle boundary; graceful `close()` flush,
+socket-I/O cancellation, 100-cycle gauges, and published secured churn remain
+open.
+
 ## V1-16 Execution Update (2026-08-22)
 
 V1-16 is `In progress`. SCRAM, TLS/mTLS, OAUTHBEARER provider single-flight,

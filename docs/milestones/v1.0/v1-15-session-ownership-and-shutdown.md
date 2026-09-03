@@ -82,6 +82,20 @@ fault points, and deterministic verification references. Five focused checker
 tests and the CI check pass. This closes the static inventory criterion only;
 cycle gauges and published secured churn remain required.
 
+### Buffered owner-drop fence (2026-09-04)
+
+Source commit `0e6c2057fe669d1522910294ec55a518ac2fda20` adds an explicit
+`Drop` implementation for the owning `BufferedProducer`. Dropping the owner
+aborts its Tokio worker instead of detaching it; pending delivery handles then
+observe the existing canceled-delivery channel outcome. The deterministic
+`dropping_buffered_producer_aborts_worker` test starts the worker, drops the
+owner, and observes the worker guard's drop signal. `close()` remains the
+required graceful-flush path for accepted records. This closes the owner-drop
+boundary only; cancellation during socket I/O, 100-cycle gauge audits, and
+published secured churn remain required.
+
+Evidence: [`v1-buffered-owner-drop-2026-09-04.md`](../../evidence/v1-buffered-owner-drop-2026-09-04.md).
+
 ## Failure And Lifecycle Contract
 
 - A connection is checked out by one request and returned only after framing,

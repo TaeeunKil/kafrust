@@ -6225,3 +6225,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-company-validation-recheck-2026-09-04.md; source commit d1fe161563327a2d2c704224a00fa5a407fd1dc5
 - non_claims: not full WSL all-target validation, not broker acceptance, not published-artifact qualification, not secure transport, not long campaigns, not service canary, not release authorization
+
+## Q-BUFFERED-OWNER-DROP-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: 0e6c2057fe669d1522910294ec55a518ac2fda20
+- client_version: 0.3.6 source workspace
+- protocol_version: not-applicable; lifecycle-only
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: not-applicable
+- kafka_image: not-applicable
+- mode: owning BufferedProducer drop and worker abort
+- topology: no broker; one Tokio worker task
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: one started pending worker dropped through the owning producer
+- workflow: scripts/check_qualification_ledger.py
+- fault: owner drop while the buffered worker is still pending
+- duration: focused deterministic test under one second
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: one deterministic run on Windows
+- expected_errors: worker is aborted rather than detached; pending delivery channels are canceled
+- observed_errors: worker guard drop signal arrived within the timeout after owner drop
+- retry_count: 0
+- duplicate_count: 0
+- loss_count: no broker record; accepted-record flush on drop is not claimed
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: worker task aborted; no broker, Docker, network, or detached task
+- result: passed
+- artifact: docs/evidence/v1-buffered-owner-drop-2026-09-04.md; crates/kafrust/src/producer.rs
+- non_claims: not graceful flush, not socket-I/O cancellation, not broker acceptance or reconciliation, not 100-cycle qualification, not published-artifact qualification, not secure transport, not long campaigns, not service canary, not release authorization
