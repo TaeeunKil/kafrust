@@ -5070,3 +5070,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-data-plane-trailing-client-boundary-2026-09-03.md; crates/kafrust/src/client.rs
 - non_claims: not V1-03 completion, not live broker malformed-response qualification, not official Apache response oracles for every shape, not three-broker movement, not long campaigns, not service canary, not published compatibility completion, not release authorization
+
+## Q-COMPANY-DATAPLANE-BOUNDARY-SMOKE-2026-09-03
+
+- date_utc: 2026-09-03
+- source_commit: 1b4cb5f952261325dd0c20d6348829d3dd7a8e4f
+- client_version: 0.3.6 source checkout
+- protocol_version: 0.3.6 source checkout
+- work_status: In progress
+- evidence_level: Live current-source
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
+- mode: company WSL2 source data-plane boundary smoke
+- topology: isolated single-node KRaft with one named container and port 19092
+- security: PLAINTEXT
+- group_protocol: not-applicable
+- workload: ApiVersions, Metadata, ListOffsets, OffsetForLeaderEpoch, Produce, and Fetch version negotiation and one-record roundtrip
+- workflow: scripts/check_qualification_ledger.py
+- fault: valid broker responses after strict trailing-byte decoder boundary change
+- duration: one broker test run under two minutes
+- record_count: one produced and fetched record
+- member_count: not-applicable
+- repetition_count: one bounded source smoke
+- expected_errors: no errors on valid selected-version paths
+- observed_errors: all selected paths passed; one record fetched; 1 test passed
+- retry_count: not measured
+- duplicate_count: zero observed in fetched probe record
+- loss_count: zero observed in fetched probe record
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: Docker inventory retained pre-existing resources; no prune
+- result: passed
+- artifact: docs/evidence/v1-company-data-plane-response-boundary-smoke-2026-09-03.md; crates/kafrust/tests/broker_roundtrip.rs
+- non_claims: not accepted-floor security/workload qualification, not three-broker movement, not malformed-broker injection qualification, not published compatibility completion, not long campaigns, not service canary, not release authorization

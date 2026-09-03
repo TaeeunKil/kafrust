@@ -228,10 +228,11 @@ All four focused malformed tests passed, and the manifest checker requires the
 new matrix test. The detailed record is
 [`v1-data-plane-malformed-prefix-matrix-2026-09-03.md`](../../evidence/v1-data-plane-malformed-prefix-matrix-2026-09-03.md).
 
-This strengthens deterministic truncation evidence only; complete malformed
-length/trailing-byte coverage, transaction-selection proof, three-broker
-topic-ID/leader movement, accepted security or published-artifact
-qualification, and the V1-03 exit criteria remain open.
+This strengthens deterministic truncation evidence only; the earlier source
+slice left complete malformed length/trailing-byte coverage, transaction
+selection proof, three-broker topic-ID/leader movement, accepted security or
+published-artifact qualification, and the V1-03 exit criteria open. The strict
+boundary and selector follow-ups are recorded below.
 
 ### Deterministic transactional Produce selector guard (2026-09-03)
 
@@ -270,6 +271,17 @@ full required validation passed; details are in
 [`v1-data-plane-trailing-client-boundary-2026-09-03.md`](../../evidence/v1-data-plane-trailing-client-boundary-2026-09-03.md).
 This confirms client observability of the deterministic boundary only; live
 malformed-broker evidence and the remaining V1-03 gates stay open.
+
+### Current-source broker recheck after strict response boundary (2026-09-03)
+
+Source commit `1b4cb5f952261325dd0c20d6348829d3dd7a8e4f` was rechecked from the
+company WSL2 workstation against an isolated Kafka 4.3.1 single-node broker.
+The negotiated data-plane versions and valid ListOffsets, OffsetForLeaderEpoch,
+Produce, and Fetch roundtrips all passed after the strict decoder change. The
+retained diagnostic is
+[`v1-company-data-plane-response-boundary-smoke-2026-09-03.md`](../../evidence/v1-company-data-plane-response-boundary-smoke-2026-09-03.md).
+This is current-source local evidence only; multi-broker movement, security,
+published, and release gates remain open.
 
 ## Exit Criteria
 

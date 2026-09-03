@@ -155,6 +155,15 @@ regression passed with the required workspace validation; see
 This remains deterministic injected-stream evidence and does not replace live
 broker malformed-response or published qualification.
 
+The current source was rechecked on the company WSL2 workstation at `1b4cb5f`
+against an isolated Kafka 4.3.1 broker after the strict response-boundary
+change. Version negotiation and valid ListOffsets, OffsetForLeaderEpoch,
+Produce, and Fetch roundtrips passed; the named test container was removed
+without touching pre-existing resources. Details are in
+[`v1-company-data-plane-response-boundary-smoke-2026-09-03.md`](evidence/v1-company-data-plane-response-boundary-smoke-2026-09-03.md).
+This remains a short local diagnostic and does not replace three-broker or
+published qualification.
+
 The protocol fixture increment at pushed head `fd37184` adds fixed non-empty
 response bodies for the selected Produce, Fetch, Metadata, ListOffsets,
 OffsetForLeaderEpoch, and ApiVersions versions. Five golden tests and three
