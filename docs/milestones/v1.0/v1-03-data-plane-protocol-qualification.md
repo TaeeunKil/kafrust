@@ -198,6 +198,25 @@ passed. The record is
 This is a single-node diagnostic only; it does not satisfy the accepted-floor
 security/workload matrix or V1-20 published gate.
 
+### Floor/current version negotiation probe (2026-09-03)
+
+The opt-in broker-roundtrip probe now records the negotiated data-plane
+selection and exercises the selected paths on both local profiles. At source
+commit `4110089`, Kafka 4.3.1 selected Produce 13 with topic IDs (12 without
+them), Fetch 13, Metadata 12, ListOffsets 1, OffsetForLeaderEpoch 3, and
+ApiVersions 3. Kafka 3.7.2 selected Produce 9, Fetch 13, Metadata 12,
+ListOffsets 1, OffsetForLeaderEpoch 3, and ApiVersions 3. Each run created a
+unique topic, waited for a ready leader, completed ListOffsets and
+OffsetForLeaderEpoch partition roundtrips, produced one record, fetched it at
+the returned offset, and cleaned up the topic. The exact logs, image digests,
+commands, and non-claims are in
+[`v1-company-data-plane-version-log-2026-09-03.md`](../../evidence/v1-company-data-plane-version-log-2026-09-03.md).
+
+This closes the bounded single-node floor/current version-log slice only. It
+does not close the full malformed length/trailing-byte matrix, transaction
+selection proof, three-broker topic-ID/leader movement, accepted security or
+published-artifact qualification, or the V1-03 exit criteria.
+
 ## Exit Criteria
 
 1. Every stable high-level selected/fallback version has official metadata,

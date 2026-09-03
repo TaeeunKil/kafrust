@@ -76,7 +76,7 @@ Metadata, ApiVersions, and OffsetForLeaderEpoch. Its checker cross-validates
 the local API types and keys against Kafka 4.3.1 metadata and keeps transactional
 Produce selection owned by V1-06; the producer now enforces the V1-06 TV1 cap
 at Produce v11 for transactional sends. Golden/malformed fixture expansion and
-floor / pinned-current live version logs remain open. The cap commit passed
+the remaining live multi-broker qualification remain open. The cap commit passed
 CI run [32547821393](https://github.com/TaeeunKil/kafrust/actions/runs/32547821393),
 and the malformed-boundary increment passed CI run
 [32548081944](https://github.com/TaeeunKil/kafrust/actions/runs/32548081944).
@@ -88,8 +88,8 @@ immediate/idempotent producer, buffered/idempotent producer, classic and
 KIP-848 group poll/commit/leave, and Admin topic lifecycle examples passed.
 The bounded diagnostic is recorded in
 [`v1-company-workstation-current-short-smoke-2026-09-03.md`](evidence/v1-company-workstation-current-short-smoke-2026-09-03.md).
-This is local diagnostic evidence only; accepted-floor/pinned-current version
-logs, three-broker topic-ID movement, and published qualification remain open.
+This is local diagnostic evidence only; three-broker topic-ID movement and
+published qualification remain open.
 
 The same pushed head `e51384d` also passed the 19-test scripted fault suite and
 the selected-version golden/malformed protocol fixture suites on Windows Rust
@@ -104,6 +104,19 @@ checks. The record is
 [`v1-company-floor-short-smoke-2026-09-03.md`](evidence/v1-company-floor-short-smoke-2026-09-03.md);
 it is a single-node diagnostic and does not replace the accepted-floor matrix.
 
+The opt-in broker-roundtrip probe at pushed head `4110089` now records the
+floor/current data-plane selections and runs the selected paths. Kafka 4.3.1
+selected Produce 13 with topic IDs (12 without), Fetch 13, Metadata 12,
+ListOffsets 1, OffsetForLeaderEpoch 3, and ApiVersions 3. Kafka 3.7.2
+selected Produce 9, Fetch 13, Metadata 12, ListOffsets 1,
+OffsetForLeaderEpoch 3, and ApiVersions 3. Both profiles completed a
+leader-ready topic probe, ListOffsets/OffsetForLeaderEpoch roundtrip, one
+Produce, and one Fetch with cleanup. Exact logs and image digests are recorded
+in [`v1-company-data-plane-version-log-2026-09-03.md`](evidence/v1-company-data-plane-version-log-2026-09-03.md).
+This closes only the bounded single-node version-log slice; three-broker
+topic-ID/leader movement and the accepted/published qualification gates remain
+open.
+
 The protocol fixture increment at pushed head `fd37184` adds fixed non-empty
 response bodies for the selected Produce, Fetch, Metadata, ListOffsets,
 OffsetForLeaderEpoch, and ApiVersions versions. Five golden tests and three
@@ -112,9 +125,9 @@ stable and Rust 1.81.0 are covered by
 [CI run 33735496212](https://github.com/TaeeunKil/kafrust/actions/runs/33735496212).
 The evidence record is
 [`v1-data-plane-response-golden-2026-09-03.md`](evidence/v1-data-plane-response-golden-2026-09-03.md).
-This strengthens deterministic V1-03 evidence only; live floor/pinned-broker
-version logs, the complete malformed matrix, transaction-selection proof, and
-the milestone exit criteria remain open.
+This strengthens deterministic V1-03 evidence only; live three-broker
+topic-ID/leader movement, the complete malformed matrix, transaction-selection
+proof, and the milestone exit criteria remain open.
 
 ## V1-04 Execution Update (2026-08-22)
 

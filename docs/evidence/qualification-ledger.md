@@ -4905,3 +4905,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-data-plane-response-golden-2026-09-03.md
 - non_claims: not V1-03 completion, not an official Apache oracle for every response, not complete malformed-boundary coverage, not accepted-floor or pinned-broker live qualification, not three-broker movement, not long campaigns, not service canary, not release authorization
+
+## Q-DATAPLANE-LIVE-VERSION-LOG-2026-09-03
+
+- date_utc: 2026-09-03
+- source_commit: 411008987edc687f8487f910514594c8f272e412
+- client_version: 0.3.6 source checkout
+- protocol_version: 0.3.6 source checkout
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: 3.7.2 and 4.3.1
+- kafka_image: apache/kafka@sha256:8bd63e1bd445e5e19427a4bdbcc3d23bf6efd774b058a41b36ba87fda7623e34; apache/kafka@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
+- mode: floor and pinned data-plane version negotiation probe
+- topology: isolated single-node KRaft profiles with uniquely named resources
+- security: PLAINTEXT
+- group_protocol: not-applicable
+- workload: ApiVersions, Metadata, Produce, Fetch, ListOffsets, and OffsetForLeaderEpoch selected-version logs and roundtrips
+- workflow: scripts/check_qualification_ledger.py
+- fault: no injected fault; topic leader readiness was awaited before partition requests
+- duration: two short local broker runs under one minute each
+- record_count: one produced and fetched record per broker profile
+- member_count: not-applicable
+- repetition_count: one bounded run per broker profile
+- expected_errors: none for the configured paths
+- observed_errors: zero operation failures; all partition and record assertions passed
+- retry_count: not measured
+- duplicate_count: zero observed in the fetched probe record
+- loss_count: zero observed in the fetched probe record
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: not exposed by this probe
+- result: passed
+- artifact: docs/evidence/v1-company-data-plane-version-log-2026-09-03.md; crates/kafrust/tests/broker_roundtrip.rs
+- non_claims: not V1-03 completion, not three-broker topic-ID movement, not accepted-floor security/workload qualification, not published-artifact qualification, not long campaigns, not service canary, not release authorization
