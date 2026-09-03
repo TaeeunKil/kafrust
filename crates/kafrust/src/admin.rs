@@ -19795,6 +19795,297 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn classifies_create_partitions_response_loss_after_transmission() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let metadata_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+            write_frame(&mut bootstrap, &metadata_response(addr.port())).await;
+
+            let (mut controller, _) = listener.accept().await.unwrap();
+            let create_request = read_frame(&mut controller).await;
+            assert_eq!(&create_request[0..4], &[0, 37, 0, 0]);
+            drop(controller);
+        });
+        let admin =
+            AdminClient::new(ClientConfig::new([addr.to_string()]).request_timeout_ms(1_000))
+                .max_retries(0);
+
+        let error = admin
+            .create_partitions(
+                &[NewPartitions::new("orders", 3)],
+                CreatePartitionsOptions::new(),
+            )
+            .await
+            .unwrap_err();
+
+        assert!(matches!(
+            error,
+            Error::AdminMutationOutcomeUnknown {
+                operation: "CreatePartitions"
+            }
+        ));
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn classifies_delete_topics_response_loss_after_transmission() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let metadata_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+            write_frame(&mut bootstrap, &metadata_response(addr.port())).await;
+
+            let (mut controller, _) = listener.accept().await.unwrap();
+            let delete_request = read_frame(&mut controller).await;
+            assert_eq!(&delete_request[0..4], &[0, 20, 0, 3]);
+            drop(controller);
+        });
+        let admin =
+            AdminClient::new(ClientConfig::new([addr.to_string()]).request_timeout_ms(1_000))
+                .max_retries(0);
+
+        let error = admin
+            .delete_topics(&["orders".to_owned()], DeleteTopicsOptions::new())
+            .await
+            .unwrap_err();
+
+        assert!(matches!(
+            error,
+            Error::AdminMutationOutcomeUnknown {
+                operation: "DeleteTopics"
+            }
+        ));
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn classifies_elect_leaders_response_loss_after_transmission() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let metadata_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+            write_frame(&mut bootstrap, &metadata_response(addr.port())).await;
+
+            let (mut controller, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut controller).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut controller, &api_versions_with_elect_leaders(2)).await;
+
+            let elect_request = read_frame(&mut controller).await;
+            assert_eq!(&elect_request[0..4], &[0, 43, 0, 2]);
+            drop(controller);
+        });
+        let admin =
+            AdminClient::new(ClientConfig::new([addr.to_string()]).request_timeout_ms(1_000))
+                .max_retries(0);
+        let elections = [LeaderElection::new("orders").partition(0)];
+
+        let error = admin
+            .elect_leaders(
+                Some(&elections),
+                ElectionType::Preferred,
+                ElectLeadersOptions::new(),
+            )
+            .await
+            .unwrap_err();
+
+        assert!(matches!(
+            error,
+            Error::AdminMutationOutcomeUnknown {
+                operation: "ElectLeaders"
+            }
+        ));
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn classifies_partition_reassignment_response_loss_after_transmission() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let metadata_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+            write_frame(&mut bootstrap, &metadata_response(addr.port())).await;
+
+            let (mut controller, _) = listener.accept().await.unwrap();
+            let reassignment_request = read_frame(&mut controller).await;
+            assert_eq!(&reassignment_request[0..4], &[0, 45, 0, 0]);
+            drop(controller);
+        });
+        let admin =
+            AdminClient::new(ClientConfig::new([addr.to_string()]).request_timeout_ms(1_000))
+                .max_retries(0);
+        let reassignments = [PartitionReassignment::new("orders").partition(0, [1])];
+
+        let error = admin
+            .alter_partition_reassignments(&reassignments, PartitionReassignmentOptions::new())
+            .await
+            .unwrap_err();
+
+        assert!(matches!(
+            error,
+            Error::AdminMutationOutcomeUnknown {
+                operation: "AlterPartitionReassignments"
+            }
+        ));
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn classifies_update_features_response_loss_after_transmission() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let metadata_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+            write_frame(&mut bootstrap, &metadata_response(addr.port())).await;
+
+            let (mut controller, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut controller).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut controller, &api_versions_with_update_features()).await;
+
+            let update_request = read_frame(&mut controller).await;
+            assert_eq!(&update_request[0..4], &[0, 57, 0, 1]);
+            drop(controller);
+        });
+        let admin =
+            AdminClient::new(ClientConfig::new([addr.to_string()]).request_timeout_ms(1_000))
+                .max_retries(0);
+        let updates = [FeatureUpdate::new("transaction.version", 1)];
+
+        let error = admin
+            .update_features(&updates, UpdateFeaturesOptions::new())
+            .await
+            .unwrap_err();
+
+        assert!(matches!(
+            error,
+            Error::AdminMutationOutcomeUnknown {
+                operation: "UpdateFeatures"
+            }
+        ));
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn classifies_add_raft_voter_response_loss_after_transmission() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let metadata_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+            write_frame(&mut bootstrap, &metadata_response(addr.port())).await;
+
+            let (mut controller, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut controller).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut controller, &api_versions_with_raft_voter(1, 0)).await;
+
+            let add_request = read_frame(&mut controller).await;
+            assert_eq!(&add_request[0..4], &[0, 80, 0, 1]);
+            drop(controller);
+        });
+        let admin =
+            AdminClient::new(ClientConfig::new([addr.to_string()]).request_timeout_ms(1_000))
+                .max_retries(0);
+
+        let error = admin
+            .add_raft_voter(AddRaftVoterOptions::new(4, [9; 16]))
+            .await
+            .unwrap_err();
+
+        assert!(matches!(
+            error,
+            Error::AdminMutationOutcomeUnknown {
+                operation: "AddRaftVoter"
+            }
+        ));
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn classifies_remove_raft_voter_response_loss_after_transmission() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let metadata_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+            write_frame(&mut bootstrap, &metadata_response(addr.port())).await;
+
+            let (mut controller, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut controller).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut controller, &api_versions_with_raft_voter(0, 0)).await;
+
+            let remove_request = read_frame(&mut controller).await;
+            assert_eq!(&remove_request[0..4], &[0, 81, 0, 0]);
+            drop(controller);
+        });
+        let admin =
+            AdminClient::new(ClientConfig::new([addr.to_string()]).request_timeout_ms(1_000))
+                .max_retries(0);
+
+        let error = admin
+            .remove_raft_voter(RemoveRaftVoterOptions::new(2, [3; 16]))
+            .await
+            .unwrap_err();
+
+        assert!(matches!(
+            error,
+            Error::AdminMutationOutcomeUnknown {
+                operation: "RemoveRaftVoter"
+            }
+        ));
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn classifies_unregister_broker_response_loss_after_transmission() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let metadata_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+            write_frame(&mut bootstrap, &metadata_response(addr.port())).await;
+
+            let (mut controller, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut controller).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut controller, &api_versions_with_unregister_broker()).await;
+
+            let unregister_request = read_frame(&mut controller).await;
+            assert_eq!(&unregister_request[0..4], &[0, 64, 0, 0]);
+            drop(controller);
+        });
+        let admin =
+            AdminClient::new(ClientConfig::new([addr.to_string()]).request_timeout_ms(1_000))
+                .max_retries(0);
+
+        let error = admin.unregister_broker(4).await.unwrap_err();
+
+        assert!(matches!(
+            error,
+            Error::AdminMutationOutcomeUnknown {
+                operation: "UnregisterBroker"
+            }
+        ));
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn retries_create_topics_after_controller_discovery_disconnect() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
