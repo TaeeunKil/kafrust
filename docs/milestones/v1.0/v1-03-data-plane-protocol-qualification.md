@@ -262,6 +262,15 @@ boundary slice. Official Apache response oracles for every shape, live
 three-broker movement, accepted security/published qualification, and the
 remaining V1-03 exit criteria remain open.
 
+The high-level client boundary was also exercised at source commit
+`e1df007da77bd6ff6cc3031bc64de9c10b033da8`: an injected OffsetForLeaderEpoch
+v3 response with one trailing sentinel byte returns the typed
+`Error::Protocol(TrailingBytes { remaining: 1 })`. The focused regression and
+full required validation passed; details are in
+[`v1-data-plane-trailing-client-boundary-2026-09-03.md`](../../evidence/v1-data-plane-trailing-client-boundary-2026-09-03.md).
+This confirms client observability of the deterministic boundary only; live
+malformed-broker evidence and the remaining V1-03 gates stay open.
+
 ## Exit Criteria
 
 1. Every stable high-level selected/fallback version has official metadata,

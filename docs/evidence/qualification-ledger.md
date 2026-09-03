@@ -5037,3 +5037,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-data-plane-malformed-trailing-2026-09-03.md; crates/kafrust-protocol/src/codec/decode.rs; crates/kafrust-protocol/tests/data_plane_malformed.rs
 - non_claims: not V1-03 completion, not official Apache response oracles for every shape, not live broker qualification, not three-broker movement, not long campaigns, not service canary, not published compatibility completion, not release authorization
+
+## Q-DATAPLANE-TRAILING-CLIENT-2026-09-03
+
+- date_utc: 2026-09-03
+- source_commit: e1df007da77bd6ff6cc3031bc64de9c10b033da8
+- client_version: 0.3.6 source checkout
+- protocol_version: 0.3.6 source checkout
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: not-applicable; injected broker stream
+- kafka_image: not-applicable; no broker required
+- mode: high-level client trailing-byte response regression
+- topology: in-memory duplex client/broker stream
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: OffsetForLeaderEpoch v3 response decoding
+- workflow: scripts/check_qualification_ledger.py
+- fault: one sentinel byte appended to an otherwise valid response body
+- duration: deterministic client test under one second
+- record_count: not-applicable; protocol response fixture
+- member_count: not-applicable
+- repetition_count: one bounded injected-stream run
+- expected_errors: Error::Protocol(TrailingBytes { remaining: 1 })
+- observed_errors: typed trailing-byte error returned; 1 focused test passed
+- retry_count: 0
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: not-applicable
+- result: passed
+- artifact: docs/evidence/v1-data-plane-trailing-client-boundary-2026-09-03.md; crates/kafrust/src/client.rs
+- non_claims: not V1-03 completion, not live broker malformed-response qualification, not official Apache response oracles for every shape, not three-broker movement, not long campaigns, not service canary, not published compatibility completion, not release authorization

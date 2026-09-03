@@ -147,6 +147,14 @@ This closes the selected deterministic malformed boundary slice only; complete
 official response oracles, live three-broker movement, and accepted/published
 qualification remain open.
 
+The same boundary is observable through `Client` at pushed head `e1df007`: an
+injected OffsetForLeaderEpoch v3 response with one trailing sentinel byte is
+returned as typed `Error::Protocol(TrailingBytes { remaining: 1 })`. The focused
+regression passed with the required workspace validation; see
+[`v1-data-plane-trailing-client-boundary-2026-09-03.md`](evidence/v1-data-plane-trailing-client-boundary-2026-09-03.md).
+This remains deterministic injected-stream evidence and does not replace live
+broker malformed-response or published qualification.
+
 The protocol fixture increment at pushed head `fd37184` adds fixed non-empty
 response bodies for the selected Produce, Fetch, Metadata, ListOffsets,
 OffsetForLeaderEpoch, and ApiVersions versions. Five golden tests and three
