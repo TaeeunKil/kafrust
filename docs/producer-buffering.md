@@ -43,6 +43,9 @@ Names can change during implementation, but the behavioral split should remain:
 - `BufferedProducer::send` enqueues one `ProducerRecord` and returns a delivery handle for that input record.
 - `BufferedProducer::flush` waits until all records accepted before the flush have terminal delivery outcomes.
 - `BufferedProducer::close` flushes, stops the background task, and rejects later sends.
+- Dropping the owning `BufferedProducer` aborts its background task so it is not
+  detached; pending delivery handles resolve as canceled. Call `close()` when
+  accepted records must be flushed gracefully.
 
 Current implementation status: `ProducerConfig::linger_ms`, `ProducerConfig::buffer_capacity`, `ProducerConfig::build_buffered`, `BufferedProducer::send`, `BufferedProducer::flush`, `BufferedProducer::close`, `BufferedProducer::is_closed`, and per-record `ProducerDelivery` handles exist. `flush`, `close`, linger expiry, record-count thresholds, and byte-count thresholds send accepted records through the existing `send_batch_report` path and complete delivery handles from per-record outcomes. The command queue defaults to 1024 records, applies async backpressure at capacity, and reports current and maximum outstanding buffered records through `ClientMetrics`.
 

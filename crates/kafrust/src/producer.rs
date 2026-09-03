@@ -1011,6 +1011,14 @@ impl BufferedProducer {
     }
 }
 
+impl Drop for BufferedProducer {
+    fn drop(&mut self) {
+        if let Some(worker) = self.worker.take() {
+            worker.abort();
+        }
+    }
+}
+
 impl BufferedProducerHandle {
     /// Enqueues one record using the shared bounded producer queue.
     #[tracing::instrument(
@@ -7463,6 +7471,45 @@ mod tests {
         state.close();
 
         assert!(state.is_closed());
+    }
+
+    #[tokio::test]
+    async fn dropping_buffered_producer_aborts_worker() {
+        struct DropSignal(Option<oneshot::Sender<()>>);
+
+        impl Drop for DropSignal {
+            fn drop(&mut self) {
+                if let Some(sender) = self.0.take() {
+                    let _ = sender.send(());
+                }
+            }
+        }
+
+        let (started_sender, started_receiver) = oneshot::channel();
+        let (dropped_sender, dropped_receiver) = oneshot::channel();
+        let worker = tokio::spawn(async move {
+            let _signal = DropSignal(Some(dropped_sender));
+            started_sender.send(()).unwrap();
+            std::future::pending::<()>().await;
+        });
+        started_receiver.await.unwrap();
+        let (commands, _receiver) = mpsc::channel(1);
+        let producer = BufferedProducer {
+            commands,
+            metrics: ClientMetrics::new(),
+            worker: Some(worker),
+            state: BufferedProducerState::Open,
+            transactional: false,
+            in_transaction: false,
+            defunct: false,
+        };
+
+        drop(producer);
+
+        time::timeout(Duration::from_secs(1), dropped_receiver)
+            .await
+            .unwrap()
+            .unwrap();
     }
 
     #[test]

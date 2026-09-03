@@ -276,6 +276,8 @@ successfully committed or aborted from a lost response.
 
 `ProducerConfig::build_buffered` creates an opt-in buffered producer. Records are
 flushed by linger time, record count, byte count, explicit `flush`, or `close`.
+Dropping the owning `BufferedProducer` aborts its worker so it is not detached;
+use `close()` when accepted records must be flushed gracefully.
 
 ```rust,no_run
 use kafrust::{Acks, ProducerConfig, ProducerRecord};

@@ -317,6 +317,7 @@ Current implementation status:
   RecordBatch v2.
 - `ProducerConfig::build_buffered` creates a `BufferedProducer` with configurable bounded enqueue, per-record `ProducerDelivery` handles, `flush`, `close`, and `is_closed`.
 - `BufferedProducer::send` queues records for the buffered path, and `flush` or `close` sends accepted records through the existing batch Produce path before completing delivery handles from per-record outcomes.
+- Dropping the owning `BufferedProducer` aborts its worker and resolves pending delivery handles as canceled; call `close()` to flush accepted records before shutdown.
 - `BufferedProducer::handle` creates a cloneable `BufferedProducerHandle` for concurrent non-transactional enqueueing from multiple Tokio tasks. The handle uses the same bounded queue and per-record delivery semantics; drop or stop all handles before calling `BufferedProducer::close`. Transactional buffered producers reject handles so transaction boundaries remain ordered through the owner.
 - `BufferedProducer` automatically flushes queued records when a topic and explicit-partition buffer reaches `max_records_per_batch` or `max_batch_bytes`, or when the oldest queued record reaches `linger_ms`. `linger_ms(0)` schedules a flush without intentional delay.
 - Producer metadata is cached by topic and refreshed when a retriable send failure invalidates that topic cache entry.
