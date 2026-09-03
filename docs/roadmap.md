@@ -244,6 +244,11 @@ record is in
 It remains current-source scripted evidence, not published, accepted-floor,
 three-broker, long-campaign, canary, or release evidence.
 
+The company WSL2 short smoke was refreshed at source `c1dc209`; the complete
+29-test `fault_injection` target passed, including delivery-receiver
+cancellation and the buffered close edge cases. The latest record is
+[`v1-company-fault-matrix-29test-smoke-2026-09-03.md`](evidence/v1-company-fault-matrix-29test-smoke-2026-09-03.md).
+
 ## V1-05 Execution Update (2026-08-22)
 
 V1-05 is `In progress`. The deterministic idempotent slice now records exact
@@ -285,6 +290,11 @@ deadline. The short reproduction is recorded in
 [`v1-company-fault-matrix-short-smoke-2026-09-03.md`](evidence/v1-company-fault-matrix-short-smoke-2026-09-03.md)
 and does not change the published or multi-broker gates. The prior 22-test
 record remains historical evidence at `83ec120`.
+
+The company WSL2 run was refreshed at source `c1dc209`; all 29 deterministic
+fault tests passed, including buffered close and delivery-cancellation cases.
+The latest short record is
+[`v1-company-fault-matrix-29test-smoke-2026-09-03.md`](evidence/v1-company-fault-matrix-29test-smoke-2026-09-03.md).
 
 At pushed head `b885647`, two additional close cases passed: owner close joins
 cleanly after a buffered in-flight Produce deadline with

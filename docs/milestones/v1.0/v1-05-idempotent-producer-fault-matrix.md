@@ -125,6 +125,12 @@ and remains short deterministic evidence rather than published or multi-broker
 qualification. The earlier 22-test record remains an immutable historical
 snapshot at source `83ec120`.
 
+The same company WSL2 checkout then passed the expanded 29-test target at
+source `c1dc209`, including the buffered close and delivery-cancellation
+cases. The latest short record is
+[`v1-company-fault-matrix-29test-smoke-2026-09-03.md`](../../evidence/v1-company-fault-matrix-29test-smoke-2026-09-03.md).
+It remains non-published deterministic evidence.
+
 ### Buffered terminal sequence errors (2026-09-03)
 
 The buffered path now exercises the three terminal Kafka identity errors. At

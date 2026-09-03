@@ -5532,3 +5532,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-buffered-delivery-cancellation-2026-09-03.md; crates/kafrust/tests/fault_injection.rs
 - non_claims: not cancellation during socket I/O, not partial client request-write coverage, not delayed metadata/capability, not published mixed-outcome qualification, not long campaigns, not service canary, not release authorization
+
+## Q-COMPANY-FAULT-MATRIX-29TEST-SMOKE-2026-09-03
+
+- date_utc: 2026-09-03
+- source_commit: c1dc20943dd9ae7e7f9971a665c4ca15dfd3b8cc
+- client_version: 0.3.6 source checkout
+- protocol_version: 0.3.6 source checkout
+- work_status: In progress
+- evidence_level: Live current-source
+- kafka_version: not-applicable; in-memory scripted broker
+- kafka_image: not-applicable
+- mode: company WSL2 complete deterministic fault-injection smoke
+- topology: company Windows host, Ubuntu-T9 WSL2 x86_64; no external broker
+- security: not-applicable
+- group_protocol: covered by the complete target's group cases
+- workload: complete `fault_injection` integration target with 29 tests and two test threads
+- workflow: scripts/check_qualification_ledger.py
+- fault: response loss/partial response, terminal sequence errors, queue expiry, close edge cases, and delivery receiver cancellation
+- duration: 1.92 seconds test execution after compilation
+- record_count: bounded scripted cases across Admin, consumer, group, Share, transaction, immediate, and buffered paths
+- member_count: not-applicable
+- repetition_count: one bounded company WSL run; 29 tests
+- expected_errors: all scripted recovery, ambiguity, expiry, shutdown, terminal-error, and cancellation assertions pass
+- observed_errors: 29 passed; 0 failed; buffered in-flight close and receiver-cancellation cases released worker/gauge resources
+- retry_count: covered by individual scripted assertions; not aggregated
+- duplicate_count: zero client-visible duplicates in idempotent replay cases
+- loss_count: zero in deterministic success/recovery cases
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: no Docker resources created or modified; WSL mounted checkout line-ending noise retained
+- result: passed
+- artifact: docs/evidence/v1-company-fault-matrix-29test-smoke-2026-09-03.md; crates/kafrust/tests/fault_injection.rs; crates/kafrust/tests/support/mod.rs
+- non_claims: not published-artifact qualification, not accepted-floor or three-broker qualification, not security, not long campaigns, not service canary, not release authorization

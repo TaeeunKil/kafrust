@@ -164,6 +164,13 @@ reproduction is recorded in
 [`v1-company-fault-matrix-short-smoke-2026-09-03.md`](../../evidence/v1-company-fault-matrix-short-smoke-2026-09-03.md)
 and does not change the published, multi-broker, or long-campaign gates.
 
+The company WSL2 short smoke was refreshed at source
+`c1dc20943dd9ae7e7f9971a665c4ca15dfd3b8cc`; all 29 deterministic
+`fault_injection` tests passed, including delivery-receiver cancellation and
+the close edge cases. The latest record is
+[`v1-company-fault-matrix-29test-smoke-2026-09-03.md`](../../evidence/v1-company-fault-matrix-29test-smoke-2026-09-03.md).
+This remains current-source scripted evidence only.
+
 ### Close edge cases (2026-09-03)
 
 At source commit `b88564748c56e1bcc8ae4c5944235b4cb1bb95e4`,
