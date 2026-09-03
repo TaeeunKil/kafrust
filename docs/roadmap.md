@@ -285,6 +285,12 @@ in [`v1-client-no-response-cancellation-2026-09-03.md`](evidence/v1-client-no-re
 This remains low-level evidence and does not alter producer retry, published,
 long-campaign, canary, or release gates.
 
+Company Ubuntu-T9 WSL2 x86_64 also reproduced the no-response cancellation
+regression at source `040edc5`; the focused test and all 29 scripted fault
+tests passed. See
+[`v1-company-no-response-cancellation-smoke-2026-09-03.md`](evidence/v1-company-no-response-cancellation-smoke-2026-09-03.md).
+No Docker resources were touched.
+
 ## V1-05 Execution Update (2026-08-22)
 
 V1-05 is `In progress`. The deterministic idempotent slice now records exact

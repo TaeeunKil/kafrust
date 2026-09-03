@@ -241,6 +241,12 @@ record is
 This remains low-level cancellation evidence; producer-level retry and live
 gates remain open.
 
+Company Ubuntu-T9 WSL2 x86_64 reproduced this no-response cancellation case at
+source `040edc5`; the focused regression and all 29 scripted fault-injection
+tests passed. The short record is
+[`v1-company-no-response-cancellation-smoke-2026-09-03.md`](../../evidence/v1-company-no-response-cancellation-smoke-2026-09-03.md).
+No Docker resources were touched.
+
 ## Exit Criteria
 
 1. All three producer modes share the documented total-budget calculation.

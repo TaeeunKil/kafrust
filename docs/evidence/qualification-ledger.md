@@ -5566,6 +5566,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-client-no-response-cancellation-2026-09-03.md; crates/kafrust/src/client.rs
 - non_claims: not producer retry qualification, not partial-write qualification, not published-artifact qualification, not multi-broker or security qualification, not long campaign, not service canary, not release authorization
 
+## Q-COMPANY-NO-RESPONSE-CANCEL-2026-09-03
+
+- date_utc: 2026-09-03
+- source_commit: 040edc5e256c6fd58888ae83eb1df79b36773212
+- client_version: 0.3.6 source workspace
+- protocol_version: no-response Kafka request path
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: scripted transport fixture
+- kafka_image: not-applicable
+- mode: company WSL2 canceled no-response request smoke
+- topology: single injected AsyncWrite connection plus scripted broker target
+- security: PLAINTEXT fixture
+- group_protocol: not-applicable
+- workload: focused no-response cancellation regression plus 29 fault-injection tests
+- workflow: scripts/check_qualification_ledger.py
+- fault: writer remains pending until caller cancellation
+- duration: focused test 0.04 s; fault matrix 0.61 s
+- record_count: 1 request attempted; 0 records
+- member_count: 0
+- repetition_count: one company WSL2 run
+- expected_errors: canceled no-response request leaves connection unusable; deterministic fault assertions pass
+- observed_errors: focused test passed; 29 fault-injection tests passed
+- retry_count: covered by individual scripted assertions; not aggregated
+- duplicate_count: zero client-visible duplicates in covered idempotent cases
+- loss_count: zero in deterministic success/recovery cases
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: no Docker resources created or modified; WSL checkout retained
+- result: passed
+- artifact: docs/evidence/v1-company-no-response-cancellation-smoke-2026-09-03.md; crates/kafrust/src/client.rs; crates/kafrust/tests/fault_injection.rs
+- non_claims: not producer retry qualification, not partial-write qualification, not published-artifact qualification, not accepted-floor or three-broker qualification, not security, not long campaign, not service canary, not release authorization
+
 ## Q-BUFFERED-INFLIGHT-DEADLINE-2026-09-03
 
 - date_utc: 2026-09-03

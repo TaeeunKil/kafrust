@@ -191,6 +191,13 @@ source `d9f1309`; the next operation was rejected with `NotConnected`. See
 This is low-level transport evidence and does not close producer retry or
 published reconciliation.
 
+Company Ubuntu-T9 WSL2 x86_64 reproduced the canceled no-response write at
+source `040edc5`; the focused regression and all 29 scripted fault-injection
+tests passed. The short record is
+[`v1-company-no-response-cancellation-smoke-2026-09-03.md`](../../evidence/v1-company-no-response-cancellation-smoke-2026-09-03.md).
+This remains low-level evidence and does not close producer retry or published
+reconciliation.
+
 ## Failure And Lifecycle Contract
 
 - A safe retry retains the same producer identity and batch sequence.
