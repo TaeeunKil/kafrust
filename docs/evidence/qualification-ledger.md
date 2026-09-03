@@ -6588,3 +6588,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-producer-delivery-phase-expiry-2026-09-04.md; crates/kafrust/src/producer.rs; crates/kafrust/tests/fault_injection.rs
 - non_claims: not published mixed-outcome reconciliation, not accepted-floor or multi-broker qualification, not long campaigns, not service canary, not release authorization
+
+## Q-COMPANY-PUSHED-SHORT-KAFKA-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: 0674907732524dc115088aab22f79daf5a42d624
+- client_version: 0.3.6 source checkout
+- protocol_version: 0.3.6 source checkout
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
+- mode: company pushed-source short Kafka smoke
+- topology: isolated single-node KRaft broker
+- security: PLAINTEXT
+- group_protocol: not run in this rerun
+- workload: broker_roundtrip 13 tests; idempotent immediate and buffered producers; Admin lifecycle
+- workflow: scripts/check_qualification_ledger.py
+- fault: no injected broker fault; buffered records fetched back for key/value reconciliation
+- duration: under two minutes after warm build
+- record_count: one data-plane roundtrip record; one immediate record; three buffered records
+- member_count: not run in this rerun
+- repetition_count: one company WSL2 x86_64 run
+- expected_errors: zero unexpected errors; Share-specific cases skipped by configuration
+- observed_errors: zero failures in executed targets
+- retry_count: not aggregated
+- duplicate_count: 0 observed in short fetch reconciliation
+- loss_count: 0 observed in short fetch reconciliation
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: broker container and uniquely named topics removed; no external resources changed
+- result: passed
+- artifact: docs/evidence/v1-company-pushed-short-kafka-smoke-2026-09-04.md; crates/kafrust/tests/broker_roundtrip.rs; crates/kafrust/examples/producer_send.rs; crates/kafrust/examples/producer_buffered.rs; crates/kafrust/examples/admin_create_topic.rs
+- non_claims: not published artifact qualification, not accepted-floor security, not three-broker movement, not long campaign, not service canary, not release authorization

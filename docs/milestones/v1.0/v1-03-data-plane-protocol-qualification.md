@@ -320,6 +320,17 @@ This refresh is local deterministic evidence only; Share, security,
 three-broker movement, accepted-floor, published, long-campaign, and release
 gates remain open.
 
+### Pushed-source company broker smoke after producer cancellation fence (2026-09-04)
+
+Source `0674907` was rerun on the company Ubuntu-T9 WSL2 x86_64 workstation
+against an isolated Kafka 4.3.1 broker. `broker_roundtrip` passed all 13 tests,
+including the negotiated data-plane version log and one-record Produce/Fetch
+roundtrip. Idempotent immediate and buffered producers passed, including
+buffered fetch reconciliation, and the Admin topic lifecycle passed. The
+record is [`v1-company-pushed-short-kafka-smoke-2026-09-04.md`](../../evidence/v1-company-pushed-short-kafka-smoke-2026-09-04.md).
+This rerun is local deterministic evidence only; no group, Share, security,
+three-broker, published, long-campaign, or release gate is promoted.
+
 ### Current-source hosted matrix recheck (2026-09-04)
 
 After the producer deadline phase change, source `513dc7e` passed all 17 jobs

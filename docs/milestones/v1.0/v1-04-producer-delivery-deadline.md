@@ -96,6 +96,13 @@ buffered producer examples (normal and idempotent) against isolated Kafka
 This does not replace the published mixed-outcome reconciliation or long SLO
 requirements.
 
+The pushed source `0674907` was also exercised against an isolated Kafka 4.3.1
+broker: idempotent immediate and buffered examples completed, and buffered
+records were fetched back with matching keys and values. See
+[`v1-company-pushed-short-kafka-smoke-2026-09-04.md`](../../evidence/v1-company-pushed-short-kafka-smoke-2026-09-04.md).
+This remains short local broker evidence and does not satisfy the published
+deadline matrix or SLO gates.
+
 The same short workstation run also passed normal and idempotent buffered
 delivery against Kafka 3.7.2; see
 [`v1-company-floor-short-smoke-2026-09-03.md`](../../evidence/v1-company-floor-short-smoke-2026-09-03.md).

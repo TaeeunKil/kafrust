@@ -68,6 +68,13 @@ buffered records by fetch. The bounded diagnostic is recorded in
 it contains no injected fault and does not count toward the published fault
 matrix or ten-cycle gate.
 
+The pushed source `0674907` was rerun against an isolated Kafka 4.3.1 broker;
+the idempotent immediate and buffered examples passed, with three buffered
+records fetched back and reconciled by key/value. The detailed record is
+[`v1-company-pushed-short-kafka-smoke-2026-09-04.md`](../../evidence/v1-company-pushed-short-kafka-smoke-2026-09-04.md).
+This is a no-fault local broker diagnostic and does not count toward the
+published fault matrix, ten-cycle, or 100,000-record gates.
+
 At pushed head `e51384d`, the Windows workstation reran all 19 deterministic
 `fault_injection` tests. Producer response-loss replay and terminal sequence
 errors, transaction ambiguity, consumer/group recovery, Share ambiguity, and

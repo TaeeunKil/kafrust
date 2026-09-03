@@ -400,6 +400,16 @@ The evidence is
 This closes only the deterministic buffered cancellation/no-reuse slice;
 published reconciliation and long/live gates remain open.
 
+The pushed source `0674907` was then rerun on the company Ubuntu-T9 WSL2
+x86_64 workstation against an isolated Kafka 4.3.1 broker. The 13-test
+`broker_roundtrip` target, idempotent immediate and buffered producer examples
+with fetch reconciliation, and the Admin topic lifecycle all passed. The
+container was uniquely named and removed on exit; existing Docker resources
+were not touched. The immutable record is
+[`v1-company-pushed-short-kafka-smoke-2026-09-04.md`](evidence/v1-company-pushed-short-kafka-smoke-2026-09-04.md).
+This is local short evidence only and does not promote published, security,
+three-broker, long-campaign, canary, or release gates.
+
 At pushed head `a46462f`, the buffered idempotent path now covers terminal
 sequence errors 45, 47, and 90. Each first delivery returns the fatal broker
 code; a second queued delivery emits no Produce frame and returns the same
