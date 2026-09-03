@@ -641,6 +641,14 @@ targets, preserving the typed partial result. The evidence is recorded in
 This state-idempotent rule is operation-specific and does not close the
 published Admin matrix.
 
+The classic coordinator response-loss boundary is now covered at pushed source
+`dbeff56`: scripted OffsetCommit v2, OffsetDelete v0, and DeleteGroups v1
+requests are read in full, their responses are dropped, and each operation
+returns its typed `AdminMutationOutcomeUnknown` result without replay. This is
+local deterministic evidence only; member-aware OffsetCommit, live movement,
+published profiles, and the remaining V1-12 gates remain open. See
+[`v1-admin-coordinator-response-loss-matrix-2026-09-04.md`](evidence/v1-admin-coordinator-response-loss-matrix-2026-09-04.md).
+
 ## V1-13 Execution Update (2026-08-22)
 
 V1-13 is `In progress`. Security Admin routes preserve typed mixed

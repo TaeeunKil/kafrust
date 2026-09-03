@@ -6819,3 +6819,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-admin-controller-response-loss-matrix-2026-09-04.md; crates/kafrust/src/admin.rs
 - non_claims: not safe retry for other Admin mutations, not published floor or authorization qualification, not reconciliation or three-broker failover qualification, not long campaign, not service canary, not release authorization
+
+## Q-ADMIN-COORDINATOR-RESPONSE-LOSS-MATRIX-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: dbeff56ad07ad6aed0482fee884472384d7ee48e
+- client_version: 0.3.6 source checkout
+- protocol_version: OffsetCommit v2; OffsetDelete v0; DeleteGroups v1
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: not-applicable; scripted broker
+- kafka_image: not-applicable; in-memory fixture
+- mode: classic coordinator mutation response-loss classification matrix
+- topology: in-memory scripted broker
+- security: not-applicable
+- group_protocol: classic consumer group
+- workload: three complete coordinator mutation requests followed by dropped responses
+- workflow: scripts/check_qualification_ledger.py
+- fault: response dropped after complete mutation request transmission
+- duration: focused test matrix 0.07 seconds on Windows
+- record_count: three complete mutation request frames; no response frames
+- member_count: not-applicable
+- repetition_count: one Windows focused run and one all-features workspace replay
+- expected_errors: one operation-specific AdminMutationOutcomeUnknown result per fixture
+- observed_errors: exact typed unknown outcomes for OffsetCommit, OffsetDelete, and DeleteGroups; no replay
+- retry_count: 0
+- duplicate_count: 0 client-visible mutations; no replay attempted
+- loss_count: three intentionally dropped coordinator responses
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: no external resources
+- result: passed
+- artifact: docs/evidence/v1-admin-coordinator-response-loss-matrix-2026-09-04.md; crates/kafrust/src/admin.rs
+- non_claims: not member-aware OffsetCommit qualification, not safe retry for other Admin mutations, not published floor or authorization qualification, not reconciliation or three-broker failover qualification, not long campaign, not service canary, not release authorization

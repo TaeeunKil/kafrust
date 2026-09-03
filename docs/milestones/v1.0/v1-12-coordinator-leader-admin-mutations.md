@@ -80,6 +80,18 @@ retry metric is exactly one. This is the fixed-target idempotence boundary only;
 other mutation retries and published leader-failover profiles remain open. See
 [`v1-admin-delete-records-response-loss-2026-09-04.md`](../../evidence/v1-admin-delete-records-response-loss-2026-09-04.md).
 
+### Coordinator mutation response-loss matrix (2026-09-04)
+
+Source `dbeff56ad07ad6aed0482fee884472384d7ee48e` adds deterministic regressions
+for classic coordinator-routed OffsetCommit v2, OffsetDelete v0, and
+DeleteGroups v1. Each scripted coordinator reads the complete mutation frame,
+drops the response, and the client returns the operation-specific
+`Error::AdminMutationOutcomeUnknown` without replay. This closes the local
+response-loss classification slice for these three classic coordinator writes;
+member-aware OffsetCommit, live owner movement, published profiles, and the
+remaining V1-12 gates stay open. See
+[`v1-admin-coordinator-response-loss-matrix-2026-09-04.md`](../../evidence/v1-admin-coordinator-response-loss-matrix-2026-09-04.md).
+
 ## Failure And Lifecycle Contract
 
 - Read-only operations may rediscover/retry inside their budget.
