@@ -295,6 +295,14 @@ producer entry modes. Published mixed-outcome reconciliation, cancellation
 while socket I/O is blocked, long campaigns, and live qualification remain
 open.
 
+The buffered owner cancellation fence is also covered at source `cb5b82f`:
+after the scripted broker observes Produce, dropping the owner cancels the
+worker and completes the delivery without permitting a second sequence to be
+sent. See
+[`v1-buffered-idempotent-cancellation-2026-09-04.md`](../../evidence/v1-buffered-idempotent-cancellation-2026-09-04.md).
+This is post-transmission cancellation evidence; other socket-I/O phases,
+published reconciliation, long campaigns, and live qualification remain open.
+
 ## Exit Criteria
 
 1. All three producer modes share the documented total-budget calculation.

@@ -232,6 +232,21 @@ This closes deterministic immediate and batch cancellation after Produce
 transmission only. Buffered worker cancellation, published ten-cycle profiles,
 100,000-record reconciliation, and secure/live gates remain open.
 
+### Buffered owner cancellation after Produce (2026-09-04)
+
+At source commit `cb5b82f`,
+`dropping_buffered_idempotent_producer_cancels_in_flight_delivery` waits for a
+scripted broker to observe the Produce frame, then drops the buffered owner
+while its worker is awaiting the response. The delivery is completed with the
+typed buffered-cancellation error, the buffered gauge reaches zero, and a
+retained enqueue handle observes `buffered producer task stopped`; no second
+Produce frame can reuse the uncertain sequence. The detailed record is
+[`v1-buffered-idempotent-cancellation-2026-09-04.md`](../../evidence/v1-buffered-idempotent-cancellation-2026-09-04.md).
+
+This closes deterministic buffered worker cancellation after transmission only.
+Published ten-cycle profiles, 100,000-record reconciliation, and secure/live
+gates remain open.
+
 ## Failure And Lifecycle Contract
 
 - A safe retry retains the same producer identity and batch sequence.

@@ -389,6 +389,17 @@ Details are in
 Cancellation while socket I/O is blocked and partial client request writes
 remain open.
 
+## V1-05 Buffered idempotent cancellation fence (2026-09-04)
+
+Source `cb5b82f` now covers dropping a buffered idempotent producer owner while
+Produce is in flight. Windows and company Ubuntu-T9 WSL2 x86_64 both passed the
+regression: the delivery is canceled, `buffered_records` returns to zero, a
+retained handle reports `task stopped`, and no second Produce frame is sent.
+The evidence is
+[`v1-buffered-idempotent-cancellation-2026-09-04.md`](evidence/v1-buffered-idempotent-cancellation-2026-09-04.md).
+This closes only the deterministic buffered cancellation/no-reuse slice;
+published reconciliation and long/live gates remain open.
+
 At pushed head `a46462f`, the buffered idempotent path now covers terminal
 sequence errors 45, 47, and 90. Each first delivery returns the fatal broker
 code; a second queued delivery emits no Produce frame and returns the same

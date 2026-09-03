@@ -6523,6 +6523,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-buffered-delivery-phase-expiry-2026-09-04.md; crates/kafrust/tests/fault_injection.rs
 - non_claims: not published mixed-outcome reconciliation, not socket-I/O cancellation qualification, not long campaign, not service canary, not release authorization
 
+## Q-BUFFERED-IDEMPOTENT-CANCELLATION-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: cb5b82fe16d66ba98010a75ede87cfc6ac0539db
+- client_version: 0.3.6 source checkout
+- protocol_version: 0.3.6 source checkout
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: not-applicable; scripted broker
+- kafka_image: not-applicable; scripted broker
+- mode: buffered owner cancellation after Produce transmission
+- topology: in-process scripted broker
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: one idempotent buffered delivery with a held Produce response
+- workflow: scripts/check_qualification_ledger.py
+- fault: owner drop aborts the worker after Produce is observed and prevents sequence reuse
+- duration: Windows focused target 0.01 seconds; company WSL2 focused target 0.12 seconds
+- record_count: one Produce frame; no replacement frame
+- member_count: not-applicable
+- repetition_count: one Windows run and one Ubuntu-T9 WSL2 x86_64 replay
+- expected_errors: buffered delivery canceled; retained handle reports buffered producer task stopped
+- observed_errors: delivery and enqueue-handle errors matched; buffered_records reached zero
+- retry_count: 0
+- duplicate_count: 0
+- loss_count: not adjudicated; broker-side outcome remains unknown
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: buffered_records=0; worker aborted; no external resources
+- result: passed
+- artifact: docs/evidence/v1-buffered-idempotent-cancellation-2026-09-04.md; crates/kafrust/tests/fault_injection.rs; crates/kafrust/tests/support/mod.rs
+- non_claims: not broker acceptance or reconciliation, not published fault cycles, not 100000-record qualification, not long campaign, not service canary, not release authorization
+
 ## Q-PRODUCER-DEADLINE-PHASES-2026-09-04
 
 - date_utc: 2026-09-04
