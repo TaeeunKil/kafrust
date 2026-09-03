@@ -310,6 +310,8 @@ fn duration_nanos(duration: Duration) -> u64 {
 #[cfg(test)]
 mod tests {
     use std::sync::atomic::{AtomicU64, Ordering};
+    use std::sync::{Arc, Barrier};
+    use std::thread;
     use std::time::Duration;
 
     use super::{
@@ -418,5 +420,49 @@ mod tests {
         let gauge = AtomicU64::new(0);
         assert_eq!(atomic_saturating_sub(&gauge, 1), 0);
         assert_eq!(gauge.load(Ordering::Relaxed), 0);
+    }
+
+    #[test]
+    fn concurrent_metric_updates_keep_counters_consistent() {
+        const WORKERS: usize = 4;
+        const ITERATIONS: usize = 100;
+        let metrics = ClientMetrics::new();
+        let barrier = Arc::new(Barrier::new(WORKERS));
+        let workers = (0..WORKERS)
+            .map(|_| {
+                let metrics = metrics.clone();
+                let barrier = barrier.clone();
+                thread::spawn(move || {
+                    barrier.wait();
+                    for _ in 0..ITERATIONS {
+                        metrics.start_request(1).succeed(1);
+                        metrics.record_retry();
+                        metrics.record_produce_batch(1);
+                        metrics.record_consumed(1);
+                    }
+                })
+            })
+            .collect::<Vec<_>>();
+
+        for worker in workers {
+            assert!(worker.join().is_ok());
+        }
+
+        let snapshot = metrics.snapshot();
+        let expected = (WORKERS * ITERATIONS) as u64;
+        assert_eq!(snapshot.requests_started, expected);
+        assert_eq!(snapshot.requests_succeeded, expected);
+        assert_eq!(snapshot.retries, expected);
+        assert_eq!(snapshot.produced_records, expected);
+        assert_eq!(snapshot.produce_batches, expected);
+        assert_eq!(snapshot.consumed_records, expected);
+        assert_eq!(snapshot.request_bytes, expected);
+        assert_eq!(snapshot.response_bytes, expected);
+        assert_eq!(snapshot.in_flight_requests, 0);
+        assert!(snapshot.max_in_flight_requests >= 1);
+        assert_eq!(
+            snapshot.request_latency_buckets.iter().sum::<u64>(),
+            expected
+        );
     }
 }
