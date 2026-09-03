@@ -4,10 +4,11 @@
 
 The new integration fixture
 [`data_plane_golden.rs`](../../crates/kafrust-protocol/tests/data_plane_golden.rs)
-checks complete request bytes for the selected data-plane wire boundary. The
-fixtures use empty or nullable collections deliberately so header version,
-nullable encoding, fixed-width fields, compact-array counts, and tagged-field
-terminators are visible without record-batch compression noise.
+checks complete request bytes and minimal empty response bodies for the
+selected data-plane wire boundary. The fixtures use empty or nullable
+collections deliberately so header version, nullable encoding, fixed-width
+fields, compact-array counts, and tagged-field terminators are visible without
+record-batch compression noise.
 
 The field order and selected request/response header versions follow the
 Apache Kafka 4.3.1 message schemas named by
@@ -24,6 +25,10 @@ non-empty record batches, topic UUIDs, flexible tags, and all four codecs.
 - ApiVersions v0, v3, and v4
 - OffsetForLeaderEpoch v3
 
+The same boundary fixture covers the selected response versions for these
+families, asserting zero records/topics/partitions, nullable cluster state,
+and fully consumed tagged fields.
+
 The test also asserts that Fetch v13's empty-body shape differs only in the
 API-version header from Fetch v12, while Produce v13's topic UUID and compact
 topic structure are retained. Nullable client IDs, transactional IDs,
@@ -33,13 +38,14 @@ explicitly rather than normalized.
 ## Verification
 
 `cargo test -p kafrust-protocol --test data_plane_golden -- --nocapture`
-passed all three tests on 2026-09-03. This is deterministic current-source
+passed all four tests on 2026-09-03. This is deterministic current-source
 evidence; the follow-up CI run and the accepted floor/pinned-current live
 negotiation logs remain separate V1-03 gates.
 
 ## Boundary
 
-These fixtures close the previously missing byte-auditable request-shape
-slice. They do not by themselves prove every non-empty response fixture,
+These fixtures close the previously missing byte-auditable request-shape and
+minimal response-boundary slice. They do not by themselves prove every
+non-empty response fixture,
 malformed boundary, codec roundtrip, transactional selection rule, or live
 floor/pinned-current negotiation result required by V1-03.

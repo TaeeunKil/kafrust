@@ -11,18 +11,26 @@
 #![allow(clippy::unwrap_used)]
 
 use kafrust_protocol::api::api_versions::{
-    ApiVersionsRequestV0, ApiVersionsRequestV3, ApiVersionsRequestV4,
+    ApiVersionsRequestV0, ApiVersionsRequestV3, ApiVersionsRequestV4, ApiVersionsResponseV0,
+    ApiVersionsResponseV3, ApiVersionsResponseV4,
 };
 use kafrust_protocol::api::fetch::{
-    FetchRequestV11, FetchRequestV12, FetchRequestV13, FetchRequestV4,
+    FetchRequestV11, FetchRequestV12, FetchRequestV13, FetchRequestV4, FetchResponseV11,
+    FetchResponseV12, FetchResponseV13, FetchResponseV4,
 };
-use kafrust_protocol::api::list_offsets::ListOffsetsRequestV1;
-use kafrust_protocol::api::metadata::{MetadataRequestV1, MetadataRequestV12};
-use kafrust_protocol::api::offset_for_leader_epoch::OffsetForLeaderEpochRequestV3;
+use kafrust_protocol::api::list_offsets::{ListOffsetsRequestV1, ListOffsetsResponseV1};
+use kafrust_protocol::api::metadata::{
+    MetadataRequestV1, MetadataRequestV12, MetadataResponseV1, MetadataResponseV12,
+};
+use kafrust_protocol::api::offset_for_leader_epoch::{
+    OffsetForLeaderEpochRequestV3, OffsetForLeaderEpochResponseV3,
+};
 use kafrust_protocol::api::produce::{
     ProduceRequestV11, ProduceRequestV12, ProduceRequestV13, ProduceRequestV2, ProduceRequestV3,
-    ProduceRequestV7, ProduceRequestV9, ProduceTopicV13,
+    ProduceRequestV7, ProduceRequestV9, ProduceResponseV13, ProduceResponseV2, ProduceResponseV7,
+    ProduceResponseV9, ProduceTopicV13,
 };
+use kafrust_protocol::codec::Decoder;
 
 fn assert_golden(actual: impl AsRef<[u8]>, expected: &[u8]) {
     assert_eq!(actual.as_ref(), expected);
@@ -374,4 +382,109 @@ fn metadata_offsets_and_api_versions_have_checked_request_fixtures() {
         ];
         assert_eq!(bytes, expected);
     }
+}
+
+#[test]
+fn selected_response_versions_have_stable_empty_body_shapes() {
+    let mut decoder = Decoder::new(&[0, 0, 0, 0, 0, 0, 0, 0]);
+    let response = ProduceResponseV2::decode_body(&mut decoder).unwrap();
+    assert!(response.responses.is_empty());
+    assert_eq!(response.throttle_time_ms, 0);
+    assert!(decoder.is_empty());
+
+    let mut decoder = Decoder::new(&[0, 0, 0, 0, 0, 0, 0, 0]);
+    let response = ProduceResponseV7::decode_body(&mut decoder).unwrap();
+    assert!(response.responses.is_empty());
+    assert_eq!(response.throttle_time_ms, 0);
+    assert!(decoder.is_empty());
+
+    let mut decoder = Decoder::new(&[1, 0, 0, 0, 0, 0]);
+    let response = ProduceResponseV9::decode_body(&mut decoder).unwrap();
+    assert!(response.responses.is_empty());
+    assert_eq!(response.throttle_time_ms, 0);
+    assert!(response.node_endpoints.is_empty());
+    assert!(decoder.is_empty());
+    let mut decoder = Decoder::new(&[1, 0, 0, 0, 0, 0]);
+    let response = ProduceResponseV13::decode_body(&mut decoder).unwrap();
+    assert!(response.responses.is_empty());
+    assert_eq!(response.throttle_time_ms, 0);
+    assert!(response.node_endpoints.is_empty());
+    assert!(decoder.is_empty());
+
+    let mut decoder = Decoder::new(&[0, 0, 0, 0, 0, 0, 0, 0]);
+    let response = FetchResponseV4::decode_body(&mut decoder).unwrap();
+    assert!(response.responses.is_empty());
+    assert_eq!(response.throttle_time_ms, 0);
+    assert!(decoder.is_empty());
+
+    let mut decoder = Decoder::new(&[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    let response = FetchResponseV11::decode_body(&mut decoder).unwrap();
+    assert!(response.responses.is_empty());
+    assert_eq!(response.error_code, 0);
+    assert_eq!(response.session_id, 0);
+    assert!(decoder.is_empty());
+
+    let mut decoder = Decoder::new(&[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    let response = FetchResponseV12::decode_body(&mut decoder).unwrap();
+    assert!(response.responses.is_empty());
+    assert_eq!(response.error_code, 0);
+    assert_eq!(response.session_id, 0);
+    assert!(decoder.is_empty());
+    let mut decoder = Decoder::new(&[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    let response = FetchResponseV13::decode_body(&mut decoder).unwrap();
+    assert!(response.responses.is_empty());
+    assert_eq!(response.error_code, 0);
+    assert_eq!(response.session_id, 0);
+    assert!(decoder.is_empty());
+
+    let mut decoder = Decoder::new(&[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    let response = MetadataResponseV1::decode_body(&mut decoder).unwrap();
+    assert!(response.brokers.is_empty());
+    assert_eq!(response.controller_id, 0);
+    assert!(response.topics.is_empty());
+    assert!(decoder.is_empty());
+
+    let mut decoder = Decoder::new(&[0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0]);
+    let response = MetadataResponseV12::decode_body(&mut decoder).unwrap();
+    assert!(response.brokers.is_empty());
+    assert_eq!(response.cluster_id, None);
+    assert_eq!(response.controller_id, 0);
+    assert!(response.topics.is_empty());
+    assert!(decoder.is_empty());
+
+    let mut decoder = Decoder::new(&[0, 0, 0, 0]);
+    let response = ListOffsetsResponseV1::decode_body(&mut decoder).unwrap();
+    assert!(response.topics.is_empty());
+    assert!(decoder.is_empty());
+
+    let mut decoder = Decoder::new(&[0, 0, 0, 0, 0, 0, 0, 0]);
+    let response = OffsetForLeaderEpochResponseV3::decode_body(&mut decoder).unwrap();
+    assert_eq!(response.throttle_time_ms, 0);
+    assert!(response.topics.is_empty());
+    assert!(decoder.is_empty());
+
+    let mut decoder = Decoder::new(&[0, 0, 0, 0, 0, 0]);
+    let response = ApiVersionsResponseV0::decode_body(&mut decoder).unwrap();
+    assert_eq!(response.error_code, 0);
+    assert!(response.api_keys.is_empty());
+    assert!(decoder.is_empty());
+
+    let mut decoder = Decoder::new(&[0, 0, 1, 0, 0, 0, 0, 0]);
+    let response = ApiVersionsResponseV3::decode_body(&mut decoder).unwrap();
+    assert_eq!(response.error_code, 0);
+    assert!(response.api_keys.is_empty());
+    assert_eq!(response.throttle_time_ms, 0);
+    assert!(response.supported_features.is_empty());
+    assert!(response.finalized_features.is_empty());
+    assert!(response.tagged_fields.is_empty());
+    assert!(decoder.is_empty());
+    let mut decoder = Decoder::new(&[0, 0, 1, 0, 0, 0, 0, 0]);
+    let response = ApiVersionsResponseV4::decode_body(&mut decoder).unwrap();
+    assert_eq!(response.error_code, 0);
+    assert!(response.api_keys.is_empty());
+    assert_eq!(response.throttle_time_ms, 0);
+    assert!(response.supported_features.is_empty());
+    assert!(response.finalized_features.is_empty());
+    assert!(response.tagged_fields.is_empty());
+    assert!(decoder.is_empty());
 }

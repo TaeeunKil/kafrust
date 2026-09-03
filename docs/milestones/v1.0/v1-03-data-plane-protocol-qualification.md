@@ -133,9 +133,10 @@ now records complete request bytes for Produce v2/v3/v7/v9/v11/v12/v13, Fetch
 v4/v11/v12/v13, Metadata v1/v12, ListOffsets v1, ApiVersions v0/v3/v4, and
 OffsetForLeaderEpoch v3. The empty/nullable shapes isolate header versions,
 compact counts, and tagged-field terminators against the Apache 4.3.1 schema
-manifest. Focused test execution passed all three tests; details are in
+manifest. Focused test execution passed all four tests; details are in
 [`v1-data-plane-golden-fixtures-2026-09-03.md`](../../evidence/v1-data-plane-golden-fixtures-2026-09-03.md).
-This closes the deterministic request-shape slice only; non-empty response
+This closes the deterministic request-shape and minimal empty-response slice;
+non-empty response
 oracles, malformed expansion, transaction-selection proof, and live version
 logs remain required.
 

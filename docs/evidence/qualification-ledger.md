@@ -4695,9 +4695,9 @@ unqualified relative artifact label.
 - duration: focused protocol test completed in under 1 second
 - record_count: not-applicable; wire fixture
 - member_count: not-applicable
-- repetition_count: three integration tests
+- repetition_count: four integration tests
 - expected_errors: exact request bytes match the checked Apache 4.3.1 schema shape
-- observed_errors: all three focused tests passed
+- observed_errors: all four focused tests passed
 - retry_count: 0
 - duplicate_count: 0
 - loss_count: 0
