@@ -29,6 +29,15 @@ retained for profiling only; this does not establish the V1-22 five-repetition
 eight-hour SLO or a universal performance ranking. Details are in
 [v1-published-performance-campaign-diagnostic-2026-09-03.md](evidence/v1-published-performance-campaign-diagnostic-2026-09-03.md).
 
+The same published artifact also passed buffered and direct-consumer mode
+diagnostics in [run 33721044749](https://github.com/TaeeunKil/kafrust/actions/runs/33721044749)
+and [run 33721215334](https://github.com/TaeeunKil/kafrust/actions/runs/33721215334).
+Eight additional profiles reconciled exactly with zero retries, unknown
+outcomes, loss, duplicates, and final queue gauges. These short mode checks
+inform profiling only; they do not establish the V1-22 long SLO or release
+readiness. See
+[v1-published-performance-mode-diagnostics-2026-09-03.md](evidence/v1-published-performance-mode-diagnostics-2026-09-03.md).
+
 ## v1.0 Support Contract
 
 V1-01 sets the accepted support boundary below. “Required” means the named

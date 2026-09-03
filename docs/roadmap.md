@@ -1189,6 +1189,15 @@ marks these results diagnostic and qualified=false; they inform profiling only
 and do not close V1-22's five-repetition eight-hour SLO or authorize a release.
 See [v1-published-performance-campaign-diagnostic-2026-09-03.md](evidence/v1-published-performance-campaign-diagnostic-2026-09-03.md).
 
+The same published artifact then passed buffered and direct-consumer
+diagnostics in [33721044749](https://github.com/TaeeunKil/kafrust/actions/runs/33721044749)
+and [33721215334](https://github.com/TaeeunKil/kafrust/actions/runs/33721215334).
+All eight additional profiles reconciled exactly with zero retries, unknown
+outcomes, loss, duplicates, and final queue gauges. These mode-specific
+diagnostics extend profiling coverage only; their descriptors remain
+qualified=false, and V1-22's five-repetition eight-hour SLO and locked
+baseline remain open. See [v1-published-performance-mode-diagnostics-2026-09-03.md](evidence/v1-published-performance-mode-diagnostics-2026-09-03.md).
+
 ## Historical Release Qualification
 
 `0.3.5` is now published on crates.io in protocol-first order. The fresh
