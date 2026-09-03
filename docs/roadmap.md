@@ -243,6 +243,13 @@ delivery. The exact deterministic record is in
 Partial client request writes, cancellation/shutdown faults, published cycles,
 and 100,000-record reconciliation remain open.
 
+The complete 22-test scripted fault target was also re-run from the company
+Windows/Ubuntu-T9 WSL2 x86_64 environment at `83ec120`; all tests passed,
+including the four immediate/buffered dropped- and partial-response cases. The
+short reproduction is recorded in
+[`v1-company-partial-fault-short-smoke-2026-09-03.md`](evidence/v1-company-partial-fault-short-smoke-2026-09-03.md)
+and does not change the published or multi-broker gates.
+
 ## V1-06 Execution Update (2026-08-22)
 
 V1-06 is `In progress`. The transaction path keeps one coherent legacy TV0/TV1

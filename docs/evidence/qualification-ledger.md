@@ -5235,3 +5235,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-idempotent-partial-response-retry-2026-09-03.md; crates/kafrust/tests/fault_injection.rs; crates/kafrust/tests/support/mod.rs
 - non_claims: not partial client request-write coverage, not cancellation/shutdown fault coverage, not published ten-cycle or 100,000-record qualification, not long campaigns, not service canary, not release authorization
+
+## Q-COMPANY-PARTIAL-FAULT-SMOKE-2026-09-03
+
+- date_utc: 2026-09-03
+- source_commit: 83ec120851e5afb71aede3b329814003e4a1d8cf
+- client_version: 0.3.6 source checkout
+- protocol_version: 0.3.6 source checkout
+- work_status: In progress
+- evidence_level: Live current-source
+- kafka_version: not-applicable; in-memory scripted broker
+- kafka_image: not-applicable
+- mode: company WSL2 deterministic fault-injection smoke
+- topology: company Windows host, Ubuntu-T9 WSL2 x86_64; no external broker
+- security: not-applicable
+- group_protocol: not-applicable to producer fault subset; complete target also ran group and Share regressions
+- workload: complete fault_injection integration target, including immediate and buffered partial-response replay
+- workflow: scripts/check_qualification_ledger.py
+- fault: dropped and truncated Produce responses with reconnect and replay
+- duration: test execution 0.57 seconds after compilation
+- record_count: two partial-response deliveries plus existing scripted cases
+- member_count: not-applicable
+- repetition_count: one bounded company WSL run; 22 tests
+- expected_errors: all scripted recovery and terminal-error assertions pass
+- observed_errors: 22 passed; 0 failed; partial-response replays byte-identical and duplicate-sequence deliveries resolve
+- retry_count: covered by individual scripted assertions; not aggregated
+- duplicate_count: zero client-visible duplicates in partial-response cases
+- loss_count: zero in partial-response cases
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: no Docker resources created or modified; WSL mounted checkout line-ending noise retained
+- result: passed
+- artifact: docs/evidence/v1-company-partial-fault-short-smoke-2026-09-03.md; crates/kafrust/tests/fault_injection.rs
+- non_claims: not published-artifact qualification, not accepted-floor or three-broker qualification, not long campaigns, not service canary, not release authorization

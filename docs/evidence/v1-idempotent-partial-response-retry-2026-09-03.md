@@ -34,6 +34,9 @@ batch sequence, and completed from the duplicate-sequence response without a
 client-visible duplicate. The buffered delivery resolved and its worker closed
 cleanly.
 
+The pushed source commit passed the stable/Rust 1.81.0 matrix in
+[CI run 33750844748](https://github.com/TaeeunKil/kafrust/actions/runs/33750844748).
+
 ## Boundary
 
 This closes deterministic partial-response classification for immediate and
