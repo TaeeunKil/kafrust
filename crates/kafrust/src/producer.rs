@@ -5863,35 +5863,35 @@ mod tests {
     }
 
     #[test]
-    fn caps_transactional_produce_at_v11_before_tv2_is_qualified() {
-        let versions = api_versions(13);
+    fn caps_transactional_produce_at_v11_across_advertised_tv2_versions() {
         let record = ProducerRecord::to("orders").header("source", "checkout");
 
-        assert_eq!(
-            select_produce_version_with_topic_id_for_mode(
+        for advertised_max in [11, 12, 13] {
+            let versions = api_versions(advertised_max);
+            let immediate = select_produce_version_with_topic_id_for_mode(
                 &versions,
                 &record,
                 Compression::None,
                 Some([7; 16]),
                 true,
             )
-            .unwrap(),
-            ProduceVersion::V11
-        );
+            .unwrap();
+            assert_eq!(immediate, ProduceVersion::V11);
+            assert_eq!(immediate.api_version(), 11);
 
-        let records = [BatchRecord::new(record)];
-        let prepared = prepared_records(&records);
-        assert_eq!(
-            select_produce_batch_version_with_topic_id_for_mode(
+            let records = [BatchRecord::new(record.clone())];
+            let prepared = prepared_records(&records);
+            let batch = select_produce_batch_version_with_topic_id_for_mode(
                 &versions,
                 &prepared,
                 Compression::None,
                 Some([7; 16]),
                 true,
             )
-            .unwrap(),
-            ProduceVersion::V11
-        );
+            .unwrap();
+            assert_eq!(batch, ProduceVersion::V11);
+            assert_eq!(batch.api_version(), 11);
+        }
     }
 
     #[test]
