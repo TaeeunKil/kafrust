@@ -21,7 +21,10 @@ Focused command:
 cargo test -p kafrust --lib metrics::tests::concurrent_metric_updates_keep_counters_consistent -- --nocapture
 ```
 
-Result: one test passed on the company Windows x64 checkout.
+Result: one test passed on the company Windows x64 checkout and one test passed
+on company Ubuntu-T9 WSL2 with Rust 1.81.0 (`x86_64-unknown-linux-gnu`). The
+WSL2 run took 4m36s while compiling the Linux test binary; the test itself
+completed in 0.03s.
 
 The required workspace validation also passed in the Visual Studio x64
 developer environment:

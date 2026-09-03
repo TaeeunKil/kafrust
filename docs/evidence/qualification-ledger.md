@@ -6312,7 +6312,7 @@ unqualified relative artifact label.
 - duration: focused deterministic test under one second
 - record_count: not-applicable
 - member_count: not-applicable
-- repetition_count: one deterministic run on Windows
+- repetition_count: one deterministic run on Windows and one on company Ubuntu-T9 WSL2 (Rust 1.81.0)
 - expected_errors: exact cumulative counters, conserved latency buckets, and zero final in-flight gauge
 - observed_errors: all expected totals and lifecycle values matched
 - retry_count: 0

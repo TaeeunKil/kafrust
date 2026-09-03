@@ -96,8 +96,9 @@ Source commit `91c5592c6599eeb16df661616efa3fe0d5c7e0b4` adds a deterministic
 four-thread shared-`ClientMetrics` regression. A barrier starts four workers,
 each worker performs 100 updates, and the test verifies exact cumulative
 request/byte/error totals, latency-bucket conservation, and a zero final
-in-flight gauge. The focused test and the required workspace validation pass
-on the company Windows x64 checkout. See
+in-flight gauge. The focused test passes on the company Windows x64 checkout
+and Ubuntu-T9 WSL2 with Rust 1.81.0; the required workspace validation passes
+on Windows. See
 [`v1-metrics-concurrency-2026-09-04.md`](../../evidence/v1-metrics-concurrency-2026-09-04.md).
 This closes the in-process atomic-update consistency slice only; published
 collection, broker replacement, throttling, secure transport, and
