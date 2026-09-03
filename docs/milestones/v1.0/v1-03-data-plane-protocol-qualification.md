@@ -144,8 +144,29 @@ the flexible tagged-field truncation cases are also covered by
 The pushed head also passed the malformed fixture in both stable and Rust 1.81
 CI jobs in
 [run 33727384183](https://github.com/TaeeunKil/kafrust/actions/runs/33727384183).
-Non-empty response oracles, the full malformed length/trailing-byte matrix,
-transaction-selection proof, and live version logs remain required.
+The deterministic response-fixture slice below is now also recorded; the full
+malformed length/trailing-byte matrix, transaction-selection proof, and live
+version logs remain required.
+
+### Non-empty response golden-fixture slice (2026-09-03)
+
+The same integration fixture now contains fixed non-empty response bodies for
+Produce v2/v7/v9/v11/v12/v13, Fetch v4/v11/v12/v13, Metadata v1/v12,
+ListOffsets v1, OffsetForLeaderEpoch v3, and ApiVersions v0/v3/v4. Assertions
+verify decoded topics, partitions, offsets, record errors, aborted transactions,
+topic UUIDs, compact collections, and flexible tagged fields. The focused
+golden suite passed all five tests, the malformed suite passed all three tests,
+and the complete repository validation passed on source commit
+`fd3718484ce84cc37d4b8ebf1b3267a4e404e1b5`. The pushed commit is covered by
+stable and Rust 1.81.0 in
+[CI run 33735496212](https://github.com/TaeeunKil/kafrust/actions/runs/33735496212).
+The detailed record is
+[`v1-data-plane-response-golden-2026-09-03.md`](../../evidence/v1-data-plane-response-golden-2026-09-03.md).
+
+This is deterministic decoder evidence, not an official Apache oracle for every
+response or a live broker qualification. Full malformed boundary expansion,
+transaction-selection proof, accepted-floor/pinned-broker version logs,
+three-broker movement, and the V1-03 exit criteria remain open.
 
 ### Current-source company workstation smoke (2026-09-03)
 

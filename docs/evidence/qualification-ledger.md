@@ -4872,3 +4872,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-company-share-short-smoke-2026-09-03.md
 - non_claims: not V1-10 completion, not secure multi-member qualification, not three-broker/20-cycle/10,000-record evidence, not long campaigns, not release authorization
+
+## Q-DATAPLANE-RESPONSE-GOLDEN-2026-09-03
+
+- date_utc: 2026-09-03
+- source_commit: fd3718484ce84cc37d4b8ebf1b3267a4e404e1b5
+- client_version: 0.3.6 source checkout
+- protocol_version: 0.3.6 source checkout
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: not-applicable; checked protocol wire fixtures
+- kafka_image: not-applicable; checked protocol wire fixtures
+- mode: non-empty data-plane response golden matrix
+- topology: not-applicable; deterministic protocol test
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: Produce v2/v7/v9/v11/v12/v13; Fetch v4/v11/v12/v13; Metadata v1/v12; ListOffsets v1; OffsetForLeaderEpoch v3; ApiVersions v0/v3/v4
+- workflow: scripts/check_qualification_ledger.py
+- fault: non-empty fields, compact collections, tagged fields, topic UUIDs, and offsets decoded from fixed bytes
+- duration: one deterministic protocol test run under one second
+- record_count: not-applicable; wire fixtures
+- member_count: not-applicable
+- repetition_count: one deterministic response matrix
+- expected_errors: decoder consumes each exact fixture and preserves selected fields
+- observed_errors: five golden tests and three malformed-boundary tests passed
+- retry_count: 0
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: not-applicable
+- result: passed
+- artifact: docs/evidence/v1-data-plane-response-golden-2026-09-03.md
+- non_claims: not V1-03 completion, not an official Apache oracle for every response, not complete malformed-boundary coverage, not accepted-floor or pinned-broker live qualification, not three-broker movement, not long campaigns, not service canary, not release authorization

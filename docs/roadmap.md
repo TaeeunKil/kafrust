@@ -104,6 +104,18 @@ checks. The record is
 [`v1-company-floor-short-smoke-2026-09-03.md`](evidence/v1-company-floor-short-smoke-2026-09-03.md);
 it is a single-node diagnostic and does not replace the accepted-floor matrix.
 
+The protocol fixture increment at pushed head `fd37184` adds fixed non-empty
+response bodies for the selected Produce, Fetch, Metadata, ListOffsets,
+OffsetForLeaderEpoch, and ApiVersions versions. Five golden tests and three
+malformed-boundary tests passed, together with the full workspace validation;
+stable and Rust 1.81.0 are covered by
+[CI run 33735496212](https://github.com/TaeeunKil/kafrust/actions/runs/33735496212).
+The evidence record is
+[`v1-data-plane-response-golden-2026-09-03.md`](evidence/v1-data-plane-response-golden-2026-09-03.md).
+This strengthens deterministic V1-03 evidence only; live floor/pinned-broker
+version logs, the complete malformed matrix, transaction-selection proof, and
+the milestone exit criteria remain open.
+
 ## V1-04 Execution Update (2026-08-22)
 
 V1-04 is `In progress`. Producer delivery expiry now has a typed
