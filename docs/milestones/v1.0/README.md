@@ -130,6 +130,12 @@ in [`v1-company-workstation-return-2026-09-03.md`](../../evidence/v1-company-wor
 These are deterministic/CI diagnostics only. They do not promote a live
 qualification row or remove the dedicated Linux/Docker, long-campaign, or
 named-service prerequisites.
+The latest pushed `main` head `37c5baa` was also rerun on the same workstation
+against an isolated Kafka 4.3.1 broker, covering current-source immediate and
+buffered producer, classic/KIP-848 group, and Admin lifecycle examples. The
+exact record is
+[`v1-company-workstation-current-short-smoke-2026-09-03.md`](../../evidence/v1-company-workstation-current-short-smoke-2026-09-03.md);
+it remains local diagnostic evidence only.
 
 ## Status And Evidence
 

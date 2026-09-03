@@ -147,6 +147,20 @@ CI jobs in
 Non-empty response oracles, the full malformed length/trailing-byte matrix,
 transaction-selection proof, and live version logs remain required.
 
+### Current-source company workstation smoke (2026-09-03)
+
+The pushed `main` head `37c5baa` was exercised against an isolated Kafka 4.3.1
+single-node KRaft broker from the company Windows x64 workstation's WSL2
+Ubuntu-T9 environment. The broker roundtrip binary passed all 13 tests, and
+immediate/idempotent producer, buffered/idempotent producer, classic and
+KIP-848 group poll/commit/leave, and Admin topic lifecycle examples passed.
+The exact diagnostic record is
+[`v1-company-workstation-current-short-smoke-2026-09-03.md`](../../evidence/v1-company-workstation-current-short-smoke-2026-09-03.md).
+Share-specific tests were left unconfigured and are explicitly not claimed.
+This is a bounded local diagnostic; accepted-floor/pinned-current version
+logs, three-broker topic-ID movement, and the published qualification gate
+remain open.
+
 ## Exit Criteria
 
 1. Every stable high-level selected/fallback version has official metadata,

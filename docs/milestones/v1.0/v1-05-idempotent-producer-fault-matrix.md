@@ -61,6 +61,13 @@ This does not close the milestone: buffered-mode
 fault coverage, the complete before/partial/after-write table, ten-cycle
 published profiles, and the 100,000-record reconciliation gate remain open.
 
+The current-source company workstation smoke additionally exercised immediate
+and buffered idempotent sends against isolated Kafka 4.3.1 and reconciled the
+buffered records by fetch. The bounded diagnostic is recorded in
+[`v1-company-workstation-current-short-smoke-2026-09-03.md`](../../evidence/v1-company-workstation-current-short-smoke-2026-09-03.md);
+it contains no injected fault and does not count toward the published fault
+matrix or ten-cycle gate.
+
 ## Failure And Lifecycle Contract
 
 - A safe retry retains the same producer identity and batch sequence.

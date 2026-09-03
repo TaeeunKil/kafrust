@@ -81,6 +81,16 @@ CI run [32547821393](https://github.com/TaeeunKil/kafrust/actions/runs/325478213
 and the malformed-boundary increment passed CI run
 [32548081944](https://github.com/TaeeunKil/kafrust/actions/runs/32548081944).
 
+The latest pushed `main` head `37c5baa` was exercised from the company Windows
+x64 workstation's WSL2 Ubuntu-T9 environment against an isolated Kafka 4.3.1
+single-node KRaft broker. The broker roundtrip binary passed all 13 tests, and
+immediate/idempotent producer, buffered/idempotent producer, classic and
+KIP-848 group poll/commit/leave, and Admin topic lifecycle examples passed.
+The bounded diagnostic is recorded in
+[`v1-company-workstation-current-short-smoke-2026-09-03.md`](evidence/v1-company-workstation-current-short-smoke-2026-09-03.md).
+This is local diagnostic evidence only; accepted-floor/pinned-current version
+logs, three-broker topic-ID movement, and published qualification remain open.
+
 ## V1-04 Execution Update (2026-08-22)
 
 V1-04 is `In progress`. Producer delivery expiry now has a typed

@@ -89,6 +89,13 @@ The published artifact profiles, clock-controlled coverage for every producer
 entry point, and exact CI/live evidence remain open. V1-03's live/golden gates
 also remain a prerequisite for closing this milestone.
 
+The current-source company workstation short smoke also passed immediate and
+buffered producer examples (normal and idempotent) against isolated Kafka
+4.3.1; it is recorded in
+[`v1-company-workstation-current-short-smoke-2026-09-03.md`](../../evidence/v1-company-workstation-current-short-smoke-2026-09-03.md).
+This does not replace the published mixed-outcome reconciliation or long SLO
+requirements.
+
 ### Buffered budget clock-anchor slice (2026-09-03)
 
 `buffered_remaining_delivery_timeout` now receives an explicit clock anchor;

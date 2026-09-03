@@ -4740,3 +4740,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-producer-delivery-budget-2026-09-03.md; crates/kafrust/src/producer.rs
 - non_claims: not full clock-controlled producer matrix, not published mixed-outcome reconciliation, not broker compatibility, not long SLO, not release authorization
+
+## Q-COMPANY-CURRENT-SHORT-SMOKE-2026-09-03
+
+- date_utc: 2026-09-03
+- source_commit: 37c5baa78bcf28d963df69a8eea91027c47bf631
+- client_version: 0.3.6 source checkout
+- protocol_version: 0.3.6 source checkout
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
+- mode: company workstation short broker smoke
+- topology: isolated single-node KRaft; uniquely named container and host port
+- security: PLAINTEXT
+- group_protocol: classic and KIP-848 consumer smoke examples
+- workload: broker_roundtrip 13-test binary; immediate/idempotent producer; buffered/idempotent producer with fetch; classic/KIP-848 group poll/commit/leave; Admin topic lifecycle
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/33729541055
+- fault: no fault injection; bounded connectivity and lifecycle diagnostic
+- duration: short local run; no long campaign
+- record_count: eight records observed by each group poll after immediate and buffered sends
+- member_count: one classic and one KIP-848 member per run
+- repetition_count: one bounded source-head diagnostic
+- expected_errors: none for configured paths; share-specific broker tests intentionally skipped without share configuration
+- observed_errors: zero operation failures
+- retry_count: not measured by this smoke
+- duplicate_count: zero observed in fetched buffered records
+- loss_count: zero observed in fetched buffered records
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: not exposed by these examples
+- result: passed
+- artifact: https://github.com/TaeeunKil/kafrust/actions/runs/33729541055
+- non_claims: not V1-03/V1-04/V1-05 completion, not published-artifact qualification, not accepted-floor coverage, not V1-21/V1-22/V1-23 evidence, not release authorization
