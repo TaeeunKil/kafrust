@@ -117,6 +117,16 @@ This closes only the bounded single-node version-log slice; three-broker
 topic-ID/leader movement and the accepted/published qualification gates remain
 open.
 
+At pushed head `8842c65`, the deterministic malformed suite was expanded with
+a prefix matrix that feeds every shorter prefix of valid empty-body responses
+to Produce v2/v7/v9/v11/v12/v13, Fetch v4/v11/v12/v13, Metadata v1/v12,
+ListOffsets v1, OffsetForLeaderEpoch v3, and ApiVersions v0/v3/v4. All four
+focused malformed tests passed, with the detailed record in
+[`v1-data-plane-malformed-prefix-matrix-2026-09-03.md`](evidence/v1-data-plane-malformed-prefix-matrix-2026-09-03.md).
+This is deterministic truncation evidence only; complete malformed
+length/trailing-byte coverage, transaction-selection proof, three-broker
+movement, and accepted/published qualification remain open.
+
 The protocol fixture increment at pushed head `fd37184` adds fixed non-empty
 response bodies for the selected Produce, Fetch, Metadata, ListOffsets,
 OffsetForLeaderEpoch, and ApiVersions versions. Five golden tests and three

@@ -4938,3 +4938,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-company-data-plane-version-log-2026-09-03.md; crates/kafrust/tests/broker_roundtrip.rs
 - non_claims: not V1-03 completion, not three-broker topic-ID movement, not accepted-floor security/workload qualification, not published-artifact qualification, not long campaigns, not service canary, not release authorization
+
+## Q-DATAPLANE-MALFORMED-PREFIX-2026-09-03
+
+- date_utc: 2026-09-03
+- source_commit: 8842c654702010a0719049bb70f1458a66954c80
+- client_version: 0.3.6 source checkout
+- protocol_version: 0.3.6 source checkout
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: not-applicable; protocol decoder fixtures
+- kafka_image: not-applicable; no broker required
+- mode: selected data-plane response truncation prefix matrix
+- topology: not-applicable; deterministic protocol test
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: Produce v2/v7/v9/v11/v12/v13; Fetch v4/v11/v12/v13; Metadata v1/v12; ListOffsets v1; OffsetForLeaderEpoch v3; ApiVersions v0/v3/v4
+- workflow: scripts/check_qualification_ledger.py
+- fault: every incomplete response-body prefix
+- duration: deterministic protocol test under one second
+- record_count: not-applicable; wire fixtures
+- member_count: not-applicable
+- repetition_count: one bounded matrix run
+- expected_errors: every truncated prefix must return a typed decoder error
+- observed_errors: all incomplete prefixes rejected; 4 malformed tests passed
+- retry_count: 0
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: not-applicable
+- result: passed
+- artifact: docs/evidence/v1-data-plane-malformed-prefix-matrix-2026-09-03.md; crates/kafrust-protocol/tests/data_plane_malformed.rs
+- non_claims: not V1-03 completion, not complete malformed length/trailing-byte coverage, not official Apache response oracles, not live broker qualification, not three-broker movement, not long campaigns, not service canary, not release authorization

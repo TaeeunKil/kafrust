@@ -217,6 +217,22 @@ does not close the full malformed length/trailing-byte matrix, transaction
 selection proof, three-broker topic-ID/leader movement, accepted security or
 published-artifact qualification, or the V1-03 exit criteria.
 
+### Deterministic response truncation prefix matrix (2026-09-03)
+
+At source commit `8842c654702010a0719049bb70f1458a66954c80`,
+`data_plane_malformed.rs` now starts from the valid empty-body shape for each
+selected/fallback response version and checks every shorter byte prefix. The
+matrix covers Produce v2/v7/v9/v11/v12/v13, Fetch v4/v11/v12/v13, Metadata
+v1/v12, ListOffsets v1, OffsetForLeaderEpoch v3, and ApiVersions v0/v3/v4.
+All four focused malformed tests passed, and the manifest checker requires the
+new matrix test. The detailed record is
+[`v1-data-plane-malformed-prefix-matrix-2026-09-03.md`](../../evidence/v1-data-plane-malformed-prefix-matrix-2026-09-03.md).
+
+This strengthens deterministic truncation evidence only; complete malformed
+length/trailing-byte coverage, transaction-selection proof, three-broker
+topic-ID/leader movement, accepted security or published-artifact
+qualification, and the V1-03 exit criteria remain open.
+
 ## Exit Criteria
 
 1. Every stable high-level selected/fallback version has official metadata,
