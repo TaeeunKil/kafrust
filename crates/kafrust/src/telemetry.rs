@@ -1201,6 +1201,62 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn terminate_sends_one_terminating_push() {
+        let (client_stream, mut broker_stream) = tokio::io::duplex(4096);
+        let broker = tokio::spawn(async move {
+            let request = read_frame(&mut broker_stream).await;
+            assert_eq!(i16::from_be_bytes([request[0], request[1]]), 72);
+            let correlation_id =
+                i32::from_be_bytes([request[8], request[9], request[10], request[11]]);
+            let mut decoder = Decoder::new(&request);
+            decoder.read_i16().unwrap();
+            decoder.read_i16().unwrap();
+            decoder.read_i32().unwrap();
+            decoder.read_nullable_string().unwrap();
+            decoder.read_tagged_fields().unwrap();
+            decoder.read_uuid().unwrap();
+            assert_eq!(decoder.read_i32().unwrap(), 4);
+            assert!(decoder.read_bool().unwrap());
+            assert_eq!(decoder.read_i8().unwrap(), 0);
+            assert_eq!(decoder.read_compact_bytes().unwrap(), &[1, 2, 3]);
+            decoder.read_tagged_fields().unwrap();
+
+            let mut response = Encoder::new();
+            response.write_i32(correlation_id);
+            response.write_empty_tagged_fields();
+            response.write_i32(0);
+            response.write_i16(0);
+            response.write_empty_tagged_fields();
+            write_frame(&mut broker_stream, &response.into_bytes()).await;
+        });
+
+        let client = Client::from_stream(
+            Box::new(client_stream),
+            Some("telemetry-terminate-test".to_owned()),
+            Some(Duration::from_secs(1)),
+        );
+        let mut telemetry = TelemetryClient::from_client(
+            client,
+            |_requested: &[String], _delta: bool| Ok(vec![1, 2, 3]),
+            TelemetryConfig::new().jitter(false),
+        );
+        telemetry.subscription = Some(TelemetrySubscription {
+            client_instance_id: [7; 16],
+            subscription_id: 4,
+            accepted_compression_types: vec![0],
+            push_interval: Duration::from_millis(50),
+            telemetry_max_bytes: 1024,
+            delta_temporality: false,
+            requested_metrics: vec!["org.apache.kafka.".to_owned()],
+        });
+
+        let summary = telemetry.terminate().await.unwrap().unwrap();
+        assert_eq!(summary.subscription_id, 4);
+        assert_eq!(summary.payload_bytes, 3);
+        broker.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn refreshes_empty_subscription_before_the_next_push() {
         let (client_stream, mut broker_stream) = tokio::io::duplex(4096);
         let broker = tokio::spawn(async move {
