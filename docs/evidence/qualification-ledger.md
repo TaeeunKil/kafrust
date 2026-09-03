@@ -5269,6 +5269,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-company-partial-fault-short-smoke-2026-09-03.md; crates/kafrust/tests/fault_injection.rs
 - non_claims: not published-artifact qualification, not accepted-floor or three-broker qualification, not long campaigns, not service canary, not release authorization
 
+## Q-BUFFERED-QUEUE-EXPIRY-2026-09-03
+
+- date_utc: 2026-09-03
+- source_commit: fb2778b370e466af01f08d60e6d0ec26053cc1e5
+- client_version: 0.3.6 source checkout
+- protocol_version: 0.3.6 source checkout
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: not-applicable; scripted broker with no response steps
+- kafka_image: not-applicable
+- mode: buffered producer queue-expiry/no-transmission regression
+- topology: in-memory scripted broker; no Produce response configured
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: one buffered record with 20 ms delivery budget and 10 second linger
+- workflow: scripts/check_qualification_ledger.py
+- fault: queue deadline expires before linger-triggered Produce flush
+- duration: deterministic integration test under one second
+- record_count: one accepted and expired buffered record
+- member_count: not-applicable
+- repetition_count: one bounded scripted run
+- expected_errors: DeliveryDeadlineExceeded phase Queue, possibly_transmitted false, zero Produce frames
+- observed_errors: typed queue deadline returned; buffered gauge drained; broker observed zero requests
+- retry_count: 0
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: buffered worker closed cleanly; no external resources
+- result: passed
+- artifact: docs/evidence/v1-buffered-queue-expiry-2026-09-03.md; crates/kafrust/tests/fault_injection.rs
+- non_claims: not delayed metadata/capability or post-write deadline coverage, not cancellation/shutdown ambiguity, not published mixed-outcome qualification, not long campaigns, not service canary, not release authorization
+
 ## Q-IDEMPOTENT-BUFFERED-FATAL-2026-09-03
 
 - date_utc: 2026-09-03

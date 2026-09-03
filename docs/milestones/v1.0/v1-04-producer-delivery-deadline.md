@@ -114,6 +114,20 @@ passed on source commit `b838fa3`. This narrows the clock-controlled gap only;
 every producer entry point, published mixed-outcome reconciliation, and live
 evidence remain required.
 
+### Buffered queue expiry through the worker (2026-09-03)
+
+At source commit `fb2778b370e466af01f08d60e6d0ec26053cc1e5`,
+`buffered_delivery_deadline_expires_before_produce_without_transmission`
+exercises the real `BufferedProducer` worker with a 20 ms delivery budget and
+10 second linger. The delivery returns the typed queue-phase deadline,
+`possibly_transmitted=false`, drains the buffered-record gauge, and the
+scripted broker observes zero Produce requests. The detailed record is
+[`v1-buffered-queue-expiry-2026-09-03.md`](../../evidence/v1-buffered-queue-expiry-2026-09-03.md).
+
+This closes the buffered queue-expiry/no-transmission slice only; delayed
+metadata/capability, post-write deadlines, cancellation/shutdown ambiguity,
+published mixed-outcome reconciliation, and live evidence remain open.
+
 ## Exit Criteria
 
 1. All three producer modes share the documented total-budget calculation.

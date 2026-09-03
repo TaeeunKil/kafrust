@@ -210,6 +210,14 @@ source commit `b838fa3`; the exact deterministic record is in
 [`v1-producer-delivery-budget-2026-09-03.md`](evidence/v1-producer-delivery-budget-2026-09-03.md).
 The pushed candidate's stable and Rust 1.81.0 jobs are green in [CI run 32548809314](https://github.com/TaeeunKil/kafrust/actions/runs/32548809314).
 
+At pushed head `fb2778b`, the real buffered worker was exercised with a 20 ms
+delivery budget and 10 second linger. Queue expiry returned the typed
+queue-phase deadline, drained the buffered gauge, and sent zero Produce
+requests. The detailed record is in
+[`v1-buffered-queue-expiry-2026-09-03.md`](evidence/v1-buffered-queue-expiry-2026-09-03.md).
+Delayed metadata/capability, post-write deadlines, cancellation/shutdown
+ambiguity, and published mixed-outcome reconciliation remain open.
+
 ## V1-05 Execution Update (2026-08-22)
 
 V1-05 is `In progress`. The deterministic idempotent slice now records exact
