@@ -5375,7 +5375,11 @@ mod tests {
     use kafrust_protocol::codec::Encoder;
     use std::cell::Cell;
     use std::collections::BTreeMap;
+    use std::io;
+    use std::pin::Pin;
+    use std::task::{Context, Poll};
     use std::time::Duration;
+    use tokio::io::ReadBuf;
     use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
     use tokio::net::TcpListener;
     use tokio::sync::{mpsc, oneshot};
@@ -8324,6 +8328,100 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn retries_idempotent_producer_after_partial_produce_write_with_same_sequence() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let retry_server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+
+            let versions = read_frame(&mut socket).await;
+            assert_eq!(&versions[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut socket, &api_versions_response_frame(3)).await;
+
+            let produce = read_frame(&mut socket).await;
+            assert_eq!(&produce[0..4], &[0, 0, 0, 3]);
+            write_frame(&mut socket, &produce_v3_response_frame(0, 0)).await;
+        });
+
+        let (bootstrap_stream, mut metadata_stream) = tokio::io::duplex(4096);
+        let metadata_server = tokio::spawn(async move {
+            let request = read_frame(&mut metadata_stream).await;
+            assert_eq!(&request[0..4], &[0, 3, 0, 1]);
+            write_frame(&mut metadata_stream, &metadata_response_frame_for(addr)).await;
+        });
+
+        let (partial_stream, mut first_broker_stream) = tokio::io::duplex(4096);
+        let first_broker = tokio::spawn(async move {
+            let versions = read_frame(&mut first_broker_stream).await;
+            assert_eq!(&versions[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut first_broker_stream, &api_versions_response_frame(3)).await;
+
+            let mut partial_prefix = [0u8; 3];
+            first_broker_stream
+                .read_exact(&mut partial_prefix)
+                .await
+                .unwrap();
+        });
+
+        let metrics = ClientMetrics::new();
+        let config = ProducerConfig::new([addr.to_string()])
+            .request_timeout_ms(500)
+            .metrics(metrics.clone())
+            .enable_idempotence(true)
+            .max_retries(1);
+        let broker_clients = config.client.shared_broker_clients();
+        broker_clients
+            .insert(
+                addr.to_string(),
+                Client::from_stream(
+                    Box::new(PartialWriteAfterFirst::new(partial_stream, 3)),
+                    Some("kafrust-partial-produce-test".to_owned()),
+                    Some(Duration::from_millis(500)),
+                ),
+                1,
+            )
+            .await;
+
+        let mut metadata_cache = BTreeMap::new();
+        metadata_cache.insert("orders".to_owned(), metadata_fixture_for(addr));
+        let mut producer = Producer {
+            client: Client::from_stream(
+                Box::new(bootstrap_stream),
+                Some("kafrust-producer-partial-write-test".to_owned()),
+                Some(Duration::from_millis(500)),
+            ),
+            config,
+            metadata_cache,
+            leader_hints: BTreeMap::new(),
+            topic_id_cache: BTreeMap::new(),
+            keyless_partition_indexes: BTreeMap::new(),
+            broker_clients,
+            idempotent_state: Some(IdempotentProducerState::new(42, 3)),
+            transaction_state: None,
+        };
+
+        let metadata = producer
+            .send(ProducerRecord::to("orders").partition(0).value("created"))
+            .await
+            .unwrap();
+
+        assert_eq!(metadata.offset(), 0);
+        assert_eq!(metrics.snapshot().retries, 1);
+        assert_eq!(
+            producer
+                .idempotent_state
+                .as_ref()
+                .unwrap()
+                .identity("orders", 0)
+                .base_sequence,
+            1
+        );
+        first_broker.await.unwrap();
+        metadata_server.await.unwrap();
+        retry_server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn retries_ambiguous_idempotent_batch_with_the_same_sequence() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -8444,6 +8542,67 @@ mod tests {
         metadata.brokers[0].host = addr.ip().to_string();
         metadata.brokers[0].port = i32::from(addr.port());
         metadata
+    }
+
+    struct PartialWriteAfterFirst {
+        inner: tokio::io::DuplexStream,
+        writes: usize,
+        partial_len: usize,
+        partial_returned: bool,
+    }
+
+    impl PartialWriteAfterFirst {
+        fn new(inner: tokio::io::DuplexStream, partial_len: usize) -> Self {
+            Self {
+                inner,
+                writes: 0,
+                partial_len,
+                partial_returned: false,
+            }
+        }
+    }
+
+    impl AsyncRead for PartialWriteAfterFirst {
+        fn poll_read(
+            mut self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+            buf: &mut ReadBuf<'_>,
+        ) -> Poll<io::Result<()>> {
+            Pin::new(&mut self.inner).poll_read(cx, buf)
+        }
+    }
+
+    impl AsyncWrite for PartialWriteAfterFirst {
+        fn poll_write(
+            mut self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+            buf: &[u8],
+        ) -> Poll<io::Result<usize>> {
+            if self.writes == 0 {
+                let result = Pin::new(&mut self.inner).poll_write(cx, buf);
+                if matches!(result, Poll::Ready(Ok(_))) {
+                    self.writes = 1;
+                }
+                return result;
+            }
+            if !self.partial_returned {
+                self.partial_returned = true;
+                let partial_len = self.partial_len.min(buf.len());
+                return Pin::new(&mut self.inner).poll_write(cx, &buf[..partial_len]);
+            }
+            Poll::Ready(Err(io::Error::new(
+                io::ErrorKind::BrokenPipe,
+                "scripted partial Produce request write failure",
+            )))
+        }
+
+        fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+            Pin::new(&mut self.inner).poll_flush(cx)
+        }
+
+        fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+            Pin::new(&mut self.inner).poll_shutdown(cx)
+        }
     }
 
     async fn read_frame<T>(stream: &mut T) -> Vec<u8>
