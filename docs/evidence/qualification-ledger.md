@@ -4279,6 +4279,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-company-capacity-recovery-2026-09-03.md; scripts/check_campaign_capacity.sh output
 - non_claims: not a V1-21 long-campaign result, not V1-22 SLO evidence, not V1-23 service-canary authority, not release readiness
 
+## Q-INFRA-RUNNER-DNS-RECHECK-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: 598bb638c1f46053a79e3fc86159a421722cad6e
+- client_version: 0.3.6 published baseline
+- protocol_version: 0.3.6 published dependency
+- work_status: Blocked
+- evidence_level: Local deterministic
+- kafka_version: not-applicable; runner connectivity preflight
+- kafka_image: not-applicable; no broker campaign dispatched
+- mode: WSL2 self-hosted runner DNS and capacity recheck
+- topology: repository runner, Docker root, and host-volume inventory
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: V1-21/V1-22 campaign preflight only
+- workflow: scripts/check_campaign_capacity.sh; GitHub Actions runner inventory
+- fault: generated WSL resolver cannot resolve GitHub Actions endpoints
+- duration: read-only preflight completed on 2026-09-04
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: 1 connectivity and capacity recheck
+- expected_errors: runner online and idle with host and Docker free space at least 700 GiB
+- observed_errors: capacity passed at 736 GiB host and 856 GiB Docker free, but runner remained offline; DNS lookup timed out
+- retry_count: not-applicable
+- duplicate_count: not-applicable
+- loss_count: not-applicable
+- latency: DNS timeout; not measured
+- memory: not measured
+- final_resource_gauges: `/mnt/t` 736 GiB free; `/var/lib/docker` 856 GiB free; 14 images, 12 containers, 172 volumes
+- result: blocked
+- artifact: docs/evidence/v1-long-campaign-capacity-audit-2026-08-24.md; scripts/check_campaign_capacity.sh output; GitHub runner inventory
+- non_claims: not a client fault result, not V1-21 completion, not V1-22 SLO evidence, not V1-23 service-canary authority, not release readiness
+
 ## Q-LIVE-V121-DIAG-002
 
 - date_utc: 2026-09-03

@@ -192,3 +192,21 @@ on T: is `T:\Backups\Ubuntu-full-2026-08-24.tar` at `115,386,419,200` bytes
 (`194.58 GiB`). Moving the verified backup to an independent volume would
 raise T: above the guard threshold, but no move or deletion was performed in
 this preflight. The exact long-campaign manifest therefore remains not-run.
+
+## Current runner connectivity recheck (2026-09-04)
+
+The same company WSL distribution was rechecked from the workstation. The
+runner listener process, its systemd service, and Docker service are active,
+and the read-only capacity guard now passes with 736 GiB free on `/mnt/t` and
+856 GiB free at Docker's `/var/lib/docker` root. GitHub's runner inventory,
+however, reports `wsl-ubuntu-t9` as `offline`.
+
+The generated `/etc/resolv.conf` still points at `10.255.255.254`; both
+`github.com` and `broker.actions.githubusercontent.com` fail DNS resolution,
+matching the Actions listener's repeated `Socket Error: TryAgain` and token or
+broker timeout messages. A temporary public-DNS probe was not able to change
+the resolver because the WSL user is not root and passwordless sudo is not
+available. No resolver, Docker resource, or existing container was modified,
+and no long campaign was dispatched. Recovery requires an authorized root-only
+resolver fix (preferably persistent through the WSL networking policy), then a
+fresh runner-online preflight before any V1-21/V1-22 dispatch.
