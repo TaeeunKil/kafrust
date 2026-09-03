@@ -4678,7 +4678,7 @@ unqualified relative artifact label.
 ## Q-DATAPLANE-GOLDEN-2026-09-03
 
 - date_utc: 2026-09-03
-- source_commit: e66bc5dc1968b35ce17fee0284c34a299b0aeede
+- source_commit: b0cfdd94ed7ff2f3d5a988787f45f8e365837989
 - client_version: 0.3.6 source checkout
 - protocol_version: 0.3.6 source checkout
 - work_status: In progress
