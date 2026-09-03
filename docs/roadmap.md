@@ -604,6 +604,17 @@ result coverage spans topic, partition, election, reassignment, feature, voter,
 and broker-unregister operations. The complete authorization/reconciliation
 ledger and published controller failover profiles remain open.
 
+At pushed source `f3124d01b0bf30f5b14f7eefdb88c81fc90b5186`, deterministic
+response-loss tests now cover all nine common controller mutation wrappers:
+CreateTopics, CreatePartitions, DeleteTopics, ElectLeaders,
+AlterPartitionReassignments, UpdateFeatures, AddRaftVoter, RemoveRaftVoter, and
+UnregisterBroker. Each fixture verifies a complete request frame before closing
+the connection and receives the exact operation-specific
+`Error::AdminMutationOutcomeUnknown` without replay. This closes only the local
+classifier wiring slice; published authorization/failover, reconciliation, and
+long-campaign gates remain open. See
+[`v1-admin-controller-response-loss-matrix-2026-09-04.md`](evidence/v1-admin-controller-response-loss-matrix-2026-09-04.md).
+
 The CreateTopics-specific response-loss boundary is now covered at pushed
 source `7614cb9d2fe7ce349105eae146a39657a5aaa422`: a scripted controller read a
 complete CreateTopics v2 frame, dropped its response, and the client returned

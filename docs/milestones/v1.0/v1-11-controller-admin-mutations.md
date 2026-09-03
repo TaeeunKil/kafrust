@@ -74,6 +74,21 @@ operation-by-operation authorization/failover table, active-controller
 replacement, and published floor/current profiles remain open; no complete
 Admin compatibility claim is made.
 
+### Controller mutation response-loss matrix (2026-09-04)
+
+The deterministic response-loss matrix now exercises every common controller
+mutation wrapper at the request boundary: CreateTopics, CreatePartitions,
+DeleteTopics, ElectLeaders, AlterPartitionReassignments, UpdateFeatures,
+AddRaftVoter, RemoveRaftVoter, and UnregisterBroker. Each scripted broker
+fixture reads the complete API/version frame and then closes without a response;
+the client returns the operation-specific
+`Error::AdminMutationOutcomeUnknown` value with retries disabled. This proves
+the no-blind-replay classifier is wired through all nine common methods, while
+published authorization/failover, reconciliation, and long-campaign evidence
+remain open. See
+[`v1-admin-controller-response-loss-matrix-2026-09-04.md`](../../evidence/v1-admin-controller-response-loss-matrix-2026-09-04.md)
+from source commit `f3124d01b0bf30f5b14f7eefdb88c81fc90b5186`.
+
 ### CreateTopics response-loss boundary (2026-09-04)
 
 The operation-specific response-loss fixture now sends a complete CreateTopics

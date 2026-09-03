@@ -6786,3 +6786,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-admin-create-topics-response-loss-2026-09-04.md; crates/kafrust/src/admin.rs
 - non_claims: not safe retry for other Admin mutations, not published floor qualification, not authorization or three-broker failover qualification, not long campaign, not service canary, not release authorization
+
+## Q-ADMIN-CONTROLLER-RESPONSE-LOSS-MATRIX-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: f3124d01b0bf30f5b14f7eefdb88c81fc90b5186
+- client_version: 0.3.6 source checkout
+- protocol_version: controller mutation API versions 0, 1, 2, and 3
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: not-applicable; scripted broker
+- kafka_image: not-applicable; in-memory fixture
+- mode: common controller mutation response-loss classification matrix
+- topology: in-memory scripted broker
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: nine complete controller mutation requests followed by dropped responses
+- workflow: scripts/check_qualification_ledger.py
+- fault: response dropped after complete mutation request transmission
+- duration: focused test matrix 0.06 seconds on Windows
+- record_count: nine complete mutation request frames; no response frames
+- member_count: not-applicable
+- repetition_count: one Windows focused run and one all-features workspace replay
+- expected_errors: one operation-specific AdminMutationOutcomeUnknown result per fixture
+- observed_errors: exact typed unknown outcomes for all nine operations; no replay
+- retry_count: 0
+- duplicate_count: 0 client-visible mutations; no replay attempted
+- loss_count: nine intentionally dropped controller responses
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: no external resources
+- result: passed
+- artifact: docs/evidence/v1-admin-controller-response-loss-matrix-2026-09-04.md; crates/kafrust/src/admin.rs
+- non_claims: not safe retry for other Admin mutations, not published floor or authorization qualification, not reconciliation or three-broker failover qualification, not long campaign, not service canary, not release authorization
