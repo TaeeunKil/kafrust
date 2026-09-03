@@ -659,6 +659,85 @@ async fn idempotent_producer_fatal_sequence_errors_are_terminal() {
 }
 
 #[tokio::test]
+async fn buffered_idempotent_producer_fatal_sequence_errors_are_terminal() {
+    for error_code in [45, 47, 90] {
+        let broker = ScriptedBroker::start(vec![
+            ScriptedResponse::Respond(api_versions_producer_response_body()),
+            ScriptedResponse::Respond(init_producer_id_v2_response_body()),
+            ScriptedResponse::RespondWithAddressAndClose(metadata_response_for_address),
+            ScriptedResponse::Respond(api_versions_response_body(3)),
+            ScriptedResponse::Respond(produce_v3_response_body(error_code, -1)),
+        ])
+        .await
+        .expect("scripted broker should bind");
+        let address = broker.address();
+        let metrics = ClientMetrics::new();
+        let mut producer = ProducerConfig::new([address.to_string()])
+            .metrics(metrics.clone())
+            .request_timeout_ms(1_000)
+            .enable_idempotence(true)
+            .max_retries(1)
+            .linger_ms(10_000)
+            .build_buffered()
+            .await
+            .expect("buffered idempotent producer should initialize");
+
+        let first_delivery = producer
+            .send(ProducerRecord::to("orders").partition(0).value("value"))
+            .await
+            .expect("first buffered record should enqueue");
+        let first_flush_error = producer
+            .flush()
+            .await
+            .expect_err("fatal sequence error must fail the first flush");
+        assert!(matches!(
+            first_flush_error,
+            kafrust::Error::Broker { code, .. } if code == error_code
+        ));
+        assert!(matches!(
+            first_delivery.wait().await,
+            Err(kafrust::Error::Broker { code, .. }) if code == error_code
+        ));
+
+        let second_delivery = producer
+            .send(ProducerRecord::to("orders").partition(0).value("value-2"))
+            .await
+            .expect("second buffered record should be accepted for terminal completion");
+        let second_flush_error = producer
+            .flush()
+            .await
+            .expect_err("a fatal sequence error must remain terminal");
+        assert!(matches!(
+            second_flush_error,
+            kafrust::Error::Broker { code, .. } if code == error_code
+        ));
+        assert!(matches!(
+            second_delivery.wait().await,
+            Err(kafrust::Error::Broker { code, .. }) if code == error_code
+        ));
+        assert_eq!(metrics.snapshot().retries, 0);
+        assert_eq!(metrics.snapshot().broker_errors, 1);
+
+        producer
+            .close()
+            .await
+            .expect("buffered producer should close after terminal delivery errors");
+        let observations = broker
+            .finish()
+            .await
+            .expect("scripted broker should complete the buffered fatal path");
+        assert_eq!(observations.len(), 5);
+        assert_eq!(
+            observations
+                .iter()
+                .map(|request| request.api_key)
+                .collect::<Vec<_>>(),
+            [18, 22, 3, 18, 0]
+        );
+    }
+}
+
+#[tokio::test]
 async fn transactional_commit_response_loss_marks_outcome_unknown_and_defunct() {
     let coordinator = ScriptedBroker::start(vec![
         ScriptedResponse::Respond(api_versions_producer_response_body()),
