@@ -767,6 +767,13 @@ the complete milestone gates, and exact artifact verification show no material
 gap; otherwise the milestone graph and roadmap must be replanned around the
 needed intermediate version.
 
+The staged package boundary was refreshed on 2026-09-03 from source
+`b4505903e9b15b3e7452b9e6f8e9cbf3f6ea679b`. The actual 0.3.6 crate pair passed
+default, TLS, blocking, OTLP, and all-feature consumer fixtures with locked
+dependency trees. Exact tarball hashes are retained in
+[`v1-package-boundary-2026-09-03.md`](evidence/v1-package-boundary-2026-09-03.md).
+This does not publish the crates or close live/release gates.
+
 ## V1-20 Execution Update (2026-08-22)
 
 V1-20 is `In progress`. The draft machine-readable matrix at

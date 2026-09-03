@@ -209,6 +209,17 @@ critical/high matches. The refreshed report and digest are recorded in
 now passes; owner/rationale review, multi-platform package evidence, and
 published-artifact gates remain open.
 
+### Staged package boundary refresh (2026-09-03)
+
+At source `b4505903e9b15b3e7452b9e6f8e9cbf3f6ea679b`,
+`verify_package_boundary.py --staged` rebuilt and verified the 0.3.6
+`kafrust-protocol` and `kafrust` tarballs. Default, TLS, blocking, OTLP, and
+all-feature consumer fixtures passed locked checks and dependency-tree
+inspection. The tarball digests and exact boundary are recorded in
+[`v1-package-boundary-2026-09-03.md`](../../evidence/v1-package-boundary-2026-09-03.md).
+This is packaged-candidate evidence only; publication and later release gates
+remain open.
+
 ### Combined CI validation (2026-08-23)
 
 The exact pushed commit `af73b8d2eaf19e33d9e90dbc79189f74bd9ad538` passed the

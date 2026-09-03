@@ -5533,6 +5533,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-19-advisories.md; docs/evidence/v1-19-advisories.json
 - non_claims: not a guarantee against future or undisclosed vulnerabilities, not full upstream unsafe-block review, not multi-platform or published-artifact qualification, not release authorization
 
+## Q-PACKAGE-BOUNDARY-2026-09-03
+
+- date_utc: 2026-09-03
+- source_commit: b4505903e9b15b3e7452b9e6f8e9cbf3f6ea679b
+- client_version: 0.3.6 packaged candidate
+- protocol_version: 0.3.6 packaged candidate
+- work_status: In progress
+- evidence_level: Packaged candidate
+- kafka_version: not-applicable
+- kafka_image: not-applicable
+- mode: staged tarball consumer-boundary verification
+- topology: temporary local consumer fixtures
+- security: feature matrix includes TLS fixture; no broker
+- group_protocol: not-applicable
+- workload: package pair and five default/tls/blocking/otlp/all feature fixtures
+- workflow: scripts/verify_package_boundary.py
+- fault: package isolation and staged dependency resolution
+- duration: bounded local package build and five locked checks
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: one staged boundary run
+- expected_errors: staged tarballs must resolve and compile in every accepted profile
+- observed_errors: protocol and client tarballs built; all five profiles passed
+- retry_count: 0
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: temporary fixtures cleaned; no Docker resources created or modified
+- result: passed
+- artifact: docs/evidence/v1-package-boundary-2026-09-03.md; target/package/kafrust-0.3.6.crate; target/package/kafrust-protocol-0.3.6.crate
+- non_claims: not crates.io publication, not live broker compatibility, not multi-platform qualification, not long campaign, not service canary, not release authorization
+
 ## Q-CLIENT-CANCELED-INFLIGHT-2026-09-03
 
 - date_utc: 2026-09-03
