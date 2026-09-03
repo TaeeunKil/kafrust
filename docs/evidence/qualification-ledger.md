@@ -4839,3 +4839,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-company-floor-short-smoke-2026-09-03.md
 - non_claims: not accepted-floor qualification, not V1-20 completion, not published-artifact evidence, not three-broker/security matrix, not long campaigns, not service canary, not release authorization
+
+## Q-COMPANY-SHARE-SHORT-SMOKE-2026-09-03
+
+- date_utc: 2026-09-03
+- source_commit: 74ee4dc87cc13a2c7dd0b3d69a433aeba29d0fe4
+- client_version: 0.3.6 source checkout
+- protocol_version: 0.3.6 source checkout
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
+- mode: company workstation Share short broker smoke
+- topology: isolated single-node KRaft with Share coordinator; uniquely named container and host port
+- security: PLAINTEXT
+- group_protocol: Share
+- workload: ShareConsumer roundtrip, ShareGroup offset mutations, and ShareGroup state lifecycle
+- workflow: scripts/check_qualification_ledger.py
+- fault: no injected fault; bounded Share acquisition, acknowledgement, and state lifecycle
+- duration: three focused tests completed in 38 seconds
+- record_count: one seeded Share record
+- member_count: one Share member
+- repetition_count: one bounded Share diagnostic
+- expected_errors: none for configured paths
+- observed_errors: all three Share tests passed
+- retry_count: not measured
+- duplicate_count: not measured
+- loss_count: not measured
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: not exposed by these tests
+- result: passed
+- artifact: docs/evidence/v1-company-share-short-smoke-2026-09-03.md
+- non_claims: not V1-10 completion, not secure multi-member qualification, not three-broker/20-cycle/10,000-record evidence, not long campaigns, not release authorization

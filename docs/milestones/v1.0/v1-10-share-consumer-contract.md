@@ -154,3 +154,10 @@ shortened 30-second member-loss diagnostic is retained as a failed input
 boundary; the supported-window rerun passed. These rows are recorded in
 [`v1-published-short-surface-smoke-2026-09-03.md`](../../evidence/v1-published-short-surface-smoke-2026-09-03.md).
 The exact 10,000-record/20-cycle/ambiguity exit gate remains open.
+
+The company workstation also passed a short Kafka 4.3.1 Share diagnostic at
+pushed head `74ee4dc`: ShareConsumer roundtrip, ShareGroup offset mutations,
+and ShareGroup state lifecycle. The exact record is
+[`v1-company-share-short-smoke-2026-09-03.md`](../../evidence/v1-company-share-short-smoke-2026-09-03.md).
+It is single-node local evidence and does not count toward the secure
+multi-member, three-broker, 10,000-record, or 20-cycle exit gate.

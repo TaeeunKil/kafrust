@@ -188,6 +188,12 @@ close, acquisition filtering, and stable member identity across reconciliation.
 Published secure two-member churn, delayed/applied acknowledgement branches,
 and the 10,000-record gate remain open; no exactly-once claim is made.
 
+The company workstation then passed the three focused Share tests against an
+isolated Kafka 4.3.1 Share coordinator at pushed head `74ee4dc`. The record is
+[`v1-company-share-short-smoke-2026-09-03.md`](evidence/v1-company-share-short-smoke-2026-09-03.md);
+it is single-node diagnostic evidence and does not replace the secure
+multi-member published gate.
+
 ## V1-11 Execution Update (2026-08-22)
 
 V1-11 is `In progress`. Controller-routed Admin operations now share explicit

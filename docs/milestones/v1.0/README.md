@@ -144,6 +144,10 @@ Kafka 3.7.2, the planned floor line, was also rerun with the same short
 producer/group/Admin smoke; it is recorded separately in
 [`v1-company-floor-short-smoke-2026-09-03.md`](../../evidence/v1-company-floor-short-smoke-2026-09-03.md)
 and remains diagnostic-only.
+The same workstation also passed the three focused Share tests against an
+isolated Kafka 4.3.1 Share coordinator; the diagnostic is recorded in
+[`v1-company-share-short-smoke-2026-09-03.md`](../../evidence/v1-company-share-short-smoke-2026-09-03.md)
+and does not replace the V1-10 published gate.
 
 ## Status And Evidence
 
