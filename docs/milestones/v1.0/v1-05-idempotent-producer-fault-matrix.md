@@ -165,6 +165,19 @@ This closes connection reuse safety for caller-canceled in-flight requests
 only; it does not classify partial client request writes or satisfy the
 published ten-cycle and 100,000-record reconciliation gates.
 
+### Partial client request write (2026-09-03)
+
+At source commit `c42826f36f8af9b2d368d4035a05dfb8eb189ab8`,
+`does_not_reuse_connection_after_partial_request_write` forces an encoded
+request to write three bytes before returning `BrokenPipe`. The connection is
+poisoned and the next operation is rejected with `NotConnected`, preserving the
+no-reuse boundary for uncertain idempotent requests. The detailed record is
+[`v1-client-partial-write-2026-09-03.md`](../../evidence/v1-client-partial-write-2026-09-03.md).
+
+This is low-level transport evidence only; it does not yet classify producer
+retry behavior for partial writes or satisfy the published ten-cycle and
+100,000-record reconciliation gates.
+
 ## Failure And Lifecycle Contract
 
 - A safe retry retains the same producer identity and batch sequence.

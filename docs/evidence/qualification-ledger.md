@@ -5467,6 +5467,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-client-cancellation-poisoning-2026-09-03.md; crates/kafrust/src/client.rs
 - non_claims: not partial client request-write qualification, not producer delivery receiver cancellation, not published-artifact qualification, not multi-broker or security qualification, not long campaign, not service canary, not release authorization
 
+## Q-CLIENT-PARTIAL-WRITE-2026-09-03
+
+- date_utc: 2026-09-03
+- source_commit: c42826f36f8af9b2d368d4035a05dfb8eb189ab8
+- client_version: 0.3.6 source workspace
+- protocol_version: Kafka ApiVersions v0 request path
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: scripted transport fixture
+- kafka_image: not-applicable
+- mode: low-level partial client request write poisoning
+- topology: single injected AsyncWrite connection
+- security: PLAINTEXT fixture
+- group_protocol: not-applicable
+- workload: one partially written ApiVersions request and one rejected reuse attempt
+- workflow: scripts/check_qualification_ledger.py
+- fault: three request bytes accepted followed by BrokenPipe
+- duration: focused test 0.00 s; required workspace validation passed
+- record_count: 1 request attempted; 0 records
+- member_count: 0
+- repetition_count: one deterministic regression
+- expected_errors: partial write returns BrokenPipe; next request returns NotConnected
+- observed_errors: focused regression passed; reuse was rejected before writing
+- retry_count: 0
+- duplicate_count: 0
+- loss_count: not-applicable
+- latency: not-recorded
+- memory: not-recorded
+- final_resource_gauges: no Docker resources created or modified; injected stream owned by test
+- result: passed
+- artifact: docs/evidence/v1-client-partial-write-2026-09-03.md; crates/kafrust/src/client.rs
+- non_claims: not producer retry classification, not published-artifact qualification, not multi-broker or security qualification, not long campaign, not service canary, not release authorization
+
 ## Q-BUFFERED-INFLIGHT-DEADLINE-2026-09-03
 
 - date_utc: 2026-09-03

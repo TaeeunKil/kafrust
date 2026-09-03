@@ -214,6 +214,19 @@ not close producer delivery receiver cancellation, partial client request
 writes, delayed metadata/capability, published mixed-outcome reconciliation,
 or live qualification gates.
 
+### Partial client request write cannot be reused (2026-09-03)
+
+At source commit `c42826f36f8af9b2d368d4035a05dfb8eb189ab8`,
+`does_not_reuse_connection_after_partial_request_write` injects a three-byte
+write followed by `BrokenPipe`. The client marks the connection unusable and
+rejects the next request with `NotConnected`; no response bytes can be
+misattributed to a later operation. The detailed record is
+[`v1-client-partial-write-2026-09-03.md`](../../evidence/v1-client-partial-write-2026-09-03.md).
+
+This closes low-level partial-write connection reuse only. Producer retry
+classification, delayed metadata/capability, published mixed-outcome
+reconciliation, and live qualification gates remain open.
+
 ## Exit Criteria
 
 1. All three producer modes share the documented total-budget calculation.

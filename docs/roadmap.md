@@ -265,6 +265,14 @@ multi-broker security profiles, service canary qualification, and release
 authorization remain open; no version or publication decision follows from
 this slice.
 
+The partial-write boundary is now covered as well at source
+`c42826f36f8af9b2d368d4035a05dfb8eb189ab8`: an injected three-byte request
+write followed by `BrokenPipe` poisons the connection, and the next request is
+rejected with `NotConnected`. See
+[`v1-client-partial-write-2026-09-03.md`](evidence/v1-client-partial-write-2026-09-03.md).
+This remains low-level transport evidence and does not close producer retry,
+published reconciliation, long-campaign, canary, or release gates.
+
 ## V1-05 Execution Update (2026-08-22)
 
 V1-05 is `In progress`. The deterministic idempotent slice now records exact
