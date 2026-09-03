@@ -1447,8 +1447,11 @@ async fn flush_buffered_delivery_report(
         .iter()
         .map(|request| request.record.clone())
         .collect::<Vec<_>>();
-    let delivery_timeout =
-        buffered_remaining_delivery_timeout(&requests, producer.config.delivery_timeout);
+    let delivery_timeout = buffered_remaining_delivery_timeout(
+        &requests,
+        producer.config.delivery_timeout,
+        Instant::now(),
+    );
 
     match producer
         .send_batch_report_with_timeout(records, delivery_timeout)
@@ -1469,8 +1472,8 @@ async fn flush_buffered_delivery_report(
 fn buffered_remaining_delivery_timeout(
     requests: &[BufferedProduceRequest],
     delivery_timeout: Duration,
+    now: Instant,
 ) -> Duration {
-    let now = Instant::now();
     requests
         .iter()
         .map(|request| (request.enqueued_at + delivery_timeout).saturating_duration_since(now))
@@ -5271,7 +5274,8 @@ mod tests {
         advance_producer_sequence, batch_duplicate_outcomes, batch_failure_outcomes,
         batch_record_chunks, batch_records_encoded_len, batch_report_from_outcomes,
         batch_success_outcomes, buffered_delivery_canceled_error, buffered_delivery_deadline,
-        buffered_enqueue_flush_reason, buffered_linger_deadline, can_retry_send, choose_partition,
+        buffered_enqueue_flush_reason, buffered_linger_deadline,
+        buffered_remaining_delivery_timeout, can_retry_send, choose_partition,
         choose_partition_with_partitioner, complete_buffered_deliveries,
         delivery_error_from_request_error, enqueue_buffered_record,
         ensure_buffered_transaction_deliveries_succeeded, expire_buffered_deliveries,
@@ -6943,6 +6947,40 @@ mod tests {
         assert_eq!(
             buffered_delivery_deadline(None, Duration::from_millis(20)),
             None
+        );
+    }
+
+    #[test]
+    fn computes_buffered_remaining_delivery_timeout_from_oldest_record() {
+        let now = Instant::now();
+        let mut oldest = buffered_request(ProducerRecord::to("orders"));
+        oldest.enqueued_at = now - Duration::from_millis(20);
+        let mut newer = buffered_request(ProducerRecord::to("orders"));
+        newer.enqueued_at = now - Duration::from_millis(5);
+
+        assert_eq!(
+            buffered_remaining_delivery_timeout(&[oldest, newer], Duration::from_millis(100), now,),
+            Duration::from_millis(80)
+        );
+    }
+
+    #[test]
+    fn returns_zero_remaining_delivery_timeout_for_expired_buffered_record() {
+        let now = Instant::now();
+        let mut request = buffered_request(ProducerRecord::to("orders"));
+        request.enqueued_at = now - Duration::from_millis(101);
+
+        assert_eq!(
+            buffered_remaining_delivery_timeout(&[request], Duration::from_millis(100), now),
+            Duration::ZERO
+        );
+    }
+
+    #[test]
+    fn uses_configured_delivery_timeout_when_buffered_batch_is_empty() {
+        assert_eq!(
+            buffered_remaining_delivery_timeout(&[], Duration::from_millis(100), Instant::now()),
+            Duration::from_millis(100)
         );
     }
 
