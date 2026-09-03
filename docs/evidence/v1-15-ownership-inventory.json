@@ -1,0 +1,133 @@
+{
+  "schema_version": 1,
+  "milestone": "V1-15",
+  "source": "crates/kafrust/src runtime ownership audit",
+  "status": "deterministic-inventory",
+  "non_claims": [
+    "does not prove 100-cycle gauge qualification",
+    "does not prove published secured churn",
+    "does not certify production readiness"
+  ],
+  "owners": [
+    {
+      "owner_id": "producer-idle-cache",
+      "owner": "Producer client shared stateless idle-connection cache",
+      "identity_lease": "producer client configuration identity; no group, Share, Streams, or telemetry membership lease",
+      "capacity": {"kind": "finite", "description": "configured idle-cache limit; zero is normalized to one"},
+      "saturation_policy": "FIFO eviction of idle entries; checked-out connections are not evicted",
+      "cancellation": "request timeout or transport failure poisons the connection before it can return",
+      "join_path": "cache checkout is synchronous in request ownership; no detached task",
+      "fault_points": ["metadata disconnect", "request timeout", "poisoned return"],
+      "verification": ["broker_client_cache::tests::evicts_idle_connections_in_fifo_order", "producer timeout regression tests"],
+      "evidence_level": "local-deterministic"
+    },
+    {
+      "owner_id": "buffered-producer-worker",
+      "owner": "Buffered producer enqueue channel and flush worker",
+      "identity_lease": "producer configuration plus per-delivery deadline; no broker membership identity",
+      "capacity": {"kind": "finite", "description": "configured record channel and batch byte/record limits, each clamped to one"},
+      "saturation_policy": "bounded enqueue applies backpressure and reports closed or canceled senders",
+      "cancellation": "shutdown closes the enqueue path, fails pending deliveries, and waits for the worker join",
+      "join_path": "buffered producer close awaits the owned worker handle",
+      "fault_points": ["enqueue saturation", "deadline before transmission", "delivery response loss", "shutdown"],
+      "verification": ["producer::tests::buffered_enqueue_applies_backpressure_at_channel_capacity", "producer::tests::fails_pending_buffered_deliveries"],
+      "evidence_level": "local-deterministic"
+    },
+    {
+      "owner_id": "admin-clone-cache",
+      "owner": "Admin clone-local stateless broker-connection cache",
+      "identity_lease": "Admin client configuration and broker route; no consumer-group generation or transaction producer identity",
+      "capacity": {"kind": "finite", "description": "bounded per-route idle connection cache"},
+      "saturation_policy": "reuse only healthy idle connections; discard poisoned or route-incompatible entries",
+      "cancellation": "request cancellation or I/O failure closes the affected connection and preserves mutation outcome",
+      "join_path": "Admin operations own request futures; no detached Admin cache task",
+      "fault_points": ["controller disconnect", "coordinator disconnect", "leader disconnect", "post-send mutation ambiguity"],
+      "verification": ["admin::tests::reuses_admin_bootstrap_connection_for_sequential_metadata_reads", "admin mutation response-loss tests"],
+      "evidence_level": "local-deterministic"
+    },
+    {
+      "owner_id": "direct-fetch-session",
+      "owner": "Direct consumer Fetch session and partition position state",
+      "identity_lease": "consumer instance, assignment generation, topic/partition, leader epoch, and fetch session id",
+      "capacity": {"kind": "finite", "description": "configured fetch bytes, records, and partition queue capacity"},
+      "saturation_policy": "poll budget and bounded partition queues prevent unbounded record allocation",
+      "cancellation": "consumer close cancels active fetch and drops the instance-local session",
+      "join_path": "Fetch request is awaited by the poll owner; no membership heartbeat task is shared",
+      "fault_points": ["fetch response loss", "leader epoch change", "assignment removal", "queue backpressure"],
+      "verification": ["consumer::tests::reuses_fetch_session_for_sequential_rack_aware_polls", "consumer::tests::split_partition_queue_reports_backpressure_without_skipping_records"],
+      "evidence_level": "local-deterministic"
+    },
+    {
+      "owner_id": "classic-group-membership",
+      "owner": "Classic consumer-group membership and heartbeat task",
+      "identity_lease": "group id, member id, generation, assignment, and coordinator epoch",
+      "capacity": {"kind": "finite", "description": "bounded commit queue and configured heartbeat/rejoin timers"},
+      "saturation_policy": "commit queue coalesces current assignment offsets and rejects overflow",
+      "cancellation": "group close cancels heartbeat and commit workers, then awaits both task handles",
+      "join_path": "heartbeat and commit workers are owned by the group membership object",
+      "fault_points": ["coordinator loss", "rebalance", "member loss", "heartbeat cancellation"],
+      "verification": ["group::tests::classic_heartbeat_shutdown_cancels_inflight_request", "group::tests::stale_heartbeat_shutdown_stops_running_task"],
+      "evidence_level": "local-deterministic"
+    },
+    {
+      "owner_id": "kip848-group-membership",
+      "owner": "KIP-848 consumer-group membership and heartbeat task",
+      "identity_lease": "group id, UUID-shaped member id, member epoch, assignment epoch, and topic UUIDs",
+      "capacity": {"kind": "finite", "description": "bounded assignment, commit queue, and heartbeat request state"},
+      "saturation_policy": "assignment updates are applied by epoch; stale or conflicting state requests rejoin",
+      "cancellation": "KIP-848 close cancels the owned heartbeat request and awaits task termination",
+      "join_path": "the membership object owns the heartbeat handle and rejoin state",
+      "fault_points": ["member epoch rejection", "coordinator loss", "empty assignment", "heartbeat cancellation"],
+      "verification": ["group::tests::kip_848_heartbeat_shutdown_cancels_inflight_request", "group::tests::kip_848_background_state_preserves_null_assignment_and_tracks_updates"],
+      "evidence_level": "local-deterministic"
+    },
+    {
+      "owner_id": "share-consumer-session",
+      "owner": "ShareConsumer fetch, acknowledgement, and heartbeat sessions",
+      "identity_lease": "share group id, member id, member epoch, coordinator, partition lock, and acquired record identity",
+      "capacity": {"kind": "finite", "description": "configured acquisition and acknowledgement queues with bounded in-flight records"},
+      "saturation_policy": "acquisition is bounded; acknowledgement batches are per-record and preserve unknown outcomes",
+      "cancellation": "close cancels Share heartbeat/fetch work, drains known state, and retains unknown acknowledgement disposition",
+      "join_path": "Share session owns its heartbeat and broker-session handles; it never enters the generic idle cache",
+      "fault_points": ["lost acknowledgement response", "lock renewal", "coordinator movement", "member cancellation"],
+      "verification": ["share_consumer::tests::close_finishes_after_an_unknown_acknowledgement_outcome", "share_consumer::tests::detached_share_heartbeat_cancels_inflight_request"],
+      "evidence_level": "local-deterministic"
+    },
+    {
+      "owner_id": "streams-membership",
+      "owner": "Kafka Streams group membership and task-runtime session",
+      "identity_lease": "process id, member epoch, assignment epoch, topology, and task identity set",
+      "capacity": {"kind": "finite", "description": "configured task transitions and heartbeat request state"},
+      "saturation_policy": "conflicting assignment is rejected without mutating the task runtime",
+      "cancellation": "Streams close cancels heartbeat and task commands, then awaits the session handle",
+      "join_path": "StreamsGroupSessionHandle owns the background heartbeat task and task-runtime command path",
+      "fault_points": ["coordinator loss", "assignment conflict", "session cancellation", "graceful leave"],
+      "verification": ["streams::tests::background_streams_session_owns_heartbeat_and_graceful_close", "streams::tests::task_runtime_rejects_conflicting_assignment_without_mutating_state"],
+      "evidence_level": "local-deterministic"
+    },
+    {
+      "owner_id": "telemetry-subscription",
+      "owner": "Telemetry subscription and push connection",
+      "identity_lease": "telemetry subscription id, negotiated codec, and client metrics provider identity",
+      "capacity": {"kind": "finite", "description": "bounded payload and metric sample limits"},
+      "saturation_policy": "payloads over the configured limit are rejected before send; subscription refreshes in place",
+      "cancellation": "telemetry close stops the owned push loop and terminates the same-connection subscription",
+      "join_path": "telemetry provider owns the push future and uses no generic session cache",
+      "fault_points": ["unsupported compression", "unknown subscription id", "payload over limit", "terminating push"],
+      "verification": ["telemetry::tests::negotiates_subscription_and_pushes_through_one_connection", "telemetry::tests::validates_payload_limit"],
+      "evidence_level": "local-deterministic"
+    },
+    {
+      "owner_id": "blocking-adapter-runtime",
+      "owner": "Blocking adapter dedicated Tokio runtime",
+      "identity_lease": "adapter instance and its synchronous call scope; never a shared async membership lease",
+      "capacity": {"kind": "finite", "description": "one owned runtime per blocking adapter instance"},
+      "saturation_policy": "synchronous calls wait on the owned runtime; nested Tokio runtime use is rejected",
+      "cancellation": "adapter drop stops the owned runtime after in-flight call completion or explicit task error",
+      "join_path": "blocking adapter owns the runtime thread and joins it during shutdown",
+      "fault_points": ["nested runtime", "task error", "adapter drop", "connection failure"],
+      "verification": ["blocking::tests::blocking_build_rejects_nested_tokio_runtime", "blocking adapter close and runtime ownership review"],
+      "evidence_level": "local-deterministic"
+    }
+  ]
+}

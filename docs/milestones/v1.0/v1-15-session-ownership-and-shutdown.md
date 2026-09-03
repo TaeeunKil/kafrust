@@ -69,6 +69,19 @@ record task/queue/connection peaks and final gauges for every stable surface,
 and run the 100-cycle and exact-artifact churn gates. No stale-session or
 detached-task completion claim is made by this record.
 
+### Checked ownership inventory (2026-09-03)
+
+The static owner inventory is now machine-readable at
+[`v1-15-ownership-inventory.json`](../../evidence/v1-15-ownership-inventory.json)
+and validated by [`check_v1_ownership_inventory.py`](../../../scripts/check_v1_ownership_inventory.py).
+It enumerates the producer and Admin stateless caches, buffered worker, direct
+Fetch session, classic and KIP-848 memberships, Share and Streams sessions,
+telemetry subscription, and blocking runtime. Every row declares a finite
+capacity, saturation policy, identity lease, cancellation rule, join path,
+fault points, and deterministic verification references. Five focused checker
+tests and the CI check pass. This closes the static inventory criterion only;
+cycle gauges and published secured churn remain required.
+
 ## Failure And Lifecycle Contract
 
 - A connection is checked out by one request and returned only after framing,

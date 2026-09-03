@@ -261,6 +261,15 @@ and nested-runtime rejection tests pass on source `e6de5c5`. The ownership table
 100 construct/use/fault/close cycles, final gauges, and published secured churn
 profile remain open.
 
+The static ownership table is now checked by
+[`v1-15-ownership-inventory.json`](evidence/v1-15-ownership-inventory.json)
+and [`check_v1_ownership_inventory.py`](../scripts/check_v1_ownership_inventory.py).
+The inventory covers ten stable connection/session/task owners with finite
+capacities, identity leases, saturation, cancellation, join, fault, and
+verification fields; its five focused tests and CI check pass. This closes the
+static inventory slice only. The 100-cycle gauge audit and exact published
+secured churn gate remain open.
+
 ## V1-16 Execution Update (2026-08-22)
 
 V1-16 is `In progress`. SCRAM, TLS/mTLS, OAUTHBEARER provider single-flight,
