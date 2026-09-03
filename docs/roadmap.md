@@ -1140,6 +1140,15 @@ baseline, and V1-23's named service canary remain open. Full details are in
 [`v1-company-capacity-recovery-2026-09-03.md`](evidence/v1-company-capacity-recovery-2026-09-03.md)
 and [`v1-company-selfhosted-short-fault-2026-09-03.md`](evidence/v1-company-selfhosted-short-fault-2026-09-03.md).
 
+The current-source V1-23 reference smoke was refreshed in
+[33717760410](https://github.com/TaeeunKil/kafrust/actions/runs/33717760410)
+from `12fe52a`: Kafka 4.3.1, isolated topics, 1,000 unique 1-KiB records per
+implementation, zero loss/duplicates, and matching business-payload digest.
+This strengthens reproducible migration-fixture evidence only; a named service
+canary, fault/cutover, credential rotation, rollback, and million-record exit
+remain absent. See
+[`v1-23-reference-smoke-2026-09-03.md`](evidence/v1-23-reference-smoke-2026-09-03.md).
+
 ## Historical Release Qualification
 
 `0.3.5` is now published on crates.io in protocol-first order. The fresh

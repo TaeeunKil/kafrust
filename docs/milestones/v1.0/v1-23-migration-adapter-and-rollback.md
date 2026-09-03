@@ -183,6 +183,20 @@ until this gate is unblocked.
 If no named service/environment is available, set V1-23 to `Blocked`; V1-24
 and V1-25 cannot close, and the absence is not an alternate exit criterion.
 
+### Current-source reference smoke refresh (2026-09-03)
+
+The pushed source `12fe52a` passed the 1,000-record dual-client reference
+smoke in [33717760410](https://github.com/TaeeunKil/kafrust/actions/runs/33717760410)
+against Kafka 4.3.1. Kafrust and rust-rdkafka each processed 1,000 unique
+1-KiB business-ID records with batch size 100, zero loss/duplicates, and the
+same payload digest
+`98fb6a3dfe9a9ac1765160a42e05b2c63e0ed231af678f370de194c0f5044e26`.
+Measured kafrust throughput was 19,208.07 produce and 19,236.74 consume
+records/s; rust-rdkafka measured 23,303.75 and 21,110.20 respectively. This is
+preparation evidence for the reproducible fixture only. It does not supply a
+named service, fault/cutover, credential-rotation, rollback, or million-record
+exit result, so V1-23 remains `Blocked` on canary authority.
+
 ## Migration And Rollback
 
 This entire milestone is the migration/rollback contract. Preserve the old

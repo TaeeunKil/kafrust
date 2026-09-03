@@ -4311,3 +4311,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-company-selfhosted-short-fault-2026-09-03.md; run artifact kafrust-published-fault-segment-company-short-diagnostic-2026-09-03-0-33716428169; descriptor lockfile digest 2f81a33ed05baf0321bb7a643355bec49a5e3a8904d7cd2354e54a86314f976b
 - non_claims: not a six-hour V1-21 campaign, not 100-cycle or ambiguity-family completion, not cross-segment continuity, not V1-22 SLO evidence, not V1-23 service canary, not 1.0.0 readiness
+
+## Q-MIGRATION-REFERENCE-SMOKE-2026-09-03
+
+- date_utc: 2026-09-03
+- source_commit: 12fe52a6b1e3a6007a3fed49a1091680893a5623
+- client_version: 0.3.6 source checkout
+- protocol_version: 0.3.6 source checkout
+- work_status: In progress
+- evidence_level: Live current-source
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka:4.3.1
+- mode: dual-client reference migration smoke
+- topology: isolated single-node KRaft topics
+- security: PLAINTEXT
+- group_protocol: direct consumer comparison
+- workload: 1,000 unique 1-KiB business-ID records per implementation; batch size 100
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/33717760410
+- fault: none; baseline smoke only
+- duration: kafrust produce 0.052061s/consume 0.051984s; rust-rdkafka produce 0.042912s/consume 0.047370s
+- record_count: 1,000 per implementation
+- member_count: not-applicable
+- repetition_count: 1
+- expected_errors: zero loss and duplicate records; identical normalized payload digest
+- observed_errors: zero loss, zero duplicates, 1,000 unique records on both implementations
+- retry_count: not reported
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: not reported by reference fixture
+- result: passed
+- artifact: docs/evidence/v1-23-reference-smoke-2026-09-03.md; kafrust-migration-canary-33717760410 artifact; payload digest 98fb6a3dfe9a9ac1765160a42e05b2c63e0ed231af678f370de194c0f5044e26
+- non_claims: not a million-record comparison, not a named service canary, not forward cutover/fault observation/credential rotation/rollback, not V1-22 SLO evidence, not API freeze/RC/release readiness
