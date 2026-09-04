@@ -235,3 +235,41 @@ processed 1,736,700 unique 1-KiB records through leader, coordinator, and
 combined events with zero loss, duplicates, or unknown outcomes, and drained
 all final gauges. Its descriptor and non-qualification boundary are retained
 in [`v1-company-selfhosted-short-dns-recovery-2026-09-04.md`](v1-company-selfhosted-short-dns-recovery-2026-09-04.md).
+
+## Bounded ramp plan and resource model (2026-09-04)
+
+The official V1-21 contract is not shortened by this plan. A short run is a
+separate diagnostic used to establish WSL lifetime, resolver persistence,
+Docker cleanup, and storage growth before dispatching an exact campaign. It
+must use a diagnostic campaign identifier and must not be promoted by the V1
+fault adjudicator.
+
+The declared V1-21 floor is 10,000 records per second with 1 KiB payloads.
+For a three-broker replicated topic, the lower-bound retained data is therefore
+approximately `duration * 10,000 * 1,024 * 3`; Kafka indexes, segment headers,
+logs, retries, and filesystem overhead require additional headroom. The
+resulting planning values are:
+
+| Diagnostic or gate | Duration | Replicated data lower bound | Recommended free space |
+| --- | ---: | ---: | ---: |
+| bounded smoke | 10 min | about 18 GiB | at least 50 GiB |
+| bounded soak | 30 min | about 54 GiB | at least 100 GiB |
+| lifetime diagnostic | 2 h | about 216 GiB | at least 300 GiB |
+| V1-21 exact campaign | 6 h | about 648 GiB | at least 700 GiB |
+
+Reducing the diagnostic payload to 256 B reduces the data component by roughly
+four, but it no longer matches the V1-21 workload. One broker or replication
+factor one is also cheaper but cannot provide the required failover evidence.
+The safe progression is 10 minutes, then 30 minutes, then two hours, with
+prefix-scoped cleanup and a before/after `df` and `docker system df` record at
+each step. Only after the two-hour run, a controlled WSL restart, and one
+complete foreground-lifetime smoke are successful should an exact six-hour
+campaign be considered.
+
+The latest workstation capacity probe found about 737 GiB free on the T:
+volume and 857 GiB at Docker's root, which is technically above the guard but
+leaves only about 37 GiB of host margin for an exact V1-21 run. The current
+`Ubuntu-T9` state is `Stopped` and the repository runner is `offline`, so no
+campaign is dispatchable until the runner is online and held alive for the
+entire bounded diagnostic. Parallel exact campaigns are not safe on this host;
+the four V1-21 campaigns must be serialized if they are eventually run here.
