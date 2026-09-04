@@ -122,9 +122,23 @@ digest, and workflow results are in
 [`v1-published-group-churn-40-cycle-2026-09-04.md`](../../evidence/v1-published-group-churn-40-cycle-2026-09-04.md).
 
 These are bounded 40-cycle diagnostics. The workflow's separate 100-cycle
-qualification flag remains false, and the secure 40-cycle profile, callback /
+qualification flag remains false, and the normal-leave matrix, callback /
 heartbeat matrix, ambiguity families, and remaining V1-08 exit criteria stay
 open.
+
+### Published secure 40-cycle churn diagnostic (2026-09-04)
+
+The published `0.3.6` SASL_SSL/SCRAM-SHA-256 workflow then completed the same
+40 abrupt-member-drop cycles on Kafka 3.7.2 classic and Kafka 4.3.1 KIP-848
+consumer. Each profile restored all six committed offsets without loss or
+duplicates and ended with zero in-flight/buffered gauges. The immutable run
+metadata, broker image identities, and the initial timeout calibration are in
+[`v1-published-secure-group-churn-40-cycle-2026-09-04.md`](../../evidence/v1-published-secure-group-churn-40-cycle-2026-09-04.md).
+
+The 3.7.2 profile completed in 9m 1s (run 33830994497); the KIP-848 profile
+completed in 34m 46s (run 33832439518) because each secure rejoin took about
+51 seconds. These are bounded drop/rejoin diagnostics, not the normal-leave
+matrix, the 100-cycle flag, a long campaign, or release evidence.
 
 ## Failure And Lifecycle Contract
 

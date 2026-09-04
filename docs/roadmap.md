@@ -5899,3 +5899,20 @@ drained final gauges. The immutable record is
 
 These are bounded diagnostics; they do not close the secure group profile,
 100-cycle family gate, long campaigns, service canary, or release authorization.
+
+## V1 published secure group churn 40-cycle diagnostic (2026-09-04)
+
+The published `kafrust 0.3.6` SASL_SSL/SCRAM-SHA-256 workflow completed the
+40-cycle abrupt-member-drop/rejoin profile on both accepted broker lines:
+Kafka 3.7.2 classic ([run 33830994497](https://github.com/TaeeunKil/kafrust/actions/runs/33830994497),
+9m 1s) and Kafka 4.3.1 KIP-848 consumer ([run 33832439518](https://github.com/TaeeunKil/kafrust/actions/runs/33832439518),
+34m 46s). Each six-partition profile reported 240 ownership observations,
+zero loss/duplicates, exact committed-offset restoration, and zero final
+in-flight/buffered gauges. Broker image IDs, lockfile digest, and the
+calibration timeout attempt are recorded in
+[`v1-published-secure-group-churn-40-cycle-2026-09-04.md`](evidence/v1-published-secure-group-churn-40-cycle-2026-09-04.md).
+
+This closes only the bounded secure drop/rejoin diagnostic slice. The
+workflow's 100-cycle flag remains false; normal-leave coverage, callback /
+heartbeat and ambiguity matrices, long campaigns, service canary, and release
+authorization remain separate gates.

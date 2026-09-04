@@ -6985,6 +6985,105 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-admin-coordinator-response-loss-matrix-2026-09-04.md; docs/milestones/v1.0/v1-12-coordinator-leader-admin-mutations.md; crates/kafrust/src/admin.rs
 - non_claims: not published floor or authorization qualification, not reconciliation or three-broker failover qualification, not long campaign, not service canary, not release authorization
 
+## Q-PUBLISHED-SECURE-GROUP-CHURN-TIMEOUT-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: 5aa6b45164d3b5b90d4da88dee2b749334a10418
+- client_version: 0.3.6 published artifact
+- protocol_version: KIP-848 consumer group lifecycle over SASL_SSL/SCRAM-SHA-256
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka@sha256:47dccc76b32761bc57462b8753144cdbb73a16b123b1d13d3eedb92bb7952b11
+- mode: bounded secure group churn timeout calibration
+- topology: three-broker KRaft
+- security: SASL_SSL/SCRAM-SHA-256
+- group_protocol: KIP-848 consumer protocol
+- workload: six partitions; two members; 40 requested abrupt drop/rejoin cycles with committed-offset restoration
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/33830996464
+- fault: helper 20-minute cycle budget expired before the requested 40 cycles completed
+- duration: 20 minutes for the helper; 21 minutes 18 seconds workflow wall time
+- record_count: 138 ownership observations through cycle 23; six per completed cycle
+- member_count: 2
+- repetition_count: one timeout calibration run
+- expected_errors: helper completes all 40 cycles without loss or duplicates
+- observed_errors: cycles 1-23 passed; helper timed out before cycle 24; no loss or duplicate assertion was reported
+- retry_count: 0
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: helper assertion not reached; workflow cleanup completed
+- result: failed
+- artifact: docs/evidence/v1-published-secure-group-churn-40-cycle-2026-09-04.md; .github/published-secure-group-rebalance-smoke/src/main.rs; https://github.com/TaeeunKil/kafrust/actions/runs/33830996464
+- non_claims: not a passing 40-cycle profile, not a source regression finding, not long-campaign evidence, not service canary, not release authorization
+
+## Q-PUBLISHED-SECURE-GROUP-CHURN-40-CLASSIC-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: 5aa6b45164d3b5b90d4da88dee2b749334a10418
+- client_version: 0.3.6 published artifact
+- protocol_version: classic consumer group lifecycle and OffsetCommit/OffsetFetch path
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 3.7.2
+- kafka_image: apache/kafka@sha256:6d8457e841c10f58f952cb3942a38b6b3c21015b643e3dd010aea37cc0b89055
+- mode: published secure accepted-floor 40-cycle drop/rejoin diagnostic
+- topology: three-broker KRaft
+- security: SASL_SSL/SCRAM-SHA-256
+- group_protocol: classic consumer protocol
+- workload: six partitions; two members; 40 abrupt drop/rejoin cycles with committed-offset restoration
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/33830994497
+- fault: second member connection dropped and rejoined on every cycle
+- duration: 9 minutes 1 second workflow wall time
+- record_count: 240 ownership observations; six per cycle
+- member_count: 2
+- repetition_count: 40 churn cycles
+- expected_errors: every cycle reacquires all six partitions, restores committed offsets, and ends without loss or duplicates
+- observed_errors: cycle_count=40, records_per_cycle=6, loss_count=0, duplicate_count=0, final gauges zero; workflow qualified=false because the 100-cycle flag was not reached
+- retry_count: not measured
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: in_flight=0; buffered=0
+- result: passed
+- artifact: docs/evidence/v1-published-secure-group-churn-40-cycle-2026-09-04.md; published-secure-group-churn-summary.json; Cargo.lock; lockfile_sha256=155a31ac7d4dfcda4e65708790acbacb42dd3fd40d778ce88c5f031851d26270
+- non_claims: not normal-leave coverage, not 100-cycle qualification, not full V1-08 completion, not long fault campaign, not service canary, not release authorization
+
+## Q-PUBLISHED-SECURE-GROUP-CHURN-40-KIP848-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: 5742d5b816f061daaa92358379cce94d1101ec16
+- client_version: 0.3.6 published artifact
+- protocol_version: KIP-848 consumer group lifecycle and member-aware OffsetCommit/OffsetFetch path
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka@sha256:47dccc76b32761bc57462b8753144cdbb73a16b123b1d13d3eedb92bb7952b11
+- mode: published secure 40-cycle drop/rejoin diagnostic
+- topology: three-broker KRaft
+- security: SASL_SSL/SCRAM-SHA-256
+- group_protocol: KIP-848 consumer protocol
+- workload: six partitions; two members; 40 abrupt drop/rejoin cycles with committed-offset restoration
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/33832439518
+- fault: second member connection dropped and rejoined on every cycle
+- duration: 34 minutes 46 seconds workflow wall time
+- record_count: 240 ownership observations; six per cycle
+- member_count: 2
+- repetition_count: 40 churn cycles
+- expected_errors: every cycle reacquires all six partitions, restores committed offsets, and ends without loss or duplicates
+- observed_errors: cycle_count=40, records_per_cycle=6, loss_count=0, duplicate_count=0, final gauges zero; workflow qualified=false because the 100-cycle flag was not reached
+- retry_count: not measured
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: in_flight=0; buffered=0
+- result: passed
+- artifact: docs/evidence/v1-published-secure-group-churn-40-cycle-2026-09-04.md; published-secure-group-churn-summary.json; Cargo.lock; lockfile_sha256=155a31ac7d4dfcda4e65708790acbacb42dd3fd40d778ce88c5f031851d26270
+- non_claims: not normal-leave coverage, not 100-cycle qualification, not full V1-09 completion, not long fault campaign, not service canary, not release authorization
+
 ## Q-PUBLISHED-TOPIC-ID-LEADER-MOVEMENT-FLOOR-2026-09-04
 
 - date_utc: 2026-09-04
