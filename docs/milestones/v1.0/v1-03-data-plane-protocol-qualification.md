@@ -353,6 +353,18 @@ This refresh strengthens short live version/behavior evidence only; official
 response oracles, complete published qualification, long campaigns, and the
 remaining V1-03 exit criteria stay open.
 
+### Hosted Apache schema audit on pushed source (2026-09-04)
+
+The pushed source commit `a8199d66b75cae90db4de33b3f7db629a6b0eacc` passed
+[Apache Schema Audit 33823046705](https://github.com/TaeeunKil/kafrust/actions/runs/33823046705).
+The online Kafka 4.3.1 audit checked 152 request/response schemas across the
+local protocol modules. Coverage notes for local versions that do not reach an
+Apache flexible boundary, and the local ApiVersions v5 versus the pinned
+Apache v4 ceiling, were emitted as explicit notes rather than failures. This
+is a schema identity/version audit only; it does not replace golden-response
+oracles, accepted-floor or three-broker qualification, published testing, or
+the remaining V1-03 exit criteria.
+
 ## Exit Criteria
 
 1. Every stable high-level selected/fallback version has official metadata,

@@ -6985,6 +6985,105 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-admin-coordinator-response-loss-matrix-2026-09-04.md; docs/milestones/v1.0/v1-12-coordinator-leader-admin-mutations.md; crates/kafrust/src/admin.rs
 - non_claims: not published floor or authorization qualification, not reconciliation or three-broker failover qualification, not long campaign, not service canary, not release authorization
 
+## Q-FUZZ-DISCOVERY-RERUN-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: a8199d66b75cae90db4de33b3f7db629a6b0eacc
+- client_version: 0.3.6 source checkout
+- protocol_version: ten libFuzzer target families
+- work_status: In progress
+- evidence_level: CI
+- kafka_version: not-applicable
+- kafka_image: not-applicable
+- mode: corpus-backed bounded fuzz discovery
+- topology: not-applicable
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: ten checked-in targets; 30-second run per target; 40,216,944 total executions
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/33821955157
+- fault: none injected
+- duration: approximately 6 minutes 40 seconds workflow wall time; 30 seconds per target
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: one hosted discovery run
+- expected_errors: no target crash, hang, OOM, or failed job
+- observed_errors: all ten targets completed; no crash or OOM artifact file emitted
+- retry_count: not-applicable
+- duplicate_count: not-applicable
+- loss_count: not-applicable
+- latency: not measured
+- memory: libFuzzer reported a 2,048 MB RSS cap; target peak values are not an SLO result
+- final_resource_gauges: not-applicable
+- result: passed
+- artifact: docs/evidence/v1-fuzz-discovery-rerun-2026-09-04.md; https://github.com/TaeeunKil/kafrust/actions/runs/33821955157/artifacts/9918716093
+- non_claims: not a 3,600-second target qualification set, not a weekly campaign pass, not proof of absence of crashes/hangs/OOMs, not V1-18 completion, not release authorization
+
+## Q-BENCHMARK-PROFILE-RERUN-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: a8199d66b75cae90db4de33b3f7db629a6b0eacc
+- client_version: 0.3.6 source checkout
+- protocol_version: benchmark profile harness schema v1
+- work_status: In progress
+- evidence_level: Live current-source
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
+- mode: bounded four-profile performance diagnostic
+- topology: single-node KRaft
+- security: PLAINTEXT
+- group_protocol: not-applicable
+- workload: immediate 1/4 workers, buffered 4 workers, and direct-consumer 1 worker; 1-KiB records; 10-second warmup; 60-second measurement; ten-second samples
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/33821968768
+- fault: none injected
+- duration: approximately 3 minutes 2 seconds workflow wall time; 60-second measured window per profile
+- record_count: 18,386,030 produced and consumed across four profiles
+- member_count: not-applicable
+- repetition_count: one hosted run with four profiles
+- expected_errors: zero failed requests, retries, unknown outcomes, loss, or duplicates; matching record digests; drained gauges
+- observed_errors: all four descriptors passed reconciliation; perf stat unavailable on hosted runner
+- retry_count: 0
+- duplicate_count: 0
+- loss_count: 0
+- latency: p50/p95/p99 by profile retained in evidence; 1/1/1 to 1/5/10 ms
+- memory: RSS baseline and terminal retained per profile; no baseline-terminal growth
+- final_resource_gauges: in_flight_requests=0; buffered_records=0 in every profile
+- result: passed
+- artifact: docs/evidence/v1-benchmark-profile-rerun-2026-09-04.md; https://github.com/TaeeunKil/kafrust/actions/runs/33821968768
+- non_claims: not the six-profile five-repetition eight-hour SLO campaign, not a locked baseline, not a universal performance ranking, not V1-22 completion, not release authorization
+
+## Q-APACHE-SCHEMA-AUDIT-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: a8199d66b75cae90db4de33b3f7db629a6b0eacc
+- client_version: 0.3.6 source checkout
+- protocol_version: Kafka 4.3.1 schema metadata
+- work_status: In progress
+- evidence_level: CI
+- kafka_version: 4.3.1
+- kafka_image: not-applicable; online Apache schema metadata
+- mode: online request/response schema identity and version audit
+- topology: not-applicable
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: 152 local request/response schemas across protocol modules
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/33823046705
+- fault: none injected
+- duration: 28 seconds workflow wall time
+- record_count: 152 schemas audited
+- member_count: not-applicable
+- repetition_count: one hosted audit run
+- expected_errors: no schema identity or version mismatch
+- observed_errors: audit passed; flexible-boundary coverage notes retained as non-failures
+- retry_count: not-applicable
+- duplicate_count: not-applicable
+- loss_count: not-applicable
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: not-applicable
+- result: passed
+- artifact: docs/evidence/v1-apache-schema-audit-2026-09-04.md; scripts/check_apache_schema_versions.py
+- non_claims: not every response oracle, not accepted-floor or three-broker qualification, not published-artifact compatibility, not long campaign, not service canary, not release authorization
+
 ## Q-LIVE-DATA-PLANE-MATRIX-RERUN-2026-09-04
 
 - date_utc: 2026-09-04

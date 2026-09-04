@@ -5814,3 +5814,25 @@ and emitted zero Produce frames. Evidence is in
 This completes deterministic pre-Produce classification for immediate, batch,
 and buffered entry modes only; published reconciliation and long/live gates
 remain open.
+
+## V1 hosted non-long diagnostics from pushed source (2026-09-04)
+
+The pushed HEAD `a8199d66b75cae90db4de33b3f7db629a6b0eacc` passed the remaining
+safe hosted diagnostics. [Fuzz Check 33821955157](https://github.com/TaeeunKil/kafrust/actions/runs/33821955157)
+compiled and ran all ten corpus-backed libFuzzer targets for the bounded
+30-second window (40,216,944 executions total) and retained its corpus/crash
+artifact. [Kafka Benchmark Profile Diagnostic 33821968768](https://github.com/TaeeunKil/kafrust/actions/runs/33821968768)
+passed all four 60-second source profiles with exact record reconciliation,
+zero retries/loss/duplicates/unknown outcomes, and drained final gauges. The
+immutable records are [`v1-fuzz-discovery-rerun-2026-09-04.md`](evidence/v1-fuzz-discovery-rerun-2026-09-04.md)
+and [`v1-benchmark-profile-rerun-2026-09-04.md`](evidence/v1-benchmark-profile-rerun-2026-09-04.md).
+These are bounded diagnostics only: the remaining weekly fuzz passes, the
+published six-profile/five-repetition/eight-hour SLO campaign, locked baseline,
+service canary, and release decision remain open.
+
+The same pushed HEAD also passed the hosted [Apache Schema Audit 33823046705](https://github.com/TaeeunKil/kafrust/actions/runs/33823046705),
+checking 152 local request/response schemas against Kafka 4.3.1 online schema
+metadata. Its explicit flexible-boundary coverage notes are retained in
+[`v1-apache-schema-audit-2026-09-04.md`](evidence/v1-apache-schema-audit-2026-09-04.md).
+This is a metadata audit only and does not close the remaining live, published,
+long-campaign, canary, or release gates.

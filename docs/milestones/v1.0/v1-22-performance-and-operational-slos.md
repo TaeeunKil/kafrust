@@ -362,6 +362,21 @@ passed all four profiles in [Kafka Benchmark Profile Diagnostic run 33799886253]
 These descriptors remain non-qualifying diagnostics; the locked baseline and
 five-repetition, eight-hour published SLO campaign remain open.
 
+### Hosted profile diagnostic rerun from the pushed source (2026-09-04)
+
+The pushed source commit `a8199d66b75cae90db4de33b3f7db629a6b0eacc` passed all
+four profiles in
+[Kafka Benchmark Profile Diagnostic 33821968768](https://github.com/TaeeunKil/kafrust/actions/runs/33821968768).
+The immediate one-worker profile roundtripped 4,367,400 records, immediate
+four-worker 12,720,600, buffered four-worker 1,151,400, and direct-consumer
+one-worker 146,630. All four had zero retries, failed requests, unknown
+outcomes, loss, or duplicates, matching record digests, and drained final
+gauges. The descriptors retain 60-second measurements, six samples, and
+`qualified: false`; the complete table and artifact IDs are in
+[`v1-benchmark-profile-rerun-2026-09-04.md`](../../evidence/v1-benchmark-profile-rerun-2026-09-04.md).
+This strengthens bounded profiling evidence only. The six-profile,
+five-repetition, eight-hour published campaign and locked baseline remain open.
+
 ## Failure And Lifecycle Contract
 
 - Benchmark backpressure uses the same bounded production queues and reports

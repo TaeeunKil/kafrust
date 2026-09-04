@@ -156,6 +156,19 @@ combined current-source record is
 This remains discovery-only evidence and does not count toward the remaining
 weekly qualification sets or the 3,600-second-per-target gate.
 
+### Hosted discovery rerun from the pushed source (2026-09-04)
+
+The pushed source commit `a8199d66b75cae90db4de33b3f7db629a6b0eacc` passed
+[Fuzz Check 33821955157](https://github.com/TaeeunKil/kafrust/actions/runs/33821955157).
+All ten checked-in targets compiled and ran for 30 seconds against their
+corpora, producing 40,216,944 total executions. The artifact retained 5,131
+files and no crash/OOM artifact. Per-target counts and the immutable artifact
+digest are in
+[`v1-fuzz-discovery-rerun-2026-09-04.md`](../../evidence/v1-fuzz-discovery-rerun-2026-09-04.md).
+This is a bounded discovery rerun only: it does not count as a 3,600-second
+target qualification set or a weekly campaign pass, and the remaining two
+weekly sets plus crash/OOM disposition remain open.
+
 ## Failure And Lifecycle Contract
 
 - Limits are checked before unbounded allocation and return typed errors.
