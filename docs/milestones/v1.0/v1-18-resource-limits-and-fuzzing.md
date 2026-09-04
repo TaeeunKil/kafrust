@@ -169,6 +169,19 @@ This is a bounded discovery rerun only: it does not count as a 3,600-second
 target qualification set or a weekly campaign pass, and the remaining two
 weekly sets plus crash/OOM disposition remain open.
 
+### Pushed-head discovery refresh (2026-09-04)
+
+The short `Fuzz Check` passed from source commit
+`2beaa719fa1a65b39ee8b7fe51f73c6c49cdc730` in
+[33842200320](https://github.com/TaeeunKil/kafrust/actions/runs/33842200320).
+All ten libFuzzer targets compiled and completed their 30-second discovery
+windows, totaling 40,147,523 executions with a maximum reported RSS of 605
+MiB. The retained target statistics and artifact digest are in
+[`v1-fuzz-discovery-head-2026-09-04.md`](../../evidence/v1-fuzz-discovery-head-2026-09-04.md).
+This refresh is discovery-only; it does not count as a 3,600-second target
+qualification set or weekly pass, and the two remaining weekly sets plus
+crash/OOM disposition remain open.
+
 ## Failure And Lifecycle Contract
 
 - Limits are checked before unbounded allocation and return typed errors.

@@ -929,6 +929,14 @@ changed. The retained details are in
 [`v1-local-fuzz-preflight-2026-09-03.md`](evidence/v1-local-fuzz-preflight-2026-09-03.md);
 the two additional weekly campaign sets remain pending.
 
+The pushed-head discovery refresh [33842200320](https://github.com/TaeeunKil/kafrust/actions/runs/33842200320)
+then compiled and ran all ten libFuzzer targets for 30 seconds each, totaling
+40,147,523 executions and a maximum reported RSS of 605 MiB. Its immutable
+target statistics and artifact digest are in
+[`v1-fuzz-discovery-head-2026-09-04.md`](evidence/v1-fuzz-discovery-head-2026-09-04.md).
+This remains discovery-only and does not close the two remaining weekly
+qualification sets, crash/OOM disposition, or V1-18.
+
 ## V1-19 Execution Update (2026-08-22; completed 2026-08-23)
 
 V1-19 is `Done` at packaged-candidate evidence level. The staged `0.3.6` package candidate passes five

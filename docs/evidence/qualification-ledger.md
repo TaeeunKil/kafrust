@@ -6985,6 +6985,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-admin-coordinator-response-loss-matrix-2026-09-04.md; docs/milestones/v1.0/v1-12-coordinator-leader-admin-mutations.md; crates/kafrust/src/admin.rs
 - non_claims: not published floor or authorization qualification, not reconciliation or three-broker failover qualification, not long campaign, not service canary, not release authorization
 
+## Q-FUZZ-DISCOVERY-HEAD-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: 2beaa719fa1a65b39ee8b7fe51f73c6c49cdc730
+- client_version: 0.3.6 source checkout
+- protocol_version: ten libFuzzer target families
+- work_status: In progress
+- evidence_level: CI
+- kafka_version: not-applicable
+- kafka_image: not-applicable
+- mode: pushed-head corpus-backed discovery fuzz
+- topology: hosted Ubuntu runner; no broker
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: ten checked-in targets; 30-second run per target; 40,147,523 total executions
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/33842200320
+- fault: malformed and adversarial corpus inputs; no broker fault injection
+- duration: 6 minutes 53 seconds workflow wall time; 30 seconds per target
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: one pushed-head discovery workflow
+- expected_errors: no target crash, hang, OOM, or failed job
+- observed_errors: all ten targets completed; no crash or OOM artifact file emitted; artifact upload completed
+- retry_count: not-applicable
+- duplicate_count: not-applicable
+- loss_count: not-applicable
+- latency: not-applicable
+- memory: maximum reported target RSS 605 MiB; libFuzzer cap 2048 MiB
+- final_resource_gauges: no broker resources; 5078-file artifact uploaded
+- result: passed
+- artifact: docs/evidence/v1-fuzz-discovery-head-2026-09-04.md; https://github.com/TaeeunKil/kafrust/actions/runs/33842200320/artifacts/9925409831; artifact zip SHA-256 a578d2b23e74ed6d11ed6e9852f1afdad27be49cd4951b4c6cbb4747bcb694a3
+- non_claims: not a 3,600-second target qualification set, not a weekly campaign pass, not proof of absence of crashes/hangs/OOMs, not V1-18 completion, not release authorization
+
 ## Q-LIVE-V117-TELEMETRY-2026-09-04
 
 - date_utc: 2026-09-04
