@@ -521,3 +521,28 @@ After cleanup, the operator released the foreground process and the registered
 runner reported offline again. This confirms that the present WSL host does not
 remain resident on the enabled systemd runner alone; a host-level lifetime
 mechanism is required before unattended V1-21 execution.
+
+### Bounded long-campaign sizing (2026-09-04)
+
+The current published multi-soak helper sends batches as fast as the broker and
+client permit; it does not impose the V1-21 floor as a rate limit. The recovered
+company-runner diagnostic [33817682088](https://github.com/TaeeunKil/kafrust/actions/runs/33817682088)
+processed 1,736,700 1-KiB records in 60.002 seconds. With replication factor
+three, that observed rate is approximately 4.97 GiB of retained broker data per
+minute before Kafka segment/index and filesystem overhead. Therefore the local
+helper should be treated as a bounded diagnostic only: a 10-minute run needs at
+least 100 GiB free, and a 30-minute run at least 250 GiB free; a two-hour run is
+not recommended on the current host and a six-hour run is not feasible at the
+observed rate.
+
+If a longer lifetime probe is useful, it must use a separately identified,
+rate-limited diagnostic workload (for example 1,000 records/s with 256-byte
+payloads, about 2.6 GiB/hour at replication factor three) and a disk-watermark
+abort. Such a probe can exercise runner lifetime, broker restart recovery,
+cleanup, and final gauge draining, but it cannot be promoted to the V1-21
+10,000-records/s, 1-KiB, six-hour qualification. The exact V1-21 manifest and
+its four family/adjudication gates remain unchanged and undispatched until the
+runner is online/idle with persistent DNS and a verified lifetime guarantee.
+
+The full capacity calculation and host margin are retained in
+[`v1-long-campaign-capacity-audit-2026-08-24.md`](../../evidence/v1-long-campaign-capacity-audit-2026-08-24.md).

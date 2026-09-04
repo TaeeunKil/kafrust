@@ -5917,3 +5917,24 @@ The same profiles also passed 40 normal `LeaveGroup` cycles: classic run
 bounded secure drop/rejoin and normal-leave diagnostic slice. The workflow's
 100-cycle flag remains false; callback / heartbeat and ambiguity matrices, long
 campaigns, service canary, and release authorization remain separate gates.
+
+## V1 bounded long-campaign sizing correction (2026-09-04)
+
+The current published multi-soak helper is intentionally unthrottled: it emits
+records as fast as the broker and client permit. The company WSL diagnostic
+[33817682088](https://github.com/TaeeunKil/kafrust/actions/runs/33817682088)
+processed 1,736,700 1-KiB records in 60.002 seconds. At replication factor
+three, that observed host rate implies roughly 4.97 GiB/minute of retained
+broker data before Kafka and filesystem overhead. The capacity audit now records
+10-minute and 30-minute bounded runs as the practical local diagnostic range
+(reserve at least 100 GiB and 250 GiB respectively); a two-hour run is not
+recommended and a six-hour run is infeasible at that unthrottled rate.
+
+A longer lifetime diagnostic requires a distinct rate-limited workload and a
+disk-watermark abort. For example, 1,000 records/s with 256-byte payloads uses
+about 2.6 GiB/hour at replication factor three, but only tests lifetime, restart
+recovery, cleanup, and gauge draining. It is not V1-21 throughput evidence. The
+exact 10,000-records/s, 1-KiB, six-hour manifest and its family/adjudication
+criteria remain unchanged and undispatched while `wsl-ubuntu-t9` is offline.
+Details are in [`v1-long-campaign-capacity-audit-2026-08-24.md`](evidence/v1-long-campaign-capacity-audit-2026-08-24.md)
+and the V1-21 milestone record.
