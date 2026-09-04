@@ -5918,6 +5918,21 @@ bounded secure drop/rejoin and normal-leave diagnostic slice. The workflow's
 100-cycle flag remains false; callback / heartbeat and ambiguity matrices, long
 campaigns, service canary, and release authorization remain separate gates.
 
+The duplicate-detector hardening then passed all four profiles again from
+corrected source `ebe694e54c54a373ca63b9f19029247e8dfe93b1`: Kafka 3.7.2 classic
+drop [33837897323](https://github.com/TaeeunKil/kafrust/actions/runs/33837897323)
+and normal leave [33837897633](https://github.com/TaeeunKil/kafrust/actions/runs/33837897633),
+plus Kafka 4.3.1 KIP-848 consumer normal leave
+[33837897398](https://github.com/TaeeunKil/kafrust/actions/runs/33837897398)
+and abrupt drop
+[33837897553](https://github.com/TaeeunKil/kafrust/actions/runs/33837897553).
+Each completed 40 cycles over six partitions with zero loss, zero
+distinct-offset duplicates, and zero final gauges. The direct evidence and
+non-claims are in
+[`v1-published-secure-group-churn-40-cycle-2026-09-04.md`](evidence/v1-published-secure-group-churn-40-cycle-2026-09-04.md);
+the bounded diagnostic still does not close the 100-cycle, long-campaign, or
+release gates.
+
 ## V1 bounded long-campaign sizing correction (2026-09-04)
 
 The current published multi-soak helper is intentionally unthrottled: it emits

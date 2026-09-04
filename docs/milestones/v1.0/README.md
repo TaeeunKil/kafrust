@@ -71,6 +71,15 @@ with zero loss/duplicates and drained final gauges; the 100-cycle flag, long
 campaigns, service canary, and release gates remain separate. See
 [`v1-published-secure-group-churn-40-cycle-2026-09-04.md`](../../evidence/v1-published-secure-group-churn-40-cycle-2026-09-04.md).
 
+The secure group helper was then hardened to distinguish expected same-offset
+redelivery from a distinct second offset. Corrected-source reruns from
+`ebe694e54c54a373ca63b9f19029247e8dfe93b1` passed all four profiles again
+(Kafka 3.7.2 classic drop/leave and Kafka 4.3.1 KIP-848 consumer drop/leave),
+with zero loss, zero distinct-offset duplicates, and zero final gauges. This
+strengthens the bounded diagnostic evidence only; the 100-cycle family,
+long-campaign, service-canary, and release gates remain open. Details are in
+the linked evidence record and its four appended ledger rows.
+
 V1-02 has since generated the all-features public API snapshot at
 [`docs/evidence/public-api-snapshot.json`](../../evidence/public-api-snapshot.json):
 2,374 symbols, twelve public modules, and 288 root exports. CI checks its root
