@@ -24,9 +24,8 @@ async fn main() -> kafrust::Result<()> {
     )?);
     let batch_size = usize_from_env("KAFRUST_SOAK_BATCH_SIZE", DEFAULT_BATCH_SIZE)?.max(1);
     let payload_bytes = usize_from_env("KAFRUST_SOAK_PAYLOAD_BYTES", DEFAULT_PAYLOAD_BYTES)?;
-    let mut rate_limiter = RateLimiter::new(optional_u64_from_env(
-        "KAFRUST_SOAK_RECORDS_PER_SECOND",
-    )?)?;
+    let mut rate_limiter =
+        RateLimiter::new(optional_u64_from_env("KAFRUST_SOAK_RECORDS_PER_SECOND")?)?;
     let metrics = ClientMetrics::new();
     let payload = vec![b'x'; payload_bytes];
 
