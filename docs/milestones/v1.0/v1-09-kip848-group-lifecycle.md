@@ -69,10 +69,10 @@ covers dynamic regex topic discovery. V1-08's typed
 `ConsumerGroupCommitOutcomeUnknown` classifier is shared by the KIP-848 v9/v10
 direct and background commit paths.
 
-Published pinned-current plaintext and SASL_SSL/SCRAM churn, full member-loss
-cycles, stale-task cancellation, delete/recreate name-fallback races, and
-exact offset-restoration evidence remain open. No modern-group published
-artifact or 40-cycle claim is made.
+Published pinned-current plaintext and SASL_SSL/SCRAM 40-cycle churn
+diagnostics are now recorded; stale-task cancellation, delete/recreate
+name-fallback races, and the broader modern-group matrix remain open. No
+regex/delete-recreate claim is made here.
 
 ### Deterministic session-identity fence (2026-09-04)
 
@@ -94,6 +94,20 @@ fetched record offset 0, committed the polled record, and left cleanly. This
 is short current-source diagnostic evidence only; secure churn, member-loss,
 UUID delete/recreate races, and published qualification remain open. See
 [`v1-company-consumer-group-short-smoke-2026-09-04.md`](../../evidence/v1-company-consumer-group-short-smoke-2026-09-04.md).
+
+### Published secure KIP-848 churn diagnostic (2026-09-04)
+
+The published `0.3.6` SASL_SSL/SCRAM-SHA-256 KIP-848 profile completed 40
+abrupt-drop/rejoin cycles on Kafka 4.3.1 (run 33832439518) and 40 normal
+`LeaveGroup` cycles (run 33834880832). Every cycle restored all six committed
+offsets with disjoint ownership, zero loss/duplicates, and zero final
+in-flight/buffered gauges. The paired Kafka 3.7.2 classic profiles and the
+timeout calibration are retained in
+[`v1-published-secure-group-churn-40-cycle-2026-09-04.md`](../../evidence/v1-published-secure-group-churn-40-cycle-2026-09-04.md).
+
+These are bounded published diagnostics. The separate 100-cycle flag,
+regex-created topic and UUID delete/recreate races, callback/heartbeat matrix,
+and long-campaign/release gates remain open.
 
 ## Failure And Lifecycle Contract
 
