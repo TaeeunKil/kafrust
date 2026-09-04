@@ -162,3 +162,19 @@ Published `0.3.6` SASL_SSL/SCRAM-SHA-256 multi-broker, group-rebalance, and
 transaction-failover smokes passed on Kafka 3.7.2/4.3.1. These are bounded
 published rows only; the complete mechanism, rotation, provider, and
 three-broker credential-lifecycle exit set remains open.
+
+### Published security refresh (2026-09-04)
+
+Four additional bounded published `0.3.6` profiles passed from source
+`b3ccbd6b87d55e77c84ccfca78e9e388f33239b1`. Mutual-TLS runs on Kafka 3.7.2 and
+4.3.1 passed Admin, direct produce/consume, transaction `read_committed`, and
+group commit/restore. Unsigned OAUTHBEARER passed provider authentication and
+produce/consume on Kafka 3.7.2. Signed OAUTHBEARER passed local OIDC/JWKS
+claim validation, produce/consume, and same-connection re-authentication.
+The run links, durations, and exact assertions are recorded in
+[`v1-published-security-refresh-2026-09-04.md`](../../evidence/v1-published-security-refresh-2026-09-04.md).
+
+These runs strengthen published connectivity evidence only. Rotation,
+provider outage/expiry, JWKS rollover, restricted-principal authorization,
+secret-scan adjudication, and the complete V1-16 mechanism matrix remain open;
+V1-16 is still `In progress`.

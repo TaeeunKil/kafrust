@@ -7678,6 +7678,138 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-company-capacity-recovery-2026-09-03.md
 - non_claims: not persistent resolver policy, not long-campaign qualification, not V1-21/V1-22 completion, not service canary, not release authorization
 
+## Q-PUBLISHED-V116-MTLS-372-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: b3ccbd6b87d55e77c84ccfca78e9e388f33239b1
+- client_version: 0.3.6 published artifact
+- protocol_version: 0.3.6 published dependency
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 3.7.2
+- kafka_image: apache/kafka:3.7.2
+- mode: KRaft mutual-TLS published smoke
+- topology: single-broker external mutual-TLS
+- security: TLS with required client certificate
+- group_protocol: classic
+- workload: published Admin lifecycle, direct produce/consume, transaction commit/abort with read_committed, and group commit/restore
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/33840641199
+- fault: none injected
+- duration: 68 seconds wall time
+- record_count: one direct record; one aborted and one committed transaction record; one group record
+- member_count: one broker
+- repetition_count: 1
+- expected_errors: certificate-authenticated connection; aborted transaction hidden from read_committed; zero loss and zero duplicates
+- observed_errors: published mTLS passed Admin, producer, direct consumer, transaction/read_committed, and group checks
+- retry_count: listener readiness retries only
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: not measured
+- result: passed
+- artifact: docs/evidence/v1-published-security-refresh-2026-09-04.md; GitHub Actions run 33840641199
+- non_claims: not credential rotation, not provider outage/expiry, not restricted-principal authorization, not complete V1-16 mechanism matrix, not long campaign, not service canary, not release authorization
+
+## Q-PUBLISHED-V116-MTLS-431-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: b3ccbd6b87d55e77c84ccfca78e9e388f33239b1
+- client_version: 0.3.6 published artifact
+- protocol_version: 0.3.6 published dependency
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka:4.3.1
+- mode: KRaft mutual-TLS published smoke
+- topology: single-broker external mutual-TLS
+- security: TLS with required client certificate
+- group_protocol: classic
+- workload: published Admin lifecycle, direct produce/consume, transaction commit/abort with read_committed, and group commit/restore
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/33840643890
+- fault: none injected
+- duration: 86 seconds wall time
+- record_count: one direct record; one aborted and one committed transaction record; one group record
+- member_count: one broker
+- repetition_count: 1
+- expected_errors: certificate-authenticated connection; aborted transaction hidden from read_committed; zero loss and zero duplicates
+- observed_errors: published mTLS passed Admin, producer, direct consumer, transaction/read_committed, and group checks
+- retry_count: listener readiness retries only
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: not measured
+- result: passed
+- artifact: docs/evidence/v1-published-security-refresh-2026-09-04.md; GitHub Actions run 33840643890
+- non_claims: not credential rotation, not provider outage/expiry, not restricted-principal authorization, not complete V1-16 mechanism matrix, not long campaign, not service canary, not release authorization
+
+## Q-PUBLISHED-V116-OAUTHBEARER-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: b3ccbd6b87d55e77c84ccfca78e9e388f33239b1
+- client_version: 0.3.6 published artifact
+- protocol_version: 0.3.6 published dependency
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 3.7.2
+- kafka_image: apache/kafka:3.7.2
+- mode: KRaft SASL_SSL/OAUTHBEARER published smoke
+- topology: single-broker external OAUTHBEARER
+- security: SASL_SSL/OAUTHBEARER
+- group_protocol: not-applicable
+- workload: published provider authentication, broker discovery, produce, and consume
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/33840646148
+- fault: none injected
+- duration: 65 seconds wall time
+- record_count: one produced/read record
+- member_count: one broker
+- repetition_count: 1
+- expected_errors: provider token accepted; zero loss and zero duplicates; published lockfile version checked
+- observed_errors: published oauthbearer ok; token_provider=true; consumed=true; dependency verification passed
+- retry_count: broker readiness retries only
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: not measured
+- result: passed
+- artifact: docs/evidence/v1-published-security-refresh-2026-09-04.md; GitHub Actions run 33840646148; no token material retained
+- non_claims: not signed external OIDC/JWKS, not credential rotation, not provider outage/expiry, not provider SLO, not complete V1-16 mechanism matrix, not long campaign, not service canary, not release authorization
+
+## Q-PUBLISHED-V116-SIGNED-OAUTHBEARER-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: b3ccbd6b87d55e77c84ccfca78e9e388f33239b1
+- client_version: 0.3.6 published artifact
+- protocol_version: 0.3.6 published dependency
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 3.7.2
+- kafka_image: apache/kafka:3.7.2
+- mode: KRaft SASL_SSL/signed OAUTHBEARER published smoke and re-authentication
+- topology: single-broker external OIDC/JWKS-backed OAUTHBEARER
+- security: SASL_SSL/OAUTHBEARER with RS256 JWT and JWKS validation
+- group_protocol: not-applicable
+- workload: signed-token claim validation, published produce/consume, and same-connection re-authentication
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/33840648581
+- fault: none injected
+- duration: 100 seconds wall time
+- record_count: one produced/read record; re-authentication project issued no data mutation
+- member_count: one broker
+- repetition_count: 1 signed smoke plus 1 re-authentication smoke
+- expected_errors: issuer/audience/subject claims validated; provider re-authentication succeeds on the same connection; published lockfile version checked
+- observed_errors: signed token validation passed; published oauthbearer ok; provider_calls=2; sasl_auth_version=1; same_connection=true; dependency verification passed
+- retry_count: broker readiness retries only
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: not measured
+- result: passed
+- artifact: docs/evidence/v1-published-security-refresh-2026-09-04.md; GitHub Actions run 33840648581; no token material retained
+- non_claims: not credential rotation, not provider outage/expiry, not JWKS rollover, not restricted-principal authorization, not complete V1-16 mechanism matrix, not long campaign, not service canary, not release authorization
+
 ## Q-ADMIN-MEMBER-AWARE-V10-RESPONSE-LOSS-2026-09-04
 
 - date_utc: 2026-09-04

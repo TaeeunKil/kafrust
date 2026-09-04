@@ -792,6 +792,25 @@ the checker and five tests pass. This closes the deterministic contract slice
 only. Live rotation, restricted-principal, and published security gates remain
 open.
 
+## V1 published security refresh (2026-09-04)
+
+Four bounded published `0.3.6` security profiles passed from source
+`b3ccbd6b87d55e77c84ccfca78e9e388f33239b1`: mutual TLS on Kafka 3.7.2 and
+4.3.1, unsigned OAUTHBEARER on Kafka 3.7.2, and signed OAUTHBEARER with local
+OIDC/JWKS plus same-connection re-authentication. The mTLS profiles covered
+Admin, direct produce/consume, transaction `read_committed`, and group
+commit/restore; the OAuth profiles covered provider authentication and
+produce/consume, with the signed profile also validating issuer/audience/
+subject claims and re-authentication telemetry. All four hosted jobs passed
+in 65–100 seconds. See
+[`v1-published-security-refresh-2026-09-04.md`](evidence/v1-published-security-refresh-2026-09-04.md)
+for immutable run links and boundaries.
+
+This is published connectivity evidence only. Rotation, provider outage or
+expiry, JWKS rollover, restricted-principal authorization, the complete
+mechanism matrix, long campaigns, canary, and release authorization remain
+open; V1-16 is not complete.
+
 ## V1-17 Execution Update (2026-08-22)
 
 V1-17 is `In progress`. The bounded `ClientMetricsSnapshot` and KIP-714 provider
