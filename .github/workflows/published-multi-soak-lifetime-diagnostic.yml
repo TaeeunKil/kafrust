@@ -230,6 +230,14 @@ jobs:
               | tee published-lifetime-diagnostic.json
           ) &
           soak_pid=$!
+          (
+            set -euo pipefail
+            sleep "$((KAFRUST_SOAK_SECONDS / 2))"
+            docker stop -t 1 "${KAFRUST_RESOURCE_PREFIX}1"
+            sleep 10
+            docker start "${KAFRUST_RESOURCE_PREFIX}1"
+          ) &
+          fault_pid=$!
           aborted=0
           while kill -0 "$soak_pid" 2>/dev/null; do
             host_free="$(free_gib "$capacity_path")"
@@ -248,10 +256,19 @@ jobs:
           soak_status=0
           wait "$soak_pid" || soak_status=$?
           if ((aborted != 0)); then
+            kill -TERM "$fault_pid" 2>/dev/null || true
+            wait "$fault_pid" 2>/dev/null || true
             echo "diagnostic aborted by disk watermark"
             exit 1
           fi
-          if ((soak_status != 0)); then exit "$soak_status"; fi
+          if ((soak_status != 0)); then
+            kill -TERM "$fault_pid" 2>/dev/null || true
+            wait "$fault_pid" 2>/dev/null || true
+            exit "$soak_status"
+          fi
+          fault_status=0
+          wait "$fault_pid" || fault_status=$?
+          if ((fault_status != 0)); then exit "$fault_status"; fi
           test -s published-lifetime-diagnostic.json
           jq -e \
             '(.recovered == true) and
@@ -303,6 +320,7 @@ jobs:
               artifact: {kafrust_version: $artifact_version, source_commit: $source_commit, lockfile_sha256: $lockfile_sha256},
               runner: {image: $runner_image, broker: $kafka_version, broker_image_id: $broker_image_id},
               workload: {duration_seconds: $duration_seconds, rate_records_per_second: $rate_records_per_second, payload_bytes: $payload_bytes, replication_factor: 3, partitions: 3, disk_watermark_gib: $disk_watermark_gib},
+              fault: {mode: "single-broker-restart", broker: 1, outage_seconds: 10},
               result_file: $result_file,
               capacity_before: $capacity_before,
               capacity_after: $capacity_after,
@@ -315,6 +333,8 @@ jobs:
             (.qualified == false) and
             (.workload.replication_factor == 3) and
             (.workload.rate_records_per_second <= 5000) and
+            (.fault.mode == "single-broker-restart") and
+            (.fault.outage_seconds == 10) and
             (.result.record_id_reconciliation.qualified == true) and
             (.result.in_flight_requests == 0) and
             (.result.buffered_records == 0)

@@ -316,9 +316,11 @@ prefix; it does not run a global Docker prune.
 
 At the default workload the retained-data lower bound is about 2.6 GiB/hour,
 or 5.2 GiB for two hours, so a 40-GiB watermark leaves operational headroom.
-The descriptor is forced to `status=diagnostic` and `qualified=false`, with
-explicit non-claims for V1-21 throughput, V1-22 SLO, service-canary, and
-release evidence. The workflow has not been dispatched because
+The diagnostic now stops broker 1 once halfway through the run for a fixed
+10-second outage, which makes retry/recovery observable without changing the
+rate or storage budget. The descriptor is forced to `status=diagnostic` and
+`qualified=false`, with explicit non-claims for V1-21 throughput, V1-22 SLO,
+service-canary, and release evidence. The workflow has not been dispatched because
 `wsl-ubuntu-t9` is currently offline and `Ubuntu-T9` is stopped. A successful
 run would validate lifetime/restart/cleanup behavior only; it would not close
 the exact six-hour campaign.

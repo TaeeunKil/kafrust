@@ -278,7 +278,8 @@ repository now provides
 It uses a three-broker/RF3 topology, a global 1,000-records/s limiter, 256-byte
 values, a two-hour maximum, run-scoped Docker names, before/after capacity
 artifacts, and a 40-GiB disk watermark abort. The helper rejects a zero rate,
-and the workflow descriptor is always `qualified=false`.
+injects one fixed 10-second broker-1 restart halfway through the run, and the
+workflow descriptor is always `qualified=false`.
 
 This workflow is a runner-lifetime, broker-recovery, cleanup, and gauge-drain
 diagnostic. It is not a shortened V1-21 throughput campaign: the exact
