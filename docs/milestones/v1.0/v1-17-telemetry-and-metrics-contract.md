@@ -129,6 +129,23 @@ collection, broker replacement, mutation/throttle behavior, secure transport,
 and final task/resource/secret checks remain open. See
 [`v1-telemetry-terminating-push-2026-09-04.md`](../../evidence/v1-telemetry-terminating-push-2026-09-04.md).
 
+### Bounded live telemetry diagnostics (2026-09-04)
+
+The current-source KIP-714 diagnostics passed on Kafka 3.7.2 in
+[33841418670](https://github.com/TaeeunKil/kafrust/actions/runs/33841418670)
+and
+[33841420859](https://github.com/TaeeunKil/kafrust/actions/runs/33841420859).
+The first run loaded the broker plugin, observed six pushes across two
+subscription IDs after filter mutation, and sent one terminating push. The
+second configured a 128-byte broker ceiling and confirmed a typed rejection
+for a 2,076-byte advertised payload. The immutable record is
+[`v1-live-telemetry-diagnostics-2026-09-04.md`](../../evidence/v1-live-telemetry-diagnostics-2026-09-04.md).
+
+These are short current-source diagnostics only. Published telemetry,
+secured broker replacement with stable ClientInstanceId, 60-minute collection,
+provider/throttle failure coverage, and final secret/task adjudication remain
+open.
+
 ## Failure And Lifecycle Contract
 
 - Metrics updates never block the data path on network I/O.

@@ -6985,6 +6985,72 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-admin-coordinator-response-loss-matrix-2026-09-04.md; docs/milestones/v1.0/v1-12-coordinator-leader-admin-mutations.md; crates/kafrust/src/admin.rs
 - non_claims: not published floor or authorization qualification, not reconciliation or three-broker failover qualification, not long campaign, not service canary, not release authorization
 
+## Q-LIVE-V117-TELEMETRY-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: c8a2136ec45ffb308207728d3502e7dfeb7b2dde
+- client_version: 0.3.6 source checkout
+- protocol_version: GetTelemetrySubscriptions v0 and PushTelemetry v0
+- work_status: In progress
+- evidence_level: Live current-source
+- kafka_version: 3.7.2
+- kafka_image: kafrust-kafka-telemetry test image based on Kafka 3.7.2
+- mode: KIP-714 subscription mutation and terminating-push diagnostic
+- topology: single-node KRaft with telemetry reporter plugin
+- security: PLAINTEXT
+- group_protocol: not-applicable
+- workload: broker plugin load, client metrics subscription, filter mutation, six telemetry pushes, and one terminating push
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/33841418670
+- fault: no injected broker fault; subscription filter changed during the smoke
+- duration: 72 seconds wall time
+- record_count: not-applicable; telemetry-only workload
+- member_count: not-applicable
+- repetition_count: 1 diagnostic
+- expected_errors: two subscription IDs after mutation; non-zero regular and terminating payloads; final telemetry client shutdown
+- observed_errors: six pushes with payloads 2076 and 600 bytes, two subscription IDs, terminating push reported true, and broker payload checks passed
+- retry_count: broker readiness polling only
+- duplicate_count: not-applicable
+- loss_count: not-applicable
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: not measured
+- result: passed
+- artifact: docs/evidence/v1-live-telemetry-diagnostics-2026-09-04.md; GitHub Actions run 33841418670
+- non_claims: not published artifact compatibility, not ClientInstanceId broker-replacement qualification, not 60-minute collection, not secured multi-broker telemetry, not provider outage/throttle coverage, not long campaign, not service canary, not release authorization
+
+## Q-LIVE-V117-PAYLOAD-LIMIT-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: c8a2136ec45ffb308207728d3502e7dfeb7b2dde
+- client_version: 0.3.6 source checkout
+- protocol_version: PushTelemetry v0
+- work_status: In progress
+- evidence_level: Live current-source
+- kafka_version: 3.7.2
+- kafka_image: kafrust-kafka-telemetry test image based on Kafka 3.7.2
+- mode: advertised telemetry payload ceiling diagnostic
+- topology: single-node KRaft with telemetry reporter plugin
+- security: PLAINTEXT
+- group_protocol: not-applicable
+- workload: 128-byte broker telemetry limit with one oversized advertised payload
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/33841420859
+- fault: broker-advertised payload ceiling intentionally below the generated payload
+- duration: 66 seconds wall time
+- record_count: not-applicable; telemetry-only workload
+- member_count: not-applicable
+- repetition_count: 1 diagnostic
+- expected_errors: typed client rejection before accepting a payload larger than 128 bytes
+- observed_errors: `telemetry-smoke-payload-limit size=2076 max=128`
+- retry_count: broker readiness polling only
+- duplicate_count: not-applicable
+- loss_count: not-applicable
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: not measured
+- result: passed
+- artifact: docs/evidence/v1-live-telemetry-diagnostics-2026-09-04.md; GitHub Actions run 33841420859
+- non_claims: not published artifact compatibility, not secured multi-broker telemetry, not 60-minute collection, not provider outage/throttle coverage, not long campaign, not service canary, not release authorization
+
 ## Q-PUBLISHED-SECURE-GROUP-CHURN-40-CORRECTED-CLASSIC-DROP-2026-09-04
 
 - date_utc: 2026-09-04

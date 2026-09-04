@@ -867,6 +867,16 @@ atomic-update consistency slice only. Published collection, broker replacement,
 throttling, secure transport, and long-duration qualification remain open.
 See [`v1-metrics-concurrency-2026-09-04.md`](evidence/v1-metrics-concurrency-2026-09-04.md).
 
+The bounded current-source KIP-714 diagnostics then passed on Kafka 3.7.2 in
+[33841418670](https://github.com/TaeeunKil/kafrust/actions/runs/33841418670)
+and [33841420859](https://github.com/TaeeunKil/kafrust/actions/runs/33841420859).
+The subscription smoke observed six pushes across two IDs after a filter
+mutation and one terminating push; the payload-limit smoke rejected a
+2,076-byte payload against a 128-byte ceiling. The immutable record is
+[`v1-live-telemetry-diagnostics-2026-09-04.md`](evidence/v1-live-telemetry-diagnostics-2026-09-04.md).
+These short diagnostics do not close published telemetry, secured
+multi-broker replacement, 60-minute collection, or release gates.
+
 ## V1-18 Execution Update (2026-08-22)
 
 V1-18 is `In progress`. Frame, collection, compact/tagged-field, decompression,
