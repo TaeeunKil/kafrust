@@ -5795,6 +5795,14 @@ current-source refresh only; it does not close the exact published matrix,
 long fault/SLO campaigns, migration canary, or release authorization. Details
 are in [`v1-live-kafka-smoke-rerun-2026-09-04.md`](evidence/v1-live-kafka-smoke-rerun-2026-09-04.md).
 
+After the matrix completed, the company WSL runner was observed offline again
+because WSL regenerated `/etc/resolv.conf` with `10.255.255.254`. A root-only
+bounded replacement with the two verified resolvers and a runner-service-only
+restart restored `wsl-ubuntu-t9` to online/idle. This is recorded in
+[`v1-company-capacity-recovery-2026-09-03.md`](evidence/v1-company-capacity-recovery-2026-09-03.md)
+and confirms that a persistent resolver policy remains an external prerequisite
+for unattended long campaigns; no Docker resource or long gate was changed.
+
 ## V1-04 Buffered delivery phase expiry (2026-09-04)
 
 The buffered producer now records the total-budget phase when Metadata or
