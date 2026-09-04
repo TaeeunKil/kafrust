@@ -5868,3 +5868,18 @@ The foreground process was intentionally released after cleanup and the
 registered runner returned to `offline`. Thus the diagnostic establishes a
 workable bounded guard, while unattended long-campaign capacity still needs a
 host-level lifetime mechanism.
+
+## V1 published topic-ID leader-movement diagnostic (2026-09-04)
+
+The published `kafrust 0.3.6` three-broker Kafka 4.3.1 KIP-848 smoke passed in
+[run 33827383799](https://github.com/TaeeunKil/kafrust/actions/runs/33827383799).
+It produced and consumed a record before broker 1 was stopped, observed
+partition 0 move to broker 2, then produced and consumed a second record after
+failover. Metadata v12 returned the identical topic UUID
+`217dfd7fb4d9462d98c09fedc14b9b1d` in both phases, and the published client
+enforced that continuity. The immutable record is
+[`v1-published-topic-id-leader-movement-2026-09-04.md`](evidence/v1-published-topic-id-leader-movement-2026-09-04.md).
+
+This is a bounded published diagnostic, not V1-03 completion, the full V1-20
+matrix, a long campaign, a service canary, or release authorization. The
+workflow did not retain a broker image digest.

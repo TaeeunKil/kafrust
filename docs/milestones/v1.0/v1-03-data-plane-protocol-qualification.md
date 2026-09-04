@@ -365,6 +365,22 @@ is a schema identity/version audit only; it does not replace golden-response
 oracles, accepted-floor or three-broker qualification, published testing, or
 the remaining V1-03 exit criteria.
 
+### Published topic-ID continuity through leader movement (2026-09-04)
+
+The published `kafrust 0.3.6` three-broker Kafka 4.3.1 KIP-848 smoke in
+[run 33827383799](https://github.com/TaeeunKil/kafrust/actions/runs/33827383799)
+passed after broker 1 was stopped and partition 0 moved to broker 2. Metadata
+v12 returned the same topic UUID
+`217dfd7fb4d9462d98c09fedc14b9b1d` before and after the movement; the published
+client produced and consumed one record at offset 0 before the stop and one at
+offset 1 afterward. The implementation also rejects a changed UUID. The exact
+record is [`v1-published-topic-id-leader-movement-2026-09-04.md`](../../evidence/v1-published-topic-id-leader-movement-2026-09-04.md).
+
+This closes the bounded published topic-ID continuity probe only. Official
+response oracles for every selected shape, accepted-floor security/workload
+qualification, the full V1-20 matrix, long campaigns, and the remaining V1-03
+exit criteria stay open.
+
 ## Exit Criteria
 
 1. Every stable high-level selected/fallback version has official metadata,
