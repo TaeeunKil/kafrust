@@ -42,6 +42,31 @@ The operator should:
    before registering the runner. A diagnostic that reaches Docker but fails a
    missing utility is a host setup failure, not a qualification result.
 
+### Make WSL resolver recovery persistent
+
+The temporary `/etc/resolv.conf` replacement used during incident recovery is
+not sufficient: WSL can regenerate its managed symlink and return the runner
+to `offline`. During an approved maintenance window, persist the policy inside
+the named distribution before dispatching an unattended campaign:
+
+1. As root, copy the generated `/etc/resolv.conf` to a dated backup under
+   `/var/tmp`, then add `[network]` and `generateResolvConf = false` to
+   `/etc/wsl.conf` without removing the existing `[boot]` or `[user]` sections.
+2. Replace `/etc/resolv.conf` with only the verified workstation resolvers and
+   mode `0644`; confirm `readlink -f /etc/resolv.conf` is no longer
+   `/mnt/wsl/resolv.conf`.
+3. Record the exact change and a rollback copy, then obtain explicit approval
+   for `wsl --shutdown`. That shutdown stops the Docker daemon and any running
+   containers, so it must not be performed while existing workloads are in use.
+4. Start only `Ubuntu-T9`, verify Docker and the runner service, resolve both
+   `github.com` and `broker.actions.githubusercontent.com`, and confirm the
+   GitHub runner is `online` and idle. If the policy is not effective, restore
+   the backup and return to the temporary recovery path above.
+
+Do not apply this persistence step as part of a qualification job. It is host
+administration, and the shutdown/rollback evidence must be retained separately
+from V1-21/V1-22 results.
+
 Self-hosted runners execute repository workflow code. GitHub recommends
 restricting them to private repositories or tightly controlled runner groups;
 this repository is public, so use an isolated/ephemeral machine and do not
