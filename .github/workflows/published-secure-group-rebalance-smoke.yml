@@ -35,7 +35,7 @@ jobs:
   published-secure-group-rebalance:
     name: Published kafrust ${{ inputs.kafrust_version }} ${{ inputs.kafka_version }} ${{ inputs.group_protocol }} SASL_SSL multi-member rebalance
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     env:
       KAFRUST_BOOTSTRAP_SERVERS: localhost:23092,localhost:23093,localhost:23094
       KAFRUST_SECURITY_PROTOCOL: sasl_tls

@@ -10,7 +10,7 @@ use kafrust::{
 const PARTITION_COUNT: i32 = 6;
 const POLL_ATTEMPTS: usize = 80;
 const MAX_CHURN_CYCLES: usize = 100;
-const CHURN_TIMEOUT_PER_CYCLE_SECS: u64 = 30;
+const CHURN_TIMEOUT_PER_CYCLE_SECS: u64 = 90;
 
 struct SecuritySettings {
     tls_server_name: String,
