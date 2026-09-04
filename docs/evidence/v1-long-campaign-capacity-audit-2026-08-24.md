@@ -273,3 +273,30 @@ leaves only about 37 GiB of host margin for an exact V1-21 run. The current
 campaign is dispatchable until the runner is online and held alive for the
 entire bounded diagnostic. Parallel exact campaigns are not safe on this host;
 the four V1-21 campaigns must be serialized if they are eventually run here.
+
+### Observed-rate correction for the current soak helper
+
+The current published multi-soak helper does not impose a records-per-second
+rate limit; it sends batches as fast as the broker and client permit. The
+60-second company-runner diagnostic [33817682088](https://github.com/TaeeunKil/kafrust/actions/runs/33817682088)
+therefore provides a more useful host-specific upper-bound planning signal than
+the 10,000-records/s V1 floor: it acknowledged and consumed 1,736,700 1-KiB
+records, or approximately 28,945 records/s. At replication factor three, that
+observed rate implies roughly 4.97 GiB of retained broker data per minute before
+Kafka segment/index and filesystem overhead:
+
+| Unthrottled helper duration | Observed-rate lower bound | Safe planning reserve |
+| --- | ---: | ---: |
+| 10 min | about 50 GiB | at least 100 GiB |
+| 30 min | about 149 GiB | at least 250 GiB |
+| 2 h | about 596 GiB | at least 700 GiB; not recommended on this host |
+| 6 h | about 1.79 TiB | not feasible on this host |
+
+These are still lower bounds, not guarantees. A long diagnostic on this host
+must either use a rate-limited helper or stop at the first pre-set disk-watermark
+threshold. A resource-light lifetime probe could target 1,000 records/s with
+256-byte payloads and replication factor three: about 2.6 GiB per hour (about
+5.2 GiB for two hours), with a 20–30 GiB reserve. That probe exercises runner
+lifetime, broker restart recovery, cleanup, and final gauge draining, but it is
+not V1-21 throughput evidence. A 1-KiB, 10,000-records/s run remains the only
+workload that can be compared directly with the V1-21 floor.
