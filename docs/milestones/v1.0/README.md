@@ -65,9 +65,9 @@ These are bounded V1-03 diagnostics and do not promote V1-20, V1-21, V1-22,
 V1-23, or the release milestones.
 
 The published `0.3.6` artifact also completed the bounded secure group
-40-cycle drop/rejoin profile on Kafka 3.7.2 classic and Kafka 4.3.1 KIP-848
-consumer. Both profiles restored committed offsets with zero loss/duplicates
-and drained final gauges; the normal-leave matrix, 100-cycle flag, long
+40-cycle drop/rejoin and normal-leave profiles on Kafka 3.7.2 classic and
+Kafka 4.3.1 KIP-848 consumer. All four profiles restored committed offsets
+with zero loss/duplicates and drained final gauges; the 100-cycle flag, long
 campaigns, service canary, and release gates remain separate. See
 [`v1-published-secure-group-churn-40-cycle-2026-09-04.md`](../../evidence/v1-published-secure-group-churn-40-cycle-2026-09-04.md).
 

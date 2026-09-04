@@ -7084,6 +7084,72 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-published-secure-group-churn-40-cycle-2026-09-04.md; published-secure-group-churn-summary.json; Cargo.lock; lockfile_sha256=155a31ac7d4dfcda4e65708790acbacb42dd3fd40d778ce88c5f031851d26270
 - non_claims: not normal-leave coverage, not 100-cycle qualification, not full V1-09 completion, not long fault campaign, not service canary, not release authorization
 
+## Q-PUBLISHED-SECURE-GROUP-CHURN-40-LEAVE-CLASSIC-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: 2c0d6d8165719ac9e7fe85bb7ac9f4154377225b
+- client_version: 0.3.6 published artifact
+- protocol_version: classic consumer group lifecycle and OffsetCommit/OffsetFetch path
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 3.7.2
+- kafka_image: apache/kafka@sha256:6d8457e841c10f58f952cb3942a38b6b3c21015b643e3dd010aea37cc0b89055
+- mode: published secure 40-cycle normal-leave diagnostic
+- topology: three-broker KRaft
+- security: SASL_SSL/SCRAM-SHA-256
+- group_protocol: classic consumer protocol
+- workload: six partitions; two members; 40 normal LeaveGroup/rejoin cycles with committed-offset restoration
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/33834878818
+- fault: second member issued LeaveGroup and rejoined on every cycle
+- duration: 9 minutes 14 seconds workflow wall time
+- record_count: 240 ownership observations; six per cycle
+- member_count: 2
+- repetition_count: 40 churn cycles
+- expected_errors: every cycle reacquires all six partitions, restores committed offsets, and ends without loss or duplicates
+- observed_errors: cycle_count=40, records_per_cycle=6, loss_count=0, duplicate_count=0, final gauges zero; workflow qualified=false because the 100-cycle flag was not reached
+- retry_count: not measured
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: in_flight=0; buffered=0
+- result: passed
+- artifact: docs/evidence/v1-published-secure-group-churn-40-cycle-2026-09-04.md; published-secure-group-churn-summary.json; Cargo.lock; lockfile_sha256=155a31ac7d4dfcda4e65708790acbacb42dd3fd40d778ce88c5f031851d26270
+- non_claims: not abrupt-drop coverage, not 100-cycle qualification, not full V1-08 completion, not long fault campaign, not service canary, not release authorization
+
+## Q-PUBLISHED-SECURE-GROUP-CHURN-40-LEAVE-KIP848-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: 2c0d6d8165719ac9e7fe85bb7ac9f4154377225b
+- client_version: 0.3.6 published artifact
+- protocol_version: KIP-848 consumer group lifecycle and member-aware OffsetCommit/OffsetFetch path
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka@sha256:47dccc76b32761bc57462b8753144cdbb73a16b123b1d13d3eedb92bb7952b11
+- mode: published secure 40-cycle normal-leave diagnostic
+- topology: three-broker KRaft
+- security: SASL_SSL/SCRAM-SHA-256
+- group_protocol: KIP-848 consumer protocol
+- workload: six partitions; two members; 40 normal LeaveGroup/rejoin cycles with committed-offset restoration
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/33834880832
+- fault: second member issued LeaveGroup and rejoined on every cycle
+- duration: 5 minutes 29 seconds workflow wall time
+- record_count: 240 ownership observations; six per cycle
+- member_count: 2
+- repetition_count: 40 churn cycles
+- expected_errors: every cycle reacquires all six partitions, restores committed offsets, and ends without loss or duplicates
+- observed_errors: cycle_count=40, records_per_cycle=6, loss_count=0, duplicate_count=0, final gauges zero; workflow qualified=false because the 100-cycle flag was not reached
+- retry_count: not measured
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: in_flight=0; buffered=0
+- result: passed
+- artifact: docs/evidence/v1-published-secure-group-churn-40-cycle-2026-09-04.md; published-secure-group-churn-summary.json; Cargo.lock; lockfile_sha256=155a31ac7d4dfcda4e65708790acbacb42dd3fd40d778ce88c5f031851d26270
+- non_claims: not abrupt-drop coverage, not 100-cycle qualification, not full V1-09 completion, not long fault campaign, not service canary, not release authorization
+
 ## Q-PUBLISHED-TOPIC-ID-LEADER-MOVEMENT-FLOOR-2026-09-04
 
 - date_utc: 2026-09-04

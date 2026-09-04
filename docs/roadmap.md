@@ -5912,7 +5912,8 @@ in-flight/buffered gauges. Broker image IDs, lockfile digest, and the
 calibration timeout attempt are recorded in
 [`v1-published-secure-group-churn-40-cycle-2026-09-04.md`](evidence/v1-published-secure-group-churn-40-cycle-2026-09-04.md).
 
-This closes only the bounded secure drop/rejoin diagnostic slice. The
-workflow's 100-cycle flag remains false; normal-leave coverage, callback /
-heartbeat and ambiguity matrices, long campaigns, service canary, and release
-authorization remain separate gates.
+The same profiles also passed 40 normal `LeaveGroup` cycles: classic run
+33834878818 (9m 14s) and KIP-848 run 33834880832 (5m 29s). This closes the
+bounded secure drop/rejoin and normal-leave diagnostic slice. The workflow's
+100-cycle flag remains false; callback / heartbeat and ambiguity matrices, long
+campaigns, service canary, and release authorization remain separate gates.

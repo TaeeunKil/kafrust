@@ -122,9 +122,8 @@ digest, and workflow results are in
 [`v1-published-group-churn-40-cycle-2026-09-04.md`](../../evidence/v1-published-group-churn-40-cycle-2026-09-04.md).
 
 These are bounded 40-cycle diagnostics. The workflow's separate 100-cycle
-qualification flag remains false, and the normal-leave matrix, callback /
-heartbeat matrix, ambiguity families, and remaining V1-08 exit criteria stay
-open.
+qualification flag remains false, and the callback / heartbeat matrix,
+ambiguity families, and remaining V1-08 exit criteria stay open.
 
 ### Published secure 40-cycle churn diagnostic (2026-09-04)
 
@@ -135,10 +134,12 @@ duplicates and ended with zero in-flight/buffered gauges. The immutable run
 metadata, broker image identities, and the initial timeout calibration are in
 [`v1-published-secure-group-churn-40-cycle-2026-09-04.md`](../../evidence/v1-published-secure-group-churn-40-cycle-2026-09-04.md).
 
-The 3.7.2 profile completed in 9m 1s (run 33830994497); the KIP-848 profile
-completed in 34m 46s (run 33832439518) because each secure rejoin took about
-51 seconds. These are bounded drop/rejoin diagnostics, not the normal-leave
-matrix, the 100-cycle flag, a long campaign, or release evidence.
+The abrupt-drop 3.7.2 profile completed in 9m 1s (run 33830994497); the
+KIP-848 profile completed in 34m 46s (run 33832439518) because each secure
+rejoin took about 51 seconds. The corresponding normal-leave profiles also
+passed: 3.7.2 in 9m 14s (run 33834878818) and KIP-848 in 5m 29s (run
+33834880832). These remain bounded diagnostics; the 100-cycle flag, long
+campaign, and release evidence are separate.
 
 ## Failure And Lifecycle Contract
 
