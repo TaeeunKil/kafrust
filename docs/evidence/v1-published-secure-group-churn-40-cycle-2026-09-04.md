@@ -63,3 +63,21 @@ is not counted as a passing profile.
   from this bounded 40-cycle evidence.
 - Complete remaining V1-08 callback, heartbeat, ambiguity-family, and
   approved external capacity/canary requirements before any release decision.
+
+## Duplicate-detector hardening follow-up (2026-09-04)
+
+After these four runs completed, a source review found that the original
+`record_expected_records` helper stored only `(topic, partition)` in a set. A
+second valid record for the same partition could therefore leave the set
+unchanged and be hidden by the summary's `duplicate_count=0` field. The
+published plaintext and secure helpers now count each expected record and fail
+on a second observation or an unexpected payload value; focused regression
+tests cover both cases.
+
+That source correction postdates all four workflow runs listed above. Their
+ownership, rejoin, offset, and final-gauge observations remain historical
+diagnostics, but their zero-duplicate fields are not direct evidence under the
+strengthened detector. Re-run the four 40-cycle profiles from the corrected
+source before using duplicate absence for a group qualification or release
+decision. No release or milestone completion claim is made from the historical
+duplicate fields alone.

@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::env;
 use std::time::Duration;
 
@@ -120,7 +120,7 @@ async fn run() -> kafrust::Result<()> {
             ));
         }
 
-        let mut seen_records = BTreeSet::new();
+        let mut seen_records = BTreeMap::new();
         let second_join = tokio::spawn(
             config
                 .clone()
@@ -128,7 +128,7 @@ async fn run() -> kafrust::Result<()> {
                 .join(),
         );
         while !second_join.is_finished() {
-            record_expected_records(&mut seen_records, &topic, first.poll().await?);
+            record_expected_records(&mut seen_records, &topic, first.poll().await?)?;
         }
         let mut second = second_join
             .await
@@ -169,15 +169,15 @@ async fn wait_for_two_member_coverage(
     first: &mut ConsumerGroup,
     second: &mut ConsumerGroup,
     topic: &str,
-    mut seen_records: BTreeSet<(String, i32)>,
+    mut seen_records: BTreeMap<(String, i32), usize>,
 ) -> kafrust::Result<()> {
-    let expected: BTreeSet<_> = (0..PARTITION_COUNT)
-        .map(|partition| (topic.to_owned(), partition))
+    let expected: BTreeMap<_, _> = (0..PARTITION_COUNT)
+        .map(|partition| ((topic.to_owned(), partition), 1_usize))
         .collect();
     for _ in 0..POLL_ATTEMPTS {
         let (first_records, second_records) = poll_pair(first, second).await?;
-        record_expected_records(&mut seen_records, topic, first_records);
-        record_expected_records(&mut seen_records, topic, second_records);
+        record_expected_records(&mut seen_records, topic, first_records)?;
+        record_expected_records(&mut seen_records, topic, second_records)?;
 
         let first_partitions = assignment_keys(first);
         let second_partitions = assignment_keys(second);
@@ -331,19 +331,46 @@ async fn verify_committed_offset_restore(
 }
 
 fn record_expected_records(
-    seen_records: &mut BTreeSet<(String, i32)>,
+    seen_records: &mut BTreeMap<(String, i32), usize>,
     topic: &str,
     records: impl IntoIterator<Item = kafrust::ConsumerRecord>,
-) {
+) -> kafrust::Result<()> {
     for record in records {
-        if record.topic() == topic
-            && record.value().is_some_and(|value| {
-                value == format!("published-group-rebalance-{}", record.partition()).as_bytes()
-            })
-        {
-            seen_records.insert((record.topic().to_owned(), record.partition()));
+        if record.topic() != topic {
+            continue;
         }
+        observe_expected_record(
+            seen_records,
+            record.topic(),
+            record.partition(),
+            record.value(),
+        )?;
     }
+    Ok(())
+}
+
+fn observe_expected_record(
+    seen_records: &mut BTreeMap<(String, i32), usize>,
+    topic: &str,
+    partition: i32,
+    value: Option<&[u8]>,
+) -> kafrust::Result<()> {
+    let expected_value = format!("published-group-rebalance-{partition}");
+    if value != Some(expected_value.as_bytes()) {
+        return Err(Error::Unsupported(
+            "published group smoke observed an unexpected record value",
+        ));
+    }
+    let count = seen_records
+        .entry((topic.to_owned(), partition))
+        .or_default();
+    *count = count.saturating_add(1);
+    if *count > 1 {
+        return Err(Error::Unsupported(
+            "published group smoke observed a duplicate record",
+        ));
+    }
+    Ok(())
 }
 
 async fn poll_pair(
@@ -375,4 +402,23 @@ async fn main() -> kafrust::Result<()> {
     tokio::time::timeout(Duration::from_secs(timeout_seconds()), run())
         .await
         .map_err(|_| Error::Unsupported("published group smoke timed out"))?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn expected_record_counts_reject_duplicates() {
+        let mut seen = BTreeMap::new();
+        let value = b"published-group-rebalance-2";
+        assert!(observe_expected_record(&mut seen, "topic", 2, Some(value)).is_ok());
+        assert!(observe_expected_record(&mut seen, "topic", 2, Some(value)).is_err());
+    }
+
+    #[test]
+    fn expected_record_values_reject_unexpected_payloads() {
+        let mut seen = BTreeMap::new();
+        assert!(observe_expected_record(&mut seen, "topic", 2, Some(b"wrong")).is_err());
+    }
 }
