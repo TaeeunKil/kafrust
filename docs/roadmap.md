@@ -6026,9 +6026,10 @@ resource qualification, a competitor-parity claim, or release authorization.
 A separate [`published-multi-soak-lifetime-diagnostic.yml`](../.github/workflows/published-multi-soak-lifetime-diagnostic.yml)
 workflow now supports a bounded two-hour lifetime check at 1,000 records/s
 with 256-byte values and replication factor three. It enforces a 40-GiB host/
-Docker watermark, run-scoped cleanup, and an immutable `qualified=false`
-descriptor. This is useful for WSL lifetime, broker recovery, and resource
-drain evidence, but it is not V1-21 throughput or V1-22 SLO evidence. It has
+Docker watermark, a declared 3-CPU/6-GiB broker-container budget (1 CPU, 2 GiB,
+and 512 PIDs per broker), run-scoped cleanup, and an immutable
+`qualified=false` descriptor. This is useful for WSL lifetime, broker recovery,
+and resource drain evidence, but it is not V1-21 throughput or V1-22 SLO evidence. It has
 not been dispatched because the registered self-hosted runner is offline and
 the Ubuntu-T9 WSL instance is stopped.
 

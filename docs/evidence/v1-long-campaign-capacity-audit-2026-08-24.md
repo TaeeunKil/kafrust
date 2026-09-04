@@ -316,6 +316,11 @@ prefix; it does not run a global Docker prune.
 
 At the default workload the retained-data lower bound is about 2.6 GiB/hour,
 or 5.2 GiB for two hours, so a 40-GiB watermark leaves operational headroom.
+Each diagnostic broker is also capped at 1.0 CPU, 2 GiB memory, and 512 PIDs;
+the three-broker cluster therefore has a declared 3-CPU/6-GiB container budget
+before the Rust helper and runner overhead. Container logs are capped at three
+50 MiB files per broker. These are enforcement limits, not measured usage
+claims, and any resource-limit failure is recorded separately.
 The diagnostic now stops broker 1 once halfway through the run for a fixed
 10-second outage, which makes retry/recovery observable without changing the
 rate or storage budget. The descriptor is forced to `status=diagnostic` and

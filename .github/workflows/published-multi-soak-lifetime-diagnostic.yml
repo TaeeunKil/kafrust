@@ -135,6 +135,9 @@ jobs:
             docker run -d --name "$container_name" \
               --hostname "$container_name" \
               --network "$KAFRUST_NETWORK" \
+              --cpus=1.0 \
+              --memory=2g \
+              --pids-limit=512 \
               --log-driver json-file \
               --log-opt max-size=50m \
               --log-opt max-file=3 \

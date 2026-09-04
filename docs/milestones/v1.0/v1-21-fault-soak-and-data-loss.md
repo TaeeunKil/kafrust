@@ -277,9 +277,12 @@ repository now provides
 [`published-multi-soak-lifetime-diagnostic.yml`](../../.github/workflows/published-multi-soak-lifetime-diagnostic.yml).
 It uses a three-broker/RF3 topology, a global 1,000-records/s limiter, 256-byte
 values, a two-hour maximum, run-scoped Docker names, before/after capacity
-artifacts, and a 40-GiB disk watermark abort. The helper rejects a zero rate,
-injects one fixed 10-second broker-1 restart halfway through the run, and the
-workflow descriptor is always `qualified=false`.
+artifacts, and a 40-GiB disk watermark abort. Each broker is capped at 1 CPU,
+2 GiB memory, and 512 PIDs, with Docker JSON logs limited to three 50 MiB
+files, giving the diagnostic a declared 3-CPU/6-GiB broker-container budget.
+The helper rejects a zero rate, injects one fixed 10-second broker-1 restart
+halfway through the run, and the workflow descriptor is always
+`qualified=false`.
 
 This workflow is a runner-lifetime, broker-recovery, cleanup, and gauge-drain
 diagnostic. It is not a shortened V1-21 throughput campaign: the exact
