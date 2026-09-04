@@ -6006,3 +6006,17 @@ exact 10,000-records/s, 1-KiB, six-hour manifest and its family/adjudication
 criteria remain unchanged and undispatched while `wsl-ubuntu-t9` is offline.
 Details are in [`v1-long-campaign-capacity-audit-2026-08-24.md`](evidence/v1-long-campaign-capacity-audit-2026-08-24.md)
 and the V1-21 milestone record.
+
+## V1 published bounded performance matrix diagnostic (2026-09-04)
+
+The pushed `0.3.6` published pair passed a five-minute performance diagnostic
+on Kafka 3.7.2 and 4.3.1 with no compression and Zstd in
+[run 33845259919](https://github.com/TaeeunKil/kafrust/actions/runs/33845259919).
+All four fresh external projects reconciled their records and finished with
+zero failures, retries, unknown outcomes, loss, duplicates, and final gauges.
+The detailed rates, RSS slopes, lockfile digest, and artifact IDs are in
+[`v1-published-performance-campaign-2026-09-04.md`](evidence/v1-published-performance-campaign-2026-09-04.md).
+
+This strengthens published regression evidence only. It is not the locked
+baseline, the V1-22 five-repetition/eight-hour SLO campaign, a long-campaign
+resource qualification, a competitor-parity claim, or release authorization.

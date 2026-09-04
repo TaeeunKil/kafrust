@@ -450,6 +450,23 @@ configuration, repetitions, raw and aggregate throughput/latency/RSS/allocation/
 retry/loss/duplicate/queue results, baseline comparison, and universal-parity
 non-claim.
 
+### Published bounded matrix diagnostic (2026-09-04)
+
+The pushed `0.3.6` published pair passed a five-minute bounded matrix in
+[run 33845259919](https://github.com/TaeeunKil/kafrust/actions/runs/33845259919)
+from source `9b6f510f7dbff9dd0a38a396849661062de8392f`. Kafka 3.7.2 and 4.3.1
+were each exercised with no compression and Zstd. Every profile reconciled
+all produced and consumed records with zero failed requests, retries, unknown
+outcomes, loss, duplicates, and final resource gauges; the highest observed
+rate was 74,556 records/s on the 3.7.2 no-compression profile. The detailed
+tables and artifact IDs are in
+[`v1-published-performance-campaign-2026-09-04.md`](../../evidence/v1-published-performance-campaign-2026-09-04.md).
+
+This remains a single-node, one-repetition, five-minute diagnostic and does
+not lock a baseline or close the required five-repetition, six-profile,
+eight-hour SLO campaign. It also does not qualify the three-broker long
+campaign or authorize a release.
+
 ### Bounded published follow-up (2026-09-03)
 
 The short published surface run added successful secure failover, Share, and

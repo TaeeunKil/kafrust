@@ -7018,6 +7018,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-admin-coordinator-response-loss-matrix-2026-09-04.md; docs/milestones/v1.0/v1-12-coordinator-leader-admin-mutations.md; crates/kafrust/src/admin.rs
 - non_claims: not published floor or authorization qualification, not reconciliation or three-broker failover qualification, not long campaign, not service canary, not release authorization
 
+## Q-PUBLISHED-V122-BOUND-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: 9b6f510f7dbff9dd0a38a396849661062de8392f
+- client_version: 0.3.6 published artifact
+- protocol_version: 0.3.6 published dependency
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 3.7.2 and 4.3.1
+- kafka_image: apache/kafka:3.7.2 and apache/kafka:4.3.1
+- mode: bounded published performance diagnostic
+- topology: single-broker KRaft per profile; replication factor one
+- security: PLAINTEXT
+- group_protocol: not-applicable
+- workload: 10-second warmup, 300-second measured window, 10-second samples, two workers, batch size 50, 1-KiB values; immediate producer/consumer; no compression and Zstd
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/33845259919
+- fault: none injected
+- duration: 6m35s-6m42s workflow wall time; 300-second measured window per profile
+- record_count: 22,366,850 (3.7.2 none); 16,235,600 (3.7.2 Zstd); 20,887,450 (4.3.1 none); 17,021,000 (4.3.1 Zstd)
+- member_count: not-applicable
+- repetition_count: one profile run across four broker/compression combinations
+- expected_errors: zero failed requests, retries, unknown outcomes, loss, duplicates, digest mismatch, or final in-flight/buffered records
+- observed_errors: all four profiles passed; zero failed requests, retries, unknown outcomes, loss, duplicates, digest mismatch, and final in-flight/buffered records; exact published lockfile pair resolved
+- retry_count: 0 in all profiles
+- duplicate_count: 0 in all profiles
+- loss_count: 0 in all profiles
+- latency: p50/p95/p99 of 1/1/1 ms (3.7.2 none), 1/5/5 ms (3.7.2 Zstd), 1/1/1 ms (4.3.1 none), 1/1/5 ms (4.3.1 Zstd)
+- memory: terminal RSS 8.96 MiB (3.7.2 none), 12.97 MiB (3.7.2 Zstd), 9.10 MiB (4.3.1 none), 12.23 MiB (4.3.1 Zstd); slopes 4,123, 50, 3,752, and 236 bytes/s respectively
+- final_resource_gauges: in_flight_requests=0 and buffered_records=0 in all profiles
+- result: passed
+- artifact: docs/evidence/v1-published-performance-campaign-2026-09-04.md; run 33845259919; artifacts 9926429327, 9926427823, 9926430204, 9926428708; lockfile_sha256=5ffa8147a2c178d0eee0c060aecd9bde278615b5fc5645b9d390737241c36fd4
+- non_claims: not locked V1-22 baseline, not five-repetition six-profile eight-hour SLO evidence, not three-broker long-campaign evidence, not universal competitor parity, not service canary, not release authorization
+
 ## Q-PUBLISHED-V120-037
 
 - date_utc: 2026-09-04
