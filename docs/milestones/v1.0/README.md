@@ -173,6 +173,18 @@ isolated Kafka 4.3.1 Share coordinator; the diagnostic is recorded in
 [`v1-company-share-short-smoke-2026-09-03.md`](../../evidence/v1-company-share-short-smoke-2026-09-03.md)
 and does not replace the V1-10 published gate.
 
+### Current bounded lifetime diagnostic update (2026-09-04)
+
+The small long-run diagnostic is now resource-capped as well as disk-capped:
+each of its three Kafka containers is limited to 1 CPU, 2 GiB memory, and 512
+PIDs, with Docker JSON logs limited to three 50 MiB files. This declares a
+3-CPU/6-GiB broker-container budget while retaining the 40-GiB host/Docker
+watermark, run-scoped cleanup, and fixed broker-restart recovery probe. The
+workflow remains diagnostic-only (`qualified=false`) and has not been
+dispatched because `wsl-ubuntu-t9` is offline; it cannot close V1-21/V1-22 or
+authorize a release. The resource-cap change is on pushed commit `7558560`,
+with the follow-up documentation alignment on `db8c9e2`.
+
 ## Status And Evidence
 
 Work status and evidence level are separate axes.
