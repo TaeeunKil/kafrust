@@ -7018,6 +7018,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-company-capacity-recovery-2026-09-03.md; docs/milestones/v1.0/v1-21-fault-soak-and-data-loss.md; docs/milestones/v1.0/v1-22-performance-and-operational-slos.md
 - non_claims: not V1-21 evidence, not V1-22 evidence, not long campaign, not Docker failure, not performance sample, not release authorization
 
+## Q-LIVE-V121-FOREGROUND-LIFETIME-SMOKE-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: 17a9f8a15da22053934b9a71c82d64051c8cbdd7
+- client_version: 0.3.6 published artifact
+- protocol_version: 0.3.6 published dependency
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
+- mode: bounded self-hosted multi-broker restart diagnostic with foreground WSL lifetime guard
+- topology: three-broker KRaft on Ubuntu-T9 WSL2 x86_64
+- security: PLAINTEXT
+- group_protocol: not-applicable
+- workload: 120-second published soak; 1-KiB payloads; leader, coordinator, and combined fault events
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/33825722908
+- fault: leader@25, coordinator@50, combined@75; 10-second outages
+- duration: 120.663 seconds measured workload; 3 minutes 33 seconds workflow
+- record_count: 3,624,900 attempted, acknowledged, and consumed uniquely
+- member_count: not-applicable
+- repetition_count: one bounded diagnostic segment with operator-held foreground WSL process
+- expected_errors: scheduled broker recovery; zero unaccounted loss, duplicates, or unknown outcomes
+- observed_errors: 1 operation error, 17 failed requests, 31 retries, recovered=true, 0 unknown outcomes, zero loss/duplicates; final gauges drained
+- retry_count: 31
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: in_flight_requests=0; buffered_records=0; maximums=1 and 0
+- result: passed
+- artifact: docs/evidence/v1-company-selfhosted-foreground-lifetime-smoke-2026-09-04.md; run artifact kafrust-published-fault-segment-foreground-lifetime-smoke-2026-09-04-0-33825722908; descriptor lockfile digest 2f81a33ed05baf0321bb7a643355bec49a5e3a8904d7cd2354e54a86314f976b
+- non_claims: not a six-hour V1-21 campaign, not 100-cycle or ambiguity-family completion, not cross-segment continuity, not V1-22 SLO evidence, not unattended runner lifetime, not resolver full-restart persistence, not V1-23 service canary, not 1.0.0 readiness
+
 ## Q-FUZZ-DISCOVERY-RERUN-2026-09-04
 
 - date_utc: 2026-09-04

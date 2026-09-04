@@ -491,3 +491,14 @@ five-repetition, eight-hour campaign. The operator must first hold a host-level
 WSL lifetime guarantee, verify a complete bounded smoke, and perform the
 approved full-restart resolver check. The published profile matrix, RSS and
 retry thresholds, and release decision remain open.
+
+### Foreground WSL lifetime retry (2026-09-04)
+
+The bounded published smoke was rerun while an operator-held foreground WSL
+process kept Ubuntu-T9 alive. [Run 33825722908](https://github.com/TaeeunKil/kafrust/actions/runs/33825722908)
+completed its 120.663-second Kafka 4.3.1 three-broker workload with zero loss,
+duplicates, and unknown outcomes and zero final in-flight/buffered gauges.
+Because the run has no benchmark samples or RSS series, it is not part of the
+locked baseline or SLO set. It only confirms that the bounded runner path can
+complete under an explicit lifetime guard; the five-repetition, eight-hour
+performance campaign remains open.

@@ -500,3 +500,19 @@ session), verify one complete short smoke without service interruption, and
 complete the separately approved full-restart resolver check. Full campaign
 duration, family counts, ambiguity outcomes, data-loss fixtures, and
 adjudication remain required.
+
+### Foreground WSL lifetime retry (2026-09-04)
+
+The same bounded published path was rerun while an operator-held foreground
+WSL process kept Ubuntu-T9 alive. [Run 33825722908](https://github.com/TaeeunKil/kafrust/actions/runs/33825722908)
+completed the 120.663-second Kafka 4.3.1 three-broker smoke with 3,624,900
+produced and consumed unique 1-KiB records, one operation error, 17 failed
+requests, and 31 retries. Recovery was true with zero unknown outcomes, loss,
+or duplicates, and final in-flight/buffered gauges of zero. The descriptor and
+artifact details are in
+[`v1-company-selfhosted-foreground-lifetime-smoke-2026-09-04.md`](../../evidence/v1-company-selfhosted-foreground-lifetime-smoke-2026-09-04.md).
+
+This validates only the bounded execution path under an explicit foreground
+lifetime guard. It does not prove unattended WSL lifetime, resolver persistence
+across a full restart, or any V1-21 duration/family/data-loss gate; the exact
+six-hour campaigns remain open.

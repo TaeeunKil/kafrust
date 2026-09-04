@@ -108,3 +108,21 @@ a host-level lifetime guarantee, verify that the runner remains online through
 the full short smoke, and perform the separately approved full-restart
 resolver check. Existing Docker containers, networks, and volumes were not
 restarted, pruned, or modified during this diagnostic.
+
+## Foreground WSL lifetime retry (2026-09-04)
+
+To separate WSL lifetime from the client path, a foreground WSL process was
+held open for the next bounded dispatch. With that explicit lifetime guard,
+[run 33825722908](https://github.com/TaeeunKil/kafrust/actions/runs/33825722908)
+completed the published `0.3.6` Kafka 4.3.1 three-broker smoke. The 120.663-
+second run processed and consumed `3,624,900` unique 1-KiB records, observed
+one operation error, 17 failed requests, and 31 retries, and recovered with
+zero unknown outcomes, loss, or duplicates. Final in-flight and buffered
+gauges were both zero; the immutable artifact is retained in
+[`v1-company-selfhosted-foreground-lifetime-smoke-2026-09-04.md`](v1-company-selfhosted-foreground-lifetime-smoke-2026-09-04.md).
+
+This proves only that an operator-held foreground lifetime guard prevents the
+specific interruption seen in the prior dispatch. It is not an unattended
+runner guarantee, does not identify the Windows-side shutdown initiator, and
+does not count toward V1-21/V1-22 long gates. Workflow cleanup was
+prefix-scoped; existing Docker resources remained untouched.
