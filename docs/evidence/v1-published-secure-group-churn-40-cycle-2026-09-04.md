@@ -70,14 +70,15 @@ After these four runs completed, a source review found that the original
 `record_expected_records` helper stored only `(topic, partition)` in a set. A
 second valid record for the same partition could therefore leave the set
 unchanged and be hidden by the summary's `duplicate_count=0` field. The
-published plaintext and secure helpers now count each expected record and fail
-on a second observation or an unexpected payload value; focused regression
-tests cover both cases.
+published plaintext and secure helpers now retain the first observed offset per
+partition, allow the same offset to be observed again during expected
+pre-commit redelivery, and fail on a distinct second offset or an unexpected
+payload value; focused regression tests cover these cases.
 
 That source correction postdates all four workflow runs listed above. Their
 ownership, rejoin, offset, and final-gauge observations remain historical
 diagnostics, but their zero-duplicate fields are not direct evidence under the
-strengthened detector. Re-run the four 40-cycle profiles from the corrected
-source before using duplicate absence for a group qualification or release
-decision. No release or milestone completion claim is made from the historical
-duplicate fields alone.
+strengthened distinct-offset detector. Re-run the four 40-cycle profiles from
+the corrected source before using duplicate absence for a group qualification
+or release decision. No release or milestone completion claim is made from
+the historical duplicate fields alone.

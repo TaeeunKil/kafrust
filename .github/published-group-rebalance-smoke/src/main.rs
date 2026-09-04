@@ -169,13 +169,13 @@ async fn wait_for_two_member_coverage(
     first: &mut ConsumerGroup,
     second: &mut ConsumerGroup,
     topic: &str,
-    mut seen_records: BTreeMap<(String, i32), usize>,
+    mut seen_records: BTreeMap<(String, i32), i64>,
 ) -> kafrust::Result<()> {
     let expected_assignments: BTreeSet<_> = (0..PARTITION_COUNT)
         .map(|partition| (topic.to_owned(), partition))
         .collect();
-    let expected_records: BTreeMap<_, _> = (0..PARTITION_COUNT)
-        .map(|partition| ((topic.to_owned(), partition), 1_usize))
+    let expected_partitions: BTreeSet<_> = (0..PARTITION_COUNT)
+        .map(|partition| (topic.to_owned(), partition))
         .collect();
     for _ in 0..POLL_ATTEMPTS {
         let (first_records, second_records) = poll_pair(first, second).await?;
@@ -192,7 +192,7 @@ async fn wait_for_two_member_coverage(
                 .cloned()
                 .collect::<BTreeSet<_>>()
                 == expected_assignments
-            && seen_records == expected_records
+            && seen_records.keys().cloned().collect::<BTreeSet<_>>() == expected_partitions
         {
             return Ok(());
         }
@@ -334,7 +334,7 @@ async fn verify_committed_offset_restore(
 }
 
 fn record_expected_records(
-    seen_records: &mut BTreeMap<(String, i32), usize>,
+    seen_records: &mut BTreeMap<(String, i32), i64>,
     topic: &str,
     records: impl IntoIterator<Item = kafrust::ConsumerRecord>,
 ) -> kafrust::Result<()> {
@@ -347,16 +347,18 @@ fn record_expected_records(
             record.topic(),
             record.partition(),
             record.value(),
+            record.offset(),
         )?;
     }
     Ok(())
 }
 
 fn observe_expected_record(
-    seen_records: &mut BTreeMap<(String, i32), usize>,
+    seen_records: &mut BTreeMap<(String, i32), i64>,
     topic: &str,
     partition: i32,
     value: Option<&[u8]>,
+    offset: i64,
 ) -> kafrust::Result<()> {
     let expected_value = format!("published-group-rebalance-{partition}");
     if value != Some(expected_value.as_bytes()) {
@@ -364,15 +366,15 @@ fn observe_expected_record(
             "published group smoke observed an unexpected record value",
         ));
     }
-    let count = seen_records
-        .entry((topic.to_owned(), partition))
-        .or_default();
-    *count = count.saturating_add(1);
-    if *count > 1 {
+    if let Some(previous_offset) = seen_records.get(&(topic.to_owned(), partition)) {
+        if *previous_offset == offset {
+            return Ok(());
+        }
         return Err(Error::Unsupported(
-            "published group smoke observed a duplicate record",
+            "published group smoke observed multiple offsets for one partition",
         ));
     }
+    seen_records.insert((topic.to_owned(), partition), offset);
     Ok(())
 }
 
@@ -412,16 +414,24 @@ mod tests {
     use super::*;
 
     #[test]
-    fn expected_record_counts_reject_duplicates() {
+    fn expected_record_offsets_allow_same_offset_redelivery() {
         let mut seen = BTreeMap::new();
         let value = b"published-group-rebalance-2";
-        assert!(observe_expected_record(&mut seen, "topic", 2, Some(value)).is_ok());
-        assert!(observe_expected_record(&mut seen, "topic", 2, Some(value)).is_err());
+        assert!(observe_expected_record(&mut seen, "topic", 2, Some(value), 7).is_ok());
+        assert!(observe_expected_record(&mut seen, "topic", 2, Some(value), 7).is_ok());
+    }
+
+    #[test]
+    fn expected_record_offsets_reject_distinct_offsets() {
+        let mut seen = BTreeMap::new();
+        let value = b"published-group-rebalance-2";
+        assert!(observe_expected_record(&mut seen, "topic", 2, Some(value), 7).is_ok());
+        assert!(observe_expected_record(&mut seen, "topic", 2, Some(value), 8).is_err());
     }
 
     #[test]
     fn expected_record_values_reject_unexpected_payloads() {
         let mut seen = BTreeMap::new();
-        assert!(observe_expected_record(&mut seen, "topic", 2, Some(b"wrong")).is_err());
+        assert!(observe_expected_record(&mut seen, "topic", 2, Some(b"wrong"), 7).is_err());
     }
 }
