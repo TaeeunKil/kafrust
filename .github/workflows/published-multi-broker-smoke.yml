@@ -114,7 +114,17 @@ jobs:
       - name: Run published pre-failover phase
         env:
           KAFRUST_PHASE: pre
-        run: cargo run --manifest-path "$RUNNER_TEMP/kafrust-published-multi-smoke/Cargo.toml"
+        run: |
+          set -euo pipefail
+          log_path="$RUNNER_TEMP/kafrust-published-multi-pre.log"
+          cargo run --manifest-path "$RUNNER_TEMP/kafrust-published-multi-smoke/Cargo.toml" 2>&1 | tee "$log_path"
+          topic_id="$(sed -n 's/.*topic_id=\([0-9a-f]\{32\}\).*/\1/p' "$log_path" | tail -n 1)"
+          if [ -z "$topic_id" ]; then
+            cat "$log_path"
+            echo "published pre-failover phase did not emit a topic UUID"
+            exit 1
+          fi
+          echo "KAFRUST_EXPECTED_TOPIC_ID=$topic_id" >> "$GITHUB_ENV"
 
       - name: Stop selected partition leader
         run: |
