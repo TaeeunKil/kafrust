@@ -322,3 +322,8 @@ release evidence. The workflow has not been dispatched because
 `wsl-ubuntu-t9` is currently offline and `Ubuntu-T9` is stopped. A successful
 run would validate lifetime/restart/cleanup behavior only; it would not close
 the exact six-hour campaign.
+
+The workflow and helper formatting were validated on pushed head `730dd77`;
+the repository CI run [33847498831](https://github.com/TaeeunKil/kafrust/actions/runs/33847498831)
+passed on both stable and Rust 1.81. This validates the dispatch path and
+static safety checks only; it is not a campaign execution result.

@@ -6031,3 +6031,8 @@ descriptor. This is useful for WSL lifetime, broker recovery, and resource
 drain evidence, but it is not V1-21 throughput or V1-22 SLO evidence. It has
 not been dispatched because the registered self-hosted runner is offline and
 the Ubuntu-T9 WSL instance is stopped.
+
+The pushed implementation head `730dd77` passed the repository CI safety gate
+on stable and Rust 1.81 in [33847498831](https://github.com/TaeeunKil/kafrust/actions/runs/33847498831).
+That is workflow validation only; no diagnostic execution or release claim is
+implied.

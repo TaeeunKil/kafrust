@@ -286,6 +286,11 @@ diagnostic. It is not a shortened V1-21 throughput campaign: the exact
 requirements remain unchanged. It has not been dispatched while the current
 self-hosted runner is offline/stopped.
 
+Pushed head `730dd77` passed the repository CI safety and formatting checks in
+[33847498831](https://github.com/TaeeunKil/kafrust/actions/runs/33847498831) on
+stable and Rust 1.81. This proves the workflow is accepted by the repository
+checks, not that the diagnostic or the official campaign has run.
+
 ### Bounded current-source diagnostic runs (2026-08-22)
 
 The first 60-second manual run on source `3fdfc778` (run
