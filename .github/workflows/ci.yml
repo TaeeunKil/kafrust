@@ -46,7 +46,9 @@ jobs:
         run: git diff --check
 
       - name: Check long-campaign safety scripts
-        run: bash -n scripts/check_campaign_capacity.sh scripts/cleanup_campaign_docker.sh
+        run: |
+          bash -n scripts/check_campaign_capacity.sh scripts/cleanup_campaign_docker.sh
+          python scripts/check_lifetime_diagnostic_resources.py
 
       - name: Check protocol API surface
         run: python scripts/check_protocol_api_surface.py
