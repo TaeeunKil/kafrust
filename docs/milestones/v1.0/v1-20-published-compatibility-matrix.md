@@ -274,3 +274,15 @@ shortened-input failure diagnostic are in
 [`v1-published-short-surface-smoke-2026-09-03.md`](../../evidence/v1-published-short-surface-smoke-2026-09-03.md).
 The accepted matrix remains `In progress` because the full row-by-row
 Cartesian-independent contract and downstream V1 gates are not complete.
+
+### Current-source live matrix rerun (2026-09-04)
+
+The 17-job source matrix was rerun from
+`3c27e61820b7fb53450996d09a79c9278c8764e8` in [Live Kafka Smoke run
+33820740402](https://github.com/TaeeunKil/kafrust/actions/runs/33820740402).
+Every configured Kafka 3.7.2/3.8.1/3.9.1/4.3.1 plaintext, secured, KIP-848,
+and multi-broker failover job passed. The run is retained as
+[`v1-live-kafka-smoke-rerun-2026-09-04.md`](../../evidence/v1-live-kafka-smoke-rerun-2026-09-04.md).
+It refreshes current-source rows only; the exact published lockfile matrix,
+long fault/SLO campaigns, migration canary, API freeze, and release gates
+remain open.

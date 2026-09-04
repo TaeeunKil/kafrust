@@ -5786,6 +5786,15 @@ These runs confirm current-source compatibility and bounded diagnostics only;
 published matrices, long fuzz/SLO campaigns, named service canary, and release
 authorization remain open.
 
+The same 17-job `Live Kafka Smoke` matrix was refreshed from source commit
+`3c27e61820b7fb53450996d09a79c9278c8764e8` in
+[run 33820740402](https://github.com/TaeeunKil/kafrust/actions/runs/33820740402).
+All plaintext, TLS, SASL, OAUTHBEARER, ACL, KIP-848, and multi-broker failover
+profiles passed across Kafka 3.7.2, 3.8.1, 3.9.1, and 4.3.1. This is a short
+current-source refresh only; it does not close the exact published matrix,
+long fault/SLO campaigns, migration canary, or release authorization. Details
+are in [`v1-live-kafka-smoke-rerun-2026-09-04.md`](evidence/v1-live-kafka-smoke-rerun-2026-09-04.md).
+
 ## V1-04 Buffered delivery phase expiry (2026-09-04)
 
 The buffered producer now records the total-budget phase when Metadata or

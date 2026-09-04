@@ -6985,6 +6985,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-admin-coordinator-response-loss-matrix-2026-09-04.md; docs/milestones/v1.0/v1-12-coordinator-leader-admin-mutations.md; crates/kafrust/src/admin.rs
 - non_claims: not published floor or authorization qualification, not reconciliation or three-broker failover qualification, not long campaign, not service canary, not release authorization
 
+## Q-LIVE-DATA-PLANE-MATRIX-RERUN-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: 3c27e61820b7fb53450996d09a79c9278c8764e8
+- client_version: 0.3.6 source checkout
+- protocol_version: selected data-plane, consumer-group, and Admin versions declared by the smoke workflow
+- work_status: In progress
+- evidence_level: Live current-source
+- kafka_version: 3.7.2, 3.8.1, 3.9.1, and 4.3.1
+- kafka_image: apache/kafka:3.7.2; apache/kafka:3.8.1; apache/kafka:3.9.1; apache/kafka:4.3.1
+- mode: live short compatibility matrix refresh
+- topology: single-node and three-broker KRaft profiles
+- security: PLAINTEXT, TLS, SASL_PLAINTEXT, SASL_SSL SCRAM, OAUTHBEARER, signed OAUTHBEARER, and ACL authorization
+- group_protocol: classic consumer groups and KIP-848 member-aware groups
+- workload: broker roundtrips, producer/buffered producer, consumer lifecycles, Admin operations, codecs, authentication, and failover
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/33820740402
+- fault: configured leader/coordinator movement and transaction response-loss checks in multi-broker jobs
+- duration: 7 minutes 31 seconds workflow wall time
+- record_count: job-specific smoke records; not aggregated across profiles
+- member_count: job-specific group members; not aggregated across profiles
+- repetition_count: one 17-job matrix run
+- expected_errors: only configured transient failover/reconciliation outcomes; no job failure
+- observed_errors: all 17 jobs passed; no failed jobs
+- retry_count: job-specific and not aggregated
+- duplicate_count: no duplicate failure reported by configured checks
+- loss_count: no loss failure reported by configured checks
+- latency: not measured as a matrix gate
+- memory: not measured as a matrix gate
+- final_resource_gauges: each job completed its configured cleanup and post-check steps
+- result: passed
+- artifact: docs/evidence/v1-live-kafka-smoke-rerun-2026-09-04.md; .github/workflows/live-kafka-smoke.yml
+- non_claims: not the full V1-20 accepted matrix, not published-artifact qualification, not six-hour/24-hour fault campaigns, not five-repetition SLO qualification, not service canary, not release authorization
+
 ## Q-ADMIN-MEMBER-AWARE-V10-RESPONSE-LOSS-2026-09-04
 
 - date_utc: 2026-09-04

@@ -341,6 +341,18 @@ and KIP-848/failover profiles. The grouped record is
 This is a non-long current-source diagnostic; accepted published matrix,
 official response oracles, and three-broker qualification gates remain open.
 
+### Current-source hosted matrix rerun (2026-09-04)
+
+The full 17-job `Live Kafka Smoke` workflow was rerun from source commit
+`3c27e61820b7fb53450996d09a79c9278c8764e8` in
+[run 33820740402](https://github.com/TaeeunKil/kafrust/actions/runs/33820740402).
+All Kafka 3.7.2/3.8.1/3.9.1/4.3.1 plaintext, TLS, SASL, OAUTHBEARER, ACL,
+KIP-848, and three-broker failover jobs passed. The retained record is
+[`v1-live-kafka-smoke-rerun-2026-09-04.md`](../../evidence/v1-live-kafka-smoke-rerun-2026-09-04.md).
+This refresh strengthens short live version/behavior evidence only; official
+response oracles, complete published qualification, long campaigns, and the
+remaining V1-03 exit criteria stay open.
+
 ## Exit Criteria
 
 1. Every stable high-level selected/fallback version has official metadata,
