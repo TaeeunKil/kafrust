@@ -9,6 +9,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "published-multi-soak-lifetime-diagnostic.yml"
+REQUIRED_FRAGMENTS = {
+    "--cpus=1.0": "per-broker CPU cap",
+    "--memory=2g": "per-broker memory cap",
+    "--pids-limit=512": "per-broker PID cap",
+    "--log-opt max-size=50m": "per-broker log-size cap",
+    "--log-opt max-file=3": "per-broker log-retention cap",
+    "KAFRUST_DISK_WATERMARK_GIB": "disk-watermark enforcement",
+}
 
 
 def fail(message: str) -> int:
@@ -16,28 +24,23 @@ def fail(message: str) -> int:
     return 1
 
 
+def validate_workflow(workflow: str) -> None:
+    for fragment, description in REQUIRED_FRAGMENTS.items():
+        if fragment not in workflow:
+            raise ValueError(f"missing {description}: {fragment}")
+
+    if "docker system prune" in workflow or "docker volume prune" in workflow:
+        raise ValueError("workflow must not run a global Docker prune")
+    if "qualified: false" not in workflow and "qualified=false" not in workflow:
+        raise ValueError("diagnostic descriptor must be forced to qualified=false")
+
+
 def main() -> int:
     try:
         workflow = WORKFLOW.read_text(encoding="utf-8")
-    except OSError as error:
+        validate_workflow(workflow)
+    except (OSError, ValueError) as error:
         return fail(str(error))
-
-    required_fragments = {
-        "--cpus=1.0": "per-broker CPU cap",
-        "--memory=2g": "per-broker memory cap",
-        "--pids-limit=512": "per-broker PID cap",
-        "--log-opt max-size=50m": "per-broker log-size cap",
-        "--log-opt max-file=3": "per-broker log-retention cap",
-        "KAFRUST_DISK_WATERMARK_GIB": "disk-watermark enforcement",
-    }
-    for fragment, description in required_fragments.items():
-        if fragment not in workflow:
-            return fail(f"missing {description}: {fragment}")
-
-    if "docker system prune" in workflow or "docker volume prune" in workflow:
-        return fail("workflow must not run a global Docker prune")
-    if "qualified: false" not in workflow and "qualified=false" not in workflow:
-        return fail("diagnostic descriptor must be forced to qualified=false")
 
     print("lifetime diagnostic resource controls ok")
     return 0

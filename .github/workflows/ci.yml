@@ -98,6 +98,9 @@ jobs:
       - name: Test V1-22 performance result adjudicator
         run: python -m unittest scripts/test_check_v1_performance_results.py
 
+      - name: Test lifetime diagnostic resource guard
+        run: python -m unittest scripts/test_check_lifetime_diagnostic_resources.py
+
       - name: Check V1 dependency graph posture
         run: python scripts/check_v1_dependency_graph.py
 
