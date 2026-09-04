@@ -35,7 +35,7 @@ published from that same-version package state.
 
 ## Current Execution
 
-As of 2026-09-03, V1-00, V1-01, V1-02, and V1-19 are `Done`; V1-03 through
+As of 2026-09-04, V1-00, V1-01, V1-02, and V1-19 are `Done`; V1-03 through
 V1-18 and V1-20/V1-22 remain `In progress`; V1-21 is `In progress` with its
 dedicated Linux x64/Docker runner and host-capacity preflight recovered, while
 the long campaigns remain pending; V1-23 is `Blocked` on a named service
@@ -183,7 +183,8 @@ watermark, run-scoped cleanup, and fixed broker-restart recovery probe. The
 workflow remains diagnostic-only (`qualified=false`) and has not been
 dispatched because `wsl-ubuntu-t9` is offline; it cannot close V1-21/V1-22 or
 authorize a release. The resource-cap change is on pushed commit `7558560`,
-with the follow-up documentation alignment on `db8c9e2`.
+with the follow-up documentation alignment on `db8c9e2` and CI guard on
+`317aca9`.
 
 ## Status And Evidence
 
