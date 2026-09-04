@@ -61,8 +61,8 @@ provider failure poisons the affected connection, never downgrades the
 configured protocol, and does not expose credential material. Rotation,
 server/key replacement, restricted-principal authorization, and the seeded
 zero-match scan across logs and uploaded artifacts remain open. The required
-floor/current published profiles and final provider/connection gauges have not
-yet been run for the coordinated `0.3.6` candidate.
+mechanism matrix and rotation profiles have not yet been run for the coordinated
+`0.3.6` candidate; the secure group profiles below are one bounded exception.
 
 ### Published 0.3.6 security refresh (2026-08-23)
 
@@ -78,6 +78,13 @@ including the provider and consumed-record assertions with the published
 lockfile version check. These are short published rows only; credential
 rotation, provider outage/expiry, restricted-principal, zero-secret scan, and
 the complete V1-16 floor/current matrix remain open.
+
+The published secure group workflow additionally passed 40-cycle
+SASL_SSL/SCRAM-SHA-256 drop and normal-leave profiles on Kafka 3.7.2 classic
+and 4.3.1 KIP-848, with zero loss/duplicates and drained final gauges. This is
+group-connection evidence only; live credential rotation, restricted
+principals, provider/JWKS fault profiles, and the complete mechanism matrix
+remain open. See [`v1-published-secure-group-churn-40-cycle-2026-09-04.md`](../../evidence/v1-published-secure-group-churn-40-cycle-2026-09-04.md).
 
 ### Checked security contract (2026-09-03)
 

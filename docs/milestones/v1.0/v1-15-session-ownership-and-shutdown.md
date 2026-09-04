@@ -66,8 +66,9 @@ These tests establish the owner boundaries but do not close the required
 
 The remaining work is to turn the static owner inventory into a checked table,
 record task/queue/connection peaks and final gauges for every stable surface,
-and run the 100-cycle and exact-artifact churn gates. No stale-session or
-detached-task completion claim is made by this record.
+and run the 100-cycle all-surface audit. The published secure group owner slice
+now has bounded 40-cycle drop and normal-leave evidence, but no stale-session
+or detached-task completion claim is made for the remaining stable surfaces.
 
 ### Checked ownership inventory (2026-09-03)
 
@@ -95,6 +96,15 @@ boundary only; cancellation during socket I/O, 100-cycle gauge audits, and
 published secured churn remain required.
 
 Evidence: [`v1-buffered-owner-drop-2026-09-04.md`](../../evidence/v1-buffered-owner-drop-2026-09-04.md).
+
+### Published secure group owner slice (2026-09-04)
+
+The published `0.3.6` secure group workflow completed 40 abrupt-drop and 40
+normal-`LeaveGroup` cycles on Kafka 3.7.2 classic and Kafka 4.3.1 KIP-848.
+Every profile restored offsets and ended with zero in-flight/buffered gauges.
+This covers the group owner boundary only; the 100-cycle all-surface audit,
+Share/Streams/telemetry/Admin owner churn, and long-campaign gates remain.
+See [`v1-published-secure-group-churn-40-cycle-2026-09-04.md`](../../evidence/v1-published-secure-group-churn-40-cycle-2026-09-04.md).
 
 ## Failure And Lifecycle Contract
 
