@@ -49,3 +49,15 @@ The listener reached `Listening for Jobs`, and GitHub reported the runner
 online and idle again. The WSL VM, Docker daemon, and existing resources were
 not restarted or pruned. Because the override is temporary, a persistent WSL
 resolver policy remains a prerequisite for unattended long campaigns.
+
+## DNS regeneration recheck (2026-09-04)
+
+The resolver regenerated again as the WSL-managed symlink with
+`nameserver 10.255.255.254`, while the runner service remained active. A
+bounded root-only recovery saved the generated resolver (already retained at
+`/var/tmp/codex-generated-resolv.conf`), replaced only `/etc/resolv.conf` with
+`168.126.63.1` and `8.8.8.8`, and restarted only
+`actions.runner.TaeeunKil-kafrust.wsl-ubuntu-t9.service`. GitHub then reported
+`wsl-ubuntu-t9` online and idle. No WSL VM, Docker daemon, or existing Docker
+resource was restarted, pruned, or modified. The recurrence confirms that a
+persistent resolver policy is still required before unattended long campaigns.

@@ -7018,6 +7018,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-live-kafka-smoke-rerun-2026-09-04.md; .github/workflows/live-kafka-smoke.yml
 - non_claims: not the full V1-20 accepted matrix, not published-artifact qualification, not six-hour/24-hour fault campaigns, not five-repetition SLO qualification, not service canary, not release authorization
 
+## Q-INFRA-RUNNER-DNS-REGENERATION-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: fa616d2a0169ff54027d30ac65bbfb883d5c73be
+- client_version: 0.3.6 repository workflow runner
+- protocol_version: not-applicable
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: not-applicable
+- kafka_image: not-applicable
+- mode: self-hosted runner DNS recovery recheck
+- topology: WSL2 Ubuntu-T9 host
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: resolver inspection and runner service recovery
+- workflow: scripts/check_qualification_ledger.py
+- fault: WSL-managed resolver regenerated with unreachable nameserver
+- duration: bounded root-only recovery under one minute
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: second observed resolver regeneration and recovery
+- expected_errors: runner offline before resolver replacement; runner online and idle after service restart
+- observed_errors: `/etc/resolv.conf` contained `10.255.255.254`; replacement with two verified resolvers restored GitHub connectivity
+- retry_count: 0
+- duplicate_count: not-applicable
+- loss_count: not-applicable
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: runner online and idle; Docker/WSL resources untouched
+- result: passed
+- artifact: docs/evidence/v1-company-capacity-recovery-2026-09-03.md
+- non_claims: not persistent resolver policy, not long-campaign qualification, not V1-21/V1-22 completion, not service canary, not release authorization
+
 ## Q-ADMIN-MEMBER-AWARE-V10-RESPONSE-LOSS-2026-09-04
 
 - date_utc: 2026-09-04
