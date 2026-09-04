@@ -5888,3 +5888,14 @@ Metadata v12 preserved UUID `b258804505e74c4eb3186133ba66b260`.
 This is a bounded published diagnostic, not V1-03 completion, the full V1-20
 matrix, a long campaign, a service canary, or release authorization. The
 workflow did not retain a broker image digest.
+
+## V1 published group churn 40-cycle diagnostic (2026-09-04)
+
+The published `kafrust 0.3.6` group workflow completed 40 abrupt member-loss /
+rejoin cycles on Kafka 3.7.2 classic and Kafka 4.3.1 KIP-848. Each run covered
+six partitions with 240 ownership observations, zero loss/duplicates, and
+drained final gauges. The immutable record is
+[`v1-published-group-churn-40-cycle-2026-09-04.md`](evidence/v1-published-group-churn-40-cycle-2026-09-04.md).
+
+These are bounded diagnostics; they do not close the secure group profile,
+100-cycle family gate, long campaigns, service canary, or release authorization.

@@ -7018,6 +7018,72 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-published-topic-id-leader-movement-2026-09-04.md; .github/published-multi-broker-smoke/src/main.rs; .github/workflows/published-multi-broker-smoke.yml
 - non_claims: not V1-03 completion, not accepted-floor security/workload qualification, not official Apache response oracle for every shape, not full V1-20 matrix, not long campaign, not service canary, not release authorization
 
+## Q-PUBLISHED-GROUP-CHURN-40-FLOOR-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: b37270bff9899f8283884304b9b57ba3e939868c
+- client_version: 0.3.6 published artifact
+- protocol_version: classic consumer group lifecycle and OffsetCommit/OffsetFetch path
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 3.7.2
+- kafka_image: apache/kafka@sha256:6d8457e841c10f58f952cb3942a38b6b3c21015b643e3dd010aea37cc0b89055
+- mode: published accepted-floor 40-cycle group churn diagnostic
+- topology: three-broker KRaft
+- security: PLAINTEXT
+- group_protocol: classic consumer protocol
+- workload: six partitions; two-member group; 40 abrupt member drop/rejoin cycles with committed-offset restoration
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/33829763775
+- fault: second member connection dropped and rejoined on every cycle
+- duration: 5 minutes 58 seconds workflow wall time
+- record_count: 240 ownership observations; six per cycle
+- member_count: 2
+- repetition_count: 40 churn cycles
+- expected_errors: every cycle reacquires all six partitions, restores committed offsets, and ends without loss or duplicates
+- observed_errors: cycle_count=40, records_per_cycle=6, loss_count=0, duplicate_count=0, final gauges zero; workflow qualified=false because the 100-cycle flag was not reached
+- retry_count: not measured
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: in_flight=0; buffered=0
+- result: passed
+- artifact: docs/evidence/v1-published-group-churn-40-cycle-2026-09-04.md; published-group-churn-summary.json; Cargo.lock; lockfile_sha256=9644dadf2a339f48a3ff2b8f44f1bbe3868e79f378b3ce1f242789147373b834
+- non_claims: not secure group churn, not 100-cycle qualification, not full V1-08 completion, not long fault campaign, not service canary, not release authorization
+
+## Q-PUBLISHED-GROUP-CHURN-40-CURRENT-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: b37270bff9899f8283884304b9b57ba3e939868c
+- client_version: 0.3.6 published artifact
+- protocol_version: KIP-848 consumer group lifecycle and OffsetCommit/OffsetFetch path
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka@sha256:47dccc76b32761bc57462b8753144cdbb73a16b123b1d13d3eedb92bb7952b11
+- mode: published Kafka 4.3.1 40-cycle group churn diagnostic
+- topology: three-broker KRaft
+- security: PLAINTEXT
+- group_protocol: KIP-848 consumer protocol
+- workload: six partitions; two-member group; 40 abrupt member drop/rejoin cycles with committed-offset restoration
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/33829798439
+- fault: second member connection dropped and rejoined on every cycle
+- duration: 7 minutes 29 seconds workflow wall time
+- record_count: 240 ownership observations; six per cycle
+- member_count: 2
+- repetition_count: 40 churn cycles
+- expected_errors: every cycle reacquires all six partitions, restores committed offsets, and ends without loss or duplicates
+- observed_errors: cycle_count=40, records_per_cycle=6, loss_count=0, duplicate_count=0, final gauges zero; workflow qualified=false because the 100-cycle flag was not reached
+- retry_count: not measured
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: in_flight=0; buffered=0
+- result: passed
+- artifact: docs/evidence/v1-published-group-churn-40-cycle-2026-09-04.md; published-group-churn-summary.json; Cargo.lock; lockfile_sha256=9644dadf2a339f48a3ff2b8f44f1bbe3868e79f378b3ce1f242789147373b834
+- non_claims: not secure group churn, not 100-cycle qualification, not full V1-09 completion, not long fault campaign, not service canary, not release authorization
+
 ## Q-PUBLISHED-TOPIC-ID-LEADER-MOVEMENT-2026-09-04
 
 - date_utc: 2026-09-04

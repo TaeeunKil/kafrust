@@ -111,6 +111,21 @@ operation. It is one current-source single-node diagnostic only; published
 churn and exact restoration remain open. See
 [`v1-company-consumer-controls-short-smoke-2026-09-04.md`](../../evidence/v1-company-consumer-controls-short-smoke-2026-09-04.md).
 
+### Published 40-cycle churn replay (2026-09-04)
+
+The published `0.3.6` group workflow completed 40 abrupt second-member
+drop/rejoin cycles on both Kafka 3.7.2 classic and Kafka 4.3.1 KIP-848. Every
+cycle reacquired all six partitions and restored committed offsets; each run
+recorded 240 ownership observations, zero loss, zero duplicates, and zero
+final in-flight/buffered gauges. The exact broker image identities, lockfile
+digest, and workflow results are in
+[`v1-published-group-churn-40-cycle-2026-09-04.md`](../../evidence/v1-published-group-churn-40-cycle-2026-09-04.md).
+
+These are bounded 40-cycle diagnostics. The workflow's separate 100-cycle
+qualification flag remains false, and the secure 40-cycle profile, callback /
+heartbeat matrix, ambiguity families, and remaining V1-08 exit criteria stay
+open.
+
 ## Failure And Lifecycle Contract
 
 - The group session exclusively owns member ID, generation, assignment, and
