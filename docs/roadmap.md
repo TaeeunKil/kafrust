@@ -5863,3 +5863,8 @@ complete bounded smoke survives without service interruption, and the
 separately approved full-restart resolver verification passes. Details are in
 [`v1-company-capacity-recovery-2026-09-03.md`](evidence/v1-company-capacity-recovery-2026-09-03.md)
 and the V1-21/V1-22 milestone records.
+
+The foreground process was intentionally released after cleanup and the
+registered runner returned to `offline`. Thus the diagnostic establishes a
+workable bounded guard, while unattended long-campaign capacity still needs a
+host-level lifetime mechanism.

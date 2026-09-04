@@ -516,3 +516,8 @@ This validates only the bounded execution path under an explicit foreground
 lifetime guard. It does not prove unattended WSL lifetime, resolver persistence
 across a full restart, or any V1-21 duration/family/data-loss gate; the exact
 six-hour campaigns remain open.
+
+After cleanup, the operator released the foreground process and the registered
+runner reported offline again. This confirms that the present WSL host does not
+remain resident on the enabled systemd runner alone; a host-level lifetime
+mechanism is required before unattended V1-21 execution.

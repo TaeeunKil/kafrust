@@ -126,3 +126,10 @@ specific interruption seen in the prior dispatch. It is not an unattended
 runner guarantee, does not identify the Windows-side shutdown initiator, and
 does not count toward V1-21/V1-22 long gates. Workflow cleanup was
 prefix-scoped; existing Docker resources remained untouched.
+
+After the workflow completed, the foreground WSL process was intentionally
+terminated. GitHub then reported `wsl-ubuntu-t9` offline again, confirming that
+the installed systemd runner does not keep this WSL distribution resident once
+the foreground lifetime guard is released. This observed host behavior is why
+unattended long campaigns remain gated on an explicit host-level lifetime
+mechanism; it is not evidence of a client or broker failure.
