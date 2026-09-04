@@ -82,3 +82,28 @@ strengthened distinct-offset detector. Re-run the four 40-cycle profiles from
 the corrected source before using duplicate absence for a group qualification
 or release decision. No release or milestone completion claim is made from
 the historical duplicate fields alone.
+
+## Corrected distinct-offset reruns (2026-09-04)
+
+All four profiles were rerun from corrected source commit
+`ebe694e54c54a373ca63b9f19029247e8dfe93b1`. The helpers now retain the first
+observed offset per partition, allow the same offset to be redelivered during an
+expected pre-commit rebalance, and reject a distinct second offset or an
+unexpected payload. Every rerun resolved the published `kafrust 0.3.6` pair
+from a fresh external project with lockfile SHA-256
+`155a31ac7d4dfcda4e65708790acbacb42dd3fd40d778ce88c5f031851d26270`.
+
+| Profile | Workflow | Broker image ID | Job wall time | Result |
+| --- | --- | --- | ---: | --- |
+| Kafka 3.7.2 classic, abrupt drop | [33837897323](https://github.com/TaeeunKil/kafrust/actions/runs/33837897323) | `sha256:6d8457e841c10f58f952cb3942a38b6b3c21015b643e3dd010aea37cc0b89055` | 9m 4s | passed |
+| Kafka 3.7.2 classic, normal LeaveGroup | [33837897633](https://github.com/TaeeunKil/kafrust/actions/runs/33837897633) | `sha256:6d8457e841c10f58f952cb3942a38b6b3c21015b643e3dd010aea37cc0b89055` | 9m 4s | passed |
+| Kafka 4.3.1 KIP-848 consumer, normal LeaveGroup | [33837897398](https://github.com/TaeeunKil/kafrust/actions/runs/33837897398) | `sha256:47dccc76b32761bc57462b8753144cdbb73a16b123b1d13d3eedb92bb7952b11` | 6m 5s | passed |
+| Kafka 4.3.1 KIP-848 consumer, abrupt drop | [33837897553](https://github.com/TaeeunKil/kafrust/actions/runs/33837897553) | `sha256:47dccc76b32761bc57462b8753144cdbb73a16b123b1d13d3eedb92bb7952b11` | 35m 8s | passed |
+
+Each descriptor reports 40 cycles, six partitions, six records per cycle, zero
+loss, zero distinct-offset duplicates, and final in-flight/buffered gauges of
+zero. The workflow qualification flag remains false because these are bounded
+40-cycle diagnostics rather than the separate 100-cycle family gate. These
+reruns replace the historical zero-duplicate fields as the direct evidence for
+the bounded secure group diagnostic; they still do not close V1-08/V1-09,
+V1-20, V1-21/V1-22, the service canary, or any release gate.

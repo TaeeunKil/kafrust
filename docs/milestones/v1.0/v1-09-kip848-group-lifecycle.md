@@ -109,6 +109,22 @@ These are bounded published diagnostics. The separate 100-cycle flag,
 regex-created topic and UUID delete/recreate races, callback/heartbeat matrix,
 and long-campaign/release gates remain open.
 
+### Corrected distinct-offset detector rerun (2026-09-04)
+
+After review found that the original helper could hide a distinct second
+record in one partition, the corrected KIP-848 helper was rerun from source
+`ebe694e54c54a373ca63b9f19029247e8dfe93b1`. The Kafka 4.3.1 SASL_SSL/SCRAM
+normal `LeaveGroup` profile passed in
+[33837897398](https://github.com/TaeeunKil/kafrust/actions/runs/33837897398)
+(6m 5s), and the abrupt-drop profile passed in
+[33837897553](https://github.com/TaeeunKil/kafrust/actions/runs/33837897553)
+(35m 8s). Both retained first offsets per partition, allowed same-offset
+redelivery during expected pre-commit rebalances, rejected distinct offsets or
+unexpected payloads, completed 40 cycles over six partitions, and drained all
+final gauges. This replaces the historical zero-duplicate fields as the direct
+bounded secure KIP-848 diagnostic evidence; the 100-cycle, regex/UUID,
+callback/heartbeat, and long-campaign gates stay open.
+
 ## Failure And Lifecycle Contract
 
 - The group handle and heartbeat task share one fenced member/assignment state;

@@ -141,6 +141,21 @@ passed: 3.7.2 in 9m 14s (run 33834878818) and KIP-848 in 5m 29s (run
 33834880832). These remain bounded diagnostics; the 100-cycle flag, long
 campaign, and release evidence are separate.
 
+### Corrected distinct-offset detector rerun (2026-09-04)
+
+After review found that the original helper could hide a distinct second
+record in one partition, the corrected helper was rerun from source
+`ebe694e54c54a373ca63b9f19029247e8dfe93b1`. The Kafka 3.7.2 classic abrupt
+drop profile passed in [33837897323](https://github.com/TaeeunKil/kafrust/actions/runs/33837897323)
+(9m 4s), and the normal `LeaveGroup` profile passed in
+[33837897633](https://github.com/TaeeunKil/kafrust/actions/runs/33837897633)
+(9m 4s). Both retained first offsets per partition, allowed same-offset
+redelivery during expected pre-commit rebalances, rejected distinct offsets or
+unexpected payloads, completed 40 cycles over six partitions, and drained all
+final gauges. This replaces the historical zero-duplicate fields as the direct
+bounded secure classic diagnostic evidence; the 100-cycle and remaining
+callback/heartbeat/long-campaign gates stay open.
+
 ## Failure And Lifecycle Contract
 
 - The group session exclusively owns member ID, generation, assignment, and
