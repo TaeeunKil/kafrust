@@ -1049,6 +1049,14 @@ zero critical/high matches; the offline freshness/inventory check now passes.
 This refresh is dated evidence and does not close multi-platform, owner-review,
 published-artifact, or release gates.
 
+The advisory snapshot was refreshed again on 2026-09-04 from pushed source
+`3bfe6df6cba8b56b2c45fc76e93e00b9136386ab`. The OSV batch covered all 89
+resolved runtime/build packages and again found zero advisory and critical/high
+matches; the report digest is retained in
+[`docs/evidence/v1-19-advisories.md`](evidence/v1-19-advisories.md). This is a
+freshness refresh only and does not alter the published `0.3.6` or release
+gates.
+
 The final owner-review matrix and exact-head package validation then passed both
 toolchains from `a3df635` in [CI run 32612304536](https://github.com/TaeeunKil/kafrust/actions/runs/32612304536).
 This closes V1-19's packaged-candidate exit criteria. The next gate is V1-20's

@@ -10,7 +10,7 @@
     "the offline CI check does not query OSV or crates.io",
     "unreviewed low/moderate or informational advisories still require owner review before stable release"
   ],
-  "observed_at_utc": "2026-09-03T13:47:36Z",
+  "observed_at_utc": "2026-09-04T06:15:26Z",
   "packages": [
     {
       "advisories": [],

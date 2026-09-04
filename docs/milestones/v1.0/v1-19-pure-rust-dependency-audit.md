@@ -220,6 +220,15 @@ inspection. The tarball digests and exact boundary are recorded in
 This is packaged-candidate evidence only; publication and later release gates
 remain open.
 
+### Advisory snapshot refresh (2026-09-04)
+
+The all-feature runtime/build closure was queried again from pushed source
+`3bfe6df6cba8b56b2c45fc76e93e00b9136386ab`. All 89 packages returned zero
+advisory matches, including zero critical/high matches; the refreshed report
+digest is recorded in [`v1-19-advisories.md`](../../evidence/v1-19-advisories.md).
+This keeps the dated advisory gate current only; it does not replace the
+multi-platform, published-artifact, or future-vulnerability non-claims.
+
 ### Combined CI validation (2026-08-23)
 
 The exact pushed commit `af73b8d2eaf19e33d9e90dbc79189f74bd9ad538` passed the

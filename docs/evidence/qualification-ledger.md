@@ -5599,6 +5599,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-19-advisories.md; docs/evidence/v1-19-advisories.json
 - non_claims: not a guarantee against future or undisclosed vulnerabilities, not full upstream unsafe-block review, not multi-platform or published-artifact qualification, not release authorization
 
+## Q-ADVISORY-SNAPSHOT-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: 3bfe6df6cba8b56b2c45fc76e93e00b9136386ab
+- client_version: 0.3.6 source workspace
+- protocol_version: dependency metadata
+- work_status: In progress
+- evidence_level: Live current-source
+- kafka_version: not-applicable
+- kafka_image: not-applicable
+- mode: OSV querybatch dependency advisory refresh
+- topology: 89-package runtime/build dependency closure
+- security: advisory inventory only
+- group_protocol: not-applicable
+- workload: one OSV batch query covering all resolved packages
+- workflow: scripts/check_v1_advisories.py
+- fault: dated advisory snapshot refresh
+- duration: one bounded online query; offline checker passed
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: one refresh
+- expected_errors: zero critical/high advisory matches and snapshot age at most 30 days
+- observed_errors: zero advisory matches and zero critical/high matches
+- retry_count: 0
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: report written; no runtime or Docker resources
+- result: passed
+- artifact: docs/evidence/v1-19-advisories.md; docs/evidence/v1-19-advisories.json; report_sha256=fe85c7b2b1f73758952ad1b9b21e5cb56c6ec94e9ebf7501b611946727951fc6
+- non_claims: not a guarantee against future or undisclosed vulnerabilities, not full upstream unsafe-block review, not multi-platform or published-artifact qualification, not release authorization
+
 ## Q-PACKAGE-BOUNDARY-2026-09-03
 
 - date_utc: 2026-09-03
