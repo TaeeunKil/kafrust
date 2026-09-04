@@ -102,6 +102,14 @@ the deterministic response-loss classification slice for both classic and
 member-aware coordinator commits. Live owner movement, published profiles,
 and the remaining V1-12 gates stay open.
 
+Source `a0029bebe4b2f6ed7442f22371f3f9467330409b` extends the same boundary to
+the negotiated OffsetCommit v10 path. The fixture advertises Metadata v12 and
+OffsetCommit v10, sends a non-zero topic UUID, verifies the member ID/epoch and
+v10 frame, then drops the response; the client again returns
+`AdminMutationOutcomeUnknown` without replay. Both member-aware wire paths are
+now covered locally, while live owner movement, published profiles, and the
+remaining V1-12 gates stay open.
+
 ## Failure And Lifecycle Contract
 
 - Read-only operations may rediscover/retry inside their budget.

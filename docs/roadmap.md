@@ -658,6 +658,14 @@ the deterministic response-loss slice for classic and member-aware coordinator
 commits only; live owner movement, published profiles, and the remaining
 V1-12 gates remain open.
 
+Source `a0029bebe4b2f6ed7442f22371f3f9467330409b` extends this local evidence
+to the negotiated member-aware OffsetCommit v10 path. The scripted broker
+advertises Metadata v12 and OffsetCommit v10, verifies the topic UUID/member
+fields on the complete frame, drops the response, and observes the typed
+unknown outcome without replay. The v9 fallback and v10 topic-UUID paths are
+both covered locally; live movement, published profiles, and the remaining
+V1-12 gates remain open.
+
 ## V1-13 Execution Update (2026-08-22)
 
 V1-13 is `In progress`. Security Admin routes preserve typed mixed

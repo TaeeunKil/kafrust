@@ -6984,3 +6984,36 @@ unqualified relative artifact label.
 - result: passed
 - artifact: docs/evidence/v1-admin-coordinator-response-loss-matrix-2026-09-04.md; docs/milestones/v1.0/v1-12-coordinator-leader-admin-mutations.md; crates/kafrust/src/admin.rs
 - non_claims: not published floor or authorization qualification, not reconciliation or three-broker failover qualification, not long campaign, not service canary, not release authorization
+
+## Q-ADMIN-MEMBER-AWARE-V10-RESPONSE-LOSS-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: a0029bebe4b2f6ed7442f22371f3f9467330409b
+- client_version: 0.3.6 source checkout
+- protocol_version: OffsetCommit v10 member-aware topic-UUID path
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: not-applicable; scripted broker
+- kafka_image: not-applicable; in-memory fixture
+- mode: negotiated member-aware coordinator mutation response-loss classification
+- topology: in-memory scripted broker
+- security: not-applicable
+- group_protocol: KIP-848 member-aware Admin entry point with v10 negotiation
+- workload: one complete member-aware OffsetCommit v10 request followed by a dropped response
+- workflow: scripts/check_qualification_ledger.py
+- fault: response dropped after complete OffsetCommit v10 request transmission
+- duration: focused test 0.01 seconds on Windows
+- record_count: one complete OffsetCommit v10 mutation request frame; no response frame
+- member_count: one encoded member ID and member epoch
+- repetition_count: one Windows focused run and one all-features workspace replay
+- expected_errors: typed AdminMutationOutcomeUnknown for OffsetCommit
+- observed_errors: exact typed unknown outcome; no replay; API key/version, member fields, and topic UUID verified
+- retry_count: 0
+- duplicate_count: 0 client-visible mutations; no replay attempted
+- loss_count: one intentionally dropped coordinator response
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: no external resources
+- result: passed
+- artifact: docs/evidence/v1-admin-coordinator-response-loss-matrix-2026-09-04.md; docs/milestones/v1.0/v1-12-coordinator-leader-admin-mutations.md; crates/kafrust/src/admin.rs
+- non_claims: not published floor or authorization qualification, not reconciliation or three-broker failover qualification, not long campaign, not service canary, not release authorization
