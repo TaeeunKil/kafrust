@@ -171,7 +171,10 @@ async fn wait_for_two_member_coverage(
     topic: &str,
     mut seen_records: BTreeMap<(String, i32), usize>,
 ) -> kafrust::Result<()> {
-    let expected: BTreeMap<_, _> = (0..PARTITION_COUNT)
+    let expected_assignments: BTreeSet<_> = (0..PARTITION_COUNT)
+        .map(|partition| (topic.to_owned(), partition))
+        .collect();
+    let expected_records: BTreeMap<_, _> = (0..PARTITION_COUNT)
         .map(|partition| ((topic.to_owned(), partition), 1_usize))
         .collect();
     for _ in 0..POLL_ATTEMPTS {
@@ -188,8 +191,8 @@ async fn wait_for_two_member_coverage(
                 .union(&second_partitions)
                 .cloned()
                 .collect::<BTreeSet<_>>()
-                == expected
-            && seen_records == expected
+                == expected_assignments
+            && seen_records == expected_records
         {
             return Ok(());
         }
