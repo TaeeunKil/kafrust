@@ -9,6 +9,8 @@ use kafrust::{
 
 const PARTITION_COUNT: i32 = 6;
 const POLL_ATTEMPTS: usize = 80;
+const MAX_CHURN_CYCLES: usize = 100;
+const CHURN_TIMEOUT_PER_CYCLE_SECS: u64 = 30;
 
 struct SecuritySettings {
     tls_server_name: String,
@@ -80,6 +82,34 @@ fn group_protocol() -> Result<ConsumerGroupProtocol, Error> {
     }
 }
 
+fn member_exit_is_abrupt() -> Result<bool, Error> {
+    match env::var("KAFRUST_MEMBER_EXIT")
+        .unwrap_or_else(|_| "leave".to_owned())
+        .trim()
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "leave" => Ok(false),
+        "drop" => Ok(true),
+        _ => Err(Error::Unsupported(
+            "KAFRUST_MEMBER_EXIT must be leave or drop",
+        )),
+    }
+}
+
+fn churn_cycles() -> Result<usize, Error> {
+    let cycles = env::var("KAFRUST_GROUP_CHURN_CYCLES")
+        .unwrap_or_else(|_| "1".to_owned())
+        .parse::<usize>()
+        .map_err(|_| Error::Unsupported("KAFRUST_GROUP_CHURN_CYCLES must be an integer"))?;
+    if !(1..=MAX_CHURN_CYCLES).contains(&cycles) {
+        return Err(Error::Unsupported(
+            "KAFRUST_GROUP_CHURN_CYCLES must be between 1 and 100",
+        ));
+    }
+    Ok(cycles)
+}
+
 fn group_config(
     bootstrap_servers: &str,
     group_id: &str,
@@ -106,6 +136,8 @@ async fn run() -> kafrust::Result<()> {
     let topic = required("KAFRUST_TOPIC")?;
     let group_id = required("KAFRUST_GROUP_ID")?;
     let protocol = group_protocol()?;
+    let abrupt_member_exit = member_exit_is_abrupt()?;
+    let cycles = churn_cycles()?;
     let security = SecuritySettings::from_env()?;
 
     let mut producer = security
@@ -128,41 +160,175 @@ async fn run() -> kafrust::Result<()> {
             .await?;
     }
 
-    let config =
-        group_config(&bootstrap_servers, &group_id, protocol, &security).subscribe(topic.clone());
-    let mut first = config
-        .clone()
-        .client_id("kafrust-published-secure-group-rebalance-first")
-        .join()
-        .await?;
-    if first.assignments().is_empty() {
+    for cycle in 0..cycles {
+        let cycle_group_id = if cycles == 1 {
+            group_id.clone()
+        } else {
+            format!("{group_id}-{cycle}")
+        };
+        let config = group_config(&bootstrap_servers, &cycle_group_id, protocol, &security)
+            .subscribe(topic.clone());
+        let mut first = config
+            .clone()
+            .client_id("kafrust-published-secure-group-rebalance-first")
+            .join()
+            .await?;
+        if first.assignments().is_empty() {
+            return Err(Error::Unsupported(
+                "published secure group smoke first member received no partitions",
+            ));
+        }
+
+        let mut seen_records = BTreeSet::new();
+        let second_join = tokio::spawn(
+            config
+                .clone()
+                .client_id("kafrust-published-secure-group-rebalance-second")
+                .join(),
+        );
+        while !second_join.is_finished() {
+            record_expected_records(&mut seen_records, &topic, first.poll().await?);
+        }
+        let mut second = second_join.await.map_err(|_| {
+            Error::Unsupported("published secure group smoke second member task failed")
+        })??;
+
+        wait_for_two_member_coverage(&mut first, &mut second, &topic, seen_records).await?;
+        verify_position_survives_rejoin(&mut first, &topic).await?;
+        if abrupt_member_exit {
+            drop(second);
+        } else {
+            leave_after_member_rejoin(second).await?;
+        }
+        verify_member_departure_rejoin(&mut first, &topic).await?;
+        verify_committed_offset_restore(&config, first, &topic).await?;
+        println!(
+            "published secure group churn cycle {}/{} passed protocol={protocol:?} exit={}",
+            cycle + 1,
+            cycles,
+            if abrupt_member_exit { "drop" } else { "leave" },
+        );
+    }
+    println!(
+        "published secure group churn passed protocol={protocol:?} exit={} cycles={cycles} partitions={PARTITION_COUNT}",
+        if abrupt_member_exit { "drop" } else { "leave" },
+    );
+    Ok(())
+}
+
+async fn leave_after_member_rejoin(group: ConsumerGroup) -> kafrust::Result<()> {
+    match group.leave().await {
+        Ok(()) => Ok(()),
+        Err(Error::Broker { code: 25, .. }) => Ok(()),
+        Err(error) => Err(error),
+    }
+}
+
+async fn verify_position_survives_rejoin(
+    group: &mut ConsumerGroup,
+    topic: &str,
+) -> kafrust::Result<()> {
+    let assignment = group
+        .assignments()
+        .iter()
+        .find(|assignment| assignment.topic() == topic)
+        .ok_or(Error::Unsupported(
+            "published secure group smoke has no partition for position rejoin check",
+        ))?;
+    let partition = assignment.partition();
+    if assignment.next_offset() <= 0 {
         return Err(Error::Unsupported(
-            "published secure group smoke first member received no partitions",
+            "published secure group smoke did not advance a position before rejoin",
         ));
     }
 
-    let mut seen_records = BTreeSet::new();
-    let second_join = tokio::spawn(
-        config
-            .client_id("kafrust-published-secure-group-rebalance-second")
-            .join(),
-    );
-    while !second_join.is_finished() {
-        record_expected_records(&mut seen_records, &topic, first.poll().await?);
+    group.seek(topic, partition, 0)?;
+    group.rejoin().await?;
+    if group.position(topic, partition) != Some(0) {
+        return Err(Error::Unsupported(
+            "published secure group smoke lost an explicit seek across rejoin",
+        ));
     }
-    let mut second = second_join.await.map_err(|_| {
-        Error::Unsupported("published secure group smoke second member task failed")
-    })??;
-
-    wait_for_two_member_coverage(&mut first, &mut second, &topic, seen_records).await?;
-    println!(
-        "published secure group rebalance passed protocol={protocol:?} first={} second={} partitions={PARTITION_COUNT}",
-        first.member_id(),
-        second.member_id(),
-    );
-    first.leave().await?;
-    second.leave().await?;
     Ok(())
+}
+
+async fn verify_member_departure_rejoin(
+    group: &mut ConsumerGroup,
+    topic: &str,
+) -> kafrust::Result<()> {
+    let expected: BTreeSet<_> = (0..PARTITION_COUNT)
+        .map(|partition| (topic.to_owned(), partition))
+        .collect();
+    for _ in 0..POLL_ATTEMPTS {
+        let _ = group.poll().await?;
+        if assignment_keys(group) == expected {
+            return Ok(());
+        }
+    }
+    Err(Error::Unsupported(
+        "published secure group smoke did not recover all partitions after member departure",
+    ))
+}
+
+async fn verify_committed_offset_restore(
+    config: &ConsumerGroupConfig,
+    mut group: ConsumerGroup,
+    topic: &str,
+) -> kafrust::Result<()> {
+    let expected: BTreeSet<_> = (0..PARTITION_COUNT)
+        .map(|partition| (topic.to_owned(), partition))
+        .collect();
+    for _ in 0..POLL_ATTEMPTS {
+        if assignment_keys(&group) == expected
+            && group
+                .assignments()
+                .iter()
+                .all(|assignment| assignment.next_offset() >= 1)
+        {
+            break;
+        }
+        let _ = group.poll().await?;
+    }
+    if assignment_keys(&group) != expected
+        || !group
+            .assignments()
+            .iter()
+            .all(|assignment| assignment.next_offset() >= 1)
+    {
+        return Err(Error::Unsupported(
+            "published secure group smoke did not advance every assigned position before offset commit",
+        ));
+    }
+    group.commit_offsets().await?;
+    group.leave().await?;
+
+    let mut replacement = config
+        .clone()
+        .client_id("kafrust-published-secure-group-rebalance-restored")
+        .join()
+        .await?;
+    for _ in 0..POLL_ATTEMPTS {
+        if !replacement.poll().await?.is_empty() {
+            return Err(Error::Unsupported(
+                "published secure group smoke replayed a record after committed offset restore",
+            ));
+        }
+        if replacement.assignments().len() == PARTITION_COUNT as usize
+            && replacement
+                .assignments()
+                .iter()
+                .all(|assignment| assignment.next_offset() >= 1)
+        {
+            replacement.leave().await?;
+            return Ok(());
+        }
+        if replacement.assignments().is_empty() {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    }
+    Err(Error::Unsupported(
+        "published secure group smoke did not restore committed offsets for every partition",
+    ))
 }
 
 async fn wait_for_two_member_coverage(
@@ -240,7 +406,12 @@ fn assignment_keys(group: &ConsumerGroup) -> BTreeSet<(String, i32)> {
 
 #[tokio::main]
 async fn main() -> kafrust::Result<()> {
-    tokio::time::timeout(Duration::from_secs(60), run())
+    let timeout_seconds = env::var("KAFRUST_GROUP_CHURN_CYCLES")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .map(|cycles| cycles.saturating_mul(CHURN_TIMEOUT_PER_CYCLE_SECS).max(60))
+        .unwrap_or(60);
+    tokio::time::timeout(Duration::from_secs(timeout_seconds), run())
         .await
         .map_err(|_| Error::Unsupported("published secure group smoke timed out"))?
 }

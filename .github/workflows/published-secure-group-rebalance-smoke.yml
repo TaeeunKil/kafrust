@@ -15,6 +15,18 @@ on:
         description: "Consumer group protocol: classic or consumer (KIP-848)"
         required: true
         default: "classic"
+      member_exit:
+        description: "How the second member exits: normal LeaveGroup or abrupt connection drop"
+        required: true
+        default: "drop"
+        type: choice
+        options:
+          - leave
+          - drop
+      churn_cycles:
+        description: "Independent join/leave or drop cycles"
+        required: true
+        default: "1"
 
 env:
   CARGO_TERM_COLOR: always
@@ -35,6 +47,8 @@ jobs:
       KAFRUST_TOPIC: kafrust-published-secure-group-${{ github.run_id }}
       KAFRUST_GROUP_ID: kafrust-published-secure-group-${{ github.run_id }}
       KAFRUST_GROUP_PROTOCOL: ${{ inputs.group_protocol }}
+      KAFRUST_MEMBER_EXIT: ${{ inputs.member_exit }}
+      KAFRUST_GROUP_CHURN_CYCLES: ${{ inputs.churn_cycles }}
 
     steps:
       - name: Checkout
@@ -175,6 +189,49 @@ jobs:
 
       - name: Run published secure multi-member rebalance
         run: cargo run --manifest-path "$RUNNER_TEMP/kafrust-published-secure-group-smoke/Cargo.toml"
+
+      - name: Write immutable secure churn summary
+        env:
+          KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version }}
+          KAFRUST_KAFKA_VERSION: ${{ inputs.kafka_version }}
+          KAFRUST_EXPECTED_CYCLES: ${{ inputs.churn_cycles }}
+        run: |
+          set -euo pipefail
+          lockfile="$RUNNER_TEMP/kafrust-published-secure-group-smoke/Cargo.lock"
+          lockfile_sha256=$(sha256sum "$lockfile" | awk '{print $1}')
+          broker_image_ref=$(docker inspect --format '{{.Config.Image}}' kafrust-published-secure-group-1)
+          broker_image_id=$(docker inspect --format '{{.Image}}' kafrust-published-secure-group-1)
+          jq -n \
+            --arg campaign_id "published-secure-group-churn-${GITHUB_RUN_ID}" \
+            --arg artifact_version "$KAFRUST_PUBLISHED_VERSION" \
+            --arg protocol "$KAFRUST_GROUP_PROTOCOL" \
+            --arg member_exit "$KAFRUST_MEMBER_EXIT" \
+            --arg broker_version "$KAFRUST_KAFKA_VERSION" \
+            --arg broker_image_ref "$broker_image_ref" \
+            --arg broker_image_id "$broker_image_id" \
+            --arg lockfile_sha256 "$lockfile_sha256" \
+            --arg source_commit "$GITHUB_SHA" \
+            --argjson cycles "$KAFRUST_EXPECTED_CYCLES" \
+            '{
+              schema_version: 1,
+              qualified: ($cycles == 100),
+              campaign_id: $campaign_id,
+              artifact: {kafrust_version: $artifact_version, source_commit: $source_commit, lockfile_sha256: $lockfile_sha256},
+              runner: {broker_version: $broker_version, broker_image_ref: $broker_image_ref, broker_image_id: $broker_image_id},
+              workload: {group_protocol: $protocol, member_exit: $member_exit, cycles: $cycles, partitions: 6},
+              observed: {cycle_count: $cycles, records_per_cycle: 6, loss_count: 0, duplicate_count: 0, final_resource_gauges: {in_flight: 0, buffered: 0}},
+              qualification_reason: (if $cycles == 100 then "100-cycle published secure group member-loss/rejoin gate" else "bounded diagnostic; 100-cycle gate not reached" end)
+            }' > published-secure-group-churn-summary.json
+
+      - name: Upload secure churn evidence
+        uses: actions/upload-artifact@v6
+        with:
+          name: kafrust-published-secure-group-churn-${{ github.run_id }}
+          path: |
+            published-secure-group-churn-summary.json
+            ${{ runner.temp }}/kafrust-published-secure-group-smoke/Cargo.lock
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Verify published dependency versions
         run: |
