@@ -6985,6 +6985,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-admin-coordinator-response-loss-matrix-2026-09-04.md; docs/milestones/v1.0/v1-12-coordinator-leader-admin-mutations.md; crates/kafrust/src/admin.rs
 - non_claims: not published floor or authorization qualification, not reconciliation or three-broker failover qualification, not long campaign, not service canary, not release authorization
 
+## Q-PUBLISHED-TOPIC-ID-LEADER-MOVEMENT-FLOOR-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: 5a70a32763bb0a226f728edf8c5cd282920f5d9c
+- client_version: 0.3.6 published artifact
+- protocol_version: Metadata v12 and Kafka 3.7.2 selected Produce path
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 3.7.2
+- kafka_image: apache/kafka:3.7.2
+- mode: published accepted-floor three-broker topic UUID and leader movement diagnostic
+- topology: three-broker KRaft
+- security: PLAINTEXT
+- group_protocol: classic consumer protocol
+- workload: published pre/post produce and consume around a selected partition leader restart
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/33828967587
+- fault: stopped broker 1; partition 1 moved to replacement broker 2
+- duration: 1 minute 18 seconds workflow wall time
+- record_count: two one-record phases; pre offset 0 and post offset 1
+- member_count: one consumer group member per phase
+- repetition_count: one bounded accepted-floor published failover run
+- expected_errors: leader movement and recovery with unchanged topic UUID and no data loss
+- observed_errors: pre/post success; topic UUID identical; no failure
+- retry_count: not measured
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: workflow cleanup completed; no residual campaign resources
+- result: passed
+- artifact: docs/evidence/v1-published-topic-id-leader-movement-2026-09-04.md; .github/published-multi-broker-smoke/src/main.rs; .github/workflows/published-multi-broker-smoke.yml
+- non_claims: not V1-03 completion, not accepted-floor security/workload qualification, not official Apache response oracle for every shape, not full V1-20 matrix, not long campaign, not service canary, not release authorization
+
 ## Q-PUBLISHED-TOPIC-ID-LEADER-MOVEMENT-2026-09-04
 
 - date_utc: 2026-09-04

@@ -5880,6 +5880,11 @@ failover. Metadata v12 returned the identical topic UUID
 enforced that continuity. The immutable record is
 [`v1-published-topic-id-leader-movement-2026-09-04.md`](evidence/v1-published-topic-id-leader-movement-2026-09-04.md).
 
+The same probe also passed against Kafka 3.7.2 classic in
+[run 33828967587](https://github.com/TaeeunKil/kafrust/actions/runs/33828967587):
+partition 1 moved from broker 1 to broker 2, offsets advanced from 0 to 1, and
+Metadata v12 preserved UUID `b258804505e74c4eb3186133ba66b260`.
+
 This is a bounded published diagnostic, not V1-03 completion, the full V1-20
 matrix, a long campaign, a service canary, or release authorization. The
 workflow did not retain a broker image digest.

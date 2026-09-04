@@ -51,3 +51,24 @@ security/workload matrix, the full V1-20 published matrix, a long campaign,
 service canary, or `1.0.0` readiness. The workflow used the broker image tag;
 an image digest was not recorded by this run.
 
+## Accepted-floor replay
+
+The same published `0.3.6` workflow was replayed against Kafka `3.7.2` using
+classic consumer groups in [run 33828967587](https://github.com/TaeeunKil/kafrust/actions/runs/33828967587).
+The run lasted 1 minute 18 seconds (2026-09-04 02:17:27Z--02:18:45Z), selected
+partition 1 led by broker 1, and stopped that broker. Kafka then reported
+partition 1 moved to leader 2. The pre-failover record completed at offset 0 and
+the post-failover record at offset 1; Metadata v12 returned the unchanged topic
+UUID `b258804505e74c4eb3186133ba66b260` in both phases.
+
+```text
+published multi-broker pre-failover committed kafrust-published-multi-33828967587-1@0 topic_id=b258804505e74c4eb3186133ba66b260
+partition 1 moved to leader 2
+published multi-broker post-failover resumed kafrust-published-multi-33828967587-1@1 topic_id=b258804505e74c4eb3186133ba66b260
+```
+
+This is a second bounded published diagnostic at the planned accepted-floor
+broker line. It does not replace the complete security/workload matrix,
+row-by-row V1-20 qualification, long campaigns, service canary, or release
+authorization. The workflow used the broker image tag and did not retain an
+image digest.

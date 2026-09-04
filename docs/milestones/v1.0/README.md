@@ -60,7 +60,8 @@ On 2026-09-04, a published `0.3.6` three-broker Kafka 4.3.1 KIP-848 probe
 also verified Metadata v12 topic-UUID continuity while partition 0 moved from
 broker 1 to broker 2. The pre/post records and explicit non-claims are in
 [`v1-published-topic-id-leader-movement-2026-09-04.md`](../../evidence/v1-published-topic-id-leader-movement-2026-09-04.md).
-This is a bounded V1-03 diagnostic and does not promote V1-20, V1-21, V1-22,
+The same probe passed on the planned Kafka 3.7.2 classic floor line as well.
+These are bounded V1-03 diagnostics and do not promote V1-20, V1-21, V1-22,
 V1-23, or the release milestones.
 
 V1-02 has since generated the all-features public API snapshot at
