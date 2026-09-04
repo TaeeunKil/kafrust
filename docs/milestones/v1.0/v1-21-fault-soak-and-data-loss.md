@@ -479,3 +479,24 @@ existing resources were left untouched. GitHub reports the runner online and
 idle. An approved `wsl --shutdown` was not performed, so the policy still
 needs one controlled restart verification before an unattended six-hour
 campaign. No V1-21 long campaign was dispatched from this change.
+
+### Self-hosted lifecycle cancellation (2026-09-04)
+
+A bounded published smoke was accepted by `wsl-ubuntu-t9` after the resolver
+policy was staged, but [run 33824960369](https://github.com/TaeeunKil/kafrust/actions/runs/33824960369)
+was cancelled during `Install Rust` when the runner service stopped at
+10:14:19 KST. The WSL boot then powered off and the service returned later;
+Kafka startup was never reached and no campaign Docker resources or client
+artifact were created. This is a host lifecycle non-result, not a Kafka,
+Rust, capacity, or fault-soak failure.
+
+The journal records repeated WSL poweroff/reboot cycles and a runner unit with
+`Restart=no`; no matching systemd timer was found, and the Windows-side actor
+that initiated the shutdown is not identified. The event therefore keeps the
+runner lifecycle gate open. It is not V1-21 evidence and must not be counted
+as a failed campaign result. Before dispatching a six-hour campaign, establish
+a host-level lifetime guarantee (for example, an operator-held foreground WSL
+session), verify one complete short smoke without service interruption, and
+complete the separately approved full-restart resolver check. Full campaign
+duration, family counts, ambiguity outcomes, data-loss fixtures, and
+adjudication remain required.

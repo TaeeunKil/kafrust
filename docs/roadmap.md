@@ -5842,3 +5842,24 @@ The Ubuntu-T9 WSL host also now stages persistent resolver control through
 with rollback copies retained. Docker and existing resources were untouched;
 the runner is online and idle. A controlled `wsl --shutdown` verification is
 still pending, so V1-21/V1-22 long campaigns remain undispatched.
+
+## Self-hosted runner lifecycle diagnostic (2026-09-04)
+
+After the persistent resolver policy was staged, a deliberately short
+published `0.3.6` three-broker smoke was accepted by `wsl-ubuntu-t9` but
+[run 33824960369](https://github.com/TaeeunKil/kafrust/actions/runs/33824960369)
+was cancelled in `Install Rust` when the runner service stopped at 10:14:19
+KST. The WSL journal records a host poweroff/reboot cycle; Kafka startup was
+never reached, no campaign Docker resources were created, and no benchmark or
+client artifact exists. The runner service later returned to
+`Listening for Jobs` and online/idle. No matching systemd timer was found, and
+the Windows-side initiator is not identified, so this remains an undetermined
+host lifecycle event rather than an attributed operator action.
+
+This is an infrastructure non-result and is not counted as V1-21/V1-22
+evidence, a performance sample, or a release gate. The long campaigns remain
+undispatched until a host-level WSL lifetime guarantee is in place, one
+complete bounded smoke survives without service interruption, and the
+separately approved full-restart resolver verification passes. Details are in
+[`v1-company-capacity-recovery-2026-09-03.md`](evidence/v1-company-capacity-recovery-2026-09-03.md)
+and the V1-21/V1-22 milestone records.

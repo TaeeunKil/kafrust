@@ -473,3 +473,21 @@ It processed 1,736,700 unique records with zero loss, duplicates, or unknown
 outcomes and drained final gauges. This confirms only runner/Docker execution
 after recovery; it is not a throughput baseline, five-repetition matrix,
 eight-hour SLO result, or release authorization.
+
+### Self-hosted lifecycle cancellation (2026-09-04)
+
+The follow-up 120-second published smoke was accepted by the Ubuntu-T9
+self-hosted runner after resolver persistence was staged, but
+[run 33824960369](https://github.com/TaeeunKil/kafrust/actions/runs/33824960369)
+was cancelled during `Install Rust` when the runner service stopped at
+10:14:19 KST. No broker was started and no benchmark sample, RSS series, or
+performance artifact was emitted. The WSL journal shows a host poweroff/reboot
+cycle and no matching systemd timer; the initiating Windows-side actor remains
+undetermined. This is an infrastructure non-result, not a performance or
+client failure, and it does not enter the locked baseline or SLO sample set.
+
+V1-22 therefore still requires a lifetime-stable runner before the controlled
+five-repetition, eight-hour campaign. The operator must first hold a host-level
+WSL lifetime guarantee, verify a complete bounded smoke, and perform the
+approved full-restart resolver check. The published profile matrix, RSS and
+retry thresholds, and release decision remain open.

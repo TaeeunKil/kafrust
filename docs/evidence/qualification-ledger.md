@@ -6985,6 +6985,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-admin-coordinator-response-loss-matrix-2026-09-04.md; docs/milestones/v1.0/v1-12-coordinator-leader-admin-mutations.md; crates/kafrust/src/admin.rs
 - non_claims: not published floor or authorization qualification, not reconciliation or three-broker failover qualification, not long campaign, not service canary, not release authorization
 
+## Q-INFRA-RUNNER-JOB-CANCELLED-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: a4df64807d4b95a7e81f8b8044d63032cd1d298a
+- client_version: 0.3.6 published external smoke
+- protocol_version: not-applicable
+- work_status: Blocked
+- evidence_level: Local deterministic
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka:4.3.1 (not started)
+- mode: self-hosted runner lifecycle diagnostic
+- topology: Ubuntu-T9 WSL2 x86_64 host
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: published multi-broker smoke accepted by the runner and cancelled during Rust toolchain setup
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/33824960369
+- fault: runner service stopped during the Install Rust step
+- duration: 19 seconds workflow wall time
+- record_count: no broker records; Kafka startup not reached
+- member_count: not-applicable
+- repetition_count: one cancelled dispatch
+- expected_errors: no service interruption; job should reach toolchain setup
+- observed_errors: systemd stopped the runner service at 10:14:19 KST; the job was cancelled and the service later returned active
+- retry_count: 0
+- duplicate_count: not-applicable
+- loss_count: not-applicable
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: no campaign Docker resources created; runner online and idle after service restart
+- result: blocked
+- artifact: docs/evidence/v1-company-capacity-recovery-2026-09-03.md; docs/milestones/v1.0/v1-21-fault-soak-and-data-loss.md; docs/milestones/v1.0/v1-22-performance-and-operational-slos.md
+- non_claims: not V1-21 evidence, not V1-22 evidence, not long campaign, not Docker failure, not performance sample, not release authorization
+
 ## Q-FUZZ-DISCOVERY-RERUN-2026-09-04
 
 - date_utc: 2026-09-04

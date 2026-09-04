@@ -79,3 +79,32 @@ the runner service and Docker were active, and GitHub reported
 not run, so persistence across a full WSL restart remains an explicit
 verification step before an unattended long campaign. No long campaign was
 dispatched from this change.
+
+## Self-hosted runner lifecycle cancellation (2026-09-04)
+
+A deliberately short published diagnostic was dispatched after the persistent
+resolver policy was staged:
+[run 33824960369](https://github.com/TaeeunKil/kafrust/actions/runs/33824960369)
+used published `kafrust 0.3.6`, Kafka 4.3.1, a 120-second three-broker
+schedule, and the `wsl-ubuntu-t9` self-hosted label. The runner accepted the
+job and passed checkout and the capacity guard, but the job was cancelled in
+the `Install Rust` step after the runner service was stopped at 10:14:19 KST.
+Kafka startup was not reached, no campaign-scoped Docker resources were
+created, and no client result or artifact was produced.
+
+The host journal identifies a WSL shutdown, not a Rust or Kafka failure. The
+Ubuntu-T9 boot containing the job ended at 10:14:26 KST, `last -x` records
+repeated WSL poweroff/reboot cycles around 10:13--10:18, and systemd shows the
+runner unit with `Restart=no` and no matching runner/WSL/Docker timer. The
+service later started again and returned to `Listening for Jobs`; the runner
+is now online and idle. The journal does not identify the Windows-side actor
+that requested the shutdown, so the cause is recorded as an undetermined host
+lifecycle event rather than an attributed operator action.
+
+This is an infrastructure non-result. It does not count toward V1-21 or V1-22,
+does not indicate a Docker capacity failure, and does not authorize a release.
+Before any long campaign, keep a foreground WSL session or otherwise provide
+a host-level lifetime guarantee, verify that the runner remains online through
+the full short smoke, and perform the separately approved full-restart
+resolver check. Existing Docker containers, networks, and volumes were not
+restarted, pruned, or modified during this diagnostic.
