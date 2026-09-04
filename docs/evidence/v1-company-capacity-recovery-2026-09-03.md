@@ -61,3 +61,21 @@ bounded root-only recovery saved the generated resolver (already retained at
 `wsl-ubuntu-t9` online and idle. No WSL VM, Docker daemon, or existing Docker
 resource was restarted, pruned, or modified. The recurrence confirms that a
 persistent resolver policy is still required before unattended long campaigns.
+
+## Persistent resolver policy staged (2026-09-04)
+
+The named Ubuntu-T9 distribution now has `[network]` with
+`generateResolvConf = false` in `/etc/wsl.conf`. The generated resolver was
+copied to `/var/tmp/codex-generated-resolv.conf-2026-09-04.bak`, the prior
+`/etc/wsl.conf` was retained at `/var/tmp/codex-wsl.conf-2026-09-04.bak`, and
+`/etc/resolv.conf` was replaced with a regular `0644` file containing the
+verified workstation/public resolvers `168.126.63.1` and `8.8.8.8`. Only the
+runner service was restarted; Docker, the WSL VM, and existing containers,
+networks, and volumes were not restarted, pruned, or modified.
+
+After the change, `readlink -f /etc/resolv.conf` returned `/etc/resolv.conf`,
+the runner service and Docker were active, and GitHub reported
+`wsl-ubuntu-t9` online and idle. An approved `wsl --shutdown` was deliberately
+not run, so persistence across a full WSL restart remains an explicit
+verification step before an unattended long campaign. No long campaign was
+dispatched from this change.

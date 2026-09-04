@@ -227,6 +227,13 @@ This clears the host preflight for a future campaign dispatch only. The full
 measurement, ten-second samples, and a locked baseline; no V1-22 SLO result is
 claimed from the short diagnostic.
 
+The resolver policy was later staged persistently on Ubuntu-T9 with dated
+rollback copies and a regular `/etc/resolv.conf`; Docker remained active and
+the runner is online and idle. Because `wsl --shutdown` was intentionally not
+performed, a controlled restart verification remains before unattended
+campaign dispatch. This host change does not qualify or shorten the V1-22
+matrix.
+
 ### WSL2 capacity activation follow-up (2026-08-24)
 
 The follow-up WSL2 preflight registered one `wsl-ubuntu-t9` runner with the

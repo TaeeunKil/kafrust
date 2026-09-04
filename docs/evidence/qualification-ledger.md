@@ -7084,6 +7084,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-apache-schema-audit-2026-09-04.md; scripts/check_apache_schema_versions.py
 - non_claims: not every response oracle, not accepted-floor or three-broker qualification, not published-artifact compatibility, not long campaign, not service canary, not release authorization
 
+## Q-INFRA-RUNNER-DNS-PERSISTENCE-STAGED-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: e1c1599ca3f2d30acd3159c4ea3d475af3331462
+- client_version: 0.3.6 repository workflow runner
+- protocol_version: not-applicable
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: not-applicable
+- kafka_image: not-applicable
+- mode: WSL resolver persistence configuration
+- topology: Ubuntu-T9 WSL2 x86_64 host
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: staged `/etc/wsl.conf` policy, resolver replacement, runner-service restart
+- workflow: scripts/check_qualification_ledger.py
+- fault: WSL-managed resolver recurrence
+- duration: bounded root-only host operation under one minute
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: one persistence staging and online verification
+- expected_errors: runner offline with managed resolver; runner online and idle after replacement
+- observed_errors: regular resolver file and `generateResolvConf = false` verified; Docker and runner active
+- retry_count: 0
+- duplicate_count: not-applicable
+- loss_count: not-applicable
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: runner online and idle; Docker active; existing resources untouched
+- result: passed
+- artifact: docs/evidence/v1-company-capacity-recovery-2026-09-03.md; docs/milestones/v1.0/external-gate-unblock-runbook.md
+- non_claims: not persistence across a full WSL restart, not long-campaign qualification, not V1-21/V1-22 completion, not service canary, not release authorization
+
 ## Q-LIVE-DATA-PLANE-MATRIX-RERUN-2026-09-04
 
 - date_utc: 2026-09-04

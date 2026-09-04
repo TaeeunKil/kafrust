@@ -469,3 +469,13 @@ failed requests, eight retries, zero unknown/loss/duplicate outcomes, and
 drained gauges. This confirms the temporary DNS-recovered runner path only;
 the six-hour campaigns and all V1-21 qualification gates remain open. See
 [`v1-company-selfhosted-short-dns-recovery-2026-09-04.md`](../../evidence/v1-company-selfhosted-short-dns-recovery-2026-09-04.md).
+
+### Persistent resolver policy staged (2026-09-04)
+
+The Ubuntu-T9 host now has `[network] generateResolvConf = false` in
+`/etc/wsl.conf`, a regular `/etc/resolv.conf` with the verified resolvers, and
+dated rollback copies. Only the runner service was restarted; Docker and all
+existing resources were left untouched. GitHub reports the runner online and
+idle. An approved `wsl --shutdown` was not performed, so the policy still
+needs one controlled restart verification before an unattended six-hour
+campaign. No V1-21 long campaign was dispatched from this change.

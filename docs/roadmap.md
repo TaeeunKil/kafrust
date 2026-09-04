@@ -5836,3 +5836,9 @@ metadata. Its explicit flexible-boundary coverage notes are retained in
 [`v1-apache-schema-audit-2026-09-04.md`](evidence/v1-apache-schema-audit-2026-09-04.md).
 This is a metadata audit only and does not close the remaining live, published,
 long-campaign, canary, or release gates.
+
+The Ubuntu-T9 WSL host also now stages persistent resolver control through
+`/etc/wsl.conf` (`generateResolvConf = false`) and a regular `/etc/resolv.conf`,
+with rollback copies retained. Docker and existing resources were untouched;
+the runner is online and idle. A controlled `wsl --shutdown` verification is
+still pending, so V1-21/V1-22 long campaigns remain undispatched.
