@@ -270,6 +270,22 @@ campaign is dispatched or promoted by reducing the duration or changing the
 runner requirement. The audit is retained in
 [`v1-long-campaign-capacity-audit-2026-08-24.md`](../../evidence/v1-long-campaign-capacity-audit-2026-08-24.md).
 
+### Rate-limited lifetime diagnostic workflow (2026-09-04)
+
+To make a small long-duration check safe without weakening the V1-21 gate, the
+repository now provides
+[`published-multi-soak-lifetime-diagnostic.yml`](../../.github/workflows/published-multi-soak-lifetime-diagnostic.yml).
+It uses a three-broker/RF3 topology, a global 1,000-records/s limiter, 256-byte
+values, a two-hour maximum, run-scoped Docker names, before/after capacity
+artifacts, and a 40-GiB disk watermark abort. The helper rejects a zero rate,
+and the workflow descriptor is always `qualified=false`.
+
+This workflow is a runner-lifetime, broker-recovery, cleanup, and gauge-drain
+diagnostic. It is not a shortened V1-21 throughput campaign: the exact
+10,000-records/s, 1-KiB, six-hour manifest, fault families, and adjudication
+requirements remain unchanged. It has not been dispatched while the current
+self-hosted runner is offline/stopped.
+
 ### Bounded current-source diagnostic runs (2026-08-22)
 
 The first 60-second manual run on source `3fdfc778` (run

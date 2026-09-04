@@ -300,3 +300,25 @@ threshold. A resource-light lifetime probe could target 1,000 records/s with
 lifetime, broker restart recovery, cleanup, and final gauge draining, but it is
 not V1-21 throughput evidence. A 1-KiB, 10,000-records/s run remains the only
 workload that can be compared directly with the V1-21 floor.
+
+### Rate-limited RF3 lifetime diagnostic prepared (2026-09-04)
+
+The repository now contains a separate
+[`published-multi-soak-lifetime-diagnostic.yml`](../../.github/workflows/published-multi-soak-lifetime-diagnostic.yml)
+workflow for the small long-run question. Its defaults are a three-broker
+KRaft cluster, replication factor three, 1,000 records/s, 256-byte values, and
+two hours. Hard input caps limit the duration to two hours, the rate to 5,000
+records/s, and the payload to 256 bytes. The producer helper applies a global
+batch rate limiter, the workflow samples both the WSL-owned volume and the
+Docker root, and it aborts before either falls below the configured 40-GiB
+watermark. Resource names contain the run ID and cleanup removes only that
+prefix; it does not run a global Docker prune.
+
+At the default workload the retained-data lower bound is about 2.6 GiB/hour,
+or 5.2 GiB for two hours, so a 40-GiB watermark leaves operational headroom.
+The descriptor is forced to `status=diagnostic` and `qualified=false`, with
+explicit non-claims for V1-21 throughput, V1-22 SLO, service-canary, and
+release evidence. The workflow has not been dispatched because
+`wsl-ubuntu-t9` is currently offline and `Ubuntu-T9` is stopped. A successful
+run would validate lifetime/restart/cleanup behavior only; it would not close
+the exact six-hour campaign.

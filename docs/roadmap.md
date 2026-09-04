@@ -6020,3 +6020,14 @@ The detailed rates, RSS slopes, lockfile digest, and artifact IDs are in
 This strengthens published regression evidence only. It is not the locked
 baseline, the V1-22 five-repetition/eight-hour SLO campaign, a long-campaign
 resource qualification, a competitor-parity claim, or release authorization.
+
+## Rate-limited RF3 lifetime diagnostic prepared (2026-09-04)
+
+A separate [`published-multi-soak-lifetime-diagnostic.yml`](../.github/workflows/published-multi-soak-lifetime-diagnostic.yml)
+workflow now supports a bounded two-hour lifetime check at 1,000 records/s
+with 256-byte values and replication factor three. It enforces a 40-GiB host/
+Docker watermark, run-scoped cleanup, and an immutable `qualified=false`
+descriptor. This is useful for WSL lifetime, broker recovery, and resource
+drain evidence, but it is not V1-21 throughput or V1-22 SLO evidence. It has
+not been dispatched because the registered self-hosted runner is offline and
+the Ubuntu-T9 WSL instance is stopped.

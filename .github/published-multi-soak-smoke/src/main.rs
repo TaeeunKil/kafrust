@@ -24,6 +24,9 @@ async fn main() -> kafrust::Result<()> {
     )?);
     let batch_size = usize_from_env("KAFRUST_SOAK_BATCH_SIZE", DEFAULT_BATCH_SIZE)?.max(1);
     let payload_bytes = usize_from_env("KAFRUST_SOAK_PAYLOAD_BYTES", DEFAULT_PAYLOAD_BYTES)?;
+    let mut rate_limiter = RateLimiter::new(optional_u64_from_env(
+        "KAFRUST_SOAK_RECORDS_PER_SECOND",
+    )?)?;
     let metrics = ClientMetrics::new();
     let payload = vec![b'x'; payload_bytes];
 
@@ -88,6 +91,7 @@ async fn main() -> kafrust::Result<()> {
             };
             let batch_len = u64::try_from(batch_records.len())
                 .map_err(|_| kafrust::Error::Unsupported("soak batch length is too large"))?;
+            rate_limiter.wait(batch_records.len()).await?;
             let metadata = match producer.send_batch(batch_records.iter().cloned()).await {
                 Ok(metadata) => {
                     next_produce_sequences[partition] =
@@ -395,9 +399,58 @@ fn u64_from_env(name: &'static str, default: u64) -> kafrust::Result<u64> {
         .map_err(|_| kafrust::Error::Unsupported("soak duration variable is invalid"))
 }
 
+fn optional_u64_from_env(name: &'static str) -> kafrust::Result<Option<u64>> {
+    let Some(value) = std::env::var(name).ok() else {
+        return Ok(None);
+    };
+    let parsed = value
+        .parse()
+        .map_err(|_| kafrust::Error::Unsupported("soak rate variable is invalid"))?;
+    Ok(Some(parsed))
+}
+
+struct RateLimiter {
+    records_per_second: Option<u64>,
+    next_send_at: Instant,
+}
+
+impl RateLimiter {
+    fn new(records_per_second: Option<u64>) -> kafrust::Result<Self> {
+        if records_per_second == Some(0) {
+            return Err(kafrust::Error::Unsupported(
+                "KAFRUST_SOAK_RECORDS_PER_SECOND must be greater than zero",
+            ));
+        }
+        Ok(Self {
+            records_per_second,
+            next_send_at: Instant::now(),
+        })
+    }
+
+    async fn wait(&mut self, record_count: usize) -> kafrust::Result<()> {
+        let Some(records_per_second) = self.records_per_second else {
+            return Ok(());
+        };
+        let record_count = u64::try_from(record_count)
+            .map_err(|_| kafrust::Error::Unsupported("soak batch length is too large"))?;
+        let interval = Duration::from_secs_f64(record_count as f64 / records_per_second as f64);
+        let now = Instant::now();
+        if self.next_send_at > now {
+            tokio::time::sleep(self.next_send_at - now).await;
+        }
+        self.next_send_at = self
+            .next_send_at
+            .checked_add(interval)
+            .ok_or(kafrust::Error::Unsupported("soak rate schedule overflow"))?;
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{identity_digest, observe_identity, record_identity, record_value, PARTITIONS};
+    use super::{
+        identity_digest, observe_identity, record_identity, record_value, RateLimiter, PARTITIONS,
+    };
 
     #[test]
     fn record_identity_roundtrips_with_short_payload() {
@@ -431,5 +484,12 @@ mod tests {
             identity_digest(&first),
             identity_digest(&[4_u64; PARTITIONS])
         );
+    }
+
+    #[test]
+    fn rate_limiter_rejects_zero_rate() {
+        assert!(RateLimiter::new(Some(0)).is_err());
+        assert!(RateLimiter::new(Some(1_000)).is_ok());
+        assert!(RateLimiter::new(None).is_ok());
     }
 }

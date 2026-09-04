@@ -1,0 +1,359 @@
+name: Published Multi-Broker Lifetime Diagnostic
+
+on:
+  workflow_dispatch:
+    inputs:
+      kafrust_version:
+        description: Published kafrust version to execute from crates.io
+        required: true
+        default: "0.3.6"
+      kafka_version:
+        description: Apache Kafka broker image version
+        required: true
+        default: "4.3.1"
+      duration_seconds:
+        description: Bounded diagnostic duration (60-7200 seconds)
+        required: true
+        default: "7200"
+      rate_records_per_second:
+        description: Global hard producer rate limit
+        required: true
+        default: "1000"
+      payload_bytes:
+        description: Record value bytes (maximum 256 for this diagnostic)
+        required: true
+        default: "256"
+      disk_watermark_gib:
+        description: Abort if host or Docker free space falls below this value
+        required: true
+        default: "40"
+      campaign_id:
+        description: Non-qualifying diagnostic identity
+        required: true
+        default: "v1-21-lifetime-diagnostic"
+      runner_label:
+        description: Self-hosted Linux x64 Docker runner label
+        required: true
+        default: "self-hosted"
+
+concurrency:
+  group: kafrust-published-lifetime-diagnostic-${{ inputs.runner_label }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  KAFRUST_BOOTSTRAP_SERVERS: localhost:19092,localhost:19093,localhost:19094
+  KAFRUST_RESOURCE_PREFIX: kafrust-lifetime-${{ github.run_id }}-
+  KAFRUST_NETWORK: kafrust-lifetime-${{ github.run_id }}
+  KAFRUST_TOPIC: kafrust-lifetime-${{ github.run_id }}
+  KAFRUST_SOAK_SECONDS: ${{ inputs.duration_seconds }}
+  KAFRUST_SOAK_BATCH_SIZE: "50"
+  KAFRUST_SOAK_PAYLOAD_BYTES: ${{ inputs.payload_bytes }}
+  KAFRUST_SOAK_RECORDS_PER_SECOND: ${{ inputs.rate_records_per_second }}
+  KAFRUST_CAMPAIGN_ID: ${{ inputs.campaign_id }}
+  KAFRUST_DISK_WATERMARK_GIB: ${{ inputs.disk_watermark_gib }}
+
+jobs:
+  validate-runner:
+    name: Validate diagnostic runner selection
+    runs-on: ubuntu-latest
+    steps:
+      - name: Reject hosted runner labels
+        env:
+          RUNNER_LABEL: ${{ inputs.runner_label }}
+        run: |
+          set -euo pipefail
+          case "$RUNNER_LABEL" in
+            ubuntu-*|windows-*|macos-*)
+              echo "this diagnostic requires a self-hosted Linux x64 Docker runner"
+              exit 1
+              ;;
+            "")
+              echo "runner_label must be non-empty"
+              exit 1
+              ;;
+          esac
+
+  lifetime-diagnostic:
+    name: Published kafrust ${{ inputs.kafrust_version }} Kafka ${{ inputs.kafka_version }} rate-limited lifetime diagnostic
+    needs: validate-runner
+    runs-on: ${{ inputs.runner_label }}
+    timeout-minutes: 140
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Validate Linux x64 Docker host and inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -s)" = Linux
+          test "$(uname -m)" = x86_64
+          docker info >/dev/null
+          for value in \
+            "$KAFRUST_SOAK_SECONDS" \
+            "$KAFRUST_SOAK_RECORDS_PER_SECOND" \
+            "$KAFRUST_SOAK_PAYLOAD_BYTES" \
+            "$KAFRUST_DISK_WATERMARK_GIB"; do
+            [[ "$value" =~ ^[0-9]+$ ]] || { echo "diagnostic inputs must be non-negative integers"; exit 1; }
+          done
+          [[ "$KAFRUST_CAMPAIGN_ID" =~ ^[A-Za-z0-9._-]+$ ]] || {
+            echo "campaign_id contains unsupported characters"
+            exit 1
+          }
+          test "$KAFRUST_SOAK_SECONDS" -ge 60
+          test "$KAFRUST_SOAK_SECONDS" -le 7200
+          test "$KAFRUST_SOAK_RECORDS_PER_SECOND" -ge 1
+          test "$KAFRUST_SOAK_RECORDS_PER_SECOND" -le 5000
+          test "$KAFRUST_SOAK_PAYLOAD_BYTES" -ge 1
+          test "$KAFRUST_SOAK_PAYLOAD_BYTES" -le 256
+          test "$KAFRUST_DISK_WATERMARK_GIB" -ge 10
+          test "$KAFRUST_DISK_WATERMARK_GIB" -le 200
+
+      - name: Check self-hosted runner capacity
+        shell: bash
+        env:
+          KAFRUST_REQUIRED_HOST_FREE_GIB: ${{ inputs.disk_watermark_gib }}
+          KAFRUST_REQUIRED_DOCKER_FREE_GIB: ${{ inputs.disk_watermark_gib }}
+        run: bash scripts/check_campaign_capacity.sh
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.81.0"
+
+      - name: Start three-broker Kafka ${{ inputs.kafka_version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker network create "$KAFRUST_NETWORK"
+          cluster_id="$(docker run --rm apache/kafka:${{ inputs.kafka_version }} /opt/kafka/bin/kafka-storage.sh random-uuid)"
+          for node in 1 2 3; do
+            external_port=$((19091 + node))
+            container_name="${KAFRUST_RESOURCE_PREFIX}${node}"
+            docker run -d --name "$container_name" \
+              --hostname "$container_name" \
+              --network "$KAFRUST_NETWORK" \
+              --log-driver json-file \
+              --log-opt max-size=50m \
+              --log-opt max-file=3 \
+              -p "${external_port}:9092" \
+              -e KAFKA_CLUSTER_ID="$cluster_id" \
+              -e KAFKA_NODE_ID="$node" \
+              -e KAFKA_PROCESS_ROLES=broker,controller \
+              -e KAFKA_LISTENERS=INTERNAL://:29092,EXTERNAL://:9092,CONTROLLER://:9093 \
+              -e KAFKA_ADVERTISED_LISTENERS=INTERNAL://$container_name:29092,EXTERNAL://localhost:${external_port} \
+              -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+              -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT \
+              -e KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL \
+              -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@${KAFRUST_RESOURCE_PREFIX}1:9093,2@${KAFRUST_RESOURCE_PREFIX}2:9093,3@${KAFRUST_RESOURCE_PREFIX}3:9093 \
+              -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=3 \
+              -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=3 \
+              -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=2 \
+              -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 \
+              "apache/kafka:${{ inputs.kafka_version }}"
+          done
+
+      - name: Wait for Kafka cluster
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in {1..120}; do
+            if docker exec "${KAFRUST_RESOURCE_PREFIX}1" /opt/kafka/bin/kafka-broker-api-versions.sh \
+              --bootstrap-server "${KAFRUST_RESOURCE_PREFIX}1:29092" \
+              >/tmp/kafrust-lifetime-probe.log 2>&1; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/kafrust-lifetime-probe.log || true
+          for node in 1 2 3; do docker logs "${KAFRUST_RESOURCE_PREFIX}${node}" || true; done
+          exit 1
+
+      - name: Create replicated diagnostic topic
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker exec "${KAFRUST_RESOURCE_PREFIX}1" /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server "${KAFRUST_RESOURCE_PREFIX}1:29092" \
+            --create \
+            --topic "$KAFRUST_TOPIC" \
+            --partitions 3 \
+            --replication-factor 3
+
+      - name: Create fresh external project
+        env:
+          KAFRUST_PUBLISHED_VERSION: ${{ inputs.kafrust_version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          project_dir="$RUNNER_TEMP/kafrust-published-lifetime-diagnostic"
+          if [ "$project_dir" = "$GITHUB_WORKSPACE" ]; then
+            echo "the diagnostic project must be outside the repository"
+            exit 1
+          fi
+          cargo new --bin "$project_dir"
+          cp .github/published-multi-soak-smoke/src/main.rs "$project_dir/src/main.rs"
+          sed "s/__KAFRUST_VERSION__/$KAFRUST_PUBLISHED_VERSION/" \
+            .github/published-multi-soak-smoke/Cargo.toml > "$project_dir/Cargo.toml"
+
+      - name: Build published external diagnostic
+        shell: bash
+        run: cargo build --release --manifest-path "$RUNNER_TEMP/kafrust-published-lifetime-diagnostic/Cargo.toml"
+
+      - name: Run rate-limited diagnostic with disk watermark
+        shell: bash
+        run: |
+          set -euo pipefail
+          project_dir="$RUNNER_TEMP/kafrust-published-lifetime-diagnostic"
+          docker_root="$(docker info --format '{{.DockerRootDir}}')"
+          capacity_path=/
+          if df -Pk /mnt/t >/dev/null 2>&1; then capacity_path=/mnt/t; fi
+          free_gib() {
+            local path="$1"
+            local available_kib
+            available_kib="$(df -Pk "$path" | awk 'NR == 2 {print $4}')"
+            case "$available_kib" in
+              ''|*[!0-9]*) echo "unable to read free space for $path" >&2; return 1 ;;
+            esac
+            echo $((available_kib / 1024 / 1024))
+          }
+          {
+            echo "capacity_path=$capacity_path free_gib=$(free_gib "$capacity_path")"
+            echo "docker_root=$docker_root free_gib=$(free_gib "$docker_root")"
+            docker system df
+          } | tee campaign-capacity-before.txt
+
+          (
+            cargo run --quiet --release --manifest-path "$project_dir/Cargo.toml" \
+              | tee published-lifetime-diagnostic.json
+          ) &
+          soak_pid=$!
+          aborted=0
+          while kill -0 "$soak_pid" 2>/dev/null; do
+            host_free="$(free_gib "$capacity_path")"
+            docker_free="$(free_gib "$docker_root")"
+            echo "watermark check: host=${host_free}GiB docker=${docker_free}GiB threshold=${KAFRUST_DISK_WATERMARK_GIB}GiB"
+            if ((host_free < KAFRUST_DISK_WATERMARK_GIB || docker_free < KAFRUST_DISK_WATERMARK_GIB)); then
+              echo "disk watermark reached; stopping diagnostic before host exhaustion" >&2
+              kill -TERM "$soak_pid" 2>/dev/null || true
+              sleep 5
+              kill -KILL "$soak_pid" 2>/dev/null || true
+              aborted=1
+              break
+            fi
+            sleep 30
+          done
+          soak_status=0
+          wait "$soak_pid" || soak_status=$?
+          if ((aborted != 0)); then
+            echo "diagnostic aborted by disk watermark"
+            exit 1
+          fi
+          if ((soak_status != 0)); then exit "$soak_status"; fi
+          test -s published-lifetime-diagnostic.json
+          jq -e \
+            '(.recovered == true) and
+             (.produced == .consumed) and
+             (.acknowledged_records == .consumed_unique_records) and
+             (.unknown_outcomes == 0) and
+             (.record_id_reconciliation.qualified == true) and
+             (.record_id_reconciliation.loss_count == 0) and
+             (.record_id_reconciliation.duplicate_count == 0) and
+             (.in_flight_requests == 0) and
+             (.buffered_records == 0)' \
+            published-lifetime-diagnostic.json >/dev/null
+
+          {
+            echo "capacity_path=$capacity_path free_gib=$(free_gib "$capacity_path")"
+            echo "docker_root=$docker_root free_gib=$(free_gib "$docker_root")"
+            docker system df
+          } | tee campaign-capacity-after.txt
+
+      - name: Write non-qualifying diagnostic descriptor
+        shell: bash
+        run: |
+          set -euo pipefail
+          project_dir="$RUNNER_TEMP/kafrust-published-lifetime-diagnostic"
+          lockfile_sha256="$(sha256sum "$project_dir/Cargo.lock" | awk '{print $1}')"
+          broker_image_id="$(docker image inspect "apache/kafka:${{ inputs.kafka_version }}" --format '{{.Id}}')"
+          jq -n \
+            --arg campaign_id "$KAFRUST_CAMPAIGN_ID" \
+            --arg artifact_version "${{ inputs.kafrust_version }}" \
+            --arg source_commit "$GITHUB_SHA" \
+            --arg kafka_version "${{ inputs.kafka_version }}" \
+            --arg broker_image_id "$broker_image_id" \
+            --arg runner_image "$RUNNER_OS/${{ runner.arch }}" \
+            --arg lockfile_sha256 "$lockfile_sha256" \
+            --arg result_file published-lifetime-diagnostic.json \
+            --arg capacity_before campaign-capacity-before.txt \
+            --arg capacity_after campaign-capacity-after.txt \
+            --argjson duration_seconds "$KAFRUST_SOAK_SECONDS" \
+            --argjson rate_records_per_second "$KAFRUST_SOAK_RECORDS_PER_SECOND" \
+            --argjson payload_bytes "$KAFRUST_SOAK_PAYLOAD_BYTES" \
+            --argjson disk_watermark_gib "$KAFRUST_DISK_WATERMARK_GIB" \
+            --slurpfile result published-lifetime-diagnostic.json \
+            '{
+              schema_version: 1,
+              status: "diagnostic",
+              qualified: false,
+              qualification_reason: "rate-limited lifetime diagnostic; not a V1-21 six-hour result",
+              campaign_id: $campaign_id,
+              artifact: {kafrust_version: $artifact_version, source_commit: $source_commit, lockfile_sha256: $lockfile_sha256},
+              runner: {image: $runner_image, broker: $kafka_version, broker_image_id: $broker_image_id},
+              workload: {duration_seconds: $duration_seconds, rate_records_per_second: $rate_records_per_second, payload_bytes: $payload_bytes, replication_factor: 3, partitions: 3, disk_watermark_gib: $disk_watermark_gib},
+              result_file: $result_file,
+              capacity_before: $capacity_before,
+              capacity_after: $capacity_after,
+              result: $result[0],
+              non_claims: ["not V1-21 throughput evidence", "not six-hour fault-soak evidence", "not V1-22 SLO evidence", "not service-canary evidence", "not release authorization"]
+            }' > published-lifetime-diagnostic-descriptor.json
+          jq -e '
+            (.schema_version == 1) and
+            (.status == "diagnostic") and
+            (.qualified == false) and
+            (.workload.replication_factor == 3) and
+            (.workload.rate_records_per_second <= 5000) and
+            (.result.record_id_reconciliation.qualified == true) and
+            (.result.in_flight_requests == 0) and
+            (.result.buffered_records == 0)
+          ' published-lifetime-diagnostic-descriptor.json >/dev/null
+
+      - name: Verify published dependency version
+        shell: bash
+        run: |
+          set -euo pipefail
+          lockfile="$RUNNER_TEMP/kafrust-published-lifetime-diagnostic/Cargo.lock"
+          grep -A1 -q 'name = "kafrust"' "$lockfile"
+          grep -A1 -q 'version = "${{ inputs.kafrust_version }}"' "$lockfile"
+          grep -A1 -q 'name = "kafrust-protocol"' "$lockfile"
+          grep -A1 -q 'version = "${{ inputs.kafrust_version }}"' "$lockfile"
+
+      - name: Upload diagnostic result
+        uses: actions/upload-artifact@v6
+        with:
+          name: kafrust-published-lifetime-diagnostic-${{ inputs.campaign_id }}-${{ github.run_id }}
+          path: |
+            published-lifetime-diagnostic.json
+            published-lifetime-diagnostic-descriptor.json
+            campaign-capacity-before.txt
+            campaign-capacity-after.txt
+          retention-days: 90
+
+      - name: Dump Kafka diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          for node in 1 2 3; do docker logs --tail 200 "${KAFRUST_RESOURCE_PREFIX}${node}" || true; done
+
+      - name: Cleanup diagnostic Docker resources
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          mapfile -t containers < <(docker ps -a --format '{{.Names}}' | awk -v prefix="$KAFRUST_RESOURCE_PREFIX" 'index($0, prefix) == 1')
+          if ((${#containers[@]} > 0)); then docker rm -f -v "${containers[@]}"; fi
+          docker network rm "$KAFRUST_NETWORK" 2>/dev/null || true
+          docker system df
+          df -h /mnt/t / 2>/dev/null || df -h /
