@@ -7084,6 +7084,39 @@ unqualified relative artifact label.
 - artifact: .github/workflows/published-multi-soak-lifetime-diagnostic.yml; .github/published-multi-soak-smoke/src/main.rs; docs/evidence/v1-long-campaign-capacity-audit-2026-08-24.md
 - non_claims: not V1-21 throughput qualification, not V1-22 SLO evidence, not service canary, not release authorization, not proof of WSL lifetime until executed
 
+## Q-DESIGN-V121-RATE-LIMITED-RECOVERY-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: 4231f8fcafe3ca291ebecb65fe3ccd352e687e2d
+- client_version: 0.3.6 published diagnostic fixture
+- protocol_version: 0.3.6 published dependency
+- work_status: In progress
+- evidence_level: Design
+- kafka_version: 4.3.1 by default; configurable within the diagnostic workflow
+- kafka_image: apache/kafka:${kafka_version}
+- mode: rate-limited RF3 lifetime diagnostic with controlled recovery
+- topology: three-broker KRaft; replication factor three
+- security: PLAINTEXT
+- group_protocol: not-applicable
+- workload: default two-hour maximum, 1,000 records/s global limit, 256-byte values, 50-record batches, run-scoped topic/network/container names
+- workflow: scripts/check_campaign_capacity.sh
+- fault: broker 1 stopped halfway through the run and restarted after a fixed 10-second outage
+- duration: not-run; configured maximum 7,200 seconds
+- record_count: not-run
+- member_count: not-applicable
+- repetition_count: not-run
+- expected_errors: disk watermark abort below 40 GiB, typed zero-rate rejection, retry/recovery during the broker outage, and zero final in-flight/buffered gauges on a successful diagnostic
+- observed_errors: not-run because `wsl-ubuntu-t9` is offline and `Ubuntu-T9` is stopped
+- retry_count: not-run
+- duplicate_count: not-run
+- loss_count: not-run
+- latency: not-run
+- memory: not-run
+- final_resource_gauges: not-run
+- result: not-run
+- artifact: .github/workflows/published-multi-soak-lifetime-diagnostic.yml; .github/published-multi-soak-smoke/src/main.rs; docs/evidence/v1-long-campaign-capacity-audit-2026-08-24.md
+- non_claims: not V1-21 throughput qualification, not V1-22 SLO evidence, not service canary, not release authorization, not proof of WSL lifetime until executed
+
 ## Q-PUBLISHED-V120-037
 
 - date_utc: 2026-09-04
