@@ -286,3 +286,15 @@ and multi-broker failover job passed. The run is retained as
 It refreshes current-source rows only; the exact published lockfile matrix,
 long fault/SLO campaigns, migration canary, API freeze, and release gates
 remain open.
+
+### Published artifact smoke refresh (2026-09-04)
+
+The exact published `0.3.6` pair was rerun from pushed source
+`b990f6df20344dacd4c8773b4276e148fd255e3a` in
+[run 33844458915](https://github.com/TaeeunKil/kafrust/actions/runs/33844458915).
+All twelve profiles passed, each fresh external lockfile resolved both crates at
+`0.3.6`, and each captured fixture output contained the published verification
+marker. The immutable record is
+[`v1-20-published-smoke-refresh-2026-09-04.md`](../../evidence/v1-20-published-smoke-refresh-2026-09-04.md).
+This refresh strengthens the named published rows only; the complete matrix and
+downstream long, canary, freeze, and release gates remain open.

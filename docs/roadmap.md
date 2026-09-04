@@ -5848,6 +5848,14 @@ restart restored `wsl-ubuntu-t9` to online/idle. This is recorded in
 and confirms that a persistent resolver policy remains an external prerequisite
 for unattended long campaigns; no Docker resource or long gate was changed.
 
+The immutable published `0.3.6` smoke pair was refreshed from pushed source
+`b990f6d` in [run 33844458915](https://github.com/TaeeunKil/kafrust/actions/runs/33844458915).
+All twelve accepted short profiles passed with 12 exact external lockfiles and
+12 captured verification outputs; details are in
+[`v1-20-published-smoke-refresh-2026-09-04.md`](evidence/v1-20-published-smoke-refresh-2026-09-04.md).
+This strengthens named published rows only and leaves the complete matrix,
+long campaigns, canary, freeze, and release gates open.
+
 ## V1-04 Buffered delivery phase expiry (2026-09-04)
 
 The buffered producer now records the total-budget phase when Metadata or

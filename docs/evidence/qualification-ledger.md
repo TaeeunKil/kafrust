@@ -7018,6 +7018,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-admin-coordinator-response-loss-matrix-2026-09-04.md; docs/milestones/v1.0/v1-12-coordinator-leader-admin-mutations.md; crates/kafrust/src/admin.rs
 - non_claims: not published floor or authorization qualification, not reconciliation or three-broker failover qualification, not long campaign, not service canary, not release authorization
 
+## Q-PUBLISHED-V120-037
+
+- date_utc: 2026-09-04
+- source_commit: b990f6df20344dacd4c8773b4276e148fd255e3a
+- client_version: 0.3.6 published artifact
+- protocol_version: 0.3.6 published dependency
+- work_status: In progress
+- evidence_level: Published artifact
+- kafka_version: 3.7.2, 3.8.1, 3.9.1, 4.0.0, 4.3.1
+- kafka_image: apache/kafka:<matrix version>
+- mode: published twelve-profile smoke refresh
+- topology: single-node KRaft
+- security: PLAINTEXT, SASL_PLAINTEXT/PLAIN, and SASL_SSL/SCRAM-SHA-256/512
+- group_protocol: classic plus KIP-848 consumer
+- workload: fresh external produce/fetch/group projects plus gzip, snappy, lz4, and zstd codecs
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/33844458915
+- fault: broker/profile startup, dependency, or roundtrip failure
+- duration: approximately 2 minutes wall time across twelve matrix jobs
+- record_count: one produced/read record per profile; profile-specific
+- member_count: one broker per profile
+- repetition_count: 12 matrix profiles; one refresh
+- expected_errors: every profile resolves the exact published pair and completes its roundtrip
+- observed_errors: all twelve jobs passed; 12 exact lockfiles and 12 verification outputs retained
+- retry_count: bounded readiness polling only; no failed-job retry
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: not measured
+- result: passed
+- artifact: docs/evidence/v1-20-published-smoke-refresh-2026-09-04.md; 12 retained artifacts from run 33844458915; client checksum 4fe2758d0093ef4b2a236090cca4dc7511b9e865f5e18ce42823e428a6be71d2
+- non_claims: not the complete V1-20 matrix, not mechanism-complete security coverage, not long fault or SLO evidence, not V1-23 service canary, not API freeze, not RC, not 1.0.0 readiness
+
 ## Q-FUZZ-DISCOVERY-HEAD-2026-09-04
 
 - date_utc: 2026-09-04
