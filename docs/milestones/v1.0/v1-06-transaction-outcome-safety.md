@@ -101,9 +101,10 @@ while its response is withheld. The producer becomes `Defunct`, clears the
 active transaction, and rejects a new begin. The detailed record is
 [`v1-transaction-end-cancellation-2026-09-03.md`](../../evidence/v1-transaction-end-cancellation-2026-09-03.md).
 
-This closes direct EndTxn cancellation safety only. AddOffsets,
-AddPartitions, TxnOffsetCommit cancellation, read-committed reconciliation,
-and published transaction profiles remain open.
+This closes the direct EndTxn cancellation boundary. At the time of this
+record, the other transaction-mutation cancellation cases were still pending;
+the follow-up section below records their subsequent deterministic coverage.
+Read-committed reconciliation and published transaction profiles remain open.
 
 The same boundary was reproduced on the company Windows host in Ubuntu-T9
 WSL2 at the same source commit. The focused cancellation test passed and the
