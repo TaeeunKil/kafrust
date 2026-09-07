@@ -2858,6 +2858,96 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn resets_invalid_fetch_session_epoch_before_retrying() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut first_socket, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut first_socket).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut first_socket, &api_versions_v3_fetch_v12_response(1)).await;
+
+            let first_fetch = read_frame(&mut first_socket).await;
+            assert_eq!(&first_fetch[0..4], &[0, 1, 0, 12]);
+            assert!(first_fetch.windows(4).any(|window| window == [0, 0, 0, 0]));
+            write_frame(
+                &mut first_socket,
+                &fetch_v12_response_frame_with_session(2, -1, 17),
+            )
+            .await;
+
+            let stale_fetch = read_frame(&mut first_socket).await;
+            assert_eq!(&stale_fetch[0..4], &[0, 1, 0, 12]);
+            assert!(stale_fetch.windows(4).any(|window| window == [0, 0, 0, 17]));
+            assert!(stale_fetch.windows(4).any(|window| window == [0, 0, 0, 1]));
+            write_frame(
+                &mut first_socket,
+                &fetch_v12_response_frame_with_partition_error_and_session(3, 70, 17),
+            )
+            .await;
+
+            let (mut reset_socket, _) = listener.accept().await.unwrap();
+            let metadata_request = read_frame(&mut reset_socket).await;
+            assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+            let metadata_correlation = i32::from_be_bytes(
+                metadata_request[4..8]
+                    .try_into()
+                    .expect("metadata correlation must be present"),
+            );
+            write_frame(
+                &mut reset_socket,
+                &metadata_response_frame_for(metadata_correlation, &addr),
+            )
+            .await;
+            let (mut reset_leader_socket, _) = listener.accept().await.unwrap();
+            let reset_api_versions = read_frame(&mut reset_leader_socket).await;
+            assert_eq!(&reset_api_versions[0..4], &[0, 18, 0, 3]);
+            write_frame(
+                &mut reset_leader_socket,
+                &api_versions_v3_fetch_v12_response(4),
+            )
+            .await;
+            let reset_fetch = read_frame(&mut reset_leader_socket).await;
+            assert_eq!(&reset_fetch[0..4], &[0, 1, 0, 12]);
+            assert!(reset_fetch.windows(4).any(|window| window == [0, 0, 0, 0]));
+            write_frame(
+                &mut reset_leader_socket,
+                &fetch_v12_response_frame_with_record(5, 0),
+            )
+            .await;
+        });
+
+        let (client_stream, broker_stream) = tokio::io::duplex(64);
+        let _broker_stream = broker_stream;
+        let client = Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-fetch-session-reset-test".to_owned()),
+            Some(std::time::Duration::from_millis(500)),
+        );
+        let config = ConsumerConfig::new([addr.to_string()])
+            .request_timeout_ms(500)
+            .max_retries(1);
+        let mut consumer = Consumer::from_assignments(
+            client,
+            config,
+            vec![ConsumerAssignment::new("orders".to_owned(), 0, 42)],
+        );
+        let mut metadata = metadata_fixture();
+        metadata.brokers[0].host = addr.ip().to_string();
+        metadata.brokers[0].port = i32::from(addr.port());
+        consumer
+            .metadata_cache
+            .insert("orders".to_owned(), metadata);
+
+        assert!(consumer.poll().await.unwrap().is_empty());
+        let records = consumer.poll().await.unwrap();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].offset(), 42);
+        assert!(consumer.fetch_sessions.is_empty());
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn fetches_offset_for_leader_epoch_from_partition_leader() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -3807,12 +3897,20 @@ mod tests {
         correlation_id: i32,
         error_code: i16,
     ) -> Vec<u8> {
+        fetch_v12_response_frame_with_partition_error_and_session(correlation_id, error_code, 0)
+    }
+
+    fn fetch_v12_response_frame_with_partition_error_and_session(
+        correlation_id: i32,
+        error_code: i16,
+        session_id: i32,
+    ) -> Vec<u8> {
         let mut response = Encoder::new();
         response.write_i32(correlation_id);
         response.write_unsigned_varint(0); // response header tags
         response.write_i32(0); // throttle time
         response.write_i16(0);
-        response.write_i32(0);
+        response.write_i32(session_id);
         response.write_unsigned_varint(2); // one compact topic
         response.write_compact_string("orders").unwrap();
         response.write_unsigned_varint(2); // one compact partition
