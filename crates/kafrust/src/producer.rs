@@ -2495,8 +2495,9 @@ impl Producer {
                     let send_result = async {
                         match produce_version {
                             ProduceVersion::V9 | ProduceVersion::V11 | ProduceVersion::V12 => {
-                                leader_client
-                                    .produce_flexible_no_response(
+                                await_transaction_mutation(
+                                    &mut self.transaction_state,
+                                    leader_client.produce_flexible_no_response(
                                         produce_version.api_version(),
                                         transactional_id.clone(),
                                         self.config.acks.as_i16(),
@@ -2521,15 +2522,17 @@ impl Producer {
                                                     .collect(),
                                             }],
                                         }],
-                                    )
-                                    .await?;
+                                    ),
+                                )
+                                .await?;
                             }
                             ProduceVersion::V13 => {
                                 let topic_id = topic_id.ok_or(Error::Unsupported(
                                     "Produce v13 requires a topic UUID",
                                 ))?;
-                                leader_client
-                                    .produce_v13_no_response(
+                                await_transaction_mutation(
+                                    &mut self.transaction_state,
+                                    leader_client.produce_v13_no_response(
                                         transactional_id.clone(),
                                         self.config.acks.as_i16(),
                                         30_000,
@@ -2553,12 +2556,14 @@ impl Producer {
                                                     .collect(),
                                             }],
                                         }],
-                                    )
-                                    .await?;
+                                    ),
+                                )
+                                .await?;
                             }
                             ProduceVersion::V7 => {
-                                leader_client
-                                    .produce_v7_no_response(
+                                await_transaction_mutation(
+                                    &mut self.transaction_state,
+                                    leader_client.produce_v7_no_response(
                                         transactional_id.clone(),
                                         self.config.acks.as_i16(),
                                         30_000,
@@ -2582,12 +2587,14 @@ impl Producer {
                                                     .collect(),
                                             }],
                                         }],
-                                    )
-                                    .await?;
+                                    ),
+                                )
+                                .await?;
                             }
                             ProduceVersion::V3 => {
-                                leader_client
-                                    .produce_v3_no_response(
+                                await_transaction_mutation(
+                                    &mut self.transaction_state,
+                                    leader_client.produce_v3_no_response(
                                         transactional_id.clone(),
                                         self.config.acks.as_i16(),
                                         30_000,
@@ -2611,12 +2618,14 @@ impl Producer {
                                                     .collect(),
                                             }],
                                         }],
-                                    )
-                                    .await?;
+                                    ),
+                                )
+                                .await?;
                             }
                             ProduceVersion::V2 => {
-                                leader_client
-                                    .produce_v2_no_response(
+                                await_transaction_mutation(
+                                    &mut self.transaction_state,
+                                    leader_client.produce_v2_no_response(
                                         self.config.acks.as_i16(),
                                         30_000,
                                         vec![ProduceTopicV2 {
@@ -2634,8 +2643,9 @@ impl Producer {
                                                     .collect(),
                                             }],
                                         }],
-                                    )
-                                    .await?;
+                                    ),
+                                )
+                                .await?;
                             }
                         }
                         Ok::<(), Error>(())
@@ -2652,8 +2662,9 @@ impl Producer {
                     Ok::<ProduceResponse, Error>(match produce_version {
                         ProduceVersion::V9 | ProduceVersion::V11 | ProduceVersion::V12 => {
                             ProduceResponse::V9(
-                                leader_client
-                                    .produce_flexible(
+                                await_transaction_mutation(
+                                    &mut self.transaction_state,
+                                    leader_client.produce_flexible(
                                         produce_version.api_version(),
                                         transactional_id.clone(),
                                         self.config.acks.as_i16(),
@@ -2678,16 +2689,18 @@ impl Producer {
                                                     .collect(),
                                             }],
                                         }],
-                                    )
-                                    .await?,
+                                    ),
+                                )
+                                .await?,
                             )
                         }
                         ProduceVersion::V13 => {
                             let topic_id = topic_id
                                 .ok_or(Error::Unsupported("Produce v13 requires a topic UUID"))?;
                             ProduceResponse::V13(
-                                leader_client
-                                    .produce_v13(
+                                await_transaction_mutation(
+                                    &mut self.transaction_state,
+                                    leader_client.produce_v13(
                                         transactional_id.clone(),
                                         self.config.acks.as_i16(),
                                         30_000,
@@ -2711,13 +2724,15 @@ impl Producer {
                                                     .collect(),
                                             }],
                                         }],
-                                    )
-                                    .await?,
+                                    ),
+                                )
+                                .await?,
                             )
                         }
                         ProduceVersion::V7 => ProduceResponse::V7(
-                            leader_client
-                                .produce_v7(
+                            await_transaction_mutation(
+                                &mut self.transaction_state,
+                                leader_client.produce_v7(
                                     transactional_id.clone(),
                                     self.config.acks.as_i16(),
                                     30_000,
@@ -2741,12 +2756,14 @@ impl Producer {
                                                 .collect(),
                                         }],
                                     }],
-                                )
-                                .await?,
+                                ),
+                            )
+                            .await?,
                         ),
                         ProduceVersion::V3 => ProduceResponse::V2(
-                            leader_client
-                                .produce_v3(
+                            await_transaction_mutation(
+                                &mut self.transaction_state,
+                                leader_client.produce_v3(
                                     transactional_id.clone(),
                                     self.config.acks.as_i16(),
                                     30_000,
@@ -2770,12 +2787,14 @@ impl Producer {
                                                 .collect(),
                                         }],
                                     }],
-                                )
-                                .await?,
+                                ),
+                            )
+                            .await?,
                         ),
                         ProduceVersion::V2 => ProduceResponse::V2(
-                            leader_client
-                                .produce_one_v2(
+                            await_transaction_mutation(
+                                &mut self.transaction_state,
+                                leader_client.produce_one_v2(
                                     self.config.acks.as_i16(),
                                     30_000,
                                     key.topic.clone(),
@@ -2789,8 +2808,9 @@ impl Producer {
                                             )
                                         })
                                         .collect(),
-                                )
-                                .await?,
+                                ),
+                            )
+                            .await?,
                         ),
                     })
                 }
@@ -2948,8 +2968,9 @@ impl Producer {
                 let send_result = async {
                     match produce_version {
                         ProduceVersion::V9 | ProduceVersion::V11 | ProduceVersion::V12 => {
-                            leader_client
-                                .produce_flexible_no_response(
+                            await_transaction_mutation(
+                                &mut self.transaction_state,
+                                leader_client.produce_flexible_no_response(
                                     produce_version.api_version(),
                                     transactional_id.clone(),
                                     self.config.acks.as_i16(),
@@ -2969,14 +2990,16 @@ impl Producer {
                                             )],
                                         }],
                                     }],
-                                )
-                                .await?;
+                                ),
+                            )
+                            .await?;
                         }
                         ProduceVersion::V13 => {
                             let topic_id = topic_id
                                 .ok_or(Error::Unsupported("Produce v13 requires a topic UUID"))?;
-                            leader_client
-                                .produce_v13_no_response(
+                            await_transaction_mutation(
+                                &mut self.transaction_state,
+                                leader_client.produce_v13_no_response(
                                     transactional_id.clone(),
                                     self.config.acks.as_i16(),
                                     30_000,
@@ -2995,12 +3018,14 @@ impl Producer {
                                             )],
                                         }],
                                     }],
-                                )
-                                .await?;
+                                ),
+                            )
+                            .await?;
                         }
                         ProduceVersion::V7 => {
-                            leader_client
-                                .produce_v7_no_response(
+                            await_transaction_mutation(
+                                &mut self.transaction_state,
+                                leader_client.produce_v7_no_response(
                                     transactional_id.clone(),
                                     self.config.acks.as_i16(),
                                     30_000,
@@ -3019,12 +3044,14 @@ impl Producer {
                                             )],
                                         }],
                                     }],
-                                )
-                                .await?;
+                                ),
+                            )
+                            .await?;
                         }
                         ProduceVersion::V3 => {
-                            leader_client
-                                .produce_v3_no_response(
+                            await_transaction_mutation(
+                                &mut self.transaction_state,
+                                leader_client.produce_v3_no_response(
                                     transactional_id.clone(),
                                     self.config.acks.as_i16(),
                                     30_000,
@@ -3043,12 +3070,14 @@ impl Producer {
                                             )],
                                         }],
                                     }],
-                                )
-                                .await?;
+                                ),
+                            )
+                            .await?;
                         }
                         ProduceVersion::V2 => {
-                            leader_client
-                                .produce_v2_no_response(
+                            await_transaction_mutation(
+                                &mut self.transaction_state,
+                                leader_client.produce_v2_no_response(
                                     self.config.acks.as_i16(),
                                     30_000,
                                     vec![ProduceTopicV2 {
@@ -3061,8 +3090,9 @@ impl Producer {
                                             )],
                                         }],
                                     }],
-                                )
-                                .await?;
+                                ),
+                            )
+                            .await?;
                         }
                     }
                     Ok::<(), Error>(())
@@ -3084,8 +3114,9 @@ impl Producer {
                 Ok::<ProduceResponse, Error>(match produce_version {
                     ProduceVersion::V9 | ProduceVersion::V11 | ProduceVersion::V12 => {
                         ProduceResponse::V9(
-                            leader_client
-                                .produce_flexible(
+                            await_transaction_mutation(
+                                &mut self.transaction_state,
+                                leader_client.produce_flexible(
                                     produce_version.api_version(),
                                     transactional_id,
                                     self.config.acks.as_i16(),
@@ -3105,16 +3136,18 @@ impl Producer {
                                             )],
                                         }],
                                     }],
-                                )
-                                .await?,
+                                ),
+                            )
+                            .await?,
                         )
                     }
                     ProduceVersion::V13 => {
                         let topic_id = topic_id
                             .ok_or(Error::Unsupported("Produce v13 requires a topic UUID"))?;
                         ProduceResponse::V13(
-                            leader_client
-                                .produce_v13(
+                            await_transaction_mutation(
+                                &mut self.transaction_state,
+                                leader_client.produce_v13(
                                     transactional_id,
                                     self.config.acks.as_i16(),
                                     30_000,
@@ -3133,13 +3166,15 @@ impl Producer {
                                             )],
                                         }],
                                     }],
-                                )
-                                .await?,
+                                ),
+                            )
+                            .await?,
                         )
                     }
                     ProduceVersion::V7 => ProduceResponse::V7(
-                        leader_client
-                            .produce_v7(
+                        await_transaction_mutation(
+                            &mut self.transaction_state,
+                            leader_client.produce_v7(
                                 transactional_id.clone(),
                                 self.config.acks.as_i16(),
                                 30_000,
@@ -3155,12 +3190,14 @@ impl Producer {
                                         records: vec![record_batch_message(record, timestamp_ms)],
                                     }],
                                 }],
-                            )
-                            .await?,
+                            ),
+                        )
+                        .await?,
                     ),
                     ProduceVersion::V3 => ProduceResponse::V2(
-                        leader_client
-                            .produce_v3(
+                        await_transaction_mutation(
+                            &mut self.transaction_state,
+                            leader_client.produce_v3(
                                 transactional_id,
                                 self.config.acks.as_i16(),
                                 30_000,
@@ -3176,19 +3213,22 @@ impl Producer {
                                         records: vec![record_batch_message(record, timestamp_ms)],
                                     }],
                                 }],
-                            )
-                            .await?,
+                            ),
+                        )
+                        .await?,
                     ),
                     ProduceVersion::V2 => ProduceResponse::V2(
-                        leader_client
-                            .produce_one_v2(
+                        await_transaction_mutation(
+                            &mut self.transaction_state,
+                            leader_client.produce_one_v2(
                                 self.config.acks.as_i16(),
                                 30_000,
                                 record.topic().to_owned(),
                                 partition,
                                 vec![message_set_message(record, timestamp_ms)],
-                            )
-                            .await?,
+                            ),
+                        )
+                        .await?,
                     ),
                 })
             }
@@ -3261,8 +3301,18 @@ impl Producer {
     }
 
     fn ensure_idempotent_producer_usable(&self) -> Result<()> {
+        let transaction_defunct = self
+            .transaction_state
+            .as_ref()
+            .is_some_and(|state| state.status == TransactionStatus::Defunct);
         match &self.idempotent_state {
-            Some(state) => state.ensure_usable(),
+            Some(state) => match state.ensure_usable() {
+                Err(Error::IdempotentProducerDefunct) if transaction_defunct => {
+                    Err(Error::TransactionProducerDefunct)
+                }
+                result => result,
+            },
+            None if transaction_defunct => Err(Error::TransactionProducerDefunct),
             None => Ok(()),
         }
     }
@@ -8568,6 +8618,73 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn cancels_transactional_send_after_transmission_marks_transaction_defunct() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let (produce_seen_tx, produce_seen_rx) = oneshot::channel();
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+
+            let versions = read_frame(&mut socket).await;
+            assert_eq!(&versions[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut socket, &api_versions_response_frame(3)).await;
+
+            let produce = read_frame(&mut socket).await;
+            assert_eq!(&produce[0..4], &[0, 0, 0, 3]);
+            let _ = produce_seen_tx.send(());
+            time::sleep(Duration::from_millis(50)).await;
+        });
+
+        let (bootstrap_stream, bootstrap_peer) = tokio::io::duplex(4096);
+        drop(bootstrap_peer);
+        let config = ProducerConfig::new([addr.to_string()]).max_retries(0);
+        let mut transaction_state = TransactionState::new("orders-tx".to_owned());
+        transaction_state.status = TransactionStatus::InTransaction;
+        transaction_state
+            .registered_partitions
+            .insert(("orders".to_owned(), 0));
+        let mut producer = Producer {
+            client: Client::from_stream(
+                Box::new(bootstrap_stream),
+                Some("kafrust-transaction-cancel-test".to_owned()),
+                Some(Duration::from_secs(1)),
+            ),
+            config,
+            metadata_cache: BTreeMap::from([("orders".to_owned(), metadata_fixture_for(addr))]),
+            leader_hints: BTreeMap::new(),
+            topic_id_cache: BTreeMap::new(),
+            keyless_partition_indexes: BTreeMap::new(),
+            broker_clients: std::sync::Arc::new(SharedBrokerClientCache::default()),
+            idempotent_state: Some(IdempotentProducerState::new(42, 3)),
+            transaction_state: Some(transaction_state),
+        };
+
+        let mut send = Box::pin(
+            producer.send(
+                ProducerRecord::to("orders")
+                    .partition(0)
+                    .value("possibly-accepted"),
+            ),
+        );
+        tokio::select! {
+            result = &mut send => panic!("transactional send completed before cancellation: {result:?}"),
+            _ = produce_seen_rx => {}
+        }
+        drop(send);
+
+        assert_eq!(
+            producer.transaction_status(),
+            Some(TransactionStatus::Defunct)
+        );
+        assert!(!producer.in_transaction());
+        assert!(matches!(
+            producer.begin_transaction(),
+            Err(Error::TransactionProducerDefunct)
+        ));
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn cancels_idempotent_batch_after_transmission_marks_producer_defunct() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -8620,6 +8737,71 @@ mod tests {
                 .send_batch([ProducerRecord::to("orders").partition(0).value("next")])
                 .await,
             Err(Error::IdempotentProducerDefunct)
+        ));
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn cancels_transactional_batch_after_transmission_marks_transaction_defunct() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let (produce_seen_tx, produce_seen_rx) = oneshot::channel();
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+
+            let versions = read_frame(&mut socket).await;
+            assert_eq!(&versions[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut socket, &api_versions_response_frame(3)).await;
+
+            let produce = read_frame(&mut socket).await;
+            assert_eq!(&produce[0..4], &[0, 0, 0, 3]);
+            let _ = produce_seen_tx.send(());
+            time::sleep(Duration::from_millis(50)).await;
+        });
+
+        let (bootstrap_stream, bootstrap_peer) = tokio::io::duplex(4096);
+        drop(bootstrap_peer);
+        let config = ProducerConfig::new([addr.to_string()]).max_retries(0);
+        let mut transaction_state = TransactionState::new("orders-tx".to_owned());
+        transaction_state.status = TransactionStatus::InTransaction;
+        transaction_state
+            .registered_partitions
+            .insert(("orders".to_owned(), 0));
+        let mut producer = Producer {
+            client: Client::from_stream(
+                Box::new(bootstrap_stream),
+                Some("kafrust-transaction-batch-cancel-test".to_owned()),
+                Some(Duration::from_secs(1)),
+            ),
+            config,
+            metadata_cache: BTreeMap::from([("orders".to_owned(), metadata_fixture_for(addr))]),
+            leader_hints: BTreeMap::new(),
+            topic_id_cache: BTreeMap::new(),
+            keyless_partition_indexes: BTreeMap::new(),
+            broker_clients: std::sync::Arc::new(SharedBrokerClientCache::default()),
+            idempotent_state: Some(IdempotentProducerState::new(42, 3)),
+            transaction_state: Some(transaction_state),
+        };
+
+        let mut send_batch = Box::pin(
+            producer.send_batch([ProducerRecord::to("orders")
+                .partition(0)
+                .value("possibly-accepted")]),
+        );
+        tokio::select! {
+            result = &mut send_batch => panic!("transactional batch send completed before cancellation: {result:?}"),
+            _ = produce_seen_rx => {}
+        }
+        drop(send_batch);
+
+        assert_eq!(
+            producer.transaction_status(),
+            Some(TransactionStatus::Defunct)
+        );
+        assert!(!producer.in_transaction());
+        assert!(matches!(
+            producer.begin_transaction(),
+            Err(Error::TransactionProducerDefunct)
         ));
         server.await.unwrap();
     }
