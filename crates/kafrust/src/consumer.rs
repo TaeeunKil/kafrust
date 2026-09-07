@@ -2552,6 +2552,78 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn resets_out_of_range_assignment_to_latest_offset() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut first_socket, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut first_socket).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut first_socket, &api_versions_v3_fetch_v12_response(1)).await;
+            let first_fetch = read_frame(&mut first_socket).await;
+            assert_eq!(&first_fetch[0..4], &[0, 1, 0, 12]);
+            write_frame(&mut first_socket, &fetch_v12_out_of_range_response_frame(2)).await;
+            drop(first_socket);
+
+            let (mut second_socket, _) = listener.accept().await.unwrap();
+            for (correlation_id, timestamp, offset) in [(1, -2_i64, 4_i64), (2, -1_i64, 9_i64)] {
+                let list_offsets_request = read_frame(&mut second_socket).await;
+                assert_eq!(&list_offsets_request[0..4], &[0, 2, 0, 1]);
+                assert_eq!(
+                    i64::from_be_bytes(
+                        list_offsets_request[list_offsets_request.len() - 8..]
+                            .try_into()
+                            .unwrap()
+                    ),
+                    timestamp
+                );
+                write_frame(
+                    &mut second_socket,
+                    &list_offsets_response_frame(correlation_id, offset),
+                )
+                .await;
+            }
+
+            let api_versions_request = read_frame(&mut second_socket).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut second_socket, &api_versions_v3_fetch_v12_response(2)).await;
+            let second_fetch = read_frame(&mut second_socket).await;
+            assert_eq!(&second_fetch[0..4], &[0, 1, 0, 12]);
+            assert!(second_fetch
+                .windows(8)
+                .any(|window| window == 9_i64.to_be_bytes()));
+            write_frame(&mut second_socket, &fetch_v12_response_frame(3, -1)).await;
+        });
+        let (client_stream, broker_stream) = tokio::io::duplex(64);
+        let _broker_stream = broker_stream;
+        let client = Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-offset-reset-latest-test".to_owned()),
+            Some(std::time::Duration::from_millis(500)),
+        );
+        let config = ConsumerConfig::new([addr.to_string()])
+            .request_timeout_ms(500)
+            .offset_reset_policy(OffsetResetPolicy::Latest);
+        let mut consumer = Consumer::from_assignments(
+            client,
+            config,
+            vec![ConsumerAssignment::new("orders".to_owned(), 0, 100)],
+        );
+        let mut metadata = metadata_fixture();
+        metadata.brokers[0].host = addr.ip().to_string();
+        metadata.brokers[0].port = i32::from(addr.port());
+        consumer
+            .metadata_cache
+            .insert("orders".to_owned(), metadata);
+
+        let records = consumer.poll().await.unwrap();
+
+        assert!(records.is_empty());
+        assert_eq!(consumer.position("orders", 0), Some(9));
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn sends_assignment_leader_epoch_in_fetch_v12_request() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
