@@ -22,6 +22,7 @@ pub enum ScriptedResponse {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ObservedRequest {
+    pub connection_id: usize,
     pub api_key: i16,
     pub api_version: i16,
     pub correlation_id: i32,
@@ -36,6 +37,7 @@ pub struct ScriptedBroker {
 }
 
 struct IncomingRequest {
+    connection_id: usize,
     frame: Vec<u8>,
     response: oneshot::Sender<ConnectionResponse>,
 }
@@ -55,6 +57,7 @@ impl ScriptedBroker {
         let (observation_tx, observation_rx) = watch::channel(0_usize);
         let task = tokio::spawn(async move {
             let mut observations = Vec::with_capacity(steps.len());
+            let mut next_connection_id = 0_usize;
             for step in steps {
                 let request = loop {
                     tokio::select! {
@@ -65,10 +68,13 @@ impl ScriptedBroker {
                         }
                         accepted = listener.accept() => {
                             let (stream, _) = accepted?;
+                            let connection_id = next_connection_id;
+                            next_connection_id += 1;
                             tokio::spawn(serve_connection(
                                 stream,
                                 request_tx.clone(),
                                 shutdown_rx.clone(),
+                                connection_id,
                             ));
                         }
                         request = request_rx.recv() => {
@@ -87,6 +93,7 @@ impl ScriptedBroker {
                     ));
                 }
                 let observation = ObservedRequest {
+                    connection_id: request.connection_id,
                     api_key: i16::from_be_bytes([frame[0], frame[1]]),
                     api_version: i16::from_be_bytes([frame[2], frame[3]]),
                     correlation_id: i32::from_be_bytes([frame[4], frame[5], frame[6], frame[7]]),
@@ -172,6 +179,7 @@ async fn serve_connection(
     mut stream: TcpStream,
     requests: mpsc::UnboundedSender<IncomingRequest>,
     mut shutdown: watch::Receiver<bool>,
+    connection_id: usize,
 ) {
     loop {
         let frame = tokio::select! {
@@ -189,6 +197,7 @@ async fn serve_connection(
         let (response_tx, response_rx) = oneshot::channel();
         if requests
             .send(IncomingRequest {
+                connection_id,
                 frame,
                 response: response_tx,
             })
