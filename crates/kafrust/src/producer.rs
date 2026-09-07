@@ -8685,6 +8685,73 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn transactional_send_caps_produce_version_when_tv2_is_advertised() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let (produce_seen_tx, produce_seen_rx) = oneshot::channel();
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+
+            let versions = read_frame(&mut socket).await;
+            assert_eq!(&versions[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut socket, &api_versions_response_frame(13)).await;
+
+            let produce = read_frame(&mut socket).await;
+            assert_eq!(
+                &produce[0..4],
+                &[0, 0, 0, 11],
+                "transactional Produce must remain on the legacy v11 path until TV2 is complete"
+            );
+            let _ = produce_seen_tx.send(());
+            time::sleep(Duration::from_millis(50)).await;
+        });
+
+        let (bootstrap_stream, bootstrap_peer) = tokio::io::duplex(4096);
+        drop(bootstrap_peer);
+        let config = ProducerConfig::new([addr.to_string()]).max_retries(0);
+        let mut transaction_state = TransactionState::new("orders-tx".to_owned());
+        transaction_state.status = TransactionStatus::InTransaction;
+        transaction_state
+            .registered_partitions
+            .insert(("orders".to_owned(), 0));
+        let mut producer = Producer {
+            client: Client::from_stream(
+                Box::new(bootstrap_stream),
+                Some("kafrust-transaction-version-cap-test".to_owned()),
+                Some(Duration::from_secs(1)),
+            ),
+            config,
+            metadata_cache: BTreeMap::from([("orders".to_owned(), metadata_fixture_for(addr))]),
+            leader_hints: BTreeMap::new(),
+            topic_id_cache: BTreeMap::new(),
+            keyless_partition_indexes: BTreeMap::new(),
+            broker_clients: std::sync::Arc::new(SharedBrokerClientCache::default()),
+            idempotent_state: Some(IdempotentProducerState::new(42, 3)),
+            transaction_state: Some(transaction_state),
+        };
+
+        let mut send = Box::pin(
+            producer.send(
+                ProducerRecord::to("orders")
+                    .partition(0)
+                    .value("transactional-value"),
+            ),
+        );
+        tokio::select! {
+            result = &mut send => panic!("transactional send completed before the capped Produce was observed: {result:?}"),
+            _ = produce_seen_rx => {}
+        }
+        drop(send);
+
+        assert_eq!(
+            producer.transaction_status(),
+            Some(TransactionStatus::Defunct)
+        );
+        assert!(!producer.in_transaction());
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn cancels_idempotent_batch_after_transmission_marks_producer_defunct() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
