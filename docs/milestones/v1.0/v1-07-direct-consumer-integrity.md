@@ -171,6 +171,18 @@ This strengthens the scripted preferred-replica boundary only. Live retention,
 leader movement, published reconciliation, and final queue/resource gates
 remain open.
 
+### Leader-epoch truncation recovery rerun (2026-09-07)
+
+The current pushed head reran the deterministic leader-transition path: a Fetch
+at offset `100` and epoch `4` receives a transition error, OffsetForLeaderEpoch
+v3 returns end offset `50` at epoch `5`, and the consumer retries Fetch at `50`
+with the new epoch before advancing to position `51`. The exact record is
+[`v1-direct-consumer-leader-epoch-truncation-2026-09-07.md`](../../evidence/v1-direct-consumer-leader-epoch-truncation-2026-09-07.md).
+
+This closes the scripted truncation recovery boundary only; live retention and
+leader movement, published reconciliation, and final queue/resource gates
+remain open.
+
 ## Failure And Lifecycle Contract
 
 - A lost Fetch response is safe to retry because delivery has not been exposed

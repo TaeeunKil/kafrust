@@ -7216,6 +7216,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-admin-coordinator-response-loss-matrix-2026-09-04.md; docs/milestones/v1.0/v1-12-coordinator-leader-admin-mutations.md; crates/kafrust/src/admin.rs
 - non_claims: not published floor or authorization qualification, not reconciliation or three-broker failover qualification, not long campaign, not service canary, not release authorization
 
+## Q-DIRECT-CONSUMER-LEADER-EPOCH-TRUNCATION-2026-09-07
+
+- date_utc: 2026-09-07
+- source_commit: a6719f1dc5b9ed1a8f7de7d6613f4987bc8f8181
+- client_version: 0.3.6 source workspace
+- protocol_version: Fetch v12, Metadata v12/v1, OffsetForLeaderEpoch v3
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: scripted transport fixture
+- kafka_image: not-applicable
+- mode: direct consumer leader-epoch truncation recovery
+- topology: in-memory metadata and scripted leader connections
+- security: PLAINTEXT fixture
+- group_protocol: not-applicable
+- workload: one transition error, one epoch-offset lookup, one metadata refresh, and one recovered Fetch
+- workflow: scripts/check_qualification_ledger.py
+- fault: Fetch at offset 100/epoch 4 returned a leader-transition error
+- duration: focused test under one second
+- record_count: one recovered record at offset 50
+- member_count: 0
+- repetition_count: one deterministic truncation regression
+- expected_errors: consumer must clamp to the recovered epoch end offset and preserve the new epoch
+- observed_errors: recovered offset 50 delivered; final position 51; assignment epoch 5
+- retry_count: one bounded leader-transition recovery
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: no external resources; scripted sockets joined
+- result: passed
+- artifact: docs/evidence/v1-direct-consumer-leader-epoch-truncation-2026-09-07.md; crates/kafrust/src/consumer.rs
+- non_claims: not live retention or leader-movement qualification, not unclean-election recovery, not published-artifact qualification, not 100,000-record reconciliation, not long campaign, not service canary, not release authorization
+
 ## Q-DIRECT-CONSUMER-PREFERRED-REPLICA-FALLBACK-2026-09-07
 
 - date_utc: 2026-09-07

@@ -6298,3 +6298,11 @@ stale preferred route. The retained record is
 [`v1-direct-consumer-preferred-replica-fallback-2026-09-07.md`](evidence/v1-direct-consumer-preferred-replica-fallback-2026-09-07.md).
 This remains local scripted evidence; live retention, leader movement,
 published reconciliation, and release gates stay open.
+
+The current pushed head also reran the deterministic leader-epoch truncation
+path: OffsetForLeaderEpoch v3 resolved end offset `50` at epoch `5` after a
+Fetch transition error at offset `100`, and the consumer retried the record at
+the recovered position. The retained record is
+[`v1-direct-consumer-leader-epoch-truncation-2026-09-07.md`](evidence/v1-direct-consumer-leader-epoch-truncation-2026-09-07.md).
+This remains scripted evidence; live retention/leader movement, published
+reconciliation, and release gates stay open.
