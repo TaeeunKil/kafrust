@@ -287,6 +287,7 @@ pub struct Consumer {
     client: Client,
     config: ConsumerConfig,
     assignments: Vec<ConsumerAssignment>,
+    poll_cursor: usize,
     partition_queues: BTreeMap<(String, i32), mpsc::Sender<ConsumerRecord>>,
     metadata_cache: BTreeMap<String, MetadataResponseV1>,
     fetch_topic_ids: BTreeMap<String, [u8; 16]>,
@@ -324,6 +325,7 @@ impl Consumer {
             client,
             config,
             assignments,
+            poll_cursor: 0,
             partition_queues: BTreeMap::new(),
             metadata_cache: BTreeMap::new(),
             fetch_topic_ids: BTreeMap::new(),
@@ -367,6 +369,7 @@ impl Consumer {
             })
         });
         self.assignments = assignments;
+        self.poll_cursor %= self.assignments.len().max(1);
         self.restore_assignment_state(&previous_assignments);
         self.metadata_cache.clear();
         self.fetch_topic_ids.clear();
@@ -398,6 +401,7 @@ impl Consumer {
         let topic = topic.into();
         self.partition_queues.remove(&(topic.clone(), partition));
         assign_partition(&mut self.assignments, topic, partition, offset);
+        self.poll_cursor %= self.assignments.len().max(1);
         self.fetch_sessions.clear();
     }
 
@@ -641,16 +645,25 @@ impl Consumer {
         let assignments = self.assignments.clone();
         let mut records = Vec::new();
         let mut delivered_record_count = 0;
+        let assignment_count = assignments.len();
+        if assignment_count == 0 {
+            return Ok(records);
+        }
+        let start_index = self.poll_cursor % assignment_count;
+        let mut next_cursor = start_index;
         debug!(
             assignment_count = assignments.len(),
             max_poll_records = self.config.max_poll_records,
             "polling kafka consumer assignments"
         );
 
-        for assignment in assignments {
+        for assignment_index in 0..assignment_count {
+            let index = (start_index + assignment_index) % assignment_count;
+            let assignment = assignments[index].clone();
             if delivered_record_count >= self.config.max_poll_records {
                 break;
             }
+            next_cursor = (index + 1) % assignment_count;
             if assignment.paused {
                 continue;
             }
@@ -717,6 +730,8 @@ impl Consumer {
             delivered_record_count += fetched.records.len();
             records.extend(fetched.records);
         }
+
+        self.poll_cursor = next_cursor;
 
         debug!(
             record_count = records.len(),
@@ -1711,6 +1726,7 @@ impl ConsumerConfig {
             client,
             config: self,
             assignments: Vec::new(),
+            poll_cursor: 0,
             partition_queues: BTreeMap::new(),
             metadata_cache: BTreeMap::new(),
             fetch_topic_ids: BTreeMap::new(),
@@ -3493,6 +3509,82 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn poll_rotates_partitions_when_max_poll_records_is_one() {
+        let first_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let first_addr = first_listener.local_addr().unwrap();
+        let first_server = tokio::spawn(async move {
+            let (mut socket, _) = first_listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut socket).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut socket, &api_versions_v3_fetch_v12_response(1)).await;
+            let request = read_frame(&mut socket).await;
+            assert_eq!(&request[0..4], &[0, 1, 0, 12]);
+            write_frame(
+                &mut socket,
+                &fetch_v12_response_frame_with_record_at_partition(2, 0, 0, 42),
+            )
+            .await;
+        });
+        let second_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let second_addr = second_listener.local_addr().unwrap();
+        let second_server = tokio::spawn(async move {
+            let (mut socket, _) = second_listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut socket).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut socket, &api_versions_v3_fetch_v12_response(1)).await;
+            let request = read_frame(&mut socket).await;
+            assert_eq!(&request[0..4], &[0, 1, 0, 12]);
+            write_frame(
+                &mut socket,
+                &fetch_v12_response_frame_with_record_at_partition(2, 0, 1, 42),
+            )
+            .await;
+        });
+
+        let (client_stream, broker_stream) = tokio::io::duplex(64);
+        let _broker_stream = broker_stream;
+        let client = Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-partition-poll-fairness-test".to_owned()),
+            Some(std::time::Duration::from_millis(500)),
+        );
+        let config = ConsumerConfig::new([first_addr.to_string()])
+            .request_timeout_ms(500)
+            .max_poll_records(1);
+        let mut consumer = Consumer::from_assignments(client, config, Vec::new());
+        let mut metadata = metadata_fixture();
+        metadata.brokers[0].host = first_addr.ip().to_string();
+        metadata.brokers[0].port = i32::from(first_addr.port());
+        metadata.brokers.push(BrokerMetadata {
+            node_id: 2,
+            host: second_addr.ip().to_string(),
+            port: i32::from(second_addr.port()),
+            rack: None,
+        });
+        metadata.topics[0].partitions.push(PartitionMetadata {
+            error_code: 0,
+            partition_index: 1,
+            leader_id: 2,
+            replica_nodes: vec![2],
+            isr_nodes: vec![2],
+        });
+        consumer
+            .metadata_cache
+            .insert("orders".to_owned(), metadata);
+        consumer.assign("orders", 0, 42);
+        consumer.assign("orders", 1, 42);
+
+        let first = consumer.poll().await.unwrap();
+        assert_eq!(first.len(), 1);
+        assert_eq!(first[0].partition(), 0);
+        let second = consumer.poll().await.unwrap();
+        assert_eq!(second.len(), 1);
+        assert_eq!(second[0].partition(), 1);
+        first_server.await.unwrap();
+        second_server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn reuses_partition_leader_connection_for_sequential_fetches() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -3968,6 +4060,15 @@ mod tests {
         session_id: i32,
         offset: i64,
     ) -> Vec<u8> {
+        fetch_v12_response_frame_with_record_at_partition(correlation_id, session_id, 0, offset)
+    }
+
+    fn fetch_v12_response_frame_with_record_at_partition(
+        correlation_id: i32,
+        session_id: i32,
+        partition: i32,
+        offset: i64,
+    ) -> Vec<u8> {
         let mut message = Encoder::new();
         message.write_i32(0);
         message.write_i8(1);
@@ -3992,7 +4093,7 @@ mod tests {
         response.write_unsigned_varint(2); // one compact topic
         response.write_compact_string("orders").unwrap();
         response.write_unsigned_varint(2); // one compact partition
-        response.write_i32(0);
+        response.write_i32(partition);
         response.write_i16(0);
         response.write_i64(43);
         response.write_i64(43);
