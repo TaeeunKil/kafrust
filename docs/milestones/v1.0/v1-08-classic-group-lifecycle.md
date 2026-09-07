@@ -156,6 +156,23 @@ final gauges. This replaces the historical zero-duplicate fields as the direct
 bounded secure classic diagnostic evidence; the 100-cycle and remaining
 callback/heartbeat/long-campaign gates stay open.
 
+### Deterministic callback ordering correction (2026-09-07)
+
+The coordinator-loss assignment-restoration regression exposed a duplicate
+`After` callback during rejoin. The internal classic and KIP-848 join helpers
+already notified `After`, and `ConsumerGroup::rejoin` notified it again after
+restoring assignment state. Source commit `42169a3` added an explicit helper
+notification flag: initial joins still emit one `After`, while rejoin helpers
+remain silent and `rejoin` emits the single final callback after the
+assignment, paused state, and commit-worker membership are synchronized.
+
+The real listener sequence is now asserted as `After(generation 1)`,
+`Before(generation 1)`, `After(generation 2)` with one assignment in each
+snapshot. The deterministic evidence is
+[`v1-classic-rebalance-callback-order-2026-09-07.md`](../../evidence/v1-classic-rebalance-callback-order-2026-09-07.md).
+Published callback/heartbeat matrices, callback panic policy, and long-running
+qualification remain open.
+
 ## Failure And Lifecycle Contract
 
 - The group session exclusively owns member ID, generation, assignment, and

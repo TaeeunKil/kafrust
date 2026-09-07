@@ -7084,6 +7084,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-admin-coordinator-response-loss-matrix-2026-09-04.md; docs/milestones/v1.0/v1-12-coordinator-leader-admin-mutations.md; crates/kafrust/src/admin.rs
 - non_claims: not published floor or authorization qualification, not reconciliation or three-broker failover qualification, not long campaign, not service canary, not release authorization
 
+## Q-CLASSIC-REBALANCE-CALLBACK-ORDER-2026-09-07
+
+- date_utc: 2026-09-07
+- source_commit: 42169a37b386d2a4db0f2850329c0ed9b08dc786
+- client_version: 0.3.6 source checkout
+- protocol_version: classic JoinGroup v2 / SyncGroup v2 / Heartbeat v2 lifecycle
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: not-applicable; scripted broker
+- kafka_image: not-applicable; in-memory scripted coordinator and leader
+- mode: classic coordinator-loss rejoin with public rebalance listener
+- topology: one scripted coordinator replacement and one scripted partition leader
+- security: not-applicable
+- group_protocol: classic
+- workload: one initial assignment, one dropped heartbeat, one rejoin, one restored fetch
+- workflow: scripts/check_qualification_ledger.py
+- fault: coordinator connection loss after initial assignment
+- duration: focused test suite under one second on Windows
+- record_count: one recovered record at offset 42
+- member_count: one group member
+- repetition_count: 4 classic group fault-injection tests; 73 group unit tests
+- expected_errors: no duplicate `After` callback; exact Before/After sequence across generations
+- observed_errors: none; callback sequence After(1), Before(1), After(2), one assignment each
+- retry_count: one bounded group rejoin retry path
+- duplicate_count: zero callback duplicates after fix
+- loss_count: zero recovered records
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: scripted sockets closed; no external resources
+- result: passed
+- artifact: docs/evidence/v1-classic-rebalance-callback-order-2026-09-07.md; docs/milestones/v1.0/v1-08-classic-group-lifecycle.md; crates/kafrust/src/group.rs; crates/kafrust/tests/fault_injection.rs
+- non_claims: not published artifact, not secure broker qualification, not callback panic policy, not 100-cycle qualification, not long campaign, not service canary, not release authorization
+
 ## Q-LOCAL-V103-GOLDEN-MALFORMED-RERUN-2026-09-07
 
 - date_utc: 2026-09-07

@@ -571,6 +571,21 @@ The short diagnostic is recorded in
 It does not replace published security/churn, failover, or offset-restoration
 qualification.
 
+### Deterministic rebalance callback ordering correction (2026-09-07)
+
+The scripted coordinator-loss/offset-restoration regression found that a
+classic rejoin delivered `After` twice: once inside the join helper and once
+again after `ConsumerGroup::rejoin` restored assignment state. Source commit
+`42169a3` added an explicit helper notification flag so initial joins emit one
+`After`, while rejoin helpers defer notification until the final synchronized
+state. The public listener now produces exactly
+`After(generation 1) → Before(generation 1) → After(generation 2)` with one
+assignment in each snapshot. See
+[`v1-classic-rebalance-callback-order-2026-09-07.md`](evidence/v1-classic-rebalance-callback-order-2026-09-07.md).
+This closes only the deterministic duplicate-callback boundary; published
+callback/heartbeat matrices, panic policy, and long-campaign evidence remain
+open.
+
 ## V1-09 Execution Update (2026-08-22)
 
 V1-09 is `In progress`. The KIP-848 path now has deterministic evidence for
