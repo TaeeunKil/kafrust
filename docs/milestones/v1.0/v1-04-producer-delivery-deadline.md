@@ -325,6 +325,22 @@ This closes the immediate post-transmission cancellation/cache boundary only;
 published mixed-outcome reconciliation, all live profiles, long campaigns,
 and the V1-04 exit gate remain open.
 
+### Buffered flush cancellation during Produce (2026-09-07)
+
+At source commit `b7c16ee`,
+`dropping_buffered_flush_cancels_in_flight_delivery` holds a non-idempotent
+Produce response after the complete request is observed, drops the `flush()`
+future, and then drops the owner. The delivery completes with
+`buffered producer delivery canceled`, the shared handle rejects a subsequent
+send, the buffered-record gauge reaches zero, and the scripted broker observes
+only the original Metadata, ApiVersions, and Produce requests. The detailed
+record is
+[`v1-buffered-flush-cancellation-2026-09-07.md`](../../evidence/v1-buffered-flush-cancellation-2026-09-07.md).
+
+This closes the non-idempotent buffered flush/socket-I/O cancellation boundary
+only; published mixed-outcome reconciliation, other live profiles, long
+campaigns, and the V1-04 exit gate remain open.
+
 ## Exit Criteria
 
 1. All three producer modes share the documented total-budget calculation.

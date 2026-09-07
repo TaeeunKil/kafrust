@@ -6127,6 +6127,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-direct-consumer-partition-queue-cancellation-2026-09-07.md; docs/milestones/v1.0/v1-07-direct-consumer-integrity.md; crates/kafrust/src/consumer.rs
 - non_claims: not sustained multi-partition fairness, not live retention or leader-movement recovery, not published-artifact qualification, not security, not 100,000-record reconciliation, not long campaigns, not service canary, not release authorization
 
+## Q-PRODUCER-BUFFERED-FLUSH-CANCELLATION-2026-09-07
+
+- date_utc: 2026-09-07
+- source_commit: b7c16eef44a33fb931844142b41ce69a5c7f4fd7
+- client_version: 0.3.6 source workspace
+- protocol_version: Metadata v1, ApiVersions v3, Produce v3 scripted fixture
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: scripted transport fixture
+- kafka_image: not-applicable
+- mode: non-idempotent buffered flush cancellation during Produce
+- topology: in-memory scripted broker; no external broker
+- security: PLAINTEXT fixture
+- group_protocol: not-applicable
+- workload: one buffered record, one canceled flush, and one rejected post-shutdown handle send
+- workflow: scripts/check_qualification_ledger.py
+- fault: Produce response held after complete request transmission; flush future dropped; owner dropped
+- duration: focused test 0.01 s after compilation
+- record_count: one in-flight Produce request; one delivery completed as canceled
+- member_count: 0
+- repetition_count: one deterministic buffered-cancellation run
+- expected_errors: delivery cancellation is surfaced; worker shutdown drains the buffered-record gauge and prevents a second Produce
+- observed_errors: typed cancellation returned; subsequent handle send returned task-stopped; exactly three requests observed `[3, 18, 0]`
+- retry_count: 0
+- duplicate_count: 0 client-visible duplicates; no replay request
+- loss_count: one intentionally canceled delivery
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: buffered_records=0; no Docker resources created or modified; scripted socket joined
+- result: passed
+- artifact: docs/evidence/v1-buffered-flush-cancellation-2026-09-07.md; docs/milestones/v1.0/v1-04-producer-delivery-deadline.md; crates/kafrust/tests/fault_injection.rs
+- non_claims: not published mixed-outcome reconciliation, not idempotent sequence qualification, not live broker qualification, not long campaigns, not service canary, not release authorization
+
 ## Q-GROUP-MAX-POLL-POLICY-2026-09-03
 
 - date_utc: 2026-09-03

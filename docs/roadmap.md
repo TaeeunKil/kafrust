@@ -6248,3 +6248,17 @@ with 510 client unit tests and all workspace targets. The immutable record is
 This is local deterministic queue-cancellation evidence only; sustained
 fairness, live retention and leader movement, published reconciliation, long
 campaigns, service canaries, and release authorization remain open.
+
+## V1-04 buffered flush cancellation during Produce (2026-09-07)
+
+The pushed source `b7c16ee` adds a scripted-broker regression for dropping a
+non-idempotent buffered `flush()` future while Produce response I/O is blocked.
+Dropping the owner completes the delivery with the cancellation outcome,
+rejects subsequent handle sends, drains the buffered-record gauge, and emits no
+second Produce request. The required local validation passed with 39 fault
+injection tests. The immutable record is
+[`v1-buffered-flush-cancellation-2026-09-07.md`](evidence/v1-buffered-flush-cancellation-2026-09-07.md).
+
+This is local deterministic cancellation evidence only; published
+reconciliation, live profiles, long campaigns, service canaries, and release
+authorization remain open.
