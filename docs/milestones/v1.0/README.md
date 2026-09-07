@@ -372,3 +372,14 @@ Use [Execution Rules](execution-rules.md) and copy [_template.md](_template.md)
 when a milestone needs to be refined. One task should own one coherent work
 package or one evidence gate. Do not mark a milestone done merely because its
 code exists; record the exact evidence required by that milestone.
+
+### Read-only long-campaign preflight refresh (2026-09-07)
+
+The latest workstation probe measured `736.80 GiB` free on `T:` and `7.7 GiB`
+free Windows RAM, while `Ubuntu-T9` remained `Stopped` and the registered
+`wsl-ubuntu-t9` runner remained `offline`. Docker-root capacity therefore
+could not be checked and no diagnostic was dispatched. The observation and
+resource decision are retained in
+[`v1-long-campaign-capacity-preflight-2026-09-07.md`](../../evidence/v1-long-campaign-capacity-preflight-2026-09-07.md).
+The prepared two-hour diagnostic remains non-qualifying and requires a fresh
+online WSL/Docker preflight before execution.

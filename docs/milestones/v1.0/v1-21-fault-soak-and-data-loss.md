@@ -571,3 +571,19 @@ runner is online/idle with persistent DNS and a verified lifetime guarantee.
 
 The full capacity calculation and host margin are retained in
 [`v1-long-campaign-capacity-audit-2026-08-24.md`](../../evidence/v1-long-campaign-capacity-audit-2026-08-24.md).
+
+### Read-only capacity preflight refresh (2026-09-07)
+
+The company workstation was checked again before any campaign dispatch. The
+Windows `T:` volume had `736.80 GiB` free and Windows reported `7.7 GiB` free
+RAM out of `31.3 GiB`. `Ubuntu-T9` was `Stopped` and the registered
+`wsl-ubuntu-t9` runner was `offline` with `busy=false`, so Docker-root space
+could not be measured and no workflow was dispatched. The complete observation
+and its non-qualification boundary are in
+[`v1-long-campaign-capacity-preflight-2026-09-07.md`](../../evidence/v1-long-campaign-capacity-preflight-2026-09-07.md).
+
+The T: storage figure is above the prepared diagnostic's 40-GiB watermark but
+does not by itself establish a runnable campaign: WSL, Docker, runner
+connectivity, Docker-root capacity, and live memory must be rechecked after an
+authorized start. The exact V1-21 six-hour workload and V1-22 SLO campaigns
+remain pending and unchanged.

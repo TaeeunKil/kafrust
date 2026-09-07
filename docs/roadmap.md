@@ -6103,3 +6103,13 @@ it does not close the published matrix, long campaigns, service canary, API
 freeze, RC, or stable-release gates. The self-hosted WSL runner remains
 offline, so the prepared rate-limited lifetime diagnostic is still
 undispatched.
+
+## V1 long-campaign capacity preflight refresh (2026-09-07)
+
+A read-only probe measured `736.80 GiB` free on the Windows `T:` volume and
+`7.7 GiB` free RAM out of `31.3 GiB`; `Ubuntu-T9` was `Stopped` and the
+registered `wsl-ubuntu-t9` runner was `offline`. Docker-root capacity could not
+be measured while WSL was stopped, so no lifetime or exact V1-21/V1-22 campaign
+was dispatched. The prepared two-hour RF3 diagnostic remains bounded and
+`qualified=false`; its full preflight record is
+[`v1-long-campaign-capacity-preflight-2026-09-07.md`](evidence/v1-long-campaign-capacity-preflight-2026-09-07.md).
