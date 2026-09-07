@@ -697,6 +697,8 @@ connection reaches EOF and cannot be reused. This is local lifecycle evidence
 only; it does not resolve broker application state or close the full
 controller cancellation/reconciliation or published failover gates. See
 [`v1-admin-controller-cancellation-2026-09-07.md`](evidence/v1-admin-controller-cancellation-2026-09-07.md).
+The pushed source passed both stable and Rust 1.81.0 in
+[CI run 34091602946](https://github.com/TaeeunKil/kafrust/actions/runs/34091602946).
 
 ## V1-12 Execution Update (2026-08-22)
 

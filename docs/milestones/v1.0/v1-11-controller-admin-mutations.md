@@ -101,7 +101,8 @@ record is
 
 This closes one deterministic cancellation boundary only; operation-wide
 cancellation, reconciliation, authorization, published failover, and release
-gates remain open.
+gates remain open. The pushed source passed both stable and Rust 1.81.0 in
+[CI run 34091602946](https://github.com/TaeeunKil/kafrust/actions/runs/34091602946).
 
 ### CreateTopics response-loss boundary (2026-09-04)
 

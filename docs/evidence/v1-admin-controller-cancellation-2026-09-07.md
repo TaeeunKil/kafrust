@@ -18,6 +18,7 @@ authorize replay.
 - Focused test: `cargo test -p kafrust cancels_create_topics_after_transmission_closes_controller_connection --all-features -- --nocapture`
 - Workspace validation: `cargo fmt --all`, `cargo check --workspace --all-targets`, `cargo test --workspace --all-features` (514 client tests, 13 broker-roundtrip, 39 fault-injection, 285 protocol, 5 golden, 5 malformed, and 10 doctests), `cargo clippy --workspace --all-targets --all-features -- -D warnings`, `cargo doc --workspace --all-features --no-deps`, and `git diff --check`
 - Ledger validation: `python scripts/check_qualification_ledger.py`
+- CI: [run 34091602946](https://github.com/TaeeunKil/kafrust/actions/runs/34091602946), stable and Rust 1.81.0 jobs passed
 
 ## Boundary
 
