@@ -3395,6 +3395,49 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn split_partition_queue_falls_back_to_poll_when_receiver_is_dropped() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut socket).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            write_frame(&mut socket, &api_versions_v3_fetch_v12_response(1)).await;
+            let request = read_frame(&mut socket).await;
+            assert_eq!(&request[0..4], &[0, 1, 0, 12]);
+            write_frame(&mut socket, &fetch_v12_response_frame_with_record(2, 0)).await;
+        });
+
+        let (client_stream, broker_stream) = tokio::io::duplex(64);
+        let _broker_stream = broker_stream;
+        let client = Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-partition-queue-drop-test".to_owned()),
+            Some(std::time::Duration::from_millis(500)),
+        );
+        let config = ConsumerConfig::new([addr.to_string()])
+            .request_timeout_ms(500)
+            .partition_queue_capacity(2);
+        let mut consumer = Consumer::from_assignments(client, config, Vec::new());
+        let mut metadata = metadata_fixture();
+        metadata.brokers[0].host = addr.ip().to_string();
+        metadata.brokers[0].port = i32::from(addr.port());
+        consumer
+            .metadata_cache
+            .insert("orders".to_owned(), metadata);
+        consumer.assign("orders", 0, 42);
+        let queue = consumer.split_partition_queue("orders", 0).unwrap();
+        drop(queue);
+
+        let records = consumer.poll().await.unwrap();
+
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].offset(), 42);
+        assert_eq!(consumer.position("orders", 0), Some(43));
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn split_partition_queue_reports_backpressure_without_skipping_records() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
