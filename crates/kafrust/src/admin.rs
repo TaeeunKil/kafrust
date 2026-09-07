@@ -20024,6 +20024,166 @@ mod tests {
         server.await.unwrap();
     }
 
+    async fn assert_controller_mutation_cancellation<F, Fut>(
+        expected_api_key: i16,
+        expected_version: i16,
+        api_versions_response: Option<Vec<u8>>,
+        operation: F,
+    ) where
+        F: FnOnce(AdminClient) -> Fut,
+        Fut: std::future::Future<Output = Result<(), Error>>,
+    {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let (request_seen_tx, request_seen_rx) = oneshot::channel();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let metadata_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+            write_frame(&mut bootstrap, &metadata_response(addr.port())).await;
+
+            let (mut controller, _) = listener.accept().await.unwrap();
+            if let Some(response) = api_versions_response {
+                let api_versions_request = read_frame(&mut controller).await;
+                assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+                write_frame(&mut controller, &response).await;
+            }
+            let request = read_frame(&mut controller).await;
+            assert!(request.len() >= 4);
+            assert_eq!(
+                i16::from_be_bytes([request[0], request[1]]),
+                expected_api_key
+            );
+            assert_eq!(
+                i16::from_be_bytes([request[2], request[3]]),
+                expected_version
+            );
+            request_seen_tx.send(()).unwrap();
+            let mut probe = [0_u8; 1];
+            assert_eq!(controller.read(&mut probe).await.unwrap(), 0);
+        });
+        let admin =
+            AdminClient::new(ClientConfig::new([addr.to_string()]).request_timeout_ms(1_000))
+                .max_retries(0);
+
+        let mut operation = Box::pin(operation(admin));
+        tokio::select! {
+            _ = request_seen_rx => {}
+            result = &mut operation => panic!("controller mutation completed before cancellation: {result:?}"),
+        }
+        drop(operation);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn cancels_create_partitions_after_transmission_closes_controller_connection() {
+        assert_controller_mutation_cancellation(37, 0, None, |admin| async move {
+            admin
+                .create_partitions(
+                    &[NewPartitions::new("orders", 3)],
+                    CreatePartitionsOptions::new(),
+                )
+                .await
+                .map(|_| ())
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn cancels_elect_leaders_after_transmission_closes_controller_connection() {
+        assert_controller_mutation_cancellation(
+            43,
+            2,
+            Some(api_versions_with_elect_leaders(2)),
+            |admin| async move {
+                let elections = [LeaderElection::new("orders").partition(0)];
+                admin
+                    .elect_leaders(
+                        Some(&elections),
+                        ElectionType::Preferred,
+                        ElectLeadersOptions::new(),
+                    )
+                    .await
+                    .map(|_| ())
+            },
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn cancels_partition_reassignment_after_transmission_closes_controller_connection() {
+        assert_controller_mutation_cancellation(45, 0, None, |admin| async move {
+            let reassignments = [PartitionReassignment::new("orders").partition(0, [1])];
+            admin
+                .alter_partition_reassignments(&reassignments, PartitionReassignmentOptions::new())
+                .await
+                .map(|_| ())
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn cancels_update_features_after_transmission_closes_controller_connection() {
+        assert_controller_mutation_cancellation(
+            57,
+            1,
+            Some(api_versions_with_update_features()),
+            |admin| async move {
+                admin
+                    .update_features(
+                        &[FeatureUpdate::new("transaction.version", 1)],
+                        UpdateFeaturesOptions::new(),
+                    )
+                    .await
+                    .map(|_| ())
+            },
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn cancels_add_raft_voter_after_transmission_closes_controller_connection() {
+        assert_controller_mutation_cancellation(
+            80,
+            1,
+            Some(api_versions_with_raft_voter(1, 0)),
+            |admin| async move {
+                admin
+                    .add_raft_voter(AddRaftVoterOptions::new(4, [9; 16]))
+                    .await
+                    .map(|_| ())
+            },
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn cancels_remove_raft_voter_after_transmission_closes_controller_connection() {
+        assert_controller_mutation_cancellation(
+            81,
+            0,
+            Some(api_versions_with_raft_voter(0, 0)),
+            |admin| async move {
+                admin
+                    .remove_raft_voter(RemoveRaftVoterOptions::new(2, [3; 16]))
+                    .await
+                    .map(|_| ())
+            },
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn cancels_unregister_broker_after_transmission_closes_controller_connection() {
+        assert_controller_mutation_cancellation(
+            64,
+            0,
+            Some(api_versions_with_unregister_broker()),
+            |admin| async move { admin.unregister_broker(4).await.map(|_| ()) },
+        )
+        .await;
+    }
+
     #[tokio::test]
     async fn classifies_create_topics_response_loss_after_transmission() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
