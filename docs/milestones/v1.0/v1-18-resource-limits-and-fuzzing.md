@@ -200,6 +200,17 @@ These are valid historical campaign records, but both ran at source
 `5de0ba2`. Stable runtime code changed afterwards, so they do not close the
 current-head V1-18 gate or justify changing the milestone to `Done`.
 
+### Current-head discovery refresh (2026-09-07)
+
+The pushed head `2b0ece7` passed [Fuzz Check
+34073530866](https://github.com/TaeeunKil/kafrust/actions/runs/34073530866): all
+ten targets compiled and completed the 30-second corpus-backed run under the
+2,048 MiB RSS and 10-second input limits, and the discovery artifact uploaded
+successfully. The immutable record is
+[`v1-fuzz-discovery-head-2026-09-07.md`](../../evidence/v1-fuzz-discovery-head-2026-09-07.md).
+This refresh is discovery-only and does not replace the current-head
+3,600-second target qualification or four-campaign gate.
+
 ## Failure And Lifecycle Contract
 
 - Limits are checked before unbounded allocation and return typed errors.

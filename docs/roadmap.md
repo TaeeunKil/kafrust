@@ -6081,6 +6081,13 @@ and [`v1-18-fuzz-qualification-2026-08-31.md`](evidence/v1-18-fuzz-qualification
 Both runs used source `5de0ba2`; later stable runtime changes mean this is
 historical evidence only and current-head V1-18 qualification remains open.
 
+The current pushed head `2b0ece7` then passed the short [Fuzz Check
+34073530866](https://github.com/TaeeunKil/kafrust/actions/runs/34073530866) for
+all ten targets, with the discovery artifact retained. This confirms current
+target compilation and bounded corpus execution only; it is not the
+3,600-second target qualification, weekly campaign, or V1-18 completion gate.
+The immutable record is [`v1-fuzz-discovery-head-2026-09-07.md`](evidence/v1-fuzz-discovery-head-2026-09-07.md).
+
 ## V1-19 SBOM direct-dependency drift remediation (2026-09-07)
 
 The Linux package path exposed a reproducibility failure in the deterministic
