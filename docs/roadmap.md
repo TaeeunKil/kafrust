@@ -700,6 +700,17 @@ controller cancellation/reconciliation or published failover gates. See
 The pushed source passed both stable and Rust 1.81.0 in
 [CI run 34091602946](https://github.com/TaeeunKil/kafrust/actions/runs/34091602946).
 
+At pushed source `3702d796609eaddde4c44ed586fb910b6f984850`, the same
+controller-owned cancellation boundary was extended to DeleteTopics v3. The
+scripted controller observed the complete request, withheld the response, and
+reached EOF after the caller future was dropped, so the ambiguous connection
+cannot be reused. This is deterministic local evidence only; it does not
+resolve broker application state or close the operation-wide cancellation,
+reconciliation, published failover, or release gates. See
+[`v1-admin-delete-topics-cancellation-2026-09-07.md`](evidence/v1-admin-delete-topics-cancellation-2026-09-07.md).
+The pushed source passed both stable and Rust 1.81.0 in
+[CI run 34094828470](https://github.com/TaeeunKil/kafrust/actions/runs/34094828470).
+
 ## V1-12 Execution Update (2026-08-22)
 
 V1-12 is `In progress`. Coordinator/leader/broker Admin paths retain route

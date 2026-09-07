@@ -104,6 +104,21 @@ cancellation, reconciliation, authorization, published failover, and release
 gates remain open. The pushed source passed both stable and Rust 1.81.0 in
 [CI run 34091602946](https://github.com/TaeeunKil/kafrust/actions/runs/34091602946).
 
+### DeleteTopics cancellation after transmission (2026-09-07)
+
+At source commit `3702d796609eaddde4c44ed586fb910b6f984850`,
+`cancels_delete_topics_after_transmission_closes_controller_connection`
+observes a complete DeleteTopics v3 frame, withholds the response, and drops
+the caller future. The controller-side connection reaches EOF, extending the
+no-reuse cancellation boundary to a second common controller mutation. The
+detailed record is
+[`v1-admin-delete-topics-cancellation-2026-09-07.md`](../../evidence/v1-admin-delete-topics-cancellation-2026-09-07.md).
+
+This remains deterministic local evidence only; operation-wide cancellation,
+reconciliation, authorization, published failover, long-campaign, and release
+gates remain open. The pushed source passed stable and Rust 1.81.0 in
+[CI run 34094828470](https://github.com/TaeeunKil/kafrust/actions/runs/34094828470).
+
 ### CreateTopics response-loss boundary (2026-09-04)
 
 The operation-specific response-loss fixture now sends a complete CreateTopics

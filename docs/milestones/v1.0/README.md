@@ -191,8 +191,8 @@ with the follow-up documentation alignment on `db8c9e2` and CI guard on
 The direct-dependency SBOM drift found on the Linux package path was corrected
 by pinning the reviewed `tokio-rustls` edge and recording both the failed and
 recovered checks in the V1-19 ledger. The latest pushed-head CI at source
-`d650266`
-[`34092272655`](https://github.com/TaeeunKil/kafrust/actions/runs/34092272655)
+`3702d79`
+[`34094828470`](https://github.com/TaeeunKil/kafrust/actions/runs/34094828470)
 passed on stable and Rust 1.81.0. This closes that reproducibility failure
 mode only; V1-20 through V1-26 remain governed by their independent published,
 long-campaign, canary, freeze, and release criteria. The registered

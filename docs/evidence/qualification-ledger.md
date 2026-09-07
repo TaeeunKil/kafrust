@@ -7249,6 +7249,39 @@ unqualified relative artifact label.
 - artifact: `docs/evidence/v1-admin-controller-cancellation-2026-09-07.md`; `crates/kafrust/src/admin.rs`
 - non_claims: no broker application-state conclusion, not complete controller cancellation matrix, not published/live/long-campaign/release evidence
 
+## Q-ADMIN-DELETE-TOPICS-CANCELLATION-2026-09-07
+
+- date_utc: 2026-09-07
+- source_commit: 3702d796609eaddde4c44ed586fb910b6f984850
+- client_version: 0.3.6 source workspace
+- protocol_version: DeleteTopics v3
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: scripted transport fixture
+- kafka_image: not-applicable
+- mode: controller mutation cancellation after transmission
+- topology: scripted bootstrap and controller TCP sockets
+- security: PLAINTEXT fixture
+- group_protocol: not-applicable
+- workload: one DeleteTopics mutation request
+- workflow: scripts/check_qualification_ledger.py
+- fault: complete DeleteTopics frame observed, response withheld, caller future dropped
+- duration: focused test under one second
+- record_count: one mutation request
+- member_count: not-applicable
+- repetition_count: one cancellation regression
+- expected_errors: possibly-transmitted mutation connection must not remain reusable
+- observed_errors: controller connection reached EOF after cancellation; no response/replay
+- retry_count: 0
+- duplicate_count: 0
+- loss_count: one withheld response
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: scripted controller task joined; no external resources
+- result: passed
+- artifact: `docs/evidence/v1-admin-delete-topics-cancellation-2026-09-07.md`; `crates/kafrust/src/admin.rs`
+- non_claims: no broker application-state conclusion, not complete controller cancellation matrix, not published/live/long-campaign/release evidence
+
 ## Q-IDEMPOTENT-BATCH-PARTIAL-WRITE-2026-09-07
 
 - date_utc: 2026-09-07
