@@ -6127,6 +6127,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-direct-consumer-partition-queue-cancellation-2026-09-07.md; docs/milestones/v1.0/v1-07-direct-consumer-integrity.md; crates/kafrust/src/consumer.rs
 - non_claims: not sustained multi-partition fairness, not live retention or leader-movement recovery, not published-artifact qualification, not security, not 100,000-record reconciliation, not long campaigns, not service canary, not release authorization
 
+## Q-DIRECT-CONSUMER-PARTITION-POLL-FAIRNESS-2026-09-07
+
+- date_utc: 2026-09-07
+- source_commit: 3e526787f5905c000279c6d94df705c5d494cb3c
+- client_version: 0.3.6 source workspace
+- protocol_version: Fetch v12 scripted fixture
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: scripted transport fixture
+- kafka_image: not-applicable
+- mode: direct consumer partition poll-budget fairness
+- topology: in-memory metadata and two scripted broker connections; no external broker
+- security: PLAINTEXT fixture
+- group_protocol: not-applicable
+- workload: two assigned partitions with max_poll_records=1 and two sequential polls
+- workflow: scripts/check_qualification_ledger.py
+- fault: fixed assignment-order polling would select partition 0 again after the first poll budget was exhausted
+- duration: focused test 0.01 seconds after compilation
+- record_count: one record returned from each partition at offset 42
+- member_count: 0
+- repetition_count: one deterministic fairness run
+- expected_errors: next poll begins at the next assignment without changing the configured record budget
+- observed_errors: first poll returned partition 0; second poll returned partition 1; focused and workspace validation passed
+- retry_count: 0
+- duplicate_count: 0 client-visible duplicates
+- loss_count: 0 within the scripted fairness boundary
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: no Docker resources created or modified; scripted sockets joined
+- result: passed
+- artifact: docs/evidence/v1-direct-consumer-partition-poll-fairness-2026-09-07.md; docs/milestones/v1.0/v1-07-direct-consumer-integrity.md; crates/kafrust/src/consumer.rs
+- non_claims: not sustained live multi-partition throughput, not live retention or leader-movement recovery, not published-artifact qualification, not security, not 100,000-record reconciliation, not long campaigns, not service canary, not release authorization
+
 ## Q-PRODUCER-BUFFERED-FLUSH-CANCELLATION-2026-09-07
 
 - date_utc: 2026-09-07

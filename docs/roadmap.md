@@ -6262,3 +6262,16 @@ injection tests. The immutable record is
 This is local deterministic cancellation evidence only; published
 reconciliation, live profiles, long campaigns, service canaries, and release
 authorization remain open.
+
+## V1-07 direct consumer partition-poll fairness (2026-09-07)
+
+The pushed source `3e52678` adds a bounded round-robin poll cursor for direct
+consumer assignments. A two-partition scripted-broker regression with
+`max_poll_records=1` now returns partition 0 on the first poll and partition 1
+on the next, preventing the first assignment from starving later partitions.
+The required Rust validation passed, and the immutable record is
+[`v1-direct-consumer-partition-poll-fairness-2026-09-07.md`](evidence/v1-direct-consumer-partition-poll-fairness-2026-09-07.md).
+
+This is local deterministic fairness evidence only; live multi-partition
+throughput, retention and leader movement, published reconciliation, long
+campaigns, service canaries, and release authorization remain open.

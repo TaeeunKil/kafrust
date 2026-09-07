@@ -140,6 +140,22 @@ This closes the deterministic dropped-receiver boundary only; queue fairness
 under sustained multi-partition load, live retention and leader movement,
 published reconciliation, and final resource gates remain open.
 
+### Partition polling fairness (2026-09-07)
+
+At source commit `3e526787f5905c000279c6d94df705c5d494cb3c`,
+`poll_rotates_partitions_when_max_poll_records_is_one` exercises two assigned
+partitions with a one-record poll budget. The direct consumer retains a bounded
+round-robin cursor, so the first poll returns partition 0 and the next poll
+starts at partition 1 instead of repeatedly selecting the first assignment.
+Assignment replacement and explicit assignment keep the cursor valid when the
+assignment set changes. The focused test and the complete required Rust
+validation passed. The detailed record is
+[`v1-direct-consumer-partition-poll-fairness-2026-09-07.md`](../../evidence/v1-direct-consumer-partition-poll-fairness-2026-09-07.md).
+
+This closes the deterministic poll-budget fairness boundary only; sustained
+live multi-partition throughput, retention and leader movement, published
+reconciliation, and final queue/resource gates remain open.
+
 ## Failure And Lifecycle Contract
 
 - A lost Fetch response is safe to retry because delivery has not been exposed
