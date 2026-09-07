@@ -125,6 +125,20 @@ long campaigns, and release gates remain open. See
 The pushed source passed stable and Rust 1.81.0 in
 [CI run 34098931228](https://github.com/TaeeunKil/kafrust/actions/runs/34098931228).
 
+### Leader mutation cancellation boundary (2026-09-07)
+
+Source `49da8a6c8f4641d878abae09715a0e8abf18fb76` adds a deterministic
+`DeleteRecords` v1 cancellation fixture. The scripted metadata/leader socket
+observes the complete request, withholds the response, drops the caller
+future, and verifies EOF so a possibly-transmitted leader mutation connection
+cannot be reused. DeleteRecords' fixed-target state-idempotence rule is not
+expanded by this test; broker application state and replay remain unclaimed.
+Three-broker movement, published profiles, reconciliation, long campaigns,
+and release gates remain open. See
+[`v1-admin-leader-cancellation-2026-09-07.md`](../../evidence/v1-admin-leader-cancellation-2026-09-07.md).
+The pushed source passed stable and Rust 1.81.0 in
+[CI run 34101093954](https://github.com/TaeeunKil/kafrust/actions/runs/34101093954).
+
 ## Failure And Lifecycle Contract
 
 - Read-only operations may rediscover/retry inside their budget.

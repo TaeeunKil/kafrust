@@ -7249,6 +7249,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-admin-coordinator-cancellation-matrix-2026-09-07.md; docs/milestones/v1.0/v1-12-coordinator-leader-admin-mutations.md; crates/kafrust/src/admin.rs
 - non_claims: no broker application-state conclusion, not published/live/reconciliation qualification, not long-campaign, service-canary, or release evidence
 
+## Q-ADMIN-LEADER-CANCELLATION-2026-09-07
+
+- date_utc: 2026-09-07
+- source_commit: 49da8a6c8f4641d878abae09715a0e8abf18fb76
+- client_version: 0.3.6 source workspace
+- protocol_version: DeleteRecords v1
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: not-applicable; scripted broker
+- kafka_image: not-applicable; in-memory fixture
+- mode: leader-routed mutation cancellation after transmission
+- topology: scripted metadata and partition-leader TCP socket
+- security: PLAINTEXT fixture
+- group_protocol: not-applicable
+- workload: one complete DeleteRecords request for one topic/partition/offset
+- workflow: scripts/check_qualification_ledger.py
+- fault: response withheld after complete DeleteRecords frame; caller future dropped
+- duration: focused test under one second
+- record_count: one mutation request
+- member_count: not-applicable
+- repetition_count: one cancellation regression
+- expected_errors: possibly-transmitted leader mutation connection must not remain reusable
+- observed_errors: leader connection reached EOF after cancellation; no response/replay
+- retry_count: 0
+- duplicate_count: 0 client-visible mutations; no replay attempted
+- loss_count: one intentionally withheld leader response
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: scripted leader task joined; no external resources
+- result: passed
+- artifact: docs/evidence/v1-admin-leader-cancellation-2026-09-07.md; docs/milestones/v1.0/v1-12-coordinator-leader-admin-mutations.md; crates/kafrust/src/admin.rs
+- non_claims: no broker application-state conclusion, not DeleteRecords response-loss retry evidence, not three-broker failover, not published/live/long-campaign, service-canary, or release evidence
+
 ## Q-ADMIN-CONTROLLER-CANCELLATION-2026-09-07
 
 - date_utc: 2026-09-07

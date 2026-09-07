@@ -778,6 +778,18 @@ long-campaign, service-canary, and release gates remain open. See
 The pushed source passed stable and Rust 1.81.0 in
 [CI run 34098931228](https://github.com/TaeeunKil/kafrust/actions/runs/34098931228).
 
+At pushed source `49da8a6c8f4641d878abae09715a0e8abf18fb76`, the local
+leader-routed cancellation boundary now includes `DeleteRecords` v1. A
+scripted metadata/leader socket observed the complete request, withheld the
+response, and reached EOF after the caller future was dropped, so the
+possibly-transmitted leader connection is not reused. This is lifecycle
+evidence only and does not broaden the fixed-target DeleteRecords retry rule or
+claim broker application state. Three-broker movement, published profiles,
+reconciliation, long-campaign, service-canary, and release gates remain open.
+See [`v1-admin-leader-cancellation-2026-09-07.md`](evidence/v1-admin-leader-cancellation-2026-09-07.md).
+The pushed source passed stable and Rust 1.81.0 in
+[CI run 34101093954](https://github.com/TaeeunKil/kafrust/actions/runs/34101093954).
+
 ## V1-13 Execution Update (2026-08-22)
 
 V1-13 is `In progress`. Security Admin routes preserve typed mixed
