@@ -6157,6 +6157,23 @@ was dispatched. The prepared two-hour RF3 diagnostic remains bounded and
 `qualified=false`; its full preflight record is
 [`v1-long-campaign-capacity-preflight-2026-09-07.md`](evidence/v1-long-campaign-capacity-preflight-2026-09-07.md).
 
+## V1 local low-volume lifetime option (2026-09-07)
+
+The long-campaign capacity audit now defines a small local diagnostic that can
+be used after `Ubuntu-T9` and Docker are manually started and rechecked: six
+hours at 100 records/s with 64-byte values, RF3, three partitions, and one
+run-scoped broker restart. The replicated payload lower bound is about 0.39
+GiB, with a conservative 3-5 GiB run budget and a 20-GiB disk watermark. A
+24-hour 10-record/s/64-byte variant is estimated at 1-3 GiB. Current measured
+host capacity is 736.8 GiB free on `T:`, 172.4 GiB on `C:`, and 17.3 GiB free
+RAM; Docker-root capacity must still be checked inside WSL.
+
+These are local lifetime/restart/cleanup diagnostics only. They remain
+`qualified=false` and provide no V1-21/V1-22, 1.0.0, publication, or release
+evidence. The prepared GitHub diagnostic remains capped at two hours, so a
+longer local run requires a separately reviewed launcher and must not weaken the
+official six-hour 10,000-record/s, 1-KiB V1-21 contract.
+
 ## V1-18 exact-head fuzz discovery rerun (2026-09-07)
 
 The pushed head `18ee34d` passed the short [Fuzz Check

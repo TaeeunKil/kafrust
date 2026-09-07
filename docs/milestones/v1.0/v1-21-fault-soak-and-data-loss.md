@@ -270,6 +270,23 @@ campaign is dispatched or promoted by reducing the duration or changing the
 runner requirement. The audit is retained in
 [`v1-long-campaign-capacity-audit-2026-08-24.md`](../../evidence/v1-long-campaign-capacity-audit-2026-08-24.md).
 
+### Local low-volume lifetime option (2026-09-07)
+
+The capacity audit now records a separate, non-qualifying local option for
+validating process lifetime and broker-restart cleanup before an exact campaign:
+six hours, 100 records/s, 64-byte values, RF3, three partitions, and one
+run-scoped broker restart. Its replicated payload lower bound is about 0.39 GiB
+with a conservative 3-5 GiB run budget and a 20-GiB abort watermark. A 24-hour
+10-record/s variant is also within a 1-3 GiB budget. These figures are planning
+estimates, not measured usage, and Docker-root capacity must be checked after
+WSL starts.
+
+This option does not relax V1-21: it remains `qualified=false`, cannot satisfy
+the six-hour 10,000-record/s 1-KiB floor, and cannot authorize a release. The
+current prepared GitHub diagnostic is capped at two hours; any longer local
+launcher must be separately reviewed, preserve run-scoped cleanup, and record
+before/after capacity without pruning unrelated Docker resources.
+
 ### Rate-limited lifetime diagnostic workflow (2026-09-04)
 
 To make a small long-duration check safe without weakening the V1-21 gate, the

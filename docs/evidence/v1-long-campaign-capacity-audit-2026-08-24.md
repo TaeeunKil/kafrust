@@ -334,3 +334,37 @@ The workflow and helper formatting were validated on pushed head `730dd77`;
 the repository CI run [33847498831](https://github.com/TaeeunKil/kafrust/actions/runs/33847498831)
 passed on both stable and Rust 1.81. This validates the dispatch path and
 static safety checks only; it is not a campaign execution result.
+
+### Local six-hour low-volume profile (2026-09-07)
+
+A still smaller, local-only lifetime profile is feasible on this workstation
+after `Ubuntu-T9` and Docker are deliberately started and their capacity is
+rechecked. The current read-only Windows probe found `736.8 GiB` free on `T:`
+(`T:\\WSL\\Ubuntu` owns the WSL distribution), `172.4 GiB` free on `C:`, and
+`17.3 GiB` free RAM. Docker-root free space is intentionally not inferred from
+those values; it must be read from `docker info` and `df` after WSL starts.
+
+The recommended first profile is six hours at 100 records/s with 64-byte
+values, three partitions, replication factor three, and one run-scoped
+broker-1 restart at the midpoint. The replicated payload lower bound is
+`21600 * 100 * 64 * 3 = 414,720,000` bytes, or about `0.39 GiB`; indexes,
+segments, broker logs, and filesystem overhead justify a conservative `3-5 GiB`
+run budget. A 20-GiB watermark gives a clear abort margin without approaching
+the host's capacity boundary.
+
+| Profile | Replicated payload lower bound | Conservative run budget |
+| --- | ---: | ---: |
+| 6 h, 10 records/s, 64 B | about 0.04 GiB | 1-2 GiB |
+| 6 h, 100 records/s, 64 B | about 0.39 GiB | 3-5 GiB |
+| 24 h, 10 records/s, 64 B | about 0.15 GiB | 1-3 GiB |
+| 6 h, 100 records/s, 256 B | about 1.55 GiB | 5-10 GiB |
+
+The existing diagnostic container limits remain the upper bounds: one CPU,
+2 GiB, and 512 PIDs per broker, or a declared 3-CPU/6-GiB broker-container
+budget before WSL, Docker, and the Rust helper. The available RAM is enough for
+the small profile in principle, but not a guarantee under unrelated desktop
+load. This profile is a local lifetime/restart/cleanup diagnostic only:
+`qualified=false`, no V1-21/V1-22 credit, no 1.0.0 evidence, and no release or
+publication authorization. The prepared GitHub diagnostic is capped at two
+hours, so a six- or twenty-four-hour local run needs a separately reviewed
+launcher rather than weakening the official V1 workflow.
