@@ -7018,6 +7018,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-admin-coordinator-response-loss-matrix-2026-09-04.md; docs/milestones/v1.0/v1-12-coordinator-leader-admin-mutations.md; crates/kafrust/src/admin.rs
 - non_claims: not published floor or authorization qualification, not reconciliation or three-broker failover qualification, not long campaign, not service canary, not release authorization
 
+## Q-LOCAL-V103-GOLDEN-MALFORMED-RERUN-2026-09-07
+
+- date_utc: 2026-09-07
+- source_commit: 9eaca5fc72f18377a615694487102d9329919640
+- client_version: kafrust-protocol source checkout
+- protocol_version: selected V1-03 data-plane request/response versions
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: not-applicable; no broker used
+- kafka_image: not-applicable
+- mode: pushed-head golden and malformed protocol rerun
+- topology: in-memory fixtures
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: five golden tests and five malformed-boundary tests
+- workflow: scripts/check_qualification_ledger.py
+- fault: malformed lengths, truncation, flexible tags, and trailing bytes
+- duration: less than one second test execution after compilation
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: one pushed-head local rerun
+- expected_errors: typed protocol rejection for every malformed fixture
+- observed_errors: 10 tests passed; no unexpected panic or acceptance
+- retry_count: not-applicable
+- duplicate_count: not-applicable
+- loss_count: not-applicable
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: not-applicable
+- result: passed
+- artifact: docs/evidence/v1-data-plane-deterministic-rerun-2026-09-07.md; crates/kafrust-protocol/tests/data_plane_golden.rs; crates/kafrust-protocol/tests/data_plane_malformed.rs
+- non_claims: not official Apache oracle evidence, not live broker qualification, not published artifact qualification, not V1-03 completion, not release authorization
+
 ## Q-CI-V118-DISCOVERY-RERUN-2026-09-07
 
 - date_utc: 2026-09-07

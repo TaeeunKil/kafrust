@@ -283,6 +283,17 @@ retained diagnostic is
 This is current-source local evidence only; multi-broker movement, security,
 published, and release gates remain open.
 
+### Current-head deterministic rerun (2026-09-07)
+
+The exact pushed head `9eaca5f` reran the V1-03 protocol fixtures with
+`cargo test -p kafrust-protocol --all-features --test data_plane_golden
+--test data_plane_malformed`. All five golden tests and all five malformed
+boundary tests passed. The immutable local record is
+[`v1-data-plane-deterministic-rerun-2026-09-07.md`](../../evidence/v1-data-plane-deterministic-rerun-2026-09-07.md).
+This refreshes deterministic evidence only; official Apache response oracles,
+live floor/current qualification, three-broker movement, and published gates
+remain open.
+
 ### Complete broker-roundtrip recheck on the company workstation (2026-09-03)
 
 The complete `broker_roundtrip` integration target was rerun at source commit

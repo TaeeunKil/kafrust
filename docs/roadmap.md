@@ -6123,3 +6123,12 @@ limits and a retained discovery artifact. The immutable record is
 [`v1-fuzz-discovery-head-rerun-2026-09-07.md`](evidence/v1-fuzz-discovery-head-rerun-2026-09-07.md).
 This aligns discovery provenance with the latest pushed head but does not
 replace the 3,600-second qualification, weekly campaign, or V1-18 exit gate.
+
+## V1-03 current-head deterministic protocol rerun (2026-09-07)
+
+The exact pushed head `9eaca5f` passed the five golden and five malformed
+data-plane fixture tests in the `kafrust-protocol` crate. The retained local
+record is
+[`v1-data-plane-deterministic-rerun-2026-09-07.md`](evidence/v1-data-plane-deterministic-rerun-2026-09-07.md).
+This strengthens deterministic boundary evidence only; live broker, official
+oracle, published, and release gates remain open.
