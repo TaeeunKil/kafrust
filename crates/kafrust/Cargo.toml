@@ -46,7 +46,7 @@ rustls = { version = "0.23.35", default-features = false, features = ["std", "ri
 rustls-platform-verifier = { version = "=0.6.2", optional = true }
 sha2 = "0.10"
 tokio = { version = "1", features = ["io-util", "macros", "net", "rt", "sync", "time"] }
-tokio-rustls = { version = "0.26.4", default-features = false, features = ["ring", "tls12"], optional = true }
+tokio-rustls = { version = "=0.26.4", default-features = false, features = ["ring", "tls12"], optional = true }
 tracing = "0.1"
 # Keep TLS dependency resolution on the line verified by the MSRV CI job.
 zeroize = { version = ">=1.8.2, <1.9", optional = true }
