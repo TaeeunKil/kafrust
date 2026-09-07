@@ -223,6 +223,20 @@ closes deterministic producer classification for a partial client Produce
 write only; remaining cancellation/shutdown phases, published cycles, and
 100,000-record reconciliation remain open.
 
+### Batch partial Produce write retry (2026-09-07)
+
+At source commit `2fb3e23`,
+`retries_idempotent_batch_after_partial_produce_write_with_same_sequence`
+replays the `send_batch` path after the first leader writes only a three-byte
+Produce prefix and the connection breaks. The retry broker verifies the same
+`producer_id=42`, `producer_epoch=3`, and `base_sequence=0`; the batch returns
+offset `0` and advances the next base sequence to `1`. The detailed record is
+[`v1-idempotent-batch-partial-write-retry-2026-09-07.md`](../../evidence/v1-idempotent-batch-partial-write-retry-2026-09-07.md).
+
+This closes only deterministic batch request-write retry coverage. Published
+reconciliation, live/security matrices, long campaigns, canary, and release
+gates remain open.
+
 ### Idempotent send cancellation fence (2026-09-04)
 
 At source commit `d0e033fb2cc6bfe67f3302a29d01f4f1f9a45c0c`, immediate and batch

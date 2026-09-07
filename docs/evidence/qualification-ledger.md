@@ -7216,6 +7216,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-admin-coordinator-response-loss-matrix-2026-09-04.md; docs/milestones/v1.0/v1-12-coordinator-leader-admin-mutations.md; crates/kafrust/src/admin.rs
 - non_claims: not published floor or authorization qualification, not reconciliation or three-broker failover qualification, not long campaign, not service canary, not release authorization
 
+## Q-IDEMPOTENT-BATCH-PARTIAL-WRITE-2026-09-07
+
+- date_utc: 2026-09-07
+- source_commit: 2fb3e23cd299a734066dee27715e927bf96c57d4
+- client_version: 0.3.6 source workspace
+- protocol_version: Produce v3 / InitProducerId v2
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: scripted transport fixture
+- kafka_image: not-applicable
+- mode: idempotent batch partial Produce write retry
+- topology: in-memory metadata with scripted leader and retry sockets
+- security: PLAINTEXT fixture
+- group_protocol: not-applicable
+- workload: one `send_batch` request containing one record
+- workflow: scripts/check_qualification_ledger.py
+- fault: first leader writes only a three-byte Produce prefix then breaks the connection
+- duration: focused test under one second
+- record_count: one
+- member_count: 0
+- repetition_count: one batch regression
+- expected_errors: retry preserves producer ID, epoch, and base sequence; no duplicate sequence allocation
+- observed_errors: retry succeeded; offset 0; next base sequence 1
+- retry_count: 1
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: no external resources; scripted sockets joined
+- result: passed
+- artifact: `docs/evidence/v1-idempotent-batch-partial-write-retry-2026-09-07.md`; `crates/kafrust/src/producer.rs`
+- non_claims: not published/live/100k/long-campaign/release evidence
+
 ## Q-DIRECT-CONSUMER-LEADER-EPOCH-TRUNCATION-2026-09-07
 
 - date_utc: 2026-09-07

@@ -397,6 +397,16 @@ Details are in
 Cancellation while socket I/O is blocked and partial client request writes
 remain open.
 
+## V1-05 Batch partial Produce write retry (2026-09-07)
+
+Pushed source `2fb3e23` adds a deterministic `send_batch` regression for a
+three-byte partial Produce request followed by a broken leader connection. The
+retry broker verifies the unchanged producer identity and base sequence, and
+the batch succeeds without allocating a duplicate sequence. See
+[`v1-idempotent-batch-partial-write-retry-2026-09-07.md`](evidence/v1-idempotent-batch-partial-write-retry-2026-09-07.md).
+This is a local scripted slice only; published reconciliation, live/security,
+long-campaign, canary, and release gates remain open.
+
 ## V1-05 Buffered idempotent cancellation fence (2026-09-04)
 
 Source `cb5b82f` now covers dropping a buffered idempotent producer owner while
