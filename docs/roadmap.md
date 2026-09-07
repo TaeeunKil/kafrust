@@ -6290,3 +6290,11 @@ The immutable record is
 This is local deterministic fairness evidence only; live multi-partition
 throughput, retention and leader movement, published reconciliation, long
 campaigns, service canaries, and release authorization remain open.
+
+The current pushed head also reran the two deterministic preferred-replica
+boundaries: Fetch v12 routes to a broker-advertised rack-aware replica and
+clears the preference after `-1`, while an exhausted leader error removes a
+stale preferred route. The retained record is
+[`v1-direct-consumer-preferred-replica-fallback-2026-09-07.md`](evidence/v1-direct-consumer-preferred-replica-fallback-2026-09-07.md).
+This remains local scripted evidence; live retention, leader movement,
+published reconciliation, and release gates stay open.

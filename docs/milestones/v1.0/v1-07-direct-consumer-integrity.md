@@ -158,6 +158,19 @@ This closes the deterministic poll-budget fairness boundary only; sustained
 live multi-partition throughput, retention and leader movement, published
 reconciliation, and final queue/resource gates remain open.
 
+### Preferred-replica routing and fallback rerun (2026-09-07)
+
+The current pushed head reran both deterministic preferred-replica boundaries:
+Fetch v12 records the broker's rack-aware preferred replica, routes the next
+request there, clears a `-1` preference after a successful response, and clears
+the stale route after an exhausted leader error. The focused pair passed; the
+record is
+[`v1-direct-consumer-preferred-replica-fallback-2026-09-07.md`](../../evidence/v1-direct-consumer-preferred-replica-fallback-2026-09-07.md).
+
+This strengthens the scripted preferred-replica boundary only. Live retention,
+leader movement, published reconciliation, and final queue/resource gates
+remain open.
+
 ## Failure And Lifecycle Contract
 
 - A lost Fetch response is safe to retry because delivery has not been exposed

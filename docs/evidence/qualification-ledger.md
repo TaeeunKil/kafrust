@@ -7216,6 +7216,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-admin-coordinator-response-loss-matrix-2026-09-04.md; docs/milestones/v1.0/v1-12-coordinator-leader-admin-mutations.md; crates/kafrust/src/admin.rs
 - non_claims: not published floor or authorization qualification, not reconciliation or three-broker failover qualification, not long campaign, not service canary, not release authorization
 
+## Q-DIRECT-CONSUMER-PREFERRED-REPLICA-FALLBACK-2026-09-07
+
+- date_utc: 2026-09-07
+- source_commit: 2e94c93bb38d0e960f2f58e0ae88c502ae21864c
+- client_version: 0.3.6 source workspace
+- protocol_version: Fetch v12 rack-aware preferred-replica path
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: scripted transport fixture
+- kafka_image: not-applicable
+- mode: direct consumer preferred-replica routing and stale-route fallback
+- topology: in-memory leader and preferred-replica scripted brokers
+- security: PLAINTEXT fixture
+- group_protocol: not-applicable
+- workload: one preferred-replica route followed by preference removal, plus one exhausted preferred-route failure
+- workflow: scripts/check_qualification_ledger.py
+- fault: preferred broker returned `-1`; seeded preferred route returned a leader error
+- duration: two focused tests under one second
+- record_count: two empty Fetch responses; no external records
+- member_count: 0
+- repetition_count: two deterministic regressions
+- expected_errors: preferred route is used when advertised and cleared after success or exhausted failure
+- observed_errors: both focused tests passed; stale preferred route was removed
+- retry_count: bounded fixture retries only
+- duplicate_count: 0
+- loss_count: 0
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: no external resources; scripted sockets joined
+- result: passed
+- artifact: docs/evidence/v1-direct-consumer-preferred-replica-fallback-2026-09-07.md; crates/kafrust/src/consumer.rs
+- non_claims: not live retention or leader-movement qualification, not three-broker failover, not published-artifact qualification, not 100,000-record reconciliation, not long campaign, not service canary, not release authorization
+
 ## Q-DATAPLANE-TRANSACTIONAL-PRODUCE-WIRE-CAP-2026-09-07
 
 - date_utc: 2026-09-07
