@@ -6269,7 +6269,9 @@ The pushed source `3e52678` adds a bounded round-robin poll cursor for direct
 consumer assignments. A two-partition scripted-broker regression with
 `max_poll_records=1` now returns partition 0 on the first poll and partition 1
 on the next, preventing the first assignment from starving later partitions.
-The required Rust validation passed, and the immutable record is
+The required local Rust validation passed, and the exact pushed head passed
+stable/Rust 1.81.0 CI in [run 34087666368](https://github.com/TaeeunKil/kafrust/actions/runs/34087666368).
+The immutable record is
 [`v1-direct-consumer-partition-poll-fairness-2026-09-07.md`](evidence/v1-direct-consumer-partition-poll-fairness-2026-09-07.md).
 
 This is local deterministic fairness evidence only; live multi-partition

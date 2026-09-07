@@ -151,6 +151,8 @@ Assignment replacement and explicit assignment keep the cursor valid when the
 assignment set changes. The focused test and the complete required Rust
 validation passed. The detailed record is
 [`v1-direct-consumer-partition-poll-fairness-2026-09-07.md`](../../evidence/v1-direct-consumer-partition-poll-fairness-2026-09-07.md).
+The exact pushed head also passed the stable/Rust 1.81.0 CI matrix in
+[run 34087666368](https://github.com/TaeeunKil/kafrust/actions/runs/34087666368).
 
 This closes the deterministic poll-budget fairness boundary only; sustained
 live multi-partition throughput, retention and leader movement, published

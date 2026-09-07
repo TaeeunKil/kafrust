@@ -25,6 +25,9 @@ cargo doc --workspace --all-features --no-deps
 git diff --check
 ```
 
+The pushed head also passed both stable and Rust 1.81.0 in CI run
+[34087666368](https://github.com/TaeeunKil/kafrust/actions/runs/34087666368).
+
 The fixture uses two in-memory scripted TCP brokers, one per partition. The
 first poll returns partition 0 and the next poll returns partition 1 without
 changing the configured poll budget. No Docker resource or external Kafka
