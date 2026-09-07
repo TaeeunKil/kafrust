@@ -6069,6 +6069,18 @@ matrix, the 10,000-record/20-cycle gate, a long campaign, a service canary, or
 release authorization. The immutable record is
 [`v1-live-share-acknowledgement-ambiguity-2026-09-04.md`](evidence/v1-live-share-acknowledgement-ambiguity-2026-09-04.md).
 
+## V1-18 historical weekly fuzz artifact verification (2026-09-07)
+
+The scheduled qualification runs [32690234519](https://github.com/TaeeunKil/kafrust/actions/runs/32690234519)
+and [33380868376](https://github.com/TaeeunKil/kafrust/actions/runs/33380868376)
+each passed the artifact checker for all ten targets and four shards, with
+3,600 cumulative seconds per target, matching corpus hashes, and no retained
+crash/OOM file. Their immutable summaries are recorded in
+[`v1-18-fuzz-qualification-2026-08-24.md`](evidence/v1-18-fuzz-qualification-2026-08-24.md)
+and [`v1-18-fuzz-qualification-2026-08-31.md`](evidence/v1-18-fuzz-qualification-2026-08-31.md).
+Both runs used source `5de0ba2`; later stable runtime changes mean this is
+historical evidence only and current-head V1-18 qualification remains open.
+
 ## V1-19 SBOM direct-dependency drift remediation (2026-09-07)
 
 The Linux package path exposed a reproducibility failure in the deterministic

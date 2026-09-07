@@ -182,6 +182,24 @@ This refresh is discovery-only; it does not count as a 3,600-second target
 qualification set or weekly pass, and the two remaining weekly sets plus
 crash/OOM disposition remain open.
 
+### Historical scheduled qualification artifact verification (2026-09-07)
+
+The scheduled qualification artifacts from
+[32690234519](https://github.com/TaeeunKil/kafrust/actions/runs/32690234519)
+and [33380868376](https://github.com/TaeeunKil/kafrust/actions/runs/33380868376)
+were downloaded and checked with
+`scripts/check_v1_fuzz_qualification_artifacts.py`. Each contains all ten
+targets and four shards, declares 900 seconds per shard and 3,600 cumulative
+seconds per target, matches every recorded corpus SHA-256, and retains no
+crash/OOM artifact. The immutable summaries are
+[`v1-18-fuzz-qualification-2026-08-24.md`](../../evidence/v1-18-fuzz-qualification-2026-08-24.md)
+and
+[`v1-18-fuzz-qualification-2026-08-31.md`](../../evidence/v1-18-fuzz-qualification-2026-08-31.md).
+
+These are valid historical campaign records, but both ran at source
+`5de0ba2`. Stable runtime code changed afterwards, so they do not close the
+current-head V1-18 gate or justify changing the milestone to `Done`.
+
 ## Failure And Lifecycle Contract
 
 - Limits are checked before unbounded allocation and return typed errors.

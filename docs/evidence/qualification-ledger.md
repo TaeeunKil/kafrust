@@ -7018,6 +7018,72 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-admin-coordinator-response-loss-matrix-2026-09-04.md; docs/milestones/v1.0/v1-12-coordinator-leader-admin-mutations.md; crates/kafrust/src/admin.rs
 - non_claims: not published floor or authorization qualification, not reconciliation or three-broker failover qualification, not long campaign, not service canary, not release authorization
 
+## Q-CI-V118-QUALIFICATION-2026-08-24
+
+- date_utc: 2026-08-24
+- source_commit: 5de0ba22f82a3df4278c602d482ff7e912007f3b
+- client_version: source checkout
+- protocol_version: ten checked-in libFuzzer targets
+- work_status: In progress
+- evidence_level: CI
+- kafka_version: not-applicable
+- kafka_image: not-applicable
+- mode: scheduled V1-18 fuzz qualification campaign
+- topology: not-applicable
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: ten targets, four shards per target, 900 seconds per shard, 3,600 cumulative seconds per target
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/32690234519
+- fault: none injected
+- duration: 40 qualification shards; 3,600 cumulative seconds per target
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: one scheduled campaign set
+- expected_errors: no target crash, hang, OOM, corpus hash mismatch, or failed shard
+- observed_errors: all 40 records passed; all corpus hashes matched; no crash/OOM artifact was retained
+- retry_count: not-applicable
+- duplicate_count: not-applicable
+- loss_count: not-applicable
+- latency: not measured
+- memory: 2,048 MiB RSS cap per target
+- final_resource_gauges: not-applicable
+- result: passed
+- artifact: docs/evidence/v1-18-fuzz-qualification-2026-08-24.md; 40 GitHub artifacts (9,933,245 bytes); checker passed
+- non_claims: historical source evidence only; not post-run source qualification, not absence-of-bugs evidence, not release authorization
+
+## Q-CI-V118-QUALIFICATION-2026-08-31
+
+- date_utc: 2026-08-31
+- source_commit: 5de0ba22f82a3df4278c602d482ff7e912007f3b
+- client_version: source checkout
+- protocol_version: ten checked-in libFuzzer targets
+- work_status: In progress
+- evidence_level: CI
+- kafka_version: not-applicable
+- kafka_image: not-applicable
+- mode: scheduled V1-18 fuzz qualification campaign
+- topology: not-applicable
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: ten targets, four shards per target, 900 seconds per shard, 3,600 cumulative seconds per target
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/33380868376
+- fault: none injected
+- duration: 40 qualification shards; 3,600 cumulative seconds per target
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: one scheduled campaign set
+- expected_errors: no target crash, hang, OOM, corpus hash mismatch, or failed shard
+- observed_errors: all 40 records passed; all corpus hashes matched; no crash/OOM artifact was retained
+- retry_count: not-applicable
+- duplicate_count: not-applicable
+- loss_count: not-applicable
+- latency: not measured
+- memory: 2,048 MiB RSS cap per target
+- final_resource_gauges: not-applicable
+- result: passed
+- artifact: docs/evidence/v1-18-fuzz-qualification-2026-08-31.md; 40 GitHub artifacts (9,956,751 bytes); checker passed
+- non_claims: historical source evidence only; not post-run source qualification, not absence-of-bugs evidence, not release authorization
+
 ## Q-LIVE-V117-PAYLOAD-LIMIT-RERUN-2026-09-04
 
 - date_utc: 2026-09-04
