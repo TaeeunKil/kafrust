@@ -11,8 +11,9 @@ use kafrust::protocol::consumer_group::{
 use kafrust::{
     AdminClient, ClientConfig, ClientMetrics, ConsumerConfig, ConsumerGroupConfig,
     ConsumerGroupOffset, ConsumerGroupOffsetQuery, ConsumerGroupProtocol, ProducerConfig,
-    ProducerRecord, ShareAcknowledgementType, ShareConsumerConfig,
+    ProducerRecord, RebalancePhase, ShareAcknowledgementType, ShareConsumerConfig,
 };
+use std::sync::{Arc, Mutex};
 use support::{ScriptedBroker, ScriptedResponse};
 
 #[test]
@@ -1977,6 +1978,8 @@ async fn consumer_group_restores_assignment_and_fetches_after_rejoin() {
     .expect("bootstrap broker should bind");
 
     let metrics = ClientMetrics::new();
+    let callback_events = Arc::new(Mutex::new(Vec::new()));
+    let callback_events_for_listener = Arc::clone(&callback_events);
     let mut group = ConsumerGroupConfig::new(
         [bootstrap.address().to_string()],
         "orders-assignment-recovery",
@@ -1987,6 +1990,13 @@ async fn consumer_group_restores_assignment_and_fetches_after_rejoin() {
             .request_timeout_ms(1_000),
     )
     .subscribe("orders")
+    .rebalance_listener(move |event| {
+        callback_events_for_listener.lock().unwrap().push((
+            event.phase(),
+            event.generation_id(),
+            event.assignments().len(),
+        ));
+    })
     .max_retries(1)
     .join()
     .await
@@ -2002,6 +2012,14 @@ async fn consumer_group_restores_assignment_and_fetches_after_rejoin() {
     assert_eq!(group.generation_id(), 2);
     assert_eq!(group.position("orders", 0), Some(43));
     assert!(metrics.snapshot().retries >= 1);
+    assert_eq!(
+        *callback_events.lock().unwrap(),
+        vec![
+            (RebalancePhase::After, 1, 1),
+            (RebalancePhase::Before, 1, 1),
+            (RebalancePhase::After, 2, 1),
+        ]
+    );
 
     let bootstrap_observations = bootstrap
         .finish()

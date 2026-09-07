@@ -689,9 +689,9 @@ impl ConsumerGroupConfig {
                 .topic_pattern
                 .as_ref()
                 .map(|_| new_consumer_member_id());
-            self.join_consumer(member_id, 0, None).await?
+            self.join_consumer(member_id, 0, None, true).await?
         } else {
-            self.join_with_owned_partitions(Vec::new()).await?
+            self.join_with_owned_partitions(Vec::new(), true).await?
         };
         group.start_auto_commit_if_enabled().await?;
         Ok(group)
@@ -700,8 +700,10 @@ impl ConsumerGroupConfig {
     async fn join_with_owned_partitions(
         self,
         owned_partitions: Vec<ConsumerProtocolTopicAssignment>,
+        notify_after: bool,
     ) -> Result<ConsumerGroup> {
-        self.join_with_member_id(owned_partitions, None, None).await
+        self.join_with_member_id(owned_partitions, None, None, notify_after)
+            .await
     }
 
     async fn join_with_member_id(
@@ -709,6 +711,7 @@ impl ConsumerGroupConfig {
         owned_partitions: Vec<ConsumerProtocolTopicAssignment>,
         member_id: Option<String>,
         previous_generation: Option<i32>,
+        notify_after: bool,
     ) -> Result<ConsumerGroup> {
         if !self.has_subscription() {
             return Err(Error::Unsupported("consumer group without subscriptions"));
@@ -941,7 +944,9 @@ impl ConsumerGroupConfig {
                 commit_worker: None,
                 auto_commit_worker: None,
             };
-            group.notify_rebalance(RebalancePhase::After, group.consumer.assignments());
+            if notify_after {
+                group.notify_rebalance(RebalancePhase::After, group.consumer.assignments());
+            }
             return Ok(group);
         }
     }
@@ -1036,12 +1041,18 @@ impl ConsumerGroupConfig {
         member_id: Option<String>,
         member_epoch: i32,
         owned_partitions: Option<Vec<ConsumerGroupHeartbeatTopicPartitions>>,
+        notify_after: bool,
     ) -> Result<ConsumerGroup> {
         let mut retry_attempt = 0;
         loop {
             match self
                 .clone()
-                .join_consumer_once(member_id.clone(), member_epoch, owned_partitions.clone())
+                .join_consumer_once(
+                    member_id.clone(),
+                    member_epoch,
+                    owned_partitions.clone(),
+                    notify_after,
+                )
                 .await
             {
                 Ok(group) => return Ok(group),
@@ -1069,6 +1080,7 @@ impl ConsumerGroupConfig {
         member_id: Option<String>,
         member_epoch: i32,
         owned_partitions: Option<Vec<ConsumerGroupHeartbeatTopicPartitions>>,
+        notify_after: bool,
     ) -> Result<ConsumerGroup> {
         if !self.has_subscription() {
             return Err(Error::Unsupported("consumer group without subscriptions"));
@@ -1218,7 +1230,9 @@ impl ConsumerGroupConfig {
         if !consumer_assignment_ready(group.consumer_owned_partitions.as_deref(), false) {
             group.wait_for_consumer_assignment(false).await?;
         }
-        group.notify_rebalance(RebalancePhase::After, group.consumer.assignments());
+        if notify_after {
+            group.notify_rebalance(RebalancePhase::After, group.consumer.assignments());
+        }
         Ok(group)
     }
 }
@@ -2422,6 +2436,7 @@ impl ConsumerGroup {
                     Some(self.member_id.clone()),
                     self.generation_id,
                     Some(owned_partitions),
+                    false,
                 )
                 .await?;
             joined
@@ -2469,6 +2484,7 @@ impl ConsumerGroup {
                 owned_partitions,
                 Some(self.member_id.clone()),
                 Some(self.generation_id),
+                false,
             )
             .await?;
         joined
