@@ -19864,6 +19864,148 @@ mod tests {
         server.await.unwrap();
     }
 
+    async fn assert_coordinator_mutation_cancellation<F, Fut>(
+        expected_api_key: i16,
+        expected_version: i16,
+        api_versions_response: Option<Vec<u8>>,
+        operation: F,
+    ) where
+        F: FnOnce(AdminClient) -> Fut,
+        Fut: std::future::Future<Output = Result<(), Error>>,
+    {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let (request_seen_tx, request_seen_rx) = oneshot::channel();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let coordinator_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&coordinator_request[0..4], &[0, 10, 0, 1]);
+            write_frame(
+                &mut bootstrap,
+                &find_group_coordinator_response(addr.port()),
+            )
+            .await;
+
+            let (mut coordinator, _) = listener.accept().await.unwrap();
+            if let Some(response) = api_versions_response {
+                let api_versions_request = read_frame(&mut coordinator).await;
+                assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+                write_frame(&mut coordinator, &response).await;
+            }
+            let request = read_frame(&mut coordinator).await;
+            assert!(request.len() >= 4);
+            assert_eq!(
+                i16::from_be_bytes([request[0], request[1]]),
+                expected_api_key
+            );
+            assert_eq!(
+                i16::from_be_bytes([request[2], request[3]]),
+                expected_version
+            );
+            request_seen_tx.send(()).unwrap();
+            let mut probe = [0_u8; 1];
+            assert_eq!(coordinator.read(&mut probe).await.unwrap(), 0);
+        });
+        let admin =
+            AdminClient::new(ClientConfig::new([addr.to_string()]).request_timeout_ms(1_000))
+                .max_retries(0);
+
+        let mut operation = Box::pin(operation(admin));
+        tokio::select! {
+            _ = request_seen_rx => {}
+            result = &mut operation => panic!("coordinator mutation completed before cancellation: {result:?}"),
+        }
+        drop(operation);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn cancels_consumer_group_offset_commit_after_transmission_closes_coordinator_connection()
+    {
+        assert_coordinator_mutation_cancellation(8, 2, None, |admin| async move {
+            admin
+                .alter_consumer_group_offsets(
+                    "orders-group",
+                    &[ConsumerGroupOffset::new("orders", 0, 42)],
+                )
+                .await
+                .map(|_| ())
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn cancels_member_aware_v9_offset_commit_after_transmission_closes_coordinator_connection(
+    ) {
+        assert_coordinator_mutation_cancellation(
+            8,
+            9,
+            Some(api_versions_with_list_transactions()),
+            |admin| async move {
+                admin
+                    .alter_consumer_group_offsets_with_member(
+                        "orders-group",
+                        "member-a",
+                        7,
+                        None,
+                        &[ConsumerGroupOffset::new("orders", 0, 42)],
+                    )
+                    .await
+                    .map(|_| ())
+            },
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn cancels_member_aware_v10_offset_commit_after_transmission_closes_coordinator_connection(
+    ) {
+        assert_coordinator_mutation_cancellation(
+            8,
+            10,
+            Some(api_versions_with_offset_commit_v10()),
+            |admin| async move {
+                admin
+                    .alter_consumer_group_offsets_with_member(
+                        "orders-group",
+                        "member-a",
+                        7,
+                        None,
+                        &[ConsumerGroupOffset::new("orders", 0, 42).topic_id([1; 16])],
+                    )
+                    .await
+                    .map(|_| ())
+            },
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn cancels_consumer_group_offset_delete_after_transmission_closes_coordinator_connection()
+    {
+        assert_coordinator_mutation_cancellation(47, 0, None, |admin| async move {
+            admin
+                .delete_consumer_group_offsets(
+                    "orders-group",
+                    &[ConsumerGroupOffsetDelete::new("orders", [0])],
+                )
+                .await
+                .map(|_| ())
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn cancels_delete_group_after_transmission_closes_coordinator_connection() {
+        assert_coordinator_mutation_cancellation(42, 1, None, |admin| async move {
+            admin
+                .delete_consumer_groups(&["orders-group".to_owned()])
+                .await
+                .map(|_| ())
+        })
+        .await;
+    }
+
     #[tokio::test]
     async fn retries_consumer_group_offset_commit_after_transient_broker_error() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
