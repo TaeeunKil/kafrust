@@ -7051,6 +7051,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-data-plane-deterministic-rerun-2026-09-07.md; crates/kafrust-protocol/tests/data_plane_golden.rs; crates/kafrust-protocol/tests/data_plane_malformed.rs
 - non_claims: not official Apache oracle evidence, not live broker qualification, not published artifact qualification, not V1-03 completion, not release authorization
 
+## Q-LOCAL-V104-PRODUCER-SEND-CANCELLATION-2026-09-07
+
+- date_utc: 2026-09-07
+- source_commit: 5c4f1179e906a0f6b08e15ed38c35a54064ba024
+- client_version: kafrust source checkout
+- protocol_version: Produce v3; Metadata v12; ApiVersions v3 capability path
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: not-applicable; scripted broker only
+- kafka_image: not-applicable
+- mode: producer send cancellation during in-flight response
+- topology: one scripted TCP broker
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: one canceled Produce followed by one fresh send
+- workflow: scripts/check_qualification_ledger.py
+- fault: response held after Produce request observation; caller future dropped
+- duration: less than one second test execution after compilation
+- record_count: 2 attempted sends; one canceled and one completed
+- member_count: not-applicable
+- repetition_count: one focused rerun plus 37-test fault target
+- expected_errors: canceled socket is not returned to the idle broker cache
+- observed_errors: none; subsequent send used a distinct connection and offset 7
+- retry_count: not-applicable
+- duplicate_count: not-applicable
+- loss_count: not-applicable
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: in_flight_requests=0
+- result: passed
+- artifact: docs/evidence/v1-producer-send-cancellation-2026-09-07.md; crates/kafrust/tests/fault_injection.rs; crates/kafrust/tests/support/mod.rs
+- non_claims: not published mixed-outcome reconciliation, not live broker qualification, not long campaign, not V1-04 completion, not release authorization
+
 ## Q-CI-V118-DISCOVERY-RERUN-2026-09-07
 
 - date_utc: 2026-09-07
