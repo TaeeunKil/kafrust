@@ -7054,7 +7054,7 @@ unqualified relative artifact label.
 ## Q-LOCAL-V104-PRODUCER-SEND-CANCELLATION-2026-09-07
 
 - date_utc: 2026-09-07
-- source_commit: 5c4f1179e906a0f6b08e15ed38c35a54064ba024
+- source_commit: 94610cbcd2fb44ece52b60fb932a69ed0390cf86
 - client_version: kafrust source checkout
 - protocol_version: Produce v3; Metadata v12; ApiVersions v3 capability path
 - work_status: In progress
@@ -7065,15 +7065,15 @@ unqualified relative artifact label.
 - topology: one scripted TCP broker
 - security: not-applicable
 - group_protocol: not-applicable
-- workload: one canceled Produce followed by one fresh send
+- workload: one canceled immediate Produce and one canceled batch Produce, each followed by a fresh send
 - workflow: scripts/check_qualification_ledger.py
 - fault: response held after Produce request observation; caller future dropped
 - duration: less than one second test execution after compilation
-- record_count: 2 attempted sends; one canceled and one completed
+- record_count: 4 attempted sends; two canceled and two completed
 - member_count: not-applicable
-- repetition_count: one focused rerun plus 37-test fault target
+- repetition_count: two focused reruns plus 38-test fault target
 - expected_errors: canceled socket is not returned to the idle broker cache
-- observed_errors: none; subsequent send used a distinct connection and offset 7
+- observed_errors: none; both subsequent sends used distinct connections and offsets 7 and 8
 - retry_count: not-applicable
 - duplicate_count: not-applicable
 - loss_count: not-applicable

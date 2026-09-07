@@ -6133,13 +6133,13 @@ record is
 This strengthens deterministic boundary evidence only; live broker, official
 oracle, published, and release gates remain open.
 
-## V1-04 immediate producer cancellation boundary (2026-09-07)
+## V1-04 immediate and batch producer cancellation boundaries (2026-09-07)
 
-The pushed source `5c4f117` adds a deterministic scripted-broker regression for
-cancelling an immediate `Producer::send` while Produce response I/O is blocked.
-The subsequent send used a distinct connection, the idle cache did not retain
-the canceled socket, and the full 37-test fault target passed. Evidence is
-retained in
+The pushed sources `5c4f117` and `94610cb` add deterministic scripted-broker
+regressions for cancelling immediate and batch producer sends while Produce
+response I/O is blocked. Each subsequent send used a distinct connection, the
+idle cache did not retain the canceled socket, and the full 38-test fault target
+passed. Evidence is retained in
 [`v1-producer-send-cancellation-2026-09-07.md`](evidence/v1-producer-send-cancellation-2026-09-07.md).
 This closes one producer cancellation boundary only; published reconciliation,
 live qualification, long campaigns, and release gates remain open.

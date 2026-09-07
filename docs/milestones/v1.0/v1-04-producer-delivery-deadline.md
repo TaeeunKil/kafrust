@@ -310,13 +310,14 @@ sent. See
 This is post-transmission cancellation evidence; other socket-I/O phases,
 published reconciliation, long campaigns, and live qualification remain open.
 
-### Immediate producer send cancellation during socket I/O (2026-09-07)
+### Immediate and batch producer cancellation during socket I/O (2026-09-07)
 
-The exact source `5c4f117` adds a scripted post-transmission cancellation
-regression for the immediate producer path. The broker holds the first Produce
-response after observing the request; dropping the `Producer::send` future then
-forces the next send through a distinct broker connection, with no idle-cache
-reuse and `in_flight_requests=0`. The focused test and the complete 37-test
+The exact sources `5c4f117` and `94610cb` add scripted post-transmission
+cancellation regressions for the immediate and batch producer paths. The
+broker holds each Produce response after observing the request; dropping the
+`Producer::send` or `Producer::send_batch` future then forces the next send
+through a distinct broker connection, with no idle-cache reuse and
+`in_flight_requests=0`. Both focused tests and the complete 38-test
 fault-injection target passed. The immutable record is
 [`v1-producer-send-cancellation-2026-09-07.md`](../../evidence/v1-producer-send-cancellation-2026-09-07.md).
 
