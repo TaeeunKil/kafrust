@@ -711,6 +711,18 @@ reconciliation, published failover, or release gates. See
 The pushed source passed both stable and Rust 1.81.0 in
 [CI run 34094828470](https://github.com/TaeeunKil/kafrust/actions/runs/34094828470).
 
+At pushed source `146f98d646cd527a413b081bc1da8d89f8565a69`, the V1-11
+controller cancellation boundary was extended across all nine common mutation
+wrappers. A shared scripted fixture captured each complete API/version frame,
+withheld the response, dropped the caller future, and verified controller EOF,
+including negotiated ApiVersions for ElectLeaders, UpdateFeatures, raft-voter,
+and UnregisterBroker operations. This closes the deterministic common-mutation
+cancellation/no-reuse slice only; reconciliation, authorization, published
+failover, long-campaign, service-canary, and release gates remain open. See
+[`v1-admin-controller-cancellation-matrix-2026-09-07.md`](evidence/v1-admin-controller-cancellation-matrix-2026-09-07.md).
+The pushed source passed both stable and Rust 1.81.0 in
+[CI run 34096780922](https://github.com/TaeeunKil/kafrust/actions/runs/34096780922).
+
 ## V1-12 Execution Update (2026-08-22)
 
 V1-12 is `In progress`. Coordinator/leader/broker Admin paths retain route

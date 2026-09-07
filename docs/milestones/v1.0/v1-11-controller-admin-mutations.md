@@ -119,6 +119,23 @@ reconciliation, authorization, published failover, long-campaign, and release
 gates remain open. The pushed source passed stable and Rust 1.81.0 in
 [CI run 34094828470](https://github.com/TaeeunKil/kafrust/actions/runs/34094828470).
 
+### Common controller mutation cancellation matrix (2026-09-07)
+
+At source commit `146f98d646cd527a413b081bc1da8d89f8565a69`, a shared scripted
+fixture covers the complete common V1-11 controller mutation set: CreateTopics,
+DeleteTopics, CreatePartitions, ElectLeaders, AlterPartitionReassignments,
+UpdateFeatures, AddRaftVoter, RemoveRaftVoter, and UnregisterBroker. Each test
+observes the complete operation-specific frame, withholds the response, drops
+the caller future, and verifies that the controller connection reaches EOF.
+The detailed matrix is recorded in
+[`v1-admin-controller-cancellation-matrix-2026-09-07.md`](../../evidence/v1-admin-controller-cancellation-matrix-2026-09-07.md).
+
+This closes the deterministic common-mutation cancellation/no-reuse slice.
+It does not close per-operation reconciliation, authorization, published
+failover, long-campaign, service-canary, or release gates. The pushed source
+passed stable and Rust 1.81.0 in
+[CI run 34096780922](https://github.com/TaeeunKil/kafrust/actions/runs/34096780922).
+
 ### CreateTopics response-loss boundary (2026-09-04)
 
 The operation-specific response-loss fixture now sends a complete CreateTopics
