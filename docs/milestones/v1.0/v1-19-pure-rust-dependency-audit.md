@@ -134,6 +134,22 @@ CI permits only transitive version re-resolution caused by platform or Cargo
 index state; workspace versions, direct dependency versions, package names,
 licenses, source kinds, and graph edges must remain identical.
 
+### Direct-dependency drift remediation (2026-09-07)
+
+Stable CI run
+[34070902219](https://github.com/TaeeunKil/kafrust/actions/runs/34070902219)
+exposed a reproducibility gap: because the root `Cargo.lock` is intentionally
+ignored, a fresh hosted Linux resolve accepted `tokio-rustls 0.26.5` through
+the caret requirement `0.26.4`, while the checked-in SBOM recorded `0.26.4`.
+The SBOM checker correctly rejected this direct edge drift. Commit `af5f698`
+changed the requirement to `=0.26.4`; follow-up CI
+[34071606979](https://github.com/TaeeunKil/kafrust/actions/runs/34071606979)
+passed stable and Rust 1.81.0, including the SBOM/package gate. The immutable
+failure-and-remediation record is
+[`v1-19-direct-dependency-drift-remediation-2026-09-07.md`](../../evidence/v1-19-direct-dependency-drift-remediation-2026-09-07.md).
+This closes the identified direct-edge reproducibility failure only; V1-19's
+remaining audit and release gates stay open.
+
 ### Native-tooling slice (2026-08-23)
 
 Commit `83864c1058347dd753608307bdd5ab1d7eb68be3` adds

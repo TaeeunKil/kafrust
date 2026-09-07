@@ -7051,6 +7051,72 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-live-telemetry-payload-limit-rerun-2026-09-04.md; GitHub Actions run 33860595003; no artifact uploaded
 - non_claims: not published artifact compatibility, not secured or multi-broker telemetry, not stable ClientInstanceId across broker replacement, not 60-minute collection, not provider outage/throttle coverage, not long campaign, not service canary, not V1-17 completion, not release authorization
 
+## Q-CI-V119-SBOM-DIRECT-DRIFT-FAIL-2026-09-07
+
+- date_utc: 2026-09-07
+- source_commit: 6ffd757ef6d36fdd5ddb66b03b62dc7ff2857536
+- client_version: 0.3.6 source checkout
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: CI
+- kafka_version: not-applicable
+- kafka_image: not-applicable
+- mode: exact pushed-commit V1-19 SBOM direct-dependency drift diagnostic
+- topology: GitHub Actions Rust stable and Rust 1.81.0 jobs
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: format, dependency gates, package boundary, and deterministic CycloneDX SBOM verification
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/34070902219
+- fault: fresh Linux dependency resolution admitted tokio-rustls 0.26.5 through a caret 0.26.4 requirement
+- duration: 8 minutes 28 seconds workflow wall time
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: 2 toolchain jobs; stable SBOM step failed
+- expected_errors: zero direct dependency drift from the checked-in SBOM
+- observed_errors: stable SBOM checker rejected direct dependency version drift; Rust 1.81 skipped the stable-only SBOM step
+- retry_count: 0
+- duplicate_count: 0
+- loss_count: not-applicable
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: not measured
+- result: failed
+- artifact: docs/evidence/v1-19-direct-dependency-drift-remediation-2026-09-07.md; GitHub Actions run 34070902219
+- non_claims: not a source behavior regression, not a passing V1-19 gate, not published-artifact qualification, not long campaign, not service canary, not release authorization
+
+## Q-CI-V119-SBOM-DIRECT-DRIFT-FIX-2026-09-07
+
+- date_utc: 2026-09-07
+- source_commit: af5f6982df8c3fea6dd4e96db32303415e66c46f
+- client_version: 0.3.6 source checkout
+- protocol_version: 0.3.6
+- work_status: In progress
+- evidence_level: CI
+- kafka_version: not-applicable
+- kafka_image: not-applicable
+- mode: exact pushed-commit V1-19 SBOM determinism recheck
+- topology: GitHub Actions Rust stable and Rust 1.81.0 jobs
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: format, dependency gates, package boundary, and deterministic CycloneDX SBOM verification after tokio-rustls exact pin
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/34071606979
+- fault: none injected; direct dependency requirement pinned to the reviewed 0.26.4 release
+- duration: 8 minutes 28 seconds workflow wall time
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: 2 toolchain jobs
+- expected_errors: zero direct dependency drift and passing package/SBOM checks
+- observed_errors: both toolchain jobs passed, including the stable SBOM/package-artifact step
+- retry_count: 0
+- duplicate_count: 0
+- loss_count: not-applicable
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: not measured
+- result: passed
+- artifact: docs/evidence/v1-19-direct-dependency-drift-remediation-2026-09-07.md; GitHub Actions run 34071606979
+- non_claims: not V1-19 completion, not full advisory/yank/native/unsafe review, not published-artifact qualification, not long campaign, not service canary, not release authorization
+
 ## Q-LIVE-V110-ACK-AMBIGUITY-2026-09-04
 
 - date_utc: 2026-09-04

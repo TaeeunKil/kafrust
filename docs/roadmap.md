@@ -1001,6 +1001,16 @@ platform or Cargo index state. Workspace versions, direct dependency
 versions, package names, licenses, source kinds, and graph edges remain strict
 drift gates.
 
+On 2026-09-07, CI run
+[34070902219](https://github.com/TaeeunKil/kafrust/actions/runs/34070902219)
+found that the ignored root lockfile allowed `tokio-rustls 0.26.5` to replace
+the SBOM's direct `0.26.4` edge through a caret requirement. Commit `af5f698`
+pinned that direct dependency to `=0.26.4`; follow-up CI
+[34071606979](https://github.com/TaeeunKil/kafrust/actions/runs/34071606979)
+passed both toolchains and the SBOM/package gate. This is a reproducibility
+remediation, not completion of the broader V1-19 audit or release readiness.
+See [`v1-19-direct-dependency-drift-remediation-2026-09-07.md`](evidence/v1-19-direct-dependency-drift-remediation-2026-09-07.md).
+
 The native-tooling slice is recorded at commit
 `83864c1058347dd753608307bdd5ab1d7eb68be3`. Its checker covers the five
 feature profiles on the same explicit Linux target and runs the default
