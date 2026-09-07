@@ -877,6 +877,14 @@ mutation and one terminating push; the payload-limit smoke rejected a
 These short diagnostics do not close published telemetry, secured
 multi-broker replacement, 60-minute collection, or release gates.
 
+The payload-limit check was replayed from source `86f349b` in
+[33860595003](https://github.com/TaeeunKil/kafrust/actions/runs/33860595003).
+The Kafka 3.7.2 single-broker test again emitted
+`telemetry-smoke-payload-limit size=2076 max=128` under a 128-byte ceiling.
+This is a later current-source diagnostic, not published, secured,
+multi-broker, long-duration, canary, or release evidence. See
+[`v1-live-telemetry-payload-limit-rerun-2026-09-04.md`](evidence/v1-live-telemetry-payload-limit-rerun-2026-09-04.md).
+
 ## V1-18 Execution Update (2026-08-22)
 
 V1-18 is `In progress`. Frame, collection, compact/tagged-field, decompression,

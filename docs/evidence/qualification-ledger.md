@@ -7018,6 +7018,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-admin-coordinator-response-loss-matrix-2026-09-04.md; docs/milestones/v1.0/v1-12-coordinator-leader-admin-mutations.md; crates/kafrust/src/admin.rs
 - non_claims: not published floor or authorization qualification, not reconciliation or three-broker failover qualification, not long campaign, not service canary, not release authorization
 
+## Q-LIVE-V117-PAYLOAD-LIMIT-RERUN-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: 86f349bd5ce9d475fe5e1df1cfe8a238953eebf3
+- client_version: 0.3.6 source checkout
+- protocol_version: PushTelemetry v0
+- work_status: In progress
+- evidence_level: Live current-source
+- kafka_version: 3.7.2
+- kafka_image: kafrust-kafka-telemetry test image based on Kafka 3.7.2
+- mode: advertised telemetry payload ceiling rerun
+- topology: single-node KRaft with telemetry reporter plugin
+- security: PLAINTEXT
+- group_protocol: not-applicable
+- workload: 128-byte broker telemetry limit with one oversized advertised payload
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/33860595003
+- fault: broker-advertised payload ceiling intentionally below the generated payload
+- duration: 66 seconds wall time
+- record_count: not-applicable; telemetry-only workload
+- member_count: not-applicable
+- repetition_count: 1 diagnostic replay
+- expected_errors: typed client rejection before accepting a payload larger than 128 bytes
+- observed_errors: `telemetry-smoke-payload-limit size=2076 max=128`
+- retry_count: broker readiness polling only
+- duplicate_count: not-applicable
+- loss_count: not-applicable
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: not measured
+- result: passed
+- artifact: docs/evidence/v1-live-telemetry-payload-limit-rerun-2026-09-04.md; GitHub Actions run 33860595003; no artifact uploaded
+- non_claims: not published artifact compatibility, not secured or multi-broker telemetry, not stable ClientInstanceId across broker replacement, not 60-minute collection, not provider outage/throttle coverage, not long campaign, not service canary, not V1-17 completion, not release authorization
+
 ## Q-LIVE-V110-ACK-AMBIGUITY-2026-09-04
 
 - date_utc: 2026-09-04

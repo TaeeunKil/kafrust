@@ -146,6 +146,18 @@ secured broker replacement with stable ClientInstanceId, 60-minute collection,
 provider/throttle failure coverage, and final secret/task adjudication remain
 open.
 
+### Payload-limit rerun (2026-09-04)
+
+The payload-limit workflow was rerun from current source commit
+`86f349bd5ce9d475fe5e1df1cfe8a238953eebf3` in
+[33860595003](https://github.com/TaeeunKil/kafrust/actions/runs/33860595003).
+Kafka 3.7.2 advertised a 128-byte telemetry ceiling, and the Rust 1.81.0
+smoke rejected the 2,076-byte payload with
+`telemetry-smoke-payload-limit size=2076 max=128`. This confirms the same
+typed pre-send boundary on a later current-source replay; it is not published,
+secured, multi-broker, 60-minute, long-campaign, or release evidence. See
+[`v1-live-telemetry-payload-limit-rerun-2026-09-04.md`](../../evidence/v1-live-telemetry-payload-limit-rerun-2026-09-04.md).
+
 ## Failure And Lifecycle Contract
 
 - Metrics updates never block the data path on network I/O.
