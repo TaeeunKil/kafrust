@@ -89,6 +89,20 @@ remain open. See
 [`v1-admin-controller-response-loss-matrix-2026-09-04.md`](../../evidence/v1-admin-controller-response-loss-matrix-2026-09-04.md)
 from source commit `f3124d01b0bf30f5b14f7eefdb88c81fc90b5186`.
 
+### CreateTopics cancellation after transmission (2026-09-07)
+
+At source commit `8e0bc233d84170b14c680dc49e50fb46ded49713`,
+`cancels_create_topics_after_transmission_closes_controller_connection`
+observes a complete CreateTopics v2 frame, withholds the response, and drops
+the caller future. The controller-side connection reaches EOF, so an
+ambiguous mutation connection cannot remain available for reuse. The detailed
+record is
+[`v1-admin-controller-cancellation-2026-09-07.md`](../../evidence/v1-admin-controller-cancellation-2026-09-07.md).
+
+This closes one deterministic cancellation boundary only; operation-wide
+cancellation, reconciliation, authorization, published failover, and release
+gates remain open.
+
 ### CreateTopics response-loss boundary (2026-09-04)
 
 The operation-specific response-loss fixture now sends a complete CreateTopics

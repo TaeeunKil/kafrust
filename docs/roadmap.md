@@ -690,6 +690,14 @@ published authorization/failover matrix and remaining operation-specific
 response-loss cases remain open. See
 [`v1-admin-create-topics-response-loss-2026-09-04.md`](evidence/v1-admin-create-topics-response-loss-2026-09-04.md).
 
+At pushed source `8e0bc233d84170b14c680dc49e50fb46ded49713`, a deterministic
+CreateTopics cancellation regression observes the complete v2 mutation frame,
+then drops the caller future while the response is withheld. The controller
+connection reaches EOF and cannot be reused. This is local lifecycle evidence
+only; it does not resolve broker application state or close the full
+controller cancellation/reconciliation or published failover gates. See
+[`v1-admin-controller-cancellation-2026-09-07.md`](evidence/v1-admin-controller-cancellation-2026-09-07.md).
+
 ## V1-12 Execution Update (2026-08-22)
 
 V1-12 is `In progress`. Coordinator/leader/broker Admin paths retain route
