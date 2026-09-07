@@ -137,6 +137,14 @@ This closes only the deterministic selector guard; V1-06's coherent TV2
 fixture, live transactional roundtrips, three-broker movement, and accepted or
 published qualification remain open.
 
+The direct transactional send path is now covered at the wire boundary as well
+at pushed source `652afb1`: a scripted broker advertising Produce v13 observed
+Produce v11 on the transmitted request. The withheld response also preserves
+the existing defunct-transaction cancellation fence. The retained record is
+[`v1-transactional-produce-wire-version-cap-2026-09-07.md`](evidence/v1-transactional-produce-wire-version-cap-2026-09-07.md).
+This strengthens deterministic V1-03/V1-06 evidence only; TV2, live
+reconciliation, published artifacts, and release gates remain open.
+
 The selected response decoders now also reject unconsumed trailing bytes at
 pushed head `f98275d`. A sentinel-byte matrix covers Produce v2/v7/v9/v11/v12/v13,
 Fetch v4/v11/v12/v13, Metadata v1/v12, ListOffsets v1, OffsetForLeaderEpoch v3,
@@ -489,6 +497,11 @@ response handling and fatal EndTxn error precedence. The evidence record is
 [`v1-transaction-produce-cancellation-2026-09-07.md`](evidence/v1-transaction-produce-cancellation-2026-09-07.md).
 This closes only the deterministic transactional Produce cancellation slice;
 published/read-committed reconciliation and live qualification remain open.
+
+The same direct send fixture now also asserts that a broker-advertised Produce
+v13 cannot promote a transactional request above legacy v11. This is the
+request-path version-cap proof, separate from the cancellation evidence above;
+the full V1-06 transaction and published gates remain open.
 
 ## V1-07 Execution Update (2026-08-22)
 

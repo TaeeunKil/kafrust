@@ -398,6 +398,21 @@ response oracles for every selected shape, accepted-floor security/workload
 qualification, the full V1-20 matrix, long campaigns, and the remaining V1-03
 exit criteria stay open.
 
+### Transactional Produce wire-cap request proof (2026-09-07)
+
+The scripted-broker regression
+`transactional_send_caps_produce_version_when_tv2_is_advertised` now drives the
+direct transactional send path while the broker advertises Produce maximum
+v13. The observed request header is Produce v11, so the high-level data-plane
+path cannot silently select the unqualified TV2 v12/v13 shapes. The canceled
+response also preserves the existing defunct-transaction safety boundary. The
+exact record is
+[`v1-transactional-produce-wire-version-cap-2026-09-07.md`](../../evidence/v1-transactional-produce-wire-version-cap-2026-09-07.md).
+
+This closes the deterministic request-path proof only; official wire oracles,
+floor/current live negotiation, three-broker movement, and the V1-03 exit
+criteria remain open.
+
 ## Exit Criteria
 
 1. Every stable high-level selected/fallback version has official metadata,

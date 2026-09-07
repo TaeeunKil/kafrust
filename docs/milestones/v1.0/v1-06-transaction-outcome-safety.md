@@ -142,6 +142,19 @@ This closes the deterministic post-transmission cancellation slice for all
 direct transaction mutations currently exposed by the producer, but does not
 close published/read-committed reconciliation or any live qualification gate.
 
+### Transactional Produce wire-version cap (2026-09-07)
+
+The direct `Producer::send` path now has a scripted-broker regression that
+advertises Produce v13 and asserts the transmitted transactional request is
+still Produce v11. This proves the conservative legacy TV0/TV1 decision at the
+request boundary instead of relying only on selector-unit coverage. The
+withheld response then exercises the existing defunct-transaction cancellation
+fence. See
+[`v1-transactional-produce-wire-version-cap-2026-09-07.md`](../../evidence/v1-transactional-produce-wire-version-cap-2026-09-07.md).
+
+The TV2 state machine, published read-committed reconciliation, and live
+qualification gates remain open.
+
 ## Failure And Lifecycle Contract
 
 - A lost transmitted EndTxn response returns

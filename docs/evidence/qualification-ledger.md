@@ -7216,6 +7216,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-admin-coordinator-response-loss-matrix-2026-09-04.md; docs/milestones/v1.0/v1-12-coordinator-leader-admin-mutations.md; crates/kafrust/src/admin.rs
 - non_claims: not published floor or authorization qualification, not reconciliation or three-broker failover qualification, not long campaign, not service canary, not release authorization
 
+## Q-DATAPLANE-TRANSACTIONAL-PRODUCE-WIRE-CAP-2026-09-07
+
+- date_utc: 2026-09-07
+- source_commit: 652afb1d8aa81f5db768e43e15f9f6b4a6da244f
+- client_version: 0.3.6 source workspace
+- protocol_version: transactional Produce v11 legacy TV0/TV1 path
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: scripted transport fixture
+- kafka_image: not-applicable
+- mode: transactional Produce wire-version cap under TV2 advertisement
+- topology: in-memory scripted leader with cached topic metadata
+- security: PLAINTEXT fixture
+- group_protocol: not-applicable
+- workload: one direct transactional send with broker-advertised Produce maximum v13
+- workflow: scripts/check_qualification_ledger.py
+- fault: scripted leader withheld the response after observing the Produce frame
+- duration: focused test 0.07 seconds
+- record_count: one transactional Produce request
+- member_count: 0
+- repetition_count: one request-path regression plus existing cancellation assertion
+- expected_errors: transactional request must remain at Produce v11 and cancellation must defunct the transaction
+- observed_errors: transmitted API version 11; producer became Defunct after response withholding
+- retry_count: 0
+- duplicate_count: 0
+- loss_count: transactional Produce outcome intentionally unknown after cancellation
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: no external resources; scripted socket joined
+- result: passed
+- artifact: docs/evidence/v1-transactional-produce-wire-version-cap-2026-09-07.md; crates/kafrust/src/producer.rs
+- non_claims: not TV2 qualification, not live transactional roundtrip, not published-artifact qualification, not read-committed reconciliation, not three-broker movement, not long campaign, not service canary, not release authorization
+
 ## Q-CLASSIC-REBALANCE-CALLBACK-ORDER-2026-09-07
 
 - date_utc: 2026-09-07
