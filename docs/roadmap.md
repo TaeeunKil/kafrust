@@ -6195,6 +6195,21 @@ record is
 This strengthens deterministic boundary evidence only; live broker, official
 oracle, published, and release gates remain open.
 
+## V1-09 KIP-848 callback ordering counterpart (2026-09-07)
+
+The KIP-848 member-epoch rejoin regression now asserts the public listener
+sequence `After(generation 1)`, `Before(generation 1)`,
+`After(generation 2)` with one assignment in each snapshot. The shared
+implementation fix keeps the modern join helper silent during rejoin and emits
+the final `After` after assignment, paused state, and commit-worker
+membership are synchronized. Source test commit `9b006b1` and fix
+`42169a3` passed the focused and full local validation.
+
+This is scripted-broker evidence only; published callback/heartbeat matrices,
+stale-task churn, UUID delete/recreate races, long campaigns, and release
+authorization remain open. The detailed record is
+[`v1-classic-rebalance-callback-order-2026-09-07.md`](evidence/v1-classic-rebalance-callback-order-2026-09-07.md).
+
 ## V1-04 immediate and batch producer cancellation boundaries (2026-09-07)
 
 The pushed sources `5c4f117` and `94610cb` add deterministic scripted-broker

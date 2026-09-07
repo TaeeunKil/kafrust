@@ -125,6 +125,23 @@ final gauges. This replaces the historical zero-duplicate fields as the direct
 bounded secure KIP-848 diagnostic evidence; the 100-cycle, regex/UUID,
 callback/heartbeat, and long-campaign gates stay open.
 
+### Deterministic callback ordering counterpart (2026-09-07)
+
+The KIP-848 member-epoch rejoin regression now records the public listener
+sequence `After(generation 1)`, `Before(generation 1)`,
+`After(generation 2)` with one assignment in each snapshot. The shared fix
+keeps the internal modern join helper silent during rejoin and emits the final
+`After` only after assignment, paused state, and commit-worker membership have
+been synchronized. The focused counterpart test is
+`consumer_protocol_rejoins_and_fetches_after_rebalance_error` from source
+`9b006b1`; the implementation fix is `42169a3`.
+
+This is deterministic scripted-broker evidence only. Published callback and
+heartbeat matrices, stale-task churn, regex/UUID delete-recreate races, and
+release qualification remain open. The detailed boundary and classic/KIP-848
+comparison are recorded in
+[`v1-classic-rebalance-callback-order-2026-09-07.md`](../../evidence/v1-classic-rebalance-callback-order-2026-09-07.md).
+
 ## Failure And Lifecycle Contract
 
 - The group handle and heartbeat task share one fenced member/assignment state;
