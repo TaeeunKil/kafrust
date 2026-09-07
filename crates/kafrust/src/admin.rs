@@ -16082,6 +16082,7 @@ mod tests {
     use std::time::Duration;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
+    use tokio::sync::oneshot;
 
     async fn bind_test_listener() -> (TcpListener, std::net::SocketAddr) {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -19956,6 +19957,38 @@ mod tests {
             Some(BrokerErrorKind::TopicAlreadyExists)
         );
         assert_eq!(metrics.snapshot().broker_errors, 1);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn cancels_create_topics_after_transmission_closes_controller_connection() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let (request_seen_tx, request_seen_rx) = oneshot::channel();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let metadata_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+            write_frame(&mut bootstrap, &metadata_response(addr.port())).await;
+
+            let (mut controller, _) = listener.accept().await.unwrap();
+            let create_request = read_frame(&mut controller).await;
+            assert_eq!(&create_request[0..4], &[0, 19, 0, 2]);
+            request_seen_tx.send(()).unwrap();
+            let mut probe = [0_u8; 1];
+            assert_eq!(controller.read(&mut probe).await.unwrap(), 0);
+        });
+        let admin =
+            AdminClient::new(ClientConfig::new([addr.to_string()]).request_timeout_ms(1_000))
+                .max_retries(0);
+
+        let topics = [NewTopic::new("orders", 3, 1)];
+        let mut create = Box::pin(admin.create_topics(&topics, CreateTopicsOptions::new()));
+        tokio::select! {
+            _ = request_seen_rx => {}
+            result = &mut create => panic!("CreateTopics completed before cancellation: {result:?}"),
+        }
+        drop(create);
         server.await.unwrap();
     }
 
