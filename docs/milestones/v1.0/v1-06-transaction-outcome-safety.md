@@ -128,6 +128,20 @@ fixtures. This closes direct post-transmission mutation cancellation only;
 published profiles, read-committed reconciliation, and long campaign gates
 remain open.
 
+### Transactional Produce cancellation after transmission (2026-09-07)
+
+At source commit `22e110a6faf4a6d46b7577604e1f23195af4a0cc`, deterministic
+scripted-broker regressions cover both `Producer::send` and
+`Producer::send_batch`. After the broker observes the Produce v3 frame and
+withholds its response, dropping the future marks the transaction `Defunct`,
+clears the active transaction, and rejects a new transaction start. The
+existing fatal EndTxn broker-error precedence remains intact. The detailed
+record is [`v1-transaction-produce-cancellation-2026-09-07.md`](../../evidence/v1-transaction-produce-cancellation-2026-09-07.md).
+
+This closes the deterministic post-transmission cancellation slice for all
+direct transaction mutations currently exposed by the producer, but does not
+close published/read-committed reconciliation or any live qualification gate.
+
 ## Failure And Lifecycle Contract
 
 - A lost transmitted EndTxn response returns

@@ -6094,6 +6094,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-transaction-mutation-cancellation-2026-09-03.md; crates/kafrust/src/producer.rs; crates/kafrust/tests/fault_injection.rs
 - non_claims: not EndTxn cancellation qualification, not published-artifact qualification, not accepted-floor or three-broker qualification, not security, not read-committed reconciliation, not long campaigns, not service canary, not release authorization
 
+## Q-TRANSACTION-PRODUCE-CANCEL-2026-09-07
+
+- date_utc: 2026-09-07
+- source_commit: 22e110a6faf4a6d46b7577604e1f23195af4a0cc
+- client_version: 0.3.6 source workspace
+- protocol_version: Produce v3 transactional record batch
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: scripted transport fixture
+- kafka_image: not-applicable
+- mode: transactional Produce cancellation after transmission
+- topology: in-memory leader fixture with cached topic metadata; no external broker
+- security: PLAINTEXT fixture
+- group_protocol: not-applicable
+- workload: one immediate send and one batch send cancellation regression
+- workflow: scripts/check_qualification_ledger.py
+- fault: scripted leader observes each Produce frame and withholds its response
+- duration: focused tests 0.07 s each; workspace test targets passed
+- record_count: one record per canceled Produce request; two requests total
+- member_count: 0
+- repetition_count: two focused regressions plus full library/integration/protocol test targets
+- expected_errors: post-transmission cancellation marks the transaction Defunct, clears active state, and rejects reuse
+- observed_errors: both focused tests passed; fatal EndTxn broker-error precedence remained covered
+- retry_count: 0 after cancellation; completed response retry behavior unchanged
+- duplicate_count: 0 client-visible duplicates
+- loss_count: transactional Produce outcome intentionally unknown after cancellation
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: no Docker resources created or modified; scripted socket joined
+- result: passed
+- artifact: docs/evidence/v1-transaction-produce-cancellation-2026-09-07.md; crates/kafrust/src/producer.rs
+- non_claims: not published-artifact qualification, not accepted-floor or three-broker qualification, not security, not read-committed reconciliation, not long campaigns, not service canary, not release authorization
+
 ## Q-SHARE-ACK-CANCEL-2026-09-04
 
 - date_utc: 2026-09-04

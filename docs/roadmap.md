@@ -477,6 +477,19 @@ the complete 29-test fault-injection target also passed there. The record is
 This is bounded direct-mutation evidence, not published, multi-broker,
 security, long-campaign, service-canary, or release evidence.
 
+### Transactional Produce cancellation boundary (2026-09-07)
+
+Source commit `22e110a6faf4a6d46b7577604e1f23195af4a0cc` adds deterministic
+post-transmission cancellation regressions for both `Producer::send` and
+`Producer::send_batch`. The scripted broker observes Produce v3 and withholds
+the response; dropping either future marks the transaction `Defunct`, clears
+the active transaction, and rejects a new transaction start. The cancellation
+guard covers every direct Produce request variant while preserving retryable
+response handling and fatal EndTxn error precedence. The evidence record is
+[`v1-transaction-produce-cancellation-2026-09-07.md`](evidence/v1-transaction-produce-cancellation-2026-09-07.md).
+This closes only the deterministic transactional Produce cancellation slice;
+published/read-committed reconciliation and live qualification remain open.
+
 ## V1-07 Execution Update (2026-08-22)
 
 V1-07 is `In progress`. Direct-consumer deterministic coverage now records
