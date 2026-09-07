@@ -21226,6 +21226,41 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn cancels_delete_records_after_transmission_closes_leader_connection() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let (request_seen_tx, request_seen_rx) = oneshot::channel();
+        let server = tokio::spawn(async move {
+            let (mut connection, _) = listener.accept().await.unwrap();
+            let metadata_request = read_frame(&mut connection).await;
+            assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+            write_frame(
+                &mut connection,
+                &delete_records_metadata_response(addr.port()),
+            )
+            .await;
+
+            let request = read_frame(&mut connection).await;
+            assert_eq!(&request[0..4], &[0, 21, 0, 1]);
+            request_seen_tx.send(()).unwrap();
+            let mut probe = [0_u8; 1];
+            assert_eq!(connection.read(&mut probe).await.unwrap(), 0);
+        });
+        let admin =
+            AdminClient::new(ClientConfig::new([addr.to_string()]).request_timeout_ms(1_000))
+                .max_retries(0);
+        let topics = [DeleteRecordsTopic::new("orders").partition(0, 100)];
+        let mut deletion = Box::pin(admin.delete_records(&topics, DeleteRecordsOptions::new()));
+
+        tokio::select! {
+            _ = request_seen_rx => {}
+            result = &mut deletion => panic!("DeleteRecords completed before cancellation: {result:?}"),
+        }
+        drop(deletion);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn reuses_admin_leader_connection_for_sequential_record_deletions() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
