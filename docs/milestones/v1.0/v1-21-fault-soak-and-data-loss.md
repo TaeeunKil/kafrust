@@ -283,9 +283,12 @@ WSL starts.
 
 This option does not relax V1-21: it remains `qualified=false`, cannot satisfy
 the six-hour 10,000-record/s 1-KiB floor, and cannot authorize a release. The
-current prepared GitHub diagnostic is capped at two hours; any longer local
-launcher must be separately reviewed, preserve run-scoped cleanup, and record
-before/after capacity without pruning unrelated Docker resources.
+current prepared GitHub diagnostic is capped at two hours. The manual
+[`scripts/run_local_lifetime_diagnostic.sh`](../../scripts/run_local_lifetime_diagnostic.sh)
+launcher provides the six- or twenty-four-hour local option with a 100
+records/s hard cap, run-scoped cleanup, before/after capacity records, and an
+immutable `qualified=false` descriptor. It must be invoked deliberately and
+does not alter the official V1 workflow or its exit criteria.
 
 ### Rate-limited lifetime diagnostic workflow (2026-09-04)
 

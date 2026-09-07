@@ -31,6 +31,46 @@ class LifetimeDiagnosticResourceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "qualified=false"):
             MODULE.validate_workflow(workflow)
 
+    def test_local_launcher_declares_small_profile_and_scoped_cleanup(self):
+        launcher = "\n".join(
+            (
+                "--cpus=1.0",
+                "--memory=2g",
+                "--pids-limit=512",
+                "--log-opt max-size=50m",
+                "--log-opt max-file=3",
+                '"qualified": False',
+                "docker rm -f -v",
+                "docker network rm",
+                "docker network inspect",
+                "KAFRUST_LOCAL_DURATION_SECONDS 21600",
+                "KAFRUST_LOCAL_RATE_RECORDS_PER_SECOND 100",
+                "KAFRUST_LOCAL_PAYLOAD_BYTES 64",
+            )
+        )
+        MODULE.validate_local_launcher(launcher)
+
+    def test_local_launcher_rejects_global_prune(self):
+        launcher = "\n".join(
+            (
+                "--cpus=1.0",
+                "--memory=2g",
+                "--pids-limit=512",
+                "--log-opt max-size=50m",
+                "--log-opt max-file=3",
+                '"qualified": False',
+                "docker rm -f -v",
+                "docker network rm",
+                "docker network inspect",
+                "KAFRUST_LOCAL_DURATION_SECONDS 21600",
+                "KAFRUST_LOCAL_RATE_RECORDS_PER_SECOND 100",
+                "KAFRUST_LOCAL_PAYLOAD_BYTES 64",
+                "docker system prune",
+            )
+        )
+        with self.assertRaisesRegex(ValueError, "global Docker prune"):
+            MODULE.validate_local_launcher(launcher)
+
 
 if __name__ == "__main__":
     unittest.main()

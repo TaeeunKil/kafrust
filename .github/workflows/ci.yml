@@ -47,7 +47,8 @@ jobs:
 
       - name: Check long-campaign safety scripts
         run: |
-          bash -n scripts/check_campaign_capacity.sh scripts/cleanup_campaign_docker.sh
+          bash -n scripts/check_campaign_capacity.sh scripts/cleanup_campaign_docker.sh \
+            scripts/run_local_lifetime_diagnostic.sh
           python scripts/check_lifetime_diagnostic_resources.py
 
       - name: Check protocol API surface

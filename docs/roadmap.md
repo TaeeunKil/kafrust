@@ -6170,9 +6170,11 @@ RAM; Docker-root capacity must still be checked inside WSL.
 
 These are local lifetime/restart/cleanup diagnostics only. They remain
 `qualified=false` and provide no V1-21/V1-22, 1.0.0, publication, or release
-evidence. The prepared GitHub diagnostic remains capped at two hours, so a
-longer local run requires a separately reviewed launcher and must not weaken the
-official six-hour 10,000-record/s, 1-KiB V1-21 contract.
+evidence. The prepared GitHub diagnostic remains capped at two hours; the
+manual [`scripts/run_local_lifetime_diagnostic.sh`](../scripts/run_local_lifetime_diagnostic.sh)
+launcher now provides a deliberate six- or twenty-four-hour local path with a
+100 records/s hard cap and run-scoped cleanup. It must not weaken the official
+six-hour 10,000-record/s, 1-KiB V1-21 contract.
 
 ## V1-18 exact-head fuzz discovery rerun (2026-09-07)
 

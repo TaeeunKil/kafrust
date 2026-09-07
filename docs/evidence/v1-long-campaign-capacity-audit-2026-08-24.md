@@ -366,5 +366,16 @@ the small profile in principle, but not a guarantee under unrelated desktop
 load. This profile is a local lifetime/restart/cleanup diagnostic only:
 `qualified=false`, no V1-21/V1-22 credit, no 1.0.0 evidence, and no release or
 publication authorization. The prepared GitHub diagnostic is capped at two
-hours, so a six- or twenty-four-hour local run needs a separately reviewed
-launcher rather than weakening the official V1 workflow.
+hours. The repository now provides a separately reviewed manual launcher at
+[`scripts/run_local_lifetime_diagnostic.sh`](../../scripts/run_local_lifetime_diagnostic.sh);
+its defaults are this six-hour profile, and it hard-caps the local rate at 100
+records/s. It must be invoked deliberately from WSL, for example:
+
+```bash
+bash scripts/run_local_lifetime_diagnostic.sh
+```
+
+The launcher writes a non-qualifying descriptor under
+`target/local-lifetime/<run-id>/`, records capacity before and after the run,
+and removes only its own containers and network. It does not weaken or replace
+the official V1 workflow.
