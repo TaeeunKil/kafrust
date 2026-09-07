@@ -530,6 +530,59 @@ async fn producer_send_cancellation_does_not_reuse_in_flight_connection() {
 }
 
 #[tokio::test]
+async fn producer_batch_cancellation_does_not_reuse_in_flight_connection() {
+    let mut broker = ScriptedBroker::start(vec![
+        ScriptedResponse::RespondWithAddressAndClose(metadata_response_for_address),
+        ScriptedResponse::Respond(api_versions_response_body(3)),
+        ScriptedResponse::Hold,
+        ScriptedResponse::Respond(api_versions_response_body(3)),
+        ScriptedResponse::Respond(produce_v3_response_body(0, 8)),
+    ])
+    .await
+    .expect("scripted broker should bind");
+    let address = broker.address();
+    let metrics = ClientMetrics::new();
+    let mut producer = ProducerConfig::new([address.to_string()])
+        .metrics(metrics.clone())
+        .request_timeout_ms(1_000)
+        .delivery_timeout_ms(1_000)
+        .max_retries(0)
+        .build()
+        .await
+        .expect("producer should initialize");
+
+    let mut send_batch =
+        Box::pin(producer.send_batch([ProducerRecord::to("orders").partition(0).value("value")]));
+    tokio::select! {
+        result = &mut send_batch => panic!("batch send completed before the held Produce was observed: {result:?}"),
+        result = broker.wait_for_requests(3) => result.expect("scripted broker should observe the in-flight Produce"),
+    }
+    drop(send_batch);
+
+    let metadata = producer
+        .send_batch([ProducerRecord::to("orders").partition(0).value("next")])
+        .await
+        .expect("the next batch should use a fresh broker connection");
+    assert_eq!(metadata.len(), 1);
+    assert_eq!(metadata[0].offset(), 8);
+    assert_eq!(metrics.snapshot().in_flight_requests, 0);
+
+    let observations = broker
+        .finish()
+        .await
+        .expect("scripted broker should finish after batch cancellation");
+    assert_eq!(observations.len(), 5);
+    assert_eq!(
+        observations
+            .iter()
+            .map(|request| request.api_key)
+            .collect::<Vec<_>>(),
+        [3, 18, 0, 18, 0]
+    );
+    assert_ne!(observations[2].connection_id, observations[3].connection_id);
+}
+
+#[tokio::test]
 async fn buffered_idempotent_producer_retries_dropped_response_with_same_batch_sequence() {
     let broker = ScriptedBroker::start(vec![
         ScriptedResponse::Respond(api_versions_producer_response_body()),
