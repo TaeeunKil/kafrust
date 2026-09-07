@@ -19993,6 +19993,38 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn cancels_delete_topics_after_transmission_closes_controller_connection() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let (request_seen_tx, request_seen_rx) = oneshot::channel();
+        let server = tokio::spawn(async move {
+            let (mut bootstrap, _) = listener.accept().await.unwrap();
+            let metadata_request = read_frame(&mut bootstrap).await;
+            assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+            write_frame(&mut bootstrap, &metadata_response(addr.port())).await;
+
+            let (mut controller, _) = listener.accept().await.unwrap();
+            let delete_request = read_frame(&mut controller).await;
+            assert_eq!(&delete_request[0..4], &[0, 20, 0, 3]);
+            request_seen_tx.send(()).unwrap();
+            let mut probe = [0_u8; 1];
+            assert_eq!(controller.read(&mut probe).await.unwrap(), 0);
+        });
+        let admin =
+            AdminClient::new(ClientConfig::new([addr.to_string()]).request_timeout_ms(1_000))
+                .max_retries(0);
+
+        let topics = ["orders".to_owned()];
+        let mut delete = Box::pin(admin.delete_topics(&topics, DeleteTopicsOptions::new()));
+        tokio::select! {
+            _ = request_seen_rx => {}
+            result = &mut delete => panic!("DeleteTopics completed before cancellation: {result:?}"),
+        }
+        drop(delete);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn classifies_create_topics_response_loss_after_transmission() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
