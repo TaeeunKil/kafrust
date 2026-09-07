@@ -168,7 +168,8 @@ assignment, paused state, and commit-worker membership are synchronized.
 
 The real listener sequence is now asserted as `After(generation 1)`,
 `Before(generation 1)`, `After(generation 2)` with one assignment in each
-snapshot. The deterministic evidence is
+snapshot for both the classic coordinator-loss path and the KIP-848 member-epoch
+rejoin path. The deterministic evidence is
 [`v1-classic-rebalance-callback-order-2026-09-07.md`](../../evidence/v1-classic-rebalance-callback-order-2026-09-07.md).
 Published callback/heartbeat matrices, callback panic policy, and long-running
 qualification remain open.

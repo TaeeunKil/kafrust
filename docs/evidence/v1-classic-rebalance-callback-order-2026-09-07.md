@@ -35,10 +35,16 @@ confirms the rejoin completed after coordinator loss. The prior implementation
 failed because it produced a fourth event (`After generation 2`) immediately
 after the expected final callback.
 
+The KIP-848 counterpart
+`consumer_protocol_rejoins_and_fetches_after_rebalance_error` records the same
+three-event sequence while recovering the member epoch and fetching offset
+`42`, proving the helper flag is symmetric across both group protocols.
+
 ## Verification
 
 - `cargo fmt --all`
 - `cargo test -p kafrust --test fault_injection consumer_group_ -- --nocapture` — 4 passed
+- `cargo test -p kafrust --test fault_injection consumer_protocol_rejoins_and_fetches_after_rebalance_error -- --exact --nocapture` — 1 passed
 - `cargo test -p kafrust --lib group::tests -- --nocapture` — 73 passed
 - Source commit: `42169a3`
 

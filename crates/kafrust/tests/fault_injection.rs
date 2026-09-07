@@ -2126,6 +2126,8 @@ async fn consumer_protocol_rejoins_and_fetches_after_rebalance_error() {
     .expect("KIP-848 bootstrap broker should bind");
 
     let metrics = ClientMetrics::new();
+    let callback_events = Arc::new(Mutex::new(Vec::new()));
+    let callback_events_for_listener = Arc::clone(&callback_events);
     let mut group = ConsumerGroupConfig::new(
         [bootstrap.address().to_string()],
         "orders-consumer-recovery",
@@ -2136,6 +2138,13 @@ async fn consumer_protocol_rejoins_and_fetches_after_rebalance_error() {
             .request_timeout_ms(1_000),
     )
     .subscribe("orders")
+    .rebalance_listener(move |event| {
+        callback_events_for_listener.lock().unwrap().push((
+            event.phase(),
+            event.generation_id(),
+            event.assignments().len(),
+        ));
+    })
     .group_protocol(ConsumerGroupProtocol::Consumer)
     .max_retries(1)
     .join()
@@ -2154,6 +2163,14 @@ async fn consumer_protocol_rejoins_and_fetches_after_rebalance_error() {
     assert_eq!(group.generation_id(), 2);
     assert_eq!(group.position("orders", 0), Some(43));
     assert!(metrics.snapshot().retries >= 1);
+    assert_eq!(
+        *callback_events.lock().unwrap(),
+        vec![
+            (RebalancePhase::After, 1, 1),
+            (RebalancePhase::Before, 1, 1),
+            (RebalancePhase::After, 2, 1),
+        ]
+    );
     group
         .commit_offsets()
         .await

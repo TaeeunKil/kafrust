@@ -7104,9 +7104,9 @@ unqualified relative artifact label.
 - duration: focused test suite under one second on Windows
 - record_count: one recovered record at offset 42
 - member_count: one group member
-- repetition_count: 4 classic group fault-injection tests; 73 group unit tests
+- repetition_count: 4 classic group fault-injection tests; 1 KIP-848 rejoin test; 73 group unit tests
 - expected_errors: no duplicate `After` callback; exact Before/After sequence across generations
-- observed_errors: none; callback sequence After(1), Before(1), After(2), one assignment each
+- observed_errors: none; both protocols callback sequence After(1), Before(1), After(2), one assignment each
 - retry_count: one bounded group rejoin retry path
 - duplicate_count: zero callback duplicates after fix
 - loss_count: zero recovered records
