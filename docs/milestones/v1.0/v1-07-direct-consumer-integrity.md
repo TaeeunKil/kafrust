@@ -100,6 +100,20 @@ single-node diagnostic evidence; published retention, leader movement, and
 reconciliation gates remain open. See
 [`v1-company-consumer-controls-short-smoke-2026-09-04.md`](../../evidence/v1-company-consumer-controls-short-smoke-2026-09-04.md).
 
+### Fetch session epoch reset (2026-09-07)
+
+At source commit `7f94dfdd5ed42576493ed43cd2f6c4dd1d5e9f7c`, a scripted broker
+first establishes Fetch v12 session `17`, then returns
+`INVALID_FETCH_SESSION_EPOCH` after observing the stale session/epoch pair.
+The consumer discards the session and metadata route, reconnects, retries with
+session `0`, and delivers the expected record at offset `42` with an empty
+final session cache. The detailed record is
+[`v1-direct-consumer-fetch-session-reset-2026-09-07.md`](../../evidence/v1-direct-consumer-fetch-session-reset-2026-09-07.md).
+
+This closes the deterministic invalid-session recovery boundary only; live
+leader movement, retention, published reconciliation, and final queue/resource
+gates remain open.
+
 ## Failure And Lifecycle Contract
 
 - A lost Fetch response is safe to retry because delivery has not been exposed

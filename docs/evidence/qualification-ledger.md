@@ -6028,6 +6028,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-direct-consumer-integrity-2026-09-03.md; crates/kafrust/src/consumer.rs; crates/kafrust/tests/fault_injection.rs
 - non_claims: not retention or unclean-election recovery, not published-artifact qualification, not accepted-floor or three-broker qualification, not security, not 100,000-record reconciliation, not long campaigns, not service canary, not release authorization
 
+## Q-DIRECT-CONSUMER-FETCH-SESSION-RESET-2026-09-07
+
+- date_utc: 2026-09-07
+- source_commit: 7f94dfdd5ed42576493ed43cd2f6c4dd1d5e9f7c
+- client_version: 0.3.6 source workspace
+- protocol_version: Fetch v12 and INVALID_FETCH_SESSION_EPOCH
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: scripted transport fixture
+- kafka_image: not-applicable
+- mode: direct consumer Fetch session epoch reset
+- topology: in-memory metadata and two scripted broker connections; no external broker
+- security: PLAINTEXT fixture
+- group_protocol: not-applicable
+- workload: one session establishment, one stale-session rejection, and one reset retry
+- workflow: scripts/check_qualification_ledger.py
+- fault: broker returns error code 70 after observing session 17 and request epoch 1
+- duration: focused test 0.53 s; consumer test target passed
+- record_count: one recovered record at offset 42
+- member_count: 0
+- repetition_count: one deterministic session-reset run
+- expected_errors: invalid session is discarded; retry begins with session 0 and does not reuse stale state
+- observed_errors: focused regression passed; final session cache was empty
+- retry_count: 1 session-reset retry; metadata and leader connections were rediscovered
+- duplicate_count: 0 client-visible duplicates
+- loss_count: 0 recovered record loss
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: no Docker resources created or modified; scripted sockets joined
+- result: passed
+- artifact: docs/evidence/v1-direct-consumer-fetch-session-reset-2026-09-07.md; crates/kafrust/src/consumer.rs
+- non_claims: not preferred-replica or retention qualification, not live leader-movement qualification, not published-artifact qualification, not security, not 100,000-record reconciliation, not long campaigns, not service canary, not release authorization
+
 ## Q-GROUP-MAX-POLL-POLICY-2026-09-03
 
 - date_utc: 2026-09-03

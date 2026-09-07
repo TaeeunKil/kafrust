@@ -526,6 +526,18 @@ recovery) on separate isolated topics. Details are recorded in
 [`v1-company-consumer-controls-short-smoke-2026-09-04.md`](evidence/v1-company-consumer-controls-short-smoke-2026-09-04.md);
 these remain bounded single-node diagnostics.
 
+### Fetch session epoch reset (2026-09-07)
+
+Source commit `7f94dfdd5ed42576493ed43cd2f6c4dd1d5e9f7c` adds a scripted
+Fetch-v12 regression for `INVALID_FETCH_SESSION_EPOCH`. After session `17` is
+rejected, the consumer invalidates the stale route, reconnects, starts the
+retry with session `0`, and returns the expected record at offset `42` with no
+cached session left behind. The evidence is
+[`v1-direct-consumer-fetch-session-reset-2026-09-07.md`](evidence/v1-direct-consumer-fetch-session-reset-2026-09-07.md).
+This closes only the deterministic invalid-session boundary; live retention,
+leader movement, published reconciliation, and final queue/resource gates
+remain open.
+
 ## V1-08 Execution Update (2026-08-22)
 
 V1-08 is `In progress`. Classic and KIP-848 OffsetCommit now expose a typed
