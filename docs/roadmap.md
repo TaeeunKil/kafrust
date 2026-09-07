@@ -6220,3 +6220,18 @@ passed. Evidence is retained in
 [`v1-producer-send-cancellation-2026-09-07.md`](evidence/v1-producer-send-cancellation-2026-09-07.md).
 This closes one producer cancellation boundary only; published reconciliation,
 live qualification, long campaigns, and release gates remain open.
+
+## V1-07 direct consumer latest offset reset (2026-09-07)
+
+The pushed source `758b8f9` adds a deterministic scripted-broker regression for
+`OffsetResetPolicy::Latest`. After an `OFFSET_OUT_OF_RANGE` response at offset
+100, the consumer performs the bounded earliest/latest watermark lookup,
+selects the high watermark 9, retries Fetch at offset 9, returns no records,
+and advances the assignment position to 9. The required local validation passed
+with the 509-test client unit suite and all workspace targets. The immutable
+record is
+[`v1-direct-consumer-offset-reset-high-watermark-2026-09-07.md`](evidence/v1-direct-consumer-offset-reset-high-watermark-2026-09-07.md).
+
+This is local deterministic reset evidence only; live retention and leader
+movement, published reconciliation, long campaigns, service canaries, and
+release authorization remain open.

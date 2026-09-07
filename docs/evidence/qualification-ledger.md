@@ -6061,6 +6061,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-direct-consumer-fetch-session-reset-2026-09-07.md; crates/kafrust/src/consumer.rs
 - non_claims: not preferred-replica or retention qualification, not live leader-movement qualification, not published-artifact qualification, not security, not 100,000-record reconciliation, not long campaigns, not service canary, not release authorization
 
+## Q-DIRECT-CONSUMER-OFFSET-RESET-LATEST-2026-09-07
+
+- date_utc: 2026-09-07
+- source_commit: 758b8f9052164937f449e3985777ba87bf9ea340
+- client_version: 0.3.6 source workspace
+- protocol_version: Fetch v12 and ListOffsets v1
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: scripted transport fixture
+- kafka_image: not-applicable
+- mode: direct consumer high-watermark offset reset
+- topology: in-memory metadata and two scripted broker connections; no external broker
+- security: PLAINTEXT fixture
+- group_protocol: not-applicable
+- workload: one out-of-range Fetch, earliest/high-watermark lookup, and high-watermark retry
+- workflow: scripts/check_qualification_ledger.py
+- fault: broker returns OFFSET_OUT_OF_RANGE for assignment offset 100
+- duration: focused test 0.02 s after compilation
+- record_count: zero records returned at the high watermark; assignment position advanced to 9
+- member_count: 0
+- repetition_count: one deterministic offset-reset run
+- expected_errors: configured reset policy selects high watermark 9 after the bounded ListOffsets lookup
+- observed_errors: low/high timestamps -2/-1 were requested; retry Fetch contained offset 9; final position was 9
+- retry_count: 1 reset retry after one out-of-range response
+- duplicate_count: 0 client-visible duplicates
+- loss_count: 0 within the scripted high-watermark boundary
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: no Docker resources created or modified; scripted sockets joined
+- result: passed
+- artifact: docs/evidence/v1-direct-consumer-offset-reset-high-watermark-2026-09-07.md; docs/milestones/v1.0/v1-07-direct-consumer-integrity.md; crates/kafrust/src/consumer.rs
+- non_claims: not live retention or unclean-election recovery, not leader-movement qualification, not published-artifact qualification, not security, not 100,000-record reconciliation, not long campaigns, not service canary, not release authorization
+
 ## Q-GROUP-MAX-POLL-POLICY-2026-09-03
 
 - date_utc: 2026-09-03

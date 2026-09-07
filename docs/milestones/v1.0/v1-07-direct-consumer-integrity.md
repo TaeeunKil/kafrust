@@ -114,6 +114,20 @@ This closes the deterministic invalid-session recovery boundary only; live
 leader movement, retention, published reconciliation, and final queue/resource
 gates remain open.
 
+### Latest offset reset boundary (2026-09-07)
+
+At source commit `758b8f9`, a scripted broker first returns
+`OFFSET_OUT_OF_RANGE` for an assignment at offset `100`, then reports
+watermarks `(low=4, high=9)`. The direct consumer configured with
+`OffsetResetPolicy::Latest` sends the bounded low/high ListOffsets lookup,
+selects the high watermark, retries Fetch at offset `9`, returns no record, and
+advances its assignment position to `9`. The detailed record is
+ [`v1-direct-consumer-offset-reset-high-watermark-2026-09-07.md`](../../evidence/v1-direct-consumer-offset-reset-high-watermark-2026-09-07.md).
+
+This closes the deterministic latest-reset boundary only; retention behavior on
+a live broker, leader movement, published reconciliation, and final
+queue/resource gates remain open.
+
 ## Failure And Lifecycle Contract
 
 - A lost Fetch response is safe to retry because delivery has not been exposed
