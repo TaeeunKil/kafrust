@@ -7216,6 +7216,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-admin-coordinator-response-loss-matrix-2026-09-04.md; docs/milestones/v1.0/v1-12-coordinator-leader-admin-mutations.md; crates/kafrust/src/admin.rs
 - non_claims: not published floor or authorization qualification, not reconciliation or three-broker failover qualification, not long campaign, not service canary, not release authorization
 
+## Q-ADMIN-COORDINATOR-CANCELLATION-MATRIX-2026-09-07
+
+- date_utc: 2026-09-07
+- source_commit: 536b339afd2b6027570cd8f19f15238896f1c0d5
+- client_version: 0.3.6 source workspace
+- protocol_version: OffsetCommit v2; member-aware OffsetCommit v9; member-aware OffsetCommit v10; OffsetDelete v0; DeleteGroups v1
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: not-applicable; scripted broker
+- kafka_image: not-applicable; in-memory fixture
+- mode: coordinator mutation cancellation after transmission
+- topology: scripted bootstrap, coordinator, and ApiVersions TCP sockets
+- security: PLAINTEXT fixture
+- group_protocol: classic and KIP-848 member-aware coordinator entry points
+- workload: one complete request for each of five coordinator mutations
+- workflow: scripts/check_qualification_ledger.py
+- fault: response withheld after each complete mutation frame; caller future dropped
+- duration: focused matrix under one second
+- record_count: five mutation requests
+- member_count: one encoded member ID and epoch in each member-aware request
+- repetition_count: one regression per operation
+- expected_errors: possibly-transmitted mutation connections must not remain reusable
+- observed_errors: every coordinator connection reached EOF after cancellation; no response/replay
+- retry_count: 0
+- duplicate_count: 0 client-visible mutations; no replay attempted
+- loss_count: five intentionally withheld coordinator responses
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: scripted coordinator tasks joined; no external resources
+- result: passed
+- artifact: docs/evidence/v1-admin-coordinator-cancellation-matrix-2026-09-07.md; docs/milestones/v1.0/v1-12-coordinator-leader-admin-mutations.md; crates/kafrust/src/admin.rs
+- non_claims: no broker application-state conclusion, not published/live/reconciliation qualification, not long-campaign, service-canary, or release evidence
+
 ## Q-ADMIN-CONTROLLER-CANCELLATION-2026-09-07
 
 - date_utc: 2026-09-07

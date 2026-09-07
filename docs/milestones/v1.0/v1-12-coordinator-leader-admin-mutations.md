@@ -110,6 +110,21 @@ v10 frame, then drops the response; the client again returns
 now covered locally, while live owner movement, published profiles, and the
 remaining V1-12 gates stay open.
 
+### Coordinator mutation cancellation matrix (2026-09-07)
+
+Source `536b339afd2b6027570cd8f19f15238896f1c0d5` adds a shared scripted
+coordinator cancellation fixture for classic OffsetCommit v2, member-aware
+OffsetCommit v9 fallback, member-aware OffsetCommit v10 with topic UUID,
+OffsetDelete v0, and DeleteGroups v1. Each fixture observes the complete
+request, withholds the response, drops the caller future, and verifies that
+the coordinator connection reaches EOF instead of remaining reusable. This
+closes the deterministic coordinator cancellation/no-reuse slice only;
+application state, reconciliation, live owner movement, published profiles,
+long campaigns, and release gates remain open. See
+[`v1-admin-coordinator-cancellation-matrix-2026-09-07.md`](../../evidence/v1-admin-coordinator-cancellation-matrix-2026-09-07.md).
+The pushed source passed stable and Rust 1.81.0 in
+[CI run 34098931228](https://github.com/TaeeunKil/kafrust/actions/runs/34098931228).
+
 ## Failure And Lifecycle Contract
 
 - Read-only operations may rediscover/retry inside their budget.

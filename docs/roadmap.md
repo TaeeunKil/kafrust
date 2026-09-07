@@ -765,6 +765,19 @@ unknown outcome without replay. The v9 fallback and v10 topic-UUID paths are
 both covered locally; live movement, published profiles, and the remaining
 V1-12 gates remain open.
 
+At pushed source `536b339afd2b6027570cd8f19f15238896f1c0d5`, the deterministic
+coordinator cancellation boundary now covers classic OffsetCommit v2,
+member-aware OffsetCommit v9 fallback, member-aware OffsetCommit v10 with
+topic UUID, OffsetDelete v0, and DeleteGroups v1. Each scripted coordinator
+observed the complete request, withheld its response, and reached EOF after the
+caller future was dropped, preventing reuse of a possibly-transmitted mutation
+connection. This closes the local cancellation/no-reuse slice only; application
+state, reconciliation, live owner movement, published profiles,
+long-campaign, service-canary, and release gates remain open. See
+[`v1-admin-coordinator-cancellation-matrix-2026-09-07.md`](evidence/v1-admin-coordinator-cancellation-matrix-2026-09-07.md).
+The pushed source passed stable and Rust 1.81.0 in
+[CI run 34098931228](https://github.com/TaeeunKil/kafrust/actions/runs/34098931228).
+
 ## V1-13 Execution Update (2026-08-22)
 
 V1-13 is `In progress`. Security Admin routes preserve typed mixed
