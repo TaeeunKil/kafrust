@@ -186,6 +186,18 @@ authorize a release. The resource-cap change is on pushed commit `7558560`,
 with the follow-up documentation alignment on `db8c9e2` and CI guard on
 `317aca9`.
 
+### Current CI and runner state (2026-09-07)
+
+The direct-dependency SBOM drift found on the Linux package path was corrected
+by pinning the reviewed `tokio-rustls` edge and recording both the failed and
+recovered checks in the V1-19 ledger. The follow-up pushed-head CI
+[`34072160752`](https://github.com/TaeeunKil/kafrust/actions/runs/34072160752)
+passed on stable and Rust 1.81.0. This closes that reproducibility failure
+mode only; V1-20 through V1-26 remain governed by their independent published,
+long-campaign, canary, freeze, and release criteria. The registered
+`wsl-ubuntu-t9` runner is currently offline and no lifetime diagnostic has
+been dispatched.
+
 ## Status And Evidence
 
 Work status and evidence level are separate axes.

@@ -6068,3 +6068,19 @@ it is not published-artifact evidence, the secure multi-member/three-broker
 matrix, the 10,000-record/20-cycle gate, a long campaign, a service canary, or
 release authorization. The immutable record is
 [`v1-live-share-acknowledgement-ambiguity-2026-09-04.md`](evidence/v1-live-share-acknowledgement-ambiguity-2026-09-04.md).
+
+## V1-19 SBOM direct-dependency drift remediation (2026-09-07)
+
+The Linux package path exposed a reproducibility failure in the deterministic
+SBOM gate: the ignored root lockfile resolved the direct `tokio-rustls`
+requirement to `0.26.5` while the reviewed SBOM recorded `0.26.4`. The SBOM
+checker correctly rejected that direct-edge drift. The requirement is now
+exactly pinned, and the failed check, remediation, local validation, and
+recovered CI are recorded in
+[`v1-19-direct-dependency-drift-remediation-2026-09-07.md`](evidence/v1-19-direct-dependency-drift-remediation-2026-09-07.md).
+CI run [34072160752](https://github.com/TaeeunKil/kafrust/actions/runs/34072160752)
+passed on stable and Rust 1.81.0. This closes one V1-19 reproducibility mode;
+it does not close the published matrix, long campaigns, service canary, API
+freeze, RC, or stable-release gates. The self-hosted WSL runner remains
+offline, so the prepared rate-limited lifetime diagnostic is still
+undispatched.
