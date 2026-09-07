@@ -176,3 +176,17 @@ and ShareGroup state lifecycle. The exact record is
 [`v1-company-share-short-smoke-2026-09-03.md`](../../evidence/v1-company-share-short-smoke-2026-09-03.md).
 It is single-node local evidence and does not count toward the secure
 multi-member, three-broker, 10,000-record, or 20-cycle exit gate.
+
+### Hosted current-source acknowledgement ambiguity recheck (2026-09-04)
+
+The pushed source `86f349b` passed the Kafka 4.3.1 Share acknowledgement
+response-loss workflow in
+[run 33855859702](https://github.com/TaeeunKil/kafrust/actions/runs/33855859702).
+The workflow seeded one record, dropped ShareAcknowledge API key 79 through a
+proxy, and passed
+`share_consumer_reconciles_lost_release_response_when_broker_is_configured`;
+the drop marker was present. This strengthens the current-source Release and
+unknown-outcome boundary only. It is not published-artifact evidence and does
+not close the secure multi-member, three-broker, 10,000-record, 20-cycle, or
+release gates. The immutable record is
+[`v1-live-share-acknowledgement-ambiguity-2026-09-04.md`](../../evidence/v1-live-share-acknowledgement-ambiguity-2026-09-04.md).

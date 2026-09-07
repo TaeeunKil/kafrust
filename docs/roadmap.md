@@ -6037,3 +6037,16 @@ The pushed implementation head `730dd77` passed the repository CI safety gate
 on stable and Rust 1.81 in [33847498831](https://github.com/TaeeunKil/kafrust/actions/runs/33847498831).
 That is workflow validation only; no diagnostic execution or release claim is
 implied.
+
+## V1-10 current-source Share acknowledgement ambiguity recheck (2026-09-04)
+
+The pushed source `86f349b` passed the Kafka 4.3.1 Share acknowledgement
+response-loss workflow in
+[run 33855859702](https://github.com/TaeeunKil/kafrust/actions/runs/33855859702).
+The workflow seeded one record, dropped ShareAcknowledge API key 79 through a
+proxy, and passed the Release reconciliation test with the drop marker present.
+This is bounded current-source evidence for the unknown-outcome boundary only;
+it is not published-artifact evidence, the secure multi-member/three-broker
+matrix, the 10,000-record/20-cycle gate, a long campaign, a service canary, or
+release authorization. The immutable record is
+[`v1-live-share-acknowledgement-ambiguity-2026-09-04.md`](evidence/v1-live-share-acknowledgement-ambiguity-2026-09-04.md).

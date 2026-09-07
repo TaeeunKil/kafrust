@@ -7018,6 +7018,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-admin-coordinator-response-loss-matrix-2026-09-04.md; docs/milestones/v1.0/v1-12-coordinator-leader-admin-mutations.md; crates/kafrust/src/admin.rs
 - non_claims: not published floor or authorization qualification, not reconciliation or three-broker failover qualification, not long campaign, not service canary, not release authorization
 
+## Q-LIVE-V110-ACK-AMBIGUITY-2026-09-04
+
+- date_utc: 2026-09-04
+- source_commit: 86f349bd5ce9d475fe5e1df1cfe8a238953eebf3
+- client_version: 0.3.6 source checkout
+- protocol_version: ShareAcknowledge v1/v2 response-loss path
+- work_status: In progress
+- evidence_level: Live current-source
+- kafka_version: 4.3.1
+- kafka_image: apache/kafka:4.3.1
+- mode: ShareConsumer Release acknowledgement ambiguity reconciliation
+- topology: single-node KRaft with Share groups enabled
+- security: PLAINTEXT
+- group_protocol: Share
+- workload: one seeded Share record and one dropped ShareAcknowledge response
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/33855859702
+- fault: response-drop proxy discarded API key 79 after transmission
+- duration: approximately 58 seconds workflow wall time; one focused test
+- record_count: one seeded and reconciled Share record
+- member_count: one Share member
+- repetition_count: 1 bounded diagnostic
+- expected_errors: typed unknown-outcome/reconciliation path; no acknowledgement replay
+- observed_errors: test passed 1/1; drop-marker assertion passed; no workflow failure
+- retry_count: not measured
+- duplicate_count: 0 observed by the focused test
+- loss_count: 0 observed by the focused test; response intentionally dropped
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: not measured
+- result: passed
+- artifact: docs/evidence/v1-live-share-acknowledgement-ambiguity-2026-09-04.md; workflow run 33855859702
+- non_claims: not published artifact qualification, not secure multi-member or three-broker qualification, not 10,000-record/20-cycle gate, not long campaign, not service canary, not release authorization
+
 ## Q-PUBLISHED-V122-BOUND-2026-09-04
 
 - date_utc: 2026-09-04
