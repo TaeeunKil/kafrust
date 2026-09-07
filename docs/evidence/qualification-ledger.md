@@ -7018,6 +7018,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-admin-coordinator-response-loss-matrix-2026-09-04.md; docs/milestones/v1.0/v1-12-coordinator-leader-admin-mutations.md; crates/kafrust/src/admin.rs
 - non_claims: not published floor or authorization qualification, not reconciliation or three-broker failover qualification, not long campaign, not service canary, not release authorization
 
+## Q-CI-V118-DISCOVERY-RERUN-2026-09-07
+
+- date_utc: 2026-09-07
+- source_commit: 18ee34d9c12c9c16c19764e27322130c717ee15a
+- client_version: source checkout
+- protocol_version: ten checked-in libFuzzer targets
+- work_status: In progress
+- evidence_level: CI
+- kafka_version: not-applicable
+- kafka_image: not-applicable
+- mode: exact pushed-head corpus-backed fuzz discovery rerun
+- topology: not-applicable
+- security: not-applicable
+- group_protocol: not-applicable
+- workload: ten targets; 30-second run per target
+- workflow: https://github.com/TaeeunKil/kafrust/actions/runs/34075853513
+- fault: none injected
+- duration: approximately 7 minutes workflow wall time
+- record_count: not-applicable
+- member_count: not-applicable
+- repetition_count: one exact pushed-head discovery rerun
+- expected_errors: no target compilation failure or fuzz-run failure
+- observed_errors: all ten targets compiled and completed; artifact upload succeeded
+- retry_count: not-applicable
+- duplicate_count: not-applicable
+- loss_count: not-applicable
+- latency: not measured
+- memory: 2,048 MiB RSS cap; target peak values are not an SLO result
+- final_resource_gauges: not-applicable
+- result: passed
+- artifact: docs/evidence/v1-fuzz-discovery-head-rerun-2026-09-07.md; artifact 10002123213 (1,595,787 bytes)
+- non_claims: not a 3,600-second target qualification set, not a weekly campaign pass, not proof of absence of bugs, not V1-18 completion, not release authorization
+
 ## Q-CI-V118-QUALIFICATION-2026-08-24
 
 - date_utc: 2026-08-24

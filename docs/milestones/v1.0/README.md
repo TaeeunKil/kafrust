@@ -383,3 +383,9 @@ resource decision are retained in
 [`v1-long-campaign-capacity-preflight-2026-09-07.md`](../../evidence/v1-long-campaign-capacity-preflight-2026-09-07.md).
 The prepared two-hour diagnostic remains non-qualifying and requires a fresh
 online WSL/Docker preflight before execution.
+
+The exact pushed head also passed the short Fuzz Check
+[34075853513](https://github.com/TaeeunKil/kafrust/actions/runs/34075853513)
+for all ten targets. Its artifact is retained in
+[`v1-fuzz-discovery-head-rerun-2026-09-07.md`](../../evidence/v1-fuzz-discovery-head-rerun-2026-09-07.md);
+this remains discovery-only and does not close V1-18 qualification.

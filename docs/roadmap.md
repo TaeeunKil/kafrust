@@ -6113,3 +6113,13 @@ be measured while WSL was stopped, so no lifetime or exact V1-21/V1-22 campaign
 was dispatched. The prepared two-hour RF3 diagnostic remains bounded and
 `qualified=false`; its full preflight record is
 [`v1-long-campaign-capacity-preflight-2026-09-07.md`](evidence/v1-long-campaign-capacity-preflight-2026-09-07.md).
+
+## V1-18 exact-head fuzz discovery rerun (2026-09-07)
+
+The pushed head `18ee34d` passed the short [Fuzz Check
+34075853513](https://github.com/TaeeunKil/kafrust/actions/runs/34075853513)
+for all ten libFuzzer targets, with the 2,048 MiB RSS and 10-second input
+limits and a retained discovery artifact. The immutable record is
+[`v1-fuzz-discovery-head-rerun-2026-09-07.md`](evidence/v1-fuzz-discovery-head-rerun-2026-09-07.md).
+This aligns discovery provenance with the latest pushed head but does not
+replace the 3,600-second qualification, weekly campaign, or V1-18 exit gate.

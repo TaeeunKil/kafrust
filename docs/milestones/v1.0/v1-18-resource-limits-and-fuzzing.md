@@ -211,6 +211,19 @@ successfully. The immutable record is
 This refresh is discovery-only and does not replace the current-head
 3,600-second target qualification or four-campaign gate.
 
+### Exact pushed-head discovery rerun (2026-09-07)
+
+The exact pushed head `18ee34d` passed [Fuzz Check
+34075853513](https://github.com/TaeeunKil/kafrust/actions/runs/34075853513):
+all ten targets compiled and completed their 30-second corpus-backed runs under
+the 2,048 MiB RSS and 10-second input limits. The artifact
+[`kafrust-fuzz-34075853513`](https://github.com/TaeeunKil/kafrust/actions/runs/34075853513)
+was uploaded successfully. The immutable record is
+[`v1-fuzz-discovery-head-rerun-2026-09-07.md`](../../evidence/v1-fuzz-discovery-head-rerun-2026-09-07.md).
+This is provenance-aligned discovery evidence only; the current-head
+3,600-second target qualification, four weekly campaigns, and crash/OOM
+disposition remain open.
+
 ## Failure And Lifecycle Contract
 
 - Limits are checked before unbounded allocation and return typed errors.
