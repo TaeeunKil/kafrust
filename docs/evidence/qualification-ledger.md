@@ -7115,7 +7115,7 @@ unqualified relative artifact label.
 - final_resource_gauges: scripted sockets closed; no external resources
 - result: passed
 - artifact: docs/evidence/v1-classic-rebalance-callback-order-2026-09-07.md; docs/milestones/v1.0/v1-08-classic-group-lifecycle.md; crates/kafrust/src/group.rs; crates/kafrust/tests/fault_injection.rs
-- non_claims: not published artifact, not secure broker qualification, not callback panic policy, not 100-cycle qualification, not long campaign, not service canary, not release authorization
+- non_claims: not published artifact, not secure broker qualification, not runtime callback panic-isolation qualification, not 100-cycle qualification, not long campaign, not service canary, not release authorization
 
 ## Q-LOCAL-V103-GOLDEN-MALFORMED-RERUN-2026-09-07
 
