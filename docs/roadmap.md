@@ -6235,3 +6235,16 @@ record is
 This is local deterministic reset evidence only; live retention and leader
 movement, published reconciliation, long campaigns, service canaries, and
 release authorization remain open.
+
+## V1-07 direct consumer partition-queue cancellation (2026-09-07)
+
+The pushed source `90e1ad3` adds a scripted-broker regression for dropping a
+split partition-queue receiver before the next poll. The closed route is removed
+and its Fetch record is returned through normal `poll()` output, with the
+assignment advancing from offset 42 to 43. The required local validation passed
+with 510 client unit tests and all workspace targets. The immutable record is
+[`v1-direct-consumer-partition-queue-cancellation-2026-09-07.md`](evidence/v1-direct-consumer-partition-queue-cancellation-2026-09-07.md).
+
+This is local deterministic queue-cancellation evidence only; sustained
+fairness, live retention and leader movement, published reconciliation, long
+campaigns, service canaries, and release authorization remain open.

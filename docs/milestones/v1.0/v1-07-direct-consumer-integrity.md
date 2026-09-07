@@ -128,6 +128,18 @@ This closes the deterministic latest-reset boundary only; retention behavior on
 a live broker, leader movement, published reconciliation, and final
 queue/resource gates remain open.
 
+### Partition-queue cancellation boundary (2026-09-07)
+
+At source commit `90e1ad3`, a scripted broker supplies one Fetch record after
+the split queue receiver is dropped. The consumer detects the closed queue,
+removes the route, returns the record through the ordinary `poll()` result, and
+advances the assignment position from `42` to `43`. The detailed record is
+[`v1-direct-consumer-partition-queue-cancellation-2026-09-07.md`](../../evidence/v1-direct-consumer-partition-queue-cancellation-2026-09-07.md).
+
+This closes the deterministic dropped-receiver boundary only; queue fairness
+under sustained multi-partition load, live retention and leader movement,
+published reconciliation, and final resource gates remain open.
+
 ## Failure And Lifecycle Contract
 
 - A lost Fetch response is safe to retry because delivery has not been exposed

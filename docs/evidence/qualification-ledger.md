@@ -6094,6 +6094,39 @@ unqualified relative artifact label.
 - artifact: docs/evidence/v1-direct-consumer-offset-reset-high-watermark-2026-09-07.md; docs/milestones/v1.0/v1-07-direct-consumer-integrity.md; crates/kafrust/src/consumer.rs
 - non_claims: not live retention or unclean-election recovery, not leader-movement qualification, not published-artifact qualification, not security, not 100,000-record reconciliation, not long campaigns, not service canary, not release authorization
 
+## Q-DIRECT-CONSUMER-PARTITION-QUEUE-CANCELLATION-2026-09-07
+
+- date_utc: 2026-09-07
+- source_commit: 90e1ad3f968fd3c126accf641d382f63a50fda77
+- client_version: 0.3.6 source workspace
+- protocol_version: Fetch v12 scripted fixture
+- work_status: In progress
+- evidence_level: Local deterministic
+- kafka_version: scripted transport fixture
+- kafka_image: not-applicable
+- mode: direct consumer partition-queue cancellation
+- topology: in-memory metadata and one scripted broker connection; no external broker
+- security: PLAINTEXT fixture
+- group_protocol: not-applicable
+- workload: one split partition queue whose receiver is dropped before Fetch delivery
+- workflow: scripts/check_qualification_ledger.py
+- fault: bounded queue receiver is closed before the next poll
+- duration: focused test 0.01 s after compilation
+- record_count: one record returned through normal poll output at offset 42
+- member_count: 0
+- repetition_count: one deterministic queue-cancellation run
+- expected_errors: closed queue route is removed without skipping the fetched record
+- observed_errors: one record returned; assignment position advanced to 43; no queue remained active
+- retry_count: 0
+- duplicate_count: 0 client-visible duplicates
+- loss_count: 0 within the scripted queue-cancellation boundary
+- latency: not measured
+- memory: not measured
+- final_resource_gauges: no Docker resources created or modified; scripted socket joined
+- result: passed
+- artifact: docs/evidence/v1-direct-consumer-partition-queue-cancellation-2026-09-07.md; docs/milestones/v1.0/v1-07-direct-consumer-integrity.md; crates/kafrust/src/consumer.rs
+- non_claims: not sustained multi-partition fairness, not live retention or leader-movement recovery, not published-artifact qualification, not security, not 100,000-record reconciliation, not long campaigns, not service canary, not release authorization
+
 ## Q-GROUP-MAX-POLL-POLICY-2026-09-03
 
 - date_utc: 2026-09-03
