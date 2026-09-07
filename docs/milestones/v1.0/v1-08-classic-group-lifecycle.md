@@ -172,7 +172,11 @@ snapshot for both the classic coordinator-loss path and the KIP-848 member-epoch
 rejoin path. The deterministic evidence is
 [`v1-classic-rebalance-callback-order-2026-09-07.md`](../../evidence/v1-classic-rebalance-callback-order-2026-09-07.md).
 Published callback/heartbeat matrices, callback panic policy, and long-running
-qualification remain open.
+qualification remain open for live/published coverage. The public policy is
+now explicit: `RebalanceListener` is synchronous and infallible, application
+panics are not caught or converted into successful transitions, and an
+explicit `leave` does not synthesize a rebalance callback. Applications needing
+isolation must catch panics in their own listener wrapper.
 
 ## Failure And Lifecycle Contract
 

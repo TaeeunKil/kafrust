@@ -583,8 +583,11 @@ state. The public listener now produces exactly
 assignment in each snapshot. See
 [`v1-classic-rebalance-callback-order-2026-09-07.md`](evidence/v1-classic-rebalance-callback-order-2026-09-07.md).
 This closes only the deterministic duplicate-callback boundary; published
-callback/heartbeat matrices, panic policy, and long-campaign evidence remain
-open.
+callback/heartbeat matrices and long-campaign evidence remain open. The public
+panic policy is explicit: `RebalanceListener` is synchronous and infallible;
+kafrust does not catch or reinterpret an application panic, and an explicit
+`leave` does not synthesize a rebalance callback. Applications that need panic
+isolation must provide their own wrapper.
 
 ## V1-09 Execution Update (2026-08-22)
 

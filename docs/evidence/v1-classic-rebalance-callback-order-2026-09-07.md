@@ -53,4 +53,6 @@ three-event sequence while recovering the member epoch and fetching offset
 This closes the deterministic duplicate-callback boundary for the exercised
 classic coordinator-loss/rejoin path. Callback panic policy, background
 heartbeat matrices, published security profiles, 100-cycle qualification, and
-long-campaign evidence remain separate V1-08 gates.
+long-campaign evidence remain separate V1-08 gates. The panic boundary is
+documented in `docs/consumer-groups.md`: application panics propagate through
+the invoking task and are not converted into successful transitions.

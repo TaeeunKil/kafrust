@@ -141,6 +141,14 @@ KIP-848 assignment changes. Callbacks run synchronously on the task invoking
 `join`, `heartbeat`, `poll`, or `poll_with_heartbeat`; keep them bounded and do
 not re-enter the same group handle from the callback.
 
+The callback trait does not return a `Result`, and kafrust does not catch or
+reinterpret a panic raised by application callback code. A callback panic
+propagates to the task that invoked `join`, `heartbeat`, `poll`, or
+`poll_with_heartbeat`; applications that need isolation must catch panics
+inside their own listener wrapper. Kafrust never treats a callback panic as a
+successful assignment transition, and it does not synthesize a callback for an
+explicit `leave`.
+
 ## KIP-848 Consumer Protocol
 
 Select Kafka's newer broker-side consumer protocol explicitly:
