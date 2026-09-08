@@ -32,7 +32,7 @@ class BoundedCampaignProfileTests(unittest.TestCase):
                 "kip848-leave-group-churn",
                 "kip848-drop-group-churn",
                 "secure-soak-6h",
-                "plaintext-soak-24h",
+                "plaintext-soak-12h",
             ],
         )
         serialized = json.dumps(self.config).lower()
@@ -43,7 +43,7 @@ class BoundedCampaignProfileTests(unittest.TestCase):
         result = plan(self.config, ROOT)
         by_id = {phase["id"]: phase for phase in result["phases"]}
         self.assertLessEqual(by_id["secure-soak-6h"]["estimated_storage_gib"], 20)
-        self.assertLessEqual(by_id["plaintext-soak-24h"]["estimated_storage_gib"], 20)
+        self.assertLessEqual(by_id["plaintext-soak-12h"]["estimated_storage_gib"], 20)
 
     def test_secure_helper_is_ready_only_when_rate_contract_is_present(self):
         blockers = readiness_blockers(self.config, ROOT)

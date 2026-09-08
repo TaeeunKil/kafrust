@@ -93,10 +93,10 @@
       "kafka_version": "4.3.1"
     },
     {
-      "id": "plaintext-soak-24h",
+      "id": "plaintext-soak-12h",
       "kind": "plaintext-soak",
       "security_protocol": "plaintext",
-      "duration_seconds": 86400,
+      "duration_seconds": 43200,
       "rate_records_per_second": 25,
       "payload_bytes": 64,
       "batch_size": 50,

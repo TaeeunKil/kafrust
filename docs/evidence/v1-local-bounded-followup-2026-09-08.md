@@ -53,10 +53,19 @@ Only if those checks pass does the runner start the full sequence:
 1. Classic leave and drop, 100 cycles each on Kafka 3.7.2.
 2. KIP-848 leave and drop, 100 cycles each on Kafka 4.3.1.
 3. SASL/TLS for six hours at 100 records/s, 64-byte values, Kafka 4.3.1.
-4. Plaintext for 24 hours at 25 records/s, 64-byte values, Kafka 4.3.1.
+4. Plaintext for 12 hours at 25 records/s, 64-byte values, Kafka 4.3.1.
 
-At this record's creation, the second execution is still in smoke validation.
-Use its `smoke/campaign-state.json`, `long/campaign-state.json`, per-phase
-results/provenance, resource JSONL, and Windows holder exit status to determine
-the actual outcome. Planned durations and profile entries are not completion
-evidence.
+The second execution completed its smoke checks and all four group-churn
+phases. Its six-hour secure result also completed with exact reconciliation,
+zero loss/duplicates/unknown outcomes, and recovered broker restart behavior.
+The outer WSL campaign process then disappeared before it checkpointed the
+secure phase or started plaintext, leaving `long/campaign-state.json` stale at
+`running`. This is an orchestration interruption, not a Kafka data-plane
+failure; the secure result is retained and the missing plaintext phase is
+rerun separately.
+
+The corrected workstation gate uses a 12-hour plaintext phase. The runner now
+supports `--only-phase` for an explicitly validated phase rerun and refreshes
+the campaign state heartbeat during monitoring. A 24-hour plaintext run is
+optional extended diagnostic evidence and is not required for the scoped 0.4
+gate. Planned durations and profile entries are not completion evidence.

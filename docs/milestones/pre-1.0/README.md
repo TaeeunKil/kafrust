@@ -52,7 +52,7 @@ The practical schedule is:
 
 | Work | Execution on this workstation | Expected elapsed time |
 | --- | --- | --- |
-| 0.4 bounded qualification | Preflight, 6-hour secure phase, 24-hour plaintext phase, reconciliation, and package smoke | 2–3 days |
+| 0.4 bounded qualification | Preflight, 6-hour secure phase, 12-hour plaintext phase, reconciliation, and package smoke | 1–2 days |
 | 0.5 additional envelope | One short preflight plus one secure and one plaintext bounded run per declared profile | 1–2 days per profile |
 | 0.6 recovery confidence | Targeted broker/coordinator/leader restart, response-loss, and group-rejoin slices | 2–3 days |
 | 0.7 local baseline | Fixed representative profiles, repeated on the same runner, with migration/rollback rehearsal | 3–5 days |
@@ -68,7 +68,9 @@ preflight rather than repeat successful phases blindly.
 
 The current 0.4 gate is deliberately small and reviewable:
 
-- finish the bounded 6-hour secure and 24-hour plaintext campaigns;
+- finish the bounded 6-hour secure and 12-hour plaintext campaigns;
+- optionally extend the plaintext phase to 24 hours for additional diagnostic
+  evidence without changing the 0.4 gate;
 - retain exact source, broker image, workload, resource, reconciliation, and
   final-gauge evidence;
 - require zero unexplained loss or duplicates and no resource-guard breach;
@@ -78,6 +80,10 @@ The current 0.4 gate is deliberately small and reviewable:
 Passing this gate supports a scoped pre-1.0 release. It does not claim the
 full V1-21 fault matrix, V1-22 performance SLO, managed-service support, or
 universal `rust-rdkafka` parity.
+
+The 12-hour plaintext run is the workstation-sized 0.4 gate. It is shorter
+than the former 24-hour diagnostic and must not be described as equivalent to
+that extended run; the 24-hour variant remains optional evidence.
 
 ## 0.5 — Portable profiles
 

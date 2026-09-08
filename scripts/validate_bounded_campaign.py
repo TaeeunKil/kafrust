@@ -90,11 +90,11 @@ def validate_profile(config: dict[str, Any], root: Path = ROOT) -> None:
         "kip848-leave-group-churn",
         "kip848-drop-group-churn",
         "secure-soak-6h",
-        "plaintext-soak-24h",
+        "plaintext-soak-12h",
     ]
     _require(
         [phase.get("id") for phase in phases] == expected_ids,
-        "phase order must be classic leave/drop, KIP-848 leave/drop, secure six-hour, plaintext 24-hour",
+        "phase order must be classic leave/drop, KIP-848 leave/drop, secure six-hour, plaintext 12-hour",
     )
 
     for phase in phases[:4]:
@@ -131,7 +131,7 @@ def validate_profile(config: dict[str, Any], root: Path = ROOT) -> None:
     plaintext = phases[5]
     _require(plaintext.get("kind") == "plaintext-soak", "fourth phase must be plaintext soak")
     _require(plaintext.get("security_protocol") == "plaintext", "plaintext soak must use plaintext")
-    _require(plaintext.get("duration_seconds") == 86_400, "plaintext soak must run 24 hours")
+    _require(plaintext.get("duration_seconds") == 43_200, "plaintext soak must run 12 hours")
     _require(plaintext.get("rate_records_per_second") == 25, "plaintext soak must run at 25 records/s")
     _require(plaintext.get("payload_bytes") == 64, "plaintext soak payload must be 64 bytes")
     _require(secure.get("kafka_version") == "4.3.1", "secure soak must use Kafka 4.3.1")

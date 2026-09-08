@@ -43,7 +43,7 @@ class BoundedCampaignRunnerTests(unittest.TestCase):
             output_dir=Path("/tmp/test-run/plaintext"),
             config=self.config,
         )
-        self.assertEqual(env["KAFRUST_LOCAL_DURATION_SECONDS"], "86400")
+        self.assertEqual(env["KAFRUST_LOCAL_DURATION_SECONDS"], "43200")
         self.assertEqual(env["KAFRUST_LOCAL_RATE_RECORDS_PER_SECOND"], "25")
         self.assertEqual(env["KAFRUST_LOCAL_PAYLOAD_BYTES"], "64")
         self.assertNotIn("KAFRUST_SASL_PASSWORD", env)

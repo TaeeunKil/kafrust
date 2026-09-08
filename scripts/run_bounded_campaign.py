@@ -19,7 +19,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Callable, Sequence
 
 try:
     from .validate_bounded_campaign import (
@@ -155,6 +155,7 @@ def run_monitored(
     cwd: Path,
     env: dict[str, str],
     state_path: Path,
+    heartbeat: Callable[[], None] | None = None,
 ) -> None:
     process = subprocess.Popen(
         list(command),
@@ -170,6 +171,8 @@ def run_monitored(
             except (OSError, subprocess.CalledProcessError) as error:
                 terminate_process_group(process)
                 raise RuntimeError(f"disk guard stopped the active phase: {error}") from error
+            if heartbeat is not None:
+                heartbeat()
             time.sleep(10)
         status = process.wait()
     except KeyboardInterrupt:
@@ -398,10 +401,22 @@ def write_campaign_provenance(output_root: Path, root: Path, env: dict[str, str]
     )
 
 
-def execute(config: dict[str, Any], root: Path, run_id: str, output_root: Path) -> None:
+def execute(
+    config: dict[str, Any],
+    root: Path,
+    run_id: str,
+    output_root: Path,
+    only_phase: str | None = None,
+) -> None:
     require_linux_wsl()
     if not RUN_ID_RE.fullmatch(run_id):
         raise CampaignConfigError("run ID contains unsupported characters")
+    phases = config["phases"]
+    if only_phase is not None:
+        matching = [phase for phase in phases if phase["id"] == only_phase]
+        if not matching:
+            raise CampaignConfigError(f"unknown phase: {only_phase}")
+        phases = matching
     if output_root.exists():
         raise CampaignConfigError(f"output directory already exists: {output_root}")
     output_root.mkdir(parents=True)
@@ -424,7 +439,7 @@ def execute(config: dict[str, Any], root: Path, run_id: str, output_root: Path) 
         current_phase=None,
         completed_phases=completed_phases,
     )
-    for phase in config["phases"]:
+    for phase in phases:
         phase_dir = phase_output_dir(output_root, phase["id"])
         state_path = guard_dir / f"{phase['id']}.json"
         command = phase_command(
@@ -466,6 +481,14 @@ def execute(config: dict[str, Any], root: Path, run_id: str, output_root: Path) 
                 cwd=root,
                 env=phase_environment,
                 state_path=state_path,
+                heartbeat=lambda: write_campaign_state(
+                    campaign_state,
+                    profile_id=config["profile_id"],
+                    run_id=run_id,
+                    status="running",
+                    current_phase=phase["id"],
+                    completed_phases=completed_phases,
+                ),
             )
         except Exception:
             write_campaign_state(
@@ -505,6 +528,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument("--run-id", default=None)
     parser.add_argument(
+        "--only-phase",
+        default=None,
+        help="run one validated phase without repeating earlier completed phases",
+    )
+    parser.add_argument(
         "--output-root",
         type=Path,
         default=None,
@@ -525,7 +553,7 @@ def main(argv: list[str] | None = None) -> int:
             return 78
         run_id = args.run_id or time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
         output_root = args.output_root or Path(tempfile.gettempdir()) / "kafrust-bounded" / run_id
-        execute(config, args.root, run_id, output_root)
+        execute(config, args.root, run_id, output_root, only_phase=args.only_phase)
     except (CampaignConfigError, OSError, RuntimeError, subprocess.CalledProcessError) as error:
         return fail(str(error))
     return 0

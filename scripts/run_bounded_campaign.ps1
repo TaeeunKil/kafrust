@@ -2,6 +2,7 @@
 param(
     [string]$RunId,
     [string]$OutputRoot,
+    [string]$OnlyPhase,
     [switch]$Plan
 )
 
@@ -29,6 +30,9 @@ if ($OutputRoot) {
         throw "could not translate the output path into WSL"
     }
     $arguments += @("--output-root", $wslOutput)
+}
+if ($OnlyPhase) {
+    $arguments += @("--only-phase", $OnlyPhase)
 }
 if ($Plan) {
     $arguments += "--plan"
