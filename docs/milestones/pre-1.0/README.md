@@ -29,6 +29,41 @@ post-publication smoke must identify their respective artifacts; a smoke run
 against an older published version does not qualify the new release. The
 [release preparation policy](../../release.md) continues to govern publication.
 
+## Current workstation execution plan
+
+The current Windows workstation is suitable for sequential 0.x qualification:
+8 CPU cores/16 threads, about 31 GiB of host memory, about 15 GiB visible to
+WSL2, and more than 700 GiB free on the campaign and Docker volumes. The local
+policy uses one active phase at a time and treats roughly half of the WSL2
+memory as the soft operating budget:
+
+- keep measured WSL2 working set below 8 GiB and broker CPU below 4 vCPU in
+  aggregate;
+- keep the three broker containers at their declared 1 CPU/2 GiB caps, with
+  helper and build processes included in the observed budget;
+- keep at least 100 GiB free and stop a phase if its growth exceeds 20 GiB;
+- do not run V1-22 jobs in parallel on this workstation.
+
+These are resource-safety limits for local work. Lowering a rate or payload to
+fit the envelope creates a scoped 0.x profile; it does not satisfy the official
+V1-21 or V1-22 workload gates.
+
+The practical schedule is:
+
+| Work | Execution on this workstation | Expected elapsed time |
+| --- | --- | --- |
+| 0.4 bounded qualification | Preflight, 6-hour secure phase, 24-hour plaintext phase, reconciliation, and package smoke | 2–3 days |
+| 0.5 additional envelope | One short preflight plus one secure and one plaintext bounded run per declared profile | 1–2 days per profile |
+| 0.6 recovery confidence | Targeted broker/coordinator/leader restart, response-loss, and group-rejoin slices | 2–3 days |
+| 0.7 local baseline | Fixed representative profiles, repeated on the same runner, with migration/rollback rehearsal | 3–5 days |
+| V1-21 official gate | Four six-hour fault campaigns plus 100-cycle, ambiguity, retention, and unclean-election fixtures | At least 3–5 days, with reruns extending it |
+| V1-22 official gate | 120 jobs, each two-hour warmup plus six-hour measurement | About 40 days sequentially, before reruns |
+
+The current interrupted attempt can retain its completed secure result after
+adjudication, but the missing plaintext phase must be rerun before 0.4 is
+complete. A rerun should start at the missing phase after a fresh capacity
+preflight rather than repeat successful phases blindly.
+
 ## 0.4 — Stabilize
 
 The current 0.4 gate is deliberately small and reviewable:
