@@ -1999,17 +1999,20 @@ fn visible_records(
 
 fn can_retry_fetch(error: &Error) -> bool {
     match error {
-        Error::Broker { code, .. } => matches!(
-            BrokerErrorKind::from_code(*code),
-            BrokerErrorKind::UnknownTopicOrPartition
-                | BrokerErrorKind::LeaderNotAvailable
-                | BrokerErrorKind::NotLeaderOrFollower
-                | BrokerErrorKind::RequestTimedOut
-                | BrokerErrorKind::ReplicaNotAvailable
-                | BrokerErrorKind::FencedLeaderEpoch
-                | BrokerErrorKind::UnknownLeaderEpoch
-                | BrokerErrorKind::InvalidFetchSessionEpoch
-        ),
+        Error::Broker { code, .. } => {
+            *code == FETCH_UNKNOWN_TOPIC_ID_ERROR_CODE
+                || matches!(
+                    BrokerErrorKind::from_code(*code),
+                    BrokerErrorKind::UnknownTopicOrPartition
+                        | BrokerErrorKind::LeaderNotAvailable
+                        | BrokerErrorKind::NotLeaderOrFollower
+                        | BrokerErrorKind::RequestTimedOut
+                        | BrokerErrorKind::ReplicaNotAvailable
+                        | BrokerErrorKind::FencedLeaderEpoch
+                        | BrokerErrorKind::UnknownLeaderEpoch
+                        | BrokerErrorKind::InvalidFetchSessionEpoch
+                )
+        }
         Error::Io(_)
         | Error::RequestTimedOut { .. }
         | Error::UnknownTopicOrPartition { .. }
@@ -2092,6 +2095,11 @@ fn invalidate_metadata_cache(
 ) {
     metadata_cache.remove(topic);
 }
+
+// Kafka error code 100 (UNKNOWN_TOPIC_ID) is retriable for Fetch. Keep this
+// Fetch-specific protocol classification local because the shared broker error
+// enum intentionally does not expose every newer Kafka code yet.
+const FETCH_UNKNOWN_TOPIC_ID_ERROR_CODE: i16 = 100;
 
 #[cfg(test)]
 #[allow(clippy::expect_used, clippy::unwrap_used)]
@@ -2776,6 +2784,191 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn refreshes_stale_fetch_v13_topic_uuid_after_unknown_topic_id() {
+        let (result, position, topic_id) = run_v13_unknown_topic_id_retry(true).await;
+        let records = result.unwrap();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].offset(), 42);
+        assert_eq!(position, Some(43));
+        assert_eq!(topic_id, Some([2; 16]));
+    }
+
+    #[tokio::test]
+    async fn preserves_fetch_position_when_unknown_topic_id_retry_is_exhausted() {
+        let (result, position, topic_id) = run_v13_unknown_topic_id_retry(false).await;
+        let error = result.unwrap_err();
+        assert!(matches!(error, Error::Broker { code: 100, .. }));
+        assert_eq!(position, Some(42));
+        assert_eq!(topic_id, None);
+    }
+
+    async fn run_v13_unknown_topic_id_retry(
+        final_success: bool,
+    ) -> (
+        std::result::Result<Vec<ConsumerRecord>, Error>,
+        Option<i64>,
+        Option<[u8; 16]>,
+    ) {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let (client_stream, mut bootstrap_stream) = tokio::io::duplex(4096);
+        let broker = tokio::spawn(async move {
+            let (mut first_socket, _) = listener.accept().await.unwrap();
+            let api_versions_request = read_frame(&mut first_socket).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            let api_versions_correlation = i32::from_be_bytes(
+                api_versions_request[4..8]
+                    .try_into()
+                    .expect("api versions correlation must be present"),
+            );
+            write_frame(
+                &mut first_socket,
+                &api_versions_v3_fetch_v13_response(api_versions_correlation),
+            )
+            .await;
+
+            let stale_fetch_request = read_frame(&mut first_socket).await;
+            assert_eq!(&stale_fetch_request[0..4], &[0, 1, 0, 13]);
+            assert!(stale_fetch_request
+                .windows(16)
+                .any(|window| window == [1; 16]));
+            assert!(stale_fetch_request
+                .windows(8)
+                .any(|window| window == 42_i64.to_be_bytes()));
+            let stale_fetch_correlation = i32::from_be_bytes(
+                stale_fetch_request[4..8]
+                    .try_into()
+                    .expect("fetch correlation must be present"),
+            );
+            write_frame(
+                &mut first_socket,
+                &fetch_v13_response_frame_with_partition_error(
+                    stale_fetch_correlation,
+                    [1; 16],
+                    100,
+                ),
+            )
+            .await;
+
+            let (mut retry_socket, _) = listener.accept().await.unwrap();
+            let retry_api_versions_request = read_frame(&mut retry_socket).await;
+            assert_eq!(&retry_api_versions_request[0..4], &[0, 18, 0, 3]);
+            let retry_api_versions_correlation = i32::from_be_bytes(
+                retry_api_versions_request[4..8]
+                    .try_into()
+                    .expect("retry api versions correlation must be present"),
+            );
+            write_frame(
+                &mut retry_socket,
+                &api_versions_v3_fetch_v13_response(retry_api_versions_correlation),
+            )
+            .await;
+
+            let retry_fetch_request = read_frame(&mut retry_socket).await;
+            assert_eq!(&retry_fetch_request[0..4], &[0, 1, 0, 13]);
+            assert!(retry_fetch_request
+                .windows(16)
+                .any(|window| window == [2; 16]));
+            assert!(retry_fetch_request
+                .windows(8)
+                .any(|window| window == 42_i64.to_be_bytes()));
+            let retry_fetch_correlation = i32::from_be_bytes(
+                retry_fetch_request[4..8]
+                    .try_into()
+                    .expect("retry fetch correlation must be present"),
+            );
+            let retry_response = if final_success {
+                fetch_v13_response_frame_with_record_at(retry_fetch_correlation, [2; 16], 42)
+            } else {
+                fetch_v13_response_frame_with_partition_error(retry_fetch_correlation, [2; 16], 100)
+            };
+            write_frame(&mut retry_socket, &retry_response).await;
+        });
+        let bootstrap = tokio::spawn(async move {
+            let metadata_request = read_frame(&mut bootstrap_stream).await;
+            assert_eq!(&metadata_request[0..4], &[0, 3, 0, 1]);
+            let metadata_correlation = i32::from_be_bytes(
+                metadata_request[4..8]
+                    .try_into()
+                    .expect("metadata correlation must be present"),
+            );
+            write_frame(
+                &mut bootstrap_stream,
+                &metadata_response_frame_for(metadata_correlation, &addr),
+            )
+            .await;
+
+            let api_versions_request = read_frame(&mut bootstrap_stream).await;
+            assert_eq!(&api_versions_request[0..4], &[0, 18, 0, 3]);
+            let api_versions_correlation = i32::from_be_bytes(
+                api_versions_request[4..8]
+                    .try_into()
+                    .expect("bootstrap api versions correlation must be present"),
+            );
+            write_frame(
+                &mut bootstrap_stream,
+                &api_versions_v3_metadata_fetch_response(api_versions_correlation, 13),
+            )
+            .await;
+
+            let metadata_v12_request = read_frame(&mut bootstrap_stream).await;
+            assert_eq!(&metadata_v12_request[0..4], &[0, 3, 0, 12]);
+            let metadata_v12_correlation = i32::from_be_bytes(
+                metadata_v12_request[4..8]
+                    .try_into()
+                    .expect("metadata v12 correlation must be present"),
+            );
+            write_frame(
+                &mut bootstrap_stream,
+                &metadata_v12_response_frame_with_topic_id(
+                    metadata_v12_correlation,
+                    &addr,
+                    5,
+                    [2; 16],
+                ),
+            )
+            .await;
+        });
+
+        let client = Client::from_stream(
+            Box::new(client_stream),
+            Some("kafrust-fetch-v13-unknown-topic-id-exhaustion-test".to_owned()),
+            Some(std::time::Duration::from_millis(500)),
+        );
+        let config = ConsumerConfig::new([addr.to_string()])
+            .request_timeout_ms(500)
+            .max_retries(1);
+        let mut consumer = Consumer::from_assignments(
+            client,
+            config,
+            vec![ConsumerAssignment::new("orders".to_owned(), 0, 42)],
+        );
+        let mut metadata = metadata_fixture();
+        metadata.brokers[0].host = addr.ip().to_string();
+        metadata.brokers[0].port = i32::from(addr.port());
+        consumer
+            .metadata_cache
+            .insert("orders".to_owned(), metadata);
+        consumer
+            .fetch_topic_ids
+            .insert("orders".to_owned(), [1; 16]);
+
+        assert_eq!(consumer.position("orders", 0), Some(42));
+        let result = consumer.poll().await;
+        let position = consumer.position("orders", 0);
+        let topic_id = consumer.fetch_topic_ids.get("orders").copied();
+        tokio::time::timeout(Duration::from_secs(2), broker)
+            .await
+            .expect("v13 broker retry script timed out")
+            .unwrap();
+        tokio::time::timeout(Duration::from_secs(2), bootstrap)
+            .await
+            .expect("v13 metadata refresh script timed out")
+            .unwrap();
+        (result, position, topic_id)
+    }
+
+    #[tokio::test]
     async fn recovers_assignment_after_leader_epoch_truncation() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -3121,6 +3314,10 @@ mod tests {
         }));
         assert!(can_retry_fetch(&Error::Broker {
             code: 70,
+            context: "fetch orders-0@0".to_owned(),
+        }));
+        assert!(can_retry_fetch(&Error::Broker {
+            code: 100,
             context: "fetch orders-0@0".to_owned(),
         }));
         assert!(!can_retry_fetch(&Error::Broker {
@@ -4045,6 +4242,79 @@ mod tests {
         response.write_unsigned_varint(1); // no aborted transactions
         response.write_i32(-1); // preferred read replica
         response.write_compact_nullable_bytes(Some(&[])).unwrap();
+        response.write_unsigned_varint(0); // partition tags
+        response.write_unsigned_varint(0); // topic tags
+        response.write_unsigned_varint(0); // response tags
+        response.into_bytes()
+    }
+
+    fn fetch_v13_response_frame_with_partition_error(
+        correlation_id: i32,
+        topic_id: [u8; 16],
+        error_code: i16,
+    ) -> Vec<u8> {
+        let mut response = Encoder::new();
+        response.write_i32(correlation_id);
+        response.write_unsigned_varint(0); // response header tags
+        response.write_i32(0); // throttle time
+        response.write_i16(0); // top-level error
+        response.write_i32(0); // fetch session id
+        response.write_unsigned_varint(2); // one compact topic
+        response.write_uuid(&topic_id);
+        response.write_unsigned_varint(2); // one compact partition
+        response.write_i32(0);
+        response.write_i16(error_code);
+        response.write_i64(43);
+        response.write_i64(43);
+        response.write_i64(42);
+        response.write_unsigned_varint(1); // no aborted transactions
+        response.write_i32(-1); // preferred read replica
+        response.write_compact_nullable_bytes(Some(&[])).unwrap();
+        response.write_unsigned_varint(0); // partition tags
+        response.write_unsigned_varint(0); // topic tags
+        response.write_unsigned_varint(0); // response tags
+        response.into_bytes()
+    }
+
+    fn fetch_v13_response_frame_with_record_at(
+        correlation_id: i32,
+        topic_id: [u8; 16],
+        offset: i64,
+    ) -> Vec<u8> {
+        let mut message = Encoder::new();
+        message.write_i32(0);
+        message.write_i8(1);
+        message.write_i8(0);
+        message.write_i64(123);
+        message.write_nullable_bytes(Some(b"order-1")).unwrap();
+        message.write_nullable_bytes(Some(b"created")).unwrap();
+        let message = message.into_bytes();
+
+        let mut records = Encoder::new();
+        records.write_i64(offset);
+        records.write_i32(i32::try_from(message.len()).unwrap());
+        records.write_raw(&message);
+        let records = records.into_bytes();
+
+        let mut response = Encoder::new();
+        response.write_i32(correlation_id);
+        response.write_unsigned_varint(0); // response header tags
+        response.write_i32(0); // throttle time
+        response.write_i16(0); // top-level error
+        response.write_i32(0); // fetch session id
+        response.write_unsigned_varint(2); // one compact topic
+        response.write_uuid(&topic_id);
+        response.write_unsigned_varint(2); // one compact partition
+        response.write_i32(0);
+        response.write_i16(0);
+        response.write_i64(43);
+        response.write_i64(43);
+        response.write_i64(0);
+        response.write_unsigned_varint(1); // no aborted transactions
+        response.write_i32(-1); // preferred read replica
+        response
+            .write_compact_nullable_bytes(Some(&records))
+            .unwrap();
         response.write_unsigned_varint(0); // partition tags
         response.write_unsigned_varint(0); // topic tags
         response.write_unsigned_varint(0); // response tags
