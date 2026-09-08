@@ -57,6 +57,8 @@ resource_prefix="kafrust-local-lifetime-$run_id-"
 network_name="kafrust-local-lifetime-$run_id"
 topic_name="kafrust-local-lifetime-$run_id"
 broker_image="apache/kafka:$kafka_version"
+(( ${#resource_prefix} + 1 <= 63 )) ||
+  die "run ID is too long for Docker hostnames; use a shorter KAFRUST_LOCAL_RUN_ID"
 output_dir="$(get_or_default KAFRUST_LOCAL_OUTPUT_DIR "$repo_root/target/local-lifetime/$run_id")"
 project_dir="$output_dir/external-project"
 result_file="$output_dir/local-lifetime.json"
