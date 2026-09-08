@@ -139,8 +139,10 @@ consumer, group, transaction, buffering, Share, Streams, Admin API는
 - 범용 프로덕션 준비 완료, managed service 지원, `rust-rdkafka` drop-in
   호환을 주장하지 않습니다.
 
-[v1.0 마일스톤](docs/milestones/v1.0/README.md)에서 남은 릴리스 게이트를,
-[릴리스 준비 문서](docs/release.md)에서 버전 정책을 확인하세요.
+[v1.0 마일스톤](docs/milestones/v1.0/README.md)에서 넓은 프로덕션 검증
+게이트를 확인하세요. 실제 0.x 순서는
+[pre-1.0 릴리스 트랙](docs/milestones/pre-1.0/README.md)에 정리했고,
+[릴리스 준비 문서](docs/release.md)에서 버전 정책을 설명합니다.
 
 ## 문서
 

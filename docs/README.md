@@ -9,6 +9,7 @@ evidence easy to find.
 
 - [Project strategy](project-strategy.md) — product direction and support boundary
 - [Roadmap](roadmap.md) — current sequencing and open work
+- [Pre-1.0 release track](milestones/pre-1.0/README.md) — scoped 0.x milestones
 - [Compatibility](compatibility.md) — broker, protocol, security, and runtime claims
 - [Release preparation](release.md) — version, publication, and release gates
 - [Migration from rust-rdkafka](migration-from-rust-rdkafka.md) — migration notes

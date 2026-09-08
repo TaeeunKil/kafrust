@@ -142,8 +142,9 @@ The current support boundary is intentionally narrower than universal
   `rust-rdkafka` claim is made.
 
 See [the v1.0 milestone program](docs/milestones/v1.0/README.md) for the
-remaining release gates and [release preparation](docs/release.md) for version
-policy.
+remaining broad qualification gates. The practical 0.x sequence is in the
+[pre-1.0 release track](docs/milestones/pre-1.0/README.md), and
+[release preparation](docs/release.md) defines version policy.
 
 ## Documentation
 

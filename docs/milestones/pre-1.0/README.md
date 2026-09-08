@@ -1,0 +1,87 @@
+# Pre-1.0 Release Track
+
+This track describes the releases that can be completed by a small project
+team while the broader V1 qualification program remains open. It does not
+replace [V1-21](../v1.0/v1-21-fault-soak-and-data-loss.md) or
+[V1-22](../v1.0/v1-22-performance-and-operational-slos.md); those documents
+still define the evidence required for a broad production-readiness claim.
+
+The release track separates a usable, well-scoped pre-1.0 package from the
+later work needed for a stable 1.0 API and service-level qualification. A
+release can advance when its own profile gates pass and its non-claims are
+recorded. Milestone names here are release-oriented; they are not substitutes
+for the V1-00 through V1-26 IDs.
+
+## Release map
+
+| Release | Focus | Status | Exit evidence |
+| --- | --- | --- | --- |
+| `0.4` | Stabilize the current client and bounded long-run path | In progress | Exact source/package identity, bounded soak, focused published smoke, and explicit limits |
+| `0.5` | Portable resource profiles | Planned | ARM64 16 GiB and x86/WSL 32 GiB profiles with retained resource traces |
+| `0.6` | Operational recovery confidence | Planned | Targeted broker restart, coordinator/leader recovery, response-loss, and reconciliation evidence |
+| `0.7` | Performance baseline and migration readiness | Planned | Repeatable profile baseline, tuning guidance, migration notes, and rollback rehearsal |
+| `0.8` | Release candidate and external adoption | Planned | Fresh external-project smoke, canary plan, and release-candidate artifact |
+| `1.0` | Optional broad stability and production qualification claim | Conditional | V1-20 through V1-26 gates, including the full V1-21/V1-22 requirements |
+
+## 0.4 — Stabilize
+
+The current 0.4 gate is deliberately small and reviewable:
+
+- finish the bounded 6-hour secure and 24-hour plaintext campaigns;
+- retain exact source, broker image, workload, resource, reconciliation, and
+  final-gauge evidence;
+- require zero unexplained loss or duplicates and no resource-guard breach;
+- rerun the published-package smoke and required Rust/package checks;
+- document the tested broker, security, runtime, and workload boundary.
+
+Passing this gate supports a scoped pre-1.0 release. It does not claim the
+full V1-21 fault matrix, V1-22 performance SLO, managed-service support, or
+universal `rust-rdkafka` parity.
+
+## 0.5 — Portable profiles
+
+Add a profile such as `macos-arm64-16g-low-rate` without changing the existing
+32 GiB baseline. Each profile declares its host memory, architecture, Docker
+budget, broker limits, disk reserve, rate, payload, duration, and evidence
+level. The same source and artifact identity must be recorded for comparison.
+
+A passing 16 GiB profile proves long-run behavior within that envelope. It is
+supplemental profile evidence unless the release manifest explicitly names it
+as an accepted environment.
+
+## 0.6 — Operational recovery
+
+Expand the solo-friendly campaign around the failure modes that affect normal
+client operation:
+
+- leader, coordinator, and single-broker restart recovery;
+- selected response-loss and cancellation outcomes;
+- classic and KIP-848 group rejoin with exact record reconciliation;
+- bounded Share/Admin checks when their fixtures are available;
+- retained resource series and drained final gauges.
+
+This milestone improves operational confidence without pretending that a
+small targeted matrix is the complete V1-21 campaign.
+
+## 0.7 — Baseline and migration
+
+Create a repeatable, profile-specific performance baseline, publish the
+configuration and backpressure guidance, and test the migration and rollback
+path from `rust-rdkafka` for the supported API subset. Baselines are compared
+only with the same hardware, broker, artifact, and workload profile; a local
+baseline is not a universal SLO.
+
+## 0.8 — Release candidate
+
+Build a candidate from an immutable source and package identity, run a fresh
+external-project smoke, exercise the documented canary and rollback procedure,
+and publish the remaining limitations. This is the point at which a service
+can decide whether the scoped client is acceptable for its own workload.
+
+## When to pursue 1.0
+
+Move from this track to `1.0` only when the project wants to make a broad
+stability and production-qualification claim. At that point the full V1
+milestones remain the source of truth: published artifact identity, complete
+fault/data-loss evidence, repeated performance profiles, locked baselines,
+migration canary, API freeze, and release-candidate publication.
