@@ -17,11 +17,17 @@ for the V1-00 through V1-26 IDs.
 | Release | Focus | Status | Exit evidence |
 | --- | --- | --- | --- |
 | `0.4` | Stabilize the current client and bounded long-run path | In progress | Exact source/package identity, bounded soak, focused published smoke, and explicit limits |
-| `0.5` | Portable resource profiles | Planned | ARM64 16 GiB and x86/WSL 32 GiB profiles with retained resource traces |
+| `0.5` | Portable resource profiles | Planned | Declared resource envelopes with reproducible configuration and retained resource traces |
 | `0.6` | Operational recovery confidence | Planned | Targeted broker restart, coordinator/leader recovery, response-loss, and reconciliation evidence |
 | `0.7` | Performance baseline and migration readiness | Planned | Repeatable profile baseline, tuning guidance, migration notes, and rollback rehearsal |
-| `0.8` | Release candidate and external adoption | Planned | Fresh external-project smoke, canary plan, and release-candidate artifact |
-| `1.0` | Optional broad stability and production qualification claim | Conditional | V1-20 through V1-26 gates, including the full V1-21/V1-22 requirements |
+| `0.8` | Scoped 0.x release candidate and external adoption | Planned | Fresh external-project smoke, canary/rollback rehearsal, and release-candidate artifact |
+| `1.0` | Optional broad stability and production qualification claim | Conditional | Full V1-00 through V1-26 program exit criteria, including V1-21/V1-22 requirements |
+
+Before running a release gate, record its exact candidate identity, accepted
+profiles, pass/fail thresholds, and evidence locations. Candidate checks and
+post-publication smoke must identify their respective artifacts; a smoke run
+against an older published version does not qualify the new release. The
+[release preparation policy](../../release.md) continues to govern publication.
 
 ## 0.4 — Stabilize
 
@@ -40,14 +46,19 @@ universal `rust-rdkafka` parity.
 
 ## 0.5 — Portable profiles
 
-Add a profile such as `macos-arm64-16g-low-rate` without changing the existing
-32 GiB baseline. Each profile declares its host memory, architecture, Docker
-budget, broker limits, disk reserve, rate, payload, duration, and evidence
-level. The same source and artifact identity must be recorded for comparison.
+Make the bounded campaign reproducible across declared resource envelopes,
+including at least one additional envelope alongside the existing baseline.
+Select profiles from available capacity and intended workloads; this milestone
+does not require a particular device, architecture, or host-memory size. Each
+profile declares its operating system, architecture, host memory, CPU and
+Docker budgets, broker limits, disk reserve, rate, payload, duration, and
+evidence level. Record the same source and artifact identity across profiles
+while keeping their results separate.
 
-A passing 16 GiB profile proves long-run behavior within that envelope. It is
-supplemental profile evidence unless the release manifest explicitly names it
-as an accepted environment.
+A passing profile proves long-run behavior only within its declared envelope.
+It is supplemental profile evidence unless the release manifest explicitly
+names it as an accepted environment. Additional profiles do not redefine the
+existing baseline or relax the V1-21/V1-22 qualification gates.
 
 ## 0.6 — Operational recovery
 
@@ -71,12 +82,14 @@ path from `rust-rdkafka` for the supported API subset. Baselines are compared
 only with the same hardware, broker, artifact, and workload profile; a local
 baseline is not a universal SLO.
 
-## 0.8 — Release candidate
+## 0.8 — Scoped 0.x release candidate
 
 Build a candidate from an immutable source and package identity, run a fresh
 external-project smoke, exercise the documented canary and rollback procedure,
 and publish the remaining limitations. This is the point at which a service
 can decide whether the scoped client is acceptable for its own workload.
+This candidate does not imply an API freeze or satisfy the V1-25 `1.0` release
+candidate gate; the V1-23 service-canary requirements also remain separate.
 
 ## When to pursue 1.0
 

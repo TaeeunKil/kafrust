@@ -13,7 +13,7 @@ evidence easy to find.
 - [Compatibility](compatibility.md) — broker, protocol, security, and runtime claims
 - [Release preparation](release.md) — version, publication, and release gates
 - [Migration from rust-rdkafka](migration-from-rust-rdkafka.md) — migration notes
-- [v1.0 milestone program](milestones/v1.0/README.md) — release gates and milestone status
+- [v1.0 milestone program](milestones/v1.0/README.md) — conditional 1.0 qualification gates and milestone status
 
 ## Strategy and comparison
 
@@ -55,9 +55,10 @@ and decisions.
 
 Use the root README for the current public positioning and a first run. Use the
 topic documents for API behavior and examples. Use Compatibility for claims
-that can be made about brokers and features. Use the v1.0 milestone pages for
-release gates and ownership. Use `evidence/` for what was actually observed in
-a dated environment and workload.
+that can be made about brokers and features. Use the pre-1.0 release track for
+scoped 0.x gates and the v1.0 milestone pages for the full 1.0 qualification
+gates and ownership. Use `evidence/` for what was actually observed in a dated
+environment and workload.
 
 The source checkout and the published crate are separate artifacts. A workflow,
 local source change, or passing unit test does not by itself prove that the

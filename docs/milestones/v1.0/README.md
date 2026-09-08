@@ -1,10 +1,12 @@
 # kafrust v1.0 Milestone Program
 
 This directory decomposes roadmap milestone M21 into small, evidence-backed
-execution milestones. It is the planning source of truth for work from the
-current `0.3.6` line through the `1.0.0` release. Historical implementation and
-release evidence remains in [the roadmap](../../roadmap.md) and
-[compatibility record](../../compatibility.md).
+execution milestones. It is the planning source of truth for the full
+qualification program leading to a conditional `1.0.0` release. The
+[pre-1.0 release track](../pre-1.0/README.md) defines scoped 0.x release gates;
+passing those gates does not close this program's remaining requirements.
+Historical implementation and release evidence remains in
+[the roadmap](../../roadmap.md) and [compatibility record](../../compatibility.md).
 
 The target is a credible pure-Rust Kafka client for the broker profiles and
 workloads that the project explicitly supports. It is not universal
