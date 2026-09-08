@@ -1,5 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use std::{env, fs};
 
 use kafrust::{
@@ -11,6 +11,11 @@ const PARTITION_COUNT: i32 = 6;
 const POLL_ATTEMPTS: usize = 80;
 const MAX_CHURN_CYCLES: usize = 100;
 const CHURN_TIMEOUT_PER_CYCLE_SECS: u64 = 90;
+const MEMBER_DEPARTURE_RECOVERY_TIMEOUT_SECS: u64 = 60;
+
+fn member_departure_recovery_deadline(start: Instant) -> Instant {
+    start + Duration::from_secs(MEMBER_DEPARTURE_RECOVERY_TIMEOUT_SECS)
+}
 
 struct SecuritySettings {
     tls_server_name: String,
@@ -259,7 +264,8 @@ async fn verify_member_departure_rejoin(
     let expected: BTreeSet<_> = (0..PARTITION_COUNT)
         .map(|partition| (topic.to_owned(), partition))
         .collect();
-    for _ in 0..POLL_ATTEMPTS {
+    let deadline = member_departure_recovery_deadline(Instant::now());
+    while Instant::now() < deadline {
         let _ = group.poll().await?;
         if assignment_keys(group) == expected {
             return Ok(());
@@ -471,5 +477,15 @@ mod tests {
     fn expected_record_values_reject_unexpected_payloads() {
         let mut seen = BTreeMap::new();
         assert!(observe_expected_record(&mut seen, "topic", 2, Some(b"wrong"), 7).is_err());
+    }
+
+    #[test]
+    fn member_departure_recovery_deadline_is_bounded() {
+        let start = Instant::now();
+        let deadline = member_departure_recovery_deadline(start);
+        assert_eq!(
+            deadline.duration_since(start),
+            Duration::from_secs(MEMBER_DEPARTURE_RECOVERY_TIMEOUT_SECS)
+        );
     }
 }

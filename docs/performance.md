@@ -1,5 +1,83 @@
 # Performance Benchmarks
 
+## Workstation-sized long diagnostics
+
+Use `scripts/run_local_lifetime_diagnostic.sh` inside Linux/WSL for a
+rate-limited current-source diagnostic. The default is six hours, 100 records/s,
+64-byte values, three partitions and three replicas. Each broker is capped at
+one CPU and 2 GiB RAM, with rotating container logs. Run one campaign at a time.
+
+After the previous host-volume exhaustion, the local launcher now requires
+100 GiB remaining space plus its full 20 GiB growth budget before starting.
+It checks the WSL host volume (`/mnt/t` when mounted), Docker root, and output
+volume. Ensure `/mnt/t` actually contains this WSL installation's VHDX; on
+other layouts the host-volume mapping must be corrected before running.
+Every ten seconds during the helper run, it aborts if any checked filesystem
+has 100 GiB or less free, or has lost 20 GiB since preflight. Other applications'
+writes count toward the limit too. This is a sampled abort threshold, not a
+filesystem quota; writes can overshoot between samples, and a stopped host
+cannot execute the guard. Keep the workstation awake throughout the run.
+Set `KAFRUST_LOCAL_CARGO_TARGET_DIR` to a persistent WSL cache when repeating
+the smoke; that target directory is included in the same disk guard.
+
+Admission planning reserves RF3 times `(payload + 1024)` bytes per record,
+adds a 2x margin and 2 GiB fixed allowance. The default estimate is about
+15.13 GiB; actual payload-only replication is about 0.39 GiB. Neither number
+predicts actual Kafka, index, image, or build usage. The live disk guard remains
+necessary. Image/container startup precedes the recurring helper checks.
+
+For a 24-hour low-rate run with the same estimated budget:
+
+```sh
+KAFRUST_LOCAL_DURATION_SECONDS=86400 \
+KAFRUST_LOCAL_RATE_RECORDS_PER_SECOND=25 \
+bash scripts/run_local_lifetime_diagnostic.sh
+```
+
+The full-rate 24-hour profile is rejected by the 20 GiB planning budget.
+The budget cannot exceed 20 GiB and the reserve cannot be set below 100 GiB.
+Do not shorten Kafka retention to hide growth: record reconciliation must
+finish before test data is removed. Exit cleanup removes only this run's
+containers, anonymous volumes, and network; output/build artifacts remain.
+WSL VHDX files may retain their physical size after Linux data deletion, so
+recheck host free space before each subsequent run.
+
+Disk aborts terminate the build, helper, and fault process groups. Compilation
+has its own 15-minute timeout and is followed by an execution timeout of the
+requested duration plus 15 minutes; a cold build therefore cannot consume the
+short smoke's fault-restart window.
+Run this first for a short smoke, then six hours, then 24 hours at the reduced
+rate. Results remain `qualified=false`: these long low-rate diagnostics measure
+lifetime/recovery, not the existing V1-21 high-load or V1-22 SLO requirements.
+
+The completed [six-hour local diagnostic](evidence/v1-local-lifetime-diagnostic-2026-09-07.md)
+and [Kafka 3.7.2 fixture reproduction](evidence/v1-local-kafka-floor-repro-2026-09-08.md)
+record the source identity, results, and limits of those observations.
+The [bounded follow-up record](evidence/v1-local-bounded-followup-2026-09-08.md)
+tracks the subsequent sequential campaign and its separate smoke attempts.
+
+`scripts/run_bounded_campaign.py --plan` prints the sequential follow-up
+profile without starting brokers. Its checked-in profile runs classic and
+KIP-848 group churn with explicit leave and drop (100 cycles each), followed
+by SASL/TLS for six hours at 100 records/s and plaintext for 24 hours at
+25 records/s. Both soak phases use 64-byte payloads. Classic churn uses Kafka
+3.7.2; KIP-848 and the soak phases use Kafka 4.3.1.
+
+When validating an unpublished fix, set `KAFRUST_LOCAL_SOURCE_ROOT` to the
+immutable source checkout used for the campaign. Keep that checkout outside
+the campaign output directory, retain its provenance, and run the source's
+launcher. Published secure helpers remain available when the override is
+omitted. The runner stops on a failed phase; it does not advance after an
+unqualified result. Completed phase output and build caches remain on disk.
+
+Resource samples record helper process-tree RSS, OS thread counts, open file
+descriptors and sockets, broker container memory, and filesystem free space.
+These are OS observations, not Tokio task counts or a claim of bounded memory
+over an unobserved duration. Missing telemetry must be investigated before
+using a run as resource-lifetime evidence.
+
+## Live benchmark
+
 kafrust includes an opt-in live Kafka benchmark. It measures complete
 high-level Produce and Fetch operations rather than isolated codec functions.
 Results are diagnostic baselines, not CI pass/fail thresholds.

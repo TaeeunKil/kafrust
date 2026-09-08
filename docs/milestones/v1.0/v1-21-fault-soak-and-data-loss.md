@@ -290,6 +290,17 @@ records/s hard cap, run-scoped cleanup, before/after capacity records, and an
 immutable `qualified=false` descriptor. It must be invoked deliberately and
 does not alter the official V1 workflow or its exit criteria.
 
+### Local low-volume lifetime diagnostic result (2026-09-07)
+
+The retained local `20260907-bounded-six-hour` descriptor completed the
+rate-limited RF3 profile for `21,600.895` reported seconds. It recorded
+`2,160,150` acknowledged and consumed unique records, zero loss, duplicates,
+and unknown outcomes, five retries across four failed requests, and zero final
+in-flight/buffered gauges. This is bounded local recovery and reconciliation
+evidence only; the descriptor remains `qualified=false` and does not satisfy
+the exact V1-21 throughput, fault-family, cycle, or data-loss gates. See the
+[dated evidence report](../../evidence/v1-local-lifetime-diagnostic-2026-09-07.md).
+
 ### Rate-limited lifetime diagnostic workflow (2026-09-04)
 
 To make a small long-duration check safe without weakening the V1-21 gate, the

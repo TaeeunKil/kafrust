@@ -10,6 +10,7 @@ use kafrust::{
 use sha2::{Digest, Sha256};
 
 const PARTITIONS: usize = 3;
+const MAX_RECORDS_PER_SECOND: u64 = 100;
 const DRAIN_TIMEOUT: Duration = Duration::from_secs(300);
 const RECOVERY_BACKOFF: Duration = Duration::from_millis(100);
 const ERROR_REPORT_INTERVAL: Duration = Duration::from_secs(10);
@@ -65,6 +66,8 @@ async fn main() -> kafrust::Result<()> {
     let duration = Duration::from_secs(u64_from_env("KAFRUST_SOAK_SECONDS", 120)?);
     let batch_size = usize_from_env("KAFRUST_SOAK_BATCH_SIZE", 100)?.max(1);
     let payload = vec![b'x'; usize_from_env("KAFRUST_SOAK_PAYLOAD_BYTES", 1024)?];
+    let mut rate_limiter =
+        RateLimiter::new(optional_u64_from_env("KAFRUST_SOAK_RECORDS_PER_SECOND")?)?;
     let metrics = ClientMetrics::new();
     let server_list = servers.split(',').map(str::to_owned).collect::<Vec<_>>();
 
@@ -140,6 +143,7 @@ async fn main() -> kafrust::Result<()> {
             };
             let batch_len = u64::try_from(batch_records.len())
                 .map_err(|_| Error::Unsupported("secure soak batch length is too large"))?;
+            rate_limiter.wait(batch_records.len()).await?;
             let metadata = match producer.send_batch(batch_records.iter().cloned()).await {
                 Ok(metadata) => {
                     next_produce_sequences[partition] =
@@ -459,9 +463,65 @@ fn u64_from_env(name: &'static str, default: u64) -> kafrust::Result<u64> {
     })
 }
 
+fn optional_u64_from_env(name: &'static str) -> kafrust::Result<Option<u64>> {
+    let Some(value) = env::var(name).ok() else {
+        return Ok(None);
+    };
+    let parsed = value
+        .parse()
+        .map_err(|_| Error::Unsupported("secure soak rate variable is invalid"))?;
+    Ok(Some(parsed))
+}
+
+struct RateLimiter {
+    records_per_second: Option<u64>,
+    next_send_at: Instant,
+}
+
+impl RateLimiter {
+    fn new(records_per_second: Option<u64>) -> kafrust::Result<Self> {
+        if records_per_second == Some(0) {
+            return Err(Error::Unsupported(
+                "KAFRUST_SOAK_RECORDS_PER_SECOND must be greater than zero",
+            ));
+        }
+        if records_per_second.is_some_and(|rate| rate > MAX_RECORDS_PER_SECOND) {
+            return Err(Error::Unsupported(
+                "KAFRUST_SOAK_RECORDS_PER_SECOND must not exceed 100",
+            ));
+        }
+        Ok(Self {
+            records_per_second,
+            next_send_at: Instant::now(),
+        })
+    }
+
+    async fn wait(&mut self, record_count: usize) -> kafrust::Result<()> {
+        let Some(records_per_second) = self.records_per_second else {
+            return Ok(());
+        };
+        let record_count = u64::try_from(record_count)
+            .map_err(|_| Error::Unsupported("secure soak batch length is too large"))?;
+        let interval = Duration::from_secs_f64(record_count as f64 / records_per_second as f64);
+        let now = Instant::now();
+        if self.next_send_at > now {
+            tokio::time::sleep(self.next_send_at - now).await;
+        }
+        self.next_send_at = self
+            .next_send_at
+            .checked_add(interval)
+            .ok_or(Error::Unsupported("secure soak rate schedule overflow"))?;
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{identity_digest, observe_identity, record_identity, record_value, PARTITIONS};
+    use std::time::Duration;
+
+    use super::{
+        identity_digest, observe_identity, record_identity, record_value, RateLimiter, PARTITIONS,
+    };
 
     #[test]
     fn secure_record_identity_roundtrips() {
@@ -494,5 +554,21 @@ mod tests {
             identity_digest(&[2_u64; PARTITIONS]),
             identity_digest(&[3_u64; PARTITIONS])
         );
+    }
+
+    #[test]
+    fn secure_rate_limiter_rejects_zero_and_rates_above_cap() {
+        assert!(RateLimiter::new(Some(0)).is_err());
+        assert!(RateLimiter::new(Some(100)).is_ok());
+        assert!(RateLimiter::new(Some(101)).is_err());
+        assert!(RateLimiter::new(None).is_ok());
+    }
+
+    #[tokio::test]
+    async fn secure_rate_limiter_uses_aggregate_batch_interval() {
+        let mut limiter = RateLimiter::new(Some(100)).expect("valid rate");
+        let initial_deadline = limiter.next_send_at;
+        limiter.wait(50).await.expect("batch interval must fit");
+        assert!(limiter.next_send_at >= initial_deadline + Duration::from_millis(500));
     }
 }

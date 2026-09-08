@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "profile_id": "windows-wsl-32g-low-rate",
+  "description": "Sequential local campaign for a 32 GiB Windows host with WSL2 and Docker.",
+  "execution": {
+    "platform": "windows-wsl",
+    "sequential": true,
+    "fail_fast": true,
+    "max_concurrent_phases": 1,
+    "cleanup_scope": "run-scoped"
+  },
+  "host": {
+    "memory_gib": 32,
+    "disk_reserve_gib": 100,
+    "disk_growth_budget_gib": 20,
+    "disk_budget_scope": "active-phase"
+  },
+  "broker": {
+    "image": "apache/kafka:3.7.2",
+    "brokers": 3,
+    "partitions": 3,
+    "replication_factor": 3,
+    "cpu_limit": "1.0",
+    "memory_limit": "2g",
+    "pids_limit": 512,
+    "log_max_size": "50m",
+    "log_max_files": 3
+  },
+  "credentials": {
+    "mode": "ephemeral",
+    "generator": "openssl rand -hex 24",
+    "username": "kafrust",
+    "password_transport": "environment-and-run-scoped-file",
+    "persist_password": false
+  },
+  "sources": {
+    "secure_group_helper": ".github/published-secure-group-rebalance-smoke/src/main.rs",
+    "secure_soak_helper": ".github/published-secure-multi-soak-smoke/src/main.rs",
+    "plaintext_soak_helper": ".github/published-multi-soak-smoke/src/main.rs",
+    "plaintext_launcher": "scripts/run_local_lifetime_diagnostic.sh",
+    "disk_guard": "scripts/local_lifetime_disk_budget.py",
+    "cleanup_helper": "scripts/cleanup_campaign_docker.sh",
+    "topic_readiness_helper": "scripts/wait_for_kafka_topic.py"
+  },
+  "phases": [
+    {
+      "id": "classic-leave-group-churn",
+      "kind": "secure-group-churn",
+      "group_protocol": "classic",
+      "member_exit": "leave",
+      "cycles": 100,
+      "payload_bytes": 64,
+      "kafka_version": "3.7.2"
+    },
+    {
+      "id": "classic-drop-group-churn",
+      "kind": "secure-group-churn",
+      "group_protocol": "classic",
+      "member_exit": "drop",
+      "cycles": 100,
+      "payload_bytes": 64,
+      "kafka_version": "3.7.2"
+    },
+    {
+      "id": "kip848-leave-group-churn",
+      "kind": "secure-group-churn",
+      "group_protocol": "kip-848",
+      "member_exit": "leave",
+      "cycles": 100,
+      "payload_bytes": 64,
+      "kafka_version": "4.3.1"
+    },
+    {
+      "id": "kip848-drop-group-churn",
+      "kind": "secure-group-churn",
+      "group_protocol": "kip-848",
+      "member_exit": "drop",
+      "cycles": 100,
+      "payload_bytes": 64,
+      "kafka_version": "4.3.1"
+    },
+    {
+      "id": "secure-soak-6h",
+      "kind": "secure-soak",
+      "security_protocol": "sasl_tls",
+      "duration_seconds": 21600,
+      "rate_records_per_second": 100,
+      "payload_bytes": 64,
+      "batch_size": 50,
+      "fault_mode": "single-broker-restart",
+      "outage_seconds": 10,
+      "requires_rate_limiter": true,
+      "kafka_version": "4.3.1"
+    },
+    {
+      "id": "plaintext-soak-24h",
+      "kind": "plaintext-soak",
+      "security_protocol": "plaintext",
+      "duration_seconds": 86400,
+      "rate_records_per_second": 25,
+      "payload_bytes": 64,
+      "batch_size": 50,
+      "fault_mode": "single-broker-restart",
+      "outage_seconds": 10,
+      "kafka_version": "4.3.1"
+    }
+  ]
+}

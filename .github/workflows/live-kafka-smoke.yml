@@ -1923,6 +1923,8 @@ jobs:
             --topic "$KAFRUST_TOPIC" \
             --partitions 1 \
             --replication-factor 3
+          python scripts/wait_for_kafka_topic.py --topic "$KAFRUST_TOPIC" --partitions 1 \
+            --containers kafrust-kafka-multi-1 kafrust-kafka-multi-2 kafrust-kafka-multi-3
           cargo run -p kafrust --example consumer_group_offset_reset
 
       - name: Start transaction ambiguity Kafka cluster
@@ -3793,6 +3795,8 @@ jobs:
             --replication-factor 3
 
           preflight_log=/tmp/kafrust-sasl-combined-preflight.log
+          python scripts/wait_for_kafka_topic.py --topic "$combined_topic" --partitions 3 \
+            --containers kafrust-kafka-sasl-multi-1 kafrust-kafka-sasl-multi-2 kafrust-kafka-sasl-multi-3
           preflight_status=0
           KAFRUST_GROUP_ID="$combined_group_id" \
           KAFRUST_GROUP_PROTOCOL=classic \

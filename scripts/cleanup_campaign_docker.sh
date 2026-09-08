@@ -10,6 +10,6 @@ if ((${#containers[@]} > 0)); then
   docker rm -f -v "${containers[@]}"
 fi
 docker network rm "$network_name" 2>/dev/null || true
-docker builder prune -af --filter 'until=24h' || true
+# Build caches may belong to other campaigns; only the named run is removed.
 docker system df
 df -h /mnt/t / 2>/dev/null || df -h /

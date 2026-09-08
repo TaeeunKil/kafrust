@@ -39,6 +39,7 @@ jobs:
             .github/published-performance-smoke/src/main.rs \
             .github/published-multi-soak-smoke/src/main.rs \
             .github/published-secure-multi-soak-smoke/src/main.rs \
+            .github/published-secure-group-rebalance-smoke/src/main.rs \
             .github/published-share-multi-member/src/main.rs \
             .github/published-streams-group-runtime/src/main.rs
 
@@ -100,7 +101,21 @@ jobs:
         run: python -m unittest scripts/test_check_v1_performance_results.py
 
       - name: Test lifetime diagnostic resource guard
-        run: python -m unittest scripts/test_check_lifetime_diagnostic_resources.py
+        run: |
+          python -m unittest scripts/test_check_lifetime_diagnostic_resources.py \
+            scripts/test_local_lifetime_disk_budget.py \
+            scripts/test_local_lifetime_launcher_guard.py \
+            scripts/test_local_lifetime_resource_sampler.py \
+            scripts/test_cleanup_campaign_docker.py
+
+      - name: Check bounded workstation campaign profiles
+        run: |
+          python -m unittest scripts/test_validate_bounded_campaign.py scripts/test_run_bounded_campaign.py
+          python scripts/validate_bounded_campaign.py --check
+          bash -n scripts/run_bounded_secure_phase.sh scripts/run_bounded_campaign.sh scripts/local_lifetime_launcher_guard.sh
+
+      - name: Test Kafka fixture readiness
+        run: python -m unittest scripts/test_wait_for_kafka_topic.py
 
       - name: Check V1 dependency graph posture
         run: python scripts/check_v1_dependency_graph.py

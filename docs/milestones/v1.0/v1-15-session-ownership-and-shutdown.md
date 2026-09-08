@@ -106,6 +106,15 @@ This covers the group owner boundary only; the 100-cycle all-surface audit,
 Share/Streams/telemetry/Admin owner churn, and long-campaign gates remain.
 See [`v1-published-secure-group-churn-40-cycle-2026-09-04.md`](../../evidence/v1-published-secure-group-churn-40-cycle-2026-09-04.md).
 
+### Local lifetime/restart diagnostic (2026-09-07)
+
+The local RF3 lifetime diagnostic completed one six-hour rate-limited run with
+a broker restart and ended with zero in-flight and buffered gauges. This is a
+single bounded process-lifetime and cleanup observation; it does not close the
+owner-by-owner lifecycle audit, 100 construct/use/fault/close cycles, or the
+published secured churn profile. See the
+[dated evidence report](../../evidence/v1-local-lifetime-diagnostic-2026-09-07.md).
+
 ## Failure And Lifecycle Contract
 
 - A connection is checked out by one request and returned only after framing,
