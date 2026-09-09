@@ -16,7 +16,7 @@ for the V1-00 through V1-26 IDs.
 
 | Release | Focus | Status | Exit evidence |
 | --- | --- | --- | --- |
-| `0.4` | Stabilize the current client and bounded long-run path | Candidate preparation | Exact source/package identity, bounded soak, focused published smoke, and explicit limits |
+| `0.4` | Stabilize the current client and bounded long-run path | Published | Exact source/package identity, bounded soak, focused published smoke, and explicit limits |
 | `0.5` | Portable resource profiles | Planned | Declared resource envelopes with reproducible configuration and retained resource traces |
 | `0.6` | Operational recovery confidence | Planned | Targeted broker restart, coordinator/leader recovery, response-loss, and reconciliation evidence |
 | `0.7` | Performance baseline and migration readiness | Planned | Repeatable profile baseline, tuning guidance, migration notes, and rollback rehearsal |
@@ -61,14 +61,14 @@ The practical schedule is:
 
 The interrupted attempt's completed secure result was retained after
 adjudication. A fresh bounded run then completed the twelve-hour plaintext
-phase with a clean reconciliation and no resource-guard breach. The remaining
-0.4 work is candidate package qualification and protocol-first publication;
-the published baseline must stay unchanged until the new pair is visible and
-fresh external resolution passes.
+phase with a clean reconciliation and no resource-guard breach. The coordinated
+`0.4.0` pair is now published, and its checksums plus fresh external Rust 1.81
+resolution are recorded in
+[`v1-20-published-0.4.0-boundary-2026-09-09.md`](../../evidence/v1-20-published-0.4.0-boundary-2026-09-09.md).
 
 ## 0.4 — Stabilize
 
-The current 0.4 gate is deliberately small and reviewable:
+The completed 0.4 gate was deliberately small and reviewable:
 
 - finish the bounded 6-hour secure and 12-hour plaintext campaigns;
 - optionally extend the plaintext phase to 24 hours for additional diagnostic

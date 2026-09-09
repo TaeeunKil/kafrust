@@ -1,8 +1,8 @@
 # Competitor comparison for the `0.4.0` scoped release
 
 - date_utc: 2026-09-09
-- candidate: `kafrust 0.4.0` and `kafrust-protocol 0.4.0`
-- current_published_baseline: `0.3.6`
+- published: `kafrust 0.4.0` and `kafrust-protocol 0.4.0`
+- current_published_baseline: `0.4.0`
 - decision: proceed with the scoped `0.4.0` pre-1.0 boundary after its
   protocol-first registry checks; do not make a broad production or `1.0.0`
   claim
@@ -26,7 +26,7 @@ qualification of those projects.
 
 ## Decision and non-claims
 
-The `0.4.0` candidate closes an independently consumable boundary in kafrust:
+The published `0.4.0` pair closes an independently consumable boundary in kafrust:
 the post-`0.3.6` protocol/runtime hardening, complete decoder checks, and the
 declared six-hour secured plus twelve-hour plaintext workstation soak are
 packaged together with coordinated protocol/client versions. The retained
@@ -42,8 +42,8 @@ and re-plan them under the later `0.6` recovery and `0.7` baseline milestones:
 - the bounded workload is not V1-21 high-load fault evidence or V1-22 SLO
   evidence;
 - no managed-service, service-canary, API-freeze, or `1.0.0` claim follows;
-- published smoke defaults remain on `0.3.6` until the new pair is visible and
-  fresh external resolution passes.
+- published smoke defaults now use `0.4.0`; explicit version inputs remain
+  available for historical `0.3.6` reruns.
 
 This record is the dated competitor refresh required by the release policy. It
 supports a scoped pre-1.0 publication; it does not promote the project above

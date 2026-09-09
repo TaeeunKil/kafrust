@@ -7,7 +7,7 @@ kafrust publishes two crates:
 
 Publish `kafrust-protocol` before `kafrust` because the client crate depends on the protocol crate by version.
 
-## 0.4.0 Release Candidate (2026-09-09)
+## 0.4.0 Scoped Release (2026-09-09)
 
 The pre-1.0 `0.4` milestone maps to the coordinated `0.4.0` crate pair. This
 minor release groups the client and protocol hardening completed after `0.3.6`
@@ -21,15 +21,16 @@ with the workstation-sized bounded soak gate:
 The bounded workloads are scoped diagnostics on one workstation. They support
 the `0.4` pre-1.0 boundary but do not close the V1-20 compatibility matrix,
 V1-21 fault campaign, V1-22 performance SLO, V1-23 canary, V1-24 API freeze,
-or any `1.0.0` claim. The candidate must be published protocol-first, followed
-by a fresh client package check against the visible `kafrust-protocol 0.4.0`
-artifact. The published baseline remains `0.3.6` until both uploads and fresh
-external resolution have passed.
+or any `1.0.0` claim. Both crates were published protocol-first, followed by
+a fresh external Rust 1.81 resolution against the visible registry pair. The
+published baseline is now `0.4.0`.
 The dated competitor refresh and the explicit decision to keep the remaining
 performance and breadth gaps as later milestones are in
 [`v1-23-published-competitor-comparison-2026-09-09.md`](evidence/v1-23-published-competitor-comparison-2026-09-09.md).
-The staged package hashes and candidate checks are recorded in
-[`v1-20-candidate-0.4.0-boundary-2026-09-09.md`](evidence/v1-20-candidate-0.4.0-boundary-2026-09-09.md).
+The staged package checks are recorded in
+[`v1-20-candidate-0.4.0-boundary-2026-09-09.md`](evidence/v1-20-candidate-0.4.0-boundary-2026-09-09.md);
+the final registry checksums and external smoke are in
+[`v1-20-published-0.4.0-boundary-2026-09-09.md`](evidence/v1-20-published-0.4.0-boundary-2026-09-09.md).
 
 ## v1.0 Publication Gate (2026-08-22)
 
@@ -111,10 +112,10 @@ qualification changes.
 
 ### Verification
 
-The required Rust workspace checks, package boundary script, and release
-metadata checks pass for the candidate source. After publication, repeat the
-client dry-run against the visible `kafrust-protocol 0.4.0` artifact and record
-the registry checksums before updating `published-baseline.json`.
+The required Rust workspace checks, package boundary script, release metadata
+checks, ordered registry uploads, and fresh external Rust 1.81 resolution pass.
+The registry checksums and publication timestamps are recorded in
+[`published-baseline.json`](evidence/published-baseline.json).
 
 ### Known limits
 

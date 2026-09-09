@@ -9,8 +9,8 @@
 `librdkafka`나 필수 C 클라이언트 의존성 없이 Kafka 프로토콜을 사용하는
 순수 Rust Kafka 클라이언트입니다.
 
-현재 공개 버전은 **`0.3.6`**이고, 완료된 `0.4` 마일스톤을 반영한
-**`0.4.0`** 후보를 준비 중입니다. 아직 `1.0` 이전이므로 마이너 버전에서
+현재 공개 버전은 완료된 `0.4` 마일스톤을 반영한 **`0.4.0`**입니다. 아직
+`1.0` 이전이므로 마이너 버전에서
 공개 API가 바뀔 수 있습니다. 작업 트리에는 공개 패키지에 포함되지 않은 수정이
 있을 수 있으므로, 소스 체크아웃을 릴리스 산출물로 판단하기 전
 [릴리스 문서](docs/release.md)와 [증거 기록](docs/evidence/)을 확인하세요.
@@ -46,14 +46,14 @@ group, heartbeat, commit 같은 Kafka 개념을 직접 드러냅니다.
 
 ```toml
 [dependencies]
-kafrust = "0.3.6"
+kafrust = "0.4.0"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
 
 또는:
 
 ```sh
-cargo add kafrust@0.3.6
+cargo add kafrust@0.4.0
 ```
 
 필요 환경:
@@ -151,8 +151,8 @@ consumer, group, transaction, buffering, Share, Streams, Admin API는
 
 생성된 API 문서:
 
-- [`kafrust`](https://docs.rs/kafrust/0.3.6/kafrust/)
-- [`kafrust-protocol`](https://docs.rs/kafrust-protocol/0.3.6/kafrust_protocol/)
+- [`kafrust`](https://docs.rs/kafrust/0.4.0/kafrust/)
+- [`kafrust-protocol`](https://docs.rs/kafrust-protocol/0.4.0/kafrust_protocol/)
 
 ## 개발
 

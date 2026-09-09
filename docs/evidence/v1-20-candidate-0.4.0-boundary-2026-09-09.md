@@ -3,8 +3,9 @@
 - date_utc: 2026-09-09
 - source_commit: `628d130`
 - candidate: `kafrust 0.4.0` and `kafrust-protocol 0.4.0`
-- current_published_baseline: `0.3.6`
-- status: candidate staged; registry publication pending
+- current_published_baseline_at_capture: `0.3.6`
+- status: published; final registry evidence is in
+  [`v1-20-published-0.4.0-boundary-2026-09-09.md`](v1-20-published-0.4.0-boundary-2026-09-09.md)
 - competitor_decision: [`v1-23-published-competitor-comparison-2026-09-09.md`](v1-23-published-competitor-comparison-2026-09-09.md)
 
 ## Package bytes
@@ -55,17 +56,16 @@ The candidate passed:
 - `python scripts/check_qualification_ledger.py`
 - `git diff --check`
 
-Publication must remain protocol-first. After `kafrust-protocol 0.4.0` is
-visible on crates.io, run a fresh client dry-run against that registry artifact,
-then publish `kafrust 0.4.0`. Update `published-baseline.json`, workflow
-defaults, checksums, and docs.rs links only after both uploads and fresh
-external resolution pass.
+Publication was protocol-first. The final registry checksums, publication
+timestamps, and fresh external Rust 1.81 resolution are recorded in
+[`v1-20-published-0.4.0-boundary-2026-09-09.md`](v1-20-published-0.4.0-boundary-2026-09-09.md).
 
-## Upload attempt
+## Initial upload attempt
 
 The first protocol-first `cargo publish -p kafrust-protocol --locked` attempt
-reached crates.io but returned HTTP `403 authentication failed`. No `0.4.0`
-version is visible in the registry, the client upload was not attempted, and
-the published `0.3.6` baseline remains unchanged. After local Cargo registry
-credentials are repaired with `cargo login`, rerun the same protocol-first
-sequence from the clean release worktree.
+reached crates.io but returned HTTP `403 authentication failed`. That attempt
+was superseded after local Cargo credentials were repaired with `cargo login`.
+
+The successful retry published the protocol at `2026-09-09T04:24:58.098711Z`
+and the client at `2026-09-09T04:25:42.314168Z`; the post-publication archive
+hashes and external resolution are recorded in the final boundary evidence.

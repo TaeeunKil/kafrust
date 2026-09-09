@@ -6,7 +6,7 @@ on:
       kafrust_version:
         description: Exact published kafrust version to benchmark from crates.io
         required: true
-        default: "0.3.6"
+        default: "0.4.0"
       artifact_digest:
         description: Exact SHA-256 checksum for the published kafrust artifact
         required: true

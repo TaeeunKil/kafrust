@@ -2,8 +2,12 @@
   "schema_version": 1,
   "client_crate": "kafrust",
   "protocol_crate": "kafrust-protocol",
-  "version": "0.3.6",
-  "published_at_utc": "2026-08-23T02:45:02.515315Z",
-  "boundary_evidence": "docs/evidence/v1-20-published-0.3.6-boundary-2026-08-23.md",
+  "version": "0.4.0",
+  "published_at_utc": "2026-09-09T04:25:42.314168Z",
+  "protocol_published_at_utc": "2026-09-09T04:24:58.098711Z",
+  "source_commit": "628d130",
+  "client_sha256": "20459f0fb58c93e2517e2d11d35aa8a355d11e22514161eba3fbfc2ebe5fca0d",
+  "protocol_sha256": "5c5f76a73b2d73a3a7644e8d91e78fdb9ae0434a071ac273410ddf2d8b0f11a",
+  "boundary_evidence": "docs/evidence/v1-20-published-0.4.0-boundary-2026-09-09.md",
   "policy": "Update only after both coordinated crates are visible on crates.io and fresh external resolution passes. Historical reruns must pass an explicit workflow version."
 }

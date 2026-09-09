@@ -1810,22 +1810,27 @@ Both remain diagnostic evidence only; the six-hour/24-hour fault campaigns,
 five-repetition eight-hour SLO campaign, and published-artifact gates remain
 open.
 
-## Current 0.4.0 Candidate Qualification (2026-09-09)
+## Current 0.4.0 Published Qualification (2026-09-09)
 
 The pre-1.0 release track's `0.4` milestone now has its coordinated `0.4.0`
-candidate. The workstation-sized six-hour secured and twelve-hour plaintext
+published pair. The workstation-sized six-hour secured and twelve-hour plaintext
 campaigns completed with exact attempted/acknowledged/consumed reconciliation,
 zero loss, duplicates, or unknown outcomes, drained final gauges, and no disk
 guard breach. The retained records are in
 [`v1-local-bounded-followup-2026-09-08.md`](evidence/v1-local-bounded-followup-2026-09-08.md).
 
-The current source passes the required workspace validation and staged package
-boundary checks. Publication remains protocol-first: upload
-`kafrust-protocol 0.4.0`, verify fresh registry resolution, then upload
-`kafrust 0.4.0`. Until those checks complete, `0.3.6` remains the published
-baseline. This candidate is a scoped pre-1.0 boundary and does not close the
+The current source passed the required workspace validation and staged package
+boundary checks. The protocol-first uploads completed, both `0.4.0` crates are
+visible on crates.io, and a fresh external Rust 1.81 project resolved and built
+the exact pair. The published baseline is now `0.4.0`. This release is a
+scoped pre-1.0 boundary and does not close the
 full V1-20 matrix, V1-21 fault campaign, V1-22 performance SLO, V1-23 canary,
 V1-24 API freeze, or `1.0.0` release gate.
+
+All 36 `published-*` workflows now default to the published `0.4.0` client;
+explicit version inputs remain available for historical reruns. The machine-
+readable baseline is [published-baseline.json](evidence/published-baseline.json),
+and CI enforces this default-version invariant.
 
 ## Historical 0.3.6 Pre-1.0 Qualification (2026-08-23)
 
