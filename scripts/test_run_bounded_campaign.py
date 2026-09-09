@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 from scripts.run_bounded_campaign import (
+    MAX_RUN_ID_LENGTH,
     RUN_ID_RE,
     phase_command,
     phase_env,
@@ -68,6 +69,8 @@ class BoundedCampaignRunnerTests(unittest.TestCase):
     def test_run_id_matches_docker_hostname_constraints(self):
         self.assertIsNotNone(RUN_ID_RE.fullmatch("bounded-0.5-half-budget"))
         self.assertIsNone(RUN_ID_RE.fullmatch("bounded_0_5_half_budget"))
+        self.assertLessEqual(len("r05-half-budget"), MAX_RUN_ID_LENGTH)
+        self.assertGreater(len("bounded-0.5-half-budget-20260909"), MAX_RUN_ID_LENGTH)
 
 
 if __name__ == "__main__":

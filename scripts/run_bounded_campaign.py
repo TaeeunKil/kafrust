@@ -42,6 +42,7 @@ except ImportError:  # Direct invocation: python scripts/run_bounded_campaign.py
 # Docker uses the run ID in container hostnames; underscores are accepted by
 # the old campaign validator but rejected by the container runtime.
 RUN_ID_RE = re.compile(r"^[A-Za-z0-9.-]+$")
+MAX_RUN_ID_LENGTH = 24
 DEFAULT_KAFKA_VERSION = "3.7.2"
 
 
@@ -413,6 +414,10 @@ def execute(
     require_linux_wsl()
     if not RUN_ID_RE.fullmatch(run_id):
         raise CampaignConfigError("run ID contains unsupported characters")
+    if len(run_id) > MAX_RUN_ID_LENGTH:
+        raise CampaignConfigError(
+            f"run ID is too long for Docker hostnames (maximum {MAX_RUN_ID_LENGTH} characters)"
+        )
     phases = config["phases"]
     if only_phase is not None:
         matching = [phase for phase in phases if phase["id"] == only_phase]
