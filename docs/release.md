@@ -7,6 +7,25 @@ kafrust publishes two crates:
 
 Publish `kafrust-protocol` before `kafrust` because the client crate depends on the protocol crate by version.
 
+## 0.4.0 Release Candidate (2026-09-09)
+
+The pre-1.0 `0.4` milestone maps to the coordinated `0.4.0` crate pair. This
+minor release groups the client and protocol hardening completed after `0.3.6`
+with the workstation-sized bounded soak gate:
+
+- six-hour secured plaintext/SASL workload and twelve-hour plaintext workload;
+- exact record reconciliation with zero loss, duplicates, and unknown outcomes;
+- drained in-flight and buffered gauges with retained resource guard series;
+- staged protocol-first packaging and all-feature external package checks.
+
+The bounded workloads are scoped diagnostics on one workstation. They support
+the `0.4` pre-1.0 boundary but do not close the V1-20 compatibility matrix,
+V1-21 fault campaign, V1-22 performance SLO, V1-23 canary, V1-24 API freeze,
+or any `1.0.0` claim. The candidate must be published protocol-first, followed
+by a fresh client package check against the visible `kafrust-protocol 0.4.0`
+artifact. The published baseline remains `0.3.6` until both uploads and fresh
+external resolution have passed.
+
 ## v1.0 Publication Gate (2026-08-22)
 
 The coordinated `0.3.6` candidate is authorized for one ordered pre-1.0
@@ -26,8 +45,8 @@ The exact checksums and fresh external Rust 1.81/stable lockfile checks are in
 Both exact docs.rs pages subsequently returned HTTP 200; this is page
 availability only. The full V1-20 matrix is not complete.
 
-Version cadence is evidence-driven rather than one-patch-per-commit. A pre-1.0
-patch is published only when a user-visible or independently consumable boundary
+Version cadence is evidence-driven rather than one-commit-per-release. A pre-1.0
+patch or minor is published only when a user-visible or independently consumable boundary
 justifies a fresh registry artifact and its affected smoke rows; internal,
 documentation-only, or incomplete changes remain unpublished until grouped into
 the next qualified boundary. Before any external publication (patch, minor,
@@ -52,6 +71,52 @@ V1-26 repeats the same protocol-first sequence for `1.0.0` only after the RC
 canary, rollback, complete matrix, and post-publish approval gates pass. A
 partial protocol publication is recorded and never reused for changed bytes;
 the next attempt uses a new coordinated version pair.
+
+## 0.4.0 Release Notes
+
+This pre-1.0 minor release groups the post-`0.3.6` protocol and runtime
+hardening with the bounded workstation qualification. The coordinated
+`kafrust-protocol` and `kafrust` packages use version `0.4.0`.
+
+### Breaking changes
+
+No intentional breaking change is planned, but this is a `0.x` minor release
+and the public API remains open to correction. Protocol callers can opt into
+the new `Decoder::finish()` completeness check; malformed trailing input is
+reported as `kafrust_protocol::Error::TrailingBytes`.
+
+### Migration notes
+
+Existing callers may keep their `0.3.6` dependency until they are ready to
+upgrade. Callers that decode a value from an untrusted frame should call
+`Decoder::finish()` after the expected fields are read when full-input
+consumption is required. No other migration step is required by the bounded
+qualification changes.
+
+### Compatibility evidence
+
+- Kafka `3.7.2` and `4.3.1` bounded secured/plaintext workloads completed on
+  the declared workstation profile with exact record reconciliation.
+- Six-hour secured and twelve-hour plaintext runs recorded zero loss,
+  duplicates, and unknown outcomes; final in-flight and buffered gauges were
+  zero and the resource guard did not breach.
+- The staged protocol-first package boundary passed all default, TLS,
+  blocking, OTLP, and all-feature external fixtures. The retained run details
+  are in [`v1-local-bounded-followup-2026-09-08.md`](evidence/v1-local-bounded-followup-2026-09-08.md).
+
+### Verification
+
+The required Rust workspace checks, package boundary script, and release
+metadata checks pass for the candidate source. After publication, repeat the
+client dry-run against the visible `kafrust-protocol 0.4.0` artifact and record
+the registry checksums before updating `published-baseline.json`.
+
+### Known limits
+
+This release is a scoped pre-1.0 boundary. It does not close the full V1-20
+compatibility matrix, V1-21 fault campaign, V1-22 performance SLO, V1-23
+service canary, V1-24 API freeze, or any `1.0.0` claim. The local low-rate
+workload is not evidence for the official high-load V1-21/V1-22 profiles.
 
 ## 0.3.6 Release Notes
 
@@ -198,7 +263,7 @@ Before publishing:
 4. Keep `Cargo.lock` out of the commit unless the repository policy changes.
 
 Never reuse a version that already exists on crates.io. The client and protocol
-crates must use the same new patch version, and the protocol crate must be
+crates must use the same new version, and the protocol crate must be
 published first. A local workspace build can pass while an isolated client
 package still resolves an older published protocol crate, so the ordered
 registry checks below are part of the release gate.

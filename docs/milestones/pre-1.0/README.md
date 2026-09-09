@@ -16,7 +16,7 @@ for the V1-00 through V1-26 IDs.
 
 | Release | Focus | Status | Exit evidence |
 | --- | --- | --- | --- |
-| `0.4` | Stabilize the current client and bounded long-run path | In progress | Exact source/package identity, bounded soak, focused published smoke, and explicit limits |
+| `0.4` | Stabilize the current client and bounded long-run path | Candidate preparation | Exact source/package identity, bounded soak, focused published smoke, and explicit limits |
 | `0.5` | Portable resource profiles | Planned | Declared resource envelopes with reproducible configuration and retained resource traces |
 | `0.6` | Operational recovery confidence | Planned | Targeted broker restart, coordinator/leader recovery, response-loss, and reconciliation evidence |
 | `0.7` | Performance baseline and migration readiness | Planned | Repeatable profile baseline, tuning guidance, migration notes, and rollback rehearsal |
@@ -59,10 +59,12 @@ The practical schedule is:
 | V1-21 official gate | Four six-hour fault campaigns plus 100-cycle, ambiguity, retention, and unclean-election fixtures | At least 3–5 days, with reruns extending it |
 | V1-22 official gate | 120 jobs, each two-hour warmup plus six-hour measurement | About 40 days sequentially, before reruns |
 
-The current interrupted attempt can retain its completed secure result after
-adjudication, but the missing plaintext phase must be rerun before 0.4 is
-complete. A rerun should start at the missing phase after a fresh capacity
-preflight rather than repeat successful phases blindly.
+The interrupted attempt's completed secure result was retained after
+adjudication. A fresh bounded run then completed the twelve-hour plaintext
+phase with a clean reconciliation and no resource-guard breach. The remaining
+0.4 work is candidate package qualification and protocol-first publication;
+the published baseline must stay unchanged until the new pair is visible and
+fresh external resolution passes.
 
 ## 0.4 — Stabilize
 

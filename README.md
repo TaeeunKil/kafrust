@@ -9,7 +9,9 @@
 A pure Rust Kafka client for applications that need Kafka protocol access
 without a required `librdkafka` or C client dependency.
 
-The current published line is **`0.3.6`**. It is pre-`1.0` and its public API
+The current published line is **`0.3.6`**. The coordinated **`0.4.0`**
+candidate is being prepared from the completed `0.4` milestone. Both are
+pre-`1.0` and their public APIs
 may change between minor releases. The working tree can contain fixes that are
 not part of the published package; check the release and evidence documents
 before treating a source checkout as a release artifact.
