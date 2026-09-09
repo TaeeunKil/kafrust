@@ -25,6 +25,11 @@ or any `1.0.0` claim. The candidate must be published protocol-first, followed
 by a fresh client package check against the visible `kafrust-protocol 0.4.0`
 artifact. The published baseline remains `0.3.6` until both uploads and fresh
 external resolution have passed.
+The dated competitor refresh and the explicit decision to keep the remaining
+performance and breadth gaps as later milestones are in
+[`v1-23-published-competitor-comparison-2026-09-09.md`](evidence/v1-23-published-competitor-comparison-2026-09-09.md).
+The staged package hashes and candidate checks are recorded in
+[`v1-20-candidate-0.4.0-boundary-2026-09-09.md`](evidence/v1-20-candidate-0.4.0-boundary-2026-09-09.md).
 
 ## v1.0 Publication Gate (2026-08-22)
 
