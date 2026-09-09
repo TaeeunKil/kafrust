@@ -3,9 +3,11 @@
 ## Artifact Qualification Boundary
 
 The current published compatibility baseline is the coordinated crates.io
-`0.3.6` pair. Its exact registry checksums, lockfile identity, and initial
-external-project checks are recorded in
-[`v1-20-published-0.3.6-boundary-2026-08-23.md`](evidence/v1-20-published-0.3.6-boundary-2026-08-23.md).
+`0.4.0` pair. Its exact registry checksums, lockfile identity, and fresh
+external-project check are recorded in
+[`v1-20-published-0.4.0-boundary-2026-09-09.md`](evidence/v1-20-published-0.4.0-boundary-2026-09-09.md).
+The earlier `0.3.6` results below remain historical evidence and do not define
+the current default artifact.
 The complete V1-20 matrix and later fault, SLO, migration, and API-freeze gates
 remain open; live and published claims stay tied to their named source commits,
 artifact versions, and workflow runs below.
