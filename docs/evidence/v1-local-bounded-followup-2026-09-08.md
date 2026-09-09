@@ -69,3 +69,44 @@ supports `--only-phase` for an explicitly validated phase rerun and refreshes
 the campaign state heartbeat during monitoring. A 24-hour plaintext run is
 optional extended diagnostic evidence and is not required for the scoped 0.4
 gate. Planned durations and profile entries are not completion evidence.
+
+## Third execution: completed 12-hour plaintext phase
+
+Snapshot `0f7616a3dcd7567fcf6de0481eff2a9ee74569ca` is retained under
+`/home/taeeun/kafrust-campaigns/bounded-followup-20260908-attempt5/source`.
+The generated campaign provenance identifies the immutable snapshot commit as
+`ab997a2c512926fa7c4d97d25a9cc30bcb1519e7`; its working tree was clean. The
+Windows artifacts are `.artifacts/bounded-followup-20260908-attempt5/` and the
+phase output is under
+`/home/taeeun/kafrust-campaigns/bounded-followup-20260908-attempt5/long/plaintext-soak-12h/`.
+
+The explicitly resumed plaintext phase completed at 2026-09-09 12:03 KST.
+Its measured workload duration was 43,203.896 seconds at 25 records/s with
+64-byte values on Kafka 4.3.1, using three replicated partitions and one
+10-second broker restart. The result reported:
+
+- attempted, acknowledged, and consumed-unique records: **1,080,150 each**;
+- loss, duplicate, and unknown outcomes: **0, 0, and 0**;
+- `recovered: true`, `operation_errors: 0`, and qualified record-ID digest;
+- 43,227 requests started, 4 failed requests, and 5 retries;
+- final `in_flight_requests: 0` and `buffered_records: 0`.
+
+The descriptor records `qualified: false` for the diagnostic itself and keeps
+the non-claims that it is not V1-21 throughput evidence, V1-22 SLO evidence,
+published-artifact evidence, service-canary evidence, or release authorization.
+The 2,849 resource samples span
+`2026-09-08T13:54:53Z`–`2026-09-09T03:03:15Z`. Helper-process RSS ranged from
+7,184,384 to 7,634,944 bytes, OS thread count from 18 to 19, and open sockets
+from 1 to 8. Free space stayed at 791,117,004,800 bytes on `/mnt/t` and
+ranged from 914,141,184,000 to 914,496,012,288 bytes under `/var/lib/docker`;
+the 100 GiB reserve and 20 GiB growth guard were not breached.
+
+The six-hour secure result remains the retained result from attempt2:
+2,160,150 attempted/acknowledged/consumed-unique records, zero loss,
+duplicates, and unknown outcomes, `recovered: true`, and final in-flight and
+buffered gauges of zero. Its source provenance is recorded in the secure phase
+directory with snapshot commit
+`2212fb0c79cbf0693de7f3dc607d09a21b854aad`; the plaintext provenance and
+descriptor are recorded alongside the attempt5 result. Together these are the
+completed scoped 0.4 bounded evidence; they remain diagnostic evidence and do
+not close V1-21 or V1-22.
