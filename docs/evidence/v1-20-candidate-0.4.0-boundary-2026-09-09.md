@@ -60,3 +60,12 @@ visible on crates.io, run a fresh client dry-run against that registry artifact,
 then publish `kafrust 0.4.0`. Update `published-baseline.json`, workflow
 defaults, checksums, and docs.rs links only after both uploads and fresh
 external resolution pass.
+
+## Upload attempt
+
+The first protocol-first `cargo publish -p kafrust-protocol --locked` attempt
+reached crates.io but returned HTTP `403 authentication failed`. No `0.4.0`
+version is visible in the registry, the client upload was not attempted, and
+the published `0.3.6` baseline remains unchanged. After local Cargo registry
+credentials are repaired with `cargo login`, rerun the same protocol-first
+sequence from the clean release worktree.
