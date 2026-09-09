@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 from scripts.run_bounded_campaign import (
+    RUN_ID_RE,
     phase_command,
     phase_env,
     write_campaign_state,
@@ -63,6 +64,10 @@ class BoundedCampaignRunnerTests(unittest.TestCase):
             self.assertEqual(value["status"], "running")
             self.assertEqual(value["current_phase"], "secure-soak-6h")
             self.assertFalse((Path(folder) / "campaign-state.tmp").exists())
+
+    def test_run_id_matches_docker_hostname_constraints(self):
+        self.assertIsNotNone(RUN_ID_RE.fullmatch("bounded-0.5-half-budget"))
+        self.assertIsNone(RUN_ID_RE.fullmatch("bounded_0_5_half_budget"))
 
 
 if __name__ == "__main__":

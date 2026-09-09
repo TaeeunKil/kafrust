@@ -39,7 +39,9 @@ except ImportError:  # Direct invocation: python scripts/run_bounded_campaign.py
     )
 
 
-RUN_ID_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+# Docker uses the run ID in container hostnames; underscores are accepted by
+# the old campaign validator but rejected by the container runtime.
+RUN_ID_RE = re.compile(r"^[A-Za-z0-9.-]+$")
 DEFAULT_KAFKA_VERSION = "3.7.2"
 
 
