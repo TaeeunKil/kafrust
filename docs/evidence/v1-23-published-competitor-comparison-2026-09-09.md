@@ -6,7 +6,7 @@
 - decision: proceed with the scoped `0.4.0` pre-1.0 boundary after its
   protocol-first registry checks; do not make a broad production or `1.0.0`
   claim
-- source: `9b76780` candidate preparation; the bounded workload evidence keeps
+- source: `628d130` candidate preparation; the bounded workload evidence keeps
   its own run source identities in
   [`v1-local-bounded-followup-2026-09-08.md`](v1-local-bounded-followup-2026-09-08.md)
 

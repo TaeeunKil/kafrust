@@ -1,7 +1,7 @@
 # `0.4.0` candidate package boundary
 
 - date_utc: 2026-09-09
-- source_commit: `9b76780`
+- source_commit: `628d130`
 - candidate: `kafrust 0.4.0` and `kafrust-protocol 0.4.0`
 - current_published_baseline: `0.3.6`
 - status: candidate staged; registry publication pending
@@ -14,9 +14,9 @@ temporary local patch for the matching protocol source, then compiled in fresh
 external fixtures without a workspace path dependency.
 
 - `kafrust-protocol-0.4.0.crate` SHA-256:
-  `d17616f17fff9128f7b83acd60727fc979e386f195baef5e539b1678537eed66`
+  `5c5f76a73b2d73a3a7644e8d91e78fdb9ae0434a071ac273410ddf2d8b0f11a`
 - `kafrust-0.4.0.crate` SHA-256:
-  `81d37581ae48fc4b618473f4a4f7ad35f36e11f247352cbcc178dcb7a8b5fef9`
+  `af7d10ff3917ee021932a075dc95dcb9f1c69bfc07992d5733119b314d7d439c`
 - external feature fixtures: default, `tls`, `blocking`, `otlp`, and all
 - package boundary command: `python scripts/verify_package_boundary.py --staged`
 - result: all five profiles passed with coordinated `0.4.0` lockfile entries
