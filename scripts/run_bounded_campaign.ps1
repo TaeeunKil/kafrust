@@ -2,6 +2,7 @@
 param(
     [string]$RunId,
     [string]$OutputRoot,
+    [string]$Config = "scripts/bounded_campaign_profiles.json",
     [string]$OnlyPhase,
     [switch]$Plan
 )
@@ -19,7 +20,7 @@ $arguments = @(
     "python3",
     "scripts/run_bounded_campaign.py",
     "--config",
-    "scripts/bounded_campaign_profiles.json"
+    $Config
 )
 if ($RunId) {
     $arguments += @("--run-id", $RunId)

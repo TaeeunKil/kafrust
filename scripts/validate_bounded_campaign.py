@@ -20,6 +20,18 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = Path(__file__).with_name("bounded_campaign_profiles.json")
 GIB = 1024**3
+PROFILE_CONTRACTS = {
+    "windows-wsl-32g-low-rate": {
+        "secure_rate": 100,
+        "plaintext_rate": 25,
+        "requires_half_budget": False,
+    },
+    "windows-wsl-32g-half-budget": {
+        "secure_rate": 50,
+        "plaintext_rate": 12,
+        "requires_half_budget": True,
+    },
+}
 
 
 class CampaignConfigError(ValueError):
@@ -42,7 +54,9 @@ def validate_profile(config: dict[str, Any], root: Path = ROOT) -> None:
     """Validate the exact four-phase profile and referenced repository files."""
 
     _require(config.get("schema_version") == 1, "schema_version must be 1")
-    _require(config.get("profile_id") == "windows-wsl-32g-low-rate", "unexpected profile_id")
+    profile_id = config.get("profile_id")
+    _require(profile_id in PROFILE_CONTRACTS, "unexpected profile_id")
+    contract = PROFILE_CONTRACTS[profile_id]
 
     execution = config.get("execution", {})
     _require(execution.get("platform") == "windows-wsl", "execution platform must be windows-wsl")
@@ -56,6 +70,9 @@ def validate_profile(config: dict[str, Any], root: Path = ROOT) -> None:
     _require(host.get("disk_reserve_gib") == 100, "disk reserve must be 100 GiB")
     _require(host.get("disk_growth_budget_gib") == 20, "disk growth budget must be 20 GiB")
     _require(host.get("disk_budget_scope") == "active-phase", "disk budget scope must be active-phase")
+    if contract["requires_half_budget"]:
+        _require(host.get("soft_memory_budget_gib") == 8, "half-budget profile must declare an 8 GiB WSL soft budget")
+        _require(host.get("cpu_budget_vcpu") == 4, "half-budget profile must declare a 4 vCPU budget")
 
     broker = config.get("broker", {})
     _require(broker.get("brokers") == 3, "campaign requires three brokers")
@@ -124,7 +141,10 @@ def validate_profile(config: dict[str, Any], root: Path = ROOT) -> None:
     _require(secure.get("kind") == "secure-soak", "third phase must be secure soak")
     _require(secure.get("security_protocol") == "sasl_tls", "secure soak must use SASL_TLS")
     _require(secure.get("duration_seconds") == 21_600, "secure soak must run six hours")
-    _require(secure.get("rate_records_per_second") == 100, "secure soak must run at 100 records/s")
+    _require(
+        secure.get("rate_records_per_second") == contract["secure_rate"],
+        f"secure soak must run at {contract['secure_rate']} records/s for this profile",
+    )
     _require(secure.get("payload_bytes") == 64, "secure soak payload must be 64 bytes")
     _require(secure.get("requires_rate_limiter") is True, "secure soak must require an explicit rate limiter")
 
@@ -132,7 +152,10 @@ def validate_profile(config: dict[str, Any], root: Path = ROOT) -> None:
     _require(plaintext.get("kind") == "plaintext-soak", "fourth phase must be plaintext soak")
     _require(plaintext.get("security_protocol") == "plaintext", "plaintext soak must use plaintext")
     _require(plaintext.get("duration_seconds") == 43_200, "plaintext soak must run 12 hours")
-    _require(plaintext.get("rate_records_per_second") == 25, "plaintext soak must run at 25 records/s")
+    _require(
+        plaintext.get("rate_records_per_second") == contract["plaintext_rate"],
+        f"plaintext soak must run at {contract['plaintext_rate']} records/s for this profile",
+    )
     _require(plaintext.get("payload_bytes") == 64, "plaintext soak payload must be 64 bytes")
     _require(secure.get("kafka_version") == "4.3.1", "secure soak must use Kafka 4.3.1")
     _require(plaintext.get("kafka_version") == "4.3.1", "plaintext soak must use Kafka 4.3.1")

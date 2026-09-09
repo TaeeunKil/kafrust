@@ -15,6 +15,7 @@ from scripts.validate_bounded_campaign import (
 
 
 ROOT = Path(__file__).resolve().parents[1]
+HALF_BUDGET_CONFIG = ROOT / "scripts" / "bounded_campaign_profiles_0_5.json"
 
 
 class BoundedCampaignProfileTests(unittest.TestCase):
@@ -44,6 +45,15 @@ class BoundedCampaignProfileTests(unittest.TestCase):
         by_id = {phase["id"]: phase for phase in result["phases"]}
         self.assertLessEqual(by_id["secure-soak-6h"]["estimated_storage_gib"], 20)
         self.assertLessEqual(by_id["plaintext-soak-12h"]["estimated_storage_gib"], 20)
+
+    def test_half_budget_profile_has_a_distinct_declared_envelope(self):
+        config = load_config(HALF_BUDGET_CONFIG)
+        validate_profile(config, ROOT)
+        self.assertEqual(config["profile_id"], "windows-wsl-32g-half-budget")
+        self.assertEqual(config["host"]["soft_memory_budget_gib"], 8)
+        self.assertEqual(config["host"]["cpu_budget_vcpu"], 4)
+        self.assertEqual(config["phases"][4]["rate_records_per_second"], 50)
+        self.assertEqual(config["phases"][5]["rate_records_per_second"], 12)
 
     def test_secure_helper_is_ready_only_when_rate_contract_is_present(self):
         blockers = readiness_blockers(self.config, ROOT)
