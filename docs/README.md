@@ -39,7 +39,8 @@ evidence easy to find.
 - [Performance](performance.md) — benchmark method, profiles, and limits
 - [v1.0 qualification ledger](evidence/qualification-ledger.md) — gate-by-gate evidence index
 - [Evidence archive](evidence/README.md) — dated live runs, audits, manifests, and diagnostic records
-- [Latest bounded campaign record](evidence/v1-local-bounded-followup-2026-09-08.md) — active workstation diagnostic and explicit non-claims
+- [Latest 0.6 recovery record](evidence/v1-0_6-published-operational-recovery-2026-09-10.md) — published-package group rejoin and broker-restart evidence
+- [Bounded workstation campaign](evidence/v1-local-bounded-followup-2026-09-08.md) — workstation diagnostic and explicit non-claims
 
 Evidence files are historical records. A newer dated record can supersede an
 older observation, but old records remain useful for understanding regressions

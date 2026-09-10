@@ -22,6 +22,21 @@ decision and verification record is
 The next registry release waits for a user-visible or independently consumable
 package boundary and follows the protocol-first sequence below.
 
+## 0.6 Operational Recovery Decision (2026-09-10)
+
+The bounded 0.6 operational-recovery slice is verified against the published
+`0.4.0` pair. Fresh external projects completed classic and KIP-848 group
+leave/drop churn at 100 cycles each, and three-broker plaintext plus SASL/TLS
+restart schedules completed with record-ID reconciliation and drained final
+gauges. The complete run and artifact provenance are in
+[`v1-0_6-published-operational-recovery-2026-09-10.md`](evidence/v1-0_6-published-operational-recovery-2026-09-10.md).
+
+This is repository-level recovery evidence: no crate source, public API, or
+independently consumable package boundary changed. Therefore it does not
+authorize a `0.6.0` upload, and the registry baseline remains `0.4.0`. The
+secure profile's reconciled unknown outcomes and the bounded workload are
+explicit limits; V1-21 high-load, V1-22 SLO, and the 1.0 gates remain open.
+
 ## 0.4.0 Scoped Release (2026-09-09)
 
 The pre-1.0 `0.4` milestone maps to the coordinated `0.4.0` crate pair. This

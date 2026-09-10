@@ -18,7 +18,7 @@ for the V1-00 through V1-26 IDs.
 | --- | --- | --- | --- |
 | `0.4` | Stabilize the current client and bounded long-run path | Published | Exact source/package identity, bounded soak, focused published smoke, and explicit limits |
 | `0.5` | Portable resource profiles | Verified (repository milestone) | [Windows/WSL half-budget profile](../../evidence/v1-local-half-budget-profile-2026-09-09.md): reproducible envelope, six ordered phases, retained resource traces, reconciliation, and provenance; no registry artifact because the crate boundary is unchanged |
-| `0.6` | Operational recovery confidence | Planned | Targeted broker restart, coordinator/leader recovery, response-loss, and reconciliation evidence |
+| `0.6` | Operational recovery confidence | Verified (published bounded slice) | [Published group rejoin and multi-broker recovery](../../evidence/v1-0_6-published-operational-recovery-2026-09-10.md): four 100-cycle group-loss/rejoin gates plus plaintext and SASL/TLS broker-restart reconciliation |
 | `0.7` | Performance baseline and migration readiness | Planned | Repeatable profile baseline, tuning guidance, migration notes, and rollback rehearsal |
 | `0.8` | Scoped 0.x release candidate and external adoption | Planned | Fresh external-project smoke, canary/rollback rehearsal, and release-candidate artifact |
 | `1.0` | Optional broad stability and production qualification claim | Conditional | Full V1-00 through V1-26 program exit criteria, including V1-21/V1-22 requirements |
@@ -104,6 +104,20 @@ names it as an accepted environment. Additional profiles do not redefine the
 existing baseline or relax the V1-21/V1-22 qualification gates.
 
 ## 0.6 — Operational recovery
+
+The bounded published-package slice is verified in
+[`v1-0_6-published-operational-recovery-2026-09-10.md`](../../evidence/v1-0_6-published-operational-recovery-2026-09-10.md).
+It covers the four classic/KIP-848 member-loss and rejoin combinations at 100
+cycles each, plus three-broker leader/coordinator/combined/simultaneous
+restart schedules for plaintext and SASL/TLS workloads. All six runs drained
+their final client gauges and reconciled records without loss or duplicates.
+The secure run retains its nonzero unknown-outcome count as an ambiguity signal
+and is not promoted to a zero-ambiguity claim.
+
+This verifies the scoped 0.6 repository milestone against published `0.4.0`
+artifacts. It does not close V1-21 high-load or V1-22 SLO qualification, and it
+does not create a `0.6.0` registry release because the crate boundary is
+unchanged.
 
 Expand the solo-friendly campaign around the failure modes that affect normal
 client operation:

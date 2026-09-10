@@ -40,6 +40,8 @@ its milestone document.
 - `v1-local-*` records bounded workstation campaigns and their resource guards.
   The 2026-09-08 follow-up is explicitly diagnostic until its long phases finish
   and the adjudicator accepts the retained artifacts.
+- `v1-0_6-*` records the bounded operational-recovery slice against published
+  artifacts; its unknown outcomes and workload limits remain part of the record.
 - `v1-18-*` and `v1-19-*` cover fuzzing, dependency, license, native-tooling,
   and package audits.
 - `*.json` manifests and snapshots are machine-readable inputs for checkers;
