@@ -7,6 +7,21 @@ kafrust publishes two crates:
 
 Publish `kafrust-protocol` before `kafrust` because the client crate depends on the protocol crate by version.
 
+## 0.5 Profile Publication Decision (2026-09-10)
+
+The `0.5` portable-profile milestone is verified by the Windows/WSL
+half-budget run in
+[`v1-local-half-budget-profile-2026-09-09.md`](evidence/v1-local-half-budget-profile-2026-09-09.md).
+It remains a repository qualification milestone rather than a crates.io
+version: the change is limited to campaign scripts, profile configuration,
+tests, and evidence, while the crate source and public API remain the
+published `0.4.0` pair. Cargo packages do not contain those repository-level
+files, so a `0.5.0` upload would not be independently consumable. The full
+decision and verification record is
+[`v1-23-0.5-profile-release-decision-2026-09-10.md`](evidence/v1-23-0.5-profile-release-decision-2026-09-10.md).
+The next registry release waits for a user-visible or independently consumable
+package boundary and follows the protocol-first sequence below.
+
 ## 0.4.0 Scoped Release (2026-09-09)
 
 The pre-1.0 `0.4` milestone maps to the coordinated `0.4.0` crate pair. This

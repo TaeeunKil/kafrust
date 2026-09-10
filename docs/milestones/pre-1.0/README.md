@@ -17,7 +17,7 @@ for the V1-00 through V1-26 IDs.
 | Release | Focus | Status | Exit evidence |
 | --- | --- | --- | --- |
 | `0.4` | Stabilize the current client and bounded long-run path | Published | Exact source/package identity, bounded soak, focused published smoke, and explicit limits |
-| `0.5` | Portable resource profiles | Verified | [Windows/WSL half-budget profile](../../evidence/v1-local-half-budget-profile-2026-09-09.md): reproducible envelope, six ordered phases, retained resource traces, reconciliation, and provenance |
+| `0.5` | Portable resource profiles | Verified (repository milestone) | [Windows/WSL half-budget profile](../../evidence/v1-local-half-budget-profile-2026-09-09.md): reproducible envelope, six ordered phases, retained resource traces, reconciliation, and provenance; no registry artifact because the crate boundary is unchanged |
 | `0.6` | Operational recovery confidence | Planned | Targeted broker restart, coordinator/leader recovery, response-loss, and reconciliation evidence |
 | `0.7` | Performance baseline and migration readiness | Planned | Repeatable profile baseline, tuning guidance, migration notes, and rollback rehearsal |
 | `0.8` | Scoped 0.x release candidate and external adoption | Planned | Fresh external-project smoke, canary/rollback rehearsal, and release-candidate artifact |
