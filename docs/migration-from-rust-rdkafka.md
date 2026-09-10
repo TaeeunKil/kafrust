@@ -1,7 +1,7 @@
 # Migrating from rust-rdkafka
 
 This guide maps common `rust-rdkafka` 0.39 application patterns to kafrust
-0.3.6. It is a staged migration guide, not a drop-in compatibility claim.
+0.4.0. It is a staged migration guide, not a drop-in compatibility claim.
 `rust-rdkafka` wraps librdkafka and has substantially broader production
 coverage. kafrust is a Tokio-based pure Rust client with a smaller, typed
 configuration surface.
@@ -9,7 +9,7 @@ configuration surface.
 > Version note: the capability gate below retains historical published-crate
 > evidence from earlier `0.2.x` and `0.3.x` runs so results remain auditable.
 > Those entries are evidence for the named artifact and workload, not the
-> current release version. Re-run the target workflow against `0.3.6` and the
+> current release version. Re-run the target workflow against `0.4.0` and the
 > target service profile before treating it as a production qualification.
 
 Reference APIs:
@@ -20,11 +20,12 @@ Reference APIs:
 - [`rust-rdkafka` AdminClient](https://docs.rs/rdkafka/latest/rdkafka/admin/struct.AdminClient.html)
 - [kafrust compatibility claim](compatibility.md)
 
-## Changes from kafrust 0.3.5 to 0.3.6
+## Changes from kafrust 0.3.5 to 0.4.0
 
-The `0.3.6` release is a coordinated package-boundary repair: the client and
-`kafrust-protocol` now publish and resolve as the same pair from crates.io.
-There is no intentional breaking public-API change recorded for this patch;
+The `0.4.0` release is a coordinated client/protocol pair that carries the
+post-`0.3.6` protocol and runtime hardening, including complete decoder
+consumption checks and the bounded workstation qualification. The release
+records no intentional breaking public-API change for this minor release;
 existing callers should still review the capability and operational limits
 below before rollout. The release does not imply `1.0.0` stability, drop-in
 `rust-rdkafka` parity, or production SLO qualification. Those claims remain
@@ -36,7 +37,7 @@ Replace the dependency:
 
 ```toml
 [dependencies]
-kafrust = "0.3.6"
+kafrust = "0.4.0"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
 
