@@ -37,7 +37,11 @@ jobs:
   published-group-rebalance:
     name: Published kafrust ${{ inputs.kafrust_version || '0.4.0' }} ${{ inputs.kafka_version || '4.3.1' }} ${{ inputs.group_protocol || 'consumer' }} group churn
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    # A 100-cycle KIP-848 drop run can spend several minutes in coordinator
+    # polling per cycle. Keep the gate alive long enough to finish its declared
+    # workload instead of turning a slow but healthy run into an infrastructure
+    # timeout.
+    timeout-minutes: 180
     env:
       KAFRUST_BOOTSTRAP_SERVERS: localhost:20092,localhost:20093,localhost:20094
       KAFRUST_TOPIC: kafrust-published-group-${{ github.run_id }}
