@@ -37,6 +37,8 @@ its milestone document.
 - `v1-company-*` records workstation diagnostics. They are useful for local
   reproduction and capacity checks, but are not automatically published or
   service-canary evidence.
+- `v1-current-host-*` records the latest read-only runner and storage
+  preflight. A capacity finding blocks unsafe dispatch; it is not a gate pass.
 - `v1-local-*` records bounded workstation campaigns and their resource guards.
   The 2026-09-08 follow-up is explicitly diagnostic until its long phases finish
   and the adjudicator accepts the retained artifacts.

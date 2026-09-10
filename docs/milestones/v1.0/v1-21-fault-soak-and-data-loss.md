@@ -618,3 +618,18 @@ does not by itself establish a runnable campaign: WSL, Docker, runner
 connectivity, Docker-root capacity, and live memory must be rechecked after an
 authorized start. The exact V1-21 six-hour workload and V1-22 SLO campaigns
 remain pending and unchanged.
+
+### Current host capacity preflight (2026-09-10)
+
+The registered `wsl-ubuntu-t9` runner is online and its systemd service is
+enabled. The workstation has 733 GiB free on `T:` and 846 GiB free under the
+Docker root. A recent published 15-minute soak reached approximately 31,985
+records/s with a 1-KiB payload and replication factor three, projecting to
+nearly 2 TiB of payload for six hours before Kafka and filesystem overhead.
+The previous 700-GiB guard was therefore too weak for the unbounded published
+helper. `scripts/check_campaign_capacity.sh` now enforces 2,600 GiB for
+six-hour jobs and 4,000 GiB for the eight-hour V1-22 jobs, while retaining the
+700-GiB floor for short diagnostics. The current host fails those long-job
+preflights before Kafka startup; no official campaign is dispatched until a
+larger storage-backed runner is available. Full observations are in
+[`v1-current-host-capacity-preflight-2026-09-10.md`](../../evidence/v1-current-host-capacity-preflight-2026-09-10.md).
