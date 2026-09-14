@@ -4884,10 +4884,7 @@ fn timestamp_millis(timestamp: SystemTime) -> i64 {
     let duration = timestamp
         .duration_since(UNIX_EPOCH)
         .unwrap_or(Duration::from_millis(0));
-    match i64::try_from(duration.as_millis()) {
-        Ok(value) => value,
-        Err(_) => i64::MAX,
-    }
+    i64::try_from(duration.as_millis()).unwrap_or(i64::MAX)
 }
 
 fn record_batch_message(record: &ProducerRecord, timestamp_ms: i64) -> RecordBatchMessage {

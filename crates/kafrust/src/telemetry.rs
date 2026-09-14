@@ -451,18 +451,12 @@ fn number_data_point(
 
 #[cfg(feature = "otlp")]
 fn u64_to_i64(value: u64) -> i64 {
-    match i64::try_from(value) {
-        Ok(value) => value,
-        Err(_) => i64::MAX,
-    }
+    i64::try_from(value).unwrap_or(i64::MAX)
 }
 
 #[cfg(feature = "otlp")]
 fn duration_nanos(duration: Duration) -> u64 {
-    match u64::try_from(duration.as_nanos()) {
-        Ok(value) => value,
-        Err(_) => u64::MAX,
-    }
+    u64::try_from(duration.as_nanos()).unwrap_or(u64::MAX)
 }
 
 #[cfg(feature = "otlp")]

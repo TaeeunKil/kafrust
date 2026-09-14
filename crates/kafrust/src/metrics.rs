@@ -115,7 +115,9 @@ impl ClientMetricsSnapshot {
         if sample_count == 0 {
             return None;
         }
-        let rank = ((u128::from(sample_count) * u128::from(percentile) + 99) / 100).max(1);
+        let rank = (u128::from(sample_count) * u128::from(percentile))
+            .div_ceil(100)
+            .max(1);
         let mut cumulative = 0_u128;
         for (index, count) in self.request_latency_buckets.iter().copied().enumerate() {
             cumulative += u128::from(count);

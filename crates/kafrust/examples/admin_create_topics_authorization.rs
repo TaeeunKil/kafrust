@@ -54,7 +54,7 @@ async fn main() -> kafrust::Result<()> {
             });
         }
         let deleted = admin
-            .delete_topics(&[topic.clone()], DeleteTopicsOptions::new())
+            .delete_topics(std::slice::from_ref(&topic), DeleteTopicsOptions::new())
             .await?;
         let delete_outcome = deleted
             .topics()
