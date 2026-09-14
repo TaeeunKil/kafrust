@@ -35,7 +35,7 @@ async fn main() -> kafrust::Result<()> {
     let query = [ConsumerGroupOffsetQuery::new(topic.clone(), [partition]).topic_id(topic_id)];
 
     let descriptions = admin
-        .describe_consumer_groups_modern(&[group_id.clone()], true)
+        .describe_consumer_groups_modern(std::slice::from_ref(&group_id), true)
         .await?;
     let description = descriptions.first().ok_or(Error::MissingGroupDescription {
         group_id: group_id.clone(),

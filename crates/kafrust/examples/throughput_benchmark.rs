@@ -227,7 +227,7 @@ impl CampaignMode {
 }
 
 enum CampaignProducer {
-    Immediate(Producer),
+    Immediate(Box<Producer>),
     Buffered(BufferedProducer),
 }
 
@@ -481,7 +481,7 @@ async fn run_campaign(
                 .max_batch_bytes(settings.max_batch_bytes)
                 .build()
                 .await?;
-                CampaignProducer::Immediate(producer)
+                CampaignProducer::Immediate(Box::new(producer))
             }
         };
         let mut consumer = common::apply_security(

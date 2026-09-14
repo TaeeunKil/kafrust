@@ -182,7 +182,7 @@ async fn main() -> kafrust::Result<()> {
     println!("incrementally altered retention.ms=120000 for topic {topic}");
 
     let delete_result = admin
-        .delete_topics(&[topic.clone()], DeleteTopicsOptions::new())
+        .delete_topics(std::slice::from_ref(&topic), DeleteTopicsOptions::new())
         .await?;
     for topic_result in delete_result.topics() {
         if !topic_result.is_success() {

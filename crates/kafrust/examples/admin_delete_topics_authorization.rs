@@ -16,7 +16,7 @@ async fn main() -> kafrust::Result<()> {
     let admin = AdminClient::new(config);
 
     let result = admin
-        .delete_topics(&[topic.clone()], DeleteTopicsOptions::new())
+        .delete_topics(std::slice::from_ref(&topic), DeleteTopicsOptions::new())
         .await?;
     let outcome = result
         .topics()

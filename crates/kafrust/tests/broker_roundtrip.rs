@@ -588,7 +588,7 @@ async fn share_consumer_roundtrip_when_broker_is_configured() {
                     .expect("valid share admin test configuration"),
             );
             let descriptions = admin
-                .describe_share_groups(&[group_id.clone()], true)
+                .describe_share_groups(std::slice::from_ref(&group_id), true)
                 .await
                 .expect("ShareGroupDescribe should inspect the active share group");
             assert_eq!(descriptions.len(), 1);

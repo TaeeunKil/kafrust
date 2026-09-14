@@ -69,7 +69,7 @@ async fn main() -> kafrust::Result<()> {
             });
         }
         admin
-            .delete_topics(&[topic.clone()], DeleteTopicsOptions::new())
+            .delete_topics(std::slice::from_ref(&topic), DeleteTopicsOptions::new())
             .await?;
         println!("AlterConfigs allowed for {topic}");
         return Ok(());
