@@ -139,6 +139,9 @@ The current support boundary is intentionally narrower than universal
 - Long fault/soak and performance gates are distinct from short smoke tests.
 - A named service canary, forward cutover, credential rotation, and rollback
   are required for the `1.0` program and are not implied by local tests.
+- Linux x86_64 is the primary live-broker target; Windows x86_64 and macOS are
+  build/test targets in CI, while ARM64 targets remain unclaimed. See
+  [Platform support](docs/platform-support.md).
 - No universal production-readiness, managed-service, or drop-in
   `rust-rdkafka` claim is made.
 

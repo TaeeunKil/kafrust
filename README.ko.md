@@ -137,6 +137,9 @@ consumer, group, transaction, buffering, Share, Streams, Admin API는
 - 장시간 fault/soak 및 성능 게이트는 짧은 smoke 테스트와 별개입니다.
 - `1.0` 프로그램에는 명명된 서비스 canary, forward cutover, credential
   rotation, rollback이 필요하며 로컬 테스트만으로 충족되지 않습니다.
+- Linux x86_64가 기본 실브로커 대상이며, Windows x86_64와 macOS는 CI에서
+  빌드·테스트 대상으로 확인합니다. ARM64 대상은 아직 주장하지 않습니다.
+  자세한 내용은 [플랫폼 지원 문서](docs/platform-support.md)를 확인하세요.
 - 범용 프로덕션 준비 완료, managed service 지원, `rust-rdkafka` drop-in
   호환을 주장하지 않습니다.
 

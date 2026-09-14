@@ -1,0 +1,52 @@
+name: Platform Compatibility
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  platform:
+    name: ${{ matrix.os }} / stable
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - windows-latest
+          - macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          components: clippy,rustfmt
+
+      - name: Record target
+        shell: bash
+        run: |
+          rustc -vV
+          echo "runner_os=${RUNNER_OS}"
+          echo "runner_arch=${RUNNER_ARCH}"
+
+      - name: Check formatting
+        run: cargo fmt --all --check
+
+      - name: Check build
+        run: cargo check --workspace --all-targets --all-features
+
+      - name: Run tests
+        run: cargo test --workspace --all-features
+
+      - name: Run clippy
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+      - name: Build documentation
+        run: cargo doc --workspace --all-features --no-deps

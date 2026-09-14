@@ -11,6 +11,7 @@ evidence easy to find.
 - [Roadmap](roadmap.md) — current sequencing and open work
 - [Pre-1.0 release track](milestones/pre-1.0/README.md) — scoped 0.x milestones
 - [Compatibility](compatibility.md) — broker, protocol, security, and runtime claims
+- [Platform support](platform-support.md) — OS/target build checks and qualification boundaries
 - [Release preparation](release.md) — version, publication, and release gates
 - [Migration from rust-rdkafka](migration-from-rust-rdkafka.md) — migration notes
 - [v1.0 milestone program](milestones/v1.0/README.md) — conditional 1.0 qualification gates and milestone status
