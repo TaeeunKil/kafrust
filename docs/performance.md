@@ -1,5 +1,45 @@
 # Performance Benchmarks
 
+## Native macOS Apple Silicon diagnostic
+
+The Linux/WSL launcher below remains the reference workstation campaign. For
+an Apple Silicon MacBook, use
+`scripts/run_local_lifetime_diagnostic_macos.py`. It is a bounded diagnostic,
+not a V1-21 or V1-22 qualification run, and it deliberately uses a one-gigabyte
+cap per broker by default so a host with 8 GiB of memory can run three brokers
+with less pressure on Docker Desktop.
+
+The repository and Cargo target may be on the internal disk, but the long-run
+output and Docker Desktop data must be on the external volume being guarded.
+Configure Docker Desktop's VM/data disk to that external volume before
+starting. The launcher requires at least the configured 100 GiB reserve plus
+the 20 GiB growth budget on both configured paths; it refuses to start when
+that capacity is not available. Keep the Mac awake for the duration.
+
+For a six-hour, low-rate native diagnostic:
+
+```sh
+export PATH="/Applications/Docker.app/Contents/Resources/bin:/Users/$USER/.cargo/bin:$PATH"
+export KAFRUST_LOCAL_CAPACITY_PATH=/Volumes/KafrustSSD
+export KAFRUST_LOCAL_DOCKER_DATA_PATH=/Volumes/KafrustSSD
+export KAFRUST_LOCAL_CARGO_TARGET_DIR=/Volumes/KafrustSSD/kafrust-cargo-target
+export KAFRUST_LOCAL_DURATION_SECONDS=21600
+export KAFRUST_LOCAL_RATE_RECORDS_PER_SECOND=25
+export KAFRUST_LOCAL_PAYLOAD_BYTES=64
+export KAFRUST_LOCAL_BROKER_MEMORY=1g
+
+python3 scripts/run_local_lifetime_diagnostic_macos.py --preflight
+python3 scripts/run_local_lifetime_diagnostic_macos.py
+```
+
+The native launcher uses stable Rust for the external helper build, performs a
+single-broker restart halfway through the run, reconciles record identities,
+and retains JSON results, disk checks, Docker memory samples, and a
+`qualified=false` descriptor under the external output directory. A 24-hour
+profile is possible at 25 records/s when the same 20 GiB growth budget and
+100 GiB reserve remain available. The macOS runner records Docker and disk
+metrics; Linux `/proc` helper-process metrics are intentionally not claimed.
+
 ## Workstation-sized long diagnostics
 
 Use `scripts/run_local_lifetime_diagnostic.sh` inside Linux/WSL for a
