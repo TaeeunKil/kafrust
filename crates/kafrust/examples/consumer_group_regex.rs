@@ -3,9 +3,10 @@ mod common;
 use std::collections::BTreeSet;
 use std::time::{Duration, Instant};
 
+use kafrust::protocol::api::metadata::MetadataResponseV1;
 use kafrust::{
-    AdminClient, ClientConfig, ConsumerGroupConfig, ConsumerGroupProtocol, CreateTopicsOptions,
-    Error, NewTopic, ProducerConfig, ProducerRecord,
+    AdminClient, BrokerErrorKind, ClientConfig, ConsumerGroupConfig, ConsumerGroupProtocol,
+    CreateTopicsOptions, Error, NewTopic, ProducerConfig, ProducerRecord,
 };
 
 #[tokio::main]
@@ -123,6 +124,7 @@ async fn main() -> kafrust::Result<()> {
                 });
             }
         }
+        wait_for_topic_partition_leader(&client_config, &dynamic_topic, 0).await?;
 
         let mut producer = ProducerConfig::new(bootstrap_servers.clone())
             .with_client_config(client_config.clone())
@@ -189,6 +191,92 @@ async fn main() -> kafrust::Result<()> {
     Ok(())
 }
 
+async fn wait_for_topic_partition_leader(
+    config: &ClientConfig,
+    topic: &str,
+    partition: i32,
+) -> kafrust::Result<()> {
+    let timeout = Duration::from_secs(30);
+    let deadline = Instant::now() + timeout;
+    loop {
+        let result = async {
+            let mut client = config.clone().connect().await?;
+            let metadata = client.metadata(Some(vec![topic.to_owned()])).await?;
+            topic_partition_has_leader(&metadata, topic, partition)
+        }
+        .await;
+
+        match result {
+            Ok(true) => return Ok(()),
+            Ok(false) => {}
+            Err(error) if is_retryable_topic_metadata_error(&error) => {}
+            Err(error) => return Err(error),
+        }
+
+        if Instant::now() >= deadline {
+            return Err(Error::RequestTimedOut {
+                timeout_ms: timeout.as_millis() as u64,
+            });
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+}
+
+fn topic_partition_has_leader(
+    metadata: &MetadataResponseV1,
+    topic: &str,
+    partition: i32,
+) -> kafrust::Result<bool> {
+    let Some(topic_metadata) = metadata
+        .topics
+        .iter()
+        .find(|metadata| metadata.name == topic)
+    else {
+        return Ok(false);
+    };
+    if topic_metadata.error_code != 0 {
+        return Err(Error::Broker {
+            code: topic_metadata.error_code,
+            context: format!("read metadata for dynamic regex topic {topic}"),
+        });
+    }
+
+    let Some(partition_metadata) = topic_metadata
+        .partitions
+        .iter()
+        .find(|metadata| metadata.partition_index == partition)
+    else {
+        return Ok(false);
+    };
+    if partition_metadata.error_code != 0 {
+        return Err(Error::Broker {
+            code: partition_metadata.error_code,
+            context: format!("read metadata for {topic}-{partition}"),
+        });
+    }
+
+    Ok(partition_metadata.leader_id >= 0)
+}
+
+fn is_retryable_topic_metadata_error(error: &Error) -> bool {
+    match error {
+        Error::Broker { code, .. } => matches!(
+            BrokerErrorKind::from_code(*code),
+            BrokerErrorKind::UnknownTopicOrPartition
+                | BrokerErrorKind::LeaderNotAvailable
+                | BrokerErrorKind::NotLeaderOrFollower
+                | BrokerErrorKind::RequestTimedOut
+                | BrokerErrorKind::ReplicaNotAvailable
+        ),
+        Error::Io(_)
+        | Error::RequestTimedOut { .. }
+        | Error::UnknownTopicOrPartition { .. }
+        | Error::MissingLeader { .. }
+        | Error::MissingBroker { .. } => true,
+        _ => false,
+    }
+}
+
 fn expected_topics_from_env() -> BTreeSet<String> {
     std::env::var("KAFRUST_REGEX_EXPECTED_TOPICS")
         .unwrap_or_default()
@@ -197,4 +285,40 @@ fn expected_topics_from_env() -> BTreeSet<String> {
         .filter(|topic| !topic.is_empty())
         .map(ToOwned::to_owned)
         .collect()
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::topic_partition_has_leader;
+    use kafrust::protocol::api::metadata::{MetadataResponseV1, PartitionMetadata, TopicMetadata};
+
+    fn metadata_with_partition_leader(leader_id: i32) -> MetadataResponseV1 {
+        MetadataResponseV1 {
+            brokers: Vec::new(),
+            controller_id: -1,
+            topics: vec![TopicMetadata {
+                error_code: 0,
+                name: "kafrust-regex-dynamic-test".to_owned(),
+                is_internal: false,
+                partitions: vec![PartitionMetadata {
+                    error_code: 0,
+                    partition_index: 0,
+                    leader_id,
+                    replica_nodes: vec![1],
+                    isr_nodes: vec![1],
+                }],
+            }],
+        }
+    }
+
+    #[test]
+    fn waits_until_partition_metadata_reports_a_leader() {
+        let topic = "kafrust-regex-dynamic-test";
+
+        assert!(
+            !topic_partition_has_leader(&metadata_with_partition_leader(-1), topic, 0).unwrap()
+        );
+        assert!(topic_partition_has_leader(&metadata_with_partition_leader(1), topic, 0).unwrap());
+    }
 }
