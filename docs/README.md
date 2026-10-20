@@ -40,6 +40,7 @@ evidence easy to find.
 - [Performance](performance.md) — benchmark method, profiles, and limits
 - [v1.0 qualification ledger](evidence/qualification-ledger.md) — gate-by-gate evidence index
 - [Evidence archive](evidence/README.md) — dated live runs, audits, manifests, and diagnostic records
+- [macOS ARM64 local validation (2026-09-15)](evidence/macos-arm64-local-validation-2026-09-15.md) — Apple Silicon workstation and Kafka smoke results
 - [Latest 0.6 recovery record](evidence/v1-0_6-published-operational-recovery-2026-09-10.md) — published-package group rejoin and broker-restart evidence
 - [Bounded workstation campaign](evidence/v1-local-bounded-followup-2026-09-08.md) — workstation diagnostic and explicit non-claims
 

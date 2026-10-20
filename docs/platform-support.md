@@ -13,7 +13,7 @@ SLO on that target.
 | Windows x86_64 | Local Rust 1.81 checks and the platform CI workflow | Local bounded smoke only | Development and bounded validation target |
 | macOS hosted target | The platform CI workflow records the runner target and runs the full feature test suite | No named live-broker or long-soak row | Build and test target; broker qualification remains open |
 | Linux ARM64 | No committed CI or live-broker row | None | Unclaimed |
-| macOS ARM64 | Only claimed when the recorded CI target is `aarch64-apple-darwin` | None | Build and test evidence required before claiming |
+| macOS ARM64 | Native stable checks plus the optional bounded macOS lifetime diagnostic | No named release live-broker or long-soak row | Build/test and diagnostic evidence only; broker qualification remains open |
 
 The repository has no client implementation that requires a Unix socket,
 Windows-only API, or native Kafka client binding. The main portability risks
@@ -33,6 +33,12 @@ This workflow intentionally does not start Docker, Kafka, fault injection, or
 long-running campaigns. Those tests require an isolated broker environment and
 their evidence remains tied to the broker, artifact, workload, and runner
 recorded by the corresponding compatibility or V1 milestone.
+
+The repository also contains a native Apple Silicon diagnostic launcher at
+`scripts/run_local_lifetime_diagnostic_macos.py`. It is intentionally separate
+from the Linux/WSL qualification-shaped launcher: Docker Desktop's data volume
+must be supplied explicitly, the default broker memory cap is 1 GiB per broker,
+and its descriptor remains `qualified=false`.
 
 ## Local checks
 
