@@ -45,6 +45,28 @@ published artifacts without workspace paths or patches:
 - [docs.rs `kafrust 0.5.0`](https://docs.rs/kafrust/0.5.0/kafrust/) and
   [docs.rs `kafrust-protocol 0.5.0`](https://docs.rs/kafrust-protocol/0.5.0/kafrust_protocol/)
   returned HTTP 200.
+- The post-publication main CI passed on Rust 1.87 and stable in
+  [run 39527701485](https://github.com/TaeeunKil/kafrust/actions/runs/39527701485);
+  Windows and macOS compatibility passed in
+  [run 39527701608](https://github.com/TaeeunKil/kafrust/actions/runs/39527701608).
 
-The published-crate smoke and live Kafka smoke runs will be recorded here
-after the post-publication workflows finish.
+## Post-publication live evidence
+
+All manually dispatched post-publication checks passed against the published
+`0.5.0` crates:
+
+- [Published Crate Smoke](https://github.com/TaeeunKil/kafrust/actions/runs/39527749223)
+  passed its full broker, TLS/SASL, and compression matrix.
+- [Published Share Group State Failover](https://github.com/TaeeunKil/kafrust/actions/runs/39527749339),
+  [Published Streams Group Runtime](https://github.com/TaeeunKil/kafrust/actions/runs/39527749286),
+  [Published ShareConsumer Runtime](https://github.com/TaeeunKil/kafrust/actions/runs/39527749614),
+  and [Published ShareConsumer Acknowledgement Soak](https://github.com/TaeeunKil/kafrust/actions/runs/39527748875)
+  passed. The acknowledgement soak ran 64 cycles.
+- [Live Kafka Streams Group](https://github.com/TaeeunKil/kafrust/actions/runs/39527749220),
+  [Live Kafka Streams Group Failover](https://github.com/TaeeunKil/kafrust/actions/runs/39527749251),
+  [Live Kafka Dynamic Quorum](https://github.com/TaeeunKil/kafrust/actions/runs/39527749354),
+  and [Live Kafka Smoke](https://github.com/TaeeunKil/kafrust/actions/runs/39527749134)
+  passed their complete matrices.
+
+The annotated [`v0.5.0` tag](https://github.com/TaeeunKil/kafrust/releases/tag/v0.5.0)
+and GitHub release point to source commit `88429143a772ab5d9eb23f2f906d17a4ac349c69`.
