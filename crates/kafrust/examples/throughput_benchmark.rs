@@ -1188,7 +1188,7 @@ fn median_u64(values: &[u64]) -> Option<u64> {
     let mut sorted = values.to_vec();
     sorted.sort_unstable();
     let middle = sorted.len() / 2;
-    if sorted.len() % 2 == 0 {
+    if sorted.len().is_multiple_of(2) {
         let lower = u128::from(sorted[middle - 1]);
         let upper = u128::from(sorted[middle]);
         Some(((lower + upper) / 2) as u64)
