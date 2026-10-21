@@ -38,6 +38,7 @@ NATIVE_CANDIDATES = {
     "zstd-sys",
 }
 PACKAGE_LINE = re.compile(r"^([A-Za-z0-9_-]+) v([0-9][^ ]*)")
+ANSI_ESCAPE = re.compile(r"\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 
 
 def fail(message: str) -> int:
@@ -46,10 +47,16 @@ def fail(message: str) -> int:
 
 
 def run(command: list[str], *, env: dict[str, str] | None = None) -> str:
+    environment = os.environ.copy()
+    if env is not None:
+        environment.update(env)
+    # Cargo output is parsed below, so keep it deterministic even in CI where
+    # CARGO_TERM_COLOR=always is commonly set by the runner.
+    environment.update({"CARGO_TERM_COLOR": "never", "NO_COLOR": "1"})
     result = subprocess.run(
         command,
         cwd=ROOT,
-        env=env,
+        env=environment,
         check=False,
         text=True,
         encoding="utf-8",
@@ -121,7 +128,7 @@ def tree_packages(features: tuple[str, ...], platform: str) -> dict[str, str]:
     )
     packages: dict[str, str] = {}
     for line in output.splitlines():
-        normalized = re.sub(r"^[^A-Za-z0-9]*", "", line)
+        normalized = re.sub(r"^[^A-Za-z0-9]*", "", ANSI_ESCAPE.sub("", line))
         match = PACKAGE_LINE.match(normalized)
         if match:
             packages[match.group(1)] = match.group(2)
