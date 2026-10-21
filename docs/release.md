@@ -16,6 +16,24 @@ Already-published `0.4.0` artifacts are unchanged. See
 upgrade note. The prior Rust 1.81 qualification records below remain historical
 evidence for the versions tested at that time.
 
+## 0.5.0 Security Release Candidate (2026-10-21)
+
+The prepared `0.5.0` pair contains the upstream `ruzstd 0.9.1` fix for
+RUSTSEC-2026-0344. A crafted compressed Kafka record could make `ruzstd 0.8.1`
+allocate several gigabytes before kafrust's output limit stopped decompression.
+The security fix is a user-visible package boundary. Its Rust 1.87 minimum is a
+compiler compatibility change from `0.4.0`, so the coordinated pre-1.0 minor
+version is `0.5.0`, not a patch release. No Kafka client API changes are
+included.
+
+The registry baseline remains `0.4.0` until the ordered protocol-first
+publication, fresh external resolution, and post-publish smoke checks complete.
+Do not update the published workflow defaults or
+[`published-baseline.json`](evidence/published-baseline.json) before then.
+The dated comparison and candidate gate are recorded in
+[`v1-23-published-competitor-comparison-2026-10-21.md`](evidence/v1-23-published-competitor-comparison-2026-10-21.md)
+and [`v1-20-candidate-0.5.0-boundary-2026-10-21.md`](evidence/v1-20-candidate-0.5.0-boundary-2026-10-21.md).
+
 kafrust publishes two crates:
 
 - `kafrust-protocol`: Kafka wire-format primitives and request/response types
@@ -52,6 +70,10 @@ independently consumable package boundary changed. Therefore it does not
 authorize a `0.6.0` upload, and the registry baseline remains `0.4.0`. The
 secure profile's reconciled unknown outcomes and the bounded workload are
 explicit limits; V1-21 high-load, V1-22 SLO, and the 1.0 gates remain open.
+
+This decision concerns only the earlier repository-level profile milestones.
+The separately prepared `0.5.0` security release above changes the published
+protocol crate and has its own ordered publication gate.
 
 ## 0.4.0 Scoped Release (2026-09-09)
 
@@ -169,6 +191,36 @@ This release is a scoped pre-1.0 boundary. It does not close the full V1-20
 compatibility matrix, V1-21 fault campaign, V1-22 performance SLO, V1-23
 service canary, V1-24 API freeze, or any `1.0.0` claim. The local low-rate
 workload is not evidence for the official high-load V1-21/V1-22 profiles.
+
+## 0.5.0 Security Release Notes
+
+The coordinated `kafrust-protocol` and `kafrust` packages use version
+`0.5.0`. This is a pre-1.0 minor release because it raises the compiler
+minimum from Rust 1.81 to Rust 1.87 to take the maintained upstream Zstandard
+security fix.
+
+### Security
+
+- Upgrade `ruzstd` from `0.8.1` to `0.9.1`, fixing
+  [RUSTSEC-2026-0344](https://github.com/RustSec/advisory-db/blob/main/crates/ruzstd/RUSTSEC-2026-0344.md).
+  Without the fix, a small crafted compressed frame could cause multi-gigabyte
+  allocation before kafrust's output limit rejected decompression.
+- Users processing untrusted Zstandard Kafka records should use this release.
+
+### Compatibility and limits
+
+- Rust 1.87 or newer is required. There is no safe Rust 1.81 workaround for
+  the affected `ruzstd 0.8.1` decoder.
+- No Kafka client API or configuration migration is required.
+- This release does not claim feature parity with `rust-rdkafka`, a complete
+  Kafka compatibility matrix, production SLO qualification, or `1.0.0` status.
+
+### Verification
+
+Record the exact registry checksums, publication order, fresh external build,
+docs.rs availability, and published smoke results in
+[`v1-20-published-0.5.0-boundary-2026-10-21.md`](evidence/v1-20-published-0.5.0-boundary-2026-10-21.md)
+after the publication gate succeeds.
 
 ## 0.3.6 Release Notes
 
