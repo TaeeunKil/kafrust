@@ -15,6 +15,13 @@ promise that every Kafka API is stable at the high-level client boundary.
 
 ## Planning Baseline
 
+### Current MSRV Policy (2026-10-21)
+
+The current source support floor is Rust 1.87, raised from Rust 1.81 to adopt
+the fixed `ruzstd 0.9.1` decoder for RUSTSEC-2026-0344. Older milestone and
+qualification records retain their original Rust 1.81 results as historical
+evidence; future package and release gates use Rust 1.87 and stable.
+
 The dated baseline and known contradictions are recorded in
 [Planning Baseline](baseline.md). The important current facts are:
 

@@ -768,7 +768,7 @@ impl ShareConsumer {
     pub fn heartbeat_task_is_finished(&self) -> bool {
         self.heartbeat_task
             .as_ref()
-            .map_or(true, ShareConsumerHeartbeat::is_finished)
+            .is_none_or(ShareConsumerHeartbeat::is_finished)
     }
 
     /// Checks the detached heartbeat task without requesting shutdown.

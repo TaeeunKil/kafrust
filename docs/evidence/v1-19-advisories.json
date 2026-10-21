@@ -10,19 +10,19 @@
     "the offline CI check does not query OSV or crates.io",
     "unreviewed low/moderate or informational advisories still require owner review before stable release"
   ],
-  "observed_at_utc": "2026-09-04T06:15:26Z",
+  "observed_at_utc": "2026-10-21T00:05:20Z",
   "packages": [
     {
       "advisories": [],
       "name": "kafrust",
       "source_kind": "workspace",
-      "version": "0.3.6"
+      "version": "0.4.0"
     },
     {
       "advisories": [],
       "name": "kafrust-protocol",
       "source_kind": "workspace",
-      "version": "0.3.6"
+      "version": "0.4.0"
     },
     {
       "advisories": [],
@@ -52,7 +52,7 @@
       "advisories": [],
       "name": "bitflags",
       "source_kind": "registry",
-      "version": "2.13.1"
+      "version": "2.13.2"
     },
     {
       "advisories": [],
@@ -76,13 +76,13 @@
       "advisories": [],
       "name": "cc",
       "source_kind": "registry",
-      "version": "1.4.4"
+      "version": "1.9.0"
     },
     {
       "advisories": [],
       "name": "cfg-if",
       "source_kind": "registry",
-      "version": "1.0.4"
+      "version": "1.0.5"
     },
     {
       "advisories": [],
@@ -94,7 +94,7 @@
       "advisories": [],
       "name": "crc32fast",
       "source_kind": "registry",
-      "version": "1.5.1"
+      "version": "1.5.2"
     },
     {
       "advisories": [],
@@ -124,13 +124,13 @@
       "advisories": [],
       "name": "either",
       "source_kind": "registry",
-      "version": "1.18.0"
+      "version": "1.19.0"
     },
     {
       "advisories": [],
       "name": "find-msvc-tools",
       "source_kind": "registry",
-      "version": "0.1.11"
+      "version": "0.1.15"
     },
     {
       "advisories": [],
@@ -208,7 +208,7 @@
       "advisories": [],
       "name": "libc",
       "source_kind": "registry",
-      "version": "0.2.189"
+      "version": "0.2.191"
     },
     {
       "advisories": [],
@@ -238,7 +238,7 @@
       "advisories": [],
       "name": "mio",
       "source_kind": "registry",
-      "version": "1.2.3"
+      "version": "1.2.4"
     },
     {
       "advisories": [],
@@ -358,7 +358,7 @@
       "advisories": [],
       "name": "rustls-native-certs",
       "source_kind": "registry",
-      "version": "0.8.4"
+      "version": "0.8.5"
     },
     {
       "advisories": [],
@@ -376,19 +376,19 @@
       "advisories": [],
       "name": "rustls-webpki",
       "source_kind": "registry",
-      "version": "0.103.15"
+      "version": "0.103.16"
     },
     {
       "advisories": [],
       "name": "rustls",
       "source_kind": "registry",
-      "version": "0.23.43"
+      "version": "0.23.46"
     },
     {
       "advisories": [],
       "name": "ruzstd",
       "source_kind": "registry",
-      "version": "0.8.1"
+      "version": "0.9.1"
     },
     {
       "advisories": [],
@@ -442,7 +442,7 @@
       "advisories": [],
       "name": "syn",
       "source_kind": "registry",
-      "version": "3.0.4"
+      "version": "3.0.9"
     },
     {
       "advisories": [],
@@ -454,7 +454,7 @@
       "advisories": [],
       "name": "thiserror-impl",
       "source_kind": "registry",
-      "version": "2.0.20"
+      "version": "2.0.21"
     },
     {
       "advisories": [],
@@ -466,7 +466,7 @@
       "advisories": [],
       "name": "thiserror",
       "source_kind": "registry",
-      "version": "2.0.20"
+      "version": "2.0.21"
     },
     {
       "advisories": [],
@@ -484,7 +484,7 @@
       "advisories": [],
       "name": "tokio",
       "source_kind": "registry",
-      "version": "1.53.1"
+      "version": "1.53.3"
     },
     {
       "advisories": [],
@@ -520,7 +520,7 @@
       "advisories": [],
       "name": "unicode-ident",
       "source_kind": "registry",
-      "version": "1.0.24"
+      "version": "1.0.27"
     },
     {
       "advisories": [],
@@ -538,7 +538,7 @@
       "advisories": [],
       "name": "zerocopy",
       "source_kind": "registry",
-      "version": "0.8.56"
+      "version": "0.8.63"
     },
     {
       "advisories": [],
@@ -549,7 +549,7 @@
   ],
   "platform": "x86_64-unknown-linux-gnu",
   "rustsec_repository": "https://github.com/RustSec/advisory-db",
-  "rustsec_revision": "bf5c0d245a92671908518d7e765914d437954ed6",
+  "rustsec_revision": "e6f94f3760d5e6c54c1b05f204002263bc025524",
   "schema_version": 1,
   "source": "OSV querybatch (RustSec advisory export)",
   "summary": {

@@ -40,7 +40,7 @@ matrix checks, and state the stable support contract without overstating it.
    feature x toolchain row against the actual stable tarballs and regenerate
    the required SBOMs from those artifacts.
 3. Publish protocol first, wait for registry resolution, verify client package
-   against it in fresh Rust 1.81/stable external projects, run client `cargo
+   against it in fresh Rust 1.87/stable external projects, run client `cargo
    publish --dry-run`, then publish client.
 4. Verify exact crates.io metadata, docs.rs pages, package checksums/contents,
    fresh external feature projects, and critical floor/current workloads.
@@ -58,7 +58,7 @@ matrix checks, and state the stable support contract without overstating it.
 V1-26 remains `Planned`. The repository still has no `1.0.0` tag, GitHub
 release, or stable registry publication. The only authorized future path is a
 metadata-only change from an accepted RC, protocol-first publication, fresh
-Rust 1.81/stable external resolution, docs.rs and critical smoke verification,
+Rust 1.87/stable external resolution, docs.rs and critical smoke verification,
 then the named post-publish canary and rollback. Earlier `0.3.5` evidence is
 retained as historical context and cannot close this release gate.
 
@@ -91,7 +91,7 @@ The preparation checker does not publish, tag, or mark the release complete.
 - Every required validation and package isolation gate passes on release SHA.
 - Every V1-19 OS/target x feature x toolchain row passes from the actual stable
   tarballs, and the required SBOMs match their package/dependency digests.
-- Fresh external Rust 1.81/stable projects resolve exact final versions,
+- Fresh external Rust 1.87/stable projects resolve exact final versions,
   including `kafrust 1.0.0` and the protocol version selected by V1-24, for all
   accepted feature profiles with no path/patch dependency.
 - Critical published floor/current core/security/group/transaction/Share rows

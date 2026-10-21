@@ -6,6 +6,6 @@ publish = false
 
 [dependencies]
 kafrust = { version = "__KAFRUST_VERSION__", features = [] }
-tokio = { version = ">=1.0.0, <1.54.0", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

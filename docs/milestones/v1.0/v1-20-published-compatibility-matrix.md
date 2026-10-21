@@ -1,5 +1,9 @@
 # V1-20 Published Compatibility Matrix
 
+> Policy update (2026-10-21): future V1-20 package rows now use Rust 1.87 and
+> stable. The Rust 1.81 records below describe artifacts and runs completed
+> before the `ruzstd 0.9.1` security fix raised the current source MSRV.
+
 - Status: In progress
 - Target evidence: Published artifact
 - Dependencies: V1-03-V1-19
@@ -25,7 +29,7 @@ path dependency.
 - `.github/workflows/live-*.yml`, `published-*.yml`, external fixture projects,
   Docker/Kafka configuration, release/package scripts, and artifact retention
 - current-source, packaged-candidate, and published-artifact rows kept separate
-- stable and Rust 1.81 toolchains; default, `tls`, `blocking`, `otlp`, and
+- stable and Rust 1.87 toolchains; default, `tls`, `blocking`, `otlp`, and
   all-feature package profiles
 
 Minimum matrix unless V1-01 changes it:
@@ -51,7 +55,7 @@ Minimum matrix unless V1-01 changes it:
    the feature/toolchain combination it claims to execute.
 4. After explicit authorization, publish the protocol candidate first. Wait
    until a fresh external project can fetch and build that exact registry
-   version on Rust 1.81 and stable; then package and run `cargo publish
+   version on Rust 1.87 and stable; then package and run `cargo publish
    --dry-run` for the client against the registry protocol before publishing
    the client.
 5. Create fresh external projects per feature/workload family, assert exact

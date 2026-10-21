@@ -72,7 +72,7 @@ def main() -> int:
     required_profiles = {"default", "tls", "blocking", "otlp", "all-features"}
     if not isinstance(profiles, list) or {profile.get("id") for profile in profiles} != required_profiles:
         return fail("feature profiles must cover default, tls, blocking, otlp, and all-features")
-    if manifest.get("toolchains") != ["1.81.0", "stable"]:
+    if manifest.get("toolchains") != ["1.87.0", "stable"]:
         return fail("MSRV/stable toolchain order must remain explicit")
     policy = manifest.get("protocol_policy", {})
     if policy.get("protocol_first") is not True or policy.get("rc_client_exact_protocol_prerelease") is not True:
@@ -88,7 +88,7 @@ def main() -> int:
         "public-surface-feature-profiles",
         "migration-notes-from-0.3.5",
         "exact-protocol-rc-lockfile",
-        "rust-1.81-and-stable-package-build",
+        "rust-1.87-and-stable-package-build",
         "rustdoc-warning-free",
     }
     if set(manifest.get("required_gates", ())) != required_gates:

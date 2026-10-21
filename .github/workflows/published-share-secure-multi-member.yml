@@ -20,7 +20,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  RUSTUP_TOOLCHAIN: "1.81.0"
+  RUSTUP_TOOLCHAIN: "1.87.0"
   KAFRUST_BOOTSTRAP_SERVERS: localhost:24092,localhost:24093,localhost:24094
   KAFRUST_SHARE_TOPIC: kafrust-published-share-secure-members-${{ github.run_id }}
   KAFRUST_SHARE_GROUP_ID: kafrust-published-share-secure-members-group-${{ github.run_id }}
@@ -41,7 +41,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: "1.81.0"
+          toolchain: "1.87.0"
 
       - name: Generate TLS certificates
         run: |

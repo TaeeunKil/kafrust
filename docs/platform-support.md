@@ -9,8 +9,8 @@ SLO on that target.
 
 | Target | Build and test | Live Kafka evidence | Position |
 | --- | --- | --- | --- |
-| Linux x86_64 | Rust 1.81 and stable CI | Named Kafka 3.7.2 and 4.3.1 profiles | Primary qualified target |
-| Windows x86_64 | Local Rust 1.81 checks and the platform CI workflow | Local bounded smoke only | Development and bounded validation target |
+| Linux x86_64 | Rust 1.87 and stable CI | Named Kafka 3.7.2 and 4.3.1 profiles | Primary qualified target |
+| Windows x86_64 | Local Rust 1.87 checks and the platform CI workflow | Local bounded smoke only | Development and bounded validation target |
 | macOS hosted target | The platform CI workflow records the runner target and runs the full feature test suite | No named live-broker or long-soak row | Build and test target; broker qualification remains open |
 | Linux ARM64 | No committed CI or live-broker row | None | Unclaimed |
 | macOS ARM64 | Native stable checks plus the optional bounded macOS lifetime diagnostic | No named release live-broker or long-soak row | Build/test and diagnostic evidence only; broker qualification remains open |
@@ -27,7 +27,7 @@ target rather than inferred from the default build.
 `macos-latest` for every push and pull request. It records `rustc -vV` and the
 runner architecture, then runs formatting, all-target/all-feature checking,
 the workspace test suite, Clippy, and rustdoc. Linux remains covered by the
-main CI workflow on Rust 1.81 and stable.
+main CI workflow on Rust 1.87 and stable.
 
 This workflow intentionally does not start Docker, Kafka, fault injection, or
 long-running campaigns. Those tests require an isolated broker environment and

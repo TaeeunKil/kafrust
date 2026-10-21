@@ -22,7 +22,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: "1.81.0"
+          toolchain: "1.87.0"
 
       - name: Build Kafka telemetry test image
         run: docker build -t kafrust-kafka-telemetry scripts/kafka-client-telemetry-plugin

@@ -26,7 +26,7 @@ and migration have been proven by the same candidate line.
   result/partial-result shapes, traits/callbacks, async/blocking behavior,
   clone/send/sync/drop semantics, and non-exhaustive policy
 - `kafrust::protocol` and `kafrust-protocol` version/compatibility policy
-- Rust 1.81 MSRV, stable support, feature additive behavior, release cadence,
+- Rust 1.87 MSRV, stable support, feature additive behavior, release cadence,
   deprecation and minimum migration window
 - public compile tests, semver/API-diff tooling, README/API stability/public API
   audit/migration/release docs
@@ -82,7 +82,7 @@ does not close V1-24's semver, migration, or release exit criteria.
 - Generated API snapshot accounts for 100% of default/feature exports.
 - Semver/API diff is reviewed against `0.3.5` migration notes and then locked as
   the `1.0.0-rc.1` baseline.
-- Public surface/reference service compiles on Rust 1.81 and stable for default,
+- Public surface/reference service compiles on Rust 1.87 and stable for default,
   `tls`, `blocking`, `otlp`, and all features from staged packages.
 - An external lockfile proves that each client RC resolves only its exact
   protocol RC; stable dependency-range behavior matches the separately accepted

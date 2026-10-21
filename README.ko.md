@@ -58,7 +58,9 @@ cargo add kafrust@0.4.0
 
 필요 환경:
 
-- Rust `1.81` 이상
+- Rust `1.87` 이상. 수정된 Zstandard 디코더를 사용하기 위해 현재 소스의
+  MSRV가 기존 1.81에서 올라갔습니다. [마이그레이션 안내](docs/migration-from-rust-1.81.md)를
+  참고하세요.
 - 비동기 API용 Tokio 런타임
 - 런타임 호출을 수행할 Kafka 브로커
 - 소유 런타임 동기 어댑터에는 선택 `blocking` 기능

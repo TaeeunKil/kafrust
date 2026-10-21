@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import re
 import subprocess
 import sys
 import urllib.request
@@ -27,8 +28,11 @@ DEFAULT_OUTPUT = ROOT / "docs" / "evidence" / "v1-19-advisories.json"
 GENERATOR = "scripts/check_v1_advisories.py"
 OSV_ENDPOINT = "https://api.osv.dev/v1/querybatch"
 RUSTSEC_REPOSITORY = "https://github.com/RustSec/advisory-db"
-RUSTSEC_REVISION = "bf5c0d245a92671908518d7e765914d437954ed6"
+RUSTSEC_REVISION = "e6f94f3760d5e6c54c1b05f204002263bc025524"
 DEFAULT_MAX_AGE_DAYS = 30
+# Version floors for advisories that must remain fixed even when CI allows
+# ordinary transitive version drift in the offline snapshot check.
+MINIMUM_FIXED_VERSIONS: dict[str, tuple[int, int, int]] = {"ruzstd": (0, 9, 1)}
 
 
 def fail(message: str) -> int:
@@ -60,6 +64,22 @@ def advisory_severity(vulnerability: dict[str, Any]) -> str | None:
     for level in ("CRITICAL", "HIGH", "MODERATE", "MEDIUM", "LOW"):
         if level in normalized:
             return level
+    return None
+
+
+def minimum_fixed_version_violation(packages: list[dict[str, str]]) -> str | None:
+    for package in packages:
+        minimum = MINIMUM_FIXED_VERSIONS.get(package["name"])
+        if minimum is None:
+            continue
+        version = package["version"]
+        match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", version)
+        if match is None:
+            return f"{package['name']} version {version!r} is not a stable semantic version"
+        resolved = tuple(int(component) for component in match.groups())
+        if resolved < minimum:
+            minimum_text = ".".join(str(component) for component in minimum)
+            return f"{package['name']} {version} is below the security fix floor {minimum_text}"
     return None
 
 
@@ -183,6 +203,9 @@ def main() -> int:
         if args.check:
             expected = json.loads(args.output.read_text(encoding="utf-8"))
             current_rows = inventory(metadata)
+            version_violation = minimum_fixed_version_violation(current_rows)
+            if version_violation is not None:
+                return fail(version_violation)
             current_inventory = {tuple(item.values()) for item in current_rows}
             expected_inventory = {
                 (item.get("name"), item.get("version"), item.get("source_kind"))

@@ -38,7 +38,7 @@
       "risk_disposition": "accepted for the 0.3.6 pre-1.0 candidate only; not a 1.0.0 safety certification",
       "source_kind": "registry",
       "unsafe_constructs": 2,
-      "version": "2.13.1"
+      "version": "2.13.2"
     },
     {
       "classification": "upstream-unsafe-implementation",
@@ -89,8 +89,8 @@
       "review_action": "retain as an upstream transitive implementation boundary; recheck advisory, source, and package drift on every update",
       "risk_disposition": "accepted for the 0.3.6 pre-1.0 candidate only; not a 1.0.0 safety certification",
       "source_kind": "registry",
-      "unsafe_constructs": 18,
-      "version": "1.4.4"
+      "unsafe_constructs": 35,
+      "version": "1.9.0"
     },
     {
       "classification": "upstream-unsafe-implementation",
@@ -115,8 +115,8 @@
       "review_action": "retain only as an upstream build/code-generation boundary; recheck generated output and no-C default posture on every update",
       "risk_disposition": "accepted for the 0.3.6 pre-1.0 candidate only; not a 1.0.0 safety certification",
       "source_kind": "registry",
-      "unsafe_constructs": 6,
-      "version": "1.5.0"
+      "unsafe_constructs": 15,
+      "version": "1.5.2"
     },
     {
       "classification": "upstream-unsafe-implementation",
@@ -129,7 +129,7 @@
       "risk_disposition": "accepted for the 0.3.6 pre-1.0 candidate only; not a 1.0.0 safety certification",
       "source_kind": "registry",
       "unsafe_constructs": 2,
-      "version": "1.18.0"
+      "version": "1.19.0"
     },
     {
       "classification": "upstream-unsafe-implementation",
@@ -142,7 +142,7 @@
       "risk_disposition": "accepted for the 0.3.6 pre-1.0 candidate only; not a 1.0.0 safety certification",
       "source_kind": "registry",
       "unsafe_constructs": 55,
-      "version": "0.1.11"
+      "version": "0.1.15"
     },
     {
       "classification": "upstream-unsafe-implementation",
@@ -297,8 +297,8 @@
       "review_action": "retain only in the documented feature/target path; recheck parent graph, toolchain, and platform behavior on every update",
       "risk_disposition": "accepted for the 0.3.6 pre-1.0 candidate only; not a 1.0.0 safety certification",
       "source_kind": "registry",
-      "unsafe_constructs": 671,
-      "version": "0.2.189"
+      "unsafe_constructs": 795,
+      "version": "0.2.191"
     },
     {
       "classification": "upstream-unsafe-implementation",
@@ -311,7 +311,7 @@
       "risk_disposition": "accepted for the 0.3.6 pre-1.0 candidate only; not a 1.0.0 safety certification",
       "source_kind": "registry",
       "unsafe_constructs": 6,
-      "version": "0.4.33"
+      "version": "0.4.34"
     },
     {
       "classification": "upstream-unsafe-implementation",
@@ -350,7 +350,7 @@
       "risk_disposition": "accepted for the 0.3.6 pre-1.0 candidate only; not a 1.0.0 safety certification",
       "source_kind": "registry",
       "unsafe_constructs": 165,
-      "version": "1.2.2"
+      "version": "1.2.4"
     },
     {
       "classification": "upstream-unsafe-implementation",
@@ -454,7 +454,7 @@
       "risk_disposition": "accepted for the 0.3.6 pre-1.0 candidate only; not a 1.0.0 safety certification",
       "source_kind": "registry",
       "unsafe_constructs": 14,
-      "version": "0.8.7"
+      "version": "0.8.8"
     },
     {
       "classification": "upstream-unsafe-implementation",
@@ -558,7 +558,7 @@
       "risk_disposition": "accepted for the 0.3.6 pre-1.0 candidate only; not a 1.0.0 safety certification",
       "source_kind": "registry",
       "unsafe_constructs": 0,
-      "version": "0.23.43"
+      "version": "0.23.46"
     },
     {
       "classification": "upstream-unsafe-implementation",
@@ -570,8 +570,8 @@
       "review_action": "retain as an upstream transitive implementation boundary; recheck advisory, source, and package drift on every update",
       "risk_disposition": "accepted for the 0.3.6 pre-1.0 candidate only; not a 1.0.0 safety certification",
       "source_kind": "registry",
-      "unsafe_constructs": 35,
-      "version": "0.8.1"
+      "unsafe_constructs": 39,
+      "version": "0.9.1"
     },
     {
       "classification": "upstream-unsafe-implementation",
@@ -688,7 +688,7 @@
       "risk_disposition": "accepted for the 0.3.6 pre-1.0 candidate only; not a 1.0.0 safety certification",
       "source_kind": "registry",
       "unsafe_constructs": 44,
-      "version": "3.0.3"
+      "version": "3.0.9"
     },
     {
       "classification": "build-script-or-codegen",
@@ -714,7 +714,7 @@
       "risk_disposition": "accepted for the 0.3.6 pre-1.0 candidate only; not a 1.0.0 safety certification",
       "source_kind": "registry",
       "unsafe_constructs": 0,
-      "version": "2.0.20"
+      "version": "2.0.21"
     },
     {
       "classification": "upstream-unsafe-implementation",
@@ -726,8 +726,8 @@
       "review_action": "retain as an upstream transitive implementation boundary; recheck advisory, source, and package drift on every update",
       "risk_disposition": "accepted for the 0.3.6 pre-1.0 candidate only; not a 1.0.0 safety certification",
       "source_kind": "registry",
-      "unsafe_constructs": 1055,
-      "version": "1.53.1"
+      "unsafe_constructs": 1077,
+      "version": "1.53.3"
     },
     {
       "classification": "upstream-unsafe-implementation",
@@ -779,7 +779,7 @@
       "risk_disposition": "accepted for the 0.3.6 pre-1.0 candidate only; not a 1.0.0 safety certification",
       "source_kind": "registry",
       "unsafe_constructs": 2,
-      "version": "1.0.24"
+      "version": "1.0.27"
     },
     {
       "classification": "build-script-or-codegen",
@@ -791,8 +791,8 @@
       "review_action": "retain only as an upstream build/code-generation boundary; recheck generated output and no-C default posture on every update",
       "risk_disposition": "accepted for the 0.3.6 pre-1.0 candidate only; not a 1.0.0 safety certification",
       "source_kind": "registry",
-      "unsafe_constructs": 498,
-      "version": "0.8.56"
+      "unsafe_constructs": 502,
+      "version": "0.8.63"
     },
     {
       "classification": "upstream-unsafe-implementation",

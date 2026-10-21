@@ -1,5 +1,21 @@
 # Release Preparation
 
+## Current Source Support Update (2026-10-21)
+
+The current source MSRV is Rust 1.87. `kafrust-protocol` now uses `ruzstd
+0.9.1`, which fixes RustSec advisory RUSTSEC-2026-0344 in Zstandard block
+decompression and requires Rust 1.87. The previous `ruzstd 0.8.1` could allocate
+several gigabytes while processing a small crafted frame before kafrust's
+outer output limit could stop it. The maintained upstream fix is used instead
+of carrying a local fork of security-sensitive decompression code.
+
+This is a source compatibility change for the next release: Rust 1.81 users
+must upgrade their compiler to 1.87 or newer before adopting that release.
+Already-published `0.4.0` artifacts are unchanged. See
+[`migration-from-rust-1.81.md`](migration-from-rust-1.81.md) for the user-facing
+upgrade note. The prior Rust 1.81 qualification records below remain historical
+evidence for the versions tested at that time.
+
 kafrust publishes two crates:
 
 - `kafrust-protocol`: Kafka wire-format primitives and request/response types
@@ -358,7 +374,7 @@ cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo doc --workspace --all-features --no-deps
 ```
 
-The same validation runs on both the Rust 1.81 MSRV job and stable in the
+The same validation runs on both the Rust 1.87 MSRV job and stable in the
 main CI workflow. Feature-specific broker smoke tests remain separate because
 they require a running Kafka deployment.
 
@@ -1311,12 +1327,11 @@ order:
 
 2. Wait for the index, then prove the exact protocol version resolves from a
    fresh external project with no path/patch override. Use both supported
-   toolchains; `cargo info` is unavailable on pinned Cargo 1.81 and is not
-   release evidence:
+   toolchains:
 
    ```sh
-   rustup run 1.81.0 cargo fetch --manifest-path <external-project>/Cargo.toml
-   rustup run 1.81.0 cargo check --manifest-path <external-project>/Cargo.toml --locked
+   rustup run 1.87.0 cargo fetch --manifest-path <external-project>/Cargo.toml
+   rustup run 1.87.0 cargo check --manifest-path <external-project>/Cargo.toml --locked
    cargo +stable check --manifest-path <external-project>/Cargo.toml --locked
    ```
 

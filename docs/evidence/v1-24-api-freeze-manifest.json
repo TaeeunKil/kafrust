@@ -26,7 +26,7 @@
     {"id": "otlp", "features": ["otlp"]},
     {"id": "all-features", "features": ["all-features"]}
   ],
-  "toolchains": ["1.81.0", "stable"],
+  "toolchains": ["1.87.0", "stable"],
   "protocol_policy": {
     "protocol_first": true,
     "rc_client_exact_protocol_prerelease": true,
@@ -40,7 +40,7 @@
     "public-surface-feature-profiles",
     "migration-notes-from-0.3.5",
     "exact-protocol-rc-lockfile",
-    "rust-1.81-and-stable-package-build",
+    "rust-1.87-and-stable-package-build",
     "rustdoc-warning-free"
   ],
   "non_claims": [

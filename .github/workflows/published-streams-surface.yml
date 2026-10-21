@@ -20,7 +20,7 @@ jobs:
       matrix:
         toolchain:
           - stable
-          - "1.81.0"
+          - "1.87.0"
 
     steps:
       - name: Checkout

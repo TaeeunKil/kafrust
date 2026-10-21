@@ -59,7 +59,8 @@ cargo add kafrust@0.4.0
 
 Requirements:
 
-- Rust `1.81` or newer.
+- Rust `1.87` or newer. The current source raises the former Rust 1.81 MSRV
+  to use the fixed Zstandard decoder; see the [migration note](docs/migration-from-rust-1.81.md).
 - A Tokio runtime for async APIs.
 - A Kafka broker for runtime calls.
 - The optional `blocking` feature for the owned-runtime synchronous adapters.

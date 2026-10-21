@@ -3600,9 +3600,9 @@ fn balance_owned_assignments(
                 if target_count + 1 >= source_count {
                     continue;
                 }
-                let should_replace = candidate.as_ref().map_or(true, |(_, _, _, current_count)| {
-                    target_count < *current_count
-                });
+                let should_replace = candidate
+                    .as_ref()
+                    .is_none_or(|(_, _, _, current_count)| target_count < *current_count);
                 if should_replace {
                     candidate = Some((
                         partition.0.clone(),

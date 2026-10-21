@@ -14,6 +14,7 @@ evidence easy to find.
 - [Platform support](platform-support.md) — OS/target build checks and qualification boundaries
 - [Release preparation](release.md) — version, publication, and release gates
 - [Migration from rust-rdkafka](migration-from-rust-rdkafka.md) — migration notes
+- [Rust 1.81 to 1.87 migration](migration-from-rust-1.81.md) — security-driven MSRV change
 - [v1.0 milestone program](milestones/v1.0/README.md) — conditional 1.0 qualification gates and milestone status
 
 ## Strategy and comparison

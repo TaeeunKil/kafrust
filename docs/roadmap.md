@@ -1,5 +1,10 @@
 # Roadmap
 
+> Current support policy (2026-10-21): source and future package gates require
+> Rust 1.87 or newer after the security fix to the pure-Rust Zstandard
+> decoder. Earlier Rust 1.81 entries below record the toolchain used at the
+> time and remain historical evidence.
+
 kafrust milestones are ordered by implementation risk and user-visible value. The project should keep Kafka concepts familiar to existing Kafka users while building a native Rust implementation underneath.
 
 See [Project Strategy](project-strategy.md) for the replacement target, non-goals, existing alternatives, completion tiers, and the rationale for building a pure Rust client instead of wrapping librdkafka.

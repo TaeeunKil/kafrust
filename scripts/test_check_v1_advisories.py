@@ -33,6 +33,15 @@ class AdvisoryTests(unittest.TestCase):
         now = datetime(2026, 8, 23, tzinfo=timezone.utc)
         self.assertEqual(MODULE.age_days(observed, now), 3)
 
+    def test_fixed_version_floor_rejects_vulnerable_ruzstd(self):
+        self.assertIn(
+            "below the security fix floor 0.9.1",
+            MODULE.minimum_fixed_version_violation([{"name": "ruzstd", "version": "0.8.1"}]),
+        )
+        self.assertIsNone(
+            MODULE.minimum_fixed_version_violation([{"name": "ruzstd", "version": "0.9.1"}])
+        )
+
     def test_comparable_ignores_timestamp_and_advisory_details(self):
         base = {
             "schema_version": 1,

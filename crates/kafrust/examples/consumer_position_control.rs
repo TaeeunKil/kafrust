@@ -31,9 +31,9 @@ async fn main() -> kafrust::Result<()> {
     consumer.resume(&topic, 0)?;
     let direct_records = consumer.poll().await?;
     if direct_records.is_empty()
-        || !consumer
+        || consumer
             .position(&topic, 0)
-            .is_some_and(|offset| offset > 0)
+            .is_none_or(|offset| offset <= 0)
     {
         return Err(Error::Unsupported(
             "resumed direct consumer did not advance position",
@@ -74,9 +74,9 @@ async fn main() -> kafrust::Result<()> {
     }
     let group_records = group.poll().await?;
     if group_records.is_empty()
-        || !group
+        || group
             .position(assigned_topic, *partition)
-            .is_some_and(|offset| offset > 0)
+            .is_none_or(|offset| offset <= 0)
     {
         return Err(Error::Unsupported(
             "resumed consumer group did not advance position",

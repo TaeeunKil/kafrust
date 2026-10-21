@@ -186,7 +186,7 @@
       "version": "1.12.1"
     },
     {
-      "bom-ref": "pkg:cargo/cc@1.4.5",
+      "bom-ref": "pkg:cargo/cc@1.9.0",
       "licenses": [
         {
           "expression": "MIT OR Apache-2.0"
@@ -200,16 +200,16 @@
         },
         {
           "name": "kafrust:package-id",
-          "value": "registry+https://github.com/rust-lang/crates.io-index#cc@1.4.5"
+          "value": "registry+https://github.com/rust-lang/crates.io-index#cc@1.9.0"
         }
       ],
-      "purl": "pkg:cargo/cc@1.4.5",
+      "purl": "pkg:cargo/cc@1.9.0",
       "scope": "required",
       "type": "library",
-      "version": "1.4.5"
+      "version": "1.9.0"
     },
     {
-      "bom-ref": "pkg:cargo/cfg-if@1.0.4",
+      "bom-ref": "pkg:cargo/cfg-if@1.0.5",
       "licenses": [
         {
           "expression": "MIT OR Apache-2.0"
@@ -223,13 +223,13 @@
         },
         {
           "name": "kafrust:package-id",
-          "value": "registry+https://github.com/rust-lang/crates.io-index#cfg-if@1.0.4"
+          "value": "registry+https://github.com/rust-lang/crates.io-index#cfg-if@1.0.5"
         }
       ],
-      "purl": "pkg:cargo/cfg-if@1.0.4",
+      "purl": "pkg:cargo/cfg-if@1.0.5",
       "scope": "required",
       "type": "library",
-      "version": "1.0.4"
+      "version": "1.0.5"
     },
     {
       "bom-ref": "pkg:cargo/cpufeatures@0.2.17",
@@ -255,7 +255,7 @@
       "version": "0.2.17"
     },
     {
-      "bom-ref": "pkg:cargo/crc32fast@1.5.1",
+      "bom-ref": "pkg:cargo/crc32fast@1.5.2",
       "licenses": [
         {
           "expression": "MIT OR Apache-2.0"
@@ -269,13 +269,13 @@
         },
         {
           "name": "kafrust:package-id",
-          "value": "registry+https://github.com/rust-lang/crates.io-index#crc32fast@1.5.1"
+          "value": "registry+https://github.com/rust-lang/crates.io-index#crc32fast@1.5.2"
         }
       ],
-      "purl": "pkg:cargo/crc32fast@1.5.1",
+      "purl": "pkg:cargo/crc32fast@1.5.2",
       "scope": "required",
       "type": "library",
-      "version": "1.5.1"
+      "version": "1.5.2"
     },
     {
       "bom-ref": "pkg:cargo/crypto-common@0.1.7",
@@ -370,7 +370,7 @@
       "version": "0.10.7"
     },
     {
-      "bom-ref": "pkg:cargo/either@1.18.0",
+      "bom-ref": "pkg:cargo/either@1.19.0",
       "licenses": [
         {
           "expression": "MIT OR Apache-2.0"
@@ -384,16 +384,16 @@
         },
         {
           "name": "kafrust:package-id",
-          "value": "registry+https://github.com/rust-lang/crates.io-index#either@1.18.0"
+          "value": "registry+https://github.com/rust-lang/crates.io-index#either@1.19.0"
         }
       ],
-      "purl": "pkg:cargo/either@1.18.0",
+      "purl": "pkg:cargo/either@1.19.0",
       "scope": "required",
       "type": "library",
-      "version": "1.18.0"
+      "version": "1.19.0"
     },
     {
-      "bom-ref": "pkg:cargo/find-msvc-tools@0.1.12",
+      "bom-ref": "pkg:cargo/find-msvc-tools@0.1.15",
       "licenses": [
         {
           "expression": "MIT OR Apache-2.0"
@@ -407,13 +407,13 @@
         },
         {
           "name": "kafrust:package-id",
-          "value": "registry+https://github.com/rust-lang/crates.io-index#find-msvc-tools@0.1.12"
+          "value": "registry+https://github.com/rust-lang/crates.io-index#find-msvc-tools@0.1.15"
         }
       ],
-      "purl": "pkg:cargo/find-msvc-tools@0.1.12",
+      "purl": "pkg:cargo/find-msvc-tools@0.1.15",
       "scope": "required",
       "type": "library",
-      "version": "0.1.12"
+      "version": "0.1.15"
     },
     {
       "bom-ref": "pkg:cargo/flate2@1.0.35",
@@ -738,7 +738,7 @@
       "version": "0.4.0"
     },
     {
-      "bom-ref": "pkg:cargo/libc@0.2.189",
+      "bom-ref": "pkg:cargo/libc@0.2.191",
       "licenses": [
         {
           "expression": "MIT OR Apache-2.0"
@@ -752,13 +752,13 @@
         },
         {
           "name": "kafrust:package-id",
-          "value": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.189"
+          "value": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.191"
         }
       ],
-      "purl": "pkg:cargo/libc@0.2.189",
+      "purl": "pkg:cargo/libc@0.2.191",
       "scope": "required",
       "type": "library",
-      "version": "0.2.189"
+      "version": "0.2.191"
     },
     {
       "bom-ref": "pkg:cargo/log@0.4.34",
@@ -853,7 +853,7 @@
       "version": "0.8.9"
     },
     {
-      "bom-ref": "pkg:cargo/mio@1.2.3",
+      "bom-ref": "pkg:cargo/mio@1.2.4",
       "licenses": [
         {
           "expression": "MIT"
@@ -867,13 +867,13 @@
         },
         {
           "name": "kafrust:package-id",
-          "value": "registry+https://github.com/rust-lang/crates.io-index#mio@1.2.3"
+          "value": "registry+https://github.com/rust-lang/crates.io-index#mio@1.2.4"
         }
       ],
-      "purl": "pkg:cargo/mio@1.2.3",
+      "purl": "pkg:cargo/mio@1.2.4",
       "scope": "required",
       "type": "library",
-      "version": "1.2.3"
+      "version": "1.2.4"
     },
     {
       "bom-ref": "pkg:cargo/once_cell@1.21.4",
@@ -1313,7 +1313,7 @@
       "version": "0.17.14"
     },
     {
-      "bom-ref": "pkg:cargo/rustls-native-certs@0.8.4",
+      "bom-ref": "pkg:cargo/rustls-native-certs@0.8.5",
       "licenses": [
         {
           "expression": "Apache-2.0 OR ISC OR MIT"
@@ -1327,13 +1327,13 @@
         },
         {
           "name": "kafrust:package-id",
-          "value": "registry+https://github.com/rust-lang/crates.io-index#rustls-native-certs@0.8.4"
+          "value": "registry+https://github.com/rust-lang/crates.io-index#rustls-native-certs@0.8.5"
         }
       ],
-      "purl": "pkg:cargo/rustls-native-certs@0.8.4",
+      "purl": "pkg:cargo/rustls-native-certs@0.8.5",
       "scope": "required",
       "type": "library",
-      "version": "0.8.4"
+      "version": "0.8.5"
     },
     {
       "bom-ref": "pkg:cargo/rustls-pki-types@1.15.1",
@@ -1382,7 +1382,7 @@
       "version": "0.6.2"
     },
     {
-      "bom-ref": "pkg:cargo/rustls-webpki@0.103.15",
+      "bom-ref": "pkg:cargo/rustls-webpki@0.103.16",
       "licenses": [
         {
           "expression": "ISC"
@@ -1396,16 +1396,16 @@
         },
         {
           "name": "kafrust:package-id",
-          "value": "registry+https://github.com/rust-lang/crates.io-index#rustls-webpki@0.103.15"
+          "value": "registry+https://github.com/rust-lang/crates.io-index#rustls-webpki@0.103.16"
         }
       ],
-      "purl": "pkg:cargo/rustls-webpki@0.103.15",
+      "purl": "pkg:cargo/rustls-webpki@0.103.16",
       "scope": "required",
       "type": "library",
-      "version": "0.103.15"
+      "version": "0.103.16"
     },
     {
-      "bom-ref": "pkg:cargo/rustls@0.23.44",
+      "bom-ref": "pkg:cargo/rustls@0.23.46",
       "licenses": [
         {
           "expression": "Apache-2.0 OR ISC OR MIT"
@@ -1419,16 +1419,16 @@
         },
         {
           "name": "kafrust:package-id",
-          "value": "registry+https://github.com/rust-lang/crates.io-index#rustls@0.23.44"
+          "value": "registry+https://github.com/rust-lang/crates.io-index#rustls@0.23.46"
         }
       ],
-      "purl": "pkg:cargo/rustls@0.23.44",
+      "purl": "pkg:cargo/rustls@0.23.46",
       "scope": "required",
       "type": "library",
-      "version": "0.23.44"
+      "version": "0.23.46"
     },
     {
-      "bom-ref": "pkg:cargo/ruzstd@0.8.1",
+      "bom-ref": "pkg:cargo/ruzstd@0.9.1",
       "licenses": [
         {
           "expression": "MIT"
@@ -1442,13 +1442,13 @@
         },
         {
           "name": "kafrust:package-id",
-          "value": "registry+https://github.com/rust-lang/crates.io-index#ruzstd@0.8.1"
+          "value": "registry+https://github.com/rust-lang/crates.io-index#ruzstd@0.9.1"
         }
       ],
-      "purl": "pkg:cargo/ruzstd@0.8.1",
+      "purl": "pkg:cargo/ruzstd@0.9.1",
       "scope": "required",
       "type": "library",
-      "version": "0.8.1"
+      "version": "0.9.1"
     },
     {
       "bom-ref": "pkg:cargo/sha2@0.10.9",
@@ -1635,7 +1635,7 @@
       "version": "2.0.119"
     },
     {
-      "bom-ref": "pkg:cargo/syn@3.0.5",
+      "bom-ref": "pkg:cargo/syn@3.0.9",
       "licenses": [
         {
           "expression": "MIT OR Apache-2.0"
@@ -1649,13 +1649,13 @@
         },
         {
           "name": "kafrust:package-id",
-          "value": "registry+https://github.com/rust-lang/crates.io-index#syn@3.0.5"
+          "value": "registry+https://github.com/rust-lang/crates.io-index#syn@3.0.9"
         }
       ],
-      "purl": "pkg:cargo/syn@3.0.5",
+      "purl": "pkg:cargo/syn@3.0.9",
       "scope": "required",
       "type": "library",
-      "version": "3.0.5"
+      "version": "3.0.9"
     },
     {
       "bom-ref": "pkg:cargo/thiserror-impl@1.0.69",
@@ -1681,7 +1681,7 @@
       "version": "1.0.69"
     },
     {
-      "bom-ref": "pkg:cargo/thiserror-impl@2.0.20",
+      "bom-ref": "pkg:cargo/thiserror-impl@2.0.21",
       "licenses": [
         {
           "expression": "MIT OR Apache-2.0"
@@ -1695,13 +1695,13 @@
         },
         {
           "name": "kafrust:package-id",
-          "value": "registry+https://github.com/rust-lang/crates.io-index#thiserror-impl@2.0.20"
+          "value": "registry+https://github.com/rust-lang/crates.io-index#thiserror-impl@2.0.21"
         }
       ],
-      "purl": "pkg:cargo/thiserror-impl@2.0.20",
+      "purl": "pkg:cargo/thiserror-impl@2.0.21",
       "scope": "required",
       "type": "library",
-      "version": "2.0.20"
+      "version": "2.0.21"
     },
     {
       "bom-ref": "pkg:cargo/thiserror@1.0.69",
@@ -1727,7 +1727,7 @@
       "version": "1.0.69"
     },
     {
-      "bom-ref": "pkg:cargo/thiserror@2.0.20",
+      "bom-ref": "pkg:cargo/thiserror@2.0.21",
       "licenses": [
         {
           "expression": "MIT OR Apache-2.0"
@@ -1741,13 +1741,13 @@
         },
         {
           "name": "kafrust:package-id",
-          "value": "registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.20"
+          "value": "registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.21"
         }
       ],
-      "purl": "pkg:cargo/thiserror@2.0.20",
+      "purl": "pkg:cargo/thiserror@2.0.21",
       "scope": "required",
       "type": "library",
-      "version": "2.0.20"
+      "version": "2.0.21"
     },
     {
       "bom-ref": "pkg:cargo/tokio-macros@2.7.2",
@@ -1796,7 +1796,7 @@
       "version": "0.26.4"
     },
     {
-      "bom-ref": "pkg:cargo/tokio@1.53.1",
+      "bom-ref": "pkg:cargo/tokio@1.53.3",
       "licenses": [
         {
           "expression": "MIT"
@@ -1810,13 +1810,13 @@
         },
         {
           "name": "kafrust:package-id",
-          "value": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.53.1"
+          "value": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.53.3"
         }
       ],
-      "purl": "pkg:cargo/tokio@1.53.1",
+      "purl": "pkg:cargo/tokio@1.53.3",
       "scope": "required",
       "type": "library",
-      "version": "1.53.1"
+      "version": "1.53.3"
     },
     {
       "bom-ref": "pkg:cargo/tracing-attributes@0.1.31",
@@ -1934,7 +1934,7 @@
       "version": "1.20.1"
     },
     {
-      "bom-ref": "pkg:cargo/unicode-ident@1.0.24",
+      "bom-ref": "pkg:cargo/unicode-ident@1.0.27",
       "licenses": [
         {
           "expression": "(MIT OR Apache-2.0) AND Unicode-3.0"
@@ -1948,13 +1948,13 @@
         },
         {
           "name": "kafrust:package-id",
-          "value": "registry+https://github.com/rust-lang/crates.io-index#unicode-ident@1.0.24"
+          "value": "registry+https://github.com/rust-lang/crates.io-index#unicode-ident@1.0.27"
         }
       ],
-      "purl": "pkg:cargo/unicode-ident@1.0.24",
+      "purl": "pkg:cargo/unicode-ident@1.0.27",
       "scope": "required",
       "type": "library",
-      "version": "1.0.24"
+      "version": "1.0.27"
     },
     {
       "bom-ref": "pkg:cargo/untrusted@0.9.0",
@@ -2003,7 +2003,7 @@
       "version": "0.9.5"
     },
     {
-      "bom-ref": "pkg:cargo/zerocopy@0.8.57",
+      "bom-ref": "pkg:cargo/zerocopy@0.8.63",
       "licenses": [
         {
           "expression": "BSD-2-Clause OR Apache-2.0 OR MIT"
@@ -2017,13 +2017,13 @@
         },
         {
           "name": "kafrust:package-id",
-          "value": "registry+https://github.com/rust-lang/crates.io-index#zerocopy@0.8.57"
+          "value": "registry+https://github.com/rust-lang/crates.io-index#zerocopy@0.8.63"
         }
       ],
-      "purl": "pkg:cargo/zerocopy@0.8.57",
+      "purl": "pkg:cargo/zerocopy@0.8.63",
       "scope": "required",
       "type": "library",
-      "version": "0.8.57"
+      "version": "0.8.63"
     },
     {
       "bom-ref": "pkg:cargo/zeroize@1.8.2",
@@ -2088,14 +2088,14 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/find-msvc-tools@0.1.12",
+        "pkg:cargo/find-msvc-tools@0.1.15",
         "pkg:cargo/shlex@2.0.1"
       ],
-      "ref": "pkg:cargo/cc@1.4.5"
+      "ref": "pkg:cargo/cc@1.9.0"
     },
     {
       "dependsOn": [],
-      "ref": "pkg:cargo/cfg-if@1.0.4"
+      "ref": "pkg:cargo/cfg-if@1.0.5"
     },
     {
       "dependsOn": [],
@@ -2103,9 +2103,9 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/cfg-if@1.0.4"
+        "pkg:cargo/cfg-if@1.0.5"
       ],
-      "ref": "pkg:cargo/crc32fast@1.5.1"
+      "ref": "pkg:cargo/crc32fast@1.5.2"
     },
     {
       "dependsOn": [
@@ -2138,15 +2138,15 @@
     },
     {
       "dependsOn": [],
-      "ref": "pkg:cargo/either@1.18.0"
+      "ref": "pkg:cargo/either@1.19.0"
     },
     {
       "dependsOn": [],
-      "ref": "pkg:cargo/find-msvc-tools@0.1.12"
+      "ref": "pkg:cargo/find-msvc-tools@0.1.15"
     },
     {
       "dependsOn": [
-        "pkg:cargo/crc32fast@1.5.1",
+        "pkg:cargo/crc32fast@1.5.2",
         "pkg:cargo/miniz_oxide@0.8.9"
       ],
       "ref": "pkg:cargo/flate2@1.0.35"
@@ -2173,7 +2173,7 @@
       "dependsOn": [
         "pkg:cargo/proc-macro2@1.0.107",
         "pkg:cargo/quote@1.0.47",
-        "pkg:cargo/syn@3.0.5"
+        "pkg:cargo/syn@3.0.9"
       ],
       "ref": "pkg:cargo/futures-macro@0.3.34"
     },
@@ -2205,8 +2205,8 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/cfg-if@1.0.4",
-        "pkg:cargo/libc@0.2.189"
+        "pkg:cargo/cfg-if@1.0.5",
+        "pkg:cargo/libc@0.2.191"
       ],
       "ref": "pkg:cargo/getrandom@0.2.17"
     },
@@ -2218,7 +2218,7 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/either@1.18.0"
+        "pkg:cargo/either@1.19.0"
       ],
       "ref": "pkg:cargo/itertools@0.14.0"
     },
@@ -2226,7 +2226,7 @@
       "dependsOn": [
         "pkg:cargo/flate2@1.0.35",
         "pkg:cargo/lz-fear@0.2.0",
-        "pkg:cargo/ruzstd@0.8.1",
+        "pkg:cargo/ruzstd@0.9.1",
         "pkg:cargo/snap@1.1.2"
       ],
       "ref": "pkg:cargo/kafrust-protocol@0.4.0"
@@ -2243,10 +2243,10 @@
         "pkg:cargo/rand@0.8.8",
         "pkg:cargo/regex@1.13.1",
         "pkg:cargo/rustls-platform-verifier@0.6.2",
-        "pkg:cargo/rustls@0.23.44",
+        "pkg:cargo/rustls@0.23.46",
         "pkg:cargo/sha2@0.10.9",
         "pkg:cargo/tokio-rustls@0.26.4",
-        "pkg:cargo/tokio@1.53.1",
+        "pkg:cargo/tokio@1.53.3",
         "pkg:cargo/tracing@0.1.44",
         "pkg:cargo/zeroize@1.8.2"
       ],
@@ -2254,7 +2254,7 @@
     },
     {
       "dependsOn": [],
-      "ref": "pkg:cargo/libc@0.2.189"
+      "ref": "pkg:cargo/libc@0.2.191"
     },
     {
       "dependsOn": [],
@@ -2282,9 +2282,9 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/libc@0.2.189"
+        "pkg:cargo/libc@0.2.191"
       ],
-      "ref": "pkg:cargo/mio@1.2.3"
+      "ref": "pkg:cargo/mio@1.2.4"
     },
     {
       "dependsOn": [],
@@ -2312,7 +2312,7 @@
         "pkg:cargo/futures-executor@0.3.34",
         "pkg:cargo/futures-util@0.3.34",
         "pkg:cargo/opentelemetry@0.32.0",
-        "pkg:cargo/thiserror@2.0.20"
+        "pkg:cargo/thiserror@2.0.21"
       ],
       "ref": "pkg:cargo/opentelemetry_sdk@0.32.1"
     },
@@ -2329,13 +2329,13 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/zerocopy@0.8.57"
+        "pkg:cargo/zerocopy@0.8.63"
       ],
       "ref": "pkg:cargo/ppv-lite86@0.2.21"
     },
     {
       "dependsOn": [
-        "pkg:cargo/unicode-ident@1.0.24"
+        "pkg:cargo/unicode-ident@1.0.27"
       ],
       "ref": "pkg:cargo/proc-macro2@1.0.107"
     },
@@ -2364,7 +2364,7 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/libc@0.2.189",
+        "pkg:cargo/libc@0.2.191",
         "pkg:cargo/rand_chacha@0.3.1",
         "pkg:cargo/rand_core@0.6.4"
       ],
@@ -2406,8 +2406,8 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/cc@1.4.5",
-        "pkg:cargo/cfg-if@1.0.4",
+        "pkg:cargo/cc@1.9.0",
+        "pkg:cargo/cfg-if@1.0.5",
         "pkg:cargo/getrandom@0.2.17",
         "pkg:cargo/untrusted@0.9.0"
       ],
@@ -2418,7 +2418,7 @@
         "pkg:cargo/openssl-probe@0.2.1",
         "pkg:cargo/rustls-pki-types@1.15.1"
       ],
-      "ref": "pkg:cargo/rustls-native-certs@0.8.4"
+      "ref": "pkg:cargo/rustls-native-certs@0.8.5"
     },
     {
       "dependsOn": [
@@ -2429,9 +2429,9 @@
     {
       "dependsOn": [
         "pkg:cargo/log@0.4.34",
-        "pkg:cargo/rustls-native-certs@0.8.4",
-        "pkg:cargo/rustls-webpki@0.103.15",
-        "pkg:cargo/rustls@0.23.44"
+        "pkg:cargo/rustls-native-certs@0.8.5",
+        "pkg:cargo/rustls-webpki@0.103.16",
+        "pkg:cargo/rustls@0.23.46"
       ],
       "ref": "pkg:cargo/rustls-platform-verifier@0.6.2"
     },
@@ -2441,26 +2441,26 @@
         "pkg:cargo/rustls-pki-types@1.15.1",
         "pkg:cargo/untrusted@0.9.0"
       ],
-      "ref": "pkg:cargo/rustls-webpki@0.103.15"
+      "ref": "pkg:cargo/rustls-webpki@0.103.16"
     },
     {
       "dependsOn": [
         "pkg:cargo/once_cell@1.21.4",
         "pkg:cargo/ring@0.17.14",
         "pkg:cargo/rustls-pki-types@1.15.1",
-        "pkg:cargo/rustls-webpki@0.103.15",
+        "pkg:cargo/rustls-webpki@0.103.16",
         "pkg:cargo/subtle@2.6.1",
         "pkg:cargo/zeroize@1.8.2"
       ],
-      "ref": "pkg:cargo/rustls@0.23.44"
+      "ref": "pkg:cargo/rustls@0.23.46"
     },
     {
       "dependsOn": [],
-      "ref": "pkg:cargo/ruzstd@0.8.1"
+      "ref": "pkg:cargo/ruzstd@0.9.1"
     },
     {
       "dependsOn": [
-        "pkg:cargo/cfg-if@1.0.4",
+        "pkg:cargo/cfg-if@1.0.5",
         "pkg:cargo/cpufeatures@0.2.17",
         "pkg:cargo/digest@0.10.7"
       ],
@@ -2480,7 +2480,7 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/libc@0.2.189"
+        "pkg:cargo/libc@0.2.191"
       ],
       "ref": "pkg:cargo/socket2@0.6.5"
     },
@@ -2496,7 +2496,7 @@
       "dependsOn": [
         "pkg:cargo/proc-macro2@1.0.107",
         "pkg:cargo/quote@1.0.47",
-        "pkg:cargo/unicode-ident@1.0.24"
+        "pkg:cargo/unicode-ident@1.0.27"
       ],
       "ref": "pkg:cargo/syn@2.0.119"
     },
@@ -2504,9 +2504,9 @@
       "dependsOn": [
         "pkg:cargo/proc-macro2@1.0.107",
         "pkg:cargo/quote@1.0.47",
-        "pkg:cargo/unicode-ident@1.0.24"
+        "pkg:cargo/unicode-ident@1.0.27"
       ],
-      "ref": "pkg:cargo/syn@3.0.5"
+      "ref": "pkg:cargo/syn@3.0.9"
     },
     {
       "dependsOn": [
@@ -2520,9 +2520,9 @@
       "dependsOn": [
         "pkg:cargo/proc-macro2@1.0.107",
         "pkg:cargo/quote@1.0.47",
-        "pkg:cargo/syn@3.0.5"
+        "pkg:cargo/syn@3.0.9"
       ],
-      "ref": "pkg:cargo/thiserror-impl@2.0.20"
+      "ref": "pkg:cargo/thiserror-impl@2.0.21"
     },
     {
       "dependsOn": [
@@ -2532,35 +2532,35 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/thiserror-impl@2.0.20"
+        "pkg:cargo/thiserror-impl@2.0.21"
       ],
-      "ref": "pkg:cargo/thiserror@2.0.20"
+      "ref": "pkg:cargo/thiserror@2.0.21"
     },
     {
       "dependsOn": [
         "pkg:cargo/proc-macro2@1.0.107",
         "pkg:cargo/quote@1.0.47",
-        "pkg:cargo/syn@3.0.5"
+        "pkg:cargo/syn@3.0.9"
       ],
       "ref": "pkg:cargo/tokio-macros@2.7.2"
     },
     {
       "dependsOn": [
-        "pkg:cargo/rustls@0.23.44",
-        "pkg:cargo/tokio@1.53.1"
+        "pkg:cargo/rustls@0.23.46",
+        "pkg:cargo/tokio@1.53.3"
       ],
       "ref": "pkg:cargo/tokio-rustls@0.26.4"
     },
     {
       "dependsOn": [
         "pkg:cargo/bytes@1.12.1",
-        "pkg:cargo/libc@0.2.189",
-        "pkg:cargo/mio@1.2.3",
+        "pkg:cargo/libc@0.2.191",
+        "pkg:cargo/mio@1.2.4",
         "pkg:cargo/pin-project-lite@0.2.17",
         "pkg:cargo/socket2@0.6.5",
         "pkg:cargo/tokio-macros@2.7.2"
       ],
-      "ref": "pkg:cargo/tokio@1.53.1"
+      "ref": "pkg:cargo/tokio@1.53.3"
     },
     {
       "dependsOn": [
@@ -2586,7 +2586,7 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/cfg-if@1.0.4",
+        "pkg:cargo/cfg-if@1.0.5",
         "pkg:cargo/static_assertions@1.1.0"
       ],
       "ref": "pkg:cargo/twox-hash@1.6.3"
@@ -2597,7 +2597,7 @@
     },
     {
       "dependsOn": [],
-      "ref": "pkg:cargo/unicode-ident@1.0.24"
+      "ref": "pkg:cargo/unicode-ident@1.0.27"
     },
     {
       "dependsOn": [],
@@ -2609,7 +2609,7 @@
     },
     {
       "dependsOn": [],
-      "ref": "pkg:cargo/zerocopy@0.8.57"
+      "ref": "pkg:cargo/zerocopy@0.8.63"
     },
     {
       "dependsOn": [],

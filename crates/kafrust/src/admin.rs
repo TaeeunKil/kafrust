@@ -4020,7 +4020,7 @@ impl AdminClient {
         let selected_brokers = metadata
             .brokers
             .iter()
-            .filter(|broker| broker_ids.map_or(true, |ids| ids.contains(&broker.node_id)))
+            .filter(|broker| broker_ids.is_none_or(|ids| ids.contains(&broker.node_id)))
             .cloned()
             .collect::<Vec<_>>();
         let request_topics = topics.map(|topics| {

@@ -6,4 +6,4 @@ publish = false
 
 [dependencies]
 kafrust = { version = "__KAFRUST_VERSION__" }
-tokio = { version = ">=1.0.0, <1.54.0", features = ["macros", "rt-multi-thread", "time"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }

@@ -1,5 +1,10 @@
 # V1-19 Pure-Rust Dependency Audit
 
+> Policy update (2026-10-21): the Rust 1.81 MSRV recorded by this completed
+> audit was superseded when `ruzstd 0.8.1` was replaced by the fixed `0.9.1`
+> release for RUSTSEC-2026-0344. Current source and future release gates use
+> Rust 1.87; the dated results below remain historical evidence.
+
 - Status: Done
 - Target evidence: Packaged candidate
 - Dependencies: V1-02

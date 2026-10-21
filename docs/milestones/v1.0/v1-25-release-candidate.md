@@ -42,7 +42,7 @@ a successful representative service cutover and rollback.
 3. Run full local validation, audits, package isolation, API/semver/MSRV, and
    dependency/security gates, including every OS/target x feature x toolchain
    row accepted by V1-19 against the actual RC tarballs.
-4. Publish the protocol RC, wait until fresh external Rust 1.81 and stable
+4. Publish the protocol RC, wait until fresh external Rust 1.87 and stable
    projects fetch/build that exact registry artifact, package and run client
    `cargo publish --dry-run` against it, then publish the client RC.
 5. Verify exact docs.rs pages and fresh external feature/workload projects.
