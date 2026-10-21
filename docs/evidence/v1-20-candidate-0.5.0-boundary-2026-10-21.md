@@ -6,9 +6,9 @@
 - registry baseline until publication verification: `0.4.0`
 - security source: `ruzstd 0.9.1`, fixing RUSTSEC-2026-0344
 - compiler minimum: Rust 1.87 (up from 1.81 in published `0.4.0`)
-- staged protocol archive SHA-256:
+- initial working-tree protocol archive SHA-256 (before the release commit):
   `f0ad0a50411a9509722ac1700ea55ce79b9180c5b5aff737c6bb5c147a046d48`
-- staged client archive SHA-256:
+- initial working-tree client archive SHA-256 (before the release commit):
   `db6ca95c2445e51449e44c51c02b4b1a78913ad4bea80c0964392c5762f997a1`
 - candidate decision: prepare a coordinated pre-1.0 minor release; do not make
   a production readiness or complete compatibility claim
@@ -38,7 +38,7 @@ workspace path override.
 - Only after those checks, update the baseline manifest and published workflow
   defaults from `0.4.0` to `0.5.0`.
 
-The candidate is not yet a published artifact. Its registry evidence and final
-source identity will be recorded in
+This candidate proceeded to publication. Its final registry evidence and
+source identity are recorded in
 [`v1-20-published-0.5.0-boundary-2026-10-21.md`](v1-20-published-0.5.0-boundary-2026-10-21.md)
-after all required gates pass.
+after the ordered uploads and external resolution succeeded.

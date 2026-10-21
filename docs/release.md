@@ -9,16 +9,17 @@ several gigabytes while processing a small crafted frame before kafrust's
 outer output limit could stop it. The maintained upstream fix is used instead
 of carrying a local fork of security-sensitive decompression code.
 
-This is a source compatibility change for the next release: Rust 1.81 users
-must upgrade their compiler to 1.87 or newer before adopting that release.
+This is a source compatibility change included in the published `0.5.0`
+release: Rust 1.81 users must upgrade their compiler to 1.87 or newer before
+adopting it.
 Already-published `0.4.0` artifacts are unchanged. See
 [`migration-from-rust-1.81.md`](migration-from-rust-1.81.md) for the user-facing
 upgrade note. The prior Rust 1.81 qualification records below remain historical
 evidence for the versions tested at that time.
 
-## 0.5.0 Security Release Candidate (2026-10-21)
+## 0.5.0 Security Release (2026-10-21)
 
-The prepared `0.5.0` pair contains the upstream `ruzstd 0.9.1` fix for
+The published `0.5.0` pair contains the upstream `ruzstd 0.9.1` fix for
 RUSTSEC-2026-0344. A crafted compressed Kafka record could make `ruzstd 0.8.1`
 allocate several gigabytes before kafrust's output limit stopped decompression.
 The security fix is a user-visible package boundary. Its Rust 1.87 minimum is a
@@ -26,10 +27,11 @@ compiler compatibility change from `0.4.0`, so the coordinated pre-1.0 minor
 version is `0.5.0`, not a patch release. No Kafka client API changes are
 included.
 
-The registry baseline remains `0.4.0` until the ordered protocol-first
-publication, fresh external resolution, and post-publish smoke checks complete.
-Do not update the published workflow defaults or
-[`published-baseline.json`](evidence/published-baseline.json) before then.
+The ordered protocol-first publication and fresh external resolution passed.
+The published baseline is now `0.5.0`; the registry checksums, publication
+timestamps, external build, and docs.rs checks are in
+[`v1-20-published-0.5.0-boundary-2026-10-21.md`](evidence/v1-20-published-0.5.0-boundary-2026-10-21.md).
+Published workflow defaults have been updated to `0.5.0`.
 The dated comparison and candidate gate are recorded in
 [`v1-23-published-competitor-comparison-2026-10-21.md`](evidence/v1-23-published-competitor-comparison-2026-10-21.md)
 and [`v1-20-candidate-0.5.0-boundary-2026-10-21.md`](evidence/v1-20-candidate-0.5.0-boundary-2026-10-21.md).
@@ -53,8 +55,9 @@ published `0.4.0` pair. Cargo packages do not contain those repository-level
 files, so a `0.5.0` upload would not be independently consumable. The full
 decision and verification record is
 [`v1-23-0.5-profile-release-decision-2026-09-10.md`](evidence/v1-23-0.5-profile-release-decision-2026-09-10.md).
-The next registry release waits for a user-visible or independently consumable
-package boundary and follows the protocol-first sequence below.
+The profile-only milestone still does not justify an upload on its own. The
+separate `0.5.0` security release is an independently consumable protocol
+package boundary and was published through the protocol-first sequence below.
 
 ## 0.6 Operational Recovery Decision (2026-09-10)
 
@@ -65,15 +68,15 @@ restart schedules completed with record-ID reconciliation and drained final
 gauges. The complete run and artifact provenance are in
 [`v1-0_6-published-operational-recovery-2026-09-10.md`](evidence/v1-0_6-published-operational-recovery-2026-09-10.md).
 
-This is repository-level recovery evidence: no crate source, public API, or
-independently consumable package boundary changed. Therefore it does not
-authorize a `0.6.0` upload, and the registry baseline remains `0.4.0`. The
+This is repository-level recovery evidence from 2026-09-10: no crate source,
+public API, or independently consumable package boundary changed at that time.
+It did not authorize a `0.6.0` upload; the baseline then remained `0.4.0`. The
 secure profile's reconciled unknown outcomes and the bounded workload are
 explicit limits; V1-21 high-load, V1-22 SLO, and the 1.0 gates remain open.
 
 This decision concerns only the earlier repository-level profile milestones.
-The separately prepared `0.5.0` security release above changes the published
-protocol crate and has its own ordered publication gate.
+The separately published `0.5.0` security release above changes the published
+protocol crate and has its own completed ordered publication gate.
 
 ## 0.4.0 Scoped Release (2026-09-09)
 

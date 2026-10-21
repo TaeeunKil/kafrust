@@ -1,7 +1,7 @@
 # Migrating from rust-rdkafka
 
 This guide maps common `rust-rdkafka` 0.39 application patterns to kafrust
-0.4.0. It is a staged migration guide, not a drop-in compatibility claim.
+0.5.0. It is a staged migration guide, not a drop-in compatibility claim.
 `rust-rdkafka` wraps librdkafka and has substantially broader production
 coverage. kafrust is a Tokio-based pure Rust client with a smaller, typed
 configuration surface.
@@ -9,7 +9,7 @@ configuration surface.
 > Version note: the capability gate below retains historical published-crate
 > evidence from earlier `0.2.x` and `0.3.x` runs so results remain auditable.
 > Those entries are evidence for the named artifact and workload, not the
-> current release version. Re-run the target workflow against `0.4.0` and the
+> current release version. Re-run the target workflow against `0.5.0` and the
 > target service profile before treating it as a production qualification.
 
 Reference APIs:
@@ -31,13 +31,23 @@ below before rollout. The release does not imply `1.0.0` stability, drop-in
 `rust-rdkafka` parity, or production SLO qualification. Those claims remain
 separate V1 gates and require the target service canary.
 
+## Changes from kafrust 0.4.0 to 0.5.0
+
+The `0.5.0` release updates the coordinated client/protocol pair to fix
+RUSTSEC-2026-0344 in Zstandard decompression. It requires Rust 1.87 or newer;
+the published `0.4.0` pair supports Rust 1.81 and does not contain this fix.
+There is no Kafka client API or configuration migration. Change the dependency
+version and rebuild with Rust 1.87 or newer before processing untrusted Zstd
+records. This security release does not change kafrust's alpha status or imply
+`1.0.0` stability, `rust-rdkafka` parity, or production SLO qualification.
+
 ## Dependency and Runtime
 
 Replace the dependency:
 
 ```toml
 [dependencies]
-kafrust = "0.4.0"
+kafrust = "0.5.0"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
 

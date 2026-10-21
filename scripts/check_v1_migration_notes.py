@@ -26,7 +26,7 @@ def main() -> int:
         return fail(str(error))
 
     required = {
-        f"Changes from kafrust 0.3.5 to {version}": "versioned migration heading",
+        f"Changes from kafrust 0.4.0 to {version}": "versioned migration heading",
         f'kafrust = "{version}"': "current dependency example",
         "not a drop-in compatibility claim": "non-drop-in disclaimer",
         "no intentional breaking public-API change": "patch breaking-change statement",
