@@ -255,7 +255,7 @@
       "version": "0.2.17"
     },
     {
-      "bom-ref": "pkg:cargo/crc32fast@1.5.2",
+      "bom-ref": "pkg:cargo/crc32fast@1.5.3",
       "licenses": [
         {
           "expression": "MIT OR Apache-2.0"
@@ -269,13 +269,13 @@
         },
         {
           "name": "kafrust:package-id",
-          "value": "registry+https://github.com/rust-lang/crates.io-index#crc32fast@1.5.2"
+          "value": "registry+https://github.com/rust-lang/crates.io-index#crc32fast@1.5.3"
         }
       ],
-      "purl": "pkg:cargo/crc32fast@1.5.2",
+      "purl": "pkg:cargo/crc32fast@1.5.3",
       "scope": "required",
       "type": "library",
-      "version": "1.5.2"
+      "version": "1.5.3"
     },
     {
       "bom-ref": "pkg:cargo/crypto-common@0.1.7",
@@ -1796,7 +1796,7 @@
       "version": "0.26.4"
     },
     {
-      "bom-ref": "pkg:cargo/tokio@1.53.3",
+      "bom-ref": "pkg:cargo/tokio@1.54.0",
       "licenses": [
         {
           "expression": "MIT"
@@ -1810,13 +1810,13 @@
         },
         {
           "name": "kafrust:package-id",
-          "value": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.53.3"
+          "value": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.54.0"
         }
       ],
-      "purl": "pkg:cargo/tokio@1.53.3",
+      "purl": "pkg:cargo/tokio@1.54.0",
       "scope": "required",
       "type": "library",
-      "version": "1.53.3"
+      "version": "1.54.0"
     },
     {
       "bom-ref": "pkg:cargo/tracing-attributes@0.1.31",
@@ -2105,7 +2105,7 @@
       "dependsOn": [
         "pkg:cargo/cfg-if@1.0.5"
       ],
-      "ref": "pkg:cargo/crc32fast@1.5.2"
+      "ref": "pkg:cargo/crc32fast@1.5.3"
     },
     {
       "dependsOn": [
@@ -2146,7 +2146,7 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/crc32fast@1.5.2",
+        "pkg:cargo/crc32fast@1.5.3",
         "pkg:cargo/miniz_oxide@0.8.9"
       ],
       "ref": "pkg:cargo/flate2@1.0.35"
@@ -2246,7 +2246,7 @@
         "pkg:cargo/rustls@0.23.46",
         "pkg:cargo/sha2@0.10.9",
         "pkg:cargo/tokio-rustls@0.26.4",
-        "pkg:cargo/tokio@1.53.3",
+        "pkg:cargo/tokio@1.54.0",
         "pkg:cargo/tracing@0.1.44",
         "pkg:cargo/zeroize@1.8.2"
       ],
@@ -2547,7 +2547,7 @@
     {
       "dependsOn": [
         "pkg:cargo/rustls@0.23.46",
-        "pkg:cargo/tokio@1.53.3"
+        "pkg:cargo/tokio@1.54.0"
       ],
       "ref": "pkg:cargo/tokio-rustls@0.26.4"
     },
@@ -2560,7 +2560,7 @@
         "pkg:cargo/socket2@0.6.5",
         "pkg:cargo/tokio-macros@2.7.2"
       ],
-      "ref": "pkg:cargo/tokio@1.53.3"
+      "ref": "pkg:cargo/tokio@1.54.0"
     },
     {
       "dependsOn": [
