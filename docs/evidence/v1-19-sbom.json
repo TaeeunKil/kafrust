@@ -692,7 +692,7 @@
       "version": "0.14.0"
     },
     {
-      "bom-ref": "pkg:cargo/kafrust-protocol@0.4.0",
+      "bom-ref": "pkg:cargo/kafrust-protocol@0.5.0",
       "licenses": [
         {
           "expression": "MIT OR Apache-2.0"
@@ -706,16 +706,16 @@
         },
         {
           "name": "kafrust:package-id",
-          "value": "workspace:kafrust-protocol@0.4.0"
+          "value": "workspace:kafrust-protocol@0.5.0"
         }
       ],
-      "purl": "pkg:cargo/kafrust-protocol@0.4.0",
+      "purl": "pkg:cargo/kafrust-protocol@0.5.0",
       "scope": "required",
       "type": "library",
-      "version": "0.4.0"
+      "version": "0.5.0"
     },
     {
-      "bom-ref": "pkg:cargo/kafrust@0.4.0",
+      "bom-ref": "pkg:cargo/kafrust@0.5.0",
       "licenses": [
         {
           "expression": "MIT OR Apache-2.0"
@@ -729,13 +729,13 @@
         },
         {
           "name": "kafrust:package-id",
-          "value": "workspace:kafrust@0.4.0"
+          "value": "workspace:kafrust@0.5.0"
         }
       ],
-      "purl": "pkg:cargo/kafrust@0.4.0",
+      "purl": "pkg:cargo/kafrust@0.5.0",
       "scope": "required",
       "type": "library",
-      "version": "0.4.0"
+      "version": "0.5.0"
     },
     {
       "bom-ref": "pkg:cargo/libc@0.2.191",
@@ -2229,13 +2229,13 @@
         "pkg:cargo/ruzstd@0.9.1",
         "pkg:cargo/snap@1.1.2"
       ],
-      "ref": "pkg:cargo/kafrust-protocol@0.4.0"
+      "ref": "pkg:cargo/kafrust-protocol@0.5.0"
     },
     {
       "dependsOn": [
         "pkg:cargo/base64@0.22.1",
         "pkg:cargo/hmac@0.12.1",
-        "pkg:cargo/kafrust-protocol@0.4.0",
+        "pkg:cargo/kafrust-protocol@0.5.0",
         "pkg:cargo/opentelemetry-proto@0.32.0",
         "pkg:cargo/pbkdf2@0.12.2",
         "pkg:cargo/prost-derive@0.14.1",
@@ -2250,7 +2250,7 @@
         "pkg:cargo/tracing@0.1.44",
         "pkg:cargo/zeroize@1.8.2"
       ],
-      "ref": "pkg:cargo/kafrust@0.4.0"
+      "ref": "pkg:cargo/kafrust@0.5.0"
     },
     {
       "dependsOn": [],
@@ -2618,7 +2618,7 @@
   ],
   "metadata": {
     "component": {
-      "bom-ref": "pkg:cargo/kafrust@0.4.0",
+      "bom-ref": "pkg:cargo/kafrust@0.5.0",
       "licenses": [
         {
           "expression": "MIT OR Apache-2.0"
@@ -2632,13 +2632,13 @@
         },
         {
           "name": "kafrust:package-id",
-          "value": "workspace:kafrust@0.4.0"
+          "value": "workspace:kafrust@0.5.0"
         }
       ],
-      "purl": "pkg:cargo/kafrust@0.4.0",
+      "purl": "pkg:cargo/kafrust@0.5.0",
       "scope": "required",
       "type": "library",
-      "version": "0.4.0"
+      "version": "0.5.0"
     },
     "properties": [
       {
