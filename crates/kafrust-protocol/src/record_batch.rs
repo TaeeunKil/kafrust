@@ -11,6 +11,8 @@ const XERIAL_SNAPPY_HEADER: [u8; 16] = [
 const XERIAL_SNAPPY_MAGIC: [u8; 8] = [0x82, b'S', b'N', b'A', b'P', b'P', b'Y', 0];
 const XERIAL_SNAPPY_BLOCK_BYTES: usize = 32 * 1024;
 const ZSTD_MAGIC: [u8; 4] = [0x28, 0xb5, 0x2f, 0xfd];
+/// zrip's fast level 1 for produced batches.
+const ZSTD_LEVEL: i32 = 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RecordBatchCompression {
@@ -267,30 +269,25 @@ fn lz4_decompress_with_limit(records: &[u8], max_decompressed_bytes: usize) -> R
 }
 
 fn zstd_compress(records: &[u8]) -> Result<Vec<u8>> {
-    std::panic::catch_unwind(|| {
-        ruzstd::encoding::compress_to_vec(records, ruzstd::encoding::CompressionLevel::Fastest)
-    })
-    .map_err(|_| compression_reason("zstd", "encoder panicked".to_owned()))
+    std::panic::catch_unwind(|| zrip::compress(records, ZSTD_LEVEL))
+        .map_err(|_| compression_reason("zstd", "encoder panicked".to_owned()))?
+        .map_err(|error| compression_reason("zstd", error.to_string()))
 }
 
+/// Decodes every frame in `records` (skippable frames ignored), bounded by
+/// `max_decompressed_bytes` in total.
 fn zstd_decompress_with_limit(records: &[u8], max_decompressed_bytes: usize) -> Result<Vec<u8>> {
     ensure_zstd_frame_limits(records, max_decompressed_bytes)?;
-    std::panic::catch_unwind(|| {
-        let decoder = ruzstd::decoding::StreamingDecoder::new(records)
-            .map_err(|error| compression_reason("zstd", error.to_string()))?;
-        let read_limit = u64::try_from(max_decompressed_bytes)
-            .map_err(|_| Error::LengthOverflow("decompressed record batch"))?
-            .checked_add(1)
-            .ok_or(Error::LengthOverflow("decompressed record batch"))?;
-        let mut limited = decoder.take(read_limit);
-        let mut output = Vec::new();
-        limited
-            .read_to_end(&mut output)
-            .map_err(|error| compression_error("zstd", error))?;
-        ensure_decompressed_output_limit(output.len(), max_decompressed_bytes)?;
-        Ok(output)
-    })
-    .map_err(|_| compression_reason("zstd", "decoder panicked".to_owned()))?
+    std::panic::catch_unwind(|| zrip::decompress_with_limit(records, max_decompressed_bytes))
+        .map_err(|_| compression_reason("zstd", "decoder panicked".to_owned()))?
+        .map_err(|error| match error {
+            zrip::DecompressError::OutputTooSmall => Error::LimitExceeded {
+                kind: "decompressed record batch bytes",
+                actual: max_decompressed_bytes.saturating_add(1),
+                max: max_decompressed_bytes,
+            },
+            error => compression_reason("zstd", error.to_string()),
+        })
 }
 
 fn ensure_zstd_frame_limits(records: &[u8], max_decompressed_bytes: usize) -> Result<()> {
@@ -600,6 +597,32 @@ mod tests {
                 ..
             })
         ));
+    }
+
+    #[test]
+    fn zstd_decoder_reads_concatenated_frames() {
+        let mut frames = compress_bytes(RecordBatchCompression::Zstd, b"first frame, ").unwrap();
+        frames.extend(compress_bytes(RecordBatchCompression::Zstd, b"second frame").unwrap());
+
+        assert_eq!(
+            decompress_bytes(RecordBatchCompression::Zstd, &frames, 1024).unwrap(),
+            b"first frame, second frame"
+        );
+    }
+
+    #[test]
+    fn zstd_decoder_limits_output_across_frames() {
+        let frame = compress_bytes(RecordBatchCompression::Zstd, &[b'x'; 48]).unwrap();
+        let frames = [frame.as_slice(), &frame].concat();
+
+        assert_eq!(
+            zstd_decompress_with_limit(&frames, 64).unwrap_err(),
+            Error::LimitExceeded {
+                kind: "decompressed record batch bytes",
+                actual: 65,
+                max: 64,
+            }
+        );
     }
 
     #[test]
